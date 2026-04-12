@@ -32,7 +32,7 @@ El cliente MCP lanza el binario como proceso hijo. La comunicación es por entra
 sequenceDiagram
     participant U as Usuario
     participant C as Cliente IA
-    participant S as pe-mcp-gitlab (stdio)
+    participant S as gitlab-mcp-server (stdio)
     participant G as GitLab API
 
     U->>C: "Lista mis proyectos"
@@ -53,7 +53,7 @@ El servidor se ejecuta como servicio web. Cada usuario proporciona su propio tok
 sequenceDiagram
     participant U1 as Usuario A
     participant U2 as Usuario B
-    participant S as pe-mcp-gitlab (HTTP :8080)
+    participant S as gitlab-mcp-server (HTTP :8080)
     participant G as GitLab API
 
     U1->>S: POST /mcp (token-A)
@@ -104,7 +104,7 @@ Las herramientas de análisis usan **MCP sampling** — un mecanismo donde el se
 sequenceDiagram
     participant U as Usuario
     participant C as Cliente IA
-    participant S as pe-mcp-gitlab
+    participant S as gitlab-mcp-server
     participant G as GitLab API
 
     U->>C: "Analiza por qué falló el pipeline"

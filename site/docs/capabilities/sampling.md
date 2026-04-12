@@ -5,7 +5,7 @@
 
 ## ¿Qué problema resuelve?
 
-Un servidor MCP como pe-mcp-gitlab es excelente obteniendo datos de GitLab: merge requests, pipelines, issues, commits. Pero los datos crudos no siempre son útiles. Lo que a menudo se necesita es **análisis**: "¿Es seguro mergear este MR?", "¿Por qué falla este pipeline?", "¿Cuál es el estado de este milestone?"
+Un servidor MCP como gitlab-mcp-server es excelente obteniendo datos de GitLab: merge requests, pipelines, issues, commits. Pero los datos crudos no siempre son útiles. Lo que a menudo se necesita es **análisis**: "¿Es seguro mergear este MR?", "¿Por qué falla este pipeline?", "¿Cuál es el estado de este milestone?"
 
 Sampling cierra esta brecha. Permite al servidor recopilar datos de GitLab y **pedir a la IA que los analice**, todo dentro de una sola llamada a herramienta. El usuario ve un resultado elaborado — no un muro de JSON, sino un análisis estructurado en lenguaje natural.
 

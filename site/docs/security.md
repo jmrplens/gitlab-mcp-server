@@ -12,7 +12,7 @@ El servidor requiere `GITLAB_TOKEN` en modo stdio. El token se carga desde:
 
 1. Variables de entorno configuradas en el cliente MCP
 2. Archivo `.env` en el directorio de trabajo
-3. Archivo `~/.pe-mcp-gitlab.env` como fallback global
+3. Archivo `~/.gitlab-mcp-server.env` como fallback global
 
 El token:
 

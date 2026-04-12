@@ -6,7 +6,7 @@
 
 ## Descripción general
 
-pe-mcp-gitlab proporciona **más de 40 iconos SVG únicos** asignados a herramientas, recursos y prompts. Los iconos permiten que los clientes MCP muestren representaciones visuales junto a cada herramienta en su interfaz.
+gitlab-mcp-server proporciona **más de 40 iconos SVG únicos** asignados a herramientas, recursos y prompts. Los iconos permiten que los clientes MCP muestren representaciones visuales junto a cada herramienta en su interfaz.
 
 ## Especificación MCP
 
@@ -30,7 +30,7 @@ interface Icon {
 | `image/svg+xml` | **SHOULD** | Escalable, usado por este proyecto |
 | `image/webp` | **SHOULD** | Formato moderno eficiente |
 
-pe-mcp-gitlab usa `image/svg+xml` exclusivamente. Clientes que solo implementen PNG/JPEG no renderizarán estos iconos.
+gitlab-mcp-server usa `image/svg+xml` exclusivamente. Clientes que solo implementen PNG/JPEG no renderizarán estos iconos.
 
 ### Compatibilidad de clientes
 

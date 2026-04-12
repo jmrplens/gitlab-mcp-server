@@ -1,6 +1,6 @@
 # Configuración
 
-Gitlab MCP se configura mediante variables de entorno. Un archivo `.env` en el directorio actual se carga automáticamente, y el servidor también carga `~/.pe-mcp-gitlab.env` como respaldo para secretos escritos por el asistente de configuración.
+Gitlab MCP se configura mediante variables de entorno. Un archivo `.env` en el directorio actual se carga automáticamente, y el servidor también carga `~/.gitlab-mcp-server.env` como respaldo para secretos escritos por el asistente de configuración.
 
 ---
 
@@ -65,7 +65,7 @@ Si prefieres configurar los clientes manualmente en vez de usar el asistente.
       "servers": {
         "gitlab": {
           "type": "stdio",
-          "command": "/ruta/a/pe-mcp-gitlab",
+          "command": "/ruta/a/gitlab-mcp-server",
           "env": {
             "GITLAB_URL": "https://tu-instancia-gitlab",
             "GITLAB_TOKEN": "glpat-tu-token"
@@ -83,7 +83,7 @@ Si prefieres configurar los clientes manualmente en vez de usar el asistente.
     {
       "mcpServers": {
         "gitlab": {
-          "command": "/ruta/a/pe-mcp-gitlab",
+          "command": "/ruta/a/gitlab-mcp-server",
           "env": {
             "GITLAB_URL": "https://tu-instancia-gitlab",
             "GITLAB_TOKEN": "glpat-tu-token"
@@ -101,7 +101,7 @@ Si prefieres configurar los clientes manualmente en vez de usar el asistente.
     {
       "mcpServers": {
         "gitlab": {
-          "command": "/ruta/a/pe-mcp-gitlab",
+          "command": "/ruta/a/gitlab-mcp-server",
           "env": {
             "GITLAB_URL": "https://tu-instancia-gitlab",
             "GITLAB_TOKEN": "glpat-tu-token"
@@ -119,7 +119,7 @@ Si prefieres configurar los clientes manualmente en vez de usar el asistente.
     {
       "mcpServers": {
         "gitlab": {
-          "command": "/ruta/a/pe-mcp-gitlab",
+          "command": "/ruta/a/gitlab-mcp-server",
           "env": {
             "GITLAB_URL": "https://tu-instancia-gitlab",
             "GITLAB_TOKEN": "glpat-tu-token"
@@ -150,7 +150,7 @@ VS Code permite solicitar el token al iniciar el servidor y almacenarlo de forma
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/pe-mcp-gitlab",
+      "command": "/ruta/a/gitlab-mcp-server",
       "env": {
         "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}"
@@ -169,8 +169,8 @@ Carga variables de entorno desde un archivo, manteniendo los secretos fuera del 
   "servers": {
     "gitlab": {
       "type": "stdio",
-      "command": "/ruta/a/pe-mcp-gitlab",
-      "envFile": "${userHome}/.pe-mcp-gitlab.env"
+      "command": "/ruta/a/gitlab-mcp-server",
+      "envFile": "${userHome}/.gitlab-mcp-server.env"
     }
   }
 }
@@ -213,7 +213,7 @@ Cada cliente proporciona su propio token por petición vía cabecera `PRIVATE-TO
 
 La configuración se carga en este orden (la última gana):
 
-1. `~/.pe-mcp-gitlab.env` (credenciales del asistente)
+1. `~/.gitlab-mcp-server.env` (credenciales del asistente)
 2. `.env` en el directorio actual
 3. Variables de entorno del sistema
 4. Flags de línea de comandos (`--http`, `--http-addr`)

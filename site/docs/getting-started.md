@@ -15,9 +15,9 @@ Guía rápida para instalar y configurar Gitlab MCP con tu cliente de IA favorit
 
     | Sistema | Ruta del binario |
     |---------|------------------|
-    | **Linux** | `~/.local/bin/pe-mcp-gitlab` |
-    | **macOS** | `~/.local/bin/pe-mcp-gitlab` |
-    | **Windows** | `%LOCALAPPDATA%\pe-mcp-gitlab\pe-mcp-gitlab.exe` |
+    | **Linux** | `~/.local/bin/gitlab-mcp-server` |
+    | **macOS** | `~/.local/bin/gitlab-mcp-server` |
+    | **Windows** | `%LOCALAPPDATA%\gitlab-mcp-server\gitlab-mcp-server.exe` |
 
     Solo necesitas ejecutar el asistente de configuración desde esa ruta.
 
@@ -31,15 +31,15 @@ Descarga el binario correspondiente a tu sistema operativo desde las releases de
 
 | Sistema | Binario |
 |---------|--------|
-| Linux (amd64) | `pe-mcp-gitlab-linux-amd64` |
-| macOS (amd64) | `pe-mcp-gitlab-darwin-amd64` |
-| macOS (arm64) | `pe-mcp-gitlab-darwin-arm64` |
-| Windows (amd64) | `pe-mcp-gitlab-windows-amd64.exe` |
+| Linux (amd64) | `gitlab-mcp-server-linux-amd64` |
+| macOS (amd64) | `gitlab-mcp-server-darwin-amd64` |
+| macOS (arm64) | `gitlab-mcp-server-darwin-arm64` |
+| Windows (amd64) | `gitlab-mcp-server-windows-amd64.exe` |
 
 ### Hacer ejecutable (Linux/macOS)
 
 ```bash
-chmod +x pe-mcp-gitlab-linux-amd64
+chmod +x gitlab-mcp-server-linux-amd64
 ```
 
 ---
@@ -49,7 +49,7 @@ chmod +x pe-mcp-gitlab-linux-amd64
 La forma más rápida de empezar es usar el asistente interactivo:
 
 ```bash
-./pe-mcp-gitlab-linux-amd64 setup-wizard
+./gitlab-mcp-server-linux-amd64 setup-wizard
 ```
 
 El asistente te guiará para:
@@ -77,7 +77,7 @@ Si prefieres configurar manualmente, selecciona tu cliente:
       "mcp": {
         "servers": {
           "gitlab": {
-            "command": "/ruta/al/pe-mcp-gitlab-linux-amd64",
+            "command": "/ruta/al/gitlab-mcp-server-linux-amd64",
             "args": [],
             "env": {
               "GITLAB_URL": "https://tu-gitlab.ejemplo.com",
@@ -97,7 +97,7 @@ Si prefieres configurar manualmente, selecciona tu cliente:
     {
       "mcpServers": {
         "gitlab": {
-          "command": "/ruta/al/pe-mcp-gitlab-linux-amd64",
+          "command": "/ruta/al/gitlab-mcp-server-linux-amd64",
           "args": [],
           "env": {
             "GITLAB_URL": "https://tu-gitlab.ejemplo.com",
@@ -116,7 +116,7 @@ Si prefieres configurar manualmente, selecciona tu cliente:
     {
       "mcpServers": {
         "gitlab": {
-          "command": "/ruta/al/pe-mcp-gitlab-linux-amd64",
+          "command": "/ruta/al/gitlab-mcp-server-linux-amd64",
           "args": [],
           "env": {
             "GITLAB_URL": "https://tu-gitlab.ejemplo.com",
@@ -131,7 +131,7 @@ Si prefieres configurar manualmente, selecciona tu cliente:
 
     ```bash
     claude mcp add --transport stdio gitlab \
-      /ruta/al/pe-mcp-gitlab-linux-amd64 \
+      /ruta/al/gitlab-mcp-server-linux-amd64 \
       -e GITLAB_URL=https://tu-gitlab.ejemplo.com \
       -e GITLAB_TOKEN=tu-token-aquí
     ```
@@ -146,7 +146,7 @@ Para equipos, puedes ejecutar Gitlab MCP como servidor HTTP:
 export GITLAB_URL="https://tu-gitlab.ejemplo.com"
 export MCP_TRANSPORT=http
 export HTTP_PORT=8080
-./pe-mcp-gitlab-linux-amd64
+./gitlab-mcp-server-linux-amd64
 ```
 
 Cada usuario envía su propio token en las peticiones. Consulta la [Guía de configuración](configuration.md) para más detalles.

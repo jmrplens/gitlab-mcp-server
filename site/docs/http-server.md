@@ -7,7 +7,7 @@ Gitlab MCP puede ejecutarse como servidor HTTP multi-usuario además del modo st
 ## Activación
 
 ```bash
-./pe-mcp-gitlab --http --gitlab-url=https://tu-gitlab.ejemplo.com
+./gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com
 ```
 
 En modo HTTP:
@@ -80,10 +80,10 @@ El servidor verifica periódicamente que los tokens almacenados siguen siendo v�
 
 ```bash
 # Validar tokens cada 15 minutos (defecto)
-./pe-mcp-gitlab --http --revalidate-interval=15m
+./gitlab-mcp-server --http --revalidate-interval=15m
 
 # Desactivar revalidación
-./pe-mcp-gitlab --http --revalidate-interval=0
+./gitlab-mcp-server --http --revalidate-interval=0
 ```
 
 Si un token ha sido revocado, su sesión se elimina automáticamente del pool.
@@ -112,8 +112,8 @@ La forma más sencilla de desplegar en modo HTTP es con Docker:
 
 ```yaml
 services:
-  pe-mcp-gitlab:
-    image: git.jmrp.io:5050/mcp/pe-mcp-gitlab:latest
+  gitlab-mcp-server:
+    image: ghcr.io/jmrplens/gitlab-mcp-server:latest
     ports:
       - "8080:8080"
     environment:

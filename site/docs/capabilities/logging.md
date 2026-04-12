@@ -40,7 +40,7 @@ Los mensajes de log enviados al cliente MCP siguen esta estructura:
 ```json
 {
   "level": "info",
-  "logger": "pe-mcp-gitlab",
+  "logger": "gitlab-mcp-server",
   "data": {
     "message": "tool call completed",
     "tool": "gitlab_list_issues",

@@ -19,7 +19,7 @@ Configuración via variable de entorno o flag:
 AUTO_UPDATE=true
 
 # Flag de línea de comandos
-./pe-mcp-gitlab --auto-update=check
+./gitlab-mcp-server --auto-update=check
 ```
 
 ---
@@ -47,14 +47,14 @@ En modo HTTP, las comprobaciones se ejecutan periódicamente en background:
 
 ```bash
 # Intervalo de comprobación (defecto: 1h)
-./pe-mcp-gitlab --http --auto-update-interval=30m
+./gitlab-mcp-server --http --auto-update-interval=30m
 ```
 
 | Parámetro | Variable | Defecto | Descripción |
 |-----------|----------|---------|-------------|
 | `--auto-update-interval` | `AUTO_UPDATE_INTERVAL` | `1h` | Intervalo entre comprobaciones |
 | `--auto-update` | `AUTO_UPDATE` | `true` | Modo de actualización |
-| `--auto-update-repo` | `AUTO_UPDATE_REPO` | `mcp/pe-mcp-gitlab` | Repositorio de releases |
+| `--auto-update-repo` | `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | Repositorio de releases |
 
 ---
 
@@ -63,7 +63,7 @@ En modo HTTP, las comprobaciones se ejecutan periódicamente en background:
 Opcionalmente, puedes verificar la firma criptográfica de los binarios:
 
 ```bash
-./pe-mcp-gitlab --auto-update-gpg-key=/ruta/a/clave-publica.asc
+./gitlab-mcp-server --auto-update-gpg-key=/ruta/a/clave-publica.asc
 ```
 
 O via variable de entorno:
@@ -100,11 +100,11 @@ Cuando está habilitada:
 
 ### Terminaci?n externa (`--shutdown`)
 
-Un actualizador externo (como pe-agnostic-store) puede invocar `pe-mcp-gitlab --shutdown` para terminar todas las instancias en ejecuci?n antes de reemplazar el binario en disco:
+Un actualizador externo (como un actualizador externo) puede invocar `gitlab-mcp-server --shutdown` para terminar todas las instancias en ejecuci?n antes de reemplazar el binario en disco:
 
 ```bash
 # Paso 1: Terminar todas las instancias
-pe-mcp-gitlab --shutdown
+gitlab-mcp-server --shutdown
 
 # Paso 2: Reemplazar el binario
 # Paso 3: El cliente MCP reinicia autom?ticamente con la nueva versi?n
@@ -135,10 +135,10 @@ Si el servidor de releases no responde dentro del timeout, la actualización se 
 
 ## Repositorio de actualización
 
-Por defecto, las actualizaciones se buscan en `mcp/pe-mcp-gitlab` en la instancia GitLab configurada. Puedes cambiarlo:
+Por defecto, las actualizaciones se buscan en `jmrplens/gitlab-mcp-server` en la instancia GitLab configurada. Puedes cambiarlo:
 
 ```bash
-./pe-mcp-gitlab --auto-update-repo=mi-grupo/mi-fork
+./gitlab-mcp-server --auto-update-repo=mi-grupo/mi-fork
 ```
 
 !!! warning "Seguridad"

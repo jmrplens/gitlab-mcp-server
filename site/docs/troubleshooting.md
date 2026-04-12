@@ -79,7 +79,7 @@ Soluciones a problemas comunes con Gitlab MCP.
 
 **Soluciones**:
 
-1. Ejecuta `pe-mcp-gitlab --shutdown` para terminar todas las instancias
+1. Ejecuta `gitlab-mcp-server --shutdown` para terminar todas las instancias
 2. Reemplaza el binario
 3. El cliente MCP reiniciará automáticamente con la nueva versión
 

@@ -1,6 +1,6 @@
 # Capacidades MCP
 
-Documentación de las **7 capacidades MCP** implementadas por pe-mcp-gitlab.
+Documentación de las **7 capacidades MCP** implementadas por gitlab-mcp-server.
 
 ## ¿Qué son las capacidades?
 
