@@ -4,15 +4,15 @@
 > the MCP tools exposed by `gitlab-mcp-server`. Each prompt tests a specific path or combination
 > of tools. Use them to verify the LLM picks the correct tool(s), parameters, and sequencing.
 >
-> **GitLab instance**: `https://bobafett` (self-signed TLS, skip verification)
-> **User**: `jmrplens` (id: 184)
+> **GitLab instance**: `https://gitlab.example.com` (self-signed TLS, skip verification)
+> **User**: `testuser` (id: 184)
 > **Test project**: `pe/ai/sw-area/mcp/gitlab-mcp-server` (id: 1835)
 
 ---
 
 ## How to Use
 
-1. Configure the MCP server pointing to `https://bobafett`
+1. Configure the MCP server pointing to `https://gitlab.example.com`
 2. Send each prompt to the LLM as-is (or adapt slightly)
 3. Observe which MCP tool(s) the LLM invokes and in what order
 4. Compare with the **Expected Path** to identify mismatches
@@ -37,7 +37,7 @@
 |-------|-------|
 | **Prompt** | "¿Quién soy en GitLab? Dame mi información de usuario." |
 | **Expected Path** | `gitlab_user` → action `current` |
-| **Expected Data** | username=jmrplens, id=184, email=<jmrplens@power-electronics.com> |
+| **Expected Data** | username=testuser, id=184, email=<testuser@example.com> |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -119,8 +119,8 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Qué proyectos tengo en mi espacio personal de GitLab (usuario jmrplens)?" |
-| **Expected Path** | `gitlab_project` → action `list_user_projects` for user jmrplens |
+| **Prompt** | "¿Qué proyectos tengo en mi espacio personal de GitLab (usuario testuser)?" |
+| **Expected Path** | `gitlab_project` → action `list_user_projects` for user testuser |
 | **Expected Data** | onboarding-tasks, informes, filesystem-analytics, MCFdiff, analisis-rendimiento-modbus-tcp |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -159,8 +159,8 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Obtén la información del proyecto en la ruta sw-area/embedded/solar/hem_max" |
-| **Expected Path** | `gitlab_project` → action `get` with path `sw-area/embedded/solar/hem_max` |
+| **Prompt** | "Obtén la información del proyecto en la ruta engineering/embedded/firmware/my-project" |
+| **Expected Path** | `gitlab_project` → action `get` with path `engineering/embedded/firmware/my-project` |
 | **Expected Data** | HEM_MAX project, id=393 |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -298,7 +298,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "Crea una issue en mi proyecto personal 'onboarding-tasks' con título 'Test MCP: verificar herramientas de issues' y descripción 'Issue creada automáticamente para validar el MCP server'." |
-| **Expected Path** | `gitlab_issue` → action `create` with project=1064 (or resolve by path jmrplens/onboarding-tasks) |
+| **Expected Path** | `gitlab_issue` → action `create` with project=1064 (or resolve by path testuser/onboarding-tasks) |
 | **Expected Data** | New issue created with given title and description |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -307,7 +307,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Actualiza la issue que acabas de crear en onboarding-tasks: añade la etiqueta 'test' y asígnala a jmrplens." |
+| **Prompt** | "Actualiza la issue que acabas de crear en onboarding-tasks: añade la etiqueta 'test' y asígnala a testuser." |
 | **Expected Path** | `gitlab_issue` → action `update` with labels and assignee |
 | **Expected Data** | Issue updated |
 | **Result** | |
@@ -696,7 +696,7 @@
 |-------|-------|
 | **Prompt** | "¿Quiénes participaron en la MR !14 del proyecto gitlab-mcp-server?" |
 | **Expected Path** | `gitlab_merge_request` → action `participants` for project=1835, mr_iid=14 |
-| **Expected Data** | jmrplens (author and merger) |
+| **Expected Data** | testuser (author and merger) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -716,7 +716,7 @@
 |-------|-------|
 | **Prompt** | "Dame las merge requests abiertas asignadas a mí en todo GitLab." |
 | **Expected Path** | `gitlab_merge_request` → action `list_global` with state=opened, assignee_id=mine |
-| **Expected Data** | List of open MRs assigned to jmrplens |
+| **Expected Data** | List of open MRs assigned to testuser |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -837,7 +837,7 @@
 | **Expected Path** | `gitlab_pipeline` → action `variables` for project 393, pipeline_id=41557 |
 | **Expected Data** | Pipeline variables |
 | **Result** | |
-| **Error / Observaciones** | Hace falta rol maintainer en el repositorio, asi que no se puede obtener pero muestra el json como si se hubiedese prodido un error, mejor si es algo mas semantico, el output del json: "pipelineGetVariables: access denied — your token lacks the required permissions for this operation: GET <https://bobafett/api/v4/projects/393/pipelines/41557/variables>: 403 {message: 403 Forbidden}" y despues el LLM si que lo entiende y dice: "No se puede acceder a las variables del pipeline #41557 — el token actual no tiene permisos suficientes." y "Error: 403 Forbidden — se requiere rol Maintainer o superior en el proyecto HEM_MAX para consultar variables de pipeline. El usuario jmrplens tiene rol Developer en este proyecto, que no es suficiente para esta operación." |
+| **Error / Observaciones** | Hace falta rol maintainer en el repositorio, asi que no se puede obtener pero muestra el json como si se hubiedese prodido un error, mejor si es algo mas semantico, el output del json: "pipelineGetVariables: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/projects/393/pipelines/41557/variables>: 403 {message: 403 Forbidden}" y despues el LLM si que lo entiende y dice: "No se puede acceder a las variables del pipeline #41557 — el token actual no tiene permisos suficientes." y "Error: 403 Forbidden — se requiere rol Maintainer o superior en el proyecto HEM_MAX para consultar variables de pipeline. El usuario testuser tiene rol Developer en este proyecto, que no es suficiente para esta operación." |
 
 ---
 
@@ -847,9 +847,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Crea un nuevo proyecto en mi espacio personal (jmrplens) llamado 'mcp-test-project' con descripción 'Proyecto temporal para testing del MCP server' y visibilidad privada." |
-| **Expected Path** | `gitlab_project` → action `create` with name, description, visibility=private in namespace jmrplens |
-| **Expected Data** | Project created in jmrplens/mcp-test-project |
+| **Prompt** | "Crea un nuevo proyecto en mi espacio personal (testuser) llamado 'mcp-test-project' con descripción 'Proyecto temporal para testing del MCP server' y visibilidad privada." |
+| **Expected Path** | `gitlab_project` → action `create` with name, description, visibility=private in namespace testuser |
+| **Expected Data** | Project created in testuser/mcp-test-project |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -1235,7 +1235,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Qué versión de GitLab está corriendo en bobafett?" |
+| **Prompt** | "¿Qué versión de GitLab está corriendo en gitlab.example.com?" |
 | **Expected Path** | Health/version tool or metadata tool |
 | **Expected Data** | GitLab version info |
 | **Result** | |
@@ -1249,7 +1249,7 @@
 | **Expected Path** | `gitlab_admin` → statistics or app_statistics tool |
 | **Expected Data** | Total projects, users, groups counts |
 | **Result** | |
-| **Error / Observaciones** | Como el token no es de admin se recibe error, mejor si es algo mas orgnico en lugar de error normal, aparece: "get_application_statistics: access denied — your token lacks the required permissions for this operation: GET <https://bobafett/api/v4/application/statistics>: 403 {message: 403 Forbidden}" |
+| **Error / Observaciones** | Como el token no es de admin se recibe error, mejor si es algo mas orgnico en lugar de error normal, aparece: "get_application_statistics: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/application/statistics>: 403 {message: 403 Forbidden}" |
 
 ### P-172: List namespaces
 
@@ -1345,7 +1345,7 @@
 |-------|-------|
 | **Prompt** | "Quiero saber quién ha sido más activo en gitlab-mcp-server últimamente. ¿Quién ha hecho más commits y MRs en la última semana?" |
 | **Expected Path** | Chain: commit list (since date) → MR list (created_after) → aggregate |
-| **Expected Data** | Activity summary (likely jmrplens dominates) |
+| **Expected Data** | Activity summary (likely testuser dominates) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -1357,7 +1357,7 @@
 | **Expected Path** | Chain: issues list (opened) → pipeline latest → branch list → contributors |
 | **Expected Data** | Multi-domain summary of HEM_MAX |
 | **Result** | |
-| **Error / Observaciones** | al usar la accion gitlab_pipeline con accion latest, se produce el error: "pipelineGetLatest: access denied — your token lacks the required permissions for this operation: GET <https://bobafett/api/v4/projects/393/pipelines/latest>: 403 {message: 403 Forbidden}". Si se uda la accion list si que obtiene datos. El resto ha ido bien |
+| **Error / Observaciones** | al usar la accion gitlab_pipeline con accion latest, se produce el error: "pipelineGetLatest: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/projects/393/pipelines/latest>: 403 {message: 403 Forbidden}". Si se uda la accion list si que obtiene datos. El resto ha ido bien |
 
 ### P-193: Conditional logic
 
@@ -1455,7 +1455,7 @@ Cuando digo que borre definitivamente un proyecto lo primero que intenta es borr
   }
 }
 Y la respuesta es
-projectDelete: bad request — check your input parameters: DELETE <https://bobafett/api/v4/projects/1883>: 400 {message: Project has already been marked for deletion}
+projectDelete: bad request — check your input parameters: DELETE <https://gitlab.example.com/api/v4/projects/1883>: 400 {message: Project has already been marked for deletion}
 
 Despues reintenta y ya lo consigue pero deberia en el primer intento confirmar estado para saber que herramienta usar o informar al usuario de que ya esta marcado y que preguntar si se quiere eliminar definitivamente (en nuestro caso hemos dicho en el prompt ue lo haga deifnitivamente, asi que deberia haberlo hecho directamente sin errores.)
 
@@ -1471,7 +1471,7 @@ Cuando pido que habilite las issus en un proyecto, primero el LLM envia:
   }
 }
 Que el mcp devuelve:
-projectUpdate: bad request — check your input parameters: PUT <https://bobafett/api/v4/projects/1064>: 400 {error: allow_merge_on_skipped_pipeline, analytics_access_level, autoclose_referenced_issues, auto_devops_enabled, auto_devops_deploy_strategy, auto_cancel_pending_pipelines, build_git_strategy, build_timeout, builds_access_level, ci_config_path, ci_default_git_depth, ci_allow_fork_pipelines_to_run_in_parent_project, ci_id_token_sub_claim_components, ci_forward_deployment_enabled, ci_forward_deployment_rollback_allowed, ci_separated_caches, container_registry_access_level, container_expiration_policy_attributes, default_branch, description, emails_disabled, emails_enabled, forking_access_level, issues_access_level, lfs_enabled, merge_pipelines_enabled, merge_requests_access_level, merge_requests_template, merge_trains_enabled, merge_method, merge_request_title_regex, merge_request_title_regex_description, name, only_allow_merge_if_all_discussions_are_resolved, only_allow_merge_if_pipeline_succeeds, package_registry_access_level, pages_access_level, path, printing_merge_request_link_enabled, public_builds, public_jobs, remove_source_branch_after_merge, repository_access_level, request_access_enabled, resolve_outdated_diff_discussions, restrict_user_defined_variables, show_diff_preview_in_email, security_and_compliance_access_level, squash_option, shared_runners_enabled, group_runners_enabled, resource_group_default_process_mode, snippets_access_level, tag_list, topics, visibility, wiki_access_level, avatar, suggestion_commit_message, merge_commit_template, squash_commit_template, issue_branch_template, repository_storage, packages_enabled, service_desk_enabled, keep_latest_artifact, mr_default_target_self, enforce_auth_checks_on_uploads, releases_access_level, environments_access_level, feature_flags_access_level, infrastructure_access_level, monitor_access_level, model_experiments_access_level, model_registry_access_level, warn_about_potentially_unwanted_characters, ci_pipeline_variables_minimum_override_role, ci_push_repository_for_job_token_allowed, ci_delete_pipelines_in_seconds, max_artifacts_size, issues_enabled, jobs_enabled, merge_requests_enabled, wiki_enabled, snippets_enabled, container_registry_enabled are missing, at least one parameter must be provided}
+projectUpdate: bad request — check your input parameters: PUT <https://gitlab.example.com/api/v4/projects/1064>: 400 {error: allow_merge_on_skipped_pipeline, analytics_access_level, autoclose_referenced_issues, auto_devops_enabled, auto_devops_deploy_strategy, auto_cancel_pending_pipelines, build_git_strategy, build_timeout, builds_access_level, ci_config_path, ci_default_git_depth, ci_allow_fork_pipelines_to_run_in_parent_project, ci_id_token_sub_claim_components, ci_forward_deployment_enabled, ci_forward_deployment_rollback_allowed, ci_separated_caches, container_registry_access_level, container_expiration_policy_attributes, default_branch, description, emails_disabled, emails_enabled, forking_access_level, issues_access_level, lfs_enabled, merge_pipelines_enabled, merge_requests_access_level, merge_requests_template, merge_trains_enabled, merge_method, merge_request_title_regex, merge_request_title_regex_description, name, only_allow_merge_if_all_discussions_are_resolved, only_allow_merge_if_pipeline_succeeds, package_registry_access_level, pages_access_level, path, printing_merge_request_link_enabled, public_builds, public_jobs, remove_source_branch_after_merge, repository_access_level, request_access_enabled, resolve_outdated_diff_discussions, restrict_user_defined_variables, show_diff_preview_in_email, security_and_compliance_access_level, squash_option, shared_runners_enabled, group_runners_enabled, resource_group_default_process_mode, snippets_access_level, tag_list, topics, visibility, wiki_access_level, avatar, suggestion_commit_message, merge_commit_template, squash_commit_template, issue_branch_template, repository_storage, packages_enabled, service_desk_enabled, keep_latest_artifact, mr_default_target_self, enforce_auth_checks_on_uploads, releases_access_level, environments_access_level, feature_flags_access_level, infrastructure_access_level, monitor_access_level, model_experiments_access_level, model_registry_access_level, warn_about_potentially_unwanted_characters, ci_pipeline_variables_minimum_override_role, ci_push_repository_for_job_token_allowed, ci_delete_pipelines_in_seconds, max_artifacts_size, issues_enabled, jobs_enabled, merge_requests_enabled, wiki_enabled, snippets_enabled, container_registry_enabled are missing, at least one parameter must be provided}
 
 Despues reintenta con:
 {
@@ -1497,7 +1497,7 @@ He pedido al LLM que borre unos packages y ha recibido forbidden, es de un repos
 }
 
 Devuelve:
-packageDelete: access denied — your token lacks the required permissions for this operation: DELETE <https://bobafett/api/v4/projects/1402/packages/3238>: 403 {message: 403 Forbidden}
+packageDelete: access denied — your token lacks the required permissions for this operation: DELETE <https://gitlab.example.com/api/v4/projects/1402/packages/3238>: 403 {message: 403 Forbidden}
 
 ---
 
@@ -1509,14 +1509,14 @@ Despues hace gitlab_admin con:
 }
 
 Y obtiene:
-{"version":"18.9.1","revision":"95bf6656b5a","kas":{"enabled":true,"external_url":"wss://bobafett/-/kubernetes-agent/","external_k8s_proxy_url":"<https://bobafett/-/kubernetes-agent/k8s-proxy/","version":"18.9.1"},"enterprise":false}>
+{"version":"18.9.1","revision":"95bf6656b5a","kas":{"enabled":true,"external_url":"wss://gitlab.example.com/-/kubernetes-agent/","external_k8s_proxy_url":"<https://gitlab.example.com/-/kubernetes-agent/k8s-proxy/","version":"18.9.1"},"enterprise":false}>
 {
   "version": "18.9.1",
   "revision": "95bf6656b5a",
   "kas": {
     "enabled": true,
-    "external_url": "wss://bobafett/-/kubernetes-agent/",
-    "external_k8s_proxy_url": "<https://bobafett/-/kubernetes-agent/k8s-proxy/>",
+    "external_url": "wss://gitlab.example.com/-/kubernetes-agent/",
+    "external_k8s_proxy_url": "<https://gitlab.example.com/-/kubernetes-agent/k8s-proxy/>",
     "version": "18.9.1"
   },
   "enterprise": false

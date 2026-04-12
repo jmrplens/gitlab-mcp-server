@@ -4,14 +4,14 @@
 > Each pair verifies that tool responses are well-structured, actionable, and contain the
 > expected structural patterns (markdown headers, next-steps, web URLs, formatted dates).
 >
-> **GitLab instance**: `https://bobafett` (self-signed TLS, skip verification)
+> **GitLab instance**: `https://gitlab.example.com` (self-signed TLS, skip verification)
 > **Test project**: `pe/ai/sw-area/mcp/gitlab-mcp-server` (id: 1835)
 
 ---
 
 ## How to Use
 
-1. Configure the MCP server pointing to `https://bobafett`
+1. Configure the MCP server pointing to `https://gitlab.example.com`
 2. Send each prompt to the LLM as-is
 3. Verify the **Expected Quality Indicators** are present in the tool response
 4. Document findings in the **Result** column
@@ -73,7 +73,7 @@
 | **Prompt** | "Show me the latest pipeline for project 1835 on branch main." |
 | **Expected Tool** | `gitlab_pipeline` → action `list` with ref=main |
 | **Quality Indicators** | Pipeline response includes `web_url` linking to the GitLab pipeline page; URL is clickable in the markdown output; status is shown with emoji indicator |
-| **Verification** | Verify response contains `https://bobafett/.../pipelines/` URL |
+| **Verification** | Verify response contains `https://gitlab.example.com/.../pipelines/` URL |
 | **Result** | |
 
 ## OQ-006: Empty list produces helpful message

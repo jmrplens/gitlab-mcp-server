@@ -18,16 +18,16 @@ import (
 
 const sampleGitmodules = `[submodule "dsp_up_spi_common_module"]
 	path = dsp_up_spi_common_module
-	url = git@gitlab.example.com:uP-DSP/common_modules_plus.git
+	url = git@gitlab.example.com:hardware/dsp/common-modules.git
 [submodule "bootloader"]
 	path = bootloader
-	url = git@gitlab.example.com:embedded/nube_bootloader.git
+	url = git@gitlab.example.com:embedded/cloud-bootloader.git
 [submodule "MCF/mcf_gen3"]
 	path = MCF/mcf_gen3
-	url = git@gitlab.example.com:sw-area/embedded/solar/mcf_gen3.git
+	url = git@gitlab.example.com:engineering/embedded/firmware/module-v3.git
 [submodule ".gitlab/gitlab-templates"]
 	path = .gitlab/gitlab-templates
-	url = git@gitlab.example.com:sw-area/doc/gitlab-templates.git
+	url = git@gitlab.example.com:engineering/docs/gitlab-templates.git
 `
 
 // parseGitmodules unit tests.
@@ -46,10 +46,10 @@ func TestParseGitmodules_Success(t *testing.T) {
 		url             string
 		resolvedProject string
 	}{
-		{"dsp_up_spi_common_module", "dsp_up_spi_common_module", "git@gitlab.example.com:uP-DSP/common_modules_plus.git", "uP-DSP/common_modules_plus"},
-		{"bootloader", "bootloader", "git@gitlab.example.com:embedded/nube_bootloader.git", "embedded/nube_bootloader"},
-		{"MCF/mcf_gen3", "MCF/mcf_gen3", "git@gitlab.example.com:sw-area/embedded/solar/mcf_gen3.git", "sw-area/embedded/solar/mcf_gen3"},
-		{".gitlab/gitlab-templates", ".gitlab/gitlab-templates", "git@gitlab.example.com:sw-area/doc/gitlab-templates.git", "sw-area/doc/gitlab-templates"},
+		{"dsp_up_spi_common_module", "dsp_up_spi_common_module", "git@gitlab.example.com:hardware/dsp/common-modules.git", "hardware/dsp/common-modules"},
+		{"bootloader", "bootloader", "git@gitlab.example.com:embedded/cloud-bootloader.git", "embedded/cloud-bootloader"},
+		{"MCF/mcf_gen3", "MCF/mcf_gen3", "git@gitlab.example.com:engineering/embedded/firmware/module-v3.git", "engineering/embedded/firmware/module-v3"},
+		{".gitlab/gitlab-templates", ".gitlab/gitlab-templates", "git@gitlab.example.com:engineering/docs/gitlab-templates.git", "engineering/docs/gitlab-templates"},
 	}
 
 	for i, tt := range tests {
