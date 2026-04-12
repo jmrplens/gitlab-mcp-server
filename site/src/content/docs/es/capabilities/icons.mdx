@@ -1,61 +1,187 @@
 ---
 title: Iconos
-description: Iconos SVG para herramientas, recursos y prompts
+description: Galería de iconos SVG para todas las herramientas, recursos y prompts
 ---
 
-GitLab MCP Server asigna iconos SVG únicos a todas las herramientas, recursos y prompts, proporcionando identificación visual en clientes MCP que soportan renderizado de iconos.
+import { Badge } from '@astrojs/starlight/components';
 
-## Resumen
+GitLab MCP Server asigna **44 iconos SVG únicos** a las 1004 herramientas individuales, 40/59 meta-herramientas, 24 recursos y 38 prompts. Los iconos ayudan a los clientes MCP a mostrar elementos de interfaz reconocibles para cada dominio de GitLab.
 
-- **43+ iconos SVG únicos** que cubren todas las áreas de dominio
-- Asignados a cada herramienta, recurso y prompt registrado
-- La asignación basada en dominio garantiza una agrupación visual consistente
+## Principios de diseño
 
-## Formato de Iconos
+- **Viewport 16×16** — tamaño mínimo optimizado para listas de herramientas y barras laterales
+- **`currentColor` como relleno** — los iconos se adaptan automáticamente a temas claro y oscuro
+- **Data URIs en línea** — embebidos en el binario, cero peticiones de red
+- **Un icono por dominio** — las herramientas relacionadas comparten el mismo icono para agrupación visual
 
-Los iconos se proporcionan en el formato de iconos MCP:
+## Galería de iconos
 
-```json
-{
-  "type": "image/svg+xml",
-  "data": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">...</svg>"
-}
-```
+Todos los iconos a 32px de tamaño, agrupados por categoría. La columna `Nombre` muestra la variable Go usada en el código.
 
-Cada icono es un SVG en línea optimizado para tamaños de visualización pequeños (típicamente 16×16 o 24×24 píxeles).
+### Control de versiones
 
-## Asignación Basada en Dominio
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M11.75 2.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5m.75 3.17a2.25 2.25 0 1 0-1.5 0v.58A2.25 2.25 0 0 1 8.75 8.5h-2.5A3.73 3.73 0 0 0 4.5 9.3v.45a2.25 2.25 0 1 0 1.5 0V9.3a2.24 2.24 0 0 1 .25-.04h2.5a3.75 3.75 0 0 0 3.75-3.75zM4.25 12a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Branch" /></td><td><code>IconBranch</code></td><td>branches, repository, repositorysubmodules</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='0' y1='8' x2='5' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='11' y1='8' x2='16' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Commit" /></td><td><code>IconCommit</code></td><td>commits, mrcontextcommits</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5zm3 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3'/%3E%3C/svg%3E" width="32" height="32" alt="Tag" /></td><td><code>IconTag</code></td><td>tags</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 1l2 3h4l-3 3 1.5 4L8 8.5 3.5 11 5 7 2 4h4z'/%3E%3C/svg%3E" width="32" height="32" alt="Release" /></td><td><code>IconRelease</code></td><td>releases</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.5' d='M3 1.5h7l3 3v10H3z'/%3E%3Cline x1='5' y1='7' x2='11' y2='7' stroke='%23888' stroke-width='1'/%3E%3Cline x1='5' y1='9.5' x2='11' y2='9.5' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="File" /></td><td><code>IconFile</code></td><td>files, markdown, pages</td></tr>
+</tbody>
+</table>
 
-Los iconos se asignan por dominio, de modo que las herramientas relacionadas comparten el mismo icono:
+### Issues y planificación
 
-| Dominio | Icono Representa |
-|---|---|
-| Issues | Rastreador de issues |
-| Merge Requests | Fusión de código |
-| Pipelines | Pipeline CI/CD |
-| Projects | Proyecto/repositorio |
-| Branches | Rama de Git |
-| Tags | Tag de Git |
-| Releases | Release/paquete |
-| Users | Usuario/persona |
-| Groups | Grupo/equipo |
-| Wiki | Documentación |
-| Labels | Etiqueta |
-| Milestones | Hito/objetivo |
-| Search | Búsqueda/lupa |
-| Security | Escudo/candado |
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%23888'/%3E%3C/svg%3E" width="32" height="32" alt="Issue" /></td><td><code>IconIssue</code></td><td>issues, workitems</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1' y='4' width='14' height='8' rx='4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Label" /></td><td><code>IconLabel</code></td><td>awardemoji, badges, grouplabels, labels, topics</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.5' d='M2 14L8 2l6 12z'/%3E%3C/svg%3E" width="32" height="32" alt="Milestone" /></td><td><code>IconMilestone</code></td><td>groupmilestones, milestones</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1' y='2' width='4' height='12' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3Crect x='6' y='2' width='4' height='8' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3Crect x='11' y='2' width='4' height='10' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Board" /></td><td><code>IconBoard</code></td><td>boards, groupboards</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.5' d='M6.5 9.5l3-3M4.5 8.5L3 10a2.8 2.8 0 0 0 4 4l1.5-1.5M11.5 7.5L13 6a2.8 2.8 0 0 0-4-4L7.5 3.5'/%3E%3C/svg%3E" width="32" height="32" alt="Link" /></td><td><code>IconLink</code></td><td>issuelinks, releaselinks</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cpath d='M5 8l2 2 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Todo" /></td><td><code>IconTodo</code></td><td>todos</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M2 3h12v2H2zm1 3h10v2H3zm2 3h6v2H5zm2 3h2v2H7z'/%3E%3C/svg%3E" width="32" height="32" alt="Epic" /></td><td><code>IconEpic</code></td><td>epics, epicdiscussions</td></tr>
+</tbody>
+</table>
 
-## Renderizado en el Cliente
+### Merge Requests
 
-El soporte de iconos varía según el cliente MCP:
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M4.25 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5M4.5 5.67a2.25 2.25 0 1 1-1.5 0v4.66a2.25 2.25 0 1 1 1.5 0zm0 0'/%3E%3Ccircle cx='11.75' cy='12.25' r='.75' fill='%23888'/%3E%3Cpath fill='%23888' d='M11.75 9.75a2.25 2.25 0 1 0 .75 4.37V9.3a2.25 2.25 0 0 1-.75.45m0-7.25a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5m.75 3.17a2.25 2.25 0 1 0-1.5 0v3.58h1.5z'/%3E%3C/svg%3E" width="32" height="32" alt="MR" /></td><td><code>IconMR</code></td><td>mergerequests, mrapprovals, mrchanges, deploymentmergerequests</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M2 2h12v8H6l-3 3v-3H2z'/%3E%3C/svg%3E" width="32" height="32" alt="Discussion" /></td><td><code>IconDiscussion</code></td><td>issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, commitdiscussions, epicdiscussions, snippetdiscussions</td></tr>
+</tbody>
+</table>
 
-| Cliente | Visualización de Iconos |
-|---|---|
-| Claude Desktop | Muestra iconos en la lista de herramientas |
-| VS Code / Copilot | Muestra iconos en el panel de herramientas MCP |
-| Cursor | Muestra iconos en la lista de herramientas |
-| Claude Code | Solo texto (sin renderizado de iconos) |
+### CI/CD
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='3' cy='8' r='2' fill='%23888'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%23888'/%3E%3Ccircle cx='13' cy='8' r='2' fill='%23888'/%3E%3Cline x1='5' y1='8' x2='6' y2='8' stroke='%23888' stroke-width='1'/%3E%3Cline x1='10' y1='8' x2='11' y2='8' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Pipeline" /></td><td><code>IconPipeline</code></td><td>cilint, pipelines, pipelinetriggers</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' rx='2' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cpath d='M6 5.5l4.5 2.5L6 10.5z' fill='%23888'/%3E%3C/svg%3E" width="32" height="32" alt="Job" /></td><td><code>IconJob</code></td><td>jobs, jobtokenscope</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='8' y1='4' x2='8' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='8' y1='8' x2='11' y2='10' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Schedule" /></td><td><code>IconSchedule</code></td><td>freezeperiods, pipelineschedules</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ctext x='3' y='12' font-size='12' font-family='monospace' fill='%23888'%3E%7Bx%7D%3C/text%3E%3C/svg%3E" width="32" height="32" alt="Variable" /></td><td><code>IconVariable</code></td><td>civariables, groupvariables, instancevariables</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='3' y='2' width='10' height='12' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Ccircle cx='6' cy='6' r='1' fill='%23888'/%3E%3Ccircle cx='10' cy='6' r='1' fill='%23888'/%3E%3Cline x1='5' y1='10' x2='11' y2='10' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Runner" /></td><td><code>IconRunner</code></td><td>clusteragents, runners, runnercontrollers, runnercontrollerscopes</td></tr>
+</tbody>
+</table>
+
+### Entornos y despliegues
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cellipse cx='8' cy='8' rx='3' ry='6' fill='none' stroke='%23888' stroke-width='1'/%3E%3Cline x1='2' y1='8' x2='14' y2='8' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Environment" /></td><td><code>IconEnvironment</code></td><td>environments</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 2v8m0 0l-3-3m3 3l3-3'/%3E%3Cline x1='3' y1='13' x2='13' y2='13' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Deploy" /></td><td><code>IconDeploy</code></td><td>deployments</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='5' y='1' width='6' height='4' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3Crect x='1' y='11' width='6' height='4' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3Crect x='9' y='11' width='6' height='4' rx='1' fill='none' stroke='%23888' stroke-width='1'/%3E%3Cline x1='8' y1='5' x2='8' y2='8' stroke='%23888' stroke-width='1'/%3E%3Cline x1='4' y1='8' x2='12' y2='8' stroke='%23888' stroke-width='1'/%3E%3Cline x1='4' y1='8' x2='4' y2='11' stroke='%23888' stroke-width='1'/%3E%3Cline x1='12' y1='8' x2='12' y2='11' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Infra" /></td><td><code>IconInfra</code></td><td>terraformstates</td></tr>
+</tbody>
+</table>
+
+### Proyectos y grupos
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='12' height='10' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='2' y1='6' x2='14' y2='6' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Project" /></td><td><code>IconProject</code></td><td>projectdiscovery, projects</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='5' cy='5' r='2' fill='%23888'/%3E%3Ccircle cx='11' cy='5' r='2' fill='%23888'/%3E%3Cpath fill='%23888' d='M1 12c0-2 2-3 4-3s4 1 4 3zm6 0c0-2 2-3 4-3s4 1 4 3z'/%3E%3C/svg%3E" width="32" height="32" alt="Group" /></td><td><code>IconGroup</code></td><td>groups, namespaces, resourcegroups</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='5' r='3' fill='%23888'/%3E%3Cpath fill='%23888' d='M2 14c0-3 3-5 6-5s6 2 6 5z'/%3E%3C/svg%3E" width="32" height="32" alt="User" /></td><td><code>IconUser</code></td><td>accessrequests, avatar, ffuserlists, groupmembers, invites, members, users</td></tr>
+</tbody>
+</table>
+
+### Paquetes y registro
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.5' d='M8 1L14 4.5v7L8 15 2 11.5v-7z'/%3E%3Cline x1='8' y1='8' x2='8' y2='15' stroke='%23888' stroke-width='1'/%3E%3Cline x1='2' y1='4.5' x2='8' y2='8' stroke='%23888' stroke-width='1'/%3E%3Cline x1='14' y1='4.5' x2='8' y2='8' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Package" /></td><td><code>IconPackage</code></td><td>dependencyproxy, packages</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='12' height='10' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='5' y1='3' x2='5' y2='13' stroke='%23888' stroke-width='1'/%3E%3Cline x1='8' y1='3' x2='8' y2='13' stroke='%23888' stroke-width='1'/%3E%3Cline x1='11' y1='3' x2='11' y2='13' stroke='%23888' stroke-width='1'/%3E%3Cline x1='2' y1='8' x2='14' y2='8' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Container" /></td><td><code>IconContainer</code></td><td>containerregistry</td></tr>
+</tbody>
+</table>
+
+### Búsqueda y analíticas
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='6.5' cy='6.5' r='4.5' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='10' y1='10' x2='14.5' y2='14.5' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Search" /></td><td><code>IconSearch</code></td><td>search</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpolyline points='1,14 5,6 9,10 15,2' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Analytics" /></td><td><code>IconAnalytics</code></td><td>appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata</td></tr>
+</tbody>
+</table>
+
+### Seguridad y acceso
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 1L2 4v4c0 4 3 6 6 7 3-1 6-3 6-7V4z'/%3E%3C/svg%3E" width="32" height="32" alt="Security" /></td><td><code>IconSecurity</code></td><td>license, protectedenvs, securefiles</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='6' cy='8' r='4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='10' y1='8' x2='15' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='13' y1='6' x2='13' y2='10' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Token" /></td><td><code>IconToken</code></td><td>accesstokens, deploytokens, jobtokenscope, runnercontrollertokens</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='5' cy='8' r='3' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='8' y1='8' x2='14' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='12' y1='6' x2='12' y2='8' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Key" /></td><td><code>IconKey</code></td><td>deploykeys, keys</td></tr>
+</tbody>
+</table>
+
+### Documentación y contenido
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M2 2h8l4 4v8H2zm8 0v4h4'/%3E%3Cline x1='4' y1='8' x2='10' y2='8' stroke='%23888' stroke-width='1'/%3E%3Cline x1='4' y1='10' x2='10' y2='10' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Wiki" /></td><td><code>IconWiki</code></td><td>wikis</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.5' d='M5 4L1 8l4 4m6-8l4 4-4 4'/%3E%3C/svg%3E" width="32" height="32" alt="Snippet" /></td><td><code>IconSnippet</code></td><td>snippets</td></tr>
+</tbody>
+</table>
+
+### Configuración y administración
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='2.5' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cpath fill='%23888' d='M7 1h2v2.1a5 5 0 0 1 1.7.7L12.1 2.4l1.4 1.4-1.4 1.4a5 5 0 0 1 .7 1.7H15v2h-2.1a5 5 0 0 1-.7 1.7l1.4 1.4-1.4 1.4-1.4-1.4a5 5 0 0 1-1.7.7V15H7v-2.1a5 5 0 0 1-1.7-.7L3.9 13.6 2.5 12.2l1.4-1.4a5 5 0 0 1-.7-1.7H1V7h2.1a5 5 0 0 1 .7-1.7L2.5 3.9 3.9 2.5l1.4 1.4A5 5 0 0 1 7 3.1z'/%3E%3C/svg%3E" width="32" height="32" alt="Config" /></td><td><code>IconConfig</code></td><td>appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='5' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Crect x='2' y='9' width='12' height='5' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Ccircle cx='5' cy='4.5' r='.75' fill='%23888'/%3E%3Ccircle cx='5' cy='11.5' r='.75' fill='%23888'/%3E%3C/svg%3E" width="32" height="32" alt="Server" /></td><td><code>IconServer</code></td><td>metadata, serverupdate</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' rx='1' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3Cline x1='2' y1='6' x2='14' y2='6' stroke='%23888' stroke-width='1'/%3E%3Cline x1='6' y1='6' x2='6' y2='14' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E" width="32" height="32" alt="Template" /></td><td><code>IconTemplate</code></td><td>ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates</td></tr>
+</tbody>
+</table>
+
+### Notificaciones y eventos
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 1C5 1 4 4 4 6v3l-2 2h12l-2-2V6c0-2-1-5-4-5m-2 13h4c0 1-1 2-2 2s-2-1-2-2'/%3E%3C/svg%3E" width="32" height="32" alt="Notify" /></td><td><code>IconNotify</code></td><td>broadcastmessages, notifications</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M10 1L6 9h3l-2 6 6-8H9l3-6z'/%3E%3C/svg%3E" width="32" height="32" alt="Event" /></td><td><code>IconEvent</code></td><td>events, resourceevents</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 1L1 14h14zM8 6v4m0 2v1'/%3E%3C/svg%3E" width="32" height="32" alt="Alert" /></td><td><code>IconAlert</code></td><td>alertmanagement, errortracking</td></tr>
+</tbody>
+</table>
+
+### Integraciones y operaciones
+
+<table>
+<thead><tr><th width="60">Vista previa</th><th>Nombre</th><th>Paquetes</th></tr></thead>
+<tbody>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M6 2v4H2v4h4v4h4v-4h4V6h-4V2z'/%3E%3C/svg%3E" width="32" height="32" alt="Integration" /></td><td><code>IconIntegration</code></td><td>integrations, systemhooks</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 14s-5.5-3.5-5.5-7A3.5 3.5 0 0 1 8 4.5 3.5 3.5 0 0 1 13.5 7c0 3.5-5.5 7-5.5 7'/%3E%3C/svg%3E" width="32" height="32" alt="Health" /></td><td><code>IconHealth</code></td><td>health</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 10V2m0 0L5 5m3-3l3 3'/%3E%3Cline x1='3' y1='13' x2='13' y2='13' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E" width="32" height="32" alt="Upload" /></td><td><code>IconUpload</code></td><td>groupmarkdownuploads, uploads</td></tr>
+<tr><td><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M8 2v8m0 0l3-3m-3 3L5 7'/%3E%3Crect x='2' y='12' width='12' height='2' rx='1' fill='%23888'/%3E%3C/svg%3E" width="32" height="32" alt="Import" /></td><td><code>IconImport</code></td><td>bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport</td></tr>
+</tbody>
+</table>
+
+## Compatibilidad con clientes
+
+| Cliente MCP | Iconos SVG | Notas |
+|---|---|---|
+| VS Code (GitHub Copilot) | ✅ Sí | Soporte completo de renderizado SVG |
+| Claude Desktop | ❌ No | No renderiza iconos de herramientas |
+| Continue.dev | ⚠️ Parcial | Depende de la versión |
+| Claude Code | ❌ No | Interfaz solo texto |
 
 :::note
 Los iconos son metadatos opcionales. Los clientes que no soportan renderizado de iconos simplemente los ignoran — la funcionalidad de las herramientas no se ve afectada.
 :::
+
+## Detalles técnicos
+
+- **Fuente**: [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)
+- **Codificación**: `data:image/svg+xml,<svg ...>...</svg>` (data URIs en línea)
+- **Viewport**: Todos los iconos usan 16×16 con `currentColor` para adaptación al tema
+- **Registro**: Cada sub-paquete de herramientas asigna iconos vía `Icons: toolutil.IconName` en `register.go`
