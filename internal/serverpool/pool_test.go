@@ -1,0 +1,530 @@
+// pool_test.go contains unit tests for the bounded LRU server pool.
+package serverpool
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+)
+
+// testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
+func testFactory() ServerFactory {
+	return func(client *gitlabclient.Client) *mcp.Server {
+		return mcp.NewServer(&mcp.Implementation{
+			Name:    "test-server",
+			Version: "0.0.0",
+		}, nil)
+	}
+}
+
+// testConfig returns a config suitable for tests using the given base URL.
+func testConfig(baseURL string) *config.Config {
+	return &config.Config{
+		GitLabURL:     baseURL,
+		GitLabToken:   "default-token",
+		SkipTLSVerify: false,
+	}
+}
+
+// TestGetOrCreate_EmptyToken verifies that GetOrCreate rejects empty tokens
+// to prevent all unauthenticated callers from sharing a single server entry.
+func TestGetOrCreate_EmptyToken(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv, err := pool.GetOrCreate("")
+	if err == nil {
+		t.Fatal("expected error for empty token, got nil")
+	}
+	if srv != nil {
+		t.Fatal("expected nil server for empty token")
+	}
+}
+
+// TestGetOrCreate_NewToken verifies that GetOrCreate handles the new token scenario correctly.
+func TestGetOrCreate_NewToken(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv, err := pool.GetOrCreate("glpat-token1")
+	if err != nil {
+		t.Fatalf("GetOrCreate() unexpected error: %v", err)
+	}
+	if srv == nil {
+		t.Fatal("GetOrCreate() returned nil server")
+	}
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want 1", pool.Size())
+	}
+}
+
+// TestGetOrCreate_SameToken verifies that GetOrCreate handles the same token scenario correctly.
+func TestGetOrCreate_SameToken(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv1, err := pool.GetOrCreate("glpat-same")
+	if err != nil {
+		t.Fatalf("first GetOrCreate() error: %v", err)
+	}
+
+	srv2, err := pool.GetOrCreate("glpat-same")
+	if err != nil {
+		t.Fatalf("second GetOrCreate() error: %v", err)
+	}
+
+	if srv1 != srv2 {
+		t.Error("expected same *mcp.Server pointer for the same token")
+	}
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want 1", pool.Size())
+	}
+}
+
+// TestGetOrCreate_DifferentTokens verifies that GetOrCreate handles the different tokens scenario correctly.
+func TestGetOrCreate_DifferentTokens(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv1, err := pool.GetOrCreate("glpat-token-a")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-a) error: %v", err)
+	}
+
+	srv2, err := pool.GetOrCreate("glpat-token-b")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-b) error: %v", err)
+	}
+
+	if srv1 == srv2 {
+		t.Error("expected different *mcp.Server pointers for different tokens")
+	}
+	if pool.Size() != 2 {
+		t.Errorf("pool.Size() = %d, want 2", pool.Size())
+	}
+}
+
+// TestGetOrCreate_LRUEviction verifies that GetOrCreate handles the l r u eviction scenario correctly.
+func TestGetOrCreate_LRUEviction(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(2))
+
+	// fill the pool
+	_, err := pool.GetOrCreate("token-1")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-1) error: %v", err)
+	}
+	_, err = pool.GetOrCreate("token-2")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-2) error: %v", err)
+	}
+
+	// this should evict token-1 (LRU)
+	_, err = pool.GetOrCreate("token-3")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-3) error: %v", err)
+	}
+
+	if pool.Size() != 2 {
+		t.Errorf("pool.Size() = %d, want 2 after eviction", pool.Size())
+	}
+
+	// token-1 should have been evicted — re-requesting creates a new entry
+	srv1, err := pool.GetOrCreate("token-1")
+	if err != nil {
+		t.Fatalf("GetOrCreate(token-1) re-create error: %v", err)
+	}
+	if srv1 == nil {
+		t.Fatal("GetOrCreate(token-1) returned nil after eviction + re-create")
+	}
+	// Now token-2 should be evicted (it was LRU after token-3 and token-1 accesses)
+	if pool.Size() != 2 {
+		t.Errorf("pool.Size() = %d, want 2", pool.Size())
+	}
+}
+
+// TestGetOrCreate_LRUPromotes verifies that GetOrCreate handles the l r u promotes scenario correctly.
+func TestGetOrCreate_LRUPromotes(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(2))
+
+	_, _ = pool.GetOrCreate("token-a")
+	_, _ = pool.GetOrCreate("token-b")
+
+	// Re-access token-a to promote it in LRU
+	_, _ = pool.GetOrCreate("token-a")
+
+	// Adding token-c should evict token-b (now LRU), not token-a
+	_, _ = pool.GetOrCreate("token-c")
+
+	if pool.Size() != 2 {
+		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
+	}
+
+	// Verify token-a still returns the same cached entry (not evicted)
+	srvA1, _ := pool.GetOrCreate("token-a")
+	srvA2, _ := pool.GetOrCreate("token-a")
+	if srvA1 != srvA2 {
+		t.Error("token-a should still be in pool after LRU promotion")
+	}
+}
+
+// TestGetOrCreate_Concurrent verifies that GetOrCreate handles the concurrent scenario correctly.
+func TestGetOrCreate_Concurrent(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(20))
+
+	tokens := []string{
+		"tok-1", "tok-2", "tok-3", "tok-4", "tok-5",
+		"tok-6", "tok-7", "tok-8", "tok-9", "tok-10",
+	}
+
+	var wg sync.WaitGroup
+	for i := range 100 {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			token := tokens[idx%len(tokens)]
+			srv, err := pool.GetOrCreate(token)
+			if err != nil {
+				t.Errorf("concurrent GetOrCreate() error: %v", err)
+				return
+			}
+			if srv == nil {
+				t.Error("concurrent GetOrCreate() returned nil")
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if pool.Size() != 10 {
+		t.Errorf("pool.Size() = %d, want 10", pool.Size())
+	}
+}
+
+// TestClose verifies the behavior of close.
+func TestClose(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	_, _ = pool.GetOrCreate("token-1")
+	_, _ = pool.GetOrCreate("token-2")
+
+	pool.Close()
+
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d after Close(), want 0", pool.Size())
+	}
+}
+
+// TestTokenHash verifies the behavior of token hash.
+func TestTokenHash(t *testing.T) {
+	hash1 := tokenHash("glpat-abc123")
+	hash2 := tokenHash("glpat-abc123")
+	hash3 := tokenHash("glpat-xyz789")
+
+	if hash1 != hash2 {
+		t.Error("same token should produce same hash")
+	}
+	if hash1 == hash3 {
+		t.Error("different tokens should produce different hashes")
+	}
+	if len(hash1) != 64 {
+		t.Errorf("hash length = %d, want 64 (SHA-256 hex)", len(hash1))
+	}
+}
+
+// TestTokenSuffix validates token suffix across multiple scenarios using table-driven subtests.
+func TestTokenSuffix(t *testing.T) {
+	tests := []struct {
+		name     string
+		token    string
+		expected string
+	}{
+		{"normal token", "glpat-abc123xyz", "...3xyz"},
+		{"short token", "abc", "****"},
+		{"exactly 4 chars", "abcd", "****"},
+		{"5 chars", "abcde", "...bcde"},
+		{"empty token", "", "****"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tokenSuffix(tt.token)
+			if got != tt.expected {
+				t.Errorf("tokenSuffix(%q) = %q, want %q", tt.token, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestWithMaxSize verifies the behavior of with max size.
+func TestWithMaxSize(t *testing.T) {
+	cfg := testConfig("http://localhost")
+
+	pool := New(cfg, testFactory(), WithMaxSize(5))
+	if pool.maxSize != 5 {
+		t.Errorf("maxSize = %d, want 5", pool.maxSize)
+	}
+
+	// Zero/negative values should be ignored
+	pool2 := New(cfg, testFactory(), WithMaxSize(0))
+	if pool2.maxSize != defaultMaxSize {
+		t.Errorf("maxSize = %d with zero, want default %d", pool2.maxSize, defaultMaxSize)
+	}
+
+	pool3 := New(cfg, testFactory(), WithMaxSize(-1))
+	if pool3.maxSize != defaultMaxSize {
+		t.Errorf("maxSize = %d with -1, want default %d", pool3.maxSize, defaultMaxSize)
+	}
+}
+
+// TestWithRevalidateInterval verifies that the revalidation interval can be
+// configured via the option.
+func TestWithRevalidateInterval(t *testing.T) {
+	cfg := testConfig("http://localhost")
+
+	pool := New(cfg, testFactory(), WithRevalidateInterval(5*time.Minute))
+	if pool.revalidateInterval != 5*time.Minute {
+		t.Errorf("revalidateInterval = %v, want 5m", pool.revalidateInterval)
+	}
+
+	// Zero disables revalidation
+	pool2 := New(cfg, testFactory(), WithRevalidateInterval(0))
+	if pool2.revalidateInterval != 0 {
+		t.Errorf("revalidateInterval = %v with zero, want 0", pool2.revalidateInterval)
+	}
+}
+
+// TestPoolEntry_TimestampFields verifies that new pool entries have
+// createdAt and lastValidated set to a recent time.
+func TestPoolEntry_TimestampFields(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	before := time.Now()
+	_, err := pool.GetOrCreate("token-time")
+	if err != nil {
+		t.Fatalf("GetOrCreate() error: %v", err)
+	}
+	after := time.Now()
+
+	key := tokenHash("token-time")
+	pool.mu.RLock()
+	entry := pool.entries[key]
+	pool.mu.RUnlock()
+
+	if entry.createdAt.Before(before) || entry.createdAt.After(after) {
+		t.Errorf("createdAt %v not between %v and %v", entry.createdAt, before, after)
+	}
+	if entry.lastValidated.Before(before) || entry.lastValidated.After(after) {
+		t.Errorf("lastValidated %v not between %v and %v", entry.lastValidated, before, after)
+	}
+}
+
+// TestStartRevalidation_NilContext verifies that StartRevalidation
+// handles nil context gracefully by substituting context.Background().
+func TestStartRevalidation_NilContext(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
+
+	// Should not panic — nil ctx is replaced with context.Background()
+	//lint:ignore SA1012 intentionally testing nil context guard
+	pool.StartRevalidation(nil) //nolint:staticcheck // SA1012
+}
+
+// TestStartRevalidation_DisabledWithZeroInterval verifies that
+// StartRevalidation returns immediately when interval is zero.
+func TestStartRevalidation_DisabledWithZeroInterval(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
+
+	ctx := t.Context()
+
+	// Should not panic and return immediately
+	pool.StartRevalidation(ctx)
+}
+
+// TestStartRevalidation_CancelledContext verifies that the revalidation
+// goroutine stops when the context is cancelled.
+func TestStartRevalidation_CancelledContext(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithRevalidateInterval(50*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	pool.StartRevalidation(ctx)
+
+	// Let it run briefly then cancel
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	// Give goroutine time to exit cleanly
+	time.Sleep(100 * time.Millisecond)
+}
+
+// TestEvictByKey verifies that evictByKey removes the specified entry
+// and not others.
+func TestEvictByKey(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	_, _ = pool.GetOrCreate("token-keep")
+	_, _ = pool.GetOrCreate("token-evict")
+
+	if pool.Size() != 2 {
+		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
+	}
+
+	key := tokenHash("token-evict")
+	pool.evictByKey(key)
+
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d after eviction, want 1", pool.Size())
+	}
+
+	// Evicting a nonexistent key is a no-op
+	pool.evictByKey("nonexistent-key")
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d after noop eviction, want 1", pool.Size())
+	}
+}
+
+// TestDefaultRevalidateInterval verifies that the default revalidation
+// interval is 15 minutes.
+func TestDefaultRevalidateInterval(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+	if pool.revalidateInterval != DefaultRevalidateInterval {
+		t.Errorf("default revalidateInterval = %v, want %v", pool.revalidateInterval, DefaultRevalidateInterval)
+	}
+}
+
+// TestStats_HitsAndMisses verifies that Stats tracks cache hits and misses.
+func TestStats_HitsAndMisses(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	// First call → miss
+	_, _ = pool.GetOrCreate("token-a")
+	s := pool.Stats()
+	if s.Misses != 1 {
+		t.Errorf("Misses = %d after first GetOrCreate, want 1", s.Misses)
+	}
+	if s.Hits != 0 {
+		t.Errorf("Hits = %d after first GetOrCreate, want 0", s.Hits)
+	}
+
+	// Second call with same token → hit
+	_, _ = pool.GetOrCreate("token-a")
+	s = pool.Stats()
+	if s.Hits != 1 {
+		t.Errorf("Hits = %d after second GetOrCreate, want 1", s.Hits)
+	}
+	if s.Misses != 1 {
+		t.Errorf("Misses = %d after second GetOrCreate, want 1", s.Misses)
+	}
+
+	// Third call with different token → another miss
+	_, _ = pool.GetOrCreate("token-b")
+	s = pool.Stats()
+	if s.Hits != 1 {
+		t.Errorf("Hits = %d, want 1", s.Hits)
+	}
+	if s.Misses != 2 {
+		t.Errorf("Misses = %d, want 2", s.Misses)
+	}
+}
+
+// TestStats_Evictions verifies that LRU evictions are counted.
+func TestStats_Evictions(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(2))
+
+	_, _ = pool.GetOrCreate("tok-1")
+	_, _ = pool.GetOrCreate("tok-2")
+	_, _ = pool.GetOrCreate("tok-3") // evicts tok-1
+
+	s := pool.Stats()
+	if s.Evictions != 1 {
+		t.Errorf("Evictions = %d after 1 LRU eviction, want 1", s.Evictions)
+	}
+
+	_, _ = pool.GetOrCreate("tok-4") // evicts tok-2
+	s = pool.Stats()
+	if s.Evictions != 2 {
+		t.Errorf("Evictions = %d after 2 LRU evictions, want 2", s.Evictions)
+	}
+}
+
+// TestStats_EvictByKey verifies that explicit key eviction is counted.
+func TestStats_EvictByKey(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	_, _ = pool.GetOrCreate("tok-evict")
+	key := tokenHash("tok-evict")
+	pool.evictByKey(key)
+
+	s := pool.Stats()
+	if s.Evictions != 1 {
+		t.Errorf("Evictions = %d after evictByKey, want 1", s.Evictions)
+	}
+
+	// Evicting a nonexistent key does not increment
+	pool.evictByKey("nonexistent")
+	s = pool.Stats()
+	if s.Evictions != 1 {
+		t.Errorf("Evictions = %d after noop evictByKey, want 1", s.Evictions)
+	}
+}
+
+// TestStats_SnapshotFields verifies that Stats returns correct pool state.
+func TestStats_SnapshotFields(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	before := time.Now()
+	pool := New(cfg, testFactory(), WithMaxSize(50))
+
+	_, _ = pool.GetOrCreate("tok-1")
+	_, _ = pool.GetOrCreate("tok-2")
+
+	s := pool.Stats()
+	if s.CurrentSize != 2 {
+		t.Errorf("CurrentSize = %d, want 2", s.CurrentSize)
+	}
+	if s.MaxSize != 50 {
+		t.Errorf("MaxSize = %d, want 50", s.MaxSize)
+	}
+	if s.CreatedAt.Before(before) {
+		t.Errorf("CreatedAt %v is before pool construction time %v", s.CreatedAt, before)
+	}
+}
+
+// TestStats_ConcurrentAccess verifies that metrics are safe under concurrent use.
+func TestStats_ConcurrentAccess(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(20))
+
+	var wg sync.WaitGroup
+	for i := range 50 {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			token := "tok-" + string(rune('a'+idx%5))
+			_, _ = pool.GetOrCreate(token)
+			_ = pool.Stats()
+		}(i)
+	}
+	wg.Wait()
+
+	s := pool.Stats()
+	total := s.Hits + s.Misses
+	if total != 50 {
+		t.Errorf("Hits(%d) + Misses(%d) = %d, want 50", s.Hits, s.Misses, total)
+	}
+}
