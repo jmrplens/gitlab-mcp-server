@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+dist/
+docs/
+plan/
+test/
+keys/*.secret.asc
+golangci-report*.txt
+coverage*
+*.exe
+*.test
+*.out
+llms-full.txt
+sonar-project.properties

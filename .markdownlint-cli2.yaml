@@ -1,0 +1,11 @@
+# markdownlint-cli2 configuration for mkdocs-material documentation
+# Disables rules incompatible with mkdocs-material features
+
+config:
+  # Line length: tables and links naturally exceed 80 chars
+  MD013: false
+  # Code block style: mkdocs tabs (===) and admonitions (!!!/???)
+  # use indented content including code blocks by design
+  MD046: false
+  # Table column style: pipe alignment style is not enforced
+  MD060: false

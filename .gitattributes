@@ -1,0 +1,43 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Go source files — always LF
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# Scripts — always LF
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Config/docs — always LF
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.toml text eol=lf
+*.properties text eol=lf
+*.txt text eol=lf
+*.html text eol=lf
+*.editorconfig text eol=lf
+Makefile text eol=lf
+
+# Extensionless text files — always LF
+CODEOWNERS text eol=lf
+VERSION text eol=lf
+
+# Cryptographic keys — text, always LF
+*.pub text eol=lf
+*.asc text eol=lf
+
+# Binary files — no conversion
+*.exe binary
+*.dll binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.zip binary
+*.tar.gz binary
