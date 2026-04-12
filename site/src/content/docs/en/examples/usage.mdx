@@ -1,0 +1,138 @@
+---
+title: Usage Examples
+description: Real-world examples of using GitLab MCP Server
+---
+
+These examples show natural language prompts you can use with any AI assistant connected to GitLab MCP Server. The server translates these into GitLab API operations automatically.
+
+## Project Management
+
+### List Your Projects
+
+**Prompt**: "Show me my GitLab projects"
+
+The server calls `gitlab_project` with `action: list`, returning project names, descriptions, and URLs.
+
+### Create an Issue
+
+**Prompt**: "Create a bug report in my-group/my-project titled 'Login page returns 404 after password reset' with labels bug and priority::high"
+
+The server calls `gitlab_issue` with `action: create`, setting the title, description, labels, and project in a single operation.
+
+### Manage Labels
+
+**Prompt**: "List all labels in the frontend project and create a new label called 'accessibility' with color #0052CC"
+
+The server first calls `gitlab_label` with `action: list` to show existing labels, then `action: create` to add the new one.
+
+### Track Milestones
+
+**Prompt**: "Show me the progress on the Sprint 14 milestone in my-project"
+
+The server calls `gitlab_milestone` with `action: get`, returning completion percentage, open/closed issue counts, and due date.
+
+---
+
+## Code Review
+
+### List Open Merge Requests
+
+**Prompt**: "Show me all open merge requests assigned to me"
+
+The server calls `gitlab_merge_request` with `action: list`, filtering by assignee and state.
+
+### Analyze MR Changes
+
+**Prompt**: "Analyze the code changes in merge request !42 for potential bugs and security issues"
+
+The server uses `gitlab_analyze_mr_changes` (sampling), which fetches the diff, sends it to the LLM for analysis, and returns a structured review with findings.
+
+### Review MR Security
+
+**Prompt**: "Do a security review of MR !78 in the backend project"
+
+The server uses `gitlab_review_mr_security` (sampling), which examines the diff for security vulnerabilities like injection flaws, hardcoded secrets, and authentication issues.
+
+### Summarize MR Discussion
+
+**Prompt**: "Summarize the review feedback on MR !42"
+
+The server uses `gitlab_summarize_mr_review` (sampling), consolidating all review comments and discussions into a concise summary.
+
+---
+
+## CI/CD
+
+### Check Pipeline Status
+
+**Prompt**: "What's the status of the latest pipeline in my-project?"
+
+The server calls `gitlab_pipeline` with `action: list`, returning the most recent pipeline's status, duration, and stages.
+
+### Diagnose Pipeline Failure
+
+**Prompt**: "Why did pipeline #12345 fail?"
+
+The server uses `gitlab_analyze_pipeline_failure` (sampling), which fetches job logs, identifies the failing step, and provides root cause analysis with suggested fixes.
+
+### Review CI Configuration
+
+**Prompt**: "Check the .gitlab-ci.yml in my-project for best practices"
+
+The server uses `gitlab_analyze_ci_configuration` (sampling), analyzing the CI config for optimization opportunities, security issues, and best practice violations.
+
+---
+
+## Release Management
+
+### Create a Release
+
+**Prompt**: "Create release v2.1.0 from tag v2.1.0 in my-project with release notes about the login fix and performance improvements"
+
+The server calls `gitlab_release` with `action: create`, associating the release with the tag and setting the description.
+
+### Generate Release Notes
+
+**Prompt**: "Generate release notes for milestone 'v2.1' based on all closed issues and merged MRs"
+
+The server uses `gitlab_generate_release_notes` (sampling), which collects all issues and merge requests in the milestone and generates categorized release notes (Features, Bug Fixes, Improvements).
+
+### Milestone Report
+
+**Prompt**: "Give me a progress report for the Q2 milestone"
+
+The server uses `gitlab_generate_milestone_report` (sampling), providing metrics on completion percentage, velocity, blockers, and projected completion date.
+
+---
+
+## Team Collaboration
+
+### Search Code
+
+**Prompt**: "Search for usages of the deprecated `authenticateUser` function across all my projects"
+
+The server calls `gitlab_search` with `action: code`, searching across projects for the specified code pattern.
+
+### Find Technical Debt
+
+**Prompt**: "Identify technical debt in the backend project"
+
+The server uses `gitlab_find_technical_debt` (sampling), analyzing issues, code patterns, and project metrics to identify areas of accumulated technical debt.
+
+### Manage Members
+
+**Prompt**: "List all members of the frontend project and their access levels"
+
+The server calls `gitlab_member` with `action: list`, returning team members with their roles and permissions.
+
+### Deployment Analysis
+
+**Prompt**: "Analyze the deployment history for the production environment over the last month"
+
+The server uses `gitlab_analyze_deployment_history` (sampling), examining deployment frequency, success rates, rollback patterns, and DORA-like metrics.
+
+---
+
+:::tip
+These examples use meta-tool mode (default). Each prompt maps to a single meta-tool call with the appropriate `action` parameter. The AI assistant handles the mapping automatically — just describe what you need in natural language.
+:::

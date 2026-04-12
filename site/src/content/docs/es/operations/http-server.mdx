@@ -1,0 +1,192 @@
+---
+title: Modo Servidor HTTP
+description: Despliegue multiusuario con autenticación por solicitud
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
+
+## Cuándo Usar el Modo HTTP
+
+| Escenario | Modo Recomendado |
+|---|---|
+| Desarrollador individual, cliente de IA local | stdio |
+| Equipo compartiendo una instancia de servidor | **HTTP** |
+| Despliegue en servidor remoto/sin pantalla | **HTTP** |
+| Integración CI/CD con MCP | **HTTP** |
+| Pruebas con curl o clientes HTTP | **HTTP** |
+
+## Iniciar el Servidor
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com
+```
+
+El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP está disponible en `/mcp`.
+
+## Flags de CLI
+
+| Flag | Por Defecto | Descripción |
+|---|---|---|
+| `--http` | _(desactivado)_ | Habilitar modo de transporte HTTP |
+| `--http-addr` | `:8080` | Dirección de escucha HTTP (`host:puerto`) |
+| `--gitlab-url` | _(requerido)_ | URL base de la instancia de GitLab |
+| `--skip-tls-verify` | `false` | Omitir verificación de certificados TLS para certificados autofirmados |
+| `--meta-tools` | `true` | Habilitar meta-herramientas de dominio (40 o 59 con --enterprise) |
+| `--enterprise` | `false` | Habilitar meta-herramientas Enterprise/Premium (14 adicionales) |
+| `--read-only` | `false` | Modo solo lectura: desactivar todas las herramientas de escritura |
+| `--max-http-clients` | `100` | Máximo de tokens únicos en el pool del servidor |
+| `--session-timeout` | `30m` | Timeout de sesión MCP inactiva |
+| `--auto-update` | `true` | Modo de actualización automática: `true`, `check` o `false` |
+| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release |
+| `--auto-update-interval` | `1h` | Intervalo de verificación periódica de actualizaciones |
+
+:::note
+`--gitlab-url` es el único flag requerido. Todos los demás tienen valores predeterminados sensatos.
+:::
+
+## Autenticación
+
+Los clientes deben proporcionar su Token de Acceso Personal de GitLab en cada solicitud HTTP usando una de dos cabeceras:
+
+### Cabecera PRIVATE-TOKEN (Recomendada)
+
+```
+PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+### Cabecera Authorization Bearer
+
+```
+Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+Si ambas cabeceras están presentes, `PRIVATE-TOKEN` tiene precedencia. Las solicitudes sin un token válido son rechazadas.
+
+## Gestión de Sesiones
+
+### Arquitectura del Pool de Servidores
+
+El núcleo del modo HTTP es un **pool LRU limitado** de instancias de servidor MCP, indexado por el hash SHA-256 del token de cada cliente.
+
+```mermaid
+graph TD
+    subgraph "Arquitectura del Modo HTTP"
+        REQ1["Cliente A<br/>Token: glpat-aaa"] --> HANDLER[StreamableHTTPHandler]
+        REQ2["Cliente B<br/>Token: glpat-bbb"] --> HANDLER
+        REQ3["Cliente C<br/>Token: glpat-aaa"] --> HANDLER
+
+        HANDLER --> POOL[Pool de Servidores]
+
+        POOL --> ENTRY1["hash(glpat-aaa)<br/>Servidor MCP + Cliente GitLab"]
+        POOL --> ENTRY2["hash(glpat-bbb)<br/>Servidor MCP + Cliente GitLab"]
+    end
+
+    ENTRY1 --> GL1["API de GitLab<br/>como usuario A"]
+    ENTRY2 --> GL2["API de GitLab<br/>como usuario B"]
+```
+
+**Propiedades clave:**
+
+- Los clientes con el **mismo token** comparten la misma instancia del servidor MCP
+- Los clientes con **diferentes tokens** obtienen instancias completamente aisladas
+- Los tokens sin procesar **nunca se almacenan** — solo se mantienen hashes SHA-256 en memoria
+- Cuando el pool alcanza `--max-http-clients`, la entrada menos usada recientemente es desalojada
+
+### Ciclo de Vida de la Sesión
+
+1. **Primera solicitud**: El token se extrae, se hashea, y se crea un nuevo servidor MCP + cliente GitLab
+2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
+3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
+4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
+
+## Configuración del Cliente
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+Añadir a `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "http://tu-servidor:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-tu-token"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="OpenCode">
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "http://tu-servidor:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-tu-token"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="curl (Pruebas)">
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+</TabItem>
+</Tabs>
+
+## Despliegue con Docker Compose
+
+```yaml
+services:
+  gitlab-mcp:
+    image: ghcr.io/jmrplens/gitlab-mcp-server:latest
+    ports:
+      - "8080:8080"
+    command:
+      - "--http"
+      - "--gitlab-url=https://gitlab.ejemplo.com"
+      - "--http-addr=:8080"
+      - "--max-http-clients=200"
+      - "--session-timeout=1h"
+    restart: unless-stopped
+```
+
+Iniciar el servicio:
+
+```bash
+docker compose up -d
+```
+
+## Verificación de Salud
+
+Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
+
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+```
+
+Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramientas disponibles.
+
+:::tip
+Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.
+:::

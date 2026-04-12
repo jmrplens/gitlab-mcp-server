@@ -72,7 +72,8 @@ plan/
 Thumbs.db
 Desktop.ini
 
-# MkDocs build output
-site/*
-!site/docs/
+# Astro Starlight
+site/node_modules/
+site/dist/
+site/.astro/
 public/

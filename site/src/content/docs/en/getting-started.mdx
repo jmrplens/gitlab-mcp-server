@@ -1,0 +1,211 @@
+---
+title: Getting Started
+description: Install and configure GitLab MCP Server with your favorite AI client
+---
+
+import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+Get up and running with GitLab MCP Server in under 5 minutes.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+1. **A GitLab instance** — GitLab.com, self-hosted CE, or EE
+2. **A Personal Access Token (PAT)** with the `api` scope
+3. **An MCP-compatible AI client** — VS Code + Copilot, Claude Desktop, Cursor, or Claude Code
+
+### Creating a Personal Access Token
+
+1. Go to **GitLab → Preferences → Access Tokens**
+2. Create a new token with the **`api`** scope
+3. Copy the token — you'll need it for configuration
+
+:::tip
+For read-only setups, you can use a token with `read_api` scope and enable `GITLAB_READ_ONLY=true`. This disables all mutating tools.
+:::
+
+## Download
+
+Download the latest binary for your platform from the [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) page:
+
+| Platform | Binary |
+|---|---|
+| Linux (x86_64) | `gitlab-mcp-server-linux-amd64` |
+| Linux (ARM64) | `gitlab-mcp-server-linux-arm64` |
+| macOS (Intel) | `gitlab-mcp-server-darwin-amd64` |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64` |
+| Windows (x86_64) | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows (ARM64) | `gitlab-mcp-server-windows-arm64.exe` |
+
+### Make it executable (Linux/macOS)
+
+```bash
+chmod +x gitlab-mcp-server-*
+```
+
+Optionally, move it to a directory in your PATH:
+
+```bash
+sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
+```
+
+## Setup Wizard
+
+The easiest way to configure the server is the built-in setup wizard:
+
+```bash
+./gitlab-mcp-server setup-wizard
+```
+
+The wizard will:
+- Prompt for your GitLab URL and token
+- Test the connection
+- Auto-detect your AI client
+- Generate the correct configuration file
+
+:::note
+The setup wizard supports VS Code, Claude Desktop, Cursor, and Claude Code. For other clients, use the manual configuration below.
+:::
+
+## Manual Configuration
+
+If you prefer to configure manually, choose your AI client:
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+Create or edit `.vscode/mcp.json` in your workspace root:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+:::tip
+For better security, use VS Code input variables to avoid storing the token in plain text. See the [Configuration](/en/configuration/) page for details.
+:::
+
+</TabItem>
+<TabItem label="Claude Desktop">
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="Cursor">
+
+Create or edit `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+<TabItem label="Claude Code">
+
+Add the server using the CLI:
+
+```bash
+claude mcp add gitlab \
+  --transport stdio \
+  -- /path/to/gitlab-mcp-server
+```
+
+Then set the required environment variables:
+
+```bash
+export GITLAB_URL="https://gitlab.example.com"
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+Or create a `.env` file in your working directory with the variables above.
+
+</TabItem>
+</Tabs>
+
+## Using an .env File
+
+Instead of placing secrets in client config files, you can use a `.env` file:
+
+```bash title=".env"
+GITLAB_URL=https://gitlab.example.com
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+The server loads `.env` from the current working directory automatically. See [Configuration](/en/configuration/) for the full load order.
+
+## HTTP Mode
+
+For team deployments, you can run the server in HTTP mode where each user authenticates with their own token:
+
+```bash
+./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
+```
+
+Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/en/guides/http-mode/) for details.
+
+## Verify the Setup
+
+Once configured, open your AI client and ask:
+
+```
+Who am I on GitLab?
+```
+
+The server should return your GitLab user profile, confirming the connection is working. You can also try:
+
+```
+List my assigned merge requests
+```
+
+```
+Show recent pipelines in my-project
+```
+
+If you see results, you're all set!
+
+:::caution
+If you get connection errors, check:
+- The `GITLAB_URL` is correct and reachable from your machine
+- The token has the `api` scope
+- For self-signed certificates, set `GITLAB_SKIP_TLS_VERIFY=true`
+:::
+
+## Next Steps
+
+- [Configuration](/en/configuration/) — Fine-tune environment variables and optional features
+- [Architecture](/en/architecture/) — Understand how the server works under the hood
+- [Tools Reference](/en/tools/) — Explore all available tools by domain

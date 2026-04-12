@@ -1,0 +1,76 @@
+---
+title: Logging
+description: Structured logging via MCP protocol
+---
+
+GitLab MCP Server uses **dual logging** — log messages are sent both to stderr (for terminal/file capture) and to the MCP client via the protocol's logging capability.
+
+## Dual Output
+
+| Destination | Format | Purpose |
+|---|---|---|
+| **stderr** | Human-readable text or JSON | Terminal output, file redirection, debugging |
+| **MCP protocol** | `notifications/message` | Displayed in the MCP client's UI (e.g., VS Code Output panel) |
+
+This ensures logs are always visible regardless of the client's logging support.
+
+## Log Levels
+
+The server supports four log levels:
+
+| Level | When Used |
+|---|---|
+| `debug` | Detailed diagnostic information — tool call parameters, API request/response details, session pool operations |
+| `info` | Normal operational events — server startup, tool registration, update checks |
+| `warn` | Non-fatal issues — network timeouts, missing optional configuration, deprecated usage |
+| `error` | Failures — authentication errors, API failures, unrecoverable tool errors |
+
+## Configuration
+
+Set the log level via environment variable:
+
+```bash
+# Stdio mode
+LOG_LEVEL=debug ./gitlab-mcp-server
+
+# HTTP mode
+LOG_LEVEL=info ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
+```
+
+The default level is `info`.
+
+## MCP Log Messages
+
+When the MCP client supports logging, the server sends structured log notifications:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/message",
+  "params": {
+    "level": "info",
+    "logger": "gitlab-mcp-server",
+    "data": {
+      "message": "starting MCP server",
+      "transport": "stdio",
+      "version": "2.1.0",
+      "tools": 40,
+      "resources": 24,
+      "prompts": 38
+    }
+  }
+}
+```
+
+### Security Rules
+
+Log messages follow strict security rules:
+
+- **No tokens** — GitLab tokens are never included in log messages
+- **Masked identifiers** — In HTTP mode, tokens are shown as `...a1b2` (last 4 characters only)
+- **No PII** — User-submitted data is not logged at `info` level or above
+- **Debug only** — Detailed request/response data is only logged at `debug` level
+
+:::tip
+In VS Code, view MCP server logs via `Ctrl+Shift+P` → **MCP: List Servers** → select the server → **Show Output**.
+:::

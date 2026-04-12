@@ -1,6 +1,6 @@
-# Documentation site — MkDocs Material → GitHub Pages
+# Documentation site — Astro Starlight → GitHub Pages
 #
-# Triggers: push to main (docs or config changes), manual dispatch
+# Triggers: push to main (site changes), manual dispatch
 
 name: Pages
 
@@ -8,8 +8,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "mkdocs.yml"
-      - "site/docs/**"
+      - "site/**"
+      - "!site/node_modules/**"
   workflow_dispatch:
 
 permissions:
@@ -28,17 +28,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.14"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
 
-      - run: pip install mkdocs-material
+      - run: npm ci
+        working-directory: site
 
-      - run: mkdocs build --strict
+      - run: npx astro build
+        working-directory: site
 
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: public
+          path: site/dist
 
   deploy:
     name: Deploy

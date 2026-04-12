@@ -1,0 +1,197 @@
+---
+title: Seguridad
+description: Modelo de seguridad, gestión de tokens y mejores prácticas
+---
+
+GitLab MCP Server está diseñado con una arquitectura que prioriza la seguridad. Esta página cubre el modelo de seguridad, el manejo de credenciales y las mejores prácticas para un despliegue seguro.
+
+## Descripción General del Modelo de Seguridad
+
+```mermaid
+flowchart TB
+    subgraph Local["Máquina Local"]
+        Token["Token de GitLab<br/>(variable de entorno / archivo .env)"]
+        Server["Proceso del Servidor MCP"]
+        Client["Cliente MCP<br/>(VS Code, etc.)"]
+    end
+    subgraph Remote["Red"]
+        GitLab["Instancia de GitLab"]
+    end
+
+    Token --> Server
+    Client <-->|"stdio (stdin/stdout)"| Server
+    Server <-->|"HTTPS"| GitLab
+```
+
+### Principios Clave
+
+- **Aislamiento del token**: En modo stdio, el token de GitLab nunca sale del proceso local del servidor. Se carga desde el entorno y se utiliza exclusivamente para llamadas a la API de GitLab.
+- **Sin reenvío de tokens**: El token nunca se envía al cliente MCP, nunca se incluye en las salidas de herramientas y nunca se pasa a través de solicitudes de sampling MCP.
+- **Aislamiento a nivel de proceso**: El servidor se ejecuta como un proceso local comunicándose a través de stdin/stdout. No se abren puertos de red en modo stdio.
+- **Mínimo privilegio**: El servidor solo necesita un token de GitLab con los scopes requeridos para las operaciones que deseas utilizar.
+
+## Gestión de Tokens
+
+### Recomendado: Archivo de Entorno
+
+Almacena tu token en un archivo `.env` con permisos restringidos:
+
+```bash
+# Crear archivo .env
+echo 'GITLAB_URL=https://gitlab.example.com' > .env
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' >> .env
+
+# Restringir permisos (solo lectura/escritura del propietario)
+chmod 600 .env
+```
+
+:::danger
+Nunca hagas commit de archivos `.env` en el control de versiones. Añade `.env` a tu archivo `.gitignore`.
+:::
+
+### Variables de Entrada en VS Code
+
+Para usuarios de VS Code, puedes usar variables de entrada para evitar almacenar tokens en texto plano:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "${input:gitlabToken}"
+      }
+    }
+  }
+}
+```
+
+El token se solicita al inicio y se mantiene solo en memoria.
+
+### Scopes del Token
+
+Usa los scopes mínimos requeridos para tu flujo de trabajo:
+
+| Scope | Requerido Para |
+|-------|---------------|
+| `read_api` | Operaciones de solo lectura (listar, obtener, buscar) |
+| `api` | Operaciones completas (crear, actualizar, eliminar) |
+| `read_repository` | Acceso a archivos del repositorio |
+| `write_repository` | Modificación de archivos del repositorio |
+
+:::tip
+Si solo necesitas operaciones de lectura, usa el scope `read_api` y habilita `GITLAB_READ_ONLY=true` como defensa en profundidad.
+:::
+
+## Eliminación de Credenciales en Sampling
+
+Cuando las herramientas de análisis usan sampling MCP para enviar datos al LLM del cliente, el servidor aplica **eliminación automática de credenciales** antes de que cualquier dato salga del proceso. Esta es una medida crítica de defensa en profundidad que previene la fuga accidental de tokens a través del contexto del LLM.
+
+### Patrones Eliminados
+
+El motor de eliminación de credenciales usa patrones regex para detectar y eliminar:
+
+| Patrón | Ejemplo | Reemplazo |
+|--------|---------|-----------|
+| PAT de GitLab | `glpat-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
+| Token de Pipeline de GitLab | `glptt-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
+| Clave de Acceso AWS | `AKIAIOSFODNN7EXAMPLE` | `[REDACTED:AWS_KEY]` |
+| Clave Secreta AWS | `wJalrXUtnFEMI/K7MDENG/...` | `[REDACTED:AWS_SECRET]` |
+| Token de Slack | `xoxb-...` / `xoxp-...` | `[REDACTED:SLACK_TOKEN]` |
+| Webhook de Slack | `hooks.slack.com/services/...` | `[REDACTED:SLACK_WEBHOOK]` |
+| JWT | `eyJhbGciOi...` | `[REDACTED:JWT]` |
+| Clave API genérica | `api_key=...`, `apikey: ...` | `[REDACTED:API_KEY]` |
+| Clave SSH privada | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]` |
+
+:::note
+La eliminación de credenciales se aplica a todos los datos enviados a través de sampling MCP, incluyendo logs de jobs, contenido de archivos, descripciones de issues y diffs de MR.
+:::
+
+## Verificación TLS
+
+Por defecto, el servidor verifica los certificados TLS al conectarse a GitLab. Para certificados autofirmados:
+
+```bash
+GITLAB_SKIP_TLS_VERIFY=true
+```
+
+:::caution
+Desactivar la verificación TLS elimina la protección contra ataques de intermediario (man-in-the-middle). Usa esto solo en entornos de desarrollo con certificados autofirmados. Nunca desactives la verificación TLS en producción.
+:::
+
+## Modo de Solo Lectura
+
+Habilita el modo de solo lectura para prevenir cualquier operación de escritura:
+
+```bash
+GITLAB_READ_ONLY=true
+```
+
+En modo de solo lectura:
+- Todas las herramientas de escritura **no se registran** (crear, actualizar, eliminar, fusionar, etc.)
+- Solo las operaciones de lectura están disponibles (listar, obtener, buscar)
+- Esto proporciona una garantía firme a nivel de servidor — el LLM no puede modificar datos accidentalmente
+
+Esto es útil para:
+- Flujos de trabajo de exploración y descubrimiento
+- Entornos de demostración
+- Entornos donde el token tiene acceso de escritura pero deseas restringir el servidor
+
+## Seguridad en Modo HTTP
+
+Al ejecutar en modo HTTP (`--http`), aplican consideraciones de seguridad adicionales:
+
+### Autenticación por Solicitud
+
+En modo HTTP, los tokens de GitLab se proporcionan por solicitud a través de cabeceras, no de variables de entorno. Cada sesión de usuario usa su propio token:
+
+```
+Authorization: Bearer <gitlab-personal-access-token>
+```
+
+### Aislamiento de Sesiones
+
+El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
+- Cada token obtiene su propia instancia aislada del servidor MCP
+- Las sesiones son independientes — un usuario no puede acceder al contexto de otro
+- Las sesiones inactivas expiran después de `--session-timeout` (por defecto: 30 minutos)
+- El máximo de sesiones concurrentes se controla con `--max-http-clients` (por defecto: 100)
+
+### Recomendaciones para Modo HTTP
+
+- Despliega detrás de un proxy inverso con terminación TLS
+- Habilita limitación de velocidad a nivel del proxy
+- Restringe el acceso a redes de confianza
+- Monitoriza las métricas de sesiones para detectar patrones inusuales
+
+## Lista de Verificación de Mejores Prácticas
+
+### Seguridad del Token
+
+- [ ] Usa un token de GitLab dedicado con los scopes mínimos requeridos
+- [ ] Almacena tokens en archivos `.env` con permisos `chmod 600`
+- [ ] Añade `.env` al `.gitignore`
+- [ ] Rota los tokens periódicamente
+- [ ] Usa el scope `read_api` cuando no se necesita acceso de escritura
+
+### Configuración del Servidor
+
+- [ ] Habilita `GITLAB_READ_ONLY=true` para flujos de trabajo de solo lectura
+- [ ] Mantén la verificación TLS habilitada (`GITLAB_SKIP_TLS_VERIFY` sin establecer o `false`)
+- [ ] Usa transporte stdio cuando sea posible (sin exposición de red)
+- [ ] Mantén el binario del servidor actualizado (`AUTO_UPDATE=true`)
+
+### Modo HTTP
+
+- [ ] Despliega detrás de un proxy inverso con terminación TLS
+- [ ] Configura apropiadamente `--session-timeout` y `--max-http-clients`
+- [ ] Habilita limitación de velocidad
+- [ ] Restringe el acceso de red a clientes de confianza
+
+### Monitorización
+
+- [ ] Revisa los logs del servidor regularmente
+- [ ] Monitoriza patrones inusuales de llamadas a la API
+- [ ] Verifica la expiración del token o cambios de permisos
+- [ ] Habilita `LOG_LEVEL=info` para registros de auditoría en producción

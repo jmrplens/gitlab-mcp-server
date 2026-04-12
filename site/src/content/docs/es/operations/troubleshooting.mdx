@@ -1,0 +1,112 @@
+---
+title: Solución de Problemas
+description: Problemas comunes y soluciones
+---
+
+## Conexión y Autenticación
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `GITLAB_TOKEN is required` al inicio | Token no establecido | Establece `GITLAB_TOKEN` en `.env` o en el entorno |
+| `GITLAB_URL is required` al inicio | URL no establecida | Establece `GITLAB_URL` en `.env` o usa el flag `--gitlab-url` |
+| `401 Unauthorized` de la API de GitLab | PAT inválido o expirado | Genera un nuevo token con scope `api` en GitLab → Preferences → Access Tokens |
+| `403 Forbidden` en operaciones específicas | El token carece del scope requerido | Asegúrate de que el token tiene scope `api` (no solo `read_api`) |
+| Conexión rechazada o timeout | Instancia de GitLab inaccesible | Verifica que `GITLAB_URL` es accesible: `curl -s $GITLAB_URL/api/v4/version` |
+
+## TLS y Certificados
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `x509: certificate signed by unknown authority` | Certificado autofirmado | Establece `GITLAB_SKIP_TLS_VERIFY=true` en `.env` o `--skip-tls-verify` en modo HTTP |
+| `x509: certificate has expired` | Certificado TLS expirado | Renueva el certificado en el servidor de GitLab, o usa `GITLAB_SKIP_TLS_VERIFY=true` temporalmente |
+
+:::caution
+`GITLAB_SKIP_TLS_VERIFY=true` desactiva la verificación TLS completamente. Úsalo solo para instancias auto-alojadas con certificados autofirmados, y nunca en entornos de producción con instancias de GitLab públicas.
+:::
+
+## Descubrimiento de Herramientas
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| El cliente MCP muestra 1004 herramientas en lugar de 40 | Meta-herramientas desactivadas | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio |
+| Herramienta no encontrada en `tools/list` | Desajuste del modo de meta-herramientas | El modo individual usa `gitlab_create_issue`, el modo meta usa `gitlab_issue` con `action: create` |
+| `unknown action` en llamada a meta-herramienta | Parámetro de acción inválido | Verifica las acciones válidas en [Resumen de Herramientas](/es/tools/overview) |
+| Herramientas enterprise faltantes | Modo enterprise desactivado | Establece `GITLAB_ENTERPRISE=true` para habilitar 19 meta-herramientas enterprise adicionales |
+
+## Actualización Automática
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| Actualización detectada pero no aplicada | Modo es solo `check` | Establece `AUTO_UPDATE=true` para habilitar la aplicación automática |
+| Sigue ejecutando la versión antigua tras la actualización | Proceso no reiniciado (Windows) | Reinicia el servidor o usa `gitlab-mcp-server --shutdown` para terminar todas las instancias |
+| No se puede reemplazar el binario (archivo bloqueado) | Las instancias en ejecución mantienen el archivo | Ejecuta `gitlab-mcp-server --shutdown` para terminar todas las instancias primero |
+| Error de red alcanzando GitHub | Firewall o proxy bloqueando | Verifica la conectividad a `github.com` desde el servidor |
+
+## Modo Servidor HTTP
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `400 Bad Request` | Cabecera de token faltante | Envía la cabecera `PRIVATE-TOKEN` o `Authorization: Bearer <token>` con cada solicitud |
+| Desalojo del pool demasiado frecuente | Demasiados tokens únicos | Aumenta `--max-http-clients` (por defecto: 100) |
+| Sesiones expirando inesperadamente | Timeout de inactividad muy corto | Aumenta `--session-timeout` (por defecto: 30m) |
+
+## Paginación
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| Resultados de listas truncados | Límite predeterminado de `per_page` | Pasa los parámetros `per_page` (máx 100) y `page` para paginar |
+| `nextPage` faltante en la respuesta | Última página alcanzada | No hay más resultados — este es el comportamiento esperado |
+
+## Problemas Específicos del IDE
+
+### VS Code / GitHub Copilot
+
+| Síntoma | Solución |
+|---|---|
+| "Tool not found" en Copilot Chat | Verifica el panel de Salida → **MCP Logs** para errores. Verifica la ruta de `.vscode/mcp.json` |
+| El servidor no aparece en el estado MCP | Ejecuta `Ctrl+Shift+P` → **MCP: List Servers** para verificar la configuración |
+| "Permission denied" al inicio | Ejecuta `chmod +x /ruta/al/gitlab-mcp-server` (Linux/macOS) |
+| El servidor se reinicia repetidamente | Verifica MCP Logs por `GITLAB_URL` o `GITLAB_TOKEN` faltantes |
+
+### Cursor
+
+| Síntoma | Solución |
+|---|---|
+| Las herramientas no se listan | Verifica que `.cursor/mcp.json` existe y usa la clave `mcpServers` (no `servers`) |
+| `${input:...}` no funciona | No es soportado por Cursor — usa variables de entorno en su lugar |
+
+## Modo de Depuración
+
+Habilita el registro detallado para diagnosticar problemas:
+
+```bash
+# Modo stdio
+LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
+
+# Modo HTTP (logs mezclados con la salida del servidor)
+LOG_LEVEL=debug ./gitlab-mcp-server --http --gitlab-url=https://gitlab.ejemplo.com 2>debug.log
+```
+
+Los logs de depuración incluyen:
+
+- Cada llamada a herramienta con parámetros de entrada
+- Detalles de solicitud/respuesta de la API de GitLab
+- Eventos de validación de token (solo los últimos 4 caracteres)
+- Operaciones del pool de sesiones (modo HTTP)
+
+:::tip
+Los logs van a **stderr**, los mensajes JSON-RPC van a **stdout**. Siempre redirige stderr al capturar logs de depuración para evitar mezclar con mensajes del protocolo MCP.
+:::
+
+## Obtener Ayuda
+
+Si no puedes resolver un problema:
+
+1. **Habilita el registro de depuración** (`LOG_LEVEL=debug`) y captura la salida
+2. **Revisa las [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues)** para problemas conocidos
+3. **Abre una nueva issue** con:
+   - Versión del servidor (`gitlab-mcp-server --version` o revisa los logs de inicio)
+   - Sistema operativo y arquitectura
+   - Nombre y versión del cliente MCP
+   - Logs de depuración redactados (elimina cualquier token o dato sensible)
+   - Pasos para reproducir el problema

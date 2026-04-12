@@ -1,0 +1,61 @@
+---
+title: Icons
+description: SVG icons for tools, resources, and prompts
+---
+
+GitLab MCP Server assigns unique SVG icons to all tools, resources, and prompts, providing visual identification in MCP clients that support icon rendering.
+
+## Overview
+
+- **43+ unique SVG icons** covering all domain areas
+- Assigned to every registered tool, resource, and prompt
+- Domain-based assignment ensures consistent visual grouping
+
+## Icon Format
+
+Icons are provided in the MCP icon format:
+
+```json
+{
+  "type": "image/svg+xml",
+  "data": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">...</svg>"
+}
+```
+
+Each icon is an inline SVG optimized for small display sizes (typically 16×16 or 24×24 pixels).
+
+## Domain-Based Assignment
+
+Icons are assigned by domain, so related tools share the same icon:
+
+| Domain | Icon Represents |
+|---|---|
+| Issues | Issue tracker |
+| Merge Requests | Code merge |
+| Pipelines | CI/CD pipeline |
+| Projects | Project/repository |
+| Branches | Git branch |
+| Tags | Git tag |
+| Releases | Release/package |
+| Users | User/person |
+| Groups | Group/team |
+| Wiki | Documentation |
+| Labels | Label/tag |
+| Milestones | Milestone/target |
+| Search | Search/magnifier |
+| Security | Shield/lock |
+
+## Client Rendering
+
+Icon support varies by MCP client:
+
+| Client | Icon Display |
+|---|---|
+| Claude Desktop | Shows icons in tool list |
+| VS Code / Copilot | Shows icons in MCP tool panel |
+| Cursor | Shows icons in tool list |
+| Claude Code | Text-only (no icon rendering) |
+
+:::note
+Icons are optional metadata. Clients that do not support icon rendering simply ignore them — tool functionality is not affected.
+:::

@@ -1,0 +1,145 @@
+---
+title: Auto-update
+description: Automatic binary updates from GitHub releases
+---
+
+GitLab MCP Server can automatically detect, download, and apply new releases from GitHub. Updates use a **rename trick** — the running binary is renamed to `.old`, the new binary is placed at the original path, and on Unix the process re-executes seamlessly.
+
+## Update Modes
+
+The `AUTO_UPDATE` variable controls how updates are handled:
+
+| Value | Mode | Behavior |
+|---|---|---|
+| `true` (default) | Auto-apply | Detect and apply updates automatically |
+| `check` | Notify only | Detect updates and log availability, but do not apply |
+| `false` | Disabled | Skip all update checks entirely |
+
+Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-insensitive.
+
+## How It Works
+
+```mermaid
+sequenceDiagram
+    participant Server as gitlab-mcp-server
+    participant GitHub as GitHub Releases API
+    participant FS as File System
+
+    Server->>Server: CleanupOldBinary()
+    Server->>GitHub: GET /repos/:owner/:repo/releases/latest
+    GitHub-->>Server: Release metadata + asset URLs
+    alt Update available
+        Server->>GitHub: Download binary asset
+        Server->>FS: Write to .tmp staging file
+        Server->>FS: Rename current → .old
+        Server->>FS: Rename .tmp → current path
+        alt Unix
+            Server->>Server: syscall.Exec(self) — seamless re-exec
+        else Windows
+            Server->>Server: Update takes effect on next restart
+        end
+    else Up to date
+        Server->>Server: Log "server is up to date"
+    end
+```
+
+### Startup Check (Stdio Mode)
+
+In stdio mode (the default), auto-update runs as a **pre-start check** with a 15-second timeout before the MCP server begins accepting connections:
+
+1. `CleanupOldBinary()` removes any leftover `.old` file from a previous update
+2. Checks for a newer release on GitHub
+3. If mode is `true` and a newer version exists, downloads and replaces the binary
+4. On **Linux/macOS**: re-executes via `syscall.Exec()` — same PID, same stdin/stdout pipes, no interruption to the MCP client
+5. On **Windows**: logs that the update will take effect on next restart
+
+The startup check is **non-fatal** — any error (network timeout, missing releases) is logged as a warning and does not prevent the server from starting.
+
+### Periodic Check (HTTP Mode)
+
+In HTTP mode, auto-update runs as a **background periodic check**:
+
+1. A goroutine checks for updates every `AUTO_UPDATE_INTERVAL` (default: 1 hour)
+2. Each cycle checks GitHub for a newer release with a 30-second timeout
+3. If mode is `true`, applies the update and logs a restart advisory
+4. The goroutine stops when the server shuts down
+
+## Configuration
+
+### Environment Variables (Stdio Mode)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUTO_UPDATE` | `true` | Update mode: `true`, `check`, or `false` |
+| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
+| `AUTO_UPDATE_INTERVAL` | `1h` | Check interval (used by HTTP mode periodic checks) |
+
+### CLI Flags (HTTP Mode)
+
+| Flag | Default | Description |
+|---|---|---|
+| `--auto-update` | `true` | Update mode: `true`, `check`, or `false` |
+| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
+| `--auto-update-interval` | `1h` | Interval between periodic update checks |
+
+:::note
+Auto-update uses the **GitHub Releases API** — it is completely independent of your GitLab configuration. Your `GITLAB_URL`, `GITLAB_TOKEN`, and `GITLAB_SKIP_TLS_VERIFY` settings do not affect auto-update.
+:::
+
+### Configuration Examples
+
+Disable auto-update entirely:
+
+```env
+AUTO_UPDATE=false
+```
+
+Check-only mode (log availability but do not apply):
+
+```env
+AUTO_UPDATE=check
+```
+
+Use a custom fork repository:
+
+```env
+AUTO_UPDATE_REPO=my-org/my-gitlab-mcp-fork
+```
+
+## Shutdown Flag for External Updaters
+
+External tools (such as pe-agnostic-store) can terminate all running instances before replacing the binary on disk:
+
+```bash
+gitlab-mcp-server --shutdown
+```
+
+This flag:
+
+1. Finds all running `gitlab-mcp-server` processes by name
+2. Sends a graceful termination signal
+3. Waits up to 5 seconds for processes to exit
+4. Force-kills any remaining processes
+5. Exits — no MCP server is started
+
+No admin or root permissions are required. This works on Linux, macOS, and Windows.
+
+## Rollback
+
+If an update causes issues:
+
+1. The previous binary is preserved as `gitlab-mcp-server.old` (or `.exe.old` on Windows) next to the current binary
+2. To rollback, stop the server and rename the `.old` file back to the original name
+3. The `.old` file is automatically cleaned up on the next successful startup
+
+## Custom Repository Support
+
+You can point auto-update at any GitHub repository that follows the expected release format:
+
+1. Set `AUTO_UPDATE_REPO=owner/repo` to your repository
+2. Create GitHub releases with platform binaries named `gitlab-mcp-server-{os}-{arch}`
+3. Include a `checksums.txt` asset with SHA-256 hashes (goreleaser format)
+
+:::caution
+Release asset names **must be exact filenames** (e.g., `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(Linux AMD64)` — the update library matches by exact name and will fail with decorated names.
+:::
