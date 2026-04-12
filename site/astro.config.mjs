@@ -1,10 +1,16 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import mermaid from "astro-mermaid";
 
 export default defineConfig({
   site: "https://jmrplens.github.io",
   base: "/gitlab-mcp-server",
   integrations: [
+    mermaid({
+      theme: "default",
+      autoTheme: true,
+      enableLog: false,
+    }),
     starlight({
       title: "GitLab MCP Server",
       logo: {
@@ -23,11 +29,13 @@ export default defineConfig({
         baseUrl:
           "https://github.com/jmrplens/gitlab-mcp-server/edit/main/site/",
       },
-      defaultLocale: "en",
+      defaultLocale: "root",
       locales: {
-        en: { label: "English", lang: "en" },
+        root: { label: "English", lang: "en" },
         es: { label: "Español", lang: "es" },
       },
+      lastUpdated: true,
+      favicon: "/favicon.svg",
       sidebar: [
         {
           label: "Getting Started",

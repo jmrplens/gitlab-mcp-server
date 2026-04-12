@@ -1,18 +1,18 @@
 {
-  "name": "site",
+  "name": "gitlab-mcp-server-docs",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@astrojs/starlight": "^0.38.3",
     "astro": "^6.1.5",
+    "astro-mermaid": "^2.0.1",
+    "mermaid": "^11.14.0",
     "sharp": "^0.34.5"
   }
 }

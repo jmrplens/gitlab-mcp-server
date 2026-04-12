@@ -1,4 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="6" fill="#7c3aed"/>
-  <text x="16" y="22" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="16" fill="white">GL</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="none">
+  <!-- GitLab tanuki (fox) shape -->
+  <path d="M18 33.6L24.6 12.6H11.4L18 33.6Z" fill="#E24329"/>
+  <path d="M18 33.6L11.4 12.6H3L18 33.6Z" fill="#FC6D26"/>
+  <path d="M3 12.6L1.2 18.2C1.03 18.74 1.22 19.33 1.68 19.66L18 33.6L3 12.6Z" fill="#FCA326"/>
+  <path d="M3 12.6H11.4L7.8 1.44C7.63 0.94 6.93 0.94 6.76 1.44L3 12.6Z" fill="#E24329"/>
+  <path d="M18 33.6L24.6 12.6H33L18 33.6Z" fill="#FC6D26"/>
+  <path d="M33 12.6L34.8 18.2C34.97 18.74 34.78 19.33 34.32 19.66L18 33.6L33 12.6Z" fill="#FCA326"/>
+  <path d="M33 12.6H24.6L28.2 1.44C28.37 0.94 29.07 0.94 29.24 1.44L33 12.6Z" fill="#E24329"/>
+  <!-- MCP connection nodes -->
+  <circle cx="18" cy="7.5" r="1.6" fill="#c4b5fd" opacity="0.85"/>
+  <circle cx="7.5" cy="20" r="1.1" fill="#c4b5fd" opacity="0.55"/>
+  <circle cx="28.5" cy="20" r="1.1" fill="#c4b5fd" opacity="0.55"/>
 </svg>
