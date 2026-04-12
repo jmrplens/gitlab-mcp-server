@@ -72,7 +72,6 @@ func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 func TestRegisterMCPMeta_WithUpdater(t *testing.T) {
 	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
 		Mode:           autoupdate.ModeCheck,
-		Token:          "test-token",
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
 	}, autoupdate.EmptySource{})

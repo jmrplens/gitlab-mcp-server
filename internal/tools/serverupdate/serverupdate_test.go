@@ -272,7 +272,6 @@ func newTestUpdater(t *testing.T) *autoupdate.Updater {
 	return autoupdate.NewUpdaterWithSource(autoupdate.Config{
 		Repository:     "test/repo",
 		CurrentVersion: "1.0.0",
-		Token:          "test-token",
 	}, autoupdate.EmptySource{})
 }
 
@@ -284,7 +283,6 @@ func newUnreachableUpdater(t *testing.T) *autoupdate.Updater {
 	return autoupdate.NewUpdaterWithSource(autoupdate.Config{
 		Repository:     "test/repo",
 		CurrentVersion: "1.0.0",
-		Token:          "test-token",
 	}, autoupdate.ErrorSource{Err: errors.New("unreachable")})
 }
 
