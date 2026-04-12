@@ -491,3 +491,71 @@ if skipTLSVerify {
     }
 }
 ```
+
+## MCP SDK v1.5.0+ Features
+
+### Tool Icons
+
+Provide SVG icons for tools, resources, and prompts:
+
+```go
+mcp.AddTool(server, &mcp.Tool{
+    Name:  "gitlab_issue_list",
+    Icons: []mcp.IconURI{{URI: "data:image/svg+xml;base64,..."}},
+}, handler)
+```
+
+### Typed Output with OutputSchema
+
+Using the triple-return handler signature auto-generates `OutputSchema` and `StructuredContent`:
+
+```go
+mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, input In) (*mcp.CallToolResult, Out, error) {
+    // The Out type generates OutputSchema automatically
+    return callToolResult, typedOutput, nil
+})
+```
+
+### Sampling (LLM Interaction)
+
+Request LLM assistance from within tool handlers:
+
+```go
+samplingReq := &mcp.CreateMessageRequest{
+    Messages: []mcp.SamplingMessage{{
+        Role:    mcp.RoleUser,
+        Content: mcp.TextContent{Text: prompt},
+    }},
+    MaxTokens: 1000,
+}
+result, err := server.CreateMessage(ctx, samplingReq)
+```
+
+### Elicitation (User Input)
+
+Request user input during tool execution:
+
+```go
+elicitReq := &mcp.ElicitRequest{
+    Message: "Confirm deletion?",
+    RequestedSchema: &mcp.ElicitRequestSchema{
+        Properties: map[string]mcp.ElicitPropertySchema{
+            "confirm": {Type: "boolean", Description: "Confirm deletion"},
+        },
+    },
+}
+result, err := server.Elicit(ctx, elicitReq)
+```
+
+### Completions
+
+Provide argument autocompletion:
+
+```go
+mcp.AddCompletionProvider(server, mcp.NewRef(mcp.RefToolInput, "tool_name", "arg"),
+    func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+        return &mcp.CompleteResult{
+            Completion: mcp.Completion{Values: suggestions},
+        }, nil
+    })
+```

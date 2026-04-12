@@ -408,3 +408,69 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 - Over-using unconstrained types (e.g., `any`); prefer specific types or generic type parameters with constraints. If an unconstrained type is required, use `any` rather than `interface{}`
 - Not considering the zero value of types
 - **Creating duplicate `package` declarations** - this is a compile error; always check existing files before adding package declarations
+
+## Go 1.24+ / 1.25+ Modern Features
+
+When the project's `go.mod` declares `go 1.25` or later, prefer these modern patterns:
+
+### Range-over-func Iterators (Go 1.23+)
+
+Use `iter.Seq` and `iter.Seq2` for custom iteration:
+
+```go
+func FilterActive(items []Item) iter.Seq[Item] {
+    return func(yield func(Item) bool) {
+        for _, item := range items {
+            if item.Active && !yield(item) { return }
+        }
+    }
+}
+```
+
+### Structured Logging (Go 1.21+)
+
+Use `log/slog` instead of `log`:
+
+```go
+slog.Info("tool called", "name", toolName, "duration", elapsed)
+```
+
+### sync.OnceValue / sync.OnceValues (Go 1.21+)
+
+Replace manual `sync.Once` patterns:
+
+```go
+var getConfig = sync.OnceValue(func() *Config {
+    return loadConfig()
+})
+```
+
+### WaitGroup.Go (Go 1.25+)
+
+Replace `Add`/`Done` boilerplate:
+
+```go
+var wg sync.WaitGroup
+wg.Go(func() { processItem(ctx, item1) })
+wg.Go(func() { processItem(ctx, item2) })
+wg.Wait()
+```
+
+### JSON omitzero Tag (Go 1.24+)
+
+Use `omitzero` for zero-value omission (works with structs, unlike `omitempty`):
+
+```go
+type Input struct {
+    Options AdvancedOpts `json:"options,omitzero"`
+}
+```
+
+### context.AfterFunc (Go 1.21+)
+
+Schedule cleanup when context is done:
+
+```go
+stop := context.AfterFunc(ctx, func() { conn.Close() })
+defer stop()
+```

@@ -107,3 +107,40 @@ For list operations:
 - **Integration**: Test against real external systems (with proper .env config)
 - **Security**: Validate auth, input sanitization, error message safety
 - **Evaluation**: Create Q&A pairs to test LLM's ability to use the server effectively
+
+## MCP Protocol 2025-11-25 Features
+
+### Structured Output (OutputSchema)
+
+Use typed output structs to auto-generate `OutputSchema` and `StructuredContent`. This enables clients to process tool results programmatically:
+
+```go
+// Triple-return signature auto-generates OutputSchema from Out type
+mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, input In) (*mcp.CallToolResult, Out, error) {
+    return markdownResult, typedOutput, nil
+})
+```
+
+### Tool Icons
+
+Provide domain-specific SVG icons on all tools, resources, and prompts for visual identification in client UIs.
+
+### Sampling
+
+Tools can request LLM assistance via `server.CreateMessage()` for analysis, summarization, and content generation tasks. Strip credentials from sampling prompts.
+
+### Elicitation
+
+Tools can request user input via `server.Elicit()` for confirmation of destructive actions or collecting missing parameters.
+
+### Completions
+
+Provide argument autocompletion for tool parameters using `mcp.AddCompletionProvider()`. Register completions for arguments that have a finite, discoverable set of values (project IDs, branch names, user names).
+
+### Discovery and Meta-Tools
+
+For servers with many tools, provide meta-tools that group operations by domain:
+
+- Reduces tool count for LLM context window efficiency
+- Uses `action` enum field routed to specific handlers
+- Each meta-tool has a discovery description listing available actions

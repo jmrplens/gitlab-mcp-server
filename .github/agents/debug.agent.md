@@ -78,4 +78,32 @@ You are in debug mode. Your primary objective is to systematically identify, ana
 - **Stay Focused**: Address the specific bug without unnecessary changes
 - **Test Thoroughly**: Verify fixes work in various scenarios and environments
 
+## Go-Specific Debugging
+
+### Common Go Bug Patterns
+
+- **Nil pointer dereference**: Check error returns before using results, verify interface implementations
+- **Goroutine leak**: Use `context.Context` for cancellation, verify `defer` cleanup
+- **Race condition**: Run `go test -race` to detect, use `sync.Mutex` or channels
+- **Closed channel**: Check `ok` on channel reads, use `sync.Once` for cleanup
+- **Interface nil comparison**: A non-nil interface containing a nil pointer is not equal to nil
+- **Loop variable capture**: Pre-Go 1.22 — verify loop variables are not captured by reference in closures
+
+### MCP Server Debugging
+
+- **Tool not found**: Check `register.go` and `register_meta.go` for registration
+- **JSON schema mismatch**: Verify `jsonschema` struct tags match expected input
+- **Context cancellation**: Ensure all API calls use `ctx` parameter
+- **Error wrapping chain**: Use `errors.Is()` and `errors.As()` to diagnose wrapped errors
+- **Transport issues**: Run with `LOG_LEVEL=debug` and inspect JSON-RPC messages on stderr
+
+### Diagnostic commands
+
+```bash
+go test ./internal/tools/{domain}/ -count=1 -v -run TestSpecific
+go test -race ./internal/tools/{domain}/ -count=1
+go vet ./internal/tools/{domain}/
+dlv test ./internal/tools/{domain}/ -- -test.run TestSpecific
+```
+
 Remember: Always reproduce and understand the bug before attempting to fix it. A well-understood problem is half solved.

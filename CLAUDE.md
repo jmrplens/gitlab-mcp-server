@@ -121,7 +121,7 @@ gitlab-mcp-server/
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
 │   ├── agents/                  # 9 specialized AI agents
-│   ├── skills/                  # 15 reusable skill templates
+│   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
 └── VERSION                      # Semantic version (2.1.0)
@@ -275,7 +275,7 @@ Instruction files in `.github/instructions/` are automatically applied when edit
 | `context-engineering.instructions.md`              | `**`       | Project structure principles for AI-readable code                         |
 | `self-explanatory-code-commenting.instructions.md` | `**`       | Comment only WHY, not WHAT; avoid redundant comments                      |
 
-### Agents (9 Specialized AI Agents)
+### Agents (7 Specialized AI Agents)
 
 Agents are invoked explicitly for specific development tasks. Each agent has a focused role:
 
@@ -283,9 +283,8 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 
 | Agent                    | File                     | When to Use                                                                                                              |
 | ------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| **Go MCP Server Expert** | `go-mcp-expert.agent.md` | Implementing new MCP tools, fixing tool handlers, MCP SDK questions. The primary coding agent for this project.          |
+| **Go MCP Server Expert** | `go-mcp-expert.agent.md` | Implementing new MCP tools, fixing tool handlers, MCP SDK questions. The primary coding agent for this project. Has Context7 integration for up-to-date library docs. |
 | **Debug Mode**           | `debug.agent.md`         | Systematic bug investigation: reproduce → hypothesize → fix → verify. 4-phase workflow.                                  |
-| **Context7 Expert**      | `context7.agent.md`      | Checking latest library docs/versions (MCP SDK, GitLab client, Go stdlib). Always fetches current docs before answering. |
 
 #### Testing
 
@@ -298,7 +297,6 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 | Agent                   | File                                       | When to Use                                                                                                       |
 | ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | **Plan Expert**         | `plan-expert.agent.md`                     | Strategic planning for features, refactoring, architecture, tests, bugs, docs, and upgrades. 7 planning modes with structured output to `plan/`. Uses Context7 for dependency research. Does NOT generate code. |
-| **SE: Architect**       | `se-system-architecture-reviewer.agent.md` | Review system architecture against Well-Architected frameworks. Generates ADRs.                                   |
 
 #### Documentation
 
@@ -307,13 +305,13 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 | **Documentation Writer** | `documentation-writer.agent.md` | Generate project documentation (architecture, references, guides). Uses Diátaxis framework + Mermaid diagrams. Uses Context7 and web fetch for up-to-date external references, specs, and protocol docs. Validates output with markdownlint-cli2. |
 | **Go Source Documenter** | `go-source-documenter.agent.md` | Add godoc-compliant doc comments to Go source and test files. Covers file headers, package comments, functions, types, interfaces, tests (detailed what/how/expected/why), benchmarks, fuzz tests, examples, deprecation notices, and BUG/TODO annotations. Uses Context7 for up-to-date Go doc conventions. |
 
-#### Security
+#### Security & Architecture
 
-| Agent            | File                            | When to Use                                                                                               |
-| ---------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **SE: Security** | `se-security-reviewer.agent.md` | Security review with OWASP Top 10, LLM security (OWASP LLM Top 10), Zero Trust. Classifies by risk level. |
+| Agent            | File                    | When to Use                                                                                               |
+| ---------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| **SE: Reviewer** | `se-reviewer.agent.md`  | Security review (OWASP Top 10, LLM security, Zero Trust) and architecture review (Well-Architected frameworks, ADRs). Two modes in one agent. |
 
-### Skills (15 Reusable Task Templates)
+### Skills (18 Reusable Task Templates)
 
 Skills are task templates that can be invoked by any agent or directly. They define structured workflows:
 
@@ -323,6 +321,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 | ---------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | **Generate Project Documentation** | `generate-project-documentation/` | Full documentation suite (architecture, package docs, tool references, onboarding). Diátaxis framework. |
 | **Update Project Documentation**   | `update-project-documentation/`   | Delta-update docs after code changes. Maps changes to affected documents.                               |
+| **Update Starlight Docs**          | `update-starlight-docs/`          | Update Astro Starlight user docs (EN/ES) when developer docs change.                                    |
 | **Go Source Documentation**        | `go-source-documentation/`        | Add godoc-compliant comments to Go files. 11 documented patterns specific to this project.              |
 
 #### Planning & Design Skills
@@ -356,6 +355,13 @@ Skills are task templates that can be invoked by any agent or directly. They def
 | **Go Safe Move Refactor**   | `go-safe-move-refactor/`   | Safely move Go source files between packages with zero compilation downtime. Handles imports, stubs, tests.       |
 | **Modularize Go Package**   | `modularize-go-package/`   | Modularize a monolithic Go package into domain sub-packages. Designed for large-scale 50–100+ file refactoring.   |
 
+#### MCP Development Skills
+
+| Skill                       | Directory                  | Purpose                                                                                                           |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Create MCP Tool**         | `create-mcp-tool/`         | End-to-end workflow for creating a new MCP tool: sub-package, structs, handler, markdown, tests, registration.    |
+| **Upstream Contribution**   | `upstream-contribution/`   | Contribute fixes to upstream gitlab.com/gitlab-org/api/client-go. Fork → branch → fix → test → MR workflow.       |
+
 ---
 
 ## Common Development Workflows
@@ -378,8 +384,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 ### Reviewing code quality
 
 1. Use `review-and-refactor` skill — reads all `.github/instructions/` files, reviews against them, then refactors
-2. For security-specific review: Use `@SE: Security` agent
-3. For architecture review: Use `@SE: Architect` agent
+2. For security or architecture review: Use `@SE: Reviewer` agent (specify "review security" or "review architecture")
 
 ### Debugging a failing test or unexpected behavior
 
@@ -388,7 +393,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 ### Checking library documentation
 
-1. Use `@Context7 Expert` agent — resolves library ID, fetches current docs, checks for version upgrades
+1. Use `@Go MCP Server Expert` agent — has Context7 integration, resolves library ID, fetches current docs
 2. Useful for MCP SDK, GitLab client, or any Go dependency questions
 
 ### Updating documentation after changes

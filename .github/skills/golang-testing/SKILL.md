@@ -707,7 +707,7 @@ test:
     - uses: actions/checkout@v4
     - uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.25'
 
     - name: Run tests
       run: go test -race -coverprofile=coverage.out ./...
@@ -716,6 +716,84 @@ test:
       run: |
         go tool cover -func=coverage.out | grep total | awk '{print $3}' | \
         awk -F'%' '{if ($1 < 80) exit 1}'
+```
+
+## Go 1.24+ / 1.25+ Testing Features
+
+### Per-Test Context with t.Context()
+
+```go
+func TestAPICall(t *testing.T) {
+    // t.Context() returns a context cancelled when the test ends
+    ctx := t.Context()
+    result, err := fetchData(ctx, "test-id")
+    if err != nil {
+        t.Fatal(err)
+    }
+    // No need for manual context.WithCancel cleanup
+}
+```
+
+### Benchmarks with b.Loop()
+
+```go
+// Go 1.24+: b.Loop() replaces the manual b.N pattern
+func BenchmarkFormat(b *testing.B) {
+    data := prepareData()
+    for b.Loop() {
+        _ = format(data)
+    }
+}
+
+// Old pattern (still works but prefer b.Loop):
+// for i := 0; i < b.N; i++ { ... }
+```
+
+### Temp Directory with t.Chdir()
+
+```go
+func TestFileProcessing(t *testing.T) {
+    // Changes to temp dir, restores original on cleanup
+    t.Chdir(t.TempDir())
+    os.WriteFile("input.txt", []byte("test"), 0o644)
+    result := processFile("input.txt")
+    // Original working directory restored after test
+}
+```
+
+### Fake Time with testing/synctest
+
+```go
+import "testing/synctest"
+
+func TestTimeout(t *testing.T) {
+    synctest.Run(func() {
+        ch := make(chan int)
+        go func() {
+            time.Sleep(10 * time.Second) // Uses fake clock
+            ch <- 42
+        }()
+        // Advances fake clock without actual waiting
+        val := <-ch
+        if val != 42 {
+            t.Fatal("unexpected value")
+        }
+    })
+}
+```
+
+### Deep Comparison with go-cmp
+
+```go
+import "github.com/google/go-cmp/cmp"
+
+func TestUserEqual(t *testing.T) {
+    got := fetchUser("42")
+    want := User{ID: 42, Name: "Alice"}
+    if diff := cmp.Diff(want, got); diff != "" {
+        t.Errorf("fetchUser() mismatch (-want +got):\n%s", diff)
+    }
+}
 ```
 
 **Remember**: Tests are documentation. They show how your code is meant to be used. Write them clearly and keep them up to date.

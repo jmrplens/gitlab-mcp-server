@@ -10,9 +10,9 @@ handoffs:
     agent: Test Expert
     prompt: Write the tests described in the Testing section of the plan above.
     send: false
-  - label: Review Architecture
-    agent: SE: Architect
-    prompt: Review the architecture decisions in the plan above against Well-Architected frameworks.
+  - label: Review Architecture & Security
+    agent: SE: Reviewer
+    prompt: Review the architecture decisions and security aspects of the plan above.
     send: false
 
 ---

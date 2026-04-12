@@ -12,8 +12,8 @@ handoffs:
     agent: agent
     prompt: Implement the documentation changes outlined above in the project files.
     send: false
-  - label: Verify with Context7
-    agent: Context7-Expert
+  - label: Verify with expert
+    agent: Go MCP Server Development Expert
     prompt: Verify the technical claims and library references in the documentation above are accurate and up-to-date.
     send: false
 ---
@@ -374,6 +374,35 @@ result, err := package.Function(ctx, input)
 - Ensure proper nesting and indentation in nested lists
 - No trailing whitespace or multiple consecutive blank lines
 
+## Astro Starlight User Documentation
+
+This project includes a user-facing documentation site built with [Astro Starlight](https://starlight.astro.build/) in the `site/` directory. When documentation changes are made to developer docs in `docs/`, evaluate whether corresponding updates are needed in the Starlight user docs.
+
+### When to Update Starlight Docs
+
+- New features, tools, or configuration options added
+- Breaking changes or deprecations
+- Getting started workflow changes
+- Security-relevant changes users should know about
+
+### Starlight Structure
+
+```text
+site/
+├── astro.config.mjs    # Navigation sidebar, i18n config
+├── src/content/docs/
+│   ├── en/             # English docs (default locale)
+│   └── es/             # Spanish translations
+```
+
+### Key Rules
+
+- English (`en/`) is the source of truth — write English first, then translate to Spanish
+- Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
+- Every `.mdx` file needs frontmatter with `title` and `description`
+- After changes, verify the build: `cd site && npm run build`
+- Follow the `update-starlight-docs` skill for the full workflow
+
 ## Operating Rules
 
 - Treat source code as read-only truth; never modify source code
@@ -383,5 +412,6 @@ result, err := package.Function(ctx, input)
 - Always verify Mermaid diagrams render correctly
 - Always use Context7 and web fetch for external references before writing
 - Always include a References section with verified URLs in every document
+- When updating developer docs, evaluate if Starlight user docs also need updates
 - Output the requested deliverable only; no unnecessary preamble
 - All documentation must be written in English per project language policy

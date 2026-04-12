@@ -671,3 +671,89 @@ func (c *Counter) Increment() { c.n++ }        // Pointer receiver
 ```
 
 **Remember**: Go code should be boring in the best way - predictable, consistent, and easy to understand. When in doubt, keep it simple.
+
+## Go 1.24+ / 1.25+ Modern Patterns
+
+### Range-over-func Iterators (Go 1.23+)
+
+```go
+// Custom iterator returning values from a slice with filtering
+func FilterUsers(users []User, pred func(User) bool) iter.Seq[User] {
+    return func(yield func(User) bool) {
+        for _, u := range users {
+            if pred(u) && !yield(u) {
+                return
+            }
+        }
+    }
+}
+
+// Usage: natural range syntax
+for u := range FilterUsers(users, isActive) {
+    fmt.Println(u.Name)
+}
+```
+
+### Structured Logging with log/slog
+
+```go
+logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+    Level: slog.LevelInfo,
+}))
+logger.Info("processing request",
+    slog.String("method", r.Method),
+    slog.String("path", r.URL.Path),
+    slog.Int("status", statusCode),
+)
+```
+
+### Multi-error with errors.Join
+
+```go
+func validateConfig(cfg Config) error {
+    var errs []error
+    if cfg.URL == "" {
+        errs = append(errs, fmt.Errorf("URL is required"))
+    }
+    if cfg.Token == "" {
+        errs = append(errs, fmt.Errorf("token is required"))
+    }
+    return errors.Join(errs...)
+}
+```
+
+### sync.OnceValue for Lazy Init
+
+```go
+var getClient = sync.OnceValue(func() *http.Client {
+    return &http.Client{Timeout: 30 * time.Second}
+})
+```
+
+### omitzero JSON Tag (Go 1.24+)
+
+```go
+type Input struct {
+    Name    string    `json:"name"`
+    Labels  []string  `json:"labels,omitzero"`  // Omits zero-value slices (nil AND empty)
+    DueDate time.Time `json:"due_date,omitzero"` // Omits zero Time
+}
+```
+
+### context.AfterFunc
+
+```go
+ctx, cancel := context.WithCancel(parentCtx)
+context.AfterFunc(ctx, func() {
+    conn.Close() // Runs when ctx is cancelled
+})
+```
+
+### http.CrossOriginProtection (Go 1.25)
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("/api/", handler)
+// Automatically applies cross-origin protection for local HTTP servers
+server := &http.Server{Handler: http.CrossOriginProtection(mux)}
+```

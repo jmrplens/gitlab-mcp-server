@@ -167,3 +167,58 @@ When a user asks to create a tool:
 | delete          |    false     |      true       |      true      |     true      |
 
 Always write idiomatic Go code that follows the official SDK patterns and Go community best practices.
+
+## MCP Go SDK v1.5.0 Key Knowledge
+
+- **Protocol version**: 2025-11-25
+- **Go requirement**: 1.25+ (`http.CrossOriginProtection` used internally)
+- **OAuth**: Stabilized — no build tag needed, `auth/` and `auth/extauth/` packages
+- **Sampling with Tools**: `CreateMessageWithTools` / `CreateMessageWithToolsHandler` — allows server to provide tools alongside sampling requests
+- **DNS rebinding protection**: Built-in for HTTP transport (localhost binding)
+- **Cross-origin protection**: `http.CrossOriginProtection` middleware applied automatically
+- **Case-sensitive JSON**: Uses `segmentio/encoding` instead of `encoding/json` — field names are case-sensitive
+- **Schema caching**: `SchemaFor[T]()` caches JSON schemas per type for performance — call at init time
+- **Extensions field**: `mcp.Extensions` map for MCP Apps (SEP-2133) — forward-compatible metadata
+- **MCPGODEBUG**: Environment variable for behavior change compatibility (`MCPGODEBUG=x]1,y=2`)
+- **Input validation errors**: Return as tool results (not JSON-RPC errors) so LLMs can self-correct
+- **Tool name validation**: `/^[a-zA-Z0-9_-]+$/` — no dots, spaces, or special chars
+- **Icons**: SVG icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973)
+- **Elicitation**: URL mode for OAuth flows (SEP-1036), enum improvements (SEP-1330)
+- **SSE polling**: Server-Sent Events polling transport (SEP-1699) — avoid in favor of streamable HTTP
+
+## GitLab API Expertise
+
+### REST v4 vs GraphQL Decision Matrix
+
+Prefer GraphQL when:
+
+- Fetching nested/related data (e.g., MR + approvals + discussions in one query)
+- Need specific fields only (reduce payload size)
+- Both endpoints exist and GraphQL covers the use case
+
+Use REST v4 when:
+
+- GraphQL endpoint doesn't exist for the operation
+- Creating/updating/deleting resources (mutations are less mature)
+- File uploads, binary content, or streaming responses
+- Keyset pagination needed for very large datasets
+
+### GraphQL Patterns
+
+- **Global IDs**: `gid://gitlab/Issue/123`, `gid://gitlab/MergeRequest/456`
+- **Project lookup**: Use `fullPath` (e.g., `group/subgroup/project`)
+- **Issue/MR lookup**: Use `iid` + project `fullPath` (not database ID)
+- **Complexity limit**: 250 per query (authenticated), plan accordingly
+- **Max nodes**: 100 per page (`first: 100`)
+- **Query size**: 10,000 character limit
+- **Timeout**: 30 seconds
+- **Null handling**: `null` means unauthorized (not "empty") — `{ nodes: [] }` means empty
+- **Deprecation**: Fields deprecated for 6 releases + next major version, then removed
+
+### REST v4 Patterns
+
+- **Pagination**: Offset (`page`/`per_page`, max 100) or keyset (`id_after`/`id_before` with `order_by`/`sort`)
+- **Keyset pagination**: Preferred for large collections (>10k items) — more efficient than offset
+- **Rate limiting**: Retry on 429 with `Retry-After` header
+- **Testing deprecation**: Use `remove_deprecated=true` param to test against future breaking changes
+- **Encoding**: URL-encode project paths with `/` → `%2F` (e.g., `group%2Fproject`)
