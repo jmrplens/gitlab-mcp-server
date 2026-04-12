@@ -400,7 +400,7 @@ site/
 - English (`en/`) is the source of truth — write English first, then translate to Spanish
 - Use Starlight MDX components: `<Aside>`, `<Tabs>`, `<Card>`, `<Steps>`, `<FileTree>`
 - Every `.mdx` file needs frontmatter with `title` and `description`
-- After changes, verify the build: `cd site && npm run build`
+- After changes, verify the build: `cd site && pnpm build`
 - Follow the `update-starlight-docs` skill for the full workflow
 
 ## Operating Rules
