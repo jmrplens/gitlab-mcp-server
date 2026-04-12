@@ -1,0 +1,103 @@
+site_name: Gitlab MCP
+site_description: Servidor MCP para GitLab — documentación de usuario
+site_url: https://jmrplens.github.io/gitlab-mcp-server
+repo_url: https://github.com/jmrplens/gitlab-mcp-server
+repo_name: jmrplens/gitlab-mcp-server
+
+theme:
+  name: material
+  language: es
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Cambiar a modo claro
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Cambiar a modo oscuro
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+  icon:
+    logo: material/server
+
+nav:
+  - Inicio: index.md
+  - Primeros pasos: getting-started.md
+  - Configuración: configuration.md
+  - Arquitectura: architecture.md
+  - Herramientas:
+    - tools/index.md
+    - Meta-herramientas: tools/meta-tools.md
+    - Herramientas de análisis: tools/analysis.md
+    - Recursos y prompts: tools/resources-prompts.md
+  - Ejemplos de uso: usage-examples.md
+  - Capacidades MCP:
+    - capabilities/index.md
+    - Sampling: capabilities/sampling.md
+    - Roots: capabilities/roots.md
+    - Elicitation: capabilities/elicitation.md
+    - Completions: capabilities/completions.md
+    - Logging: capabilities/logging.md
+    - Progress: capabilities/progress.md
+    - Icons: capabilities/icons.md
+  - Operaciones:
+    - Seguridad: security.md
+    - Auto-actualización: auto-update.md
+    - Servidor HTTP: http-server.md
+    - Errores y formato: error-handling.md
+    - Solución de problemas: troubleshooting.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social: []
+  generator: false
+
+docs_dir: site/docs
+site_dir: public
