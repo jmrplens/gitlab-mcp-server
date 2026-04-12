@@ -96,7 +96,7 @@ These completers search across the entire GitLab instance. They do not require a
 | Argument | Query Method | Example Input → Suggestions |
 | -------- | ------------ | --------------------------- |
 | `project_id` | Search projects by path or name | `mcp` → `gitlab-mcp-server (1835)`, `redmine-mcp-server (1869)` |
-| `group_id` | Search groups by name | `sw` → `sw-area (229)` |
+| `group_id` | Search groups by name | `eng` → `engineering (229)` |
 | `username` | Search GitLab users | `jreq` → `jmrplens` |
 
 ### Per-Project Completers

@@ -1,4 +1,4 @@
-# pe-mcp-gitlab — Full Reference
+# gitlab-mcp-server — Full Reference
 
 > Version 1.8.0 | 1004 tools | 40 meta-tools (59 enterprise) | 24 resources | 38 prompts
 
@@ -999,7 +999,7 @@ Actions:
 - file_raw: Get raw file content as plain text. Params: project_id (required), file_path (required), ref
 - update_submodule: Update a submodule reference. Params: project_id (required), submodule (required, URL-encoded path), branch (required), commit_sha (required), commit_message
 - list_submodules: List all submodules defined in the repository. Parses .gitmodules and enriches with commit SHAs and resolved project paths. Params: project_id (required), ref (branch/tag/SHA, optional)
-- read_submodule_file: Read a file from inside a submodule transparently. Resolves the target project and pinned commit automatically. Params: project_id (required), submodule_path (required, e.g. MCF/mcf_gen3), file_path (required, path inside the submodule), ref (optional)
+- read_submodule_file: Read a file from inside a submodule transparently. Resolves the target project and pinned commit automatically. Params: project_id (required), submodule_path (required, e.g. libs/core-module), file_path (required, path inside the submodule), ref (optional)
 - markdown_render: Render arbitrary markdown text to HTML. Params: text (required), gfm (bool, use GitLab Flavored Markdown), project (path for resolving references)
 - commit_discussion_list: List discussions on a commit. Params: project_id (required), commit_id (required), page, per_page
 - commit_discussion_get: Get a single commit discussion. Params: project_id (required), commit_id (required), discussion_id (required)
@@ -14390,7 +14390,7 @@ See also: gitlab_list_repository_submodules, gitlab_...
 - `file_path` (string) (required): Path of the file inside the submodule (e.g. src/main.c),required
 - `project_id` (string) (required): Project ID or URL-encoded path of the parent repository,required
 - `ref` (string): Branch/tag/SHA in the parent repository (defaults to default branch)
-- `submodule_path` (string) (required): Path to the submodule as defined in .gitmodules (e.g. MCF/mcf_gen3),required
+- `submodule_path` (string) (required): Path to the submodule as defined in .gitmodules (e.g. libs/core-module),required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

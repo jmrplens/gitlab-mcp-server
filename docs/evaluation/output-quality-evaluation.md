@@ -5,7 +5,7 @@
 > expected structural patterns (markdown headers, next-steps, web URLs, formatted dates).
 >
 > **GitLab instance**: `https://gitlab.example.com` (self-signed TLS, skip verification)
-> **Test project**: `pe/ai/sw-area/mcp/gitlab-mcp-server` (id: 1835)
+> **Test project**: `my-org/tools/gitlab-mcp-server` (id: 1835)
 
 ---
 
@@ -60,7 +60,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Get the project ID and default branch of project pe/ai/sw-area/mcp/gitlab-mcp-server." |
+| **Prompt** | "Get the project ID and default branch of project my-org/tools/gitlab-mcp-server." |
 | **Expected Tool** | `gitlab_project` → action `get` |
 | **Quality Indicators** | LLM can extract `id` (1835) and `default_branch` from the structured output; response includes both values explicitly; OutputSchema ensures typed extraction |
 | **Verification** | Ask LLM follow-up "What is the project ID?" — must answer 1835 without re-querying |

@@ -139,7 +139,7 @@
     }
   },
   "chat.mcp.serverSampling": {
-    "pe-mcp-gitlab/.vscode/mcp.json: gitlab-dev": {
+    "gitlab-mcp-server/.vscode/mcp.json: gitlab-dev": {
       "allowedModels": [
         "copilot/auto",
         "copilotcli/claude-sonnet-4.6",

@@ -30,17 +30,17 @@ func TestRead_Success(t *testing.T) {
 				"encoding": "text",
 				"content": %q,
 				"ref": "main"
-			}`, `[submodule "MCF/mcf_gen3"]
-	path = MCF/mcf_gen3
+			}`, `[submodule "libs/core-module"]
+	path = libs/core-module
 	url = git@gitlab.example.com:org/project.git
 `))
 			return
 		}
 
-		// Tree request for MCF directory
+		// Tree request for libs directory
 		if strings.Contains(path, "/repository/tree") {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id": "abc123def456", "name": "mcf_gen3", "type": "commit", "path": "MCF/mcf_gen3", "mode": "160000"}
+				{"id": "abc123def456", "name": "core-module", "type": "commit", "path": "libs/core-module", "mode": "160000"}
 			]`)
 			return
 		}
@@ -70,7 +70,7 @@ func TestRead_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	out, err := Read(t.Context(), client, ReadInput{
 		ProjectID:     "42",
-		SubmodulePath: "MCF/mcf_gen3",
+		SubmodulePath: "libs/core-module",
 		FilePath:      "src/main.c",
 		Ref:           "main",
 	})
@@ -89,8 +89,8 @@ func TestRead_Success(t *testing.T) {
 	if out.CommitSHA != "abc123def456" {
 		t.Errorf("expected commit SHA 'abc123def456', got %q", out.CommitSHA)
 	}
-	if out.SubmodulePath != "MCF/mcf_gen3" {
-		t.Errorf("expected submodule_path 'MCF/mcf_gen3', got %q", out.SubmodulePath)
+	if out.SubmodulePath != "libs/core-module" {
+		t.Errorf("expected submodule_path 'libs/core-module', got %q", out.SubmodulePath)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestFormatReadMarkdown(t *testing.T) {
 	out := ReadOutput{
 		FileName:        "main.c",
 		FilePath:        "src/main.c",
-		SubmodulePath:   "MCF/mcf_gen3",
+		SubmodulePath:   "libs/core-module",
 		ResolvedProject: "org/project",
 		CommitSHA:       "abc123def456789",
 		Size:            42,
@@ -250,7 +250,7 @@ func TestFormatReadMarkdown(t *testing.T) {
 	if !ok {
 		t.Fatal("expected TextContent")
 	}
-	if !strings.Contains(tc.Text, "MCF/mcf_gen3") {
+	if !strings.Contains(tc.Text, "libs/core-module") {
 		t.Error("expected submodule path")
 	}
 	if !strings.Contains(tc.Text, "org/project") {
@@ -273,10 +273,10 @@ func TestFormatReadMarkdown(t *testing.T) {
 func TestList_SubmodulePaths(t *testing.T) {
 	entries := []SubmoduleEntry{
 		{Path: "lib"},
-		{Path: "MCF/gen3"},
+		{Path: "libs/gen3"},
 	}
 	got := listSubmodulePaths(entries)
-	if got != "lib, MCF/gen3" {
+	if got != "lib, libs/gen3" {
 		t.Errorf("unexpected result: %q", got)
 	}
 }

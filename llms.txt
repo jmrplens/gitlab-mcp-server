@@ -1,15 +1,15 @@
-# pe-mcp-gitlab
+# gitlab-mcp-server
 
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 operations as tools for AI assistants.
 
-pe-mcp-gitlab v1.8.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
+gitlab-mcp-server v1.8.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides 1004 individual MCP tools across 95 GitLab API domains, 40 meta-tools (59 with enterprise mode),
 24 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
 1. Download the binary for your platform from the Releases page
-2. Run `pe-mcp-gitlab --setup` to launch the interactive setup wizard
+2. Run `gitlab-mcp-server --setup` to launch the interactive setup wizard
 3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)
 
 ## Configuration (environment variables — stdio mode)

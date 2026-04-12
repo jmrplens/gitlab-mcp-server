@@ -341,7 +341,7 @@ These tools summarize discussions and review feedback.
 
 **When to use**: When joining a long discussion, triaging issues, or preparing a sprint review.
 
-**Example prompt**: "Summarize issue #33 in HEM_MAX — what decisions were made and what's still pending?"
+**Example prompt**: "Summarize issue #33 in my-project — what decisions were made and what's still pending?"
 
 ### CI/CD Analysis
 
@@ -354,7 +354,7 @@ These tools help diagnose pipeline problems and improve CI configuration.
 
 **When to use**: When a pipeline fails and you need a quick diagnosis, or when optimizing CI/CD performance.
 
-**Example prompt**: "Pipeline 41557 in HEM_MAX failed. What went wrong and how do I fix it?"
+**Example prompt**: "Pipeline 41557 in my-project failed. What went wrong and how do I fix it?"
 
 ### Project Health Tools
 
@@ -522,7 +522,7 @@ You:  "Review the code in MR !15 of gitlab-mcp-server for bugs and improvements.
 A pipeline just failed and you need to fix it fast.
 
 ```text
-You:  "Pipeline 41556 in HEM_MAX was canceled. What happened?"
+You:  "Pipeline 41556 in my-project was canceled. What happened?"
 ```
 
 **What happens**:

@@ -20,7 +20,7 @@ import (
 // ReadInput defines parameters for reading a file inside a submodule.
 type ReadInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path of the parent repository,required"`
-	SubmodulePath string               `json:"submodule_path" jsonschema:"Path to the submodule as defined in .gitmodules (e.g. MCF/mcf_gen3),required"`
+	SubmodulePath string               `json:"submodule_path" jsonschema:"Path to the submodule as defined in .gitmodules (e.g. libs/core-module),required"`
 	FilePath      string               `json:"file_path" jsonschema:"Path of the file inside the submodule (e.g. src/main.c),required"`
 	Ref           string               `json:"ref,omitempty" jsonschema:"Branch/tag/SHA in the parent repository (defaults to default branch)"`
 }

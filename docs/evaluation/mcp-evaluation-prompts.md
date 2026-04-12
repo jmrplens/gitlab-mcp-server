@@ -6,7 +6,7 @@
 >
 > **GitLab instance**: `https://gitlab.example.com` (self-signed TLS, skip verification)
 > **User**: `testuser` (id: 184)
-> **Test project**: `pe/ai/sw-area/mcp/gitlab-mcp-server` (id: 1835)
+> **Test project**: `my-org/tools/gitlab-mcp-server` (id: 1835)
 
 ---
 
@@ -91,7 +91,7 @@
 |-------|-------|
 | **Prompt** | "Dame los proyectos más recientes a los que tengo acceso en GitLab." |
 | **Expected Path** | `gitlab_project` → action `list` ordered by last_activity_at |
-| **Expected Data** | Includes management-pe-project-tools, pe-project-tools, HEM_MAX, etc. |
+| **Expected Data** | Includes management-pe-project-tools, pe-project-tools, my-project, etc. |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -101,7 +101,7 @@
 |-------|-------|
 | **Prompt** | "Busca el proyecto 'gitlab-mcp-server' en GitLab." |
 | **Expected Path** | `gitlab_search` → search projects, or `gitlab_project` → list with search |
-| **Expected Data** | pe/ai/sw-area/mcp/gitlab-mcp-server, id=1835 |
+| **Expected Data** | my-org/tools/gitlab-mcp-server, id=1835 |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -109,7 +109,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Dame los detalles del proyecto pe/ai/sw-area/mcp/gitlab-mcp-server." |
+| **Prompt** | "Dame los detalles del proyecto my-org/tools/gitlab-mcp-server." |
 | **Expected Path** | `gitlab_project` → action `get` with project path or ID |
 | **Expected Data** | Full project info for id=1835 |
 | **Result** | |
@@ -121,7 +121,7 @@
 |-------|-------|
 | **Prompt** | "¿Qué proyectos tengo en mi espacio personal de GitLab (usuario testuser)?" |
 | **Expected Path** | `gitlab_project` → action `list_user_projects` for user testuser |
-| **Expected Data** | onboarding-tasks, informes, filesystem-analytics, MCFdiff, analisis-rendimiento-modbus-tcp |
+| **Expected Data** | onboarding-tasks, informes, filesystem-analytics, code-diff-tool, analisis-rendimiento-modbus-tcp |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -161,7 +161,7 @@
 |-------|-------|
 | **Prompt** | "Obtén la información del proyecto en la ruta engineering/embedded/firmware/my-project" |
 | **Expected Path** | `gitlab_project` → action `get` with path `engineering/embedded/firmware/my-project` |
-| **Expected Data** | HEM_MAX project, id=393 |
+| **Expected Data** | my-project project, id=393 |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -195,7 +195,7 @@
 |-------|-------|
 | **Prompt** | "¿Qué grupos de nivel superior existen en el GitLab?" |
 | **Expected Path** | `gitlab_group` → action `list` with top_level_only |
-| **Expected Data** | Ceedling (347), pe (2246), sw-area (229) |
+| **Expected Data** | Ceedling (347), my-org (2246), engineering (229) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -203,9 +203,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Dame los detalles del grupo 'sw-area'." |
-| **Expected Path** | `gitlab_group` → action `get` with group id 229 or path sw-area |
-| **Expected Data** | Group sw-area, visibility=private |
+| **Prompt** | "Dame los detalles del grupo 'engineering'." |
+| **Expected Path** | `gitlab_group` → action `get` with group id 229 or path engineering |
+| **Expected Data** | Group engineering, visibility=private |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -223,17 +223,17 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Muéstrame todos los proyectos dentro del grupo sw-area/embedded-linux." |
-| **Expected Path** | `gitlab_group` → action `projects` for group sw-area/embedded-linux |
+| **Prompt** | "Muéstrame todos los proyectos dentro del grupo engineering/embedded-linux." |
+| **Expected Path** | `gitlab_group` → action `projects` for group engineering/embedded-linux |
 | **Expected Data** | pe-nb-charger-display, pe_ocpp_manager, etc. |
 | **Result** | |
-| **Error / Observaciones** | ejecuto gitlab_group, dijo "Necesito el ID del grupo sw-area/embedded-linux para listar sus proyectos. Voy a buscarlo:" despues ejecuto gitlab_group con el groupd_id, primero sin paginacion y despues indicando per_page, obtiene datos pero el LLM dice: "Ese resultado no parece correcto, probablemente necesito incluir subgrupos:", entonces vuelve a usar gitlab_group añadiendo el include_subgroups y entonces ya devuelve los datos, deberia entender que si decimos dentro de un grupo, lo que debe buscar son subgrupos no? en lugar de tantos intentos |
+| **Error / Observaciones** | ejecuto gitlab_group, dijo "Necesito el ID del grupo engineering/embedded-linux para listar sus proyectos. Voy a buscarlo:" despues ejecuto gitlab_group con el groupd_id, primero sin paginacion y despues indicando per_page, obtiene datos pero el LLM dice: "Ese resultado no parece correcto, probablemente necesito incluir subgrupos:", entonces vuelve a usar gitlab_group añadiendo el include_subgroups y entonces ya devuelve los datos, deberia entender que si decimos dentro de un grupo, lo que debe buscar son subgrupos no? en lugar de tantos intentos |
 
 ### P-024: Search within group
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Busca proyectos con 'valans' dentro del grupo sw-area." |
+| **Prompt** | "Busca proyectos con 'valans' dentro del grupo engineering." |
 | **Expected Path** | `gitlab_group` → action `search` or `gitlab_search` with group scope |
 | **Expected Data** | valans_display_ui, valans_linux_package, valans_display_logic, valans_can_logger |
 | **Result** | |
@@ -249,11 +249,11 @@
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
-### P-026: Get subgroups of sw-area
+### P-026: Get subgroups of engineering
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Cuáles son los subgrupos de sw-area?" |
+| **Prompt** | "¿Cuáles son los subgrupos de engineering?" |
 | **Expected Path** | `gitlab_group` → action `subgroups_list` for group 229 |
 | **Expected Data** | automation_qa (231), deprecated-projects (1899), doc (348), embedded (223), embedded-linux (230), management (410), tools (248) |
 | **Result** | |
@@ -291,7 +291,7 @@
 | **Expected Path** | `gitlab_issue` → action `list` for project 1733, state=opened |
 | **Expected Data** | Issues 34-38 about internal issues, EIP trips, etc. |
 | **Result** | |
-| **Error / Observaciones** | Primero ha intentado listar y ha obtenido el error: "issueList: unexpected error: 404 Not Found", despues ha reintentado con search y ha obtenido el error: "searchProjects: query is required" porque ha enviado la clave search con lo que queria buscar, ha vuelto a intentar usando la clave query y entonces ha obtenido que "El proyecto management-xmv670 (ID 1733, sw-area/management-xmv670) tiene las issues deshabilitadas (issues_enabled: false), por lo que no es posible listar ni crear issues en él."   |
+| **Error / Observaciones** | Primero ha intentado listar y ha obtenido el error: "issueList: unexpected error: 404 Not Found", despues ha reintentado con search y ha obtenido el error: "searchProjects: query is required" porque ha enviado la clave search con lo que queria buscar, ha vuelto a intentar usando la clave query y entonces ha obtenido que "El proyecto management-xmv670 (ID 1733, engineering/management-project) tiene las issues deshabilitadas (issues_enabled: false), por lo que no es posible listar ni crear issues en él."   |
 
 ### P-033: Create an issue 🔄
 
@@ -337,7 +337,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "En la issue #33 del proyecto HEM_MAX (id 393), establece una estimación de tiempo de 4 horas." |
+| **Prompt** | "En la issue #33 del proyecto my-project (id 393), establece una estimación de tiempo de 4 horas." |
 | **Expected Path** | `gitlab_issue` → action `time_estimate_set` with project=393, iid=33 |
 | **Expected Data** | Time estimate set to 4h |
 | **Result** | |
@@ -783,7 +783,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Qué pipelines tiene el proyecto HEM_MAX (id 393)?" |
+| **Prompt** | "¿Qué pipelines tiene el proyecto my-project (id 393)?" |
 | **Expected Path** | `gitlab_pipeline` → action `list` for project 393 |
 | **Expected Data** | Pipeline 41557 (success), 41556 (canceled), 41554 (canceled) |
 | **Result** | |
@@ -793,7 +793,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Dame los detalles del pipeline 41557 del proyecto HEM_MAX." |
+| **Prompt** | "Dame los detalles del pipeline 41557 del proyecto my-project." |
 | **Expected Path** | `gitlab_pipeline` → action `get` for project 393, pipeline_id=41557 |
 | **Expected Data** | status=success, ref=refs/merge-requests/2438/head |
 | **Result** | |
@@ -803,7 +803,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Qué jobs tiene el pipeline 41557 del proyecto HEM_MAX?" |
+| **Prompt** | "¿Qué jobs tiene el pipeline 41557 del proyecto my-project?" |
 | **Expected Path** | `gitlab_job` → action `list` or pipeline jobs for project 393, pipeline_id=41557 |
 | **Expected Data** | List of jobs in the pipeline |
 | **Result** | |
@@ -813,7 +813,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Cuál es el último pipeline del proyecto HEM_MAX y en qué estado está?" |
+| **Prompt** | "¿Cuál es el último pipeline del proyecto my-project y en qué estado está?" |
 | **Expected Path** | `gitlab_pipeline` → action `latest` for project 393 |
 | **Expected Data** | Most recent pipeline with status |
 | **Result** | |
@@ -823,7 +823,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Tiene resultados de tests el pipeline 41557 del proyecto HEM_MAX?" |
+| **Prompt** | "¿Tiene resultados de tests el pipeline 41557 del proyecto my-project?" |
 | **Expected Path** | `gitlab_pipeline` → action `test_report` for project 393, pipeline_id=41557 |
 | **Expected Data** | Test report summary (if available) |
 | **Result** | |
@@ -833,11 +833,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Qué variables tiene el pipeline 41557 de HEM_MAX?" |
+| **Prompt** | "¿Qué variables tiene el pipeline 41557 de my-project?" |
 | **Expected Path** | `gitlab_pipeline` → action `variables` for project 393, pipeline_id=41557 |
 | **Expected Data** | Pipeline variables |
 | **Result** | |
-| **Error / Observaciones** | Hace falta rol maintainer en el repositorio, asi que no se puede obtener pero muestra el json como si se hubiedese prodido un error, mejor si es algo mas semantico, el output del json: "pipelineGetVariables: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/projects/393/pipelines/41557/variables>: 403 {message: 403 Forbidden}" y despues el LLM si que lo entiende y dice: "No se puede acceder a las variables del pipeline #41557 — el token actual no tiene permisos suficientes." y "Error: 403 Forbidden — se requiere rol Maintainer o superior en el proyecto HEM_MAX para consultar variables de pipeline. El usuario testuser tiene rol Developer en este proyecto, que no es suficiente para esta operación." |
+| **Error / Observaciones** | Hace falta rol maintainer en el repositorio, asi que no se puede obtener pero muestra el json como si se hubiedese prodido un error, mejor si es algo mas semantico, el output del json: "pipelineGetVariables: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/projects/393/pipelines/41557/variables>: 403 {message: 403 Forbidden}" y despues el LLM si que lo entiende y dice: "No se puede acceder a las variables del pipeline #41557 — el token actual no tiene permisos suficientes." y "Error: 403 Forbidden — se requiere rol Maintainer o superior en el proyecto my-project para consultar variables de pipeline. El usuario testuser tiene rol Developer en este proyecto, que no es suficiente para esta operación." |
 
 ---
 
@@ -963,7 +963,7 @@
 |-------|-------|
 | **Prompt** | "Busca proyectos que contengan 'mcp' en el nombre." |
 | **Expected Path** | `gitlab_search` → action `projects` with query "mcp" |
-| **Expected Data** | gitlab-mcp-server (1835), pe-mcp-redmine (1869) |
+| **Expected Data** | gitlab-mcp-server (1835), redmine-mcp-server (1869) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
 
@@ -1055,7 +1055,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "El pipeline 41556 del proyecto HEM_MAX fue cancelado. Dame los detalles del pipeline, sus jobs, y los logs si es posible." |
+| **Prompt** | "El pipeline 41556 del proyecto my-project fue cancelado. Dame los detalles del pipeline, sus jobs, y los logs si es posible." |
 | **Expected Path** | Chain: pipeline get (393, 41556) → pipeline jobs → job logs/traces |
 | **Expected Data** | Pipeline and job details showing canceled state |
 | **Result** | |
@@ -1167,7 +1167,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Tiene entornos (environments) configurados el proyecto HEM_MAX (393)?" |
+| **Prompt** | "¿Tiene entornos (environments) configurados el proyecto my-project (393)?" |
 | **Expected Path** | `gitlab_environment` → action `list` for project 393 |
 | **Expected Data** | Environment list (if any) |
 | **Result** | |
@@ -1177,7 +1177,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "¿Hay despliegues (deployments) registrados en el proyecto HEM_MAX?" |
+| **Prompt** | "¿Hay despliegues (deployments) registrados en el proyecto my-project?" |
 | **Expected Path** | `gitlab_deployment` → action `list` for project 393 |
 | **Expected Data** | Deployment list (if any) |
 | **Result** | |
@@ -1187,7 +1187,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Si hay entornos en HEM_MAX, dame los detalles del primero." |
+| **Prompt** | "Si hay entornos en my-project, dame los detalles del primero." |
 | **Expected Path** | env list → env get (conditional) |
 | **Expected Data** | Environment details or "no environments" |
 | **Result** | |
@@ -1211,7 +1211,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Crea un TODO para mí a partir de la issue #33 del proyecto HEM_MAX." |
+| **Prompt** | "Crea un TODO para mí a partir de la issue #33 del proyecto my-project." |
 | **Expected Path** | `gitlab_issue` → action `create_todo` for project 393, iid=33 |
 | **Expected Data** | Todo created |
 | **Result** | |
@@ -1289,7 +1289,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Elimina el grupo 'sw-area' del GitLab." |
+| **Prompt** | "Elimina el grupo 'engineering' del GitLab." |
 | **Expected Path** | `gitlab_group` → delete → 403 forbidden (user doesn't have admin) |
 | **Expected Data** | Permission denied error, clear message |
 | **Result** | |
@@ -1309,7 +1309,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Dame la lista completa de TODOS los miembros del grupo sw-area, incluyendo miembros heredados." |
+| **Prompt** | "Dame la lista completa de TODOS los miembros del grupo engineering, incluyendo miembros heredados." |
 | **Expected Path** | Group members list with pagination, possibly with inherited members |
 | **Expected Data** | Paginated results with has_more indicator |
 | **Result** | |
@@ -1353,9 +1353,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "En el proyecto HEM_MAX, dame un resumen que incluya: issues abiertas, último pipeline, ramas activas y contribuidores." |
+| **Prompt** | "En el proyecto my-project, dame un resumen que incluya: issues abiertas, último pipeline, ramas activas y contribuidores." |
 | **Expected Path** | Chain: issues list (opened) → pipeline latest → branch list → contributors |
-| **Expected Data** | Multi-domain summary of HEM_MAX |
+| **Expected Data** | Multi-domain summary of my-project |
 | **Result** | |
 | **Error / Observaciones** | al usar la accion gitlab_pipeline con accion latest, se produce el error: "pipelineGetLatest: access denied — your token lacks the required permissions for this operation: GET <https://gitlab.example.com/api/v4/projects/393/pipelines/latest>: 403 {message: 403 Forbidden}". Si se uda la accion list si que obtiene datos. El resto ha ido bien |
 
@@ -1373,7 +1373,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Compara los proyectos gitlab-mcp-server y pe-mcp-redmine: ¿cuál tiene más actividad reciente? Mira commits, MRs y issues de ambos." |
+| **Prompt** | "Compara los proyectos gitlab-mcp-server y redmine-mcp-server: ¿cuál tiene más actividad reciente? Mira commits, MRs y issues de ambos." |
 | **Expected Path** | Chain: (project get × 2) → (commit list × 2) → (MR list × 2) → compare |
 | **Expected Data** | Comparison of activity between both MCP projects |
 | **Result** | |

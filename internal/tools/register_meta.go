@@ -928,7 +928,7 @@ Actions:
 - file_raw: Get raw file content as plain text. Params: project_id (required), file_path (required), ref
 - update_submodule: Update a submodule reference. Params: project_id (required), submodule (required, URL-encoded path), branch (required), commit_sha (required), commit_message
 - list_submodules: List all submodules defined in the repository. Parses .gitmodules and enriches with commit SHAs and resolved project paths. Params: project_id (required), ref (branch/tag/SHA, optional)
-- read_submodule_file: Read a file from inside a submodule transparently. Resolves the target project and pinned commit automatically. Params: project_id (required), submodule_path (required, e.g. MCF/mcf_gen3), file_path (required, path inside the submodule), ref (optional)
+- read_submodule_file: Read a file from inside a submodule transparently. Resolves the target project and pinned commit automatically. Params: project_id (required), submodule_path (required, e.g. libs/core-module), file_path (required, path inside the submodule), ref (optional)
 - markdown_render: Render arbitrary markdown text to HTML. Params: text (required), gfm (bool, use GitLab Flavored Markdown), project (path for resolving references)
 - commit_discussion_list: List discussions on a commit. Params: project_id (required), commit_id (required), page, per_page
 - commit_discussion_get: Get a single commit discussion. Params: project_id (required), commit_id (required), discussion_id (required)

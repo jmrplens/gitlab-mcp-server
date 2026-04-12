@@ -21,9 +21,9 @@ const sampleGitmodules = `[submodule "dsp_up_spi_common_module"]
 	url = git@gitlab.example.com:hardware/dsp/common-modules.git
 [submodule "bootloader"]
 	path = bootloader
-	url = git@gitlab.example.com:embedded/cloud-bootloader.git
-[submodule "MCF/mcf_gen3"]
-	path = MCF/mcf_gen3
+	url = git@gitlab.example.com:firmware/cloud-bootloader.git
+[submodule "libs/core-module"]
+	path = libs/core-module
 	url = git@gitlab.example.com:engineering/embedded/firmware/module-v3.git
 [submodule ".gitlab/gitlab-templates"]
 	path = .gitlab/gitlab-templates
@@ -47,8 +47,8 @@ func TestParseGitmodules_Success(t *testing.T) {
 		resolvedProject string
 	}{
 		{"dsp_up_spi_common_module", "dsp_up_spi_common_module", "git@gitlab.example.com:hardware/dsp/common-modules.git", "hardware/dsp/common-modules"},
-		{"bootloader", "bootloader", "git@gitlab.example.com:embedded/cloud-bootloader.git", "embedded/cloud-bootloader"},
-		{"MCF/mcf_gen3", "MCF/mcf_gen3", "git@gitlab.example.com:engineering/embedded/firmware/module-v3.git", "engineering/embedded/firmware/module-v3"},
+		{"bootloader", "bootloader", "git@gitlab.example.com:firmware/cloud-bootloader.git", "firmware/cloud-bootloader"},
+		{"libs/core-module", "libs/core-module", "git@gitlab.example.com:engineering/embedded/firmware/module-v3.git", "engineering/embedded/firmware/module-v3"},
 		{".gitlab/gitlab-templates", ".gitlab/gitlab-templates", "git@gitlab.example.com:engineering/docs/gitlab-templates.git", "engineering/docs/gitlab-templates"},
 	}
 
@@ -142,7 +142,7 @@ func TestParentDir(t *testing.T) {
 		path string
 		want string
 	}{
-		{"MCF/mcf_gen3", "MCF"},
+		{"libs/core-module", "libs"},
 		{".gitlab/gitlab-templates", ".gitlab"},
 		{"bootloader", ""},
 		{"a/b/c", "a/b"},
@@ -181,9 +181,9 @@ func TestList_Success(t *testing.T) {
 		if strings.Contains(path, "/repository/tree") {
 			treePath := r.URL.Query().Get("path")
 			switch treePath {
-			case "MCF":
+			case "libs":
 				testutil.RespondJSON(w, http.StatusOK, `[
-					{"id": "aaa111", "name": "mcf_gen3", "type": "commit", "path": "MCF/mcf_gen3", "mode": "160000"}
+					{"id": "aaa111", "name": "core-module", "type": "commit", "path": "libs/core-module", "mode": "160000"}
 				]`)
 			case ".gitlab":
 				testutil.RespondJSON(w, http.StatusOK, `[
@@ -223,8 +223,8 @@ func TestList_Success(t *testing.T) {
 	if shaMap["bootloader"] != "ddd444" {
 		t.Errorf("bootloader SHA: got %q", shaMap["bootloader"])
 	}
-	if shaMap["MCF/mcf_gen3"] != "aaa111" {
-		t.Errorf("MCF/mcf_gen3 SHA: got %q", shaMap["MCF/mcf_gen3"])
+	if shaMap["libs/core-module"] != "aaa111" {
+		t.Errorf("libs/core-module SHA: got %q", shaMap["libs/core-module"])
 	}
 	if shaMap[".gitlab/gitlab-templates"] != "bbb222" {
 		t.Errorf(".gitlab/gitlab-templates SHA: got %q", shaMap[".gitlab/gitlab-templates"])
