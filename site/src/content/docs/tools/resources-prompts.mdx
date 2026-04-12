@@ -13,42 +13,42 @@ The server exposes **24 resources** across several categories:
 
 ### User Information
 
-| Resource | Description |
-|----------|-------------|
-| `gitlab://user/current` | Current authenticated user profile |
-| `gitlab://user/status` | Current user's status message |
-| `gitlab://user/preferences` | User preferences and settings |
+| Resource                    | Description                        |
+| --------------------------- | ---------------------------------- |
+| `gitlab://user/current`     | Current authenticated user profile |
+| `gitlab://user/status`      | Current user's status message      |
+| `gitlab://user/preferences` | User preferences and settings      |
 
 ### Project Information
 
-| Resource | Description |
-|----------|-------------|
-| `gitlab://project/{id}` | Project details (name, description, visibility, default branch) |
-| `gitlab://project/{id}/languages` | Programming language breakdown |
-| `gitlab://project/{id}/members` | Project team members |
-| `gitlab://project/{id}/labels` | Available project labels |
-| `gitlab://project/{id}/milestones` | Project milestones |
-| `gitlab://project/{id}/branches` | Branch list with protection status |
-| `gitlab://project/{id}/merge_requests` | Open merge requests summary |
-| `gitlab://project/{id}/pipelines` | Recent pipeline status |
-| `gitlab://project/{id}/variables` | CI/CD variable names (values hidden) |
+| Resource                               | Description                                                     |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `gitlab://project/{id}`                | Project details (name, description, visibility, default branch) |
+| `gitlab://project/{id}/languages`      | Programming language breakdown                                  |
+| `gitlab://project/{id}/members`        | Project team members                                            |
+| `gitlab://project/{id}/labels`         | Available project labels                                        |
+| `gitlab://project/{id}/milestones`     | Project milestones                                              |
+| `gitlab://project/{id}/branches`       | Branch list with protection status                              |
+| `gitlab://project/{id}/merge_requests` | Open merge requests summary                                     |
+| `gitlab://project/{id}/pipelines`      | Recent pipeline status                                          |
+| `gitlab://project/{id}/variables`      | CI/CD variable names (values hidden)                            |
 
 ### Server & Configuration
 
-| Resource | Description |
-|----------|-------------|
-| `gitlab://server/version` | GitLab server version and revision |
-| `gitlab://server/features` | Available GitLab features |
-| `gitlab://server/metadata` | Server metadata (edition, enterprise flag) |
-| `gitlab://config/current` | Current MCP server configuration (secrets redacted) |
+| Resource                   | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `gitlab://server/version`  | GitLab server version and revision                  |
+| `gitlab://server/features` | Available GitLab features                           |
+| `gitlab://server/metadata` | Server metadata (edition, enterprise flag)          |
+| `gitlab://config/current`  | Current MCP server configuration (secrets redacted) |
 
 ### Tool Discovery
 
-| Resource | Description |
-|----------|-------------|
-| `gitlab://tools/list` | All registered tools with descriptions |
-| `gitlab://tools/categories` | Tools organized by domain category |
-| `gitlab://tools/meta` | Meta-tool action reference |
+| Resource                    | Description                            |
+| --------------------------- | -------------------------------------- |
+| `gitlab://tools/list`       | All registered tools with descriptions |
+| `gitlab://tools/categories` | Tools organized by domain category     |
+| `gitlab://tools/meta`       | Meta-tool action reference             |
 
 :::note
 Resource URIs with `{id}` are **resource templates**. The client substitutes the actual project ID or path when requesting the resource.
@@ -60,10 +60,10 @@ MCP clients can request resources at any time using the `resources/read` method:
 
 ```json
 {
-  "method": "resources/read",
-  "params": {
-    "uri": "gitlab://user/current"
-  }
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://user/current"
+	}
 }
 ```
 
@@ -79,88 +79,88 @@ The server provides **38 prompt templates** organized into categories:
 
 General-purpose prompts for everyday GitLab workflows.
 
-| Prompt | Description |
-|--------|-------------|
-| `create-issue` | Guided issue creation with proper labels and assignments |
-| `review-merge-request` | Structured MR review checklist |
-| `create-release` | Release creation with changelog generation |
-| `triage-issues` | Issue triage and prioritization workflow |
-| `pipeline-troubleshoot` | Step-by-step pipeline debugging guide |
-| `branch-strategy` | Branch naming and management guidance |
-| `code-review-checklist` | Comprehensive code review template |
-| `sprint-planning` | Sprint planning assistant |
-| `incident-response` | Incident response workflow |
-| `migration-guide` | Project migration planning |
-| `security-audit` | Security audit checklist |
-| `onboarding-developer` | New developer onboarding guide |
+| Prompt                  | Description                                              |
+| ----------------------- | -------------------------------------------------------- |
+| `create-issue`          | Guided issue creation with proper labels and assignments |
+| `review-merge-request`  | Structured MR review checklist                           |
+| `create-release`        | Release creation with changelog generation               |
+| `triage-issues`         | Issue triage and prioritization workflow                 |
+| `pipeline-troubleshoot` | Step-by-step pipeline debugging guide                    |
+| `branch-strategy`       | Branch naming and management guidance                    |
+| `code-review-checklist` | Comprehensive code review template                       |
+| `sprint-planning`       | Sprint planning assistant                                |
+| `incident-response`     | Incident response workflow                               |
+| `migration-guide`       | Project migration planning                               |
+| `security-audit`        | Security audit checklist                                 |
+| `onboarding-developer`  | New developer onboarding guide                           |
 
 ### Cross-Project Prompts (4)
 
 Prompts that work across multiple projects.
 
-| Prompt | Description |
-|--------|-------------|
+| Prompt                       | Description                           |
+| ---------------------------- | ------------------------------------- |
 | `cross-project-dependencies` | Analyze dependencies between projects |
-| `cross-project-search` | Search across multiple repositories |
-| `cross-project-issues` | Track issues spanning projects |
-| `cross-project-pipelines` | Monitor pipelines across projects |
+| `cross-project-search`       | Search across multiple repositories   |
+| `cross-project-issues`       | Track issues spanning projects        |
+| `cross-project-pipelines`    | Monitor pipelines across projects     |
 
 ### Team Prompts (4)
 
 Team management and collaboration templates.
 
-| Prompt | Description |
-|--------|-------------|
-| `team-workload` | Analyze team member workload distribution |
-| `team-velocity` | Track team velocity metrics |
-| `team-review-load` | Balance code review assignments |
-| `team-standup` | Generate standup meeting summaries |
+| Prompt             | Description                               |
+| ------------------ | ----------------------------------------- |
+| `team-workload`    | Analyze team member workload distribution |
+| `team-velocity`    | Track team velocity metrics               |
+| `team-review-load` | Balance code review assignments           |
+| `team-standup`     | Generate standup meeting summaries        |
 
 ### Project Report Prompts (5)
 
 Project status and reporting templates.
 
-| Prompt | Description |
-|--------|-------------|
-| `project-health-report` | Overall project health dashboard |
-| `project-activity-report` | Recent activity summary |
-| `project-risk-report` | Risk assessment and mitigation |
-| `project-quality-report` | Code quality and test coverage trends |
-| `project-compliance-report` | Compliance status overview |
+| Prompt                      | Description                           |
+| --------------------------- | ------------------------------------- |
+| `project-health-report`     | Overall project health dashboard      |
+| `project-activity-report`   | Recent activity summary               |
+| `project-risk-report`       | Risk assessment and mitigation        |
+| `project-quality-report`    | Code quality and test coverage trends |
+| `project-compliance-report` | Compliance status overview            |
 
 ### Analytics Prompts (4)
 
 Data-driven analysis templates.
 
-| Prompt | Description |
-|--------|-------------|
-| `merge-request-analytics` | MR throughput and cycle time analysis |
-| `pipeline-analytics` | Pipeline success rate and duration trends |
-| `issue-analytics` | Issue resolution metrics and trends |
-| `deployment-analytics` | Deployment frequency and stability metrics |
+| Prompt                    | Description                                |
+| ------------------------- | ------------------------------------------ |
+| `merge-request-analytics` | MR throughput and cycle time analysis      |
+| `pipeline-analytics`      | Pipeline success rate and duration trends  |
+| `issue-analytics`         | Issue resolution metrics and trends        |
+| `deployment-analytics`    | Deployment frequency and stability metrics |
 
 ### Milestone & Label Prompts (4)
 
 Milestone and label management templates.
 
-| Prompt | Description |
-|--------|-------------|
-| `milestone-progress` | Milestone completion tracking |
-| `milestone-risk-assessment` | Identify at-risk milestone items |
-| `label-cleanup` | Identify unused or duplicate labels |
-| `label-strategy` | Label taxonomy design guide |
+| Prompt                      | Description                         |
+| --------------------------- | ----------------------------------- |
+| `milestone-progress`        | Milestone completion tracking       |
+| `milestone-risk-assessment` | Identify at-risk milestone items    |
+| `label-cleanup`             | Identify unused or duplicate labels |
+| `label-strategy`            | Label taxonomy design guide         |
 
 ### Audit Prompts (5)
 
 Governance and auditing templates.
 
-| Prompt | Description |
-|--------|-------------|
-| `access-audit` | Review project access and permissions |
-| `branch-protection-audit` | Verify branch protection settings |
-| `ci-security-audit` | CI/CD security configuration review |
-| `secret-detection-audit` | Check for exposed secrets |
-| `compliance-framework-audit` | Compliance framework verification |
+| Prompt                       | Description                           |
+| ---------------------------- | ------------------------------------- |
+| `access-audit`               | Review project access and permissions |
+| `branch-protection-audit`    | Verify branch protection settings     |
+| `ci-security-audit`          | CI/CD security configuration review   |
+| `secret-detection-audit`     | Check for exposed secrets             |
+| `compliance-framework-audit` | Compliance framework verification     |
 
 ### Using Prompts
 
@@ -168,14 +168,14 @@ Prompts are requested via the `prompts/get` MCP method:
 
 ```json
 {
-  "method": "prompts/get",
-  "params": {
-    "name": "review-merge-request",
-    "arguments": {
-      "project": "my-group/my-project",
-      "mr_iid": "42"
-    }
-  }
+	"method": "prompts/get",
+	"params": {
+		"name": "review-merge-request",
+		"arguments": {
+			"project": "my-group/my-project",
+			"mr_iid": "42"
+		}
+	}
 }
 ```
 
@@ -183,9 +183,9 @@ The server returns a structured prompt with context-aware content that the LLM c
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `META_TOOLS` | `true` | Resources and prompts are registered in both modes |
+| Variable     | Default | Description                                        |
+| ------------ | ------- | -------------------------------------------------- |
+| `META_TOOLS` | `true`  | Resources and prompts are registered in both modes |
 
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.

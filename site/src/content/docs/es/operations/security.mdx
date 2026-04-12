@@ -55,15 +55,15 @@ Para usuarios de VS Code, puedes usar variables de entrada para evitar almacenar
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "${input:gitlabToken}"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlabToken}"
+			}
+		}
+	}
 }
 ```
 
@@ -73,12 +73,12 @@ El token se solicita al inicio y se mantiene solo en memoria.
 
 Usa los scopes mínimos requeridos para tu flujo de trabajo:
 
-| Scope | Requerido Para |
-|-------|---------------|
-| `read_api` | Operaciones de solo lectura (listar, obtener, buscar) |
-| `api` | Operaciones completas (crear, actualizar, eliminar) |
-| `read_repository` | Acceso a archivos del repositorio |
-| `write_repository` | Modificación de archivos del repositorio |
+| Scope              | Requerido Para                                        |
+| ------------------ | ----------------------------------------------------- |
+| `read_api`         | Operaciones de solo lectura (listar, obtener, buscar) |
+| `api`              | Operaciones completas (crear, actualizar, eliminar)   |
+| `read_repository`  | Acceso a archivos del repositorio                     |
+| `write_repository` | Modificación de archivos del repositorio              |
 
 :::tip
 Si solo necesitas operaciones de lectura, usa el scope `read_api` y habilita `GITLAB_READ_ONLY=true` como defensa en profundidad.
@@ -92,17 +92,17 @@ Cuando las herramientas de análisis usan sampling MCP para enviar datos al LLM 
 
 El motor de eliminación de credenciales usa patrones regex para detectar y eliminar:
 
-| Patrón | Ejemplo | Reemplazo |
-|--------|---------|-----------|
-| PAT de GitLab | `glpat-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
-| Token de Pipeline de GitLab | `glptt-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
-| Clave de Acceso AWS | `AKIAIOSFODNN7EXAMPLE` | `[REDACTED:AWS_KEY]` |
-| Clave Secreta AWS | `wJalrXUtnFEMI/K7MDENG/...` | `[REDACTED:AWS_SECRET]` |
-| Token de Slack | `xoxb-...` / `xoxp-...` | `[REDACTED:SLACK_TOKEN]` |
-| Webhook de Slack | `hooks.slack.com/services/...` | `[REDACTED:SLACK_WEBHOOK]` |
-| JWT | `eyJhbGciOi...` | `[REDACTED:JWT]` |
-| Clave API genérica | `api_key=...`, `apikey: ...` | `[REDACTED:API_KEY]` |
-| Clave SSH privada | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]` |
+| Patrón                      | Ejemplo                           | Reemplazo                  |
+| --------------------------- | --------------------------------- | -------------------------- |
+| PAT de GitLab               | `glpat-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| Token de Pipeline de GitLab | `glptt-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| Clave de Acceso AWS         | `AKIAIOSFODNN7EXAMPLE`            | `[REDACTED:AWS_KEY]`       |
+| Clave Secreta AWS           | `wJalrXUtnFEMI/K7MDENG/...`       | `[REDACTED:AWS_SECRET]`    |
+| Token de Slack              | `xoxb-...` / `xoxp-...`           | `[REDACTED:SLACK_TOKEN]`   |
+| Webhook de Slack            | `hooks.slack.com/services/...`    | `[REDACTED:SLACK_WEBHOOK]` |
+| JWT                         | `eyJhbGciOi...`                   | `[REDACTED:JWT]`           |
+| Clave API genérica          | `api_key=...`, `apikey: ...`      | `[REDACTED:API_KEY]`       |
+| Clave SSH privada           | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]`   |
 
 :::note
 La eliminación de credenciales se aplica a todos los datos enviados a través de sampling MCP, incluyendo logs de jobs, contenido de archivos, descripciones de issues y diffs de MR.
@@ -129,11 +129,13 @@ GITLAB_READ_ONLY=true
 ```
 
 En modo de solo lectura:
+
 - Todas las herramientas de escritura **no se registran** (crear, actualizar, eliminar, fusionar, etc.)
 - Solo las operaciones de lectura están disponibles (listar, obtener, buscar)
 - Esto proporciona una garantía firme a nivel de servidor — el LLM no puede modificar datos accidentalmente
 
 Esto es útil para:
+
 - Flujos de trabajo de exploración y descubrimiento
 - Entornos de demostración
 - Entornos donde el token tiene acceso de escritura pero deseas restringir el servidor
@@ -153,6 +155,7 @@ Authorization: Bearer <gitlab-personal-access-token>
 ### Aislamiento de Sesiones
 
 El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
+
 - Cada token obtiene su propia instancia aislada del servidor MCP
 - Las sesiones son independientes — un usuario no puede acceder al contexto de otro
 - Las sesiones inactivas expiran después de `--session-timeout` (por defecto: 30 minutos)

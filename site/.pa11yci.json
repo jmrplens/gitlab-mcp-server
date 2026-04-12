@@ -1,24 +1,24 @@
 {
-    "defaults": {
-        "standard": "WCAG2AA",
-        "timeout": 15000,
-        "wait": 2000,
-        "chromeLaunchConfig": {
-            "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
-        }
-    },
-    "urls": [
-        "http://localhost:4321/gitlab-mcp-server/",
-        "http://localhost:4321/gitlab-mcp-server/getting-started/",
-        "http://localhost:4321/gitlab-mcp-server/configuration/",
-        "http://localhost:4321/gitlab-mcp-server/architecture/",
-        "http://localhost:4321/gitlab-mcp-server/tools/overview/",
-        "http://localhost:4321/gitlab-mcp-server/capabilities/overview/",
-        "http://localhost:4321/gitlab-mcp-server/capabilities/icons/",
-        "http://localhost:4321/gitlab-mcp-server/operations/security/",
-        "http://localhost:4321/gitlab-mcp-server/examples/usage/",
-        "http://localhost:4321/gitlab-mcp-server/es/",
-        "http://localhost:4321/gitlab-mcp-server/es/getting-started/",
-        "http://localhost:4321/gitlab-mcp-server/es/tools/overview/"
-    ]
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 15000,
+    "wait": 2000,
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+    }
+  },
+  "urls": [
+    "http://localhost:4321/gitlab-mcp-server/",
+    "http://localhost:4321/gitlab-mcp-server/getting-started/",
+    "http://localhost:4321/gitlab-mcp-server/configuration/",
+    "http://localhost:4321/gitlab-mcp-server/architecture/",
+    "http://localhost:4321/gitlab-mcp-server/tools/overview/",
+    "http://localhost:4321/gitlab-mcp-server/capabilities/overview/",
+    "http://localhost:4321/gitlab-mcp-server/capabilities/icons/",
+    "http://localhost:4321/gitlab-mcp-server/operations/security/",
+    "http://localhost:4321/gitlab-mcp-server/examples/usage/",
+    "http://localhost:4321/gitlab-mcp-server/es/",
+    "http://localhost:4321/gitlab-mcp-server/es/getting-started/",
+    "http://localhost:4321/gitlab-mcp-server/es/tools/overview/"
+  ]
 }

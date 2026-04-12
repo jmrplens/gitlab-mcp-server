@@ -17,14 +17,14 @@ In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into 
 
 ```json
 {
-  "tool": "gitlab_issue",
-  "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect",
-    "description": "Users are redirected to 404 after login",
-    "labels": "bug,priority::high"
-  }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"title": "Fix login redirect",
+		"description": "Users are redirected to 404 after login",
+		"labels": "bug,priority::high"
+	}
 }
 ```
 
@@ -39,82 +39,82 @@ All tools follow a consistent naming pattern:
 
 ### Project Management
 
-| Meta-tool | Description | Key Actions |
-|-----------|-------------|-------------|
-| `gitlab_project` | Project CRUD and configuration | list, get, create, update, delete, archive, unarchive, fork, star, unstar, transfer |
-| `gitlab_issue` | Issue lifecycle management | list, get, create, update, delete, close, reopen, subscribe, move, clone |
-| `gitlab_milestone` | Milestone management | list, get, create, update, delete |
-| `gitlab_label` | Label management | list, get, create, update, delete |
-| `gitlab_issue_link` | Issue relationships | list, create, delete |
-| `gitlab_issue_note` | Issue comments | list, get, create, update, delete |
-| `gitlab_todo` | Todo/task management | list, mark_done, mark_all_done |
+| Meta-tool           | Description                    | Key Actions                                                                         |
+| ------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| `gitlab_project`    | Project CRUD and configuration | list, get, create, update, delete, archive, unarchive, fork, star, unstar, transfer |
+| `gitlab_issue`      | Issue lifecycle management     | list, get, create, update, delete, close, reopen, subscribe, move, clone            |
+| `gitlab_milestone`  | Milestone management           | list, get, create, update, delete                                                   |
+| `gitlab_label`      | Label management               | list, get, create, update, delete                                                   |
+| `gitlab_issue_link` | Issue relationships            | list, create, delete                                                                |
+| `gitlab_issue_note` | Issue comments                 | list, get, create, update, delete                                                   |
+| `gitlab_todo`       | Todo/task management           | list, mark_done, mark_all_done                                                      |
 
 ### Code & Repository
 
-| Meta-tool | Description | Key Actions |
-|-----------|-------------|-------------|
-| `gitlab_branch` | Branch management | list, get, create, delete |
-| `gitlab_protected_branch` | Branch protection rules | list, get, protect, unprotect |
-| `gitlab_commit` | Commit operations | list, get, diff, refs, cherry_pick, revert |
-| `gitlab_tag` | Tag management | list, get, create, delete |
-| `gitlab_file` | Repository file operations | get, create, update, delete, raw |
-| `gitlab_repository` | Repository tree and compare | tree, compare, archive, contributors |
-| `gitlab_merge_request` | Merge request lifecycle | list, get, create, update, merge, close, reopen, rebase, approve, unapprove |
-| `gitlab_mr_note` | MR comments | list, get, create, update, delete |
-| `gitlab_mr_discussion` | MR discussion threads | list, get, create, reply, resolve, unresolve |
-| `gitlab_mr_draft_note` | MR draft notes | list, get, create, update, delete, publish |
-| `gitlab_mr_changes` | MR diff and changes | list, summary |
-| `gitlab_mr_approval` | MR approval rules | get, approve, unapprove, configuration |
-| `gitlab_wiki` | Wiki page management | list, get, create, update, delete |
+| Meta-tool                 | Description                 | Key Actions                                                                 |
+| ------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| `gitlab_branch`           | Branch management           | list, get, create, delete                                                   |
+| `gitlab_protected_branch` | Branch protection rules     | list, get, protect, unprotect                                               |
+| `gitlab_commit`           | Commit operations           | list, get, diff, refs, cherry_pick, revert                                  |
+| `gitlab_tag`              | Tag management              | list, get, create, delete                                                   |
+| `gitlab_file`             | Repository file operations  | get, create, update, delete, raw                                            |
+| `gitlab_repository`       | Repository tree and compare | tree, compare, archive, contributors                                        |
+| `gitlab_merge_request`    | Merge request lifecycle     | list, get, create, update, merge, close, reopen, rebase, approve, unapprove |
+| `gitlab_mr_note`          | MR comments                 | list, get, create, update, delete                                           |
+| `gitlab_mr_discussion`    | MR discussion threads       | list, get, create, reply, resolve, unresolve                                |
+| `gitlab_mr_draft_note`    | MR draft notes              | list, get, create, update, delete, publish                                  |
+| `gitlab_mr_changes`       | MR diff and changes         | list, summary                                                               |
+| `gitlab_mr_approval`      | MR approval rules           | get, approve, unapprove, configuration                                      |
+| `gitlab_wiki`             | Wiki page management        | list, get, create, update, delete                                           |
 
 ### CI/CD
 
-| Meta-tool | Description | Key Actions |
-|-----------|-------------|-------------|
-| `gitlab_pipeline` | Pipeline management | list, get, create, cancel, retry, delete |
-| `gitlab_job` | CI job management | list, get, play, cancel, retry, trace, artifacts |
-| `gitlab_pipeline_schedule` | Scheduled pipelines | list, get, create, update, delete, trigger |
-| `gitlab_ci_lint` | CI configuration validation | validate, project_lint |
-| `gitlab_ci_variable` | CI/CD variables | list, get, create, update, delete |
-| `gitlab_environment` | Environment management | list, get, create, update, delete, stop |
-| `gitlab_deployment` | Deployment tracking | list, get |
-| `gitlab_package` | Package registry | list, get, delete |
+| Meta-tool                  | Description                 | Key Actions                                      |
+| -------------------------- | --------------------------- | ------------------------------------------------ |
+| `gitlab_pipeline`          | Pipeline management         | list, get, create, cancel, retry, delete         |
+| `gitlab_job`               | CI job management           | list, get, play, cancel, retry, trace, artifacts |
+| `gitlab_pipeline_schedule` | Scheduled pipelines         | list, get, create, update, delete, trigger       |
+| `gitlab_ci_lint`           | CI configuration validation | validate, project_lint                           |
+| `gitlab_ci_variable`       | CI/CD variables             | list, get, create, update, delete                |
+| `gitlab_environment`       | Environment management      | list, get, create, update, delete, stop          |
+| `gitlab_deployment`        | Deployment tracking         | list, get                                        |
+| `gitlab_package`           | Package registry            | list, get, delete                                |
 
 ### Collaboration
 
-| Meta-tool | Description | Key Actions |
-|-----------|-------------|-------------|
-| `gitlab_member` | Project member management | list, get, add, update, remove |
-| `gitlab_group` | Group management | list, get, create, update, delete, projects, subgroups |
-| `gitlab_search` | Cross-resource search | code, issues, merge_requests, projects, users, commits, blobs |
-| `gitlab_user` | User information | get, current, list, status |
-| `gitlab_release` | Release management | list, get, create, update, delete |
-| `gitlab_release_link` | Release asset links | list, get, create, update, delete |
-| `gitlab_upload` | File uploads | upload |
+| Meta-tool             | Description               | Key Actions                                                   |
+| --------------------- | ------------------------- | ------------------------------------------------------------- |
+| `gitlab_member`       | Project member management | list, get, add, update, remove                                |
+| `gitlab_group`        | Group management          | list, get, create, update, delete, projects, subgroups        |
+| `gitlab_search`       | Cross-resource search     | code, issues, merge_requests, projects, users, commits, blobs |
+| `gitlab_user`         | User information          | get, current, list, status                                    |
+| `gitlab_release`      | Release management        | list, get, create, update, delete                             |
+| `gitlab_release_link` | Release asset links       | list, get, create, update, delete                             |
+| `gitlab_upload`       | File uploads              | upload                                                        |
 
 ### Administration & Utilities
 
-| Meta-tool | Description | Key Actions |
-|-----------|-------------|-------------|
-| `gitlab_health` | Server health check | check, version |
-| `gitlab_server_update` | Self-update management | check, apply |
-| `gitlab_resolve_project` | Git remote to project resolution | resolve |
+| Meta-tool                | Description                      | Key Actions    |
+| ------------------------ | -------------------------------- | -------------- |
+| `gitlab_health`          | Server health check              | check, version |
+| `gitlab_server_update`   | Self-update management           | check, apply   |
+| `gitlab_resolve_project` | Git remote to project resolution | resolve        |
 
 ### Sampling & Analysis
 
-| Meta-tool | Description |
-|-----------|-------------|
-| `gitlab_analyze_mr_changes` | AI analysis of merge request changes |
-| `gitlab_summarize_issue` | AI-powered issue summarization |
-| `gitlab_generate_release_notes` | Automated release notes generation |
-| `gitlab_analyze_pipeline_failure` | Pipeline failure root cause analysis |
-| `gitlab_summarize_mr_review` | MR review summarization |
-| `gitlab_generate_milestone_report` | Milestone progress reporting |
-| `gitlab_analyze_ci_configuration` | CI config quality analysis |
-| `gitlab_analyze_issue_scope` | Issue scope and complexity estimation |
-| `gitlab_review_mr_security` | Security review of MR changes |
-| `gitlab_find_technical_debt` | Technical debt identification |
-| `gitlab_analyze_deployment_history` | Deployment pattern analysis |
+| Meta-tool                           | Description                           |
+| ----------------------------------- | ------------------------------------- |
+| `gitlab_analyze_mr_changes`         | AI analysis of merge request changes  |
+| `gitlab_summarize_issue`            | AI-powered issue summarization        |
+| `gitlab_generate_release_notes`     | Automated release notes generation    |
+| `gitlab_analyze_pipeline_failure`   | Pipeline failure root cause analysis  |
+| `gitlab_summarize_mr_review`        | MR review summarization               |
+| `gitlab_generate_milestone_report`  | Milestone progress reporting          |
+| `gitlab_analyze_ci_configuration`   | CI config quality analysis            |
+| `gitlab_analyze_issue_scope`        | Issue scope and complexity estimation |
+| `gitlab_review_mr_security`         | Security review of MR changes         |
+| `gitlab_find_technical_debt`        | Technical debt identification         |
+| `gitlab_analyze_deployment_history` | Deployment pattern analysis           |
 
 ## Enterprise-Only Tools (19)
 

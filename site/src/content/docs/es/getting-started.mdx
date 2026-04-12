@@ -3,7 +3,7 @@ title: Primeros pasos
 description: Instala y configura GitLab MCP Server con tu cliente de IA favorito
 ---
 
-import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
 
 Pon en marcha GitLab MCP Server en menos de 5 minutos.
 
@@ -29,14 +29,14 @@ Para configuraciones de solo lectura, puedes usar un token con scope `read_api` 
 
 Descarga el último binario para tu plataforma desde la página de [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
-| Plataforma | Binario |
-|---|---|
-| Linux (x86_64) | `gitlab-mcp-server-linux-amd64` |
-| Linux (ARM64) | `gitlab-mcp-server-linux-arm64` |
-| macOS (Intel) | `gitlab-mcp-server-darwin-amd64` |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64` |
-| Windows (x86_64) | `gitlab-mcp-server-windows-amd64.exe` |
-| Windows (ARM64) | `gitlab-mcp-server-windows-arm64.exe` |
+| Plataforma            | Binario                               |
+| --------------------- | ------------------------------------- |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`       |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`       |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe` |
 
 ### Hacerlo ejecutable (Linux/macOS)
 
@@ -59,6 +59,7 @@ La forma más fácil de configurar el servidor es el asistente de configuración
 ```
 
 El asistente:
+
 - Solicitará tu URL de GitLab y token
 - Probará la conexión
 - Detectará automáticamente tu cliente de IA
@@ -79,15 +80,15 @@ Crea o edita `.vscode/mcp.json` en la raíz de tu workspace:
 
 ```json
 {
-  "servers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"servers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -102,15 +103,15 @@ Edita `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) 
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -121,15 +122,15 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -199,10 +200,11 @@ Muestra los pipelines recientes en my-project
 
 :::caution
 Si obtienes errores de conexión, comprueba:
+
 - Que `GITLAB_URL` es correcta y accesible desde tu máquina
 - Que el token tiene el scope `api`
 - Para certificados autofirmados, establece `GITLAB_SKIP_TLS_VERIFY=true`
-:::
+  :::
 
 ## Próximos pasos
 

@@ -3,7 +3,7 @@ title: GitLab MCP Server
 description: MCP server that connects AI assistants to GitLab via natural language
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 **GitLab MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io/) server that enables AI assistants to interact with GitLab through natural language. Ask your AI to create issues, review merge requests, analyze pipelines, and much more — all without leaving your editor.
 
@@ -27,17 +27,17 @@ The server translates these requests into GitLab API calls, executes them, and r
 
 ## Key Features
 
-| Feature | Details |
-|---|---|
-| **40+ Meta-Tools** | Domain-grouped tools covering projects, issues, merge requests, pipelines, CI/CD, wikis, releases, and more |
-| **11 Analysis Tools** | AI-powered analysis via MCP sampling — pipeline failure diagnosis, MR security review, technical debt detection |
-| **24 MCP Resources** | Read-only data endpoints for project info, user profiles, server configuration |
-| **38 MCP Prompts** | Pre-built prompt templates for reports, audits, cross-project analysis, and team workflows |
-| **Multi-User HTTP Mode** | Deploy as a shared server with per-token isolation for team environments |
-| **GitLab CE & EE** | Compatible with both Community Edition and Enterprise Edition, including self-hosted instances |
-| **Enterprise Tools** | Optional 19 additional tools for GitLab Premium/Ultimate features (DORA metrics, vulnerabilities, compliance) |
-| **Auto-Update** | Built-in self-update mechanism — always run the latest version |
-| **Cross-Platform** | Single binary for Linux, macOS, and Windows (amd64 & arm64) |
+| Feature                  | Details                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **40+ Meta-Tools**       | Domain-grouped tools covering projects, issues, merge requests, pipelines, CI/CD, wikis, releases, and more     |
+| **11 Analysis Tools**    | AI-powered analysis via MCP sampling — pipeline failure diagnosis, MR security review, technical debt detection |
+| **24 MCP Resources**     | Read-only data endpoints for project info, user profiles, server configuration                                  |
+| **38 MCP Prompts**       | Pre-built prompt templates for reports, audits, cross-project analysis, and team workflows                      |
+| **Multi-User HTTP Mode** | Deploy as a shared server with per-token isolation for team environments                                        |
+| **GitLab CE & EE**       | Compatible with both Community Edition and Enterprise Edition, including self-hosted instances                  |
+| **Enterprise Tools**     | Optional 19 additional tools for GitLab Premium/Ultimate features (DORA metrics, vulnerabilities, compliance)   |
+| **Auto-Update**          | Built-in self-update mechanism — always run the latest version                                                  |
+| **Cross-Platform**       | Single binary for Linux, macOS, and Windows (amd64 & arm64)                                                     |
 
 ## Quick Example
 
@@ -47,11 +47,11 @@ The server translates these requests into GitLab API calls, executes them, and r
 
 > Found 3 open merge requests in `my-org/backend`:
 >
-> | MR | Title | Author | Assignee | Pipeline |
-> |---|---|---|---|---|
-> | !142 | Add rate limiting middleware | @alice | @bob | ✅ passed |
-> | !139 | Fix N+1 query in /users | @charlie | @alice | ❌ failed |
-> | !137 | Update OpenAPI spec | @bob | — | ⏳ running |
+> | MR   | Title                        | Author   | Assignee | Pipeline   |
+> | ---- | ---------------------------- | -------- | -------- | ---------- |
+> | !142 | Add rate limiting middleware | @alice   | @bob     | ✅ passed  |
+> | !139 | Fix N+1 query in /users      | @charlie | @alice   | ❌ failed  |
+> | !137 | Update OpenAPI spec          | @bob     | —        | ⏳ running |
 >
 > **!139** has a failed pipeline — would you like me to analyze the failure?
 
@@ -71,10 +71,26 @@ The server translates these requests into GitLab API calls, executes them, and r
 ## Get Started
 
 <CardGrid>
-  <LinkCard title="Getting Started" href="/en/getting-started/" description="Install the binary and connect to your first AI client in minutes" />
-  <LinkCard title="Architecture" href="/en/architecture/" description="Understand how the server connects AI assistants to GitLab" />
-  <LinkCard title="Configuration" href="/en/configuration/" description="Environment variables, client configs, and deployment options" />
-  <LinkCard title="Tools Reference" href="/en/tools/" description="Browse all available MCP tools by domain" />
+	<LinkCard
+		title="Getting Started"
+		href="/en/getting-started/"
+		description="Install the binary and connect to your first AI client in minutes"
+	/>
+	<LinkCard
+		title="Architecture"
+		href="/en/architecture/"
+		description="Understand how the server connects AI assistants to GitLab"
+	/>
+	<LinkCard
+		title="Configuration"
+		href="/en/configuration/"
+		description="Environment variables, client configs, and deployment options"
+	/>
+	<LinkCard
+		title="Tools Reference"
+		href="/en/tools/"
+		description="Browse all available MCP tools by domain"
+	/>
 </CardGrid>
 
 ## How It Works

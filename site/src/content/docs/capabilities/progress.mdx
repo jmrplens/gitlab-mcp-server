@@ -32,13 +32,13 @@ sequenceDiagram
 
 Progress reporting is used for operations that may take several seconds:
 
-| Operation | Progress Detail |
-|---|---|
-| **Paginated list retrieval** | Page-by-page fetch progress |
-| **Bulk operations** | Per-item progress (e.g., bulk issue update) |
-| **Sampling analysis** | Data collection → LLM analysis phases |
-| **CSV import** | Per-row import progress |
-| **Auto-update** | Download and apply steps |
+| Operation                    | Progress Detail                             |
+| ---------------------------- | ------------------------------------------- |
+| **Paginated list retrieval** | Page-by-page fetch progress                 |
+| **Bulk operations**          | Per-item progress (e.g., bulk issue update) |
+| **Sampling analysis**        | Data collection → LLM analysis phases       |
+| **CSV import**               | Per-row import progress                     |
+| **Auto-update**              | Download and apply steps                    |
 
 ## Client Display
 
@@ -54,23 +54,23 @@ Progress notifications follow the MCP protocol format:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "notifications/progress",
-  "params": {
-    "progressToken": "tool-call-123",
-    "progress": 50,
-    "total": 100,
-    "message": "Fetching page 2 of 4..."
-  }
+	"jsonrpc": "2.0",
+	"method": "notifications/progress",
+	"params": {
+		"progressToken": "tool-call-123",
+		"progress": 50,
+		"total": 100,
+		"message": "Fetching page 2 of 4..."
+	}
 }
 ```
 
-| Field | Description |
-|---|---|
+| Field           | Description                                               |
+| --------------- | --------------------------------------------------------- |
 | `progressToken` | Correlation ID linking progress to the original tool call |
-| `progress` | Current step number |
-| `total` | Total number of steps (when known) |
-| `message` | Human-readable description of the current step |
+| `progress`      | Current step number                                       |
+| `total`         | Total number of steps (when known)                        |
+| `message`       | Human-readable description of the current step            |
 
 :::note
 Progress notifications are best-effort. If the MCP client does not support progress display, notifications are silently ignored and the tool still completes normally.

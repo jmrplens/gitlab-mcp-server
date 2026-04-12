@@ -7,9 +7,9 @@ GitLab MCP Server utiliza **registro dual** — los mensajes de log se envían t
 
 ## Salida Dual
 
-| Destino | Formato | Propósito |
-|---|---|---|
-| **stderr** | Texto legible o JSON | Salida de terminal, redirección a archivo, depuración |
+| Destino           | Formato                 | Propósito                                                                         |
+| ----------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| **stderr**        | Texto legible o JSON    | Salida de terminal, redirección a archivo, depuración                             |
 | **Protocolo MCP** | `notifications/message` | Mostrado en la interfaz del cliente MCP (por ejemplo, panel de salida de VS Code) |
 
 Esto garantiza que los logs siempre sean visibles independientemente del soporte de logging del cliente.
@@ -18,12 +18,12 @@ Esto garantiza que los logs siempre sean visibles independientemente del soporte
 
 El servidor soporta cuatro niveles de log:
 
-| Nivel | Cuándo se Usa |
-|---|---|
+| Nivel   | Cuándo se Usa                                                                                                                                         |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `debug` | Información de diagnóstico detallada — parámetros de llamadas a herramientas, detalles de peticiones/respuestas API, operaciones del pool de sesiones |
-| `info` | Eventos operativos normales — inicio del servidor, registro de herramientas, comprobaciones de actualización |
-| `warn` | Problemas no fatales — tiempos de espera de red, configuración opcional faltante, uso obsoleto |
-| `error` | Fallos — errores de autenticación, fallos de API, errores irrecuperables de herramientas |
+| `info`  | Eventos operativos normales — inicio del servidor, registro de herramientas, comprobaciones de actualización                                          |
+| `warn`  | Problemas no fatales — tiempos de espera de red, configuración opcional faltante, uso obsoleto                                                        |
+| `error` | Fallos — errores de autenticación, fallos de API, errores irrecuperables de herramientas                                                              |
 
 ## Configuración
 
@@ -45,20 +45,20 @@ Cuando el cliente MCP soporta logging, el servidor envía notificaciones de log 
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "notifications/message",
-  "params": {
-    "level": "info",
-    "logger": "gitlab-mcp-server",
-    "data": {
-      "message": "starting MCP server",
-      "transport": "stdio",
-      "version": "2.1.0",
-      "tools": 40,
-      "resources": 24,
-      "prompts": 38
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "notifications/message",
+	"params": {
+		"level": "info",
+		"logger": "gitlab-mcp-server",
+		"data": {
+			"message": "starting MCP server",
+			"transport": "stdio",
+			"version": "2.1.0",
+			"tools": 40,
+			"resources": 24,
+			"prompts": 38
+		}
+	}
 }
 ```
 

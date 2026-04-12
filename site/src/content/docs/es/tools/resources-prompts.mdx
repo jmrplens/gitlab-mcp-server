@@ -13,42 +13,42 @@ El servidor expone **24 recursos** en varias categorías:
 
 ### Información de usuario
 
-| Recurso | Descripción |
-|----------|-------------|
-| `gitlab://user/current` | Perfil del usuario autenticado actual |
-| `gitlab://user/status` | Mensaje de estado del usuario actual |
+| Recurso                     | Descripción                                |
+| --------------------------- | ------------------------------------------ |
+| `gitlab://user/current`     | Perfil del usuario autenticado actual      |
+| `gitlab://user/status`      | Mensaje de estado del usuario actual       |
 | `gitlab://user/preferences` | Preferencias y configuraciones del usuario |
 
 ### Información de proyecto
 
-| Recurso | Descripción |
-|----------|-------------|
-| `gitlab://project/{id}` | Detalles del proyecto (nombre, descripción, visibilidad, rama predeterminada) |
-| `gitlab://project/{id}/languages` | Desglose de lenguajes de programación |
-| `gitlab://project/{id}/members` | Miembros del equipo del proyecto |
-| `gitlab://project/{id}/labels` | Etiquetas disponibles del proyecto |
-| `gitlab://project/{id}/milestones` | Milestones del proyecto |
-| `gitlab://project/{id}/branches` | Lista de ramas con estado de protección |
-| `gitlab://project/{id}/merge_requests` | Resumen de merge requests abiertas |
-| `gitlab://project/{id}/pipelines` | Estado de pipelines recientes |
-| `gitlab://project/{id}/variables` | Nombres de variables CI/CD (valores ocultos) |
+| Recurso                                | Descripción                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| `gitlab://project/{id}`                | Detalles del proyecto (nombre, descripción, visibilidad, rama predeterminada) |
+| `gitlab://project/{id}/languages`      | Desglose de lenguajes de programación                                         |
+| `gitlab://project/{id}/members`        | Miembros del equipo del proyecto                                              |
+| `gitlab://project/{id}/labels`         | Etiquetas disponibles del proyecto                                            |
+| `gitlab://project/{id}/milestones`     | Milestones del proyecto                                                       |
+| `gitlab://project/{id}/branches`       | Lista de ramas con estado de protección                                       |
+| `gitlab://project/{id}/merge_requests` | Resumen de merge requests abiertas                                            |
+| `gitlab://project/{id}/pipelines`      | Estado de pipelines recientes                                                 |
+| `gitlab://project/{id}/variables`      | Nombres de variables CI/CD (valores ocultos)                                  |
 
 ### Servidor y configuración
 
-| Recurso | Descripción |
-|----------|-------------|
-| `gitlab://server/version` | Versión y revisión del servidor GitLab |
-| `gitlab://server/features` | Funciones disponibles de GitLab |
-| `gitlab://server/metadata` | Metadatos del servidor (edición, flag enterprise) |
-| `gitlab://config/current` | Configuración actual del servidor MCP (secretos redactados) |
+| Recurso                    | Descripción                                                 |
+| -------------------------- | ----------------------------------------------------------- |
+| `gitlab://server/version`  | Versión y revisión del servidor GitLab                      |
+| `gitlab://server/features` | Funciones disponibles de GitLab                             |
+| `gitlab://server/metadata` | Metadatos del servidor (edición, flag enterprise)           |
+| `gitlab://config/current`  | Configuración actual del servidor MCP (secretos redactados) |
 
 ### Descubrimiento de herramientas
 
-| Recurso | Descripción |
-|----------|-------------|
-| `gitlab://tools/list` | Todas las herramientas registradas con descripciones |
-| `gitlab://tools/categories` | Herramientas organizadas por categoría de dominio |
-| `gitlab://tools/meta` | Referencia de acciones de meta-herramientas |
+| Recurso                     | Descripción                                          |
+| --------------------------- | ---------------------------------------------------- |
+| `gitlab://tools/list`       | Todas las herramientas registradas con descripciones |
+| `gitlab://tools/categories` | Herramientas organizadas por categoría de dominio    |
+| `gitlab://tools/meta`       | Referencia de acciones de meta-herramientas          |
 
 :::note
 Las URIs de recursos con `{id}` son **plantillas de recursos**. El cliente sustituye el ID o ruta del proyecto real al solicitar el recurso.
@@ -60,10 +60,10 @@ Los clientes MCP pueden solicitar recursos en cualquier momento usando el métod
 
 ```json
 {
-  "method": "resources/read",
-  "params": {
-    "uri": "gitlab://user/current"
-  }
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://user/current"
+	}
 }
 ```
 
@@ -79,88 +79,88 @@ El servidor proporciona **38 plantillas de prompts** organizadas en categorías:
 
 Prompts de propósito general para flujos de trabajo cotidianos de GitLab.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `create-issue` | Creación guiada de issues con etiquetas y asignaciones correctas |
-| `review-merge-request` | Checklist estructurada de revisión de MRs |
-| `create-release` | Creación de releases con generación de changelog |
-| `triage-issues` | Flujo de trabajo de triaje y priorización de issues |
-| `pipeline-troubleshoot` | Guía paso a paso para depuración de pipelines |
-| `branch-strategy` | Guía de nomenclatura y gestión de ramas |
-| `code-review-checklist` | Plantilla completa de revisión de código |
-| `sprint-planning` | Asistente de planificación de sprints |
-| `incident-response` | Flujo de trabajo de respuesta a incidentes |
-| `migration-guide` | Planificación de migración de proyectos |
-| `security-audit` | Checklist de auditoría de seguridad |
-| `onboarding-developer` | Guía de incorporación de nuevos desarrolladores |
+| Prompt                  | Descripción                                                      |
+| ----------------------- | ---------------------------------------------------------------- |
+| `create-issue`          | Creación guiada de issues con etiquetas y asignaciones correctas |
+| `review-merge-request`  | Checklist estructurada de revisión de MRs                        |
+| `create-release`        | Creación de releases con generación de changelog                 |
+| `triage-issues`         | Flujo de trabajo de triaje y priorización de issues              |
+| `pipeline-troubleshoot` | Guía paso a paso para depuración de pipelines                    |
+| `branch-strategy`       | Guía de nomenclatura y gestión de ramas                          |
+| `code-review-checklist` | Plantilla completa de revisión de código                         |
+| `sprint-planning`       | Asistente de planificación de sprints                            |
+| `incident-response`     | Flujo de trabajo de respuesta a incidentes                       |
+| `migration-guide`       | Planificación de migración de proyectos                          |
+| `security-audit`        | Checklist de auditoría de seguridad                              |
+| `onboarding-developer`  | Guía de incorporación de nuevos desarrolladores                  |
 
 ### Prompts entre proyectos (4)
 
 Prompts que funcionan entre múltiples proyectos.
 
-| Prompt | Descripción |
-|--------|-------------|
+| Prompt                       | Descripción                           |
+| ---------------------------- | ------------------------------------- |
 | `cross-project-dependencies` | Analizar dependencias entre proyectos |
-| `cross-project-search` | Buscar en múltiples repositorios |
-| `cross-project-issues` | Rastrear issues que abarcan proyectos |
-| `cross-project-pipelines` | Monitorizar pipelines entre proyectos |
+| `cross-project-search`       | Buscar en múltiples repositorios      |
+| `cross-project-issues`       | Rastrear issues que abarcan proyectos |
+| `cross-project-pipelines`    | Monitorizar pipelines entre proyectos |
 
 ### Prompts de equipo (4)
 
 Plantillas de gestión y colaboración de equipos.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `team-workload` | Analizar distribución de carga de trabajo del equipo |
-| `team-velocity` | Rastrear métricas de velocidad del equipo |
-| `team-review-load` | Equilibrar asignaciones de revisión de código |
-| `team-standup` | Generar resúmenes de reuniones de standup |
+| Prompt             | Descripción                                          |
+| ------------------ | ---------------------------------------------------- |
+| `team-workload`    | Analizar distribución de carga de trabajo del equipo |
+| `team-velocity`    | Rastrear métricas de velocidad del equipo            |
+| `team-review-load` | Equilibrar asignaciones de revisión de código        |
+| `team-standup`     | Generar resúmenes de reuniones de standup            |
 
 ### Prompts de informes de proyecto (5)
 
 Plantillas de estado e informes de proyectos.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `project-health-report` | Panel general de salud del proyecto |
-| `project-activity-report` | Resumen de actividad reciente |
-| `project-risk-report` | Evaluación y mitigación de riesgos |
-| `project-quality-report` | Tendencias de calidad de código y cobertura de tests |
-| `project-compliance-report` | Resumen del estado de cumplimiento |
+| Prompt                      | Descripción                                          |
+| --------------------------- | ---------------------------------------------------- |
+| `project-health-report`     | Panel general de salud del proyecto                  |
+| `project-activity-report`   | Resumen de actividad reciente                        |
+| `project-risk-report`       | Evaluación y mitigación de riesgos                   |
+| `project-quality-report`    | Tendencias de calidad de código y cobertura de tests |
+| `project-compliance-report` | Resumen del estado de cumplimiento                   |
 
 ### Prompts de analítica (4)
 
 Plantillas de análisis basado en datos.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `merge-request-analytics` | Análisis de rendimiento y tiempo de ciclo de MRs |
-| `pipeline-analytics` | Tendencias de tasa de éxito y duración de pipelines |
-| `issue-analytics` | Métricas y tendencias de resolución de issues |
-| `deployment-analytics` | Métricas de frecuencia y estabilidad de despliegues |
+| Prompt                    | Descripción                                         |
+| ------------------------- | --------------------------------------------------- |
+| `merge-request-analytics` | Análisis de rendimiento y tiempo de ciclo de MRs    |
+| `pipeline-analytics`      | Tendencias de tasa de éxito y duración de pipelines |
+| `issue-analytics`         | Métricas y tendencias de resolución de issues       |
+| `deployment-analytics`    | Métricas de frecuencia y estabilidad de despliegues |
 
 ### Prompts de milestones y etiquetas (4)
 
 Plantillas de gestión de milestones y etiquetas.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `milestone-progress` | Seguimiento de completitud de milestones |
+| Prompt                      | Descripción                                   |
+| --------------------------- | --------------------------------------------- |
+| `milestone-progress`        | Seguimiento de completitud de milestones      |
 | `milestone-risk-assessment` | Identificar elementos en riesgo del milestone |
-| `label-cleanup` | Identificar etiquetas no usadas o duplicadas |
-| `label-strategy` | Guía de diseño de taxonomía de etiquetas |
+| `label-cleanup`             | Identificar etiquetas no usadas o duplicadas  |
+| `label-strategy`            | Guía de diseño de taxonomía de etiquetas      |
 
 ### Prompts de auditoría (5)
 
 Plantillas de gobernanza y auditoría.
 
-| Prompt | Descripción |
-|--------|-------------|
-| `access-audit` | Revisar accesos y permisos del proyecto |
-| `branch-protection-audit` | Verificar configuración de protección de ramas |
-| `ci-security-audit` | Revisión de configuración de seguridad CI/CD |
-| `secret-detection-audit` | Comprobar secretos expuestos |
-| `compliance-framework-audit` | Verificación del framework de cumplimiento |
+| Prompt                       | Descripción                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `access-audit`               | Revisar accesos y permisos del proyecto        |
+| `branch-protection-audit`    | Verificar configuración de protección de ramas |
+| `ci-security-audit`          | Revisión de configuración de seguridad CI/CD   |
+| `secret-detection-audit`     | Comprobar secretos expuestos                   |
+| `compliance-framework-audit` | Verificación del framework de cumplimiento     |
 
 ### Uso de prompts
 
@@ -168,14 +168,14 @@ Los prompts se solicitan mediante el método MCP `prompts/get`:
 
 ```json
 {
-  "method": "prompts/get",
-  "params": {
-    "name": "review-merge-request",
-    "arguments": {
-      "project": "my-group/my-project",
-      "mr_iid": "42"
-    }
-  }
+	"method": "prompts/get",
+	"params": {
+		"name": "review-merge-request",
+		"arguments": {
+			"project": "my-group/my-project",
+			"mr_iid": "42"
+		}
+	}
 }
 ```
 
@@ -183,9 +183,9 @@ El servidor devuelve un prompt estructurado con contenido consciente del context
 
 ## Configuración
 
-| Variable | Predeterminado | Descripción |
-|----------|---------|-------------|
-| `META_TOOLS` | `true` | Los recursos y prompts se registran en ambos modos |
+| Variable     | Predeterminado | Descripción                                        |
+| ------------ | -------------- | -------------------------------------------------- |
+| `META_TOOLS` | `true`         | Los recursos y prompts se registran en ambos modos |
 
 :::tip
 Los recursos son particularmente útiles para proporcionar contexto del proyecto al inicio de una conversación. Al leer el recurso del proyecto, el LLM obtiene comprensión inmediata del propósito del repositorio, el equipo y el estado actual.

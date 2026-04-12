@@ -7,10 +7,10 @@ GitLab MCP Server uses **dual logging** — log messages are sent both to stderr
 
 ## Dual Output
 
-| Destination | Format | Purpose |
-|---|---|---|
-| **stderr** | Human-readable text or JSON | Terminal output, file redirection, debugging |
-| **MCP protocol** | `notifications/message` | Displayed in the MCP client's UI (e.g., VS Code Output panel) |
+| Destination      | Format                      | Purpose                                                       |
+| ---------------- | --------------------------- | ------------------------------------------------------------- |
+| **stderr**       | Human-readable text or JSON | Terminal output, file redirection, debugging                  |
+| **MCP protocol** | `notifications/message`     | Displayed in the MCP client's UI (e.g., VS Code Output panel) |
 
 This ensures logs are always visible regardless of the client's logging support.
 
@@ -18,12 +18,12 @@ This ensures logs are always visible regardless of the client's logging support.
 
 The server supports four log levels:
 
-| Level | When Used |
-|---|---|
+| Level   | When Used                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------- |
 | `debug` | Detailed diagnostic information — tool call parameters, API request/response details, session pool operations |
-| `info` | Normal operational events — server startup, tool registration, update checks |
-| `warn` | Non-fatal issues — network timeouts, missing optional configuration, deprecated usage |
-| `error` | Failures — authentication errors, API failures, unrecoverable tool errors |
+| `info`  | Normal operational events — server startup, tool registration, update checks                                  |
+| `warn`  | Non-fatal issues — network timeouts, missing optional configuration, deprecated usage                         |
+| `error` | Failures — authentication errors, API failures, unrecoverable tool errors                                     |
 
 ## Configuration
 
@@ -45,20 +45,20 @@ When the MCP client supports logging, the server sends structured log notificati
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "notifications/message",
-  "params": {
-    "level": "info",
-    "logger": "gitlab-mcp-server",
-    "data": {
-      "message": "starting MCP server",
-      "transport": "stdio",
-      "version": "2.1.0",
-      "tools": 40,
-      "resources": 24,
-      "prompts": 38
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "notifications/message",
+	"params": {
+		"level": "info",
+		"logger": "gitlab-mcp-server",
+		"data": {
+			"message": "starting MCP server",
+			"transport": "stdio",
+			"version": "2.1.0",
+			"tools": 40,
+			"resources": 24,
+			"prompts": 38
+		}
+	}
 }
 ```
 

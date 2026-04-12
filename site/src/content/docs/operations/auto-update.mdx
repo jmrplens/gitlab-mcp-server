@@ -9,11 +9,11 @@ GitLab MCP Server can automatically detect, download, and apply new releases fro
 
 The `AUTO_UPDATE` variable controls how updates are handled:
 
-| Value | Mode | Behavior |
-|---|---|---|
-| `true` (default) | Auto-apply | Detect and apply updates automatically |
-| `check` | Notify only | Detect updates and log availability, but do not apply |
-| `false` | Disabled | Skip all update checks entirely |
+| Value            | Mode        | Behavior                                              |
+| ---------------- | ----------- | ----------------------------------------------------- |
+| `true` (default) | Auto-apply  | Detect and apply updates automatically                |
+| `check`          | Notify only | Detect updates and log availability, but do not apply |
+| `false`          | Disabled    | Skip all update checks entirely                       |
 
 Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-insensitive.
 
@@ -68,19 +68,19 @@ In HTTP mode, auto-update runs as a **background periodic check**:
 
 ### Environment Variables (Stdio Mode)
 
-| Variable | Default | Description |
-|---|---|---|
-| `AUTO_UPDATE` | `true` | Update mode: `true`, `check`, or `false` |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Check interval (used by HTTP mode periodic checks) |
+| Variable               | Default                      | Description                                              |
+| ---------------------- | ---------------------------- | -------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Update mode: `true`, `check`, or `false`                 |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Check interval (used by HTTP mode periodic checks)       |
 
 ### CLI Flags (HTTP Mode)
 
-| Flag | Default | Description |
-|---|---|---|
-| `--auto-update` | `true` | Update mode: `true`, `check`, or `false` |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
-| `--auto-update-interval` | `1h` | Interval between periodic update checks |
+| Flag                     | Default                      | Description                                              |
+| ------------------------ | ---------------------------- | -------------------------------------------------------- |
+| `--auto-update`          | `true`                       | Update mode: `true`, `check`, or `false`                 |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
+| `--auto-update-interval` | `1h`                         | Interval between periodic update checks                  |
 
 :::note
 Auto-update uses the **GitHub Releases API** — it is completely independent of your GitLab configuration. Your `GITLAB_URL`, `GITLAB_TOKEN`, and `GITLAB_SKIP_TLS_VERIFY` settings do not affect auto-update.

@@ -40,57 +40,57 @@ sequenceDiagram
 
 ### Code Review
 
-| Tool | Description |
-|---|---|
-| `gitlab_analyze_mr_changes` | Analyze merge request code changes for quality, bugs, and improvements |
-| `gitlab_review_mr_security` | Security-focused review of merge request changes |
-| `gitlab_summarize_mr_review` | Summarize merge request discussions and review feedback |
+| Tool                         | Description                                                            |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `gitlab_analyze_mr_changes`  | Analyze merge request code changes for quality, bugs, and improvements |
+| `gitlab_review_mr_security`  | Security-focused review of merge request changes                       |
+| `gitlab_summarize_mr_review` | Summarize merge request discussions and review feedback                |
 
 ### Issue Analysis
 
-| Tool | Description |
-|---|---|
-| `gitlab_summarize_issue` | Concise summary of an issue with full context and discussion |
-| `gitlab_analyze_issue_scope` | Estimate complexity and scope of an issue |
+| Tool                         | Description                                                  |
+| ---------------------------- | ------------------------------------------------------------ |
+| `gitlab_summarize_issue`     | Concise summary of an issue with full context and discussion |
+| `gitlab_analyze_issue_scope` | Estimate complexity and scope of an issue                    |
 
 ### CI/CD Analysis
 
-| Tool | Description |
-|---|---|
-| `gitlab_analyze_pipeline_failure` | Diagnose why a pipeline failed with root cause analysis |
-| `gitlab_analyze_ci_configuration` | Review `.gitlab-ci.yml` for best practices and issues |
-| `gitlab_analyze_deployment_history` | Analyze deployment patterns and reliability |
+| Tool                                | Description                                             |
+| ----------------------------------- | ------------------------------------------------------- |
+| `gitlab_analyze_pipeline_failure`   | Diagnose why a pipeline failed with root cause analysis |
+| `gitlab_analyze_ci_configuration`   | Review `.gitlab-ci.yml` for best practices and issues   |
+| `gitlab_analyze_deployment_history` | Analyze deployment patterns and reliability             |
 
 ### Project Health
 
-| Tool | Description |
-|---|---|
-| `gitlab_generate_release_notes` | Auto-generate release notes from milestone issues |
-| `gitlab_generate_milestone_report` | Sprint/milestone progress report with metrics |
-| `gitlab_find_technical_debt` | Identify technical debt indicators in the project |
+| Tool                               | Description                                       |
+| ---------------------------------- | ------------------------------------------------- |
+| `gitlab_generate_release_notes`    | Auto-generate release notes from milestone issues |
+| `gitlab_generate_milestone_report` | Sprint/milestone progress report with metrics     |
+| `gitlab_find_technical_debt`       | Identify technical debt indicators in the project |
 
 ## Security: Credential Stripping
 
 Before sending any data to the LLM, the server strips sensitive credentials using regex pattern matching:
 
-| Pattern | Examples |
-|---|---|
-| GitLab tokens | `glpat-*`, `gloas-*`, `gldt-*` |
-| AWS credentials | `AKIA*`, AWS secret keys |
-| Slack tokens | `xoxb-*`, `xoxp-*` |
-| JWTs | `eyJ*` (JSON Web Tokens) |
+| Pattern         | Examples                                        |
+| --------------- | ----------------------------------------------- |
+| GitLab tokens   | `glpat-*`, `gloas-*`, `gldt-*`                  |
+| AWS credentials | `AKIA*`, AWS secret keys                        |
+| Slack tokens    | `xoxb-*`, `xoxp-*`                              |
+| JWTs            | `eyJ*` (JSON Web Tokens)                        |
 | Generic secrets | Private keys, API keys matching common patterns |
 
 All matched patterns are replaced with `[REDACTED]` before the data reaches the LLM.
 
 ### Additional Security Layers
 
-| Layer | Protection |
-|---|---|
-| **Credential stripping** | Regex-based removal of tokens, keys, and secrets |
+| Layer                           | Protection                                               |
+| ------------------------------- | -------------------------------------------------------- |
+| **Credential stripping**        | Regex-based removal of tokens, keys, and secrets         |
 | **Prompt injection prevention** | System prompt instructs LLM to ignore injection attempts |
-| **Size limiting** | Input data is truncated to prevent context overflow |
-| **Hardened system prompt** | Analysis-focused instructions that resist misuse |
+| **Size limiting**               | Input data is truncated to prevent context overflow      |
+| **Hardened system prompt**      | Analysis-focused instructions that resist misuse         |
 
 ## Requirements
 

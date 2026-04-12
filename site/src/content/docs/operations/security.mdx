@@ -55,15 +55,15 @@ For VS Code users, you can use input variables to avoid storing tokens in plain 
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "${input:gitlabToken}"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlabToken}"
+			}
+		}
+	}
 }
 ```
 
@@ -73,12 +73,12 @@ The token is prompted at startup and kept only in memory.
 
 Use the minimum required scopes for your workflow:
 
-| Scope | Required For |
-|-------|-------------|
-| `read_api` | Read-only operations (list, get, search) |
-| `api` | Full operations (create, update, delete) |
-| `read_repository` | Repository file access |
-| `write_repository` | Repository file modifications |
+| Scope              | Required For                             |
+| ------------------ | ---------------------------------------- |
+| `read_api`         | Read-only operations (list, get, search) |
+| `api`              | Full operations (create, update, delete) |
+| `read_repository`  | Repository file access                   |
+| `write_repository` | Repository file modifications            |
 
 :::tip
 If you only need read operations, use `read_api` scope and enable `GITLAB_READ_ONLY=true` for defense-in-depth.
@@ -92,17 +92,17 @@ When analysis tools use MCP sampling to send data to the client's LLM, the serve
 
 The credential stripping engine uses regex patterns to detect and remove:
 
-| Pattern | Example | Replacement |
-|---------|---------|-------------|
-| GitLab PAT | `glpat-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
-| GitLab Pipeline Token | `glptt-aBcDeFgH12345678` | `[REDACTED:GITLAB_TOKEN]` |
-| AWS Access Key | `AKIAIOSFODNN7EXAMPLE` | `[REDACTED:AWS_KEY]` |
-| AWS Secret Key | `wJalrXUtnFEMI/K7MDENG/...` | `[REDACTED:AWS_SECRET]` |
-| Slack Token | `xoxb-...` / `xoxp-...` | `[REDACTED:SLACK_TOKEN]` |
-| Slack Webhook | `hooks.slack.com/services/...` | `[REDACTED:SLACK_WEBHOOK]` |
-| JWT | `eyJhbGciOi...` | `[REDACTED:JWT]` |
-| Generic API Key | `api_key=...`, `apikey: ...` | `[REDACTED:API_KEY]` |
-| Private SSH Key | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]` |
+| Pattern               | Example                           | Replacement                |
+| --------------------- | --------------------------------- | -------------------------- |
+| GitLab PAT            | `glpat-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| GitLab Pipeline Token | `glptt-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| AWS Access Key        | `AKIAIOSFODNN7EXAMPLE`            | `[REDACTED:AWS_KEY]`       |
+| AWS Secret Key        | `wJalrXUtnFEMI/K7MDENG/...`       | `[REDACTED:AWS_SECRET]`    |
+| Slack Token           | `xoxb-...` / `xoxp-...`           | `[REDACTED:SLACK_TOKEN]`   |
+| Slack Webhook         | `hooks.slack.com/services/...`    | `[REDACTED:SLACK_WEBHOOK]` |
+| JWT                   | `eyJhbGciOi...`                   | `[REDACTED:JWT]`           |
+| Generic API Key       | `api_key=...`, `apikey: ...`      | `[REDACTED:API_KEY]`       |
+| Private SSH Key       | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]`   |
 
 :::note
 Credential stripping is applied to all data sent through MCP sampling, including job logs, file contents, issue descriptions, and MR diffs.
@@ -129,11 +129,13 @@ GITLAB_READ_ONLY=true
 ```
 
 In read-only mode:
+
 - All write tools are **not registered** (create, update, delete, merge, etc.)
 - Only read operations are available (list, get, search)
 - This provides a hard guarantee at the server level — the LLM cannot accidentally modify data
 
 This is useful for:
+
 - Exploration and discovery workflows
 - Demo environments
 - Environments where the token has write access but you want to restrict the server
@@ -153,6 +155,7 @@ Authorization: Bearer <gitlab-personal-access-token>
 ### Session Isolation
 
 The server maintains a **bounded LRU pool** of client sessions:
+
 - Each token gets its own isolated MCP server instance
 - Sessions are independent — one user cannot access another's context
 - Idle sessions expire after `--session-timeout` (default: 30 minutes)

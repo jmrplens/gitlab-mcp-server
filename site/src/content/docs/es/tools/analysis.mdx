@@ -40,53 +40,54 @@ Las herramientas de análisis requieren que el cliente MCP soporte la **capacida
 
 ### Análisis de merge requests
 
-| Herramienta | Descripción |
-|------|-------------|
-| `gitlab_analyze_mr_changes` | Analiza los diffs de merge requests buscando calidad de código, posibles bugs, problemas de seguridad y preocupaciones arquitectónicas. Proporciona una revisión estructurada con niveles de severidad. |
-| `gitlab_summarize_mr_review` | Resume todos los comentarios de revisión, hilos y discusiones de una merge request. Identifica consensos, elementos sin resolver y decisiones clave. |
-| `gitlab_review_mr_security` | Revisión de seguridad enfocada en los cambios de una MR. Comprueba vulnerabilidades comunes, secretos expuestos, riesgos de inyección y problemas del OWASP Top 10. |
+| Herramienta                  | Descripción                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_analyze_mr_changes`  | Analiza los diffs de merge requests buscando calidad de código, posibles bugs, problemas de seguridad y preocupaciones arquitectónicas. Proporciona una revisión estructurada con niveles de severidad. |
+| `gitlab_summarize_mr_review` | Resume todos los comentarios de revisión, hilos y discusiones de una merge request. Identifica consensos, elementos sin resolver y decisiones clave.                                                    |
+| `gitlab_review_mr_security`  | Revisión de seguridad enfocada en los cambios de una MR. Comprueba vulnerabilidades comunes, secretos expuestos, riesgos de inyección y problemas del OWASP Top 10.                                     |
 
 ### Análisis de issues
 
-| Herramienta | Descripción |
-|------|-------------|
-| `gitlab_summarize_issue` | Genera un resumen conciso de un issue incluyendo su contexto completo, etiquetas, asignados, merge requests relacionadas y puntos destacados de la discusión. |
+| Herramienta                  | Descripción                                                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab_summarize_issue`     | Genera un resumen conciso de un issue incluyendo su contexto completo, etiquetas, asignados, merge requests relacionadas y puntos destacados de la discusión.                        |
 | `gitlab_analyze_issue_scope` | Estima la complejidad y el alcance de un issue. Considera sub-tareas, issues relacionados, etiquetas y discusión para proporcionar estimaciones de esfuerzo y evaluación de riesgos. |
 
 ### Análisis de CI/CD
 
-| Herramienta | Descripción |
-|------|-------------|
-| `gitlab_analyze_pipeline_failure` | Realiza análisis de causa raíz en pipelines fallidos. Examina los logs de jobs, patrones de fallo y sugiere correcciones. |
+| Herramienta                       | Descripción                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_analyze_pipeline_failure` | Realiza análisis de causa raíz en pipelines fallidos. Examina los logs de jobs, patrones de fallo y sugiere correcciones.         |
 | `gitlab_analyze_ci_configuration` | Revisa `.gitlab-ci.yml` buscando buenas prácticas, oportunidades de optimización, preocupaciones de seguridad y posibles mejoras. |
 
 ### Análisis de proyectos y releases
 
-| Herramienta | Descripción |
-|------|-------------|
-| `gitlab_generate_release_notes` | Genera notas de release completas a partir de issues y merge requests asociadas a un milestone o tag. Categoriza los cambios por tipo. |
+| Herramienta                        | Descripción                                                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_generate_release_notes`    | Genera notas de release completas a partir de issues y merge requests asociadas a un milestone o tag. Categoriza los cambios por tipo.                     |
 | `gitlab_generate_milestone_report` | Crea un informe de progreso para un milestone incluyendo porcentaje de completitud, análisis de burndown y evaluación de riesgos para elementos atrasados. |
-| `gitlab_find_technical_debt` | Analiza issues del proyecto, MRs y patrones de código para identificar y categorizar deuda técnica. Sugiere estrategias de priorización. |
+| `gitlab_find_technical_debt`       | Analiza issues del proyecto, MRs y patrones de código para identificar y categorizar deuda técnica. Sugiere estrategias de priorización.                   |
 
 ### Análisis de despliegues
 
-| Herramienta | Descripción |
-|------|-------------|
+| Herramienta                         | Descripción                                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitlab_analyze_deployment_history` | Analiza patrones de despliegue, frecuencia, tasas de fallo e incidentes de rollback. Proporciona métricas estilo DORA y sugerencias de mejora. |
 
 ## Ejemplo: Análisis de fallo de pipeline
 
 ```json
 {
-  "tool": "gitlab_analyze_pipeline_failure",
-  "arguments": {
-    "project": "my-group/backend-api",
-    "pipeline_id": 12345
-  }
+	"tool": "gitlab_analyze_pipeline_failure",
+	"arguments": {
+		"project": "my-group/backend-api",
+		"pipeline_id": 12345
+	}
 }
 ```
 
 La herramienta:
+
 1. Obtiene los detalles del pipeline y el estado de todos los jobs
 2. Descarga los logs de los jobs fallidos
 3. Recopila la configuración `.gitlab-ci.yml`
@@ -102,15 +103,16 @@ La herramienta:
 
 ```json
 {
-  "tool": "gitlab_review_mr_security",
-  "arguments": {
-    "project": "my-group/backend-api",
-    "mr_iid": 87
-  }
+	"tool": "gitlab_review_mr_security",
+	"arguments": {
+		"project": "my-group/backend-api",
+		"mr_iid": 87
+	}
 }
 ```
 
 Devuelve un análisis enfocado en seguridad que cubre:
+
 - Secretos o tokens hardcodeados en los diffs
 - Vulnerabilidades de inyección SQL o XSS
 - Problemas de autenticación/autorización
@@ -135,10 +137,10 @@ La eliminación de credenciales es una medida de defensa en profundidad. Siempre
 
 ## Requisitos
 
-| Requisito | Detalles |
-|-------------|---------|
-| Cliente MCP | Debe soportar la capacidad de `sampling` |
-| Token de GitLab | Acceso de lectura a los recursos que se analizan |
-| Red | El servidor debe poder alcanzar tanto la API de GitLab como el cliente MCP |
+| Requisito       | Detalles                                                                   |
+| --------------- | -------------------------------------------------------------------------- |
+| Cliente MCP     | Debe soportar la capacidad de `sampling`                                   |
+| Token de GitLab | Acceso de lectura a los recursos que se analizan                           |
+| Red             | El servidor debe poder alcanzar tanto la API de GitLab como el cliente MCP |
 
 Las herramientas de análisis se registran tanto en modo individual como en modo meta-herramientas. En modo meta-herramientas, aparecen como herramientas independientes (no agrupadas bajo una meta-herramienta de dominio) porque cada herramienta de análisis tiene un prompt único y especializado.

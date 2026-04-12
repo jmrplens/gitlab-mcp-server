@@ -17,14 +17,14 @@ En modo meta-herramientas (`META_TOOLS=true`), las operaciones relacionadas se c
 
 ```json
 {
-  "tool": "gitlab_issue",
-  "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect",
-    "description": "Users are redirected to 404 after login",
-    "labels": "bug,priority::high"
-  }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"title": "Fix login redirect",
+		"description": "Users are redirected to 404 after login",
+		"labels": "bug,priority::high"
+	}
 }
 ```
 
@@ -39,82 +39,82 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 
 ### Gestión de proyectos
 
-| Meta-herramienta | Descripción | Acciones principales |
-|-----------|-------------|-------------|
-| `gitlab_project` | CRUD y configuración de proyectos | list, get, create, update, delete, archive, unarchive, fork, star, unstar, transfer |
-| `gitlab_issue` | Gestión del ciclo de vida de issues | list, get, create, update, delete, close, reopen, subscribe, move, clone |
-| `gitlab_milestone` | Gestión de milestones | list, get, create, update, delete |
-| `gitlab_label` | Gestión de etiquetas | list, get, create, update, delete |
-| `gitlab_issue_link` | Relaciones entre issues | list, create, delete |
-| `gitlab_issue_note` | Comentarios en issues | list, get, create, update, delete |
-| `gitlab_todo` | Gestión de tareas pendientes | list, mark_done, mark_all_done |
+| Meta-herramienta    | Descripción                         | Acciones principales                                                                |
+| ------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `gitlab_project`    | CRUD y configuración de proyectos   | list, get, create, update, delete, archive, unarchive, fork, star, unstar, transfer |
+| `gitlab_issue`      | Gestión del ciclo de vida de issues | list, get, create, update, delete, close, reopen, subscribe, move, clone            |
+| `gitlab_milestone`  | Gestión de milestones               | list, get, create, update, delete                                                   |
+| `gitlab_label`      | Gestión de etiquetas                | list, get, create, update, delete                                                   |
+| `gitlab_issue_link` | Relaciones entre issues             | list, create, delete                                                                |
+| `gitlab_issue_note` | Comentarios en issues               | list, get, create, update, delete                                                   |
+| `gitlab_todo`       | Gestión de tareas pendientes        | list, mark_done, mark_all_done                                                      |
 
 ### Código y repositorio
 
-| Meta-herramienta | Descripción | Acciones principales |
-|-----------|-------------|-------------|
-| `gitlab_branch` | Gestión de ramas | list, get, create, delete |
-| `gitlab_protected_branch` | Reglas de protección de ramas | list, get, protect, unprotect |
-| `gitlab_commit` | Operaciones con commits | list, get, diff, refs, cherry_pick, revert |
-| `gitlab_tag` | Gestión de tags | list, get, create, delete |
-| `gitlab_file` | Operaciones con archivos del repositorio | get, create, update, delete, raw |
-| `gitlab_repository` | Árbol del repositorio y comparación | tree, compare, archive, contributors |
-| `gitlab_merge_request` | Ciclo de vida de merge requests | list, get, create, update, merge, close, reopen, rebase, approve, unapprove |
-| `gitlab_mr_note` | Comentarios en MRs | list, get, create, update, delete |
-| `gitlab_mr_discussion` | Hilos de discusión en MRs | list, get, create, reply, resolve, unresolve |
-| `gitlab_mr_draft_note` | Notas borrador en MRs | list, get, create, update, delete, publish |
-| `gitlab_mr_changes` | Diffs y cambios de MRs | list, summary |
-| `gitlab_mr_approval` | Reglas de aprobación de MRs | get, approve, unapprove, configuration |
-| `gitlab_wiki` | Gestión de páginas wiki | list, get, create, update, delete |
+| Meta-herramienta          | Descripción                              | Acciones principales                                                        |
+| ------------------------- | ---------------------------------------- | --------------------------------------------------------------------------- |
+| `gitlab_branch`           | Gestión de ramas                         | list, get, create, delete                                                   |
+| `gitlab_protected_branch` | Reglas de protección de ramas            | list, get, protect, unprotect                                               |
+| `gitlab_commit`           | Operaciones con commits                  | list, get, diff, refs, cherry_pick, revert                                  |
+| `gitlab_tag`              | Gestión de tags                          | list, get, create, delete                                                   |
+| `gitlab_file`             | Operaciones con archivos del repositorio | get, create, update, delete, raw                                            |
+| `gitlab_repository`       | Árbol del repositorio y comparación      | tree, compare, archive, contributors                                        |
+| `gitlab_merge_request`    | Ciclo de vida de merge requests          | list, get, create, update, merge, close, reopen, rebase, approve, unapprove |
+| `gitlab_mr_note`          | Comentarios en MRs                       | list, get, create, update, delete                                           |
+| `gitlab_mr_discussion`    | Hilos de discusión en MRs                | list, get, create, reply, resolve, unresolve                                |
+| `gitlab_mr_draft_note`    | Notas borrador en MRs                    | list, get, create, update, delete, publish                                  |
+| `gitlab_mr_changes`       | Diffs y cambios de MRs                   | list, summary                                                               |
+| `gitlab_mr_approval`      | Reglas de aprobación de MRs              | get, approve, unapprove, configuration                                      |
+| `gitlab_wiki`             | Gestión de páginas wiki                  | list, get, create, update, delete                                           |
 
 ### CI/CD
 
-| Meta-herramienta | Descripción | Acciones principales |
-|-----------|-------------|-------------|
-| `gitlab_pipeline` | Gestión de pipelines | list, get, create, cancel, retry, delete |
-| `gitlab_job` | Gestión de jobs de CI | list, get, play, cancel, retry, trace, artifacts |
-| `gitlab_pipeline_schedule` | Pipelines programados | list, get, create, update, delete, trigger |
-| `gitlab_ci_lint` | Validación de configuración CI | validate, project_lint |
-| `gitlab_ci_variable` | Variables de CI/CD | list, get, create, update, delete |
-| `gitlab_environment` | Gestión de entornos | list, get, create, update, delete, stop |
-| `gitlab_deployment` | Seguimiento de despliegues | list, get |
-| `gitlab_package` | Registro de paquetes | list, get, delete |
+| Meta-herramienta           | Descripción                    | Acciones principales                             |
+| -------------------------- | ------------------------------ | ------------------------------------------------ |
+| `gitlab_pipeline`          | Gestión de pipelines           | list, get, create, cancel, retry, delete         |
+| `gitlab_job`               | Gestión de jobs de CI          | list, get, play, cancel, retry, trace, artifacts |
+| `gitlab_pipeline_schedule` | Pipelines programados          | list, get, create, update, delete, trigger       |
+| `gitlab_ci_lint`           | Validación de configuración CI | validate, project_lint                           |
+| `gitlab_ci_variable`       | Variables de CI/CD             | list, get, create, update, delete                |
+| `gitlab_environment`       | Gestión de entornos            | list, get, create, update, delete, stop          |
+| `gitlab_deployment`        | Seguimiento de despliegues     | list, get                                        |
+| `gitlab_package`           | Registro de paquetes           | list, get, delete                                |
 
 ### Colaboración
 
-| Meta-herramienta | Descripción | Acciones principales |
-|-----------|-------------|-------------|
-| `gitlab_member` | Gestión de miembros del proyecto | list, get, add, update, remove |
-| `gitlab_group` | Gestión de grupos | list, get, create, update, delete, projects, subgroups |
-| `gitlab_search` | Búsqueda entre recursos | code, issues, merge_requests, projects, users, commits, blobs |
-| `gitlab_user` | Información de usuarios | get, current, list, status |
-| `gitlab_release` | Gestión de releases | list, get, create, update, delete |
-| `gitlab_release_link` | Enlaces de assets de releases | list, get, create, update, delete |
-| `gitlab_upload` | Subida de archivos | upload |
+| Meta-herramienta      | Descripción                      | Acciones principales                                          |
+| --------------------- | -------------------------------- | ------------------------------------------------------------- |
+| `gitlab_member`       | Gestión de miembros del proyecto | list, get, add, update, remove                                |
+| `gitlab_group`        | Gestión de grupos                | list, get, create, update, delete, projects, subgroups        |
+| `gitlab_search`       | Búsqueda entre recursos          | code, issues, merge_requests, projects, users, commits, blobs |
+| `gitlab_user`         | Información de usuarios          | get, current, list, status                                    |
+| `gitlab_release`      | Gestión de releases              | list, get, create, update, delete                             |
+| `gitlab_release_link` | Enlaces de assets de releases    | list, get, create, update, delete                             |
+| `gitlab_upload`       | Subida de archivos               | upload                                                        |
 
 ### Administración y utilidades
 
-| Meta-herramienta | Descripción | Acciones principales |
-|-----------|-------------|-------------|
-| `gitlab_health` | Comprobación de salud del servidor | check, version |
-| `gitlab_server_update` | Gestión de autoactualización | check, apply |
-| `gitlab_resolve_project` | Resolución de remote Git a proyecto | resolve |
+| Meta-herramienta         | Descripción                         | Acciones principales |
+| ------------------------ | ----------------------------------- | -------------------- |
+| `gitlab_health`          | Comprobación de salud del servidor  | check, version       |
+| `gitlab_server_update`   | Gestión de autoactualización        | check, apply         |
+| `gitlab_resolve_project` | Resolución de remote Git a proyecto | resolve              |
 
 ### Sampling y análisis
 
-| Meta-herramienta | Descripción |
-|-----------|-------------|
-| `gitlab_analyze_mr_changes` | Análisis con IA de cambios en merge requests |
-| `gitlab_summarize_issue` | Resumen de issues impulsado por IA |
-| `gitlab_generate_release_notes` | Generación automatizada de notas de release |
-| `gitlab_analyze_pipeline_failure` | Análisis de causa raíz de fallos en pipelines |
-| `gitlab_summarize_mr_review` | Resumen de revisiones de MRs |
-| `gitlab_generate_milestone_report` | Informes de progreso de milestones |
-| `gitlab_analyze_ci_configuration` | Análisis de calidad de la configuración CI |
-| `gitlab_analyze_issue_scope` | Estimación de alcance y complejidad de issues |
-| `gitlab_review_mr_security` | Revisión de seguridad de cambios en MRs |
-| `gitlab_find_technical_debt` | Identificación de deuda técnica |
-| `gitlab_analyze_deployment_history` | Análisis de patrones de despliegue |
+| Meta-herramienta                    | Descripción                                   |
+| ----------------------------------- | --------------------------------------------- |
+| `gitlab_analyze_mr_changes`         | Análisis con IA de cambios en merge requests  |
+| `gitlab_summarize_issue`            | Resumen de issues impulsado por IA            |
+| `gitlab_generate_release_notes`     | Generación automatizada de notas de release   |
+| `gitlab_analyze_pipeline_failure`   | Análisis de causa raíz de fallos en pipelines |
+| `gitlab_summarize_mr_review`        | Resumen de revisiones de MRs                  |
+| `gitlab_generate_milestone_report`  | Informes de progreso de milestones            |
+| `gitlab_analyze_ci_configuration`   | Análisis de calidad de la configuración CI    |
+| `gitlab_analyze_issue_scope`        | Estimación de alcance y complejidad de issues |
+| `gitlab_review_mr_security`         | Revisión de seguridad de cambios en MRs       |
+| `gitlab_find_technical_debt`        | Identificación de deuda técnica               |
+| `gitlab_analyze_deployment_history` | Análisis de patrones de despliegue            |
 
 ## Herramientas solo Enterprise (19)
 

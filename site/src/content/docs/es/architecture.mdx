@@ -48,6 +48,7 @@ sequenceDiagram
 ```
 
 **Características:**
+
 - Un proceso de servidor por sesión de cliente IA
 - Token configurado mediante variable de entorno
 - Máxima seguridad — el token nunca sale de la máquina local
@@ -81,6 +82,7 @@ sequenceDiagram
 ```
 
 **Características:**
+
 - Un único proceso de servidor atiende a múltiples usuarios
 - Aislamiento de sesión por token mediante pool LRU
 - Límites de sesión y tiempos de espera configurables
@@ -116,13 +118,13 @@ La IA envía un parámetro `action` para seleccionar la operación:
 
 ```json
 {
-  "tool": "gitlab_issue",
-  "arguments": {
-    "action": "create",
-    "project_id": "my-org/backend",
-    "title": "Fix N+1 query in /users",
-    "labels": "bug,performance"
-  }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project_id": "my-org/backend",
+		"title": "Fix N+1 query in /users",
+		"labels": "bug,performance"
+	}
 }
 ```
 
@@ -183,17 +185,21 @@ Cada herramienta devuelve una respuesta en formato dual:
 
 ```json
 {
-  "structuredContent": {
-    "type": "gitlab_issue",
-    "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
-    "next_steps": ["Ver detalles del issue", "Añadir etiquetas", "Asignar a usuario"]
-  },
-  "content": [
-    {
-      "type": "text",
-      "text": "## Issue #42: Fix N+1 query\n\n**Estado:** abierto\n**Autor:** @alice\n..."
-    }
-  ]
+	"structuredContent": {
+		"type": "gitlab_issue",
+		"data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+		"next_steps": [
+			"Ver detalles del issue",
+			"Añadir etiquetas",
+			"Asignar a usuario"
+		]
+	},
+	"content": [
+		{
+			"type": "text",
+			"text": "## Issue #42: Fix N+1 query\n\n**Estado:** abierto\n**Autor:** @alice\n..."
+		}
+	]
 }
 ```
 

@@ -7,15 +7,15 @@ GitLab MCP Server implements 7 MCP protocol capabilities that enhance how AI ass
 
 ## Capabilities Overview
 
-| Capability | Direction | What It Enables |
-|---|---|---|
-| [Logging](/en/capabilities/logging) | Server → Client | Structured log messages sent to the MCP client for visibility |
-| [Progress](/en/capabilities/progress) | Server → Client | Real-time progress updates for long-running operations |
-| [Roots](/en/capabilities/roots) | Client → Server | Workspace context — auto-detect GitLab project from local git repo |
-| [Sampling](/en/capabilities/sampling) | Server → Client | AI-powered analysis — server sends GitLab data to client's LLM for analysis |
-| [Elicitation](/en/capabilities/elicitation) | Server → Client | Interactive wizards — step-by-step forms for creating complex resources |
-| [Completions](/en/capabilities/completions) | Client → Server | Argument autocompletion for project names, branches, users, and more |
-| [Icons](/en/capabilities/icons) | Server → Client | SVG icons for every tool, resource, and prompt |
+| Capability                                  | Direction       | What It Enables                                                             |
+| ------------------------------------------- | --------------- | --------------------------------------------------------------------------- |
+| [Logging](/en/capabilities/logging)         | Server → Client | Structured log messages sent to the MCP client for visibility               |
+| [Progress](/en/capabilities/progress)       | Server → Client | Real-time progress updates for long-running operations                      |
+| [Roots](/en/capabilities/roots)             | Client → Server | Workspace context — auto-detect GitLab project from local git repo          |
+| [Sampling](/en/capabilities/sampling)       | Server → Client | AI-powered analysis — server sends GitLab data to client's LLM for analysis |
+| [Elicitation](/en/capabilities/elicitation) | Server → Client | Interactive wizards — step-by-step forms for creating complex resources     |
+| [Completions](/en/capabilities/completions) | Client → Server | Argument autocompletion for project names, branches, users, and more        |
+| [Icons](/en/capabilities/icons)             | Server → Client | SVG icons for every tool, resource, and prompt                              |
 
 ## How Capabilities Work
 
@@ -42,15 +42,15 @@ sequenceDiagram
 
 Not all MCP clients support every capability. The server adapts automatically:
 
-| Capability | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
-|---|---|---|---|---|
-| Logging | ✅ | ✅ | ✅ | ✅ |
-| Progress | ✅ | ✅ | ✅ | ✅ |
-| Completions | ✅ | ✅ | ❓ | ✅ |
-| Roots | ✅ | ✅ | ❓ | ✅ |
-| Sampling | ✅ | ❌ | ❌ | ✅ |
-| Elicitation | ✅ | ❌ | ❌ | ✅ |
-| Icons | ✅ | ✅ | ✅ | ✅ |
+| Capability  | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
+| ----------- | -------------- | --------------- | ------ | ----------- |
+| Logging     | ✅             | ✅              | ✅     | ✅          |
+| Progress    | ✅             | ✅              | ✅     | ✅          |
+| Completions | ✅             | ✅              | ❓     | ✅          |
+| Roots       | ✅             | ✅              | ❓     | ✅          |
+| Sampling    | ✅             | ❌              | ❌     | ✅          |
+| Elicitation | ✅             | ❌              | ❌     | ✅          |
+| Icons       | ✅             | ✅              | ✅     | ✅          |
 
 :::note
 Client support evolves rapidly. Check your MCP client's documentation for the latest capability support.

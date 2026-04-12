@@ -42,32 +42,32 @@ El servidor soporta **17 tipos de argumentos de autocompletado** organizados en 
 
 Funcionan sin contexto de proyecto:
 
-| Argumento | Completa | Ejemplo |
-|---|---|---|
-| `project` | Nombres/rutas de proyectos | `my-group/my-project` |
-| `group` | Nombres/rutas de grupos | `engineering` |
-| `user` | Nombres/logins de usuarios | `john.doe` |
-| `namespace` | Namespaces (grupos + usuarios) | `my-group` |
+| Argumento   | Completa                       | Ejemplo               |
+| ----------- | ------------------------------ | --------------------- |
+| `project`   | Nombres/rutas de proyectos     | `my-group/my-project` |
+| `group`     | Nombres/rutas de grupos        | `engineering`         |
+| `user`      | Nombres/logins de usuarios     | `john.doe`            |
+| `namespace` | Namespaces (grupos + usuarios) | `my-group`            |
 
 ### Completadores por Proyecto
 
 Requieren un contexto de proyecto y buscan dentro de ese proyecto:
 
-| Argumento | Completa | Ejemplo |
-|---|---|---|
-| `branch` | Nombres de ramas | `feature/login` |
-| `tag` | Nombres de tags | `v1.2.0` |
-| `milestone` | Títulos de milestones | `Sprint 14` |
-| `label` | Nombres de etiquetas | `priority::high` |
-| `merge_request` | Títulos/IIDs de MRs | `!42 Fix login` |
-| `issue` | Títulos/IIDs de issues | `#100 Bug report` |
-| `pipeline` | IDs de pipelines | `12345` |
-| `environment` | Nombres de entornos | `production` |
-| `release` | Nombres de tags de releases | `v2.0.0` |
-| `wiki_slug` | Slugs de páginas wiki | `getting-started` |
-| `version` | IDs de versiones/milestones | `v1.0` |
-| `runner` | Descripciones de runners | `shared-runner-1` |
-| `board` | Nombres de tableros | `Development` |
+| Argumento       | Completa                    | Ejemplo           |
+| --------------- | --------------------------- | ----------------- |
+| `branch`        | Nombres de ramas            | `feature/login`   |
+| `tag`           | Nombres de tags             | `v1.2.0`          |
+| `milestone`     | Títulos de milestones       | `Sprint 14`       |
+| `label`         | Nombres de etiquetas        | `priority::high`  |
+| `merge_request` | Títulos/IIDs de MRs         | `!42 Fix login`   |
+| `issue`         | Títulos/IIDs de issues      | `#100 Bug report` |
+| `pipeline`      | IDs de pipelines            | `12345`           |
+| `environment`   | Nombres de entornos         | `production`      |
+| `release`       | Nombres de tags de releases | `v2.0.0`          |
+| `wiki_slug`     | Slugs de páginas wiki       | `getting-started` |
+| `version`       | IDs de versiones/milestones | `v1.0`            |
+| `runner`        | Descripciones de runners    | `shared-runner-1` |
+| `board`         | Nombres de tableros         | `Development`     |
 
 ## Cómo el Autocompletado Mejora la Precisión de la IA
 

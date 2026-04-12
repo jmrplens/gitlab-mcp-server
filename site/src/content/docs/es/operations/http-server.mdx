@@ -3,19 +3,19 @@ title: Modo Servidor HTTP
 description: Despliegue multiusuario con autenticación por solicitud
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
 
 ## Cuándo Usar el Modo HTTP
 
-| Escenario | Modo Recomendado |
-|---|---|
-| Desarrollador individual, cliente de IA local | stdio |
-| Equipo compartiendo una instancia de servidor | **HTTP** |
-| Despliegue en servidor remoto/sin pantalla | **HTTP** |
-| Integración CI/CD con MCP | **HTTP** |
-| Pruebas con curl o clientes HTTP | **HTTP** |
+| Escenario                                     | Modo Recomendado |
+| --------------------------------------------- | ---------------- |
+| Desarrollador individual, cliente de IA local | stdio            |
+| Equipo compartiendo una instancia de servidor | **HTTP**         |
+| Despliegue en servidor remoto/sin pantalla    | **HTTP**         |
+| Integración CI/CD con MCP                     | **HTTP**         |
+| Pruebas con curl o clientes HTTP              | **HTTP**         |
 
 ## Iniciar el Servidor
 
@@ -27,20 +27,20 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 ## Flags de CLI
 
-| Flag | Por Defecto | Descripción |
-|---|---|---|
-| `--http` | _(desactivado)_ | Habilitar modo de transporte HTTP |
-| `--http-addr` | `:8080` | Dirección de escucha HTTP (`host:puerto`) |
-| `--gitlab-url` | _(requerido)_ | URL base de la instancia de GitLab |
-| `--skip-tls-verify` | `false` | Omitir verificación de certificados TLS para certificados autofirmados |
-| `--meta-tools` | `true` | Habilitar meta-herramientas de dominio (40 o 59 con --enterprise) |
-| `--enterprise` | `false` | Habilitar meta-herramientas Enterprise/Premium (14 adicionales) |
-| `--read-only` | `false` | Modo solo lectura: desactivar todas las herramientas de escritura |
-| `--max-http-clients` | `100` | Máximo de tokens únicos en el pool del servidor |
-| `--session-timeout` | `30m` | Timeout de sesión MCP inactiva |
-| `--auto-update` | `true` | Modo de actualización automática: `true`, `check` o `false` |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release |
-| `--auto-update-interval` | `1h` | Intervalo de verificación periódica de actualizaciones |
+| Flag                     | Por Defecto                  | Descripción                                                            |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                      |
+| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                              |
+| `--gitlab-url`           | _(requerido)_                | URL base de la instancia de GitLab                                     |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados |
+| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (40 o 59 con --enterprise)      |
+| `--enterprise`           | `false`                      | Habilitar meta-herramientas Enterprise/Premium (14 adicionales)        |
+| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura      |
+| `--max-http-clients`     | `100`                        | Máximo de tokens únicos en el pool del servidor                        |
+| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                         |
+| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`            |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                          |
+| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                 |
 
 :::note
 `--gitlab-url` es el único flag requerido. Todos los demás tienen valores predeterminados sensatos.
@@ -110,15 +110,15 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
-  "servers": {
-    "gitlab": {
-      "type": "http",
-      "url": "http://tu-servidor:8080/mcp",
-      "headers": {
-        "PRIVATE-TOKEN": "glpat-tu-token"
-      }
-    }
-  }
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
 }
 ```
 
@@ -127,14 +127,14 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "url": "http://tu-servidor:8080/mcp",
-      "headers": {
-        "PRIVATE-TOKEN": "glpat-tu-token"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
 }
 ```
 

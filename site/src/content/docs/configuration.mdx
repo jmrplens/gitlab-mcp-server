@@ -3,7 +3,7 @@ title: Configuration
 description: Environment variables, client setup, and deployment options
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 GitLab MCP Server is configured through environment variables for stdio mode and CLI flags for HTTP mode. This page covers all configuration options.
 
@@ -11,21 +11,21 @@ GitLab MCP Server is configured through environment variables for stdio mode and
 
 These must be set for the server to start in stdio mode:
 
-| Variable | Description | Example |
-|---|---|---|
-| `GITLAB_URL` | GitLab instance base URL | `https://gitlab.example.com` |
+| Variable       | Description                            | Example                      |
+| -------------- | -------------------------------------- | ---------------------------- |
+| `GITLAB_URL`   | GitLab instance base URL               | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token with `api` scope | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ## Core Options
 
-| Variable | Default | Description |
-|---|---|---|
-| `GITLAB_USER` | — | GitLab username (informational, used in prompts) |
-| `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable meta-tool mode (40 domain tools instead of 1000+ individual tools) |
-| `GITLAB_ENTERPRISE` | `false` | Enable 19 additional tools for GitLab Premium/Ultimate features |
-| `GITLAB_READ_ONLY` | `false` | Disable all mutating tools (create, update, delete) |
-| `LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
+| Variable                 | Default | Description                                                               |
+| ------------------------ | ------- | ------------------------------------------------------------------------- |
+| `GITLAB_USER`            | —       | GitLab username (informational, used in prompts)                          |
+| `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs                   |
+| `META_TOOLS`             | `true`  | Enable meta-tool mode (40 domain tools instead of 1000+ individual tools) |
+| `GITLAB_ENTERPRISE`      | `false` | Enable 19 additional tools for GitLab Premium/Ultimate features           |
+| `GITLAB_READ_ONLY`       | `false` | Disable all mutating tools (create, update, delete)                       |
+| `LOG_LEVEL`              | `info`  | Log verbosity: `debug`, `info`, `warn`, `error`                           |
 
 :::tip
 **Meta-tools mode** (`META_TOOLS=true`) is strongly recommended. It groups tools by domain (e.g., `gitlab_issue` handles list, get, create, update, delete) which reduces token usage and improves AI tool selection accuracy.
@@ -35,27 +35,27 @@ These must be set for the server to start in stdio mode:
 
 These control which MCP capabilities are enabled:
 
-| Variable | Default | Description |
-|---|---|---|
-| `ENABLE_ANALYSIS_TOOLS` | `true` | Enable 11 AI-powered analysis tools (requires MCP sampling) |
-| `ENABLE_ELICITATION` | `true` | Enable interactive creation wizards (project, issue, MR) |
-| `ENABLE_RESOURCES` | `true` | Enable 24 MCP resources for read-only data access |
-| `ENABLE_PROMPTS` | `true` | Enable 38 MCP prompt templates |
+| Variable                | Default | Description                                                 |
+| ----------------------- | ------- | ----------------------------------------------------------- |
+| `ENABLE_ANALYSIS_TOOLS` | `true`  | Enable 11 AI-powered analysis tools (requires MCP sampling) |
+| `ENABLE_ELICITATION`    | `true`  | Enable interactive creation wizards (project, issue, MR)    |
+| `ENABLE_RESOURCES`      | `true`  | Enable 24 MCP resources for read-only data access           |
+| `ENABLE_PROMPTS`        | `true`  | Enable 38 MCP prompt templates                              |
 
 ## Auto-Update
 
-| Variable | Default | Description |
-|---|---|---|
-| `AUTO_UPDATE` | `true` | Auto-update behavior: `true` (apply on start), `check` (notify only), `false` (disabled) |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Periodic check interval (HTTP mode only) |
+| Variable               | Default                      | Description                                                                              |
+| ---------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Auto-update behavior: `true` (apply on start), `check` (notify only), `false` (disabled) |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                     |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Periodic check interval (HTTP mode only)                                                 |
 
 ## Admin Options
 
-| Variable | Default | Description |
-|---|---|---|
-| `YOLO_MODE` | `false` | Skip destructive action confirmations (not recommended) |
-| `ISSUE_REPORTS` | `false` | Generate detailed issue reports on tool failures |
+| Variable        | Default | Description                                             |
+| --------------- | ------- | ------------------------------------------------------- |
+| `YOLO_MODE`     | `false` | Skip destructive action confirmations (not recommended) |
+| `ISSUE_REPORTS` | `false` | Generate detailed issue reports on tool failures        |
 
 ## Example .env File
 
@@ -91,15 +91,15 @@ Create `.vscode/mcp.json` in your workspace:
 
 ```json
 {
-  "servers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"servers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -107,23 +107,23 @@ Create `.vscode/mcp.json` in your workspace:
 
 ```json
 {
-  "inputs": [
-    {
-      "id": "gitlab-token",
-      "type": "promptString",
-      "description": "GitLab Personal Access Token",
-      "password": true
-    }
-  ],
-  "servers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "${input:gitlab-token}"
-      }
-    }
-  }
+	"inputs": [
+		{
+			"id": "gitlab-token",
+			"type": "promptString",
+			"description": "GitLab Personal Access Token",
+			"password": true
+		}
+	],
+	"servers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlab-token}"
+			}
+		}
+	}
 }
 ```
 
@@ -141,15 +141,15 @@ Edit `claude_desktop_config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -160,15 +160,15 @@ Create `.cursor/mcp.json` in your project:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -197,25 +197,25 @@ Or use a `.env` file in the working directory.
 
 When running in HTTP mode (`--http`), configuration uses CLI flags instead of environment variables:
 
-| Flag | Default | Description |
-|---|---|---|
-| `--http` | `false` | Enable HTTP transport mode |
-| `--http-addr` | `:8080` | Listen address and port |
-| `--gitlab-url` | — | GitLab instance URL (required) |
-| `--skip-tls-verify` | `false` | Skip TLS verification |
-| `--meta-tools` | `true` | Enable meta-tool mode |
-| `--enterprise` | `false` | Enable Enterprise/Premium tools |
-| `--read-only` | `false` | Read-only mode |
-| `--max-http-clients` | `100` | Maximum concurrent client sessions |
-| `--session-timeout` | `30m` | Idle session timeout |
-| `--auto-update` | `true` | Auto-update mode |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub release repository |
-| `--auto-update-interval` | `1h` | Periodic update check interval |
+| Flag                     | Default                      | Description                        |
+| ------------------------ | ---------------------------- | ---------------------------------- |
+| `--http`                 | `false`                      | Enable HTTP transport mode         |
+| `--http-addr`            | `:8080`                      | Listen address and port            |
+| `--gitlab-url`           | —                            | GitLab instance URL (required)     |
+| `--skip-tls-verify`      | `false`                      | Skip TLS verification              |
+| `--meta-tools`           | `true`                       | Enable meta-tool mode              |
+| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools    |
+| `--read-only`            | `false`                      | Read-only mode                     |
+| `--max-http-clients`     | `100`                        | Maximum concurrent client sessions |
+| `--session-timeout`      | `30m`                        | Idle session timeout               |
+| `--auto-update`          | `true`                       | Auto-update mode                   |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub release repository          |
+| `--auto-update-interval` | `1h`                         | Periodic update check interval     |
 
 **General flags** (both stdio and HTTP modes):
 
-| Flag | Default | Description |
-|---|---|---|
+| Flag         | Default | Description                              |
+| ------------ | ------- | ---------------------------------------- |
 | `--shutdown` | `false` | Terminate all running instances and exit |
 
 Example:

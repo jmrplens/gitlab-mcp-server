@@ -5,20 +5,20 @@ description: Common issues and solutions
 
 ## Connection and Authentication
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| `GITLAB_TOKEN is required` at startup | Token not set | Set `GITLAB_TOKEN` in `.env` or environment |
-| `GITLAB_URL is required` at startup | URL not set | Set `GITLAB_URL` in `.env` or use `--gitlab-url` flag |
-| `401 Unauthorized` from GitLab API | Invalid or expired PAT | Generate a new token with `api` scope at GitLab → Preferences → Access Tokens |
-| `403 Forbidden` on specific operations | Token lacks required scope | Ensure the token has `api` scope (not just `read_api`) |
-| Connection refused or timeout | GitLab instance unreachable | Verify `GITLAB_URL` is reachable: `curl -s $GITLAB_URL/api/v4/version` |
+| Symptom                                | Cause                       | Solution                                                                      |
+| -------------------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
+| `GITLAB_TOKEN is required` at startup  | Token not set               | Set `GITLAB_TOKEN` in `.env` or environment                                   |
+| `GITLAB_URL is required` at startup    | URL not set                 | Set `GITLAB_URL` in `.env` or use `--gitlab-url` flag                         |
+| `401 Unauthorized` from GitLab API     | Invalid or expired PAT      | Generate a new token with `api` scope at GitLab → Preferences → Access Tokens |
+| `403 Forbidden` on specific operations | Token lacks required scope  | Ensure the token has `api` scope (not just `read_api`)                        |
+| Connection refused or timeout          | GitLab instance unreachable | Verify `GITLAB_URL` is reachable: `curl -s $GITLAB_URL/api/v4/version`        |
 
 ## TLS and Certificates
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| `x509: certificate signed by unknown authority` | Self-signed certificate | Set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode |
-| `x509: certificate has expired` | Expired TLS certificate | Renew the certificate on the GitLab server, or use `GITLAB_SKIP_TLS_VERIFY=true` temporarily |
+| Symptom                                         | Cause                   | Solution                                                                                     |
+| ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| `x509: certificate signed by unknown authority` | Self-signed certificate | Set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode              |
+| `x509: certificate has expired`                 | Expired TLS certificate | Renew the certificate on the GitLab server, or use `GITLAB_SKIP_TLS_VERIFY=true` temporarily |
 
 :::caution
 `GITLAB_SKIP_TLS_VERIFY=true` disables TLS verification entirely. Use it only for self-hosted instances with self-signed certificates, and never in production environments with public-facing GitLab instances.
@@ -26,54 +26,54 @@ description: Common issues and solutions
 
 ## Tool Discovery
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| MCP client shows 1004 tools instead of 40 | Meta-tools disabled | Set `META_TOOLS=true` (default) to consolidate into domain meta-tools |
-| Tool not found in `tools/list` | Meta-tool mode mismatch | Individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create` |
-| `unknown action` in meta-tool call | Invalid action parameter | Check valid actions in the [Tools Overview](/en/tools/overview) |
-| Enterprise tools missing | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 19 additional enterprise meta-tools |
+| Symptom                                   | Cause                    | Solution                                                                                        |
+| ----------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| MCP client shows 1004 tools instead of 40 | Meta-tools disabled      | Set `META_TOOLS=true` (default) to consolidate into domain meta-tools                           |
+| Tool not found in `tools/list`            | Meta-tool mode mismatch  | Individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create` |
+| `unknown action` in meta-tool call        | Invalid action parameter | Check valid actions in the [Tools Overview](/en/tools/overview)                                 |
+| Enterprise tools missing                  | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 19 additional enterprise meta-tools                      |
 
 ## Auto-Update
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| Update detected but not applied | Mode is `check` only | Set `AUTO_UPDATE=true` to enable automatic application |
+| Symptom                                | Cause                           | Solution                                                                            |
+| -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
+| Update detected but not applied        | Mode is `check` only            | Set `AUTO_UPDATE=true` to enable automatic application                              |
 | Still running old version after update | Process not restarted (Windows) | Restart the server or use `gitlab-mcp-server --shutdown` to terminate all instances |
-| Cannot replace binary (file locked) | Running instances hold the file | Run `gitlab-mcp-server --shutdown` to terminate all instances first |
-| Network error reaching GitHub | Firewall or proxy blocking | Verify connectivity to `github.com` from the server |
+| Cannot replace binary (file locked)    | Running instances hold the file | Run `gitlab-mcp-server --shutdown` to terminate all instances first                 |
+| Network error reaching GitHub          | Firewall or proxy blocking      | Verify connectivity to `github.com` from the server                                 |
 
 ## HTTP Server Mode
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| `400 Bad Request` | Missing token header | Send `PRIVATE-TOKEN` or `Authorization: Bearer <token>` header with every request |
-| Pool eviction too frequent | Too many unique tokens | Increase `--max-http-clients` (default: 100) |
-| Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m) |
+| Symptom                        | Cause                  | Solution                                                                          |
+| ------------------------------ | ---------------------- | --------------------------------------------------------------------------------- |
+| `400 Bad Request`              | Missing token header   | Send `PRIVATE-TOKEN` or `Authorization: Bearer <token>` header with every request |
+| Pool eviction too frequent     | Too many unique tokens | Increase `--max-http-clients` (default: 100)                                      |
+| Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m)                                       |
 
 ## Pagination
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| List results truncated | Default `per_page` limit | Pass `per_page` (max 100) and `page` parameters to paginate |
-| `nextPage` missing in response | Last page reached | No more results — this is expected behavior |
+| Symptom                        | Cause                    | Solution                                                    |
+| ------------------------------ | ------------------------ | ----------------------------------------------------------- |
+| List results truncated         | Default `per_page` limit | Pass `per_page` (max 100) and `page` parameters to paginate |
+| `nextPage` missing in response | Last page reached        | No more results — this is expected behavior                 |
 
 ## IDE-Specific Issues
 
 ### VS Code / GitHub Copilot
 
-| Symptom | Solution |
-|---|---|
-| "Tool not found" in Copilot Chat | Check Output panel → **MCP Logs** for errors. Verify `.vscode/mcp.json` path |
-| Server not appearing in MCP status | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify configuration |
-| "Permission denied" on startup | Run `chmod +x /path/to/gitlab-mcp-server` (Linux/macOS) |
-| Server restarts repeatedly | Check MCP Logs for missing `GITLAB_URL` or `GITLAB_TOKEN` |
+| Symptom                            | Solution                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| "Tool not found" in Copilot Chat   | Check Output panel → **MCP Logs** for errors. Verify `.vscode/mcp.json` path |
+| Server not appearing in MCP status | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify configuration           |
+| "Permission denied" on startup     | Run `chmod +x /path/to/gitlab-mcp-server` (Linux/macOS)                      |
+| Server restarts repeatedly         | Check MCP Logs for missing `GITLAB_URL` or `GITLAB_TOKEN`                    |
 
 ### Cursor
 
-| Symptom | Solution |
-|---|---|
-| Tools not listed | Verify `.cursor/mcp.json` exists and uses `mcpServers` key (not `servers`) |
-| `${input:...}` not working | Not supported by Cursor — use environment variables instead |
+| Symptom                    | Solution                                                                   |
+| -------------------------- | -------------------------------------------------------------------------- |
+| Tools not listed           | Verify `.cursor/mcp.json` exists and uses `mcpServers` key (not `servers`) |
+| `${input:...}` not working | Not supported by Cursor — use environment variables instead                |
 
 ## Debug Mode
 

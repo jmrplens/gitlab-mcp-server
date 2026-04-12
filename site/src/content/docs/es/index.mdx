@@ -3,7 +3,7 @@ title: GitLab MCP Server
 description: Servidor MCP que conecta asistentes de IA con GitLab mediante lenguaje natural
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 **GitLab MCP Server** es un servidor [Model Context Protocol](https://modelcontextprotocol.io/) que permite a los asistentes de IA interactuar con GitLab a través de lenguaje natural. Pide a tu IA que cree issues, revise merge requests, analice pipelines y mucho más — todo sin salir de tu editor.
 
@@ -27,17 +27,17 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 ## Características principales
 
-| Característica | Detalles |
-|---|---|
-| **40+ Meta-herramientas** | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases y más |
+| Característica                  | Detalles                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **40+ Meta-herramientas**       | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases y más                       |
 | **11 Herramientas de análisis** | Análisis impulsado por IA mediante MCP sampling — diagnóstico de fallos en pipelines, revisión de seguridad de MRs, detección de deuda técnica |
-| **24 Recursos MCP** | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor |
-| **38 Prompts MCP** | Plantillas de prompts predefinidas para informes, auditorías, análisis entre proyectos y flujos de trabajo en equipo |
-| **Modo HTTP multiusuario** | Despliega como servidor compartido con aislamiento por token para entornos de equipo |
-| **GitLab CE y EE** | Compatible con Community Edition y Enterprise Edition, incluyendo instancias autoalojadas |
-| **Herramientas Enterprise** | 19 herramientas adicionales opcionales para funciones de GitLab Premium/Ultimate (métricas DORA, vulnerabilidades, cumplimiento) |
-| **Autoactualización** | Mecanismo de autoactualización integrado — ejecuta siempre la última versión |
-| **Multiplataforma** | Binario único para Linux, macOS y Windows (amd64 y arm64) |
+| **24 Recursos MCP**             | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor                              |
+| **38 Prompts MCP**              | Plantillas de prompts predefinidas para informes, auditorías, análisis entre proyectos y flujos de trabajo en equipo                           |
+| **Modo HTTP multiusuario**      | Despliega como servidor compartido con aislamiento por token para entornos de equipo                                                           |
+| **GitLab CE y EE**              | Compatible con Community Edition y Enterprise Edition, incluyendo instancias autoalojadas                                                      |
+| **Herramientas Enterprise**     | 19 herramientas adicionales opcionales para funciones de GitLab Premium/Ultimate (métricas DORA, vulnerabilidades, cumplimiento)               |
+| **Autoactualización**           | Mecanismo de autoactualización integrado — ejecuta siempre la última versión                                                                   |
+| **Multiplataforma**             | Binario único para Linux, macOS y Windows (amd64 y arm64)                                                                                      |
 
 ## Ejemplo rápido
 
@@ -47,11 +47,11 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 > Se encontraron 3 merge requests abiertas en `my-org/backend`:
 >
-> | MR | Título | Autor | Asignado | Pipeline |
-> |---|---|---|---|---|
-> | !142 | Add rate limiting middleware | @alice | @bob | ✅ exitoso |
-> | !139 | Fix N+1 query in /users | @charlie | @alice | ❌ fallido |
-> | !137 | Update OpenAPI spec | @bob | — | ⏳ en ejecución |
+> | MR   | Título                       | Autor    | Asignado | Pipeline        |
+> | ---- | ---------------------------- | -------- | -------- | --------------- |
+> | !142 | Add rate limiting middleware | @alice   | @bob     | ✅ exitoso      |
+> | !139 | Fix N+1 query in /users      | @charlie | @alice   | ❌ fallido      |
+> | !137 | Update OpenAPI spec          | @bob     | —        | ⏳ en ejecución |
 >
 > **!139** tiene un pipeline fallido — ¿quieres que analice el fallo?
 
@@ -71,10 +71,26 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 ## Comenzar
 
 <CardGrid>
-  <LinkCard title="Primeros pasos" href="/es/getting-started/" description="Instala el binario y conéctalo a tu primer cliente de IA en minutos" />
-  <LinkCard title="Arquitectura" href="/es/architecture/" description="Comprende cómo el servidor conecta los asistentes de IA con GitLab" />
-  <LinkCard title="Configuración" href="/es/configuration/" description="Variables de entorno, configuraciones de clientes y opciones de despliegue" />
-  <LinkCard title="Referencia de herramientas" href="/es/tools/" description="Explora todas las herramientas MCP disponibles por dominio" />
+	<LinkCard
+		title="Primeros pasos"
+		href="/es/getting-started/"
+		description="Instala el binario y conéctalo a tu primer cliente de IA en minutos"
+	/>
+	<LinkCard
+		title="Arquitectura"
+		href="/es/architecture/"
+		description="Comprende cómo el servidor conecta los asistentes de IA con GitLab"
+	/>
+	<LinkCard
+		title="Configuración"
+		href="/es/configuration/"
+		description="Variables de entorno, configuraciones de clientes y opciones de despliegue"
+	/>
+	<LinkCard
+		title="Referencia de herramientas"
+		href="/es/tools/"
+		description="Explora todas las herramientas MCP disponibles por dominio"
+	/>
 </CardGrid>
 
 ## Cómo funciona

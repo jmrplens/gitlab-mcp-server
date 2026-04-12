@@ -9,11 +9,11 @@ Meta-tools are the default operating mode of GitLab MCP Server. Instead of expos
 
 LLMs have limited context windows. When an MCP server registers 1004 individual tools, the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
-| Mode | Tool Count | Token Overhead | Functionality |
-|------|-----------|----------------|---------------|
-| Individual | 1004 | Very high | Full |
-| Meta (base) | 40 | Low | Full |
-| Meta (enterprise) | 59 | Low | Full + Premium/Ultimate |
+| Mode              | Tool Count | Token Overhead | Functionality           |
+| ----------------- | ---------- | -------------- | ----------------------- |
+| Individual        | 1004       | Very high      | Full                    |
+| Meta (base)       | 40         | Low            | Full                    |
+| Meta (enterprise) | 59         | Low            | Full + Premium/Ultimate |
 
 Meta-tools reduce the tool count by **96%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
@@ -40,16 +40,16 @@ The action parameter is always required and must be one of the enumerated values
 
 ```json
 {
-  "tool": "gitlab_issue",
-  "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Update API documentation",
-    "description": "The REST API docs are missing the new v2 endpoints",
-    "labels": "documentation,api",
-    "assignee_ids": "42",
-    "milestone_id": 7
-  }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"title": "Update API documentation",
+		"description": "The REST API docs are missing the new v2 endpoints",
+		"labels": "documentation,api",
+		"assignee_ids": "42",
+		"milestone_id": 7
+	}
 }
 ```
 
@@ -57,14 +57,14 @@ The action parameter is always required and must be one of the enumerated values
 
 ```json
 {
-  "tool": "gitlab_merge_request",
-  "arguments": {
-    "action": "list",
-    "project": "my-group/my-project",
-    "state": "opened",
-    "order_by": "updated_at",
-    "per_page": 20
-  }
+	"tool": "gitlab_merge_request",
+	"arguments": {
+		"action": "list",
+		"project": "my-group/my-project",
+		"state": "opened",
+		"order_by": "updated_at",
+		"per_page": 20
+	}
 }
 ```
 
@@ -72,12 +72,12 @@ The action parameter is always required and must be one of the enumerated values
 
 ```json
 {
-  "tool": "gitlab_search",
-  "arguments": {
-    "action": "code",
-    "search": "func handleWebhook",
-    "project": "my-group/my-project"
-  }
+	"tool": "gitlab_search",
+	"arguments": {
+		"action": "code",
+		"search": "func handleWebhook",
+		"project": "my-group/my-project"
+	}
 }
 ```
 
@@ -196,7 +196,7 @@ You can check which tools your server has registered by looking at the startup l
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `META_TOOLS` | `true` | Enable meta-tool mode. Set to `false` for individual tools. |
+| Variable            | Default | Description                                                    |
+| ------------------- | ------- | -------------------------------------------------------------- |
+| `META_TOOLS`        | `true`  | Enable meta-tool mode. Set to `false` for individual tools.    |
 | `GITLAB_ENTERPRISE` | `false` | Enable enterprise-only meta-tools (requires Premium/Ultimate). |

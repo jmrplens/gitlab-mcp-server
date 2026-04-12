@@ -9,11 +9,11 @@ Las meta-herramientas son el modo de operación predeterminado de GitLab MCP Ser
 
 Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra 1004 herramientas individuales, solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
 
-| Modo | Nº de herramientas | Overhead de tokens | Funcionalidad |
-|------|-----------|----------------|---------------|
-| Individual | 1004 | Muy alto | Completa |
-| Meta (base) | 40 | Bajo | Completa |
-| Meta (enterprise) | 59 | Bajo | Completa + Premium/Ultimate |
+| Modo              | Nº de herramientas | Overhead de tokens | Funcionalidad               |
+| ----------------- | ------------------ | ------------------ | --------------------------- |
+| Individual        | 1004               | Muy alto           | Completa                    |
+| Meta (base)       | 40                 | Bajo               | Completa                    |
+| Meta (enterprise) | 59                 | Bajo               | Completa + Premium/Ultimate |
 
 Las meta-herramientas reducen el recuento de herramientas en un **96%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
@@ -40,16 +40,16 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-  "tool": "gitlab_issue",
-  "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Update API documentation",
-    "description": "The REST API docs are missing the new v2 endpoints",
-    "labels": "documentation,api",
-    "assignee_ids": "42",
-    "milestone_id": 7
-  }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"title": "Update API documentation",
+		"description": "The REST API docs are missing the new v2 endpoints",
+		"labels": "documentation,api",
+		"assignee_ids": "42",
+		"milestone_id": 7
+	}
 }
 ```
 
@@ -57,14 +57,14 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-  "tool": "gitlab_merge_request",
-  "arguments": {
-    "action": "list",
-    "project": "my-group/my-project",
-    "state": "opened",
-    "order_by": "updated_at",
-    "per_page": 20
-  }
+	"tool": "gitlab_merge_request",
+	"arguments": {
+		"action": "list",
+		"project": "my-group/my-project",
+		"state": "opened",
+		"order_by": "updated_at",
+		"per_page": 20
+	}
 }
 ```
 
@@ -72,12 +72,12 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-  "tool": "gitlab_search",
-  "arguments": {
-    "action": "code",
-    "search": "func handleWebhook",
-    "project": "my-group/my-project"
-  }
+	"tool": "gitlab_search",
+	"arguments": {
+		"action": "code",
+		"search": "func handleWebhook",
+		"project": "my-group/my-project"
+	}
 }
 ```
 
@@ -196,7 +196,7 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable | Predeterminado | Descripción |
-|----------|---------|-------------|
-| `META_TOOLS` | `true` | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales. |
-| `GITLAB_ENTERPRISE` | `false` | Habilitar meta-herramientas solo enterprise (requiere Premium/Ultimate). |
+| Variable            | Predeterminado | Descripción                                                                            |
+| ------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales. |
+| `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise (requiere Premium/Ultimate).               |

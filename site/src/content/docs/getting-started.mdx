@@ -3,7 +3,7 @@ title: Getting Started
 description: Install and configure GitLab MCP Server with your favorite AI client
 ---
 
-import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
 
 Get up and running with GitLab MCP Server in under 5 minutes.
 
@@ -29,14 +29,14 @@ For read-only setups, you can use a token with `read_api` scope and enable `GITL
 
 Download the latest binary for your platform from the [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) page:
 
-| Platform | Binary |
-|---|---|
-| Linux (x86_64) | `gitlab-mcp-server-linux-amd64` |
-| Linux (ARM64) | `gitlab-mcp-server-linux-arm64` |
-| macOS (Intel) | `gitlab-mcp-server-darwin-amd64` |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64` |
-| Windows (x86_64) | `gitlab-mcp-server-windows-amd64.exe` |
-| Windows (ARM64) | `gitlab-mcp-server-windows-arm64.exe` |
+| Platform              | Binary                                |
+| --------------------- | ------------------------------------- |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`       |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`       |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe` |
 
 ### Make it executable (Linux/macOS)
 
@@ -59,6 +59,7 @@ The easiest way to configure the server is the built-in setup wizard:
 ```
 
 The wizard will:
+
 - Prompt for your GitLab URL and token
 - Test the connection
 - Auto-detect your AI client
@@ -79,15 +80,15 @@ Create or edit `.vscode/mcp.json` in your workspace root:
 
 ```json
 {
-  "servers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"servers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -102,15 +103,15 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -121,15 +122,15 @@ Create or edit `.cursor/mcp.json` in your project root:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -199,10 +200,11 @@ If you see results, you're all set!
 
 :::caution
 If you get connection errors, check:
+
 - The `GITLAB_URL` is correct and reachable from your machine
 - The token has the `api` scope
 - For self-signed certificates, set `GITLAB_SKIP_TLS_VERIFY=true`
-:::
+  :::
 
 ## Next Steps
 

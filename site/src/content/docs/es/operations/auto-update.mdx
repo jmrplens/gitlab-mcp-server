@@ -9,11 +9,11 @@ GitLab MCP Server puede detectar, descargar y aplicar automáticamente nuevas ve
 
 La variable `AUTO_UPDATE` controla cómo se manejan las actualizaciones:
 
-| Valor | Modo | Comportamiento |
-|---|---|---|
-| `true` (por defecto) | Aplicar automáticamente | Detectar y aplicar actualizaciones automáticamente |
-| `check` | Solo notificar | Detectar actualizaciones y registrar disponibilidad, pero no aplicar |
-| `false` | Deshabilitado | Omitir todas las verificaciones de actualización |
+| Valor                | Modo                    | Comportamiento                                                       |
+| -------------------- | ----------------------- | -------------------------------------------------------------------- |
+| `true` (por defecto) | Aplicar automáticamente | Detectar y aplicar actualizaciones automáticamente                   |
+| `check`              | Solo notificar          | Detectar actualizaciones y registrar disponibilidad, pero no aplicar |
+| `false`              | Deshabilitado           | Omitir todas las verificaciones de actualización                     |
 
 Alias aceptados: `1`/`yes` para true, `0`/`no` para false. El valor no distingue mayúsculas de minúsculas.
 
@@ -68,19 +68,19 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 
 ### Variables de Entorno (Modo Stdio)
 
-| Variable | Por Defecto | Descripción |
-|---|---|---|
-| `AUTO_UPDATE` | `true` | Modo de actualización: `true`, `check` o `false` |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Intervalo de verificación (usado por las verificaciones periódicas del modo HTTP) |
+| Variable               | Por Defecto                  | Descripción                                                                       |
+| ---------------------- | ---------------------------- | --------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Modo de actualización: `true`, `check` o `false`                                  |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release       |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de verificación (usado por las verificaciones periódicas del modo HTTP) |
 
 ### Flags de CLI (Modo HTTP)
 
-| Flag | Por Defecto | Descripción |
-|---|---|---|
-| `--auto-update` | `true` | Modo de actualización: `true`, `check` o `false` |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release |
-| `--auto-update-interval` | `1h` | Intervalo entre verificaciones periódicas de actualización |
+| Flag                     | Por Defecto                  | Descripción                                                                 |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------- |
+| `--auto-update`          | `true`                       | Modo de actualización: `true`, `check` o `false`                            |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release |
+| `--auto-update-interval` | `1h`                         | Intervalo entre verificaciones periódicas de actualización                  |
 
 :::note
 La actualización automática usa la **API de GitHub Releases** — es completamente independiente de tu configuración de GitLab. Tus ajustes de `GITLAB_URL`, `GITLAB_TOKEN` y `GITLAB_SKIP_TLS_VERIFY` no afectan a la actualización automática.

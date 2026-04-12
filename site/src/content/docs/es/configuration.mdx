@@ -3,7 +3,7 @@ title: Configuración
 description: Variables de entorno, configuración de clientes y opciones de despliegue
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre todas las opciones de configuración.
 
@@ -11,21 +11,21 @@ GitLab MCP Server se configura mediante variables de entorno en modo stdio y fla
 
 Estas deben establecerse para que el servidor arranque en modo stdio:
 
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `GITLAB_URL` | URL base de la instancia de GitLab | `https://gitlab.example.com` |
+| Variable       | Descripción                           | Ejemplo                      |
+| -------------- | ------------------------------------- | ---------------------------- |
+| `GITLAB_URL`   | URL base de la instancia de GitLab    | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token con scope `api` | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ## Opciones principales
 
-| Variable | Predeterminado | Descripción |
-|---|---|---|
-| `GITLAB_USER` | — | Nombre de usuario de GitLab (informativo, usado en prompts) |
-| `GITLAB_SKIP_TLS_VERIFY` | `false` | Omitir verificación de certificados TLS para certificados autofirmados |
-| `META_TOOLS` | `true` | Habilitar modo meta-herramientas (40 herramientas de dominio en lugar de 1000+ herramientas individuales) |
-| `GITLAB_ENTERPRISE` | `false` | Habilitar 19 herramientas adicionales para funciones de GitLab Premium/Ultimate |
-| `GITLAB_READ_ONLY` | `false` | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar) |
-| `LOG_LEVEL` | `info` | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error` |
+| Variable                 | Predeterminado | Descripción                                                                                               |
+| ------------------------ | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `GITLAB_USER`            | —              | Nombre de usuario de GitLab (informativo, usado en prompts)                                               |
+| `GITLAB_SKIP_TLS_VERIFY` | `false`        | Omitir verificación de certificados TLS para certificados autofirmados                                    |
+| `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (40 herramientas de dominio en lugar de 1000+ herramientas individuales) |
+| `GITLAB_ENTERPRISE`      | `false`        | Habilitar 19 herramientas adicionales para funciones de GitLab Premium/Ultimate                           |
+| `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                              |
+| `LOG_LEVEL`              | `info`         | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                             |
 
 :::tip
 **El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
@@ -35,27 +35,27 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 
 Estos controlan qué capacidades MCP están habilitadas:
 
-| Variable | Predeterminado | Descripción |
-|---|---|---|
-| `ENABLE_ANALYSIS_TOOLS` | `true` | Habilitar 11 herramientas de análisis con IA (requiere MCP sampling) |
-| `ENABLE_ELICITATION` | `true` | Habilitar asistentes de creación interactivos (proyecto, issue, MR) |
-| `ENABLE_RESOURCES` | `true` | Habilitar 24 recursos MCP para acceso de datos de solo lectura |
-| `ENABLE_PROMPTS` | `true` | Habilitar 38 plantillas de prompts MCP |
+| Variable                | Predeterminado | Descripción                                                          |
+| ----------------------- | -------------- | -------------------------------------------------------------------- |
+| `ENABLE_ANALYSIS_TOOLS` | `true`         | Habilitar 11 herramientas de análisis con IA (requiere MCP sampling) |
+| `ENABLE_ELICITATION`    | `true`         | Habilitar asistentes de creación interactivos (proyecto, issue, MR)  |
+| `ENABLE_RESOURCES`      | `true`         | Habilitar 24 recursos MCP para acceso de datos de solo lectura       |
+| `ENABLE_PROMPTS`        | `true`         | Habilitar 38 plantillas de prompts MCP                               |
 
 ## Autoactualización
 
-| Variable | Predeterminado | Descripción |
-|---|---|---|
-| `AUTO_UPDATE` | `true` | Comportamiento de autoactualización: `true` (aplicar al iniciar), `check` (solo notificar), `false` (deshabilitado) |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Intervalo de comprobación periódica (solo modo HTTP) |
+| Variable               | Predeterminado               | Descripción                                                                                                         |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Comportamiento de autoactualización: `true` (aplicar al iniciar), `check` (solo notificar), `false` (deshabilitado) |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release                                                                    |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de comprobación periódica (solo modo HTTP)                                                                |
 
 ## Opciones de administración
 
-| Variable | Predeterminado | Descripción |
-|---|---|---|
-| `YOLO_MODE` | `false` | Omitir confirmaciones de acciones destructivas (no recomendado) |
-| `ISSUE_REPORTS` | `false` | Generar informes detallados de issues en caso de fallos de herramientas |
+| Variable        | Predeterminado | Descripción                                                             |
+| --------------- | -------------- | ----------------------------------------------------------------------- |
+| `YOLO_MODE`     | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado)         |
+| `ISSUE_REPORTS` | `false`        | Generar informes detallados de issues en caso de fallos de herramientas |
 
 ## Archivo .env de ejemplo
 
@@ -91,15 +91,15 @@ Crea `.vscode/mcp.json` en tu workspace:
 
 ```json
 {
-  "servers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"servers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -107,23 +107,23 @@ Crea `.vscode/mcp.json` en tu workspace:
 
 ```json
 {
-  "inputs": [
-    {
-      "id": "gitlab-token",
-      "type": "promptString",
-      "description": "GitLab Personal Access Token",
-      "password": true
-    }
-  ],
-  "servers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "${input:gitlab-token}"
-      }
-    }
-  }
+	"inputs": [
+		{
+			"id": "gitlab-token",
+			"type": "promptString",
+			"description": "GitLab Personal Access Token",
+			"password": true
+		}
+	],
+	"servers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlab-token}"
+			}
+		}
+	}
 }
 ```
 
@@ -141,15 +141,15 @@ Edita `claude_desktop_config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -160,15 +160,15 @@ Crea `.cursor/mcp.json` en tu proyecto:
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/ruta/a/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -197,26 +197,26 @@ O usa un archivo `.env` en el directorio de trabajo.
 
 Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar de variables de entorno:
 
-| Flag | Predeterminado | Descripción |
-|---|---|---|
-| `--http` | `false` | Habilitar modo de transporte HTTP |
-| `--http-addr` | `:8080` | Dirección y puerto de escucha |
-| `--gitlab-url` | — | URL de la instancia de GitLab (requerida) |
-| `--skip-tls-verify` | `false` | Omitir verificación TLS |
-| `--meta-tools` | `true` | Habilitar modo meta-herramientas |
-| `--enterprise` | `false` | Habilitar herramientas Enterprise/Premium |
-| `--read-only` | `false` | Modo solo lectura |
-| `--max-http-clients` | `100` | Máximo de sesiones de clientes simultáneas |
-| `--session-timeout` | `30m` | Tiempo de espera de sesión inactiva |
-| `--auto-update` | `true` | Modo de autoactualización |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases |
-| `--auto-update-interval` | `1h` | Intervalo de comprobación periódica de actualizaciones |
+| Flag                     | Predeterminado               | Descripción                                            |
+| ------------------------ | ---------------------------- | ------------------------------------------------------ |
+| `--http`                 | `false`                      | Habilitar modo de transporte HTTP                      |
+| `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                          |
+| `--gitlab-url`           | —                            | URL de la instancia de GitLab (requerida)              |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                |
+| `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                       |
+| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium              |
+| `--read-only`            | `false`                      | Modo solo lectura                                      |
+| `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas             |
+| `--session-timeout`      | `30m`                        | Tiempo de espera de sesión inactiva                    |
+| `--auto-update`          | `true`                       | Modo de autoactualización                              |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                    |
+| `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones |
 
 **Flags generales** (modos stdio y HTTP):
 
-| Flag | Predeterminado | Descripción |
-|---|---|---|
-| `--shutdown` | `false` | Terminar todas las instancias en ejecución y salir |
+| Flag         | Predeterminado | Descripción                                        |
+| ------------ | -------------- | -------------------------------------------------- |
+| `--shutdown` | `false`        | Terminar todas las instancias en ejecución y salir |
 
 Ejemplo:
 

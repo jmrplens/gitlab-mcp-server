@@ -9,27 +9,27 @@ GitLab MCP Server proporciona un manejo de errores estructurado que clasifica lo
 
 Cada error de la API de GitLab se clasifica por código de estado HTTP en un mensaje accionable:
 
-| Código de Estado | Clasificación | Mensaje |
-|---|---|---|
-| 400 | Solicitud incorrecta | Verifica tus parámetros de entrada |
-| 401 | Autenticación | `GITLAB_TOKEN` puede ser inválido o haber expirado |
-| 403 | Permisos | Tu token carece de los permisos requeridos |
-| 404 | No encontrado | El recurso no existe o no tienes acceso |
-| 409 | Conflicto | El recurso ya existe o hay un conflicto de estado |
-| 422 | Validación | GitLab rechazó la solicitud debido a datos inválidos |
-| 429 | Límite de velocidad | Demasiadas solicitudes — espera antes de reintentar |
-| 500 | Error del servidor | Error interno del servidor de GitLab |
-| 502 | Bad gateway | GitLab está temporalmente no disponible |
-| 503 | Mantenimiento | GitLab está en mantenimiento o sobrecargado |
+| Código de Estado | Clasificación        | Mensaje                                              |
+| ---------------- | -------------------- | ---------------------------------------------------- |
+| 400              | Solicitud incorrecta | Verifica tus parámetros de entrada                   |
+| 401              | Autenticación        | `GITLAB_TOKEN` puede ser inválido o haber expirado   |
+| 403              | Permisos             | Tu token carece de los permisos requeridos           |
+| 404              | No encontrado        | El recurso no existe o no tienes acceso              |
+| 409              | Conflicto            | El recurso ya existe o hay un conflicto de estado    |
+| 422              | Validación           | GitLab rechazó la solicitud debido a datos inválidos |
+| 429              | Límite de velocidad  | Demasiadas solicitudes — espera antes de reintentar  |
+| 500              | Error del servidor   | Error interno del servidor de GitLab                 |
+| 502              | Bad gateway          | GitLab está temporalmente no disponible              |
+| 503              | Mantenimiento        | GitLab está en mantenimiento o sobrecargado          |
 
 Los errores a nivel de red también se clasifican:
 
-| Tipo de Error | Mensaje |
-|---|---|
-| Conexión rechazada | El servidor de GitLab es inaccesible |
-| Fallo DNS | No se pudo resolver el nombre del servidor de GitLab |
-| Timeout | La solicitud a GitLab excedió el tiempo de espera |
-| TLS/SSL | El handshake TLS/SSL falló |
+| Tipo de Error      | Mensaje                                              |
+| ------------------ | ---------------------------------------------------- |
+| Conexión rechazada | El servidor de GitLab es inaccesible                 |
+| Fallo DNS          | No se pudo resolver el nombre del servidor de GitLab |
+| Timeout            | La solicitud a GitLab excedió el tiempo de espera    |
+| TLS/SSL            | El handshake TLS/SSL falló                           |
 
 ## Funciones de Envoltura de Errores
 
@@ -64,11 +64,11 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 
 ### Árbol de Decisión
 
-| Escenario | Función |
-|---|---|
-| Operación de solo lectura (list, get, search) | `WrapErr` |
+| Escenario                                       | Función              |
+| ----------------------------------------------- | -------------------- |
+| Operación de solo lectura (list, get, search)   | `WrapErr`            |
 | Operación de escritura (create, update, delete) | `WrapErrWithMessage` |
-| Error específico con corrección conocida | `WrapErrWithHint` |
+| Error específico con corrección conocida        | `WrapErrWithHint`    |
 
 ## Sugerencias de Validación
 
@@ -98,22 +98,22 @@ Cuando una herramienta encuentra un error, la respuesta se formatea como un bloq
 
 La respuesta estructurada incluye:
 
-| Campo | Descripción |
-|---|---|
-| **Operation** | La acción de la herramienta que falló |
-| **Status** | Código de estado HTTP y clasificación |
-| **Detail** | Mensaje de error específico de GitLab |
+| Campo          | Descripción                                      |
+| -------------- | ------------------------------------------------ |
+| **Operation**  | La acción de la herramienta que falló            |
+| **Status**     | Código de estado HTTP y clasificación            |
+| **Detail**     | Mensaje de error específico de GitLab            |
 | **Request ID** | `X-Request-Id` de GitLab para tickets de soporte |
-| **Suggestion** | Sugerencia accionable (cuando está disponible) |
+| **Suggestion** | Sugerencia accionable (cuando está disponible)   |
 
 ## Errores Transitorios vs Permanentes
 
 El servidor clasifica los errores como **transitorios** (reintentables) o **permanentes**:
 
-| Tipo | Códigos de Estado | Comportamiento |
-|---|---|---|
-| Transitorio | 429, 5xx, timeouts, conexión rechazada | Seguro reintentar después de una espera |
-| Permanente | 4xx (excepto 429) | No reintentar — corregir la entrada o configuración |
+| Tipo        | Códigos de Estado                      | Comportamiento                                      |
+| ----------- | -------------------------------------- | --------------------------------------------------- |
+| Transitorio | 429, 5xx, timeouts, conexión rechazada | Seguro reintentar después de una espera             |
+| Permanente  | 4xx (excepto 429)                      | No reintentar — corregir la entrada o configuración |
 
 ## Ejemplos de Escenarios de Error
 

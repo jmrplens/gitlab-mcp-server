@@ -42,32 +42,32 @@ The server supports **17 completion argument types** organized into global and p
 
 These work without a project context:
 
-| Argument | Completes | Example |
-|---|---|---|
-| `project` | Project names/paths | `my-group/my-project` |
-| `group` | Group names/paths | `engineering` |
-| `user` | User names/logins | `john.doe` |
-| `namespace` | Namespaces (groups + users) | `my-group` |
+| Argument    | Completes                   | Example               |
+| ----------- | --------------------------- | --------------------- |
+| `project`   | Project names/paths         | `my-group/my-project` |
+| `group`     | Group names/paths           | `engineering`         |
+| `user`      | User names/logins           | `john.doe`            |
+| `namespace` | Namespaces (groups + users) | `my-group`            |
 
 ### Per-Project Completers
 
 These require a project context and search within that project:
 
-| Argument | Completes | Example |
-|---|---|---|
-| `branch` | Branch names | `feature/login` |
-| `tag` | Tag names | `v1.2.0` |
-| `milestone` | Milestone titles | `Sprint 14` |
-| `label` | Label names | `priority::high` |
-| `merge_request` | MR titles/IIDs | `!42 Fix login` |
-| `issue` | Issue titles/IIDs | `#100 Bug report` |
-| `pipeline` | Pipeline IDs | `12345` |
-| `environment` | Environment names | `production` |
-| `release` | Release tag names | `v2.0.0` |
-| `wiki_slug` | Wiki page slugs | `getting-started` |
-| `version` | Version/milestone IDs | `v1.0` |
-| `runner` | Runner descriptions | `shared-runner-1` |
-| `board` | Board names | `Development` |
+| Argument        | Completes             | Example           |
+| --------------- | --------------------- | ----------------- |
+| `branch`        | Branch names          | `feature/login`   |
+| `tag`           | Tag names             | `v1.2.0`          |
+| `milestone`     | Milestone titles      | `Sprint 14`       |
+| `label`         | Label names           | `priority::high`  |
+| `merge_request` | MR titles/IIDs        | `!42 Fix login`   |
+| `issue`         | Issue titles/IIDs     | `#100 Bug report` |
+| `pipeline`      | Pipeline IDs          | `12345`           |
+| `environment`   | Environment names     | `production`      |
+| `release`       | Release tag names     | `v2.0.0`          |
+| `wiki_slug`     | Wiki page slugs       | `getting-started` |
+| `version`       | Version/milestone IDs | `v1.0`            |
+| `runner`        | Runner descriptions   | `shared-runner-1` |
+| `board`         | Board names           | `Development`     |
 
 ## How Completions Improve AI Accuracy
 
