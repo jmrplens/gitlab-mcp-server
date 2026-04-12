@@ -5,7 +5,14 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "check": "astro check",
+    "html-validate": "html-validate 'dist/**/*.html'",
+    "htmlhint": "htmlhint 'dist/**/*.html'",
+    "pa11y": "astro preview & sleep 3 && pa11y-ci; EXIT=$?; kill %1 2>/dev/null; exit $EXIT",
+    "lint": "npm run check && npm run html-validate && npm run htmlhint",
+    "test:a11y": "npm run pa11y",
+    "analyze": "npm run build && npm run lint"
   },
   "type": "module",
   "dependencies": {
@@ -14,5 +21,13 @@
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.14.0",
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.8",
+    "html-validate": "^10.12.1",
+    "htmlhint": "^1.9.2",
+    "pa11y-ci": "^4.1.0",
+    "serve": "^14.2.6",
+    "typescript": "^5.9.3"
   }
 }

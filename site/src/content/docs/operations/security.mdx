@@ -169,29 +169,29 @@ The server maintains a **bounded LRU pool** of client sessions:
 
 ### Token Security
 
-- [ ] Use a dedicated GitLab token with minimum required scopes
-- [ ] Store tokens in `.env` files with `chmod 600` permissions
-- [ ] Add `.env` to `.gitignore`
-- [ ] Rotate tokens periodically
-- [ ] Use `read_api` scope when write access is not needed
+- ☐ Use a dedicated GitLab token with minimum required scopes
+- ☐ Store tokens in `.env` files with `chmod 600` permissions
+- ☐ Add `.env` to `.gitignore`
+- ☐ Rotate tokens periodically
+- ☐ Use `read_api` scope when write access is not needed
 
 ### Server Configuration
 
-- [ ] Enable `GITLAB_READ_ONLY=true` for read-only workflows
-- [ ] Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
-- [ ] Use stdio transport when possible (no network exposure)
-- [ ] Keep the server binary updated (`AUTO_UPDATE=true`)
+- ☐ Enable `GITLAB_READ_ONLY=true` for read-only workflows
+- ☐ Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
+- ☐ Use stdio transport when possible (no network exposure)
+- ☐ Keep the server binary updated (`AUTO_UPDATE=true`)
 
 ### HTTP Mode
 
-- [ ] Deploy behind TLS-terminating reverse proxy
-- [ ] Configure appropriate `--session-timeout` and `--max-http-clients`
-- [ ] Enable rate limiting
-- [ ] Restrict network access to trusted clients
+- ☐ Deploy behind TLS-terminating reverse proxy
+- ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
+- ☐ Enable rate limiting
+- ☐ Restrict network access to trusted clients
 
 ### Monitoring
 
-- [ ] Review server logs regularly
-- [ ] Monitor for unusual API call patterns
-- [ ] Check for token expiration or permission changes
-- [ ] Enable `LOG_LEVEL=info` for production audit trails
+- ☐ Review server logs regularly
+- ☐ Monitor for unusual API call patterns
+- ☐ Check for token expiration or permission changes
+- ☐ Enable `LOG_LEVEL=info` for production audit trails

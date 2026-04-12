@@ -169,29 +169,29 @@ El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 
 ### Seguridad del Token
 
-- [ ] Usa un token de GitLab dedicado con los scopes mínimos requeridos
-- [ ] Almacena tokens en archivos `.env` con permisos `chmod 600`
-- [ ] Añade `.env` al `.gitignore`
-- [ ] Rota los tokens periódicamente
-- [ ] Usa el scope `read_api` cuando no se necesita acceso de escritura
+- ☐ Usa un token de GitLab dedicado con los scopes mínimos requeridos
+- ☐ Almacena tokens en archivos `.env` con permisos `chmod 600`
+- ☐ Añade `.env` al `.gitignore`
+- ☐ Rota los tokens periódicamente
+- ☐ Usa el scope `read_api` cuando no se necesita acceso de escritura
 
 ### Configuración del Servidor
 
-- [ ] Habilita `GITLAB_READ_ONLY=true` para flujos de trabajo de solo lectura
-- [ ] Mantén la verificación TLS habilitada (`GITLAB_SKIP_TLS_VERIFY` sin establecer o `false`)
-- [ ] Usa transporte stdio cuando sea posible (sin exposición de red)
-- [ ] Mantén el binario del servidor actualizado (`AUTO_UPDATE=true`)
+- ☐ Habilita `GITLAB_READ_ONLY=true` para flujos de trabajo de solo lectura
+- ☐ Mantén la verificación TLS habilitada (`GITLAB_SKIP_TLS_VERIFY` sin establecer o `false`)
+- ☐ Usa transporte stdio cuando sea posible (sin exposición de red)
+- ☐ Mantén el binario del servidor actualizado (`AUTO_UPDATE=true`)
 
 ### Modo HTTP
 
-- [ ] Despliega detrás de un proxy inverso con terminación TLS
-- [ ] Configura apropiadamente `--session-timeout` y `--max-http-clients`
-- [ ] Habilita limitación de velocidad
-- [ ] Restringe el acceso de red a clientes de confianza
+- ☐ Despliega detrás de un proxy inverso con terminación TLS
+- ☐ Configura apropiadamente `--session-timeout` y `--max-http-clients`
+- ☐ Habilita limitación de velocidad
+- ☐ Restringe el acceso de red a clientes de confianza
 
 ### Monitorización
 
-- [ ] Revisa los logs del servidor regularmente
-- [ ] Monitoriza patrones inusuales de llamadas a la API
-- [ ] Verifica la expiración del token o cambios de permisos
-- [ ] Habilita `LOG_LEVEL=info` para registros de auditoría en producción
+- ☐ Revisa los logs del servidor regularmente
+- ☐ Monitoriza patrones inusuales de llamadas a la API
+- ☐ Verifica la expiración del token o cambios de permisos
+- ☐ Habilita `LOG_LEVEL=info` para registros de auditoría en producción
