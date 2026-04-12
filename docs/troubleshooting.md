@@ -46,8 +46,8 @@ Common issues and solutions for gitlab-mcp-server.
 | --- | --- | --- |
 | `autoupdate: current version is required` | Binary built without version injection | Build with `make build` or add `-ldflags "-X main.version=1.2.0"` |
 | `autoupdate: repository is required` | `AUTO_UPDATE_REPO` is empty | Set `AUTO_UPDATE_REPO` or use the default value |
-| `autoupdate: creating GitLab source` | Invalid `GITLAB_URL` or network error | Verify `GITLAB_URL` is reachable |
-| `autoupdate: detecting latest release` | No releases in repository, or token lacks `read_api` | Create a release or check token permissions |
+| `autoupdate: creating GitHub source` | Network error reaching GitHub API | Verify network connectivity to `github.com` |
+| `autoupdate: detecting latest release` | No releases in repository, or token lacks permissions | Create a release or check token permissions |
 | Update detected but not applied | Mode is `check` only | Set `AUTO_UPDATE=true` to enable automatic application |
 | Server still runs old version after update | Binary replaced but process not restarted | Restart the server process or use `gitlab-mcp-server --shutdown` to terminate all instances |
 | Cannot replace binary (file locked) | Running instances hold the file | Run `gitlab-mcp-server --shutdown` to terminate all instances first |

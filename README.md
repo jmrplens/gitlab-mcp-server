@@ -250,7 +250,7 @@ gitlab-mcp-server/
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.5.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.17.0   |
 | Transport     | stdio (default), HTTP (Streamable HTTP)         |
-| CI/CD         | GitLab CI with lint  test  build pipeline       |
+| CI/CD         | GitHub Actions with lint, test, build pipeline  |
 
 ## Building from Source
 
@@ -268,7 +268,7 @@ See the [Development Guide](docs/development/development.md) for full build inst
 
 ### Quick Start
 
-Pull and run the pre-built image from the GitLab Container Registry — **no source code required**:
+Pull and run the pre-built image from the GitHub Container Registry — **no source code required**:
 
 ```bash
 # Pull the latest image

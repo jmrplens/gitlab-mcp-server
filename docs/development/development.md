@@ -403,7 +403,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
 
 - **Conventional commits**: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`
 - **Feature branches**: `feature/tool-name`, `fix/description`
-- **Main branch**: Protected, merge via merge requests
+- **Main branch**: Protected, merge via pull requests
 
 ## Dependencies
 

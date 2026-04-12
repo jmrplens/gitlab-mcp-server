@@ -88,7 +88,7 @@ govulncheck ./...
 
 ### Threat Model
 
-The auto-update subsystem embeds a GitLab API token (`read_api` scope) in the
+The auto-update subsystem embeds a GitHub API token in the
 compiled binary to check for and download new releases. Attack vectors:
 
 | Vector | Description | Mitigation |
@@ -96,10 +96,10 @@ compiled binary to check for and download new releases. Attack vectors:
 | Binary analysis (`strings`, `hexdump`) | Extract plaintext token from binary | XOR obfuscation + symbol stripping (`-s -w`) |
 | Traffic capture (HTTP) | Intercept token on the wire | HTTPS enforcement in `NewUpdater()` |
 | Proxy interception (`HTTPS_PROXY`) | Token sent through attacker proxy | `Proxy: nil` in HTTP transport |
-| HTTP redirect to external host | GitLab redirects to S3/CDN leaking token | `CheckRedirect` strips `PRIVATE-TOKEN` on cross-host |
+| HTTP redirect to external host | GitHub redirects to S3/CDN leaking token | `CheckRedirect` strips `Authorization` on cross-host |
 | Protocol downgrade (HTTPS→HTTP) | Redirect from HTTPS to HTTP exposes token | `CheckRedirect` refuses HTTPS→HTTP redirects |
 | Redirect chain abuse | Infinite redirects / open redirect exploitation | Max 10 redirects enforced |
-| Token to external hosts | Asset URL points to non-GitLab host | `sameHost()` check before attaching header |
+| Token to external hosts | Asset URL points to non-GitHub host | `sameHost()` check before attaching header |
 | Memory dump (`gcore`, `/proc/PID/mem`) | Read token from process memory | Intermediate `[]byte` zeroed; globals zeroed after first use |
 | `/proc/PID/environ` | Read `AUTO_UPDATE_TOKEN` from env | `os.Unsetenv()` immediately after reading |
 | Accidental logging (`%v`, panic) | Token printed in logs or stack traces | `Config.String()` / `GoString()` redact to `***` |
@@ -122,13 +122,13 @@ Runtime deobfuscation: `internal/autoupdate/obfuscate.go` —
 
 ### Network Hardening
 
-The `secureGitLabSource` HTTP client (`internal/autoupdate/gitlab_source.go`):
+The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 
 - `Proxy: nil` — disables system proxy
 - `TLSClientConfig.MinVersion: tls.VersionTLS12`
 - `InsecureSkipVerify` conditional on `SkipTLS` parameter
 - `CheckRedirect`:
-  - Strips `PRIVATE-TOKEN` + `Authorization` on cross-host redirects
+  - Strips `Authorization` on cross-host redirects
   - Refuses HTTPS→HTTP protocol downgrades
   - Limits redirect chain to 10 hops
 
@@ -139,16 +139,16 @@ Build time:     plaintext → XOR → ciphertext+key  (in binary .data segment)
 Startup:        ciphertext+key → DeobfuscateHex → plaintext string
                 ciphertext+key globals zeroed via unsafe.StringData + clear
                 AUTO_UPDATE_TOKEN env var unset via os.Unsetenv
-Runtime:        plaintext lives in Config.Token and secureGitLabSource.token
+Runtime:        plaintext lives in Config.Token
                 (Go string — GC-controlled, cannot be zeroed)
 ```
 
 ### Residual Risks (Accepted)
 
 1. **Go string immutability**: The plaintext `string` cannot be overwritten (Go
-   language constraint). External library APIs (`gitlab.NewClient`, HTTP headers)
+   language constraint). External library APIs (HTTP headers)
    require `string`. Full mitigation would require custom `[]byte`-based HTTP
-   client — not justified for a `read_api` scope token.
+   client — not justified for a read-only scope token.
 
 2. **XOR is obfuscation, not encryption**: Both ciphertext and key coexist in the
    binary. Prevents `strings` extraction but not determined reverse engineering
@@ -164,6 +164,6 @@ Runtime:        plaintext lives in Config.Token and secureGitLabSource.token
 |------|---------|
 | `scripts/obfuscate-token.sh` | Build-time XOR obfuscation |
 | `internal/autoupdate/obfuscate.go` | `DeobfuscateHex`, `ObfuscateWithKey`, `zeroBytes` |
-| `internal/autoupdate/gitlab_source.go` | `secureGitLabSource` with hardened HTTP client |
+| `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client |
 | `internal/autoupdate/autoupdate.go` | HTTPS enforcement, `Config.String()`/`GoString()` |
 | `cmd/server/main.go` | Single-resolve, global zeroing, env unset |

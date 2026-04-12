@@ -187,12 +187,10 @@ go test -tags e2e -c -o /dev/null ./test/e2e/     # Compile-only check (Linux)
 
 ### Release process
 
-When creating a new release and uploading packages to the GitLab package registry:
+When creating a new release and uploading binaries to GitHub Releases:
 
-1. **Delete all previous packages** from the repository's package registry before uploading new ones
-2. Only the **latest version** of binaries and checksum files is kept — no historical package versions are retained
-3. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
-4. **Release link names MUST be exact filenames** (e.g. `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
+1. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
+2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
 
 ### Post-implementation verification
 

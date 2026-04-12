@@ -213,12 +213,10 @@ All project artifacts must be written in **English**:
 
 ## Release Process
 
-When creating a new release and uploading packages to the GitLab package registry:
+When creating a new release and uploading binaries to GitHub Releases:
 
-1. **Delete all previous packages** from the repository's package registry before uploading new ones
-2. Only the **latest version** of binaries and checksum files is kept — no historical package versions are retained
-3. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
-4. Create a GitLab release with the new tag and upload the binaries + checksum
+1. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
+2. Create a GitHub release with the new tag and upload the binaries + checksum
 
 ## Issue Reporting
 

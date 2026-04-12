@@ -1,10 +1,10 @@
 # Auto-Update
 
-gitlab-mcp-server can automatically detect, download, and apply new releases from a GitLab repository. Updates are fetched from the GitLab Releases API, validated with a `checksums.txt` file, and applied using a **rename trick** — the running binary is renamed to `.old`, the new binary is placed at the original path, and on Unix the process re-executes itself seamlessly via `syscall.Exec`. On Windows, the new binary is ready at the original path and takes effect on the next restart. Old `.old` files are cleaned up automatically at startup.
+gitlab-mcp-server can automatically detect, download, and apply new releases from a GitHub repository. Updates are fetched from the GitHub Releases API, validated with a `checksums.txt` file, and applied using a **rename trick** — the running binary is renamed to `.old`, the new binary is placed at the original path, and on Unix the process re-executes itself seamlessly via `syscall.Exec`. On Windows, the new binary is ready at the original path and takes effect on the next restart. Old `.old` files are cleaned up automatically at startup.
 
 > **Diátaxis type**: Explanation
 > **Audience**: 👤🔧 All users
-> **Prerequisites**: gitlab-mcp-server installed, GitLab repository with releases
+> **Prerequisites**: gitlab-mcp-server installed, GitHub repository with releases
 
 ---
 
@@ -13,16 +13,16 @@ gitlab-mcp-server can automatically detect, download, and apply new releases fro
 ```mermaid
 sequenceDiagram
     participant Server as gitlab-mcp-server
-    participant GitLab as GitLab Releases API
+    participant GitHub as GitHub Releases API
     participant FS as File System
 
     Server->>Server: CleanupOldBinary() — remove .old from previous update
     Server->>Server: JustUpdated()? Skip check (re-exec guard)
-    Server->>GitLab: GET /projects/:id/releases (latest)
-    GitLab-->>Server: Release metadata + asset URLs
+    Server->>GitHub: GET /repos/:owner/:repo/releases/latest
+    GitHub-->>Server: Release metadata + asset URLs
     alt Update available
-        Server->>GitLab: Download binary asset
-        GitLab-->>Server: Binary data
+        Server->>GitHub: Download binary asset
+        GitHub-->>Server: Binary data
         Server->>FS: Write to .tmp staging file
         Server->>FS: Rename current → .old (rename trick)
         Server->>FS: Rename .tmp → current path
@@ -203,7 +203,7 @@ Check if a newer version of the MCP server is available.
 
 - **Current Version**: 1.1.7
 - **Latest Version**: 1.2.0
-- **Release URL**: https://gitlab.example.com/group/project/-/releases/v1.2.0
+- **Release URL**: https://github.com/jmrplens/gitlab-mcp-server/releases/tag/v1.2.0
 
 ### Release Notes
 
@@ -277,7 +277,7 @@ graph TD
         N -->|Windows fallback| S[DownloadAndReplace]
     end
 
-    J -->|GitLab API| O[(GitLab Releases)]
+    J -->|GitHub API| O[(GitHub Releases)]
     K -->|Download + Checksum| O
     P -->|Download| O
 ```
@@ -295,7 +295,7 @@ graph TD
 
 ## Release Requirements
 
-For auto-update to work, GitLab releases must follow this structure:
+For auto-update to work, GitHub releases must follow this structure:
 
 1. **Tag format**: Semantic version with `v` prefix (e.g., `v1.1.0`).
 2. **Binary assets**: One per supported platform, named `gitlab-mcp-server-{goos}-{goarch}[.exe]`:
@@ -318,8 +318,8 @@ The Makefile `release` target generates all of these automatically.
 
 ## Security Considerations
 
-- **Token scope**: Auto-update uses a dedicated built-in token (injected at build time), separate from the user's `GITLAB_TOKEN`. The built-in token needs `read_api` scope to access releases. No additional permissions are required.
-- **TLS verification**: Auto-update always uses TLS verification (hardcoded `SkipTLS: false`) since it connects to the known production GitLab instance (`https://gitlab.example.com`) with a valid certificate. The user's `GITLAB_SKIP_TLS_VERIFY` setting does not affect auto-update.
+- **Token scope**: Auto-update uses a dedicated built-in token (injected at build time), separate from the user's `GITLAB_TOKEN`. The built-in token is a GitHub token that needs read access to releases. No additional permissions are required.
+- **TLS verification**: Auto-update always uses TLS verification (hardcoded `SkipTLS: false`) since it connects to GitHub (`github.com`) with a valid certificate. The user's `GITLAB_SKIP_TLS_VERIFY` setting does not affect auto-update.
 - **Binary integrity**: Each downloaded binary is validated against the `checksums.txt` file before replacement. If the checksum does not match, the update is rejected.
 - **GPG signature verification** (optional): When `AUTO_UPDATE_GPG_KEY` (or `--auto-update-gpg-key` in HTTP mode) points to an armored PGP public key file, the server additionally verifies that `checksums.txt` is signed by the expected key. The library downloads `checksums.txt.asc` from the release and validates the signature before trusting the checksums. If the GPG key is malformed or the `.asc` file is missing, the server logs a warning and falls back to checksum-only validation.
 - **Rename-and-rollback**: The old binary is renamed to `.old` before replacement. If the new binary fails to be placed, the `.old` is renamed back to the original path as a rollback.
@@ -331,8 +331,8 @@ The Makefile `release` target generates all of these automatically.
 | --- | --- | --- |
 | `autoupdate: current version is required (binary built without -ldflags?)` | Binary built without version injection | Build with `make build` or add `-ldflags "-X main.version=1.2.0"` |
 | `autoupdate: repository is required` | `AUTO_UPDATE_REPO` is empty | Set `AUTO_UPDATE_REPO` or use the default |
-| `autoupdate: creating GitLab source` | Network error reaching `https://gitlab.example.com` | Verify network connectivity to `https://gitlab.example.com` |
-| `autoupdate: detecting latest release` | No releases in repository, or token lacks `read_api` | Create a release or check token permissions |
+| `autoupdate: creating GitHub source` | Network error reaching GitHub API | Verify network connectivity to `github.com` |
+| `autoupdate: detecting latest release` | No releases in repository, or token lacks permissions | Create a release or check token permissions |
 | `autoupdate: startup check failed` | Network timeout (10s limit at startup) | Check network connectivity; the server starts anyway |
 | `autoupdate: could not initialize periodic updater` | Missing required config in HTTP mode | Verify `--auto-update-repo` flag and network connectivity |
 | Update detected but not applied | Mode is `check` | Set `AUTO_UPDATE=true` to enable automatic application |
