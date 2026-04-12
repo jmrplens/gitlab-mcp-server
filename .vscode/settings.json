@@ -1,0 +1,150 @@
+{
+  "gopls": {
+    "build.buildFlags": [
+      "-tags=e2e"
+    ],
+    "ui.semanticTokens": true,
+    "ui.diagnostic.staticcheck": true,
+    "analyses": {
+      // SA4006: "this value of X is never used"
+      // SA4017: "X doesn't have side effects and its return value is ignored"
+      // False positives with Go 1.26's enhanced new(value) builtin.
+      // staticcheck doesn't recognize that new(expr) consumes the variable.
+      "SA4006": false,
+      "SA4017": false
+    }
+  },
+  "go.lintOnSave": "workspace",
+  "go.lintTool": "golangci-lint",
+  "go.formatTool": "goimports",
+  "go.testFlags": [
+    "-count=1"
+  ],
+  "go.testTimeout": "300s",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "golang.go",
+  "[go]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.markdownlint": "explicit"
+    }
+  },
+  // Exclude build artifacts and generated files from search results.
+  "search.exclude": {
+    "dist/**": true,
+    "NUL": true,
+    "*-results.txt": true,
+    "*-output.txt": true,
+    "plan/**": true
+  },
+  // Reduce file watcher overhead on directories that change during builds.
+  "files.watcherExclude": {
+    "dist/**": true,
+    "**/node_modules/**": true
+  },
+  // Auto-approve URLs for chat tools — project-relevant documentation sources.
+  // Wildcard entries (https://*.domain) cover all subdomains of that domain.
+  "chat.tools.urls.autoApprove": {
+    // ── Go ecosystem (pkg.go.dev, go.dev, vuln.go.dev) ──
+    "https://*.go.dev": true,
+    // ── GitLab (project wraps GitLab REST API v4) ──
+    "https://gitlab.com": true,
+    "https://*.gitlab.com": true,
+    // ── GitHub (MCP SDK, dependencies, issues, releases) ──
+    "https://github.com": true,
+    "https://*.github.com": true,
+    "https://*.githubusercontent.com": true,
+    "https://*.github.io": true,
+    "https://github.blog": true,
+    // ── MCP Protocol (core technology) ──
+    "https://modelcontextprotocol.io": true,
+    "https://*.modelcontextprotocol.io": true,
+    // ── Static analysis tools ──
+    "https://golangci-lint.run": true,
+    "https://staticcheck.dev": true,
+    // ── npm (markdownlint-cli2) ──
+    "https://*.npmjs.com": true,
+    // ── Anthropic / Claude (AI model provider) ──
+    "https://*.anthropic.com": true,
+    "https://*.claude.com": true,
+    // ── VS Code / Microsoft (IDE docs, learn.microsoft.com) ──
+    "https://*.visualstudio.com": true,
+    "https://*.microsoft.com": true,
+    // ── SonarQube (code quality — sonar-project.properties) ──
+    "https://*.sonarsource.com": true,
+    "https://sonarcloud.io": true,
+    // ── tus.io (resumable uploads — used in project) ──
+    "https://tus.io": true,
+    // ── Security references (OWASP, CWE, CVE, RFCs) ──
+    "https://owasp.org": true,
+    "https://*.owasp.org": true,
+    "https://*.mitre.org": true,
+    "https://*.cve.org": true,
+    "https://*.ietf.org": true,
+    "https://*.rfc-editor.org": true,
+    // ── Developer references ──
+    "https://stackoverflow.com": true,
+    "https://*.stackexchange.com": true,
+    "https://*.wikipedia.org": true,
+    // ── Documentation frameworks ──
+    "https://diataxis.fr": true,
+    "https://*.writethedocs.org": true
+  },
+  // ── SonarQube for IDE: rule overrides ──
+  // IMPORTANT: sonarlint.rules has "scope": "application" in the extension,
+  // meaning VS Code ONLY reads it from User Settings, NOT Workspace Settings.
+  // The actual rule overrides that take effect are in:
+  //   %APPDATA%\Code\User\settings.json → sonarlint.rules
+  // This block is kept as documentation for contributors to replicate in their
+  // own User Settings. sonar-project.properties exclusions only apply in
+  // Connected Mode / server-side CI analysis.
+  // See: https://docs.sonarsource.com/sonarqube-for-vs-code/using/rules/#rule-selection
+  "sonarlint.rules": {
+    // S1192: "Define a constant instead of duplicating this literal"
+    // Go table-driven tests repeat string literals for readability. Extracting
+    // every repeated literal into a constant harms test clarity.
+    "go:S1192": {
+      "level": "off"
+    },
+    // S1186: "Add a nested comment explaining why this function is empty"
+    // Empty httptest handler bodies simulate HTTP 200 OK — standard Go practice:
+    //   http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+    "go:S1186": {
+      "level": "off"
+    },
+    // S100: "Rename function to match the regular expression"
+    // Go test names use underscores by convention (TestFoo_Bar_Baz).
+    // See: https://go.dev/doc/code#Testing
+    "go:S100": {
+      "level": "off"
+    },
+    // S3776: "Refactor this method to reduce its Cognitive Complexity"
+    // Go option-builder functions use many trivial if-branches for field mapping.
+    // Also affects test helper functions that verify many API response fields.
+    "go:S3776": {
+      "level": "off"
+    },
+    // S1135: "Complete the task associated to this TODO comment"
+    // False positive on GitLab API type name gl.Todo — not an actual TODO.
+    "go:S1135": {
+      "level": "off"
+    }
+  },
+  "chat.mcp.serverSampling": {
+    "pe-mcp-gitlab/.vscode/mcp.json: gitlab-dev": {
+      "allowedModels": [
+        "copilot/auto",
+        "copilotcli/claude-sonnet-4.6",
+        "claude-code/claude-opus-4.6"
+      ]
+    }
+  }
+}

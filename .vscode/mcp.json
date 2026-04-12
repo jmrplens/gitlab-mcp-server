@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "gitlab-dev": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/dist/pe-mcp-gitlab-linux-amd64",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "AUTO_UPDATE": "true",
+        "META_TOOLS": "true"
+      }
+    }
+  }
+}

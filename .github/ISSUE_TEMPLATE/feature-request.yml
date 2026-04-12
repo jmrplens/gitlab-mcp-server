@@ -1,0 +1,60 @@
+name: Feature Request
+description: Suggest a new feature or MCP tool
+labels: ["feature", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? What's the current limitation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired behavior or feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: How would this feature be used? Provide concrete examples
+      value: |
+        1.
+        2.
+
+  - type: textarea
+    id: tool-design
+    attributes:
+      label: MCP Tool Design (if applicable)
+      description: If this requires a new MCP tool, sketch the tool interface
+      value: |
+        **Tool name**: `gitlab_<name>`
+
+        **Input parameters**:
+
+        | Parameter | Type | Required | Description |
+        | --------- | ---- | -------- | ----------- |
+        |           |      |          |             |
+
+        **Output fields**:
+
+        | Field | Type | Description |
+        | ----- | ---- | ----------- |
+        |       |      |             |
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches were considered and why were they rejected?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Mockups, references, related issues, links to GitLab API docs, etc.

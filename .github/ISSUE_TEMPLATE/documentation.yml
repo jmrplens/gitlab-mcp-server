@@ -1,0 +1,41 @@
+name: Documentation
+description: Report missing, outdated, or incorrect documentation
+labels: ["documentation", "needs-triage"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Brief description of the documentation change needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What's wrong, missing, or outdated in the current documentation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed Change
+      description: What should be added, updated, or removed?
+
+  - type: checkboxes
+    id: affected
+    attributes:
+      label: Affected Documents
+      options:
+        - label: "`docs/` (project documentation)"
+        - label: "`README.md`"
+        - label: "`CONTRIBUTING.md`"
+        - label: "MkDocs site (`site/docs/`)"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, screenshots, related code changes, etc.

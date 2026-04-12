@@ -1,0 +1,101 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this bug!
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Brief description of the bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "e.g., Windows 11, Ubuntu 24.04, macOS 15"
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: "e.g., 1.26.2"
+
+  - type: input
+    id: server-version
+    attributes:
+      label: gitlab-mcp-server version
+      placeholder: "e.g., v2.1.0 or commit hash"
+
+  - type: input
+    id: gitlab-version
+    attributes:
+      label: GitLab version
+      placeholder: "e.g., 17.0.0"
+
+  - type: dropdown
+    id: mcp-client
+    attributes:
+      label: MCP Client
+      options:
+        - VS Code + Copilot
+        - Cursor
+        - Copilot CLI
+        - OpenCode
+        - Claude Desktop
+        - Other
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - stdio
+        - HTTP
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste relevant stderr logs or error messages
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Screenshots, configuration snippets, related issues, etc.

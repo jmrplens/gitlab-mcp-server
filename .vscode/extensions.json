@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    // Go development (gopls, debugging, testing, linting)
+    "golang.go",
+
+    // Markdown linting (auto-fix on save via settings.json)
+    "davidanson.vscode-markdownlint",
+
+    // Code quality — SonarQube integration
+    "sonarsource.sonarlint-vscode",
+
+    // AI assistance
+    "github.copilot-chat",
+
+    // YAML support (.golangci.yml schema validation)
+    "redhat.vscode-yaml",
+
+    // EditorConfig for cross-IDE consistency
+    "editorconfig.editorconfig"
+  ]
+}

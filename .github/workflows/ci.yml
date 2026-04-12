@@ -1,0 +1,130 @@
+# CI pipeline for gitlab-mcp-server
+#
+# Runs on: pull requests to main, pushes to main
+# Jobs: test (coverage ≥80%), build, analyze:go (8 tools), analyze:md
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26.2"
+  COVERAGE_MIN: "80"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - name: Run tests with coverage
+        run: |
+          go test -count=1 -coverprofile=coverage.out ./cmd/... ./internal/...
+          go tool cover -func=coverage.out
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if awk "BEGIN {exit !(${COVERAGE} + 0 < ${COVERAGE_MIN} + 0)}"; then
+            echo "FAIL: coverage ${COVERAGE}% is below minimum ${COVERAGE_MIN}%"
+            exit 1
+          fi
+          echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go build -o /dev/null ./cmd/server
+
+  analyze-go:
+    name: Analyze Go
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - name: Install analysis tools
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run static analysis
+        run: |
+          FAILED=0
+          PKGS="./cmd/... ./internal/..."
+
+          echo "============================================================"
+          echo " Static Analysis — gitlab-mcp-server"
+          echo "============================================================"
+
+          echo ""
+          echo "[1/8] goimports"
+          ISSUES=$(goimports -l . 2>&1)
+          [ -z "$ISSUES" ] && echo "OK" || { echo "Files needing goimports:"; echo "$ISSUES"; FAILED=1; }
+
+          echo ""
+          echo "[2/8] gofmt"
+          ISSUES=$(gofmt -l -s . 2>&1)
+          [ -z "$ISSUES" ] && echo "OK" || { echo "Files needing gofmt:"; echo "$ISSUES"; FAILED=1; }
+
+          echo ""
+          echo "[3/8] go vet"
+          go vet ${PKGS} 2>&1 || FAILED=1
+
+          echo ""
+          echo "[4/8] modernize"
+          modernize ./... 2>&1 || FAILED=1
+
+          echo ""
+          echo "[5/8] golangci-lint"
+          golangci-lint run ./... 2>&1 || FAILED=1
+
+          echo ""
+          echo "[6/8] gosec"
+          gosec -severity medium -confidence medium -exclude-generated ./... 2>&1 || FAILED=1
+
+          echo ""
+          echo "[7/8] staticcheck"
+          staticcheck ./... 2>&1 || FAILED=1
+
+          echo ""
+          echo "[8/8] govulncheck"
+          govulncheck ./... 2>&1 || FAILED=1
+
+          echo ""
+          echo "============================================================"
+          [ $FAILED -eq 0 ] && echo " All checks passed." || echo " Issues found — review findings above."
+          echo "============================================================"
+          exit $FAILED
+
+  analyze-md:
+    name: Analyze Markdown
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - run: npx --yes markdownlint-cli2 "**/*.md" "#plan" "#node_modules"
