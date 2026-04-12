@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gitlab-mcp-server Setup Wizard</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --success: #3fb950;
+    --error: #f85149;
+    --input-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; padding: 2rem 1rem;
+  }
+  .container { max-width: 640px; width: 100%; }
+  .header {
+    text-align: center; margin-bottom: 1.5rem; padding: 1.5rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .header h1 { font-size: 1.4rem; margin-bottom: 0.3rem; }
+  .header .version { color: var(--text-muted); font-size: 0.85rem; }
+
+  .section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.5rem; margin-bottom: 1rem;
+  }
+  .section h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--accent); }
+
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-size: 0.85rem; color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+  .field input[type="text"], .field input[type="url"], .field input[type="password"], .field select {
+    width: 100%; padding: 0.6rem 0.8rem; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--input-bg); color: var(--text);
+    font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field .hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+  .checkbox-group { display: flex; flex-direction: column; gap: 0.3rem; }
+  .checkbox-group label {
+    display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+    font-size: 0.95rem; color: var(--text); padding: 0.3rem 0;
+  }
+  .checkbox-group input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent);
+  }
+
+  .toggle-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.4rem 0; border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row label { color: var(--text); font-size: 0.9rem; }
+  .toggle {
+    position: relative; width: 40px; height: 22px;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--border); border-radius: 22px; transition: 0.3s;
+  }
+  .toggle .slider::before {
+    content: ''; position: absolute; height: 16px; width: 16px;
+    left: 3px; bottom: 3px; background: var(--text);
+    border-radius: 50%; transition: 0.3s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(18px); }
+
+  .btn {
+    padding: 0.6rem 1.4rem; border-radius: 6px; border: none;
+    font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .input-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+  .input-row input { flex: 1; }
+  .btn-browse {
+    padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--accent); cursor: pointer;
+    font-size: 0.85rem; white-space: nowrap; transition: 0.2s;
+  }
+  .btn-browse:hover { background: var(--border); }
+
+  .error-msg { color: var(--error); font-size: 0.85rem; margin-top: 0.3rem; display: none; }
+  .error-msg.show { display: block; }
+
+  .result {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.5rem; display: none; text-align: center;
+  }
+  .result.show { display: block; }
+  .result h2 { color: var(--success); margin-bottom: 1rem; }
+  .result .clients-list { text-align: left; margin: 1rem 0; }
+  .result .clients-list li {
+    list-style: none; padding: 0.3rem 0; color: var(--text-muted);
+  }
+  .result .clients-list li::before { content: '✓ '; color: var(--success); }
+
+  .jetbrains-json {
+    background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.8rem; margin-top: 0.5rem; font-family: monospace; font-size: 0.8rem;
+    white-space: pre-wrap; word-break: break-all; color: var(--text-muted);
+    max-height: 200px; overflow-y: auto; display: none;
+  }
+  .jetbrains-json.show { display: block; }
+
+  details.section { cursor: default; }
+  details.section summary {
+    cursor: pointer; color: var(--accent); font-size: 0.95rem; font-weight: 500;
+    list-style: none;
+  }
+  details.section summary::-webkit-details-marker { display: none; }
+  details.section > div { margin-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>gitlab-mcp-server Setup Wizard</h1>
+    <div class="version" id="version">GitLab MCP Server for AI Assistants</div>
+  </div>
+
+  <div id="formPanel">
+    <!-- Installation -->
+    <div class="section">
+      <h2>Binary Installation</h2>
+      <div class="field">
+        <label for="installPath">Install path</label>
+        <div class="input-row">
+          <input type="text" id="installPath" placeholder="Loading defaults...">
+          <button class="btn-browse" onclick="pickDirectory()">Browse...</button>
+        </div>
+        <div class="hint">Full path where the binary will be installed</div>
+      </div>
+    </div>
+
+    <!-- GitLab Config -->
+    <div class="section">
+      <h2>GitLab Configuration</h2>
+      <div class="field">
+        <label for="gitlabUrl">GitLab URL</label>
+        <input type="url" id="gitlabUrl" placeholder="https://gitlab.example.com">
+        <div class="error-msg" id="urlError">Please enter a valid URL</div>
+      </div>
+      <div class="field">
+        <label for="gitlabToken">Personal Access Token</label>
+        <input type="password" id="gitlabToken" placeholder="glpat-...">
+        <div class="hint" id="tokenExistingHint" style="display:none;color:var(--accent);">An existing token is configured. Leave empty to keep it.</div>
+        <div class="hint">
+          Need a token? <a id="tokenLink" href="#" target="_blank" style="color:var(--accent);">Create one on your GitLab instance</a>
+        </div>
+        <div class="hint">Required scope: <strong>api</strong> (full access to the GitLab API)</div>
+        <div class="hint">Token will be stored securely in ~/.gitlab-mcp-server.env (not in client config files)</div>
+        <div class="error-msg" id="tokenError">Token is required</div>
+      </div>
+    </div>
+
+    <!-- Clients -->
+    <div class="section">
+      <h2>MCP Clients</h2>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+          <label>Select clients to configure</label>
+          <label style="font-size:0.8rem;color:var(--accent);cursor:pointer;" onclick="toggleAll()">Select all</label>
+        </div>
+        <div class="checkbox-group" id="clientList"></div>
+      </div>
+    </div>
+
+    <!-- Advanced Options (collapsible) -->
+    <details class="section">
+      <summary>&#9881; Advanced Options</summary>
+      <div>
+        <div class="toggle-row">
+          <label>Skip TLS verification</label>
+          <label class="toggle"><input type="checkbox" id="optSkipTLS" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label>Enable meta-tools</label>
+          <label class="toggle"><input type="checkbox" id="optMetaTools" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label>Enable auto-update</label>
+          <label class="toggle"><input type="checkbox" id="optAutoUpdate" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label>Enable YOLO mode</label>
+          <label class="toggle"><input type="checkbox" id="optYoloMode"><span class="slider"></span></label>
+        </div>
+        <div class="field" style="margin-top:0.8rem;">
+          <label for="optLogLevel">Log level</label>
+          <select id="optLogLevel">
+            <option value="debug">debug</option>
+            <option value="info" selected>info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <!-- Configure button -->
+    <button class="btn btn-primary" id="configureBtn" onclick="configure()" style="margin-top:0.5rem;">Configure</button>
+  </div>
+
+  <!-- Result -->
+  <div class="result" id="resultPanel">
+    <h2>Setup Complete!</h2>
+    <p>The following clients have been configured:</p>
+    <ul class="clients-list" id="resultList"></ul>
+    <div class="jetbrains-json" id="jetbrainsJson"></div>
+    <p style="margin-top:1rem;color:var(--text-muted);font-size:0.85rem;">
+      To reconfigure later, run: <code>gitlab-mcp-server --setup</code>
+    </p>
+    <div style="text-align:center;margin-top:1rem;">
+      <button class="btn btn-primary" style="width:auto;" onclick="window.close()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let defaults = {};
+
+function updateTokenLink(gitlabUrl) {
+  const link = document.getElementById('tokenLink');
+  if (gitlabUrl) {
+    const base = gitlabUrl.replace(/\/+$/, '');
+    link.href = base + '/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api';
+    link.textContent = 'Create one on your GitLab instance';
+  } else {
+    link.href = '#';
+    link.textContent = 'Enter GitLab URL first';
+  }
+}
+
+async function init() {
+  try {
+    const resp = await fetch('/api/defaults');
+    defaults = await resp.json();
+    document.getElementById('version').textContent = 'v' + (defaults.version || 'dev');
+    document.getElementById('installPath').value = defaults.install_path || '';
+    if (defaults.gitlab_url) {
+      document.getElementById('gitlabUrl').value = defaults.gitlab_url;
+      updateTokenLink(defaults.gitlab_url);
+    }
+    if (defaults.has_existing && defaults.masked_token) {
+      document.getElementById('gitlabToken').placeholder = defaults.masked_token + ' (leave empty to keep)';
+      document.getElementById('tokenExistingHint').style.display = 'block';
+    }
+    if (typeof defaults.skip_tls_verify === 'boolean') {
+      document.getElementById('optSkipTLS').checked = defaults.skip_tls_verify;
+    }
+    document.getElementById('gitlabUrl').addEventListener('input', function() {
+      updateTokenLink(this.value.trim());
+    });
+
+    const clientList = document.getElementById('clientList');
+    (defaults.clients || []).forEach(function(c, i) {
+      const label = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!c.default_selected;
+      cb.dataset.index = i;
+      cb.className = 'client-cb';
+      const span = document.createElement('span');
+      span.textContent = c.name + (c.display_only ? ' (prints JSON)' : '');
+      label.appendChild(cb);
+      label.appendChild(span);
+      clientList.appendChild(label);
+    });
+  } catch(e) {
+    console.error('Failed to load defaults:', e);
+  }
+}
+
+function toggleAll() {
+  const cbs = document.querySelectorAll('.client-cb');
+  const allChecked = Array.from(cbs).every(function(cb) { return cb.checked; });
+  cbs.forEach(function(cb) { cb.checked = !allChecked; });
+}
+
+async function pickDirectory() {
+  const btn = document.querySelector('.btn-browse');
+  const origText = btn.textContent;
+  btn.textContent = 'Opening...';
+  btn.disabled = true;
+  try {
+    const startDir = document.getElementById('installPath').value.trim();
+    const resp = await fetch('/api/pick-directory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_dir: startDir }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.path) document.getElementById('installPath').value = data.path;
+    }
+  } catch(e) {
+    console.error('Pick directory failed:', e);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
+async function configure() {
+  const url = document.getElementById('gitlabUrl').value.trim();
+  const token = document.getElementById('gitlabToken').value.trim();
+  let valid = true;
+  const urlError = document.getElementById('urlError');
+  const tokenError = document.getElementById('tokenError');
+  urlError.classList.remove('show');
+  tokenError.classList.remove('show');
+  try { new URL(url); } catch(e) { urlError.classList.add('show'); valid = false; }
+  if (!token && !defaults.has_existing) { tokenError.classList.add('show'); valid = false; }
+  if (!valid) return;
+
+  const btn = document.getElementById('configureBtn');
+  btn.disabled = true;
+  btn.textContent = 'Configuring...';
+
+  const selectedIndices = [];
+  document.querySelectorAll('.client-cb').forEach(function(cb) {
+    if (cb.checked) selectedIndices.push(parseInt(cb.dataset.index, 10));
+  });
+
+  const body = {
+    install_path: document.getElementById('installPath').value.trim(),
+    gitlab_url: url,
+    gitlab_token: token,
+    skip_tls_verify: document.getElementById('optSkipTLS').checked,
+    meta_tools: document.getElementById('optMetaTools').checked,
+    auto_update: document.getElementById('optAutoUpdate').checked,
+    yolo_mode: document.getElementById('optYoloMode').checked,
+    log_level: document.getElementById('optLogLevel').value,
+    selected_clients: selectedIndices,
+  };
+
+  try {
+    const resp = await fetch('/api/configure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await resp.json();
+
+    document.getElementById('formPanel').style.display = 'none';
+
+    const resultPanel = document.getElementById('resultPanel');
+    const resultList = document.getElementById('resultList');
+    resultList.innerHTML = '';
+    (result.configured || []).forEach(function(name) {
+      const li = document.createElement('li');
+      li.textContent = name;
+      resultList.appendChild(li);
+    });
+
+    if (result.jetbrains_json) {
+      const jb = document.getElementById('jetbrainsJson');
+      jb.textContent = result.jetbrains_json;
+      jb.classList.add('show');
+    }
+
+    resultPanel.classList.add('show');
+  } catch(e) {
+    alert('Configuration failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Configure';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
