@@ -107,8 +107,6 @@ gitlab-mcp-server --setup -setup-mode cli   # Plain text prompts
   <img src=".github/assets/setup-wizard-web.png" alt="Setup Wizard — Web UI" width="500">
 </p>
 
-
-
 The wizard supports **10 MCP clients**: VS Code (GitHub Copilot), Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Copilot CLI, OpenCode, Crush, and Zed.
 
 After setup, open your AI client and try: _"List my GitLab projects"_
