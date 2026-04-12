@@ -40,7 +40,7 @@ sequenceDiagram
 
 The update mechanism uses [creativeprojects/go-selfupdate](https://github.com/creativeprojects/go-selfupdate) v1.5.2 with a GitHub source backend. Key properties:
 
-- **GitHub Releases**: Auto-update fetches releases from the GitHub repository configured via `AUTO_UPDATE_REPO` (default: `jmrplens/gitlab-mcp-server`). For public repositories, no token is needed. For private repos, set `AUTO_UPDATE_TOKEN`.
+- **GitHub Releases**: Auto-update fetches releases from the GitHub repository configured via `AUTO_UPDATE_REPO` (default: `jmrplens/gitlab-mcp-server`).
 - **Rename trick**: The running binary is renamed to `.old` (allowed even on Windows where executables are locked), and the new binary is placed at the original path. This eliminates the need for deferred scripts or manual intervention.
 - **Unix seamless re-exec**: On Linux/macOS, after replacing the binary, the process calls `syscall.Exec()` which replaces the process image in-place — the PID stays the same, stdin/stdout file descriptors are preserved, and the MCP client sees no interruption.
 - **Windows next-restart**: On Windows, `syscall.Exec` is not available (it creates a new process, losing stdio pipes). The new binary is ready at the original path and activates on the next server restart.
@@ -71,7 +71,7 @@ When running as a stdio server (the default), auto-update runs as a **pre-start 
 1. `CleanupOldBinary()` — remove leftover `.old` file from a previous update.
 2. Parse `AUTO_UPDATE` mode from environment variables.
 3. Check `PE_MCP_JUST_UPDATED` — if set, skip the update check (re-exec guard) and clear the variable.
-4. Create an `Updater` with the GitHub source, `AUTO_UPDATE_REPO`, and optionally `AUTO_UPDATE_TOKEN`.
+4. Create an `Updater` with the GitHub source and `AUTO_UPDATE_REPO`.
 5. Call `PreStartUpdate()`:
    - If mode is `true` and a newer release exists → download to `.tmp`, rename current to `.old`, move `.tmp` to original path.
    - **Unix**: Set `PE_MCP_JUST_UPDATED=1` → call `syscall.Exec(self)` → the process image is replaced with the new binary, same PID, same stdin/stdout pipes. The new binary starts, sees the guard, skips the update check, and proceeds to serve.
@@ -117,7 +117,7 @@ When running as an HTTP server (`--http`), auto-update runs as a **background pe
    - If mode is `check` → log availability only.
 5. The goroutine stops when the server context is cancelled (graceful shutdown).
 
-> **Note**: Auto-update uses the GitHub Releases API, completely independent of the user's GitLab configuration. For public repositories, no token is needed. Set `AUTO_UPDATE_TOKEN` only for private repositories.
+> **Note**: Auto-update uses the GitHub Releases API, completely independent of the user's GitLab configuration.
 
 ## Configuration Reference
 
@@ -128,9 +128,8 @@ When running as an HTTP server (`--http`), auto-update runs as a **background pe
 | `AUTO_UPDATE` | `true` | Update mode: `true`, `check`, or `false` |
 | `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
 | `AUTO_UPDATE_INTERVAL` | `1h` | Check interval (used by HTTP mode periodic checks) |
-| `AUTO_UPDATE_TOKEN` | -- | GitHub token for release API (optional for public repos) |
 
-Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not** use the user's `GITLAB_URL`, `GITLAB_TOKEN`, or `GITLAB_SKIP_TLS_VERIFY`. For public repositories, no token is needed.
+Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not** use the user's `GITLAB_URL`, `GITLAB_TOKEN`, or `GITLAB_SKIP_TLS_VERIFY`.
 
 ### CLI Flags (HTTP Mode)
 

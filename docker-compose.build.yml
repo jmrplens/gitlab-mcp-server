@@ -1,5 +1,5 @@
 # docker-compose.build.yml — Override for local development (build from source).
-# Usage: GITHUB_UPDATE_TOKEN=xxx docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+# Usage: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
 services:
   gitlab-mcp-server:
     build:
@@ -7,10 +7,4 @@ services:
       args:
         VERSION: "${VERSION:-dev}"
         COMMIT: "${COMMIT:-}"
-      secrets:
-        - update_token
     image: gitlab-mcp-server:local
-
-secrets:
-  update_token:
-    environment: GITHUB_UPDATE_TOKEN

@@ -11,30 +11,7 @@ $Version = (Get-Content -Path "VERSION" -Raw).Trim()
 $Commit = git rev-parse --short HEAD 2>$null
 if (-not $Commit) { $Commit = "none" }
 
-# Load GITLAB_UPDATE_TOKEN from .env and obfuscate it (XOR + hex encoding)
-$AutoUpdateToken = ""
-if (Test-Path ".env") {
-    Get-Content ".env" | ForEach-Object {
-        if ($_ -match '^\s*GITLAB_UPDATE_TOKEN\s*=\s*(.+)$') {
-            $AutoUpdateToken = $Matches[1].Trim()
-        }
-    }
-}
-
-$ObfuscatedToken = ""
-$ObfuscationKey = ""
-if ($AutoUpdateToken -ne "") {
-    # Use WSL or bash to run the obfuscation script
-    $ObfuscationOutput = bash -c "scripts/obfuscate-token.sh '$AutoUpdateToken'" 2>$null
-    if ($ObfuscationOutput) {
-        foreach ($line in $ObfuscationOutput) {
-            if ($line -match '^OBFUSCATED_TOKEN=(.+)$') { $ObfuscatedToken = $Matches[1] }
-            if ($line -match '^OBFUSCATION_KEY=(.+)$') { $ObfuscationKey = $Matches[1] }
-        }
-    }
-}
-
-$LdFlags = "-s -w -X main.version=$Version -X main.commit=$Commit -X main.obfuscatedAutoUpdateToken=$ObfuscatedToken -X main.autoUpdateTokenKey=$ObfuscationKey"
+$LdFlags = "-s -w -X main.version=$Version -X main.commit=$Commit"
 $OutDir = "dist"
 
 $Targets = @(

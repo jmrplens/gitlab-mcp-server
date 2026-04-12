@@ -65,7 +65,6 @@ func ParseMode(s string) (Mode, error) {
 // Config holds auto-update configuration.
 type Config struct {
 	Mode           Mode          // Update behavior (auto, check, disabled)
-	Token          string        // GitHub personal access token for release API (optional for public repos)
 	Repository     string        // GitHub repository slug (e.g. "jmrplens/gitlab-mcp-server")
 	Interval       time.Duration // Check interval for HTTP mode periodic checks
 	CurrentVersion string        // Running binary version (semver without "v" prefix)
@@ -74,12 +73,8 @@ type Config struct {
 // String returns a redacted representation of Config to prevent accidental
 // token leakage via fmt.Print, log, or %v formatting.
 func (c Config) String() string {
-	tok := ""
-	if c.Token != "" {
-		tok = "***"
-	}
-	return fmt.Sprintf("Config{Mode:%s Token:%s Repository:%s Interval:%s CurrentVersion:%s}",
-		c.Mode, tok, c.Repository, c.Interval, c.CurrentVersion)
+	return fmt.Sprintf("Config{Mode:%s Repository:%s Interval:%s CurrentVersion:%s}",
+		c.Mode, c.Repository, c.Interval, c.CurrentVersion)
 }
 
 // GoString implements [fmt.GoStringer] to prevent token leakage via %#v formatting.
@@ -117,7 +112,7 @@ func NewUpdater(cfg Config) (*Updater, error) {
 		cfg.Interval = DefaultInterval
 	}
 
-	src, err := newGitHubSource(cfg.Token)
+	src, err := newGitHubSource()
 	if err != nil {
 		return nil, fmt.Errorf("autoupdate: creating GitHub source: %w", err)
 	}
@@ -365,13 +360,9 @@ func (u *Updater) IsEnabled() bool {
 	return u.cfg.Mode != ModeDisabled
 }
 
-// GetConfig returns the updater configuration (with the token redacted).
+// GetConfig returns the updater configuration.
 func (u *Updater) GetConfig() Config {
-	c := u.cfg
-	if c.Token != "" {
-		c.Token = "***"
-	}
-	return c
+	return u.cfg
 }
 
 // checkOnceFallbackDownload is the Windows fallback for CheckOnce.

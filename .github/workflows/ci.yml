@@ -1,7 +1,7 @@
 # CI pipeline for gitlab-mcp-server
 #
 # Runs on: pull requests to main, pushes to main
-# Jobs: test (coverage ≥80%), build, analyze:go (8 tools), analyze:md
+# Jobs: test (coverage ≥80%), build, analyze:go (8 tools), analyze:md, docker
 
 name: CI
 
@@ -54,7 +54,6 @@ jobs:
   analyze-go:
     name: Analyze Go
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -121,10 +120,28 @@ jobs:
   analyze-md:
     name: Analyze Markdown
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: lts/*
       - run: npx --yes markdownlint-cli2 "**/*.md" "#plan" "#node_modules"
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' &&
+      (
+        contains(join(github.event.pull_request.labels.*.name, ','), 'docker') ||
+        true
+      )
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}

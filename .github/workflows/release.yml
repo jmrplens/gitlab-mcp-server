@@ -1,11 +1,8 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*
-# Jobs: cross-compile 6 targets, create GitHub Release with assets
+# Uses GoReleaser to cross-compile and create GitHub Release
 #
-# Required secrets:
-#   GITHUB_UPDATE_TOKEN  Token embedded in binaries for the auto-update feature (optional)
-
 name: Release
 
 on:
@@ -18,11 +15,10 @@ permissions:
 
 env:
   GO_VERSION: "1.26.2"
-  BINARY_NAME: gitlab-mcp-server
 
 jobs:
   release:
-    name: Build & Release
+    name: GoReleaser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -33,22 +29,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - run: go mod download
-
-      - name: Build release binaries
-        env:
-          GITHUB_UPDATE_TOKEN: ${{ secrets.GITHUB_UPDATE_TOKEN }}
-        run: ./scripts/build-release.sh
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          generate_release_notes: true
-          files: |
-            dist/${{ env.BINARY_NAME }}-linux-amd64
-            dist/${{ env.BINARY_NAME }}-linux-arm64
-            dist/${{ env.BINARY_NAME }}-windows-amd64.exe
-            dist/${{ env.BINARY_NAME }}-windows-arm64.exe
-            dist/${{ env.BINARY_NAME }}-darwin-amd64
-            dist/${{ env.BINARY_NAME }}-darwin-arm64
-            dist/checksums.txt
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -93,7 +93,6 @@ compiled binary to check for and download new releases. Attack vectors:
 
 | Vector | Description | Mitigation |
 |--------|-------------|------------|
-| Binary analysis (`strings`, `hexdump`) | Extract plaintext token from binary | XOR obfuscation + symbol stripping (`-s -w`) |
 | Traffic capture (HTTP) | Intercept token on the wire | HTTPS enforcement in `NewUpdater()` |
 | Proxy interception (`HTTPS_PROXY`) | Token sent through attacker proxy | `Proxy: nil` in HTTP transport |
 | HTTP redirect to external host | GitHub redirects to S3/CDN leaking token | `CheckRedirect` strips `Authorization` on cross-host |
@@ -101,24 +100,8 @@ compiled binary to check for and download new releases. Attack vectors:
 | Redirect chain abuse | Infinite redirects / open redirect exploitation | Max 10 redirects enforced |
 | Token to external hosts | Asset URL points to non-GitHub host | `sameHost()` check before attaching header |
 | Memory dump (`gcore`, `/proc/PID/mem`) | Read token from process memory | Intermediate `[]byte` zeroed; globals zeroed after first use |
-| `/proc/PID/environ` | Read `AUTO_UPDATE_TOKEN` from env | `os.Unsetenv()` immediately after reading |
 | Accidental logging (`%v`, panic) | Token printed in logs or stack traces | `Config.String()` / `GoString()` redact to `***` |
 | `GetConfig()` API | Token exposed via MCP tool | Returns copy with `Token: "***"` |
-
-### Binary Obfuscation
-
-Token is XOR-encrypted at build time:
-
-```text
-plaintext ⊕ random_key → ciphertext (both hex-encoded, injected via -ldflags)
-```
-
-Obfuscation scripts: `scripts/obfuscate-token.sh` (bash), native PowerShell in
-`scripts/build-release.ps1`. Build integration in `Makefile` and
-`scripts/build-release.sh`.
-
-Runtime deobfuscation: `internal/autoupdate/obfuscate.go` —
-`DeobfuscateHex(cipherHex, keyHex)`. Intermediate buffers zeroed after use.
 
 ### Network Hardening
 
@@ -132,38 +115,10 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
   - Refuses HTTPS→HTTP protocol downgrades
   - Limits redirect chain to 10 hops
 
-### Memory Lifecycle
-
-```text
-Build time:     plaintext → XOR → ciphertext+key  (in binary .data segment)
-Startup:        ciphertext+key → DeobfuscateHex → plaintext string
-                ciphertext+key globals zeroed via unsafe.StringData + clear
-                AUTO_UPDATE_TOKEN env var unset via os.Unsetenv
-Runtime:        plaintext lives in Config.Token
-                (Go string — GC-controlled, cannot be zeroed)
-```
-
-### Residual Risks (Accepted)
-
-1. **Go string immutability**: The plaintext `string` cannot be overwritten (Go
-   language constraint). External library APIs (HTTP headers)
-   require `string`. Full mitigation would require custom `[]byte`-based HTTP
-   client — not justified for a read-only scope token.
-
-2. **XOR is obfuscation, not encryption**: Both ciphertext and key coexist in the
-   binary. Prevents `strings` extraction but not determined reverse engineering
-   with debugger.
-
-3. **Build-time process listing**: During `go build`, hex values appear in the
-   command line (`/proc/PID/cmdline`). Mitigated by build server isolation.
-   **Not critical — accepted risk.**
-
 ### File Reference
 
 | File | Purpose |
 |------|---------|
-| `scripts/obfuscate-token.sh` | Build-time XOR obfuscation |
-| `internal/autoupdate/obfuscate.go` | `DeobfuscateHex`, `ObfuscateWithKey`, `zeroBytes` |
 | `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client |
 | `internal/autoupdate/autoupdate.go` | HTTPS enforcement, `Config.String()`/`GoString()` |
-| `cmd/server/main.go` | Single-resolve, global zeroing, env unset |
+| `cmd/server/main.go` | Update initialization |

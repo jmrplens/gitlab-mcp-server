@@ -62,7 +62,6 @@ $env:DOCKER_BUILDKIT = '1'
 docker build `
     --build-arg "VERSION=$Version" `
     --build-arg "COMMIT=$Commit" `
-    --secret "id=update_token,env=GITLAB_UPDATE_TOKEN" `
     -t "${Registry}:${Version}" `
     -t "${Registry}:latest" `
     .

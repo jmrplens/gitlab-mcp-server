@@ -13,12 +13,8 @@ COPY . .
 
 ARG VERSION=""
 ARG COMMIT=""
-# GITHUB_UPDATE_TOKEN is passed via BuildKit secret mount to avoid leaking in image layers.
-# Build with: docker build --secret id=update_token,env=GITHUB_UPDATE_TOKEN ...
-RUN --mount=type=secret,id=update_token \
-    GITHUB_UPDATE_TOKEN="$(cat /run/secrets/update_token 2>/dev/null || echo '')" && \
-    CGO_ENABLED=0 go build \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.defaultAutoUpdateToken=${GITHUB_UPDATE_TOKEN}" \
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/gitlab-mcp-server ./cmd/server
 
 # --- Runtime stage ---

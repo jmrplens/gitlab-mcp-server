@@ -19,7 +19,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -38,33 +37,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/wizard"
 )
 
-// version, commit, and obfuscated token vars are set at build time via -ldflags.
+// version and commit are set at build time via -ldflags.
 // The VERSION file at the repo root is the single source of truth for version.
-// The auto-update token is XOR-obfuscated at build time to prevent trivial
-// extraction via `strings` or `hexdump` on the compiled binary.
 var (
-	version                   = "dev"
-	commit                    = "none"
-	obfuscatedAutoUpdateToken string
-	autoUpdateTokenKey        string
+	version = "dev"
+	commit  = "none"
 )
-
-func init() {
-	// Copy ldflags strings from potentially read-only binary segments
-	// to writable heap memory so clearTokenGlobals can safely zero them.
-	obfuscatedAutoUpdateToken = heapCopy(obfuscatedAutoUpdateToken)
-	autoUpdateTokenKey = heapCopy(autoUpdateTokenKey)
-}
-
-// heapCopy returns a heap-allocated copy of s so the backing memory is writable.
-func heapCopy(s string) string {
-	if s == "" {
-		return ""
-	}
-	b := make([]byte, len(s))
-	copy(b, s)
-	return unsafe.String(unsafe.SliceData(b), len(b))
-}
 
 // Project metadata.
 const (
@@ -328,11 +306,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()
 
-	// Resolve auto-update token once, then zero all source material.
-	autoUpdateToken := resolveAutoUpdateToken()
-	clearTokenGlobals()
-
-	startAutoUpdate(ctx, cfg, autoUpdateToken)
+	startAutoUpdate(ctx, cfg)
 
 	return serveHTTP(ctx, cfg, hcfg.addr)
 }
@@ -355,12 +329,8 @@ func runStdio(ctx context.Context) error {
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()
 
-	// Resolve auto-update token once, then zero all source material.
-	autoUpdateToken := resolveAutoUpdateToken()
-	clearTokenGlobals()
-
 	// Pre-start update: download, replace, and re-exec on Unix.
-	preStartAutoUpdate(cfg, autoUpdateToken)
+	preStartAutoUpdate(cfg)
 
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
@@ -385,7 +355,7 @@ func runStdio(ctx context.Context) error {
 		slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "user", cfg.GitLabUser, "version", gitlabVersion)
 	}
 
-	updater := newUpdaterForTools(cfg, autoUpdateToken)
+	updater := newUpdaterForTools(cfg)
 	server := createServer(client, cfg, updater)
 	return serveStdio(ctx, server)
 }
@@ -686,40 +656,10 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	return nil
 }
 
-// resolveAutoUpdateToken returns the token for auto-update API calls.
-// Priority: AUTO_UPDATE_TOKEN env var > build-time obfuscated token > empty (disabled).
-// The env var is cleared after reading to prevent leakage via /proc/PID/environ.
-func resolveAutoUpdateToken() string {
-	if t := os.Getenv("AUTO_UPDATE_TOKEN"); t != "" {
-		os.Unsetenv("AUTO_UPDATE_TOKEN")
-		return t
-	}
-	return autoupdate.DeobfuscateHex(obfuscatedAutoUpdateToken, autoUpdateTokenKey)
-}
-
-// clearTokenGlobals zeros the obfuscated token globals after deobfuscation
-// to prevent recovery from a process memory dump. The init() function
-// copies ldflags strings to writable heap memory, making unsafe zeroing safe.
-func clearTokenGlobals() {
-	zeroStringVar(&obfuscatedAutoUpdateToken)
-	zeroStringVar(&autoUpdateTokenKey)
-}
-
-// zeroStringVar zeroes the backing bytes of a string variable and sets it
-// to empty. Uses unsafe to reach the immutable backing array.
-func zeroStringVar(s *string) {
-	if *s == "" {
-		return
-	}
-	p := unsafe.StringData(*s)
-	clear(unsafe.Slice(p, len(*s)))
-	*s = ""
-}
-
 // preStartAutoUpdate runs the pre-start update check for stdio mode.
 // Downloads, replaces the binary, and re-execs on Unix.
 // Non-fatal: errors are logged and do not prevent startup.
-func preStartAutoUpdate(cfg *config.Config, token string) {
+func preStartAutoUpdate(cfg *config.Config) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("autoupdate: pre-start auto-update panicked — continuing without update", "panic", r)
@@ -740,7 +680,6 @@ func preStartAutoUpdate(cfg *config.Config, token string) {
 
 	result := autoupdate.PreStartUpdate(ctx, autoupdate.Config{
 		Mode:           mode,
-		Token:          token,
 		Repository:     cfg.AutoUpdateRepo,
 		CurrentVersion: version,
 	})
@@ -756,14 +695,13 @@ func preStartAutoUpdate(cfg *config.Config, token string) {
 // newUpdaterForTools creates an [*autoupdate.Updater] for the MCP server-update
 // tools. Returns nil (safe for RegisterTools) if auto-update is disabled or
 // initialisation fails.
-func newUpdaterForTools(cfg *config.Config, token string) *autoupdate.Updater {
+func newUpdaterForTools(cfg *config.Config) *autoupdate.Updater {
 	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
 	if err != nil || mode == autoupdate.ModeDisabled {
 		return nil
 	}
 	u, err := autoupdate.NewUpdater(autoupdate.Config{
 		Mode:           mode,
-		Token:          token,
 		Repository:     cfg.AutoUpdateRepo,
 		CurrentVersion: version,
 	})
@@ -775,7 +713,7 @@ func newUpdaterForTools(cfg *config.Config, token string) *autoupdate.Updater {
 }
 
 // startAutoUpdate initializes background periodic update checks for HTTP mode.
-func startAutoUpdate(ctx context.Context, cfg *config.Config, token string) {
+func startAutoUpdate(ctx context.Context, cfg *config.Config) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("autoupdate: background auto-update panicked — continuing without updates", "panic", r)
@@ -793,7 +731,6 @@ func startAutoUpdate(ctx context.Context, cfg *config.Config, token string) {
 
 	u, err := autoupdate.NewUpdater(autoupdate.Config{
 		Mode:           mode,
-		Token:          token,
 		Repository:     cfg.AutoUpdateRepo,
 		Interval:       cfg.AutoUpdateInterval,
 		CurrentVersion: version,

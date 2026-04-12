@@ -2,9 +2,6 @@
 #
 # Triggers: tag push v*, manual dispatch
 #
-# Required secrets:
-#   GITHUB_UPDATE_TOKEN  Auto-update token embedded in the binary (optional)
-
 name: Docker
 
 on:
@@ -44,8 +41,6 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
-          secrets: |
-            update_token=${{ secrets.GITHUB_UPDATE_TOKEN }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

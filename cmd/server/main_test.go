@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
@@ -698,7 +696,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 func TestPreStartAutoUpdate_InvalidMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "invalid-value"}
 	// Should log warning and return without panic.
-	preStartAutoUpdate(cfg, "")
+	preStartAutoUpdate(cfg)
 }
 
 // TestPreStartAutoUpdate_DisabledMode verifies that preStartAutoUpdate
@@ -706,7 +704,7 @@ func TestPreStartAutoUpdate_InvalidMode(t *testing.T) {
 func TestPreStartAutoUpdate_DisabledMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "false"}
 	// Should return immediately without calling PreStartUpdate.
-	preStartAutoUpdate(cfg, "")
+	preStartAutoUpdate(cfg)
 }
 
 // TestPreStartAutoUpdate_ValidMode verifies that preStartAutoUpdate
@@ -714,21 +712,19 @@ func TestPreStartAutoUpdate_DisabledMode(t *testing.T) {
 // With version="dev" (test default), PreStartUpdate is called but
 // NewUpdater fails internally — this still covers the code path.
 func TestPreStartAutoUpdate_ValidMode(t *testing.T) {
-	t.Setenv("AUTO_UPDATE_TOKEN", testToken)
-
 	cfg := &config.Config{
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 	}
 	// Will exercise PreStartUpdate which fails internally (version="dev").
-	preStartAutoUpdate(cfg, testToken)
+	preStartAutoUpdate(cfg)
 }
 
 // TestNewUpdaterForTools_InvalidMode verifies that newUpdaterForTools
 // returns nil when the AUTO_UPDATE value cannot be parsed.
 func TestNewUpdaterForTools_InvalidMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "garbage"}
-	u := newUpdaterForTools(cfg, "")
+	u := newUpdaterForTools(cfg)
 	if u != nil {
 		t.Error("expected nil updater for invalid mode")
 	}
@@ -738,71 +734,21 @@ func TestNewUpdaterForTools_InvalidMode(t *testing.T) {
 // returns nil when auto-update is disabled.
 func TestNewUpdaterForTools_DisabledMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "false"}
-	u := newUpdaterForTools(cfg, "")
+	u := newUpdaterForTools(cfg)
 	if u != nil {
 		t.Error("expected nil updater for disabled mode")
-	}
-}
-
-// TestResolveAutoUpdateToken verifies the token resolution priority:
-// AUTO_UPDATE_TOKEN env var > build-time obfuscated token > empty string.
-func TestResolveAutoUpdateToken(t *testing.T) {
-	// Pre-compute obfuscated values for "ld-token" using a known key.
-	ldToken := "ld-token"
-	key := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
-	cipherHex, err := autoupdate.ObfuscateWithKey(ldToken, key)
-	if err != nil {
-		t.Fatalf("ObfuscateWithKey: %v", err)
-	}
-	keyHex := hex.EncodeToString(key)
-
-	tests := []struct {
-		name     string
-		envToken string
-		cipher   string
-		key      string
-		want     string
-	}{
-		{name: "env_var_takes_priority", envToken: "env-token", cipher: cipherHex, key: keyHex, want: "env-token"},
-		{name: "obfuscated_fallback", envToken: "", cipher: cipherHex, key: keyHex, want: "ld-token"},
-		{name: "empty_when_nothing_set", envToken: "", cipher: "", key: "", want: ""},
-		{name: "invalid_hex_returns_empty", envToken: "", cipher: "ggzz", key: "xxxx", want: ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envToken != "" {
-				t.Setenv("AUTO_UPDATE_TOKEN", tt.envToken)
-			} else {
-				t.Setenv("AUTO_UPDATE_TOKEN", "")
-			}
-			oldCipher := obfuscatedAutoUpdateToken
-			oldKey := autoUpdateTokenKey
-			obfuscatedAutoUpdateToken = tt.cipher
-			autoUpdateTokenKey = tt.key
-			t.Cleanup(func() {
-				obfuscatedAutoUpdateToken = oldCipher
-				autoUpdateTokenKey = oldKey
-			})
-
-			got := resolveAutoUpdateToken()
-			if got != tt.want {
-				t.Errorf("resolveAutoUpdateToken() = %q, want %q", got, tt.want)
-			}
-		})
 	}
 }
 
 // TestNewUpdaterForTools_NewUpdaterError verifies that newUpdaterForTools
 // returns nil when NewUpdater fails (e.g. version="dev").
 func TestNewUpdaterForTools_NewUpdaterError(t *testing.T) {
-	t.Setenv("AUTO_UPDATE_TOKEN", testToken)
-
 	cfg := &config.Config{
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 		// version is "dev" by default in tests → NewUpdater rejects it.
 	}
-	u := newUpdaterForTools(cfg, testToken)
+	u := newUpdaterForTools(cfg)
 	if u != nil {
 		t.Error("expected nil updater when version is 'dev'")
 	}
@@ -811,8 +757,6 @@ func TestNewUpdaterForTools_NewUpdaterError(t *testing.T) {
 // TestNewUpdaterForTools_Success verifies that newUpdaterForTools returns
 // a valid Updater when all configuration is correct.
 func TestNewUpdaterForTools_Success(t *testing.T) {
-	t.Setenv("AUTO_UPDATE_TOKEN", testToken)
-
 	oldVersion := version
 	version = "1.0.0"
 	t.Cleanup(func() { version = oldVersion })
@@ -821,7 +765,7 @@ func TestNewUpdaterForTools_Success(t *testing.T) {
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 	}
-	u := newUpdaterForTools(cfg, testToken)
+	u := newUpdaterForTools(cfg)
 	if u == nil {
 		t.Fatal("expected non-nil updater")
 	}
@@ -832,7 +776,7 @@ func TestNewUpdaterForTools_Success(t *testing.T) {
 func TestStartAutoUpdate_InvalidMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "bad-mode"}
 	// Should log warning and return.
-	startAutoUpdate(context.Background(), cfg, "")
+	startAutoUpdate(context.Background(), cfg)
 }
 
 // TestStartAutoUpdate_DisabledMode verifies that startAutoUpdate returns
@@ -840,27 +784,23 @@ func TestStartAutoUpdate_InvalidMode(t *testing.T) {
 func TestStartAutoUpdate_DisabledMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "false"}
 	// Should return without starting periodic checks.
-	startAutoUpdate(context.Background(), cfg, "")
+	startAutoUpdate(context.Background(), cfg)
 }
 
 // TestStartAutoUpdate_NewUpdaterError verifies that startAutoUpdate returns
 // gracefully when NewUpdater fails (version="dev").
 func TestStartAutoUpdate_NewUpdaterError(t *testing.T) {
-	t.Setenv("AUTO_UPDATE_TOKEN", testToken)
-
 	cfg := &config.Config{
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 		// version is "dev" → NewUpdater fails.
 	}
-	startAutoUpdate(context.Background(), cfg, testToken)
+	startAutoUpdate(context.Background(), cfg)
 }
 
 // TestStartAutoUpdate_Success verifies that startAutoUpdate successfully
 // creates an Updater and starts the periodic check goroutine.
 func TestStartAutoUpdate_Success(t *testing.T) {
-	t.Setenv("AUTO_UPDATE_TOKEN", testToken)
-
 	oldVersion := version
 	version = "1.0.0"
 	t.Cleanup(func() { version = oldVersion })
@@ -874,7 +814,7 @@ func TestStartAutoUpdate_Success(t *testing.T) {
 		AutoUpdateInterval: time.Hour,
 	}
 	// Should succeed and start background goroutine.
-	startAutoUpdate(ctx, cfg, testToken)
+	startAutoUpdate(ctx, cfg)
 
 	// Cancel context to stop the periodic checker.
 	cancel()
@@ -1150,22 +1090,6 @@ func TestParseLogLevel(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestHeapCopy verifies that heapCopy returns an independent copy.
-func TestHeapCopy(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		if got := heapCopy(""); got != "" {
-			t.Errorf("heapCopy(\"\") = %q, want \"\"", got)
-		}
-	})
-	t.Run("non-empty", func(t *testing.T) {
-		original := "hello"
-		copied := heapCopy(original)
-		if copied != original {
-			t.Errorf("heapCopy(%q) = %q, want %q", original, copied, original)
-		}
-	})
 }
 
 // TestExtractHost verifies host extraction from URLs.

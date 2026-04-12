@@ -58,7 +58,6 @@ echo "Building image..."
 DOCKER_BUILDKIT=1 docker build \
     --build-arg VERSION="${VERSION}" \
     --build-arg COMMIT="${COMMIT}" \
-    --secret id=update_token,env=GITHUB_UPDATE_TOKEN \
     -t "${REGISTRY}:${VERSION}" \
     -t "${REGISTRY}:latest" \
     .

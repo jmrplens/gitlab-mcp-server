@@ -1,5 +1,5 @@
 .PHONY: build build-all run test test-short test-race test-pkg test-integration test-e2e coverage \
-       lint fmt goimports goimports-check gofmt-check clean version release checksum \
+       lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
        analyze analyze-fix analyze-report install-tools audit-output gen-llms \
@@ -13,22 +13,7 @@ PKGS=./cmd/... ./internal/...
 VERSION := $(strip $(file < VERSION))
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
-# Read .env for GITHUB_UPDATE_TOKEN (obfuscated and injected into binary via ldflags)
--include .env
-export
-
-# Obfuscate the auto-update token at build time using XOR.
-# The token is split into ciphertext + key so it cannot be extracted via `strings`.
-# Run the obfuscation script once; $(shell) joins the two output lines with a space:
-#   "OBFUSCATED_TOKEN=hex1 OBFUSCATION_KEY=hex2"
-# $(filter) + $(patsubst) extract each value without extra shell calls.
-ifneq ($(GITHUB_UPDATE_TOKEN),)
-  _OBF_OUTPUT := $(shell scripts/obfuscate-token.sh "$(GITHUB_UPDATE_TOKEN)")
-  _OBF_TOKEN  := $(patsubst OBFUSCATED_TOKEN=%,%,$(filter OBFUSCATED_TOKEN=%,$(_OBF_OUTPUT)))
-  _OBF_KEY    := $(patsubst OBFUSCATION_KEY=%,%,$(filter OBFUSCATION_KEY=%,$(_OBF_OUTPUT)))
-endif
-
-LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.obfuscatedAutoUpdateToken=$(_OBF_TOKEN) -X main.autoUpdateTokenKey=$(_OBF_KEY)
+LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
 # OS detection for portable commands
 ifeq ($(OS),Windows_NT)
@@ -385,18 +370,17 @@ audit-output:
 fmt:
 	gofmt -s -w .
 
-## release: cross-compile all 6 binaries and generate SHA256 checksums.
-## On Windows, delegates to PowerShell script (mingw32-make uses cmd.exe which
-## does not support GOOS=linux prefix syntax). On Linux/macOS, runs natively.
+## release: build release binaries using GoReleaser (local snapshot, no publish).
+## Produces binaries in dist/ for all 6 platform targets.
 release:
-ifeq ($(OS),Windows_NT)
-	powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
-else
-	./scripts/build-release.sh
-endif
+	goreleaser release --snapshot --clean
+
+## release-check: validate .goreleaser.yml configuration
+release-check:
+	goreleaser check
 
 checksum:
-	@cat dist/checksums.sha256
+	@cat dist/checksums.txt
 
 clean:
 	$(call RM_RF,dist)

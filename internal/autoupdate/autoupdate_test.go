@@ -233,7 +233,6 @@ func TestNewUpdater_MissingFields(t *testing.T) {
 // TestNewUpdater_Defaults verifies that NewUpdater fills in defaults.
 func TestNewUpdater_Defaults(t *testing.T) {
 	u, err := NewUpdater(Config{
-		Token:          "test-token",
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
 	})
@@ -245,22 +244,6 @@ func TestNewUpdater_Defaults(t *testing.T) {
 	}
 	if u.cfg.Interval != DefaultInterval {
 		t.Errorf("Interval = %v, want %v", u.cfg.Interval, DefaultInterval)
-	}
-}
-
-// TestGetConfig_TokenRedacted verifies token is masked in returned config.
-func TestGetConfig_TokenRedacted(t *testing.T) {
-	u, err := NewUpdater(Config{
-		Token:          "glpat-secret-token",
-		Repository:     "group/project",
-		CurrentVersion: "1.0.0",
-	})
-	if err != nil {
-		t.Fatalf("NewUpdater: %v", err)
-	}
-	c := u.GetConfig()
-	if c.Token != "***" {
-		t.Errorf("Token = %q, want '***'", c.Token)
 	}
 }
 
@@ -346,7 +329,6 @@ func TestStartPeriodicCheck_ContextCancellation(t *testing.T) {
 // TestNewUpdater_ModePreset verifies Mode is preserved when already set.
 func TestNewUpdater_ModePreset(t *testing.T) {
 	u, err := NewUpdater(Config{
-		Token:          "test-token",
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
 		Mode:           ModeCheck,
@@ -363,7 +345,6 @@ func TestNewUpdater_ModePreset(t *testing.T) {
 func TestNewUpdater_IntervalPreset(t *testing.T) {
 	custom := 5 * time.Minute
 	u, err := NewUpdater(Config{
-		Token:          "test-token",
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
 		Interval:       custom,
@@ -780,19 +761,6 @@ func TestExecSelf_ViaVariable(t *testing.T) {
 	err := execSelf()
 	if err == nil {
 		t.Fatal("expected error from stubbed execSelf")
-	}
-}
-
-// TestGetConfig_EmptyToken verifies that GetConfig does not redact an
-// empty token (only non-empty tokens are masked with '***').
-func TestGetConfig_EmptyToken(t *testing.T) {
-	u := NewUpdaterWithSource(Config{
-		Repository:     "a/b",
-		CurrentVersion: "1.0.0",
-	}, nil)
-	c := u.GetConfig()
-	if c.Token != "" {
-		t.Errorf("Token = %q, want empty string", c.Token)
 	}
 }
 

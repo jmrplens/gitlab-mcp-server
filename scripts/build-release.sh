@@ -10,21 +10,7 @@ CMD_PATH="./cmd/server"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
 
-# Load GITHUB_UPDATE_TOKEN from .env (or env var) and obfuscate it (XOR + hex encoding)
-AUTO_UPDATE_TOKEN="${GITHUB_UPDATE_TOKEN:-}"
-if [ -z "${AUTO_UPDATE_TOKEN}" ] && [ -f ".env" ]; then
-    AUTO_UPDATE_TOKEN="$(grep -E '^\s*GITHUB_UPDATE_TOKEN\s*=' .env | sed 's/^[^=]*=//' | tr -d '[:space:]')" || true
-fi
-
-OBFUSCATED_TOKEN=""
-OBFUSCATION_KEY=""
-if [ -n "${AUTO_UPDATE_TOKEN}" ]; then
-    OBFUSCATION_OUTPUT="$(scripts/obfuscate-token.sh "${AUTO_UPDATE_TOKEN}")"
-    OBFUSCATED_TOKEN="$(echo "${OBFUSCATION_OUTPUT}" | grep '^OBFUSCATED_TOKEN=' | cut -d= -f2)"
-    OBFUSCATION_KEY="$(echo "${OBFUSCATION_OUTPUT}" | grep '^OBFUSCATION_KEY=' | cut -d= -f2)"
-fi
-
-LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.obfuscatedAutoUpdateToken=${OBFUSCATED_TOKEN} -X main.autoUpdateTokenKey=${OBFUSCATION_KEY}"
+LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}"
 OUT_DIR="dist"
 
 # Build targets: GOOS GOARCH extension

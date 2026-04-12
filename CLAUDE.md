@@ -230,7 +230,6 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
-| `AUTO_UPDATE_TOKEN`      | No       | GitHub token for release API (optional for public repos) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium meta-tools: 14 additional domain tools (`false` default) |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 
