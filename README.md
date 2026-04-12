@@ -1,7 +1,5 @@
 # Gitlab MCP
 
-![gitlab-mcp-server banner](.github/assets/banner.svg)
-
 A **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools, resources, and prompts for AI assistants. Written in Go — single static binary per platform.
 
 ## Table of Contents
@@ -109,25 +107,7 @@ gitlab-mcp-server --setup -setup-mode cli   # Plain text prompts
   <img src=".github/assets/setup-wizard-web.png" alt="Setup Wizard — Web UI" width="500">
 </p>
 
-<details>
-<summary><strong>Terminal UI (Bubble Tea)</strong></summary>
-<br>
-<p align="center">
-  <img src=".github/assets/setup-wizard-tui-1.png" alt="TUI — Binary Installation" width="500">
-  <br><br>
-  <img src=".github/assets/setup-wizard-tui-2.png" alt="TUI — GitLab Configuration" width="500">
-  <br><br>
-  <img src=".github/assets/setup-wizard-tui-3.png" alt="TUI — Client Selection" width="500">
-</p>
-</details>
 
-<details>
-<summary><strong>Plain CLI</strong></summary>
-<br>
-<p align="center">
-  <img src=".github/assets/setup-wizard-cli.png" alt="CLI — Full Setup Flow" width="700">
-</p>
-</details>
 
 The wizard supports **10 MCP clients**: VS Code (GitHub Copilot), Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Copilot CLI, OpenCode, Crush, and Zed.
 
