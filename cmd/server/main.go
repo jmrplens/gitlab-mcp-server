@@ -1,0 +1,945 @@
+// Command server is the MCP server entry point for gitlab-mcp-server.
+// In stdio mode, configuration comes from environment variables (.env / exports).
+// In HTTP mode, configuration comes from CLI flags; no GITLAB_TOKEN is required
+// at startup — each client provides its own token per-request.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/completions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
+	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
+	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/wizard"
+)
+
+// version, commit, and obfuscated token vars are set at build time via -ldflags.
+// The VERSION file at the repo root is the single source of truth for version.
+// The auto-update token is XOR-obfuscated at build time to prevent trivial
+// extraction via `strings` or `hexdump` on the compiled binary.
+var (
+	version                   = "dev"
+	commit                    = "none"
+	obfuscatedAutoUpdateToken string
+	autoUpdateTokenKey        string
+)
+
+func init() {
+	// Copy ldflags strings from potentially read-only binary segments
+	// to writable heap memory so clearTokenGlobals can safely zero them.
+	obfuscatedAutoUpdateToken = heapCopy(obfuscatedAutoUpdateToken)
+	autoUpdateTokenKey = heapCopy(autoUpdateTokenKey)
+}
+
+// heapCopy returns a heap-allocated copy of s so the backing memory is writable.
+func heapCopy(s string) string {
+	if s == "" {
+		return ""
+	}
+	b := make([]byte, len(s))
+	copy(b, s)
+	return unsafe.String(unsafe.SliceData(b), len(b))
+}
+
+// Project metadata.
+const (
+	projectAuthor     = "Jose Manuel Requena Plens"
+	projectDepartment = ""
+	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
+)
+
+// httpConfig holds CLI-flag configuration for HTTP server mode.
+// When non-nil is passed to [runWithContext], the server starts in HTTP mode
+// without requiring a GITLAB_TOKEN — each client must provide its own token
+// via PRIVATE-TOKEN header or Authorization: Bearer.
+type httpConfig struct {
+	addr               string
+	gitlabURL          string
+	skipTLSVerify      bool
+	metaTools          bool
+	enterprise         bool
+	readOnly           bool
+	maxHTTPClients     int
+	sessionTimeout     time.Duration
+	autoUpdate         string
+	autoUpdateRepo     string
+	autoUpdateInterval time.Duration
+	revalidateInterval time.Duration
+}
+
+// main is an internal helper for the main package.
+func main() {
+	var showHelp bool
+	var showVersion bool
+	var shutdownPeers bool
+	var useHTTP bool
+	var forceSetup bool
+	var setupMode string
+	var hcfg httpConfig
+
+	flag.BoolVar(&showHelp, "h", false, "Show full help with flags, env vars, and examples")
+	flag.BoolVar(&shutdownPeers, "shutdown", false, "Terminate all running instances and exit")
+	flag.BoolVar(&forceSetup, "setup", false, "Run interactive setup wizard")
+	flag.StringVar(&setupMode, "setup-mode", "auto", "Setup UI mode: auto, web, tui, cli")
+	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
+	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
+	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
+	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "GitLab instance URL (required for HTTP mode)")
+	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
+	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
+	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Enable Enterprise/Premium meta-tools")
+	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
+	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum concurrent client sessions")
+	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle session timeout")
+	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
+	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
+	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
+	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
+	flag.Parse()
+
+	if showHelp {
+		printHelp()
+		return
+	}
+
+	if showVersion {
+		fmt.Printf("gitlab-mcp-server %s (commit: %s)\n", version, commit)
+		return
+	}
+
+	if shutdownPeers {
+		os.Exit(runShutdown())
+	}
+
+	if forceSetup || (!useHTTP && !showHelp && !showVersion && wizard.IsInteractiveTerminal()) {
+		if err := wizard.Run(version, wizard.UIMode(setupMode), os.Stdin, os.Stdout); err != nil {
+			slog.Error("setup wizard failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
+	})))
+
+	setupAutoUpdateRedaction("")
+
+	health.SetServerInfo(health.ServerInfo{
+		Version:    version,
+		Author:     projectAuthor,
+		Department: projectDepartment,
+		Repository: projectRepository,
+	})
+
+	serverupdate.SetServerInfo(serverupdate.ServerInfo{
+		Author:     projectAuthor,
+		Department: projectDepartment,
+		Repository: projectRepository,
+	})
+
+	var hcfgPtr *httpConfig
+	if useHTTP {
+		hcfgPtr = &hcfg
+	}
+
+	if err := run(hcfgPtr); err != nil {
+		slog.Error("server exited with error", "error", err)
+		os.Exit(1)
+	}
+}
+
+// printHelp displays comprehensive usage information including version, author,
+// all flags, environment variables, and JSON configuration examples.
+func printHelp() {
+	fmt.Printf(`gitlab-mcp-server — GitLab MCP Server
+==================================
+
+Version:      %s (commit: %s)
+Author:       %s
+Department:   %s
+Repository:   %s
+
+DESCRIPTION
+  A Model Context Protocol (MCP) server that exposes GitLab operations
+  as MCP tools, resources, and prompts for AI assistants.
+  Supports stdio (default) and HTTP transport modes.
+
+FLAGS
+  -h                        Show this help message
+  -version                  Print version and exit
+  -shutdown                 Terminate all running instances and exit
+  -setup                    Run interactive setup wizard
+  -setup-mode string        Setup UI mode: auto|web|tui|cli (default "auto")
+  -http                     Run in HTTP transport mode (default: stdio)
+  -http-addr string         HTTP listen address (default ":8080")
+  -gitlab-url string        GitLab instance URL (required for HTTP mode)
+  -skip-tls-verify          Skip TLS certificate verification (default false)
+  -meta-tools               Enable meta-tools for tool discovery (default true)
+  -enterprise               Enable Enterprise/Premium meta-tools (default false)
+  -read-only                Expose only read-only tools (default false)
+  -max-http-clients int     Maximum concurrent client sessions (default %d)
+  -session-timeout duration Idle session timeout (default %s)
+  -auto-update string       Auto-update mode: true|check|false (default "true")
+  -auto-update-repo string  GitLab project path for updates (default "%s")
+  -auto-update-interval dur How often to check for updates (default %s)
+
+ENVIRONMENT VARIABLES (stdio mode)
+  GITLAB_URL                GitLab instance URL (e.g. https://gitlab.example.com)
+  GITLAB_TOKEN              Personal Access Token (glpat-...)
+  GITLAB_USER               GitLab username (optional)
+  GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
+  META_TOOLS                Enable meta-tools: true/false (default true)
+  GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
+  GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
+  ISSUE_REPORTS             Enable issue reports on errors: true/false (default false)
+  AUTO_UPDATE               Auto-update mode: true/check/false (default true)
+  AUTO_UPDATE_REPO          GitLab project for updates (default %s)
+  AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
+  LOG_LEVEL                 Logging: debug/info/warn/error (default info)
+
+JSON CONFIGURATION EXAMPLES
+
+  VS Code / GitHub Copilot (.vscode/mcp.json):
+  {
+    "servers": {
+      "gitlab": {
+        "type": "stdio",
+        "command": "/usr/local/bin/gitlab-mcp-server",
+        "env": {
+          "GITLAB_URL": "https://gitlab.example.com",
+          "GITLAB_TOKEN": "glpat-your-token",
+          "GITLAB_SKIP_TLS_VERIFY": "true",
+          "META_TOOLS": "true"
+        }
+      }
+    }
+  }
+
+  OpenCode (MCP configuration):
+  {
+    "mcpServers": {
+      "gitlab": {
+        "command": "/usr/local/bin/gitlab-mcp-server",
+        "env": {
+          "GITLAB_URL": "https://gitlab.example.com",
+          "GITLAB_TOKEN": "glpat-your-token"
+        }
+      }
+    }
+  }
+
+  HTTP mode:
+  gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
+`, version, commit,
+		projectAuthor, projectDepartment, projectRepository,
+		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
+		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
+		config.DefaultAutoUpdateRepo)
+}
+
+// run starts the MCP server with OS signal handling for graceful shutdown.
+// Pass a non-nil [httpConfig] for HTTP mode; nil selects stdio mode.
+func run(hcfg *httpConfig) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runWithContext(ctx, hcfg)
+}
+
+// runWithContext dispatches to HTTP or stdio mode depending on hcfg.
+// A non-nil hcfg starts the HTTP server using CLI-flag configuration
+// (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
+// environment-variable configuration (GITLAB_TOKEN required).
+func runWithContext(ctx context.Context, hcfg *httpConfig) error {
+	if hcfg != nil {
+		return runHTTP(ctx, hcfg)
+	}
+	return runStdio(ctx)
+}
+
+// runHTTP validates HTTP flags, builds a [config.Config] from them, and
+// starts the HTTP server. No GITLAB_TOKEN is needed; each client provides
+// its own token per-request via PRIVATE-TOKEN or Authorization: Bearer headers.
+func runHTTP(ctx context.Context, hcfg *httpConfig) error {
+	if hcfg.gitlabURL == "" {
+		return errors.New("--gitlab-url is required for HTTP mode")
+	}
+
+	u, err := url.Parse(hcfg.gitlabURL)
+	if err != nil {
+		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("--gitlab-url must use http:// or https:// scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return errors.New("--gitlab-url must include a host")
+	}
+
+	cfg := &config.Config{
+		GitLabURL:          hcfg.gitlabURL,
+		SkipTLSVerify:      hcfg.skipTLSVerify,
+		MetaTools:          hcfg.metaTools,
+		Enterprise:         hcfg.enterprise,
+		ReadOnly:           hcfg.readOnly,
+		MaxHTTPClients:     hcfg.maxHTTPClients,
+		SessionTimeout:     hcfg.sessionTimeout,
+		RevalidateInterval: hcfg.revalidateInterval,
+		UploadMaxFileSize:  config.DefaultMaxFileSize,
+		AutoUpdate:         hcfg.autoUpdate,
+		AutoUpdateRepo:     hcfg.autoUpdateRepo,
+		AutoUpdateInterval: hcfg.autoUpdateInterval,
+	}
+
+	if cfg.SessionTimeout > config.MaxSessionTimeout {
+		return fmt.Errorf("--session-timeout %s exceeds maximum of %s", cfg.SessionTimeout, config.MaxSessionTimeout)
+	}
+	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
+		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
+	}
+
+	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+
+	// Clean up leftover .old binary from previous updates.
+	autoupdate.CleanupOldBinary()
+
+	// Resolve auto-update token once, then zero all source material.
+	autoUpdateToken := resolveAutoUpdateToken()
+	clearTokenGlobals()
+
+	startAutoUpdate(ctx, cfg, autoUpdateToken)
+
+	return serveHTTP(ctx, cfg, hcfg.addr)
+}
+
+// runStdio loads configuration from environment variables (GITLAB_TOKEN
+// required), validates GitLab connectivity, and starts the stdio server.
+func runStdio(ctx context.Context) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+
+	if cfg.IssueReports {
+		toolutil.EnableIssueReports(true)
+		slog.Info("issue reports enabled (ISSUE_REPORTS=true)")
+	}
+
+	// Clean up leftover .old binary from previous updates.
+	autoupdate.CleanupOldBinary()
+
+	// Resolve auto-update token once, then zero all source material.
+	autoUpdateToken := resolveAutoUpdateToken()
+	clearTokenGlobals()
+
+	// Pre-start update: download, replace, and re-exec on Unix.
+	preStartAutoUpdate(cfg, autoUpdateToken)
+
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		return fmt.Errorf("creating gitlab client: %w", err)
+	}
+
+	slog.Info("connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
+	gitlabVersion, err := client.Initialize(ctx)
+	if err != nil {
+		slog.Warn("gitlab connectivity check failed — server will start in degraded mode",
+			"url", cfg.GitLabURL, "error", err)
+		client.EnableLazyInit()
+	} else {
+		if cfg.GitLabUser == "" {
+			var username string
+			if username, err = client.CurrentUsername(ctx); err == nil {
+				cfg.GitLabUser = username
+			} else {
+				slog.Warn("could not auto-detect gitlab user", "error", err)
+			}
+		}
+		slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "user", cfg.GitLabUser, "version", gitlabVersion)
+	}
+
+	updater := newUpdaterForTools(cfg, autoUpdateToken)
+	server := createServer(client, cfg, updater)
+	return serveStdio(ctx, server)
+}
+
+// createServer builds a fully configured [*mcp.Server] with all tools,
+// resources, and prompts registered for the given GitLab client.
+// Used both by stdio mode (single call) and by the HTTP server pool factory.
+// If updater is non-nil, server update MCP tools are registered.
+func createServer(client *gitlabclient.Client, cfg *config.Config, updater *autoupdate.Updater) *mcp.Server {
+	if client == nil {
+		panic("createServer: client must not be nil")
+	}
+
+	completionHandler := completions.NewHandler(client)
+	rootsManager := roots.NewManager()
+
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:       "gitlab-mcp-server",
+		Title:      "GitLab MCP Server",
+		Version:    version,
+		WebsiteURL: projectRepository,
+		Icons:      toolutil.IconServer,
+	}, &mcp.ServerOptions{
+		Instructions: "gitlab-mcp-server is a GitLab MCP server providing tools for projects, merge requests, " +
+			"issues, branches, tags, releases, repositories, commits, files, groups, members, " +
+			"and uploads.\n\n" +
+			"PROJECT DISCOVERY — To find the project_id needed for most operations:\n" +
+			"1. Read the .git/config file from the workspace to find [remote \"origin\"] url = ...\n" +
+			"2. Call gitlab_resolve_project_from_remote with that URL to get the project_id.\n" +
+			"3. Alternatively, use gitlab_list_projects (owned=true) or gitlab_search_projects to find projects by name.\n" +
+			"4. You can also read the gitlab://workspace/roots resource to discover workspace paths.\n\n" +
+			"DEFAULT BRANCH — When generating URLs to repository files or branches:\n" +
+			"1. Call gitlab_project_get to retrieve the project metadata, which includes the default_branch field.\n" +
+			"2. ALWAYS use the returned default_branch value (e.g. develop, master) instead of assuming 'main'.\n" +
+			"3. Projects can use any branch as default, so NEVER hardcode 'main' in URLs.\n\n" +
+			"PACKAGE + RELEASE WORKFLOW — When uploading packages and linking them to releases:\n" +
+			"1. Preferred: Use gitlab_package_publish_and_link to upload a file and create the release link in one step.\n" +
+			"2. Alternative: Use gitlab_package_publish first, then use the 'url' field from its response as the URL for gitlab_release_link_create.\n" +
+			"3. NEVER construct package download URLs manually — always use the actual URL returned by the publish tool.\n" +
+			"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n" +
+			"RELEASE CREATION — When creating releases:\n" +
+			"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in gitlab_release_create and GitLab auto-creates the tag.\n" +
+			"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs — use those, never construct source archive URLs.\n" +
+			"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n" +
+			"ID vs IID — GitLab uses two identifiers for issues and merge requests:\n" +
+			"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most tools expect IID.\n" +
+			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
+		Logger: slog.Default(),
+		Capabilities: &mcp.ServerCapabilities{
+			Logging: &mcp.LoggingCapabilities{},
+		},
+		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+			return completionHandler.Complete(ctx, req)
+		},
+		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
+			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
+				slog.Warn("failed to refresh roots on change notification", "error", err)
+			}
+		},
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationServerRequest) {
+			slog.Debug("received progress notification from client",
+				"token", req.Params.ProgressToken,
+				"progress", req.Params.Progress,
+			)
+		},
+		KeepAlive: 30 * time.Second,
+	})
+
+	if cfg.MetaTools {
+		tools.RegisterAllMeta(server, client, cfg.Enterprise)
+		tools.RegisterMCPMeta(server, client, updater)
+	} else {
+		tools.RegisterAll(server, client)
+		serverupdate.RegisterTools(server, updater)
+	}
+
+	if cfg.ReadOnly {
+		removed := removeNonReadOnlyTools(server)
+		slog.Info("read-only mode: removed write tools", "removed", removed)
+	}
+
+	toolCount, err := countRegisteredTools(server)
+	if err != nil {
+		slog.Warn("failed to count registered tools", "error", err)
+	}
+	if cfg.MetaTools {
+		slog.Info("registered meta-tools", "tools", toolCount)
+	} else {
+		slog.Info("registered individual tools", "tools", toolCount)
+	}
+
+	resources.Register(server, client)
+	resources.RegisterWorkspaceRoots(server, rootsManager)
+	resources.RegisterWorkflowGuides(server)
+	prompts.Register(server, client)
+
+	return server
+}
+
+const httpShutdownTimeout = 5 * time.Second
+
+// serveHTTP starts the MCP server in HTTP mode using a [serverpool.ServerPool].
+// Each unique token in incoming requests gets its own [*mcp.Server] instance
+// backed by a dedicated GitLab client. Requests without a valid authentication
+// token are rejected. Sessions expire after cfg.SessionTimeout of inactivity.
+// The pool is bounded by cfg.MaxHTTPClients entries with LRU eviction.
+func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
+	slog.Info("starting MCP server in HTTP mode",
+		"addr", httpAddr,
+		"max_clients", cfg.MaxHTTPClients,
+		"session_timeout", cfg.SessionTimeout,
+		"version", version,
+		"commit", commit,
+	)
+
+	pool := serverpool.New(cfg, func(client *gitlabclient.Client) *mcp.Server {
+		return createServer(client, cfg, nil)
+	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
+		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
+	defer pool.Close()
+
+	pool.StartRevalidation(ctx)
+
+	authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				authLimiter.Cleanup()
+			}
+		}
+	}()
+
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		ip := clientIP(r)
+		if authLimiter.IsBlocked(ip) {
+			slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+			return nil
+		}
+
+		token := serverpool.ExtractToken(r)
+		if token == "" {
+			authLimiter.RecordFailure(ip)
+			slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+			return nil
+		}
+		server, err := pool.GetOrCreate(token)
+		if err != nil {
+			authLimiter.RecordFailure(ip)
+			slog.Error("failed to create server for token", "error", err)
+			return nil
+		}
+		return server
+	}, &mcp.StreamableHTTPOptions{
+		SessionTimeout: cfg.SessionTimeout,
+	})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", healthHandler)
+	mux.Handle("/", handler)
+
+	var rootHandler http.Handler = mux
+	rootHandler = securityHeadersMiddleware(rootHandler)
+	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
+		rootHandler = hostValidationMiddleware(hosts, rootHandler)
+	}
+
+	httpServer := &http.Server{
+		Addr:              httpAddr,
+		Handler:           rootHandler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case <-ctx.Done():
+		slog.Info("HTTP server shutdown requested")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("http server shutdown: %w", err)
+		}
+		return nil
+	case err := <-serverErr:
+		return fmt.Errorf("mcp server error (http): %w", err)
+	}
+}
+
+// healthResponse is the JSON body returned by the /health endpoint.
+type healthResponse struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
+// clientIP extracts the client IP address from an HTTP request.
+// Uses RemoteAddr only — does not trust X-Forwarded-For to prevent spoofing.
+func clientIP(r *http.Request) string {
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return host
+}
+
+// parseLogLevel converts a LOG_LEVEL string to slog.Level.
+// Accepts: debug, info, warn, error (case-insensitive). Defaults to info.
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+// allowedHosts computes the set of valid Host header values based on the
+// listen address. Returns nil when binding to all interfaces (0.0.0.0/::),
+// which skips host validation — suitable for reverse-proxy deployments.
+func allowedHosts(addr string) map[string]bool {
+	host, _, _ := net.SplitHostPort(addr)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return nil
+	}
+	return map[string]bool{
+		host:        true,
+		"localhost": true,
+		"127.0.0.1": true,
+		"::1":       true,
+	}
+}
+
+// securityHeadersMiddleware adds standard security headers to every HTTP response
+// and enforces a request body size limit.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	const maxBodySize = 10 << 20 // 10 MB
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// hostValidationMiddleware rejects requests whose Host header does not match
+// the allowed set, mitigating DNS rebinding attacks on local servers.
+func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		if !allowed[host] {
+			slog.Warn("request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// healthHandler responds with HTTP 200 and a JSON body for container healthchecks
+// and load-balancer probes. It does not require authentication.
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(healthResponse{
+		Status:  "ok",
+		Version: version,
+		Commit:  commit,
+	})
+}
+
+// serveStdio starts the MCP server using stdio transport.
+// It blocks until the context is canceled or an error occurs.
+func serveStdio(ctx context.Context, server *mcp.Server) error {
+	slog.Info("starting MCP server", "transport", "stdio", "version", version, "commit", commit)
+	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
+		return fmt.Errorf("mcp server error: %w", err)
+	}
+	return nil
+}
+
+// resolveAutoUpdateToken returns the token for auto-update API calls.
+// Priority: AUTO_UPDATE_TOKEN env var > build-time obfuscated token > empty (disabled).
+// The env var is cleared after reading to prevent leakage via /proc/PID/environ.
+func resolveAutoUpdateToken() string {
+	if t := os.Getenv("AUTO_UPDATE_TOKEN"); t != "" {
+		os.Unsetenv("AUTO_UPDATE_TOKEN")
+		return t
+	}
+	return autoupdate.DeobfuscateHex(obfuscatedAutoUpdateToken, autoUpdateTokenKey)
+}
+
+// clearTokenGlobals zeros the obfuscated token globals after deobfuscation
+// to prevent recovery from a process memory dump. The init() function
+// copies ldflags strings to writable heap memory, making unsafe zeroing safe.
+func clearTokenGlobals() {
+	zeroStringVar(&obfuscatedAutoUpdateToken)
+	zeroStringVar(&autoUpdateTokenKey)
+}
+
+// zeroStringVar zeroes the backing bytes of a string variable and sets it
+// to empty. Uses unsafe to reach the immutable backing array.
+func zeroStringVar(s *string) {
+	if *s == "" {
+		return
+	}
+	p := unsafe.StringData(*s)
+	clear(unsafe.Slice(p, len(*s)))
+	*s = ""
+}
+
+// preStartAutoUpdate runs the pre-start update check for stdio mode.
+// Downloads, replaces the binary, and re-execs on Unix.
+// Non-fatal: errors are logged and do not prevent startup.
+func preStartAutoUpdate(cfg *config.Config, token string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("autoupdate: pre-start auto-update panicked — continuing without update", "panic", r)
+		}
+	}()
+
+	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
+	if err != nil {
+		slog.Warn("autoupdate: invalid AUTO_UPDATE value, skipping", "error", err)
+		return
+	}
+	if mode == autoupdate.ModeDisabled {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.AutoUpdateTimeout)
+	defer cancel()
+
+	result := autoupdate.PreStartUpdate(ctx, autoupdate.Config{
+		Mode:           mode,
+		Token:          token,
+		Repository:     cfg.AutoUpdateRepo,
+		CurrentVersion: version,
+	})
+
+	if result.Updated && result.NewVersion != "" {
+		slog.Info("autoupdate: binary updated",
+			"new_version", result.NewVersion,
+			"exec_failed", result.ExecFailed,
+		)
+	}
+}
+
+// newUpdaterForTools creates an [*autoupdate.Updater] for the MCP server-update
+// tools. Returns nil (safe for RegisterTools) if auto-update is disabled or
+// initialisation fails.
+func newUpdaterForTools(cfg *config.Config, token string) *autoupdate.Updater {
+	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
+	if err != nil || mode == autoupdate.ModeDisabled {
+		return nil
+	}
+	u, err := autoupdate.NewUpdater(autoupdate.Config{
+		Mode:           mode,
+		Token:          token,
+		Repository:     cfg.AutoUpdateRepo,
+		CurrentVersion: version,
+	})
+	if err != nil {
+		slog.Warn("autoupdate: could not create updater for MCP tools", "error", err)
+		return nil
+	}
+	return u
+}
+
+// startAutoUpdate initializes background periodic update checks for HTTP mode.
+func startAutoUpdate(ctx context.Context, cfg *config.Config, token string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("autoupdate: background auto-update panicked — continuing without updates", "panic", r)
+		}
+	}()
+
+	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
+	if err != nil {
+		slog.Warn("autoupdate: invalid auto-update mode, skipping", "error", err)
+		return
+	}
+	if mode == autoupdate.ModeDisabled {
+		return
+	}
+
+	u, err := autoupdate.NewUpdater(autoupdate.Config{
+		Mode:           mode,
+		Token:          token,
+		Repository:     cfg.AutoUpdateRepo,
+		Interval:       cfg.AutoUpdateInterval,
+		CurrentVersion: version,
+	})
+	if err != nil {
+		slog.Warn("autoupdate: could not initialize periodic updater", "error", err)
+		return
+	}
+
+	u.StartPeriodicCheck(ctx)
+}
+
+// countRegisteredTools returns the number of tools registered on the server
+// by connecting an ephemeral in-memory client session and calling ListTools.
+func countRegisteredTools(server *mcp.Server) (int, error) {
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return 0, fmt.Errorf("server connect: %w", err)
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "counter", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return 0, fmt.Errorf("client connect: %w", err)
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("list tools: %w", err)
+	}
+	return len(result.Tools), nil
+}
+
+// removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory
+// session and removes those that do not have ReadOnlyHint set to true.
+// Returns the number of tools removed.
+func removeNonReadOnlyTools(server *mcp.Server) int {
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		slog.Error("removeNonReadOnlyTools: server connect failed", "error", err)
+		return 0
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "readonly-filter", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		slog.Error("removeNonReadOnlyTools: client connect failed", "error", err)
+		return 0
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		slog.Error("removeNonReadOnlyTools: list tools failed", "error", err)
+		return 0
+	}
+
+	var toRemove []string
+	for _, t := range result.Tools {
+		if t.Annotations == nil || !t.Annotations.ReadOnlyHint {
+			toRemove = append(toRemove, t.Name)
+		}
+	}
+
+	if len(toRemove) > 0 {
+		server.RemoveTools(toRemove...)
+	}
+	return len(toRemove)
+}
+
+// setupAutoUpdateRedaction wraps the current global slog handler with a
+// handler that redacts the auto-update GitLab URL (and its host) from log
+// entries whose message starts with "autoupdate:". Regular GitLab operation
+// logs are left untouched so the user's configured GITLAB_URL remains visible.
+func setupAutoUpdateRedaction(autoUpdateURL string) {
+	if autoUpdateURL == "" {
+		return
+	}
+	var redactStrings []string
+	redactStrings = append(redactStrings, autoUpdateURL)
+	if host := extractHost(autoUpdateURL); host != "" {
+		redactStrings = append(redactStrings, host)
+	}
+	slog.SetDefault(slog.New(&autoUpdateRedactHandler{
+		base:          slog.Default().Handler(),
+		redactStrings: redactStrings,
+	}))
+}
+
+// extractHost returns the host (with port) from a URL string, or empty on error.
+func extractHost(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return u.Host
+}
+
+// autoUpdateRedactHandler wraps a [slog.Handler] and replaces occurrences of
+// the auto-update GitLab URL (and host) with "[REDACTED]" in string attributes,
+// but only for log records whose message starts with "autoupdate:".
+type autoUpdateRedactHandler struct {
+	base          slog.Handler
+	redactStrings []string
+}
+
+func (h *autoUpdateRedactHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.base.Enabled(ctx, level)
+}
+
+func (h *autoUpdateRedactHandler) Handle(ctx context.Context, r slog.Record) error {
+	if !strings.HasPrefix(r.Message, "autoupdate:") {
+		return h.base.Handle(ctx, r)
+	}
+	nr := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
+	r.Attrs(func(a slog.Attr) bool {
+		nr.AddAttrs(h.redactAttr(a))
+		return true
+	})
+	return h.base.Handle(ctx, nr)
+}
+
+func (h *autoUpdateRedactHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &autoUpdateRedactHandler{base: h.base.WithAttrs(attrs), redactStrings: h.redactStrings}
+}
+
+func (h *autoUpdateRedactHandler) WithGroup(name string) slog.Handler {
+	return &autoUpdateRedactHandler{base: h.base.WithGroup(name), redactStrings: h.redactStrings}
+}
+
+func (h *autoUpdateRedactHandler) redactAttr(a slog.Attr) slog.Attr {
+	if a.Value.Kind() == slog.KindString {
+		s := a.Value.String()
+		for _, r := range h.redactStrings {
+			s = strings.ReplaceAll(s, r, "[REDACTED]")
+		}
+		a.Value = slog.StringValue(s)
+	}
+	return a
+}
