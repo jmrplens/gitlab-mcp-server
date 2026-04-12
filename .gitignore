@@ -73,4 +73,6 @@ Thumbs.db
 Desktop.ini
 
 # MkDocs build output
-site/
+site/*
+!site/docs/
+public/
