@@ -84,8 +84,8 @@ func TestStepGitLabConfig_ValidInput(t *testing.T) {
 	if cfg.GitLabToken != "glpat-xxxxxxxxxxxxxxxxxxxx" {
 		t.Errorf("GitLabToken = %q, want masked value", cfg.GitLabToken)
 	}
-	if !cfg.SkipTLSVerify {
-		t.Error("SkipTLSVerify should default to true")
+	if cfg.SkipTLSVerify {
+		t.Error("SkipTLSVerify should default to false")
 	}
 	if !cfg.MetaTools {
 		t.Error("MetaTools should default to true")

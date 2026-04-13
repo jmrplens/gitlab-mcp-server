@@ -149,7 +149,7 @@ func stepGitLabConfig(p *Prompter, w io.Writer, existing ServerConfig, hasExisti
 	fmt.Fprintln(w, "    Client config files will NOT contain your token.")
 	fmt.Fprintln(w)
 
-	skipTLS := true
+	skipTLS := false
 	if hasExisting {
 		skipTLS = existing.SkipTLSVerify
 	}
@@ -167,7 +167,7 @@ func stepGitLabConfig(p *Prompter, w io.Writer, existing ServerConfig, hasExisti
 func stepOptions(p *Prompter, w io.Writer, cfg *ServerConfig) error {
 	printSection(w, "Advanced Options")
 
-	skipTLS, err := p.AskYesNo("Skip TLS verification?", true)
+	skipTLS, err := p.AskYesNo("Skip TLS verification?", false)
 	if err != nil {
 		return err
 	}

@@ -102,7 +102,7 @@ func handleDefaults(version string) http.HandlerFunc {
 		existing, hasExisting := loadExistingConfigFn()
 
 		gitlabURL := DefaultGitLabURL
-		skipTLS := true
+		skipTLS := false
 		if hasExisting {
 			if existing.GitLabURL != "" {
 				gitlabURL = existing.GitLabURL

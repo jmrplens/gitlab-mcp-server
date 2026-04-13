@@ -139,7 +139,7 @@ func newTUIModel(version string, w io.Writer) tuiModel {
 	tokenInput.CharLimit = 256
 	tokenInput.SetWidth(60)
 
-	skipTLS := true
+	skipTLS := false
 	if hasExisting {
 		skipTLS = existing.SkipTLSVerify
 	}
