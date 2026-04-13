@@ -5,7 +5,6 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 > **Diátaxis type**: Tutorial
 > **Audience**: New users
 > **Time**: ~5 minutes
-
 > 📖 **User documentation**: See the [Getting Started](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) on the documentation site for a user-friendly version.
 
 ---

@@ -5,7 +5,6 @@ gitlab-mcp-server is configured through environment variables. A `.env` file in 
 > **Diataxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: A running GitLab instance with a Personal Access Token
-
 > 📖 **User documentation**: See the [Configuration](https://jmrplens.github.io/gitlab-mcp-server/configuration/) on the documentation site for a user-friendly version.
 
 ---

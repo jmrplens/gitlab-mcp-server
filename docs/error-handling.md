@@ -5,7 +5,6 @@ This document describes the error handling architecture in gitlab-mcp-server. Al
 > **Diátaxis type**: Explanation
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go programming, understanding of MCP tool handlers
-
 > 📖 **User documentation**: See the [Error Handling](https://jmrplens.github.io/gitlab-mcp-server/operations/error-handling/) on the documentation site for a user-friendly version.
 
 ---

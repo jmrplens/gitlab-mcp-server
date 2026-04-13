@@ -5,7 +5,6 @@ This document describes the system architecture of gitlab-mcp-server, a Model Co
 > **Diataxis type**: Explanation
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Familiarity with Go, REST APIs, and basic MCP concepts
-
 > 📖 **User documentation**: See the [Architecture](https://jmrplens.github.io/gitlab-mcp-server/architecture/) on the documentation site for a user-friendly version.
 
 ---

@@ -5,7 +5,6 @@ gitlab-mcp-server can automatically detect, download, and apply new releases fro
 > **Diátaxis type**: Explanation
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: gitlab-mcp-server installed, GitHub repository with releases
-
 > 📖 **User documentation**: See the [Auto-update](https://jmrplens.github.io/gitlab-mcp-server/operations/auto-update/) on the documentation site for a user-friendly version.
 
 ---

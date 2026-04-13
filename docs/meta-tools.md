@@ -9,7 +9,6 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 In meta-tool mode (`META_TOOLS=true`, default), the server registers **40 base tools**: 23 inline + 5 delegated + 11 sampling + 1 standalone. With `GITLAB_ENTERPRISE=true`, 19 additional enterprise inline meta-tools are registered for a total of **59 tools**.
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
-
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
 
 ## How Meta-Tools Work
