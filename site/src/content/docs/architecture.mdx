@@ -28,11 +28,11 @@ The server is a single static binary that:
 3. **Executes** the API calls against your GitLab instance
 4. **Returns** results in dual format: structured JSON for the AI to reason about, and formatted Markdown for display to the user
 
-## Transport Modes
+## Transport modes
 
 The server supports two transport modes depending on your deployment needs.
 
-### Stdio Mode (Default)
+### Stdio mode (default)
 
 The standard mode for single-user setups. The AI client spawns the server as a child process and communicates via stdin/stdout using JSON-RPC.
 
@@ -58,7 +58,7 @@ sequenceDiagram
 - Maximum security — token never leaves the local machine
 - Zero network exposure
 
-### HTTP Mode (Multi-User)
+### HTTP mode (multi-user)
 
 For team deployments where a single server instance serves multiple users. Each user authenticates with their own GitLab token.
 
@@ -100,9 +100,9 @@ Start HTTP mode with:
 
 See [HTTP Server Mode](/en/guides/http-mode/) for detailed configuration.
 
-## Tool Architecture
+## Tool architecture
 
-### Meta-Tool Mode (Default)
+### Meta-tool mode (default)
 
 With `META_TOOLS=true` (default), the server exposes **40 domain-level meta-tools** instead of 1000+ individual tools. Each meta-tool groups related operations:
 
@@ -134,15 +134,15 @@ The AI sends an `action` parameter to select the operation:
 
 This reduces token usage and improves AI tool selection accuracy compared to exposing each operation as a separate tool.
 
-### Individual Tool Mode
+### Individual tool mode
 
 With `META_TOOLS=false`, all 1000+ individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`). This may be useful for testing but is not recommended for production.
 
-## Optional Components
+## Optional components
 
 The server includes several optional capabilities that can be enabled or disabled:
 
-### Analysis Tools (MCP Sampling)
+### Analysis tools (MCP sampling)
 
 11 AI-powered analysis tools that use MCP sampling to invoke the AI model for reasoning:
 
@@ -154,7 +154,7 @@ The server includes several optional capabilities that can be enabled or disable
 
 These require the AI client to support MCP sampling capability.
 
-### Elicitation (Interactive Wizards)
+### Elicitation (interactive wizards)
 
 Interactive creation flows that collect user input step-by-step:
 
@@ -183,7 +183,7 @@ Requires the AI client to support MCP elicitation capability.
 - Release note generation
 - Audit and compliance reports
 
-## Tool Output Format
+## Tool output format
 
 Every tool returns a dual-format response:
 
@@ -208,7 +208,7 @@ Every tool returns a dual-format response:
 
 This dual format ensures the AI can make follow-up decisions while presenting clean output to the user.
 
-## Security Model
+## Security model
 
 - **No server-side token storage** — In stdio mode, the token exists only in the process environment
 - **Per-session isolation** — In HTTP mode, each user's session is isolated in the server pool

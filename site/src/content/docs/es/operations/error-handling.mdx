@@ -9,7 +9,7 @@ Para la referencia técnica completa, consulta [`docs/error-handling.md`](https:
 
 GitLab MCP Server proporciona un manejo de errores estructurado que clasifica los errores, extrae detalles accionables de las respuestas de la API de GitLab y sugiere acciones correctivas al asistente de IA.
 
-## Clasificación de Errores
+## Clasificación de errores
 
 Cada error de la API de GitLab se clasifica por código de estado HTTP en un mensaje accionable:
 
@@ -35,7 +35,7 @@ Los errores a nivel de red también se clasifican:
 | Timeout            | La solicitud a GitLab excedió el tiempo de espera    |
 | TLS/SSL            | El handshake TLS/SSL falló                           |
 
-## Funciones de Envoltura de Errores
+## Funciones de envoltura de errores
 
 El servidor usa tres funciones de envoltura de errores, elegidas según el tipo de operación:
 
@@ -66,7 +66,7 @@ branchProtect: conflict — Protected branch rule already exists.
 Suggestion: use gitlab_protected_branch_get to view current rules
 ```
 
-### Árbol de Decisión
+### Árbol de decisión
 
 | Escenario                                       | Función              |
 | ----------------------------------------------- | -------------------- |
@@ -74,7 +74,7 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Operación de escritura (create, update, delete) | `WrapErrWithMessage` |
 | Error específico con corrección conocida        | `WrapErrWithHint`    |
 
-## Sugerencias de Validación
+## Sugerencias de validación
 
 Para **errores de validación 422**, el servidor enriquece automáticamente el error con guía basada en coincidencia de patrones. Se reconocen más de 15 patrones comunes, incluyendo:
 
@@ -86,7 +86,7 @@ Para **errores de validación 422**, el servidor enriquece automáticamente el e
 
 Estas sugerencias ayudan al asistente de IA a corregir su solicitud sin llamadas adicionales a la API.
 
-## Formato de Respuesta de Error
+## Formato de respuesta de error
 
 Cuando una herramienta encuentra un error, la respuesta se formatea como un bloque Markdown con campos de diagnóstico estructurados:
 
@@ -110,7 +110,7 @@ La respuesta estructurada incluye:
 | **Request ID** | `X-Request-Id` de GitLab para tickets de soporte |
 | **Suggestion** | Sugerencia accionable (cuando está disponible)   |
 
-## Errores Transitorios vs Permanentes
+## Errores transitorios vs permanentes
 
 El servidor clasifica los errores como **transitorios** (reintentables) o **permanentes**:
 
@@ -119,16 +119,16 @@ El servidor clasifica los errores como **transitorios** (reintentables) o **perm
 | Transitorio | 429, 5xx, timeouts, conexión rechazada | Seguro reintentar después de una espera             |
 | Permanente  | 4xx (excepto 429)                      | No reintentar — corregir la entrada o configuración |
 
-## Ejemplos de Escenarios de Error
+## Ejemplos de escenarios de error
 
-### Token Inválido
+### Token inválido
 
 ```
 ❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
-### Permiso Denegado
+### Permiso denegado
 
 ```
 ❌ create_issue: access denied — your token lacks the required permissions
@@ -136,21 +136,21 @@ Detail: 403 Forbidden
 💡 Ensure the token has api scope and you have Developer+ access to the project
 ```
 
-### Conflicto de Recurso
+### Conflicto de recurso
 
 ```
 ❌ branchProtect: conflict — Protected branch rule already exists
 💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
 ```
 
-### Error de Validación
+### Error de validación
 
 ```
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
 
-## Reportes Automáticos de Incidencias
+## Reportes automáticos de incidencias
 
 :::note
 La generación de reportes de incidencias está deshabilitada por defecto. Establece `ISSUE_REPORTS=true` para habilitarla.

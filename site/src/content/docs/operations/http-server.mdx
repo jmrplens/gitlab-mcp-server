@@ -11,7 +11,7 @@ For the complete technical reference, see [`docs/http-server-mode.md`](https://g
 
 By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns its own server process. **HTTP mode** is an alternative where a single server process serves multiple clients over the network, each authenticating with their own GitLab token.
 
-## When to Use HTTP Mode
+## When to use HTTP mode
 
 | Scenario                          | Recommended Mode |
 | --------------------------------- | ---------------- |
@@ -21,7 +21,7 @@ By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns i
 | CI/CD integration with MCP        | **HTTP**         |
 | Testing with curl or HTTP clients | **HTTP**         |
 
-## Starting the Server
+## Starting the server
 
 ```bash
 gitlab-mcp-server --http --gitlab-url=https://your-gitlab.example.com
@@ -29,7 +29,7 @@ gitlab-mcp-server --http --gitlab-url=https://your-gitlab.example.com
 
 The server starts listening on port 8080 by default. The MCP endpoint is available at `/mcp`.
 
-## CLI Flags
+## CLI flags
 
 | Flag                     | Default                      | Description                                             |
 | ------------------------ | ---------------------------- | ------------------------------------------------------- |
@@ -54,13 +54,13 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 
 Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers:
 
-### PRIVATE-TOKEN Header (Recommended)
+### Private-token header (recommended)
 
 ```
 PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-### Authorization Bearer Header
+### Authorization Bearer header
 
 ```
 Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
@@ -68,9 +68,9 @@ Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 
 If both headers are present, `PRIVATE-TOKEN` takes precedence. Requests without a valid token are rejected.
 
-## Session Management
+## Session management
 
-### Server Pool Architecture
+### Server pool architecture
 
 The core of HTTP mode is a **bounded LRU pool** of MCP server instances, keyed by the SHA-256 hash of each client's token.
 
@@ -98,14 +98,14 @@ graph TD
 - Raw tokens are **never stored** — only SHA-256 hashes are kept in memory
 - When the pool reaches `--max-http-clients`, the least recently used entry is evicted
 
-### Session Lifecycle
+### Session lifecycle
 
 1. **First request**: Token is extracted, hashed, and a new MCP server + GitLab client is created
 2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
 4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
 
-## Client Configuration
+## Client configuration
 
 <Tabs>
 <TabItem label="VS Code / Copilot">
@@ -155,7 +155,7 @@ curl -X POST http://localhost:8080/mcp \
 </TabItem>
 </Tabs>
 
-## Docker Compose Deployment
+## Docker Compose deployment
 
 ```yaml
 services:
@@ -178,7 +178,7 @@ Start the service:
 docker compose up -d
 ```
 
-## Health Check
+## Health check
 
 You can verify the server is running by sending a `tools/list` request:
 

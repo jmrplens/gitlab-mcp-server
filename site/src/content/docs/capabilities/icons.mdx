@@ -7,18 +7,18 @@ import { Badge } from "@astrojs/starlight/components";
 
 GitLab MCP Server assigns **44 unique SVG icons** to all 1004 individual tools, 40/59 meta-tools, 24 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain.
 
-## Design Principles
+## Design principles
 
 - **16×16 viewport** — minimal size optimized for tool lists and sidebars
 - **`currentColor` fill** — icons adapt to light and dark themes automatically
 - **Inline data URIs** — embedded in the binary, zero network requests
 - **One icon per domain** — related tools share the same icon for visual grouping
 
-## Icon Gallery
+## Icon gallery
 
 All icons at 32px display size, grouped by domain category. The `Name` column shows the Go variable used in code.
 
-### Source Control
+### Source control
 
 <table>
 	<thead>
@@ -102,7 +102,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Issues & Planning
+### Issues & planning
 
 <table>
 	<thead>
@@ -214,7 +214,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Merge Requests
+### Merge requests
 
 <table>
 	<thead>
@@ -343,7 +343,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Environments & Deployments
+### Environments & deployments
 
 <table>
 	<thead>
@@ -399,7 +399,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Projects & Groups
+### Projects & groups
 
 <table>
 	<thead>
@@ -458,7 +458,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Packages & Registry
+### Packages & registry
 
 <table>
 	<thead>
@@ -500,7 +500,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Search & Analytics
+### Search & analytics
 
 <table>
 	<thead>
@@ -545,7 +545,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Security & Access
+### Security & access
 
 <table>
 	<thead>
@@ -601,7 +601,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Documentation & Content
+### Documentation & content
 
 <table>
 	<thead>
@@ -643,7 +643,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Configuration & Administration
+### Configuration & administration
 
 <table>
 	<thead>
@@ -705,7 +705,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Notifications & Events
+### Notifications & events
 
 <table>
 	<thead>
@@ -761,7 +761,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-### Integrations & Operations
+### Integrations & operations
 
 <table>
 	<thead>
@@ -834,7 +834,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 	</tbody>
 </table>
 
-## Client Compatibility
+## Client compatibility
 
 | MCP Client               | SVG Icons  | Notes                      |
 | ------------------------ | ---------- | -------------------------- |
@@ -847,7 +847,7 @@ All icons at 32px display size, grouped by domain category. The `Name` column sh
 Icons are optional metadata. Clients that do not support icon rendering simply ignore them — tool functionality is not affected.
 :::
 
-## Technical Details
+## Technical details
 
 - **Source**: [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)
 - **Encoding**: `data:image/svg+xml,<svg ...>...</svg>` (inline data URIs)

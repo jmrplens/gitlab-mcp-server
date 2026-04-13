@@ -11,7 +11,7 @@ MCP resources provide **read-only context data** that clients can request at any
 
 The server exposes **24 resources** across several categories:
 
-### User Information
+### User information
 
 | Resource                    | Description                        |
 | --------------------------- | ---------------------------------- |
@@ -19,7 +19,7 @@ The server exposes **24 resources** across several categories:
 | `gitlab://user/status`      | Current user's status message      |
 | `gitlab://user/preferences` | User preferences and settings      |
 
-### Project Information
+### Project information
 
 | Resource                               | Description                                                     |
 | -------------------------------------- | --------------------------------------------------------------- |
@@ -33,7 +33,7 @@ The server exposes **24 resources** across several categories:
 | `gitlab://project/{id}/pipelines`      | Recent pipeline status                                          |
 | `gitlab://project/{id}/variables`      | CI/CD variable names (values hidden)                            |
 
-### Server & Configuration
+### Server & configuration
 
 | Resource                   | Description                                         |
 | -------------------------- | --------------------------------------------------- |
@@ -42,7 +42,7 @@ The server exposes **24 resources** across several categories:
 | `gitlab://server/metadata` | Server metadata (edition, enterprise flag)          |
 | `gitlab://config/current`  | Current MCP server configuration (secrets redacted) |
 
-### Tool Discovery
+### Tool discovery
 
 | Resource                    | Description                            |
 | --------------------------- | -------------------------------------- |
@@ -54,7 +54,7 @@ The server exposes **24 resources** across several categories:
 Resource URIs with `{id}` are **resource templates**. The client substitutes the actual project ID or path when requesting the resource.
 :::
 
-### Accessing Resources
+### Accessing resources
 
 MCP clients can request resources at any time using the `resources/read` method:
 
@@ -75,7 +75,7 @@ MCP prompts are **reusable templates** that guide AI assistants through common w
 
 The server provides **38 prompt templates** organized into categories:
 
-### Core Prompts (12)
+### Core prompts (12)
 
 General-purpose prompts for everyday GitLab workflows.
 
@@ -94,7 +94,7 @@ General-purpose prompts for everyday GitLab workflows.
 | `security-audit`        | Security audit checklist                                 |
 | `onboarding-developer`  | New developer onboarding guide                           |
 
-### Cross-Project Prompts (4)
+### Cross-project prompts (4)
 
 Prompts that work across multiple projects.
 
@@ -105,7 +105,7 @@ Prompts that work across multiple projects.
 | `cross-project-issues`       | Track issues spanning projects        |
 | `cross-project-pipelines`    | Monitor pipelines across projects     |
 
-### Team Prompts (4)
+### Team prompts (4)
 
 Team management and collaboration templates.
 
@@ -116,7 +116,7 @@ Team management and collaboration templates.
 | `team-review-load` | Balance code review assignments           |
 | `team-standup`     | Generate standup meeting summaries        |
 
-### Project Report Prompts (5)
+### Project report prompts (5)
 
 Project status and reporting templates.
 
@@ -128,7 +128,7 @@ Project status and reporting templates.
 | `project-quality-report`    | Code quality and test coverage trends |
 | `project-compliance-report` | Compliance status overview            |
 
-### Analytics Prompts (4)
+### Analytics prompts (4)
 
 Data-driven analysis templates.
 
@@ -139,7 +139,7 @@ Data-driven analysis templates.
 | `issue-analytics`         | Issue resolution metrics and trends        |
 | `deployment-analytics`    | Deployment frequency and stability metrics |
 
-### Milestone & Label Prompts (4)
+### Milestone & label prompts (4)
 
 Milestone and label management templates.
 
@@ -150,7 +150,7 @@ Milestone and label management templates.
 | `label-cleanup`             | Identify unused or duplicate labels |
 | `label-strategy`            | Label taxonomy design guide         |
 
-### Audit Prompts (5)
+### Audit prompts (5)
 
 Governance and auditing templates.
 
@@ -162,7 +162,7 @@ Governance and auditing templates.
 | `secret-detection-audit`     | Check for exposed secrets             |
 | `compliance-framework-audit` | Compliance framework verification     |
 
-### Using Prompts
+### Using prompts
 
 Prompts are requested via the `prompts/get` MCP method:
 

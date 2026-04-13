@@ -5,7 +5,7 @@ description: AI-powered analysis using the client's LLM
 
 Sampling allows the server to ask the MCP client's LLM to analyze GitLab data — like getting a summary of a 50-comment merge request or diagnosing why a pipeline failed, without reading through hundreds of log lines.
 
-## How It Works
+## How it works
 
 Instead of returning raw data for the AI to process, the server collects GitLab data, sends it to the client's LLM via the `sampling/createMessage` protocol method, and returns the analysis result.
 
@@ -27,18 +27,18 @@ sequenceDiagram
     AI->>U: Presents concise summary
 ```
 
-### The Four Phases
+### The four phases
 
 1. **Data collection** — Server fetches relevant data from GitLab APIs
 2. **Prompt construction** — Data is formatted with a task-specific analysis prompt
 3. **LLM analysis** — The prompt is sent to the client's LLM via sampling
 4. **Result delivery** — The analysis is returned as the tool result
 
-## Analysis Tools
+## Analysis tools
 
 11 sampling-powered tools are available:
 
-### Code Review
+### Code review
 
 | Tool                         | Description                                                            |
 | ---------------------------- | ---------------------------------------------------------------------- |
@@ -46,14 +46,14 @@ sequenceDiagram
 | `gitlab_review_mr_security`  | Security-focused review of merge request changes                       |
 | `gitlab_summarize_mr_review` | Summarize merge request discussions and review feedback                |
 
-### Issue Analysis
+### Issue analysis
 
 | Tool                         | Description                                                  |
 | ---------------------------- | ------------------------------------------------------------ |
 | `gitlab_summarize_issue`     | Concise summary of an issue with full context and discussion |
 | `gitlab_analyze_issue_scope` | Estimate complexity and scope of an issue                    |
 
-### CI/CD Analysis
+### CI/CD analysis
 
 | Tool                                | Description                                             |
 | ----------------------------------- | ------------------------------------------------------- |
@@ -61,7 +61,7 @@ sequenceDiagram
 | `gitlab_analyze_ci_configuration`   | Review `.gitlab-ci.yml` for best practices and issues   |
 | `gitlab_analyze_deployment_history` | Analyze deployment patterns and reliability             |
 
-### Project Health
+### Project health
 
 | Tool                               | Description                                       |
 | ---------------------------------- | ------------------------------------------------- |
@@ -69,7 +69,7 @@ sequenceDiagram
 | `gitlab_generate_milestone_report` | Sprint/milestone progress report with metrics     |
 | `gitlab_find_technical_debt`       | Identify technical debt indicators in the project |
 
-## Security: Credential Stripping
+## Security: Credential stripping
 
 Before sending any data to the LLM, the server strips sensitive credentials using regex pattern matching:
 
@@ -83,7 +83,7 @@ Before sending any data to the LLM, the server strips sensitive credentials usin
 
 All matched patterns are replaced with `[REDACTED]` before the data reaches the LLM.
 
-### Additional Security Layers
+### Additional security layers
 
 | Layer                           | Protection                                               |
 | ------------------------------- | -------------------------------------------------------- |

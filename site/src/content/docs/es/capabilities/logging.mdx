@@ -5,7 +5,7 @@ description: Registro estructurado mediante el protocolo MCP
 
 GitLab MCP Server utiliza **registro dual** — los mensajes de log se envían tanto a stderr (para captura en terminal/archivo) como al cliente MCP a través de la capacidad de logging del protocolo.
 
-## Salida Dual
+## Salida dual
 
 | Destino           | Formato                 | Propósito                                                                         |
 | ----------------- | ----------------------- | --------------------------------------------------------------------------------- |
@@ -14,7 +14,7 @@ GitLab MCP Server utiliza **registro dual** — los mensajes de log se envían t
 
 Esto garantiza que los logs siempre sean visibles independientemente del soporte de logging del cliente.
 
-## Niveles de Log
+## Niveles de log
 
 El servidor soporta cuatro niveles de log:
 
@@ -39,7 +39,7 @@ LOG_LEVEL=info ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.co
 
 El nivel predeterminado es `info`.
 
-## Mensajes de Log MCP
+## Mensajes de log MCP
 
 Cuando el cliente MCP soporta logging, el servidor envía notificaciones de log estructuradas:
 
@@ -62,7 +62,7 @@ Cuando el cliente MCP soporta logging, el servidor envía notificaciones de log 
 }
 ```
 
-### Reglas de Seguridad
+### Reglas de seguridad
 
 Los mensajes de log siguen reglas estrictas de seguridad:
 

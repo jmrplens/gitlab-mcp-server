@@ -9,7 +9,7 @@ For the complete technical reference, see [`docs/security.md`](https://github.co
 
 GitLab MCP Server is designed with a security-first architecture. This page covers the security model, credential handling, and best practices for safe deployment.
 
-## Security Model Overview
+## Security model overview
 
 ```mermaid
 flowchart TB
@@ -27,16 +27,16 @@ flowchart TB
     Server <-->|"HTTPS"| GitLab
 ```
 
-### Key Principles
+### Key principles
 
 - **Token isolation**: In stdio mode, the GitLab token never leaves the local server process. It is loaded from the environment and used exclusively for GitLab API calls.
 - **No token forwarding**: The token is never sent to the MCP client, never included in tool outputs, and never passed through MCP sampling requests.
 - **Process-level isolation**: The server runs as a local process communicating via stdin/stdout. No network ports are opened in stdio mode.
 - **Minimal privilege**: The server only needs a GitLab token with scopes required for the operations you intend to use.
 
-## Token Management
+## Token management
 
-### Recommended: Environment File
+### Recommended: Environment file
 
 Store your token in a `.env` file with restricted permissions:
 
@@ -53,7 +53,7 @@ chmod 600 .env
 Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
 :::
 
-### VS Code Input Variables
+### VS Code input variables
 
 For VS Code users, you can use input variables to avoid storing tokens in plain text:
 
@@ -73,7 +73,7 @@ For VS Code users, you can use input variables to avoid storing tokens in plain 
 
 The token is prompted at startup and kept only in memory.
 
-### Token Scopes
+### Token scopes
 
 Use the minimum required scopes for your workflow:
 
@@ -88,11 +88,11 @@ Use the minimum required scopes for your workflow:
 If you only need read operations, use `read_api` scope and enable `GITLAB_READ_ONLY=true` for defense-in-depth.
 :::
 
-## Credential Stripping in Sampling
+## Credential stripping in sampling
 
 When analysis tools use MCP sampling to send data to the client's LLM, the server applies **automatic credential stripping** before any data leaves the process. This is a critical defense-in-depth measure that prevents accidental token leakage through LLM context.
 
-### Stripped Patterns
+### Stripped patterns
 
 The credential stripping engine uses regex patterns to detect and remove:
 
@@ -112,7 +112,7 @@ The credential stripping engine uses regex patterns to detect and remove:
 Credential stripping is applied to all data sent through MCP sampling, including job logs, file contents, issue descriptions, and MR diffs.
 :::
 
-## TLS Verification
+## TLS verification
 
 By default, the server verifies TLS certificates when connecting to GitLab. For self-signed certificates:
 
@@ -124,7 +124,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 Disabling TLS verification removes protection against man-in-the-middle attacks. Only use this for development environments with self-signed certificates. Never disable TLS verification in production.
 :::
 
-## Read-Only Mode
+## Read-only mode
 
 Enable read-only mode to prevent any mutating operations:
 
@@ -144,11 +144,11 @@ This is useful for:
 - Demo environments
 - Environments where the token has write access but you want to restrict the server
 
-## HTTP Mode Security
+## HTTP mode security
 
 When running in HTTP mode (`--http`), additional security considerations apply:
 
-### Per-Request Authentication
+### Per-request authentication
 
 In HTTP mode, GitLab tokens are provided per-request via headers, not environment variables. Each user session uses its own token:
 
@@ -156,7 +156,7 @@ In HTTP mode, GitLab tokens are provided per-request via headers, not environmen
 Authorization: Bearer <gitlab-personal-access-token>
 ```
 
-### Session Isolation
+### Session isolation
 
 The server maintains a **bounded LRU pool** of client sessions:
 
@@ -165,16 +165,16 @@ The server maintains a **bounded LRU pool** of client sessions:
 - Idle sessions expire after `--session-timeout` (default: 30 minutes)
 - Maximum concurrent sessions controlled by `--max-http-clients` (default: 100)
 
-### HTTP Mode Recommendations
+### HTTP mode recommendations
 
 - Deploy behind a reverse proxy with TLS termination
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
 
-## Best Practices Checklist
+## Best practices checklist
 
-### Token Security
+### Token security
 
 - ☐ Use a dedicated GitLab token with minimum required scopes
 - ☐ Store tokens in `.env` files with `chmod 600` permissions
@@ -182,14 +182,14 @@ The server maintains a **bounded LRU pool** of client sessions:
 - ☐ Rotate tokens periodically
 - ☐ Use `read_api` scope when write access is not needed
 
-### Server Configuration
+### Server configuration
 
 - ☐ Enable `GITLAB_READ_ONLY=true` for read-only workflows
 - ☐ Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
 - ☐ Use stdio transport when possible (no network exposure)
 - ☐ Keep the server binary updated (`AUTO_UPDATE=true`)
 
-### HTTP Mode
+### HTTP mode
 
 - ☐ Deploy behind TLS-terminating reverse proxy
 - ☐ Configure appropriate `--session-timeout` and `--max-http-clients`

@@ -5,13 +5,13 @@ description: Complete guide to GitLab MCP Server tools and meta-tools
 
 GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. The server offers two operating modes to balance capability with token efficiency.
 
-## Operating Modes
+## Operating modes
 
-### Individual Mode
+### Individual mode
 
 In individual mode, the server registers **1004 individual tools**, each mapping to a single GitLab API operation. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
 
-### Meta-tool Mode (Default)
+### Meta-tool mode (default)
 
 In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **40 base meta-tools** (or **59 with enterprise features**), dramatically improving LLM token efficiency while preserving full functionality.
 
@@ -28,16 +28,16 @@ In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into 
 }
 ```
 
-## Tool Naming Convention
+## Tool naming convention
 
 All tools follow a consistent naming pattern:
 
 - **Individual tools**: `gitlab_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
 - **Meta-tools**: `gitlab_{domain}` (e.g., `gitlab_issue`, `gitlab_project`)
 
-## Base Meta-tools (40)
+## Base meta-tools (40)
 
-### Project Management
+### Project management
 
 | Meta-tool           | Description                    | Key Actions                                                                         |
 | ------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
@@ -49,7 +49,7 @@ All tools follow a consistent naming pattern:
 | `gitlab_issue_note` | Issue comments                 | list, get, create, update, delete                                                   |
 | `gitlab_todo`       | Todo/task management           | list, mark_done, mark_all_done                                                      |
 
-### Code & Repository
+### Code & repository
 
 | Meta-tool                 | Description                 | Key Actions                                                                 |
 | ------------------------- | --------------------------- | --------------------------------------------------------------------------- |
@@ -92,7 +92,7 @@ All tools follow a consistent naming pattern:
 | `gitlab_release_link` | Release asset links       | list, get, create, update, delete                             |
 | `gitlab_upload`       | File uploads              | upload                                                        |
 
-### Administration & Utilities
+### Administration & utilities
 
 | Meta-tool                | Description                      | Key Actions    |
 | ------------------------ | -------------------------------- | -------------- |
@@ -100,7 +100,7 @@ All tools follow a consistent naming pattern:
 | `gitlab_server_update`   | Self-update management           | check, apply   |
 | `gitlab_resolve_project` | Git remote to project resolution | resolve        |
 
-### Sampling & Analysis
+### Sampling & analysis
 
 | Meta-tool                           | Description                           |
 | ----------------------------------- | ------------------------------------- |
@@ -116,7 +116,7 @@ All tools follow a consistent naming pattern:
 | `gitlab_find_technical_debt`        | Technical debt identification         |
 | `gitlab_analyze_deployment_history` | Deployment pattern analysis           |
 
-## Enterprise-Only Tools (19)
+## Enterprise-only tools (19)
 
 When `GITLAB_ENTERPRISE=true`, the server registers 19 additional meta-tools for GitLab Premium and Ultimate features:
 
@@ -126,7 +126,7 @@ When `GITLAB_ENTERPRISE=true`, the server registers 19 additional meta-tools for
 Enterprise tools require a GitLab Premium or Ultimate license on your instance. Enabling `GITLAB_ENTERPRISE=true` on a Community Edition instance will register the tools but API calls will return permission errors.
 :::
 
-## Further Reading
+## Further reading
 
 - [Meta-tools](/en/tools/meta-tools/) — detailed meta-tool architecture and usage
 - [Analysis Tools](/en/tools/analysis/) — AI-powered sampling tools

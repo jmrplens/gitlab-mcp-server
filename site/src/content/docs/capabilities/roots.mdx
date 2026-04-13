@@ -5,7 +5,7 @@ description: Workspace context from MCP client
 
 Roots allow the MCP client to share its workspace directories with the server, enabling automatic detection of the GitLab project you are working on.
 
-## The Problem
+## The problem
 
 Without workspace context, every tool call requires an explicit project identifier:
 
@@ -18,7 +18,7 @@ User: "List branches in project my-group/my-project"
 
 With roots, the server can figure out the project automatically from your local git repository.
 
-## How It Works
+## How it works
 
 ```mermaid
 sequenceDiagram
@@ -35,7 +35,7 @@ sequenceDiagram
     Note over S: Server knows which GitLab<br/>project the user is working on
 ```
 
-### Project Resolution
+### Project resolution
 
 The server resolves GitLab projects from workspace roots through these steps:
 
@@ -51,11 +51,11 @@ Supported remote URL formats:
 | HTTPS  | `https://gitlab.example.com/group/project.git` |
 | SSH    | `git@gitlab.example.com:group/project.git`     |
 
-### Project Discovery Tool
+### Project discovery tool
 
 The `gitlab_resolve_project_from_remote` tool exposes this resolution capability explicitly. It takes a git remote URL and returns the corresponding GitLab project details, enabling the AI assistant to resolve project context on demand.
 
-## Automatic Context Enrichment
+## Automatic context enrichment
 
 When roots are available, the server provides workspace context through the `gitlab://workspace/roots` resource. This allows AI assistants to understand the user's current project context and make more informed tool calls.
 

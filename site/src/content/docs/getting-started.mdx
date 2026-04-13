@@ -19,7 +19,7 @@ Before you begin, make sure you have:
 2. **A Personal Access Token (PAT)** with the `api` scope
 3. **An MCP-compatible AI client** — VS Code + Copilot, Claude Desktop, Cursor, or Claude Code
 
-### Creating a Personal Access Token
+### Creating a personal access token
 
 1. Go to **GitLab → Preferences → Access Tokens**
 2. Create a new token with the **`api`** scope
@@ -54,7 +54,7 @@ Optionally, move it to a directory in your PATH:
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
-## Setup Wizard
+## Setup wizard
 
 The easiest way to configure the server is the built-in setup wizard:
 
@@ -73,7 +73,7 @@ The wizard will:
 The setup wizard supports VS Code, Claude Desktop, Cursor, and Claude Code. For other clients, use the manual configuration below.
 :::
 
-## Manual Configuration
+## Manual configuration
 
 If you prefer to configure manually, choose your AI client:
 
@@ -254,7 +254,7 @@ Create or edit `.kiro/mcp.json` in your project root:
 </TabItem>
 </Tabs>
 
-## Using an .env File
+## Using an .env file
 
 Instead of placing secrets in client config files, you can use a `.env` file:
 
@@ -265,7 +265,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 The server loads `.env` from the current working directory automatically. See [Configuration](/en/configuration/) for the full load order.
 
-## HTTP Mode
+## HTTP mode
 
 For team deployments, you can run the server in HTTP mode where each user authenticates with their own token:
 
@@ -275,7 +275,7 @@ For team deployments, you can run the server in HTTP mode where each user authen
 
 Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/en/guides/http-mode/) for details.
 
-## Verify the Setup
+## Verify the setup
 
 Once configured, open your AI client and ask:
 
@@ -303,7 +303,7 @@ If you get connection errors, check:
 - For self-signed certificates, set `GITLAB_SKIP_TLS_VERIFY=true`
   :::
 
-## Next Steps
+## Next steps
 
 - [Configuration](/en/configuration/) — Fine-tune environment variables and optional features
 - [Architecture](/en/architecture/) — Understand how the server works under the hood

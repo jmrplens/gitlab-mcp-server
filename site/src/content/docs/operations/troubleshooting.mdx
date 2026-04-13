@@ -7,7 +7,7 @@ description: Common issues and solutions
 For the complete technical reference, see [`docs/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/troubleshooting.md) in the repository.
 :::
 
-## Connection and Authentication
+## Connection and authentication
 
 | Symptom                                | Cause                       | Solution                                                                      |
 | -------------------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
@@ -17,7 +17,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | `403 Forbidden` on specific operations | Token lacks required scope  | Ensure the token has `api` scope (not just `read_api`)                        |
 | Connection refused or timeout          | GitLab instance unreachable | Verify `GITLAB_URL` is reachable: `curl -s $GITLAB_URL/api/v4/version`        |
 
-## TLS and Certificates
+## TLS and certificates
 
 | Symptom                                         | Cause                   | Solution                                                                                     |
 | ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
@@ -28,7 +28,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 `GITLAB_SKIP_TLS_VERIFY=true` disables TLS verification entirely. Use it only for self-hosted instances with self-signed certificates, and never in production environments with public-facing GitLab instances.
 :::
 
-## Tool Discovery
+## Tool discovery
 
 | Symptom                                   | Cause                    | Solution                                                                                        |
 | ----------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -37,7 +37,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | `unknown action` in meta-tool call        | Invalid action parameter | Check valid actions in the [Tools Overview](/en/tools/overview)                                 |
 | Enterprise tools missing                  | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 19 additional enterprise meta-tools                      |
 
-## Auto-Update
+## Auto-update
 
 | Symptom                                | Cause                           | Solution                                                                            |
 | -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | Cannot replace binary (file locked)    | Running instances hold the file | Run `gitlab-mcp-server --shutdown` to terminate all instances first                 |
 | Network error reaching GitHub          | Firewall or proxy blocking      | Verify connectivity to `github.com` from the server                                 |
 
-## HTTP Server Mode
+## HTTP server mode
 
 | Symptom                        | Cause                  | Solution                                                                          |
 | ------------------------------ | ---------------------- | --------------------------------------------------------------------------------- |
@@ -61,7 +61,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | List results truncated         | Default `per_page` limit | Pass `per_page` (max 100) and `page` parameters to paginate |
 | `nextPage` missing in response | Last page reached        | No more results — this is expected behavior                 |
 
-## IDE-Specific Issues
+## IDE-specific issues
 
 ### VS Code / GitHub Copilot
 
@@ -79,7 +79,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | Tools not listed           | Verify `.cursor/mcp.json` exists and uses `mcpServers` key (not `servers`) |
 | `${input:...}` not working | Not supported by Cursor — use environment variables instead                |
 
-## Debug Mode
+## Debug mode
 
 Enable verbose logging to diagnose issues:
 
@@ -102,7 +102,7 @@ Debug logs include:
 Logs go to **stderr**, JSON-RPC messages go to **stdout**. Always redirect stderr when capturing debug logs to avoid mixing with MCP protocol messages.
 :::
 
-## Getting Help
+## Getting help
 
 If you cannot resolve an issue:
 

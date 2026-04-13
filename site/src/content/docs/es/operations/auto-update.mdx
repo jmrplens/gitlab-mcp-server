@@ -9,7 +9,7 @@ Para la referencia técnica completa, consulta [`docs/auto-update.md`](https://g
 
 GitLab MCP Server puede detectar, descargar y aplicar automáticamente nuevas versiones desde GitHub. Las actualizaciones usan un **truco de renombrado** — el binario en ejecución se renombra a `.old`, el nuevo binario se coloca en la ruta original, y en Unix el proceso se re-ejecuta sin interrupciones.
 
-## Modos de Actualización
+## Modos de actualización
 
 La variable `AUTO_UPDATE` controla cómo se manejan las actualizaciones:
 
@@ -21,7 +21,7 @@ La variable `AUTO_UPDATE` controla cómo se manejan las actualizaciones:
 
 Alias aceptados: `1`/`yes` para true, `0`/`no` para false. El valor no distingue mayúsculas de minúsculas.
 
-## Cómo Funciona
+## Cómo funciona
 
 ```mermaid
 sequenceDiagram
@@ -47,7 +47,7 @@ sequenceDiagram
     end
 ```
 
-### Verificación al Inicio (Modo Stdio)
+### Verificación al inicio (modo stdio)
 
 En modo stdio (el predeterminado), la actualización automática se ejecuta como una **verificación previa al inicio** con un timeout de 15 segundos antes de que el servidor MCP comience a aceptar conexiones:
 
@@ -59,7 +59,7 @@ En modo stdio (el predeterminado), la actualización automática se ejecuta como
 
 La verificación al inicio es **no fatal** — cualquier error (timeout de red, releases no encontrados) se registra como advertencia y no impide que el servidor arranque.
 
-### Verificación Periódica (Modo HTTP)
+### Verificación periódica (modo http)
 
 En modo HTTP, la actualización automática se ejecuta como una **verificación periódica en segundo plano**:
 
@@ -70,7 +70,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 
 ## Configuración
 
-### Variables de Entorno (Modo Stdio)
+### Variables de entorno (modo stdio)
 
 | Variable               | Por Defecto                  | Descripción                                                                       |
 | ---------------------- | ---------------------------- | --------------------------------------------------------------------------------- |
@@ -78,7 +78,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release       |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de verificación (usado por las verificaciones periódicas del modo HTTP) |
 
-### Flags de CLI (Modo HTTP)
+### Flags de CLI (modo http)
 
 | Flag                     | Por Defecto                  | Descripción                                                                 |
 | ------------------------ | ---------------------------- | --------------------------------------------------------------------------- |
@@ -90,7 +90,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 La actualización automática usa la **API de GitHub Releases** — es completamente independiente de tu configuración de GitLab. Tus ajustes de `GITLAB_URL`, `GITLAB_TOKEN` y `GITLAB_SKIP_TLS_VERIFY` no afectan a la actualización automática.
 :::
 
-### Ejemplos de Configuración
+### Ejemplos de configuración
 
 Desactivar la actualización automática completamente:
 
@@ -110,7 +110,7 @@ Usar un repositorio fork personalizado:
 AUTO_UPDATE_REPO=mi-org/mi-fork-gitlab-mcp
 ```
 
-## Flag de Apagado para Actualizadores Externos
+## Flag de apagado para actualizadores externos
 
 Herramientas externas (como pe-agnostic-store) pueden terminar todas las instancias en ejecución antes de reemplazar el binario en disco:
 
@@ -136,7 +136,7 @@ Si una actualización causa problemas:
 2. Para revertir, detén el servidor y renombra el archivo `.old` de vuelta al nombre original
 3. El archivo `.old` se limpia automáticamente en el próximo inicio exitoso
 
-## Soporte de Repositorio Personalizado
+## Soporte de repositorio personalizado
 
 Puedes apuntar la actualización automática a cualquier repositorio de GitHub que siga el formato de release esperado:
 

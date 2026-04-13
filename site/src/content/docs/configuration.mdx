@@ -11,7 +11,7 @@ For the complete technical reference, see [`docs/configuration.md`](https://gith
 
 GitLab MCP Server is configured through environment variables for stdio mode and CLI flags for HTTP mode. This page covers all configuration options.
 
-## Required Variables
+## Required variables
 
 These must be set for the server to start in stdio mode:
 
@@ -20,7 +20,7 @@ These must be set for the server to start in stdio mode:
 | `GITLAB_URL`   | GitLab instance base URL               | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token with `api` scope | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
-## Core Options
+## Core options
 
 | Variable                 | Default | Description                                                               |
 | ------------------------ | ------- | ------------------------------------------------------------------------- |
@@ -35,7 +35,7 @@ These must be set for the server to start in stdio mode:
 **Meta-tools mode** (`META_TOOLS=true`) is strongly recommended. It groups tools by domain (e.g., `gitlab_issue` handles list, get, create, update, delete) which reduces token usage and improves AI tool selection accuracy.
 :::
 
-## Optional Components
+## Optional components
 
 These control which MCP capabilities are enabled:
 
@@ -46,7 +46,7 @@ These control which MCP capabilities are enabled:
 | `ENABLE_RESOURCES`      | `true`  | Enable 24 MCP resources for read-only data access           |
 | `ENABLE_PROMPTS`        | `true`  | Enable 38 MCP prompt templates                              |
 
-## Auto-Update
+## Auto-update
 
 | Variable               | Default                      | Description                                                                              |
 | ---------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- |
@@ -54,14 +54,14 @@ These control which MCP capabilities are enabled:
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                     |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Periodic check interval (HTTP mode only)                                                 |
 
-## Admin Options
+## Admin options
 
 | Variable        | Default | Description                                             |
 | --------------- | ------- | ------------------------------------------------------- |
 | `YOLO_MODE`     | `false` | Skip destructive action confirmations (not recommended) |
 | `ISSUE_REPORTS` | `false` | Generate detailed issue reports on tool failures        |
 
-## Example .env File
+## Example .env file
 
 ```bash title=".env"
 # Required
@@ -86,7 +86,7 @@ ENABLE_PROMPTS=true
 AUTO_UPDATE=true
 ```
 
-## Client Configuration
+## Client configuration
 
 <Tabs>
 <TabItem label="VS Code / Copilot">
@@ -197,7 +197,7 @@ Or use a `.env` file in the working directory.
 </TabItem>
 </Tabs>
 
-## HTTP Mode Flags
+## HTTP mode flags
 
 When running in HTTP mode (`--http`), configuration uses CLI flags instead of environment variables:
 
@@ -233,7 +233,7 @@ Example:
   --session-timeout=1h
 ```
 
-## Configuration Load Order
+## Configuration load order
 
 The server loads configuration in the following order (later sources override earlier ones):
 
@@ -246,7 +246,7 @@ The server loads configuration in the following order (later sources override ea
 In HTTP mode, `GITLAB_TOKEN` is not loaded from environment variables. Each client provides their own token via the HTTP request.
 :::
 
-## Self-Signed Certificates
+## Self-signed certificates
 
 For GitLab instances with self-signed TLS certificates:
 
@@ -258,7 +258,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 Only use this in trusted network environments. It disables certificate verification for all connections to the GitLab instance.
 :::
 
-## Read-Only Mode
+## Read-only mode
 
 Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. All tools that create, update, or delete resources are disabled. This is useful for:
 

@@ -5,7 +5,7 @@ description: Capacidades del protocolo implementadas por GitLab MCP Server
 
 GitLab MCP Server implementa 7 capacidades del protocolo MCP que mejoran la forma en que los asistentes de IA interactúan con GitLab. Estas capacidades van más allá de las llamadas básicas a herramientas para proporcionar interacciones más ricas e inteligentes.
 
-## Resumen de Capacidades
+## Resumen de capacidades
 
 | Capacidad                                   | Dirección          | Qué Habilita                                                                                   |
 | ------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------- |
@@ -17,7 +17,7 @@ GitLab MCP Server implementa 7 capacidades del protocolo MCP que mejoran la form
 | [Completions](/es/capabilities/completions) | Cliente → Servidor | Autocompletado de argumentos para nombres de proyectos, ramas, usuarios y más                  |
 | [Icons](/es/capabilities/icons)             | Servidor → Cliente | Iconos SVG para cada herramienta, recurso y prompt                                             |
 
-## Cómo Funcionan las Capacidades
+## Cómo funcionan las capacidades
 
 Las capacidades se negocian durante el handshake de inicialización MCP entre el cliente y el servidor:
 
@@ -38,7 +38,7 @@ sequenceDiagram
 
 **Capacidades declaradas por el servidor** (Logging, Completions) están siempre disponibles. **Capacidades dependientes del cliente** (Roots, Sampling, Elicitation) requieren que el cliente MCP declare soporte — el servidor verifica su presencia antes de usarlas y degrada gracefully cuando no están disponibles.
 
-## Soporte de Clientes
+## Soporte de clientes
 
 No todos los clientes MCP soportan todas las capacidades. El servidor se adapta automáticamente:
 

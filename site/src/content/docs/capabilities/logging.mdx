@@ -5,7 +5,7 @@ description: Structured logging via MCP protocol
 
 GitLab MCP Server uses **dual logging** — log messages are sent both to stderr (for terminal/file capture) and to the MCP client via the protocol's logging capability.
 
-## Dual Output
+## Dual output
 
 | Destination      | Format                      | Purpose                                                       |
 | ---------------- | --------------------------- | ------------------------------------------------------------- |
@@ -14,7 +14,7 @@ GitLab MCP Server uses **dual logging** — log messages are sent both to stderr
 
 This ensures logs are always visible regardless of the client's logging support.
 
-## Log Levels
+## Log levels
 
 The server supports four log levels:
 
@@ -39,7 +39,7 @@ LOG_LEVEL=info ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.co
 
 The default level is `info`.
 
-## MCP Log Messages
+## MCP log messages
 
 When the MCP client supports logging, the server sends structured log notifications:
 
@@ -62,7 +62,7 @@ When the MCP client supports logging, the server sends structured log notificati
 }
 ```
 
-### Security Rules
+### Security rules
 
 Log messages follow strict security rules:
 

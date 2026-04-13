@@ -5,7 +5,7 @@ description: AI-powered analysis tools using MCP sampling capability
 
 GitLab MCP Server includes **11 sampling-based analysis tools** that leverage the AI client's own LLM to perform deep analysis of GitLab data. Unlike regular tools that return raw API data, analysis tools collect relevant context from GitLab and send it to the client's language model for intelligent interpretation.
 
-## How Sampling Works
+## How sampling works
 
 MCP sampling is a protocol capability where the **server requests the client's LLM to process data**. The workflow is:
 
@@ -36,9 +36,9 @@ sequenceDiagram
 Analysis tools require the MCP client to support the **sampling capability**. Not all MCP clients implement this. Check your client's documentation for sampling support.
 :::
 
-## Available Analysis Tools
+## Available analysis tools
 
-### Merge Request Analysis
+### Merge request analysis
 
 | Tool                         | Description                                                                                                                                                     |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -46,21 +46,21 @@ Analysis tools require the MCP client to support the **sampling capability**. No
 | `gitlab_summarize_mr_review` | Summarizes all review comments, threads, and discussions on a merge request. Identifies consensus, unresolved items, and key decisions.                         |
 | `gitlab_review_mr_security`  | Focused security review of MR changes. Checks for common vulnerabilities, exposed secrets, injection risks, and OWASP Top 10 issues.                            |
 
-### Issue Analysis
+### Issue analysis
 
 | Tool                         | Description                                                                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `gitlab_summarize_issue`     | Generates a concise summary of an issue including its full context, labels, assignees, related merge requests, and discussion highlights.                    |
 | `gitlab_analyze_issue_scope` | Estimates the complexity and scope of an issue. Considers sub-tasks, related issues, labels, and discussion to provide effort estimates and risk assessment. |
 
-### CI/CD Analysis
+### CI/CD analysis
 
 | Tool                              | Description                                                                                                             |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `gitlab_analyze_pipeline_failure` | Performs root cause analysis on failed pipelines. Examines job logs, failure patterns, and suggests fixes.              |
 | `gitlab_analyze_ci_configuration` | Reviews `.gitlab-ci.yml` for best practices, optimization opportunities, security concerns, and potential improvements. |
 
-### Project & Release Analysis
+### Project & release analysis
 
 | Tool                               | Description                                                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,13 +68,13 @@ Analysis tools require the MCP client to support the **sampling capability**. No
 | `gitlab_generate_milestone_report` | Creates a progress report for a milestone including completion percentage, burndown analysis, and risk assessment for overdue items.  |
 | `gitlab_find_technical_debt`       | Scans project issues, MRs, and code patterns to identify and categorize technical debt. Suggests prioritization strategies.           |
 
-### Deployment Analysis
+### Deployment analysis
 
 | Tool                                | Description                                                                                                                              |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitlab_analyze_deployment_history` | Analyzes deployment patterns, frequency, failure rates, and rollback incidents. Provides DORA-style metrics and improvement suggestions. |
 
-## Example: Pipeline Failure Analysis
+## Example: Pipeline failure analysis
 
 ```json
 {
@@ -99,7 +99,7 @@ The tool will:
    - **Suggested fixes** with specific actions
    - **Prevention** recommendations
 
-## Example: MR Security Review
+## Example: MR security review
 
 ```json
 {
@@ -119,7 +119,7 @@ Returns a security-focused analysis covering:
 - Dependency security concerns
 - OWASP Top 10 compliance
 
-## Security: Credential Stripping
+## Security: Credential stripping
 
 Before any data is sent to the client's LLM for sampling, the server applies **automatic credential stripping**. This removes sensitive patterns from the data including:
 

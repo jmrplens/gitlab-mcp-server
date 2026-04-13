@@ -5,7 +5,7 @@ description: Autocompletado de argumentos para parámetros de herramientas
 
 El autocompletado proporciona sugerencias en tiempo real para los parámetros de las herramientas. En lugar de memorizar IDs de proyectos, nombres de ramas o nombres de usuario, escribes unos pocos caracteres y el servidor consulta GitLab para encontrar coincidencias.
 
-## El Problema
+## El problema
 
 ```
 Sin autocompletado:
@@ -17,7 +17,7 @@ Con autocompletado:
 
 Esto transforma una búsqueda de múltiples pasos en una **selección única e interactiva**.
 
-## Cómo Funciona
+## Cómo funciona
 
 ```mermaid
 sequenceDiagram
@@ -34,11 +34,11 @@ sequenceDiagram
     AI->>U: Muestra desplegable con opciones
 ```
 
-## Tipos de Argumentos Soportados
+## Tipos de argumentos soportados
 
 El servidor soporta **17 tipos de argumentos de autocompletado** organizados en completadores globales y por proyecto:
 
-### Completadores Globales
+### Completadores globales
 
 Funcionan sin contexto de proyecto:
 
@@ -49,7 +49,7 @@ Funcionan sin contexto de proyecto:
 | `user`      | Nombres/logins de usuarios     | `john.doe`            |
 | `namespace` | Namespaces (grupos + usuarios) | `my-group`            |
 
-### Completadores por Proyecto
+### Completadores por proyecto
 
 Requieren un contexto de proyecto y buscan dentro de ese proyecto:
 
@@ -69,7 +69,7 @@ Requieren un contexto de proyecto y buscan dentro de ese proyecto:
 | `runner`        | Descripciones de runners    | `shared-runner-1` |
 | `board`         | Nombres de tableros         | `Development`     |
 
-## Cómo el Autocompletado Mejora la Precisión de la IA
+## Cómo el autocompletado mejora la precisión de la IA
 
 El autocompletado reduce errores de varias formas:
 

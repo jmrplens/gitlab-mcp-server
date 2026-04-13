@@ -5,7 +5,7 @@ description: Argument autocompletion for tool parameters
 
 Completions provide real-time autocomplete suggestions for tool parameters. Instead of memorizing project IDs, branch names, or user logins, you type a few characters and the server queries GitLab for matches.
 
-## The Problem
+## The problem
 
 ```
 Without completions:
@@ -17,7 +17,7 @@ With completions:
 
 This transforms a multi-step lookup into a **single, interactive selection**.
 
-## How It Works
+## How it works
 
 ```mermaid
 sequenceDiagram
@@ -34,11 +34,11 @@ sequenceDiagram
     AI->>U: Shows dropdown with options
 ```
 
-## Supported Argument Types
+## Supported argument types
 
 The server supports **17 completion argument types** organized into global and per-project completers:
 
-### Global Completers
+### Global completers
 
 These work without a project context:
 
@@ -49,7 +49,7 @@ These work without a project context:
 | `user`      | User names/logins           | `john.doe`            |
 | `namespace` | Namespaces (groups + users) | `my-group`            |
 
-### Per-Project Completers
+### Per-project completers
 
 These require a project context and search within that project:
 
@@ -69,7 +69,7 @@ These require a project context and search within that project:
 | `runner`        | Runner descriptions   | `shared-runner-1` |
 | `board`         | Board names           | `Development`     |
 
-## How Completions Improve AI Accuracy
+## How completions improve AI accuracy
 
 Completions reduce errors in several ways:
 

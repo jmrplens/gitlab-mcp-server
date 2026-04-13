@@ -9,7 +9,7 @@ For the complete technical reference, see [`docs/error-handling.md`](https://git
 
 GitLab MCP Server provides structured error handling that classifies errors, extracts actionable details from GitLab API responses, and suggests corrective actions to the AI assistant.
 
-## Error Classification
+## Error classification
 
 Every error from the GitLab API is classified by HTTP status code into an actionable message:
 
@@ -35,7 +35,7 @@ Network-level errors are also classified:
 | Timeout            | Request to GitLab timed out                  |
 | TLS/SSL            | TLS/SSL handshake failed                     |
 
-## Error Wrapping Functions
+## Error wrapping functions
 
 The server uses three error wrapping functions, chosen based on the operation type:
 
@@ -66,7 +66,7 @@ branchProtect: conflict — Protected branch rule already exists.
 Suggestion: use gitlab_protected_branch_get to view current rules
 ```
 
-### Decision Tree
+### Decision tree
 
 | Scenario                                    | Function             |
 | ------------------------------------------- | -------------------- |
@@ -74,7 +74,7 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Mutating operation (create, update, delete) | `WrapErrWithMessage` |
 | Specific error with known fix               | `WrapErrWithHint`    |
 
-## Validation Hints
+## Validation hints
 
 For **422 validation errors**, the server automatically enriches the error with guidance based on pattern matching. Over 15 common patterns are recognized, including:
 
@@ -86,7 +86,7 @@ For **422 validation errors**, the server automatically enriches the error with 
 
 These hints help the AI assistant correct its request without additional API calls.
 
-## Error Response Format
+## Error response format
 
 When a tool encounters an error, the response is formatted as a Markdown block with structured diagnostic fields:
 
@@ -110,7 +110,7 @@ The structured response includes:
 | **Request ID** | GitLab's `X-Request-Id` for support tickets |
 | **Suggestion** | Actionable hint (when available)            |
 
-## Transient vs Permanent Errors
+## Transient vs permanent errors
 
 The server classifies errors as **transient** (retryable) or **permanent**:
 
@@ -119,16 +119,16 @@ The server classifies errors as **transient** (retryable) or **permanent**:
 | Transient | 429, 5xx, timeouts, connection refused | Safe to retry after a delay                   |
 | Permanent | 4xx (except 429)                       | Do not retry — fix the input or configuration |
 
-## Example Error Scenarios
+## Example error scenarios
 
-### Invalid Token
+### Invalid token
 
 ```
 ❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
-### Permission Denied
+### Permission denied
 
 ```
 ❌ create_issue: access denied — your token lacks the required permissions
@@ -136,21 +136,21 @@ Detail: 403 Forbidden
 💡 Ensure the token has api scope and you have Developer+ access to the project
 ```
 
-### Resource Conflict
+### Resource conflict
 
 ```
 ❌ branchProtect: conflict — Protected branch rule already exists
 💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
 ```
 
-### Validation Error
+### Validation error
 
 ```
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
 
-## Automated Issue Reporting
+## Automated issue reporting
 
 :::note
 Issue report generation is disabled by default. Set `ISSUE_REPORTS=true` to enable it.

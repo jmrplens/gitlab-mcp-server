@@ -5,7 +5,7 @@ description: Análisis impulsado por IA usando el LLM del cliente
 
 Sampling permite al servidor solicitar al LLM del cliente MCP que analice datos de GitLab — como obtener un resumen de un merge request con 50 comentarios o diagnosticar por qué falló un pipeline, sin leer cientos de líneas de log.
 
-## Cómo Funciona
+## Cómo funciona
 
 En lugar de devolver datos sin procesar para que la IA los analice, el servidor recopila datos de GitLab, los envía al LLM del cliente a través del método de protocolo `sampling/createMessage`, y devuelve el resultado del análisis.
 
@@ -27,18 +27,18 @@ sequenceDiagram
     AI->>U: Presenta resumen conciso
 ```
 
-### Las Cuatro Fases
+### Las cuatro fases
 
 1. **Recopilación de datos** — El servidor obtiene datos relevantes de las APIs de GitLab
 2. **Construcción del prompt** — Los datos se formatean con un prompt de análisis específico para la tarea
 3. **Análisis del LLM** — El prompt se envía al LLM del cliente vía sampling
 4. **Entrega del resultado** — El análisis se devuelve como resultado de la herramienta
 
-## Herramientas de Análisis
+## Herramientas de análisis
 
 11 herramientas impulsadas por sampling están disponibles:
 
-### Revisión de Código
+### Revisión de código
 
 | Herramienta                  | Descripción                                                                      |
 | ---------------------------- | -------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ sequenceDiagram
 | `gitlab_review_mr_security`  | Revisión enfocada en seguridad de los cambios del merge request                  |
 | `gitlab_summarize_mr_review` | Resumir discusiones y feedback de revisión del merge request                     |
 
-### Análisis de Issues
+### Análisis de issues
 
 | Herramienta                  | Descripción                                                   |
 | ---------------------------- | ------------------------------------------------------------- |
@@ -61,7 +61,7 @@ sequenceDiagram
 | `gitlab_analyze_ci_configuration`   | Revisar `.gitlab-ci.yml` para mejores prácticas y problemas       |
 | `gitlab_analyze_deployment_history` | Analizar patrones de despliegue y fiabilidad                      |
 
-### Salud del Proyecto
+### Salud del proyecto
 
 | Herramienta                        | Descripción                                              |
 | ---------------------------------- | -------------------------------------------------------- |
@@ -69,7 +69,7 @@ sequenceDiagram
 | `gitlab_generate_milestone_report` | Reporte de progreso del sprint/milestone con métricas    |
 | `gitlab_find_technical_debt`       | Identificar indicadores de deuda técnica en el proyecto  |
 
-## Seguridad: Eliminación de Credenciales
+## Seguridad: Eliminación de credenciales
 
 Antes de enviar cualquier dato al LLM, el servidor elimina credenciales sensibles usando coincidencia de patrones regex:
 
@@ -83,7 +83,7 @@ Antes de enviar cualquier dato al LLM, el servidor elimina credenciales sensible
 
 Todos los patrones coincidentes se reemplazan con `[REDACTED]` antes de que los datos lleguen al LLM.
 
-### Capas de Seguridad Adicionales
+### Capas de seguridad adicionales
 
 | Capa                                   | Protección                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------ |

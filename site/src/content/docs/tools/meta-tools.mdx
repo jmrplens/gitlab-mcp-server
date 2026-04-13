@@ -9,7 +9,7 @@ For the complete technical reference, see [`docs/meta-tools.md`](https://github.
 
 Meta-tools are the default operating mode of GitLab MCP Server. Instead of exposing each GitLab API operation as a separate MCP tool, meta-tools **group related operations under a single tool** with an `action` parameter that dispatches to the correct handler.
 
-## Why Meta-tools?
+## Why meta-tools?
 
 LLMs have limited context windows. When an MCP server registers 1004 individual tools, the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
@@ -21,7 +21,7 @@ LLMs have limited context windows. When an MCP server registers 1004 individual 
 
 Meta-tools reduce the tool count by **96%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
-## How Meta-tools Work
+## How meta-tools work
 
 Each meta-tool defines an `action` enum that lists all available operations. The server validates the action and dispatches to the corresponding handler function internally.
 
@@ -38,9 +38,9 @@ flowchart LR
 
 The action parameter is always required and must be one of the enumerated values. Additional parameters depend on the chosen action.
 
-## Example Usage
+## Example usage
 
-### Creating an Issue
+### Creating an issue
 
 ```json
 {
@@ -57,7 +57,7 @@ The action parameter is always required and must be one of the enumerated values
 }
 ```
 
-### Listing Merge Requests
+### Listing merge requests
 
 ```json
 {
@@ -85,7 +85,7 @@ The action parameter is always required and must be one of the enumerated values
 }
 ```
 
-## Key Meta-tools Reference
+## Key meta-tools reference
 
 ### `gitlab_project`
 
@@ -183,7 +183,7 @@ Personal todo/task list.
 
 **Actions**: `list`, `mark_done`, `mark_all_done`
 
-## Enterprise Mode
+## Enterprise mode
 
 Setting `GITLAB_ENTERPRISE=true` enables 19 additional meta-tools that expose GitLab Premium and Ultimate features. Additionally, 6 enterprise-only action routes are added to existing base meta-tools:
 

@@ -5,27 +5,27 @@ description: Ejemplos del mundo real de uso de GitLab MCP Server
 
 Estos ejemplos muestran prompts en lenguaje natural que puedes usar con cualquier asistente de IA conectado a GitLab MCP Server. El servidor los traduce automáticamente en operaciones de la API de GitLab.
 
-## Gestión de Proyectos
+## Gestión de proyectos
 
-### Listar Tus Proyectos
+### Listar tus proyectos
 
 **Prompt**: "Muéstrame mis proyectos de GitLab"
 
 El servidor llama a `gitlab_project` con `action: list`, devolviendo nombres de proyectos, descripciones y URLs.
 
-### Crear un Issue
+### Crear un issue
 
 **Prompt**: "Crea un reporte de bug en my-group/my-project titulado 'Login page returns 404 after password reset' con etiquetas bug y priority::high"
 
 El servidor llama a `gitlab_issue` con `action: create`, estableciendo el título, descripción, etiquetas y proyecto en una única operación.
 
-### Gestionar Etiquetas
+### Gestionar etiquetas
 
 **Prompt**: "Lista todas las etiquetas en el proyecto frontend y crea una nueva etiqueta llamada 'accessibility' con color #0052CC"
 
 El servidor primero llama a `gitlab_label` con `action: list` para mostrar las etiquetas existentes, luego `action: create` para añadir la nueva.
 
-### Seguir Milestones
+### Seguir milestones
 
 **Prompt**: "Muéstrame el progreso del milestone Sprint 14 en my-project"
 
@@ -33,27 +33,27 @@ El servidor llama a `gitlab_milestone` con `action: get`, devolviendo el porcent
 
 ---
 
-## Revisión de Código
+## Revisión de código
 
-### Listar Merge Requests Abiertos
+### Listar merge requests abiertos
 
 **Prompt**: "Muéstrame todos los merge requests abiertos asignados a mí"
 
 El servidor llama a `gitlab_merge_request` con `action: list`, filtrando por asignado y estado.
 
-### Analizar Cambios de un MR
+### Analizar cambios de un MR
 
 **Prompt**: "Analiza los cambios de código en el merge request !42 buscando posibles bugs y problemas de seguridad"
 
 El servidor usa `gitlab_analyze_mr_changes` (sampling), que obtiene el diff, lo envía al LLM para análisis, y devuelve una revisión estructurada con hallazgos.
 
-### Revisión de Seguridad de un MR
+### Revisión de seguridad de un MR
 
 **Prompt**: "Haz una revisión de seguridad del MR !78 en el proyecto backend"
 
 El servidor usa `gitlab_review_mr_security` (sampling), que examina el diff en busca de vulnerabilidades de seguridad como fallos de inyección, secretos hardcodeados y problemas de autenticación.
 
-### Resumir la Discusión de un MR
+### Resumir la discusión de un MR
 
 **Prompt**: "Resume los comentarios de revisión del MR !42"
 
@@ -63,19 +63,19 @@ El servidor usa `gitlab_summarize_mr_review` (sampling), consolidando todos los 
 
 ## CI/CD
 
-### Verificar Estado del Pipeline
+### Verificar estado del pipeline
 
 **Prompt**: "¿Cuál es el estado del último pipeline en my-project?"
 
 El servidor llama a `gitlab_pipeline` con `action: list`, devolviendo el estado, duración y etapas del pipeline más reciente.
 
-### Diagnosticar Fallo de Pipeline
+### Diagnosticar fallo de pipeline
 
 **Prompt**: "¿Por qué falló el pipeline #12345?"
 
 El servidor usa `gitlab_analyze_pipeline_failure` (sampling), que obtiene los logs de los jobs, identifica el paso que falló, y proporciona un análisis de causa raíz con correcciones sugeridas.
 
-### Revisar Configuración CI
+### Revisar configuración CI
 
 **Prompt**: "Revisa el .gitlab-ci.yml en my-project para mejores prácticas"
 
@@ -83,21 +83,21 @@ El servidor usa `gitlab_analyze_ci_configuration` (sampling), analizando la conf
 
 ---
 
-## Gestión de Releases
+## Gestión de releases
 
-### Crear un Release
+### Crear un release
 
 **Prompt**: "Crea el release v2.1.0 desde el tag v2.1.0 en my-project con notas de release sobre la corrección de login y mejoras de rendimiento"
 
 El servidor llama a `gitlab_release` con `action: create`, asociando el release con el tag y estableciendo la descripción.
 
-### Generar Notas de Release
+### Generar notas de release
 
 **Prompt**: "Genera notas de release para el milestone 'v2.1' basándote en todos los issues cerrados y MRs fusionados"
 
 El servidor usa `gitlab_generate_release_notes` (sampling), que recopila todos los issues y merge requests del milestone y genera notas de release categorizadas (Características, Correcciones de Bugs, Mejoras).
 
-### Informe de Milestone
+### Informe de milestone
 
 **Prompt**: "Dame un informe de progreso del milestone Q2"
 
@@ -105,27 +105,27 @@ El servidor usa `gitlab_generate_milestone_report` (sampling), proporcionando m�
 
 ---
 
-## Colaboración en Equipo
+## Colaboración en equipo
 
-### Buscar Código
+### Buscar código
 
 **Prompt**: "Busca usos de la función obsoleta `authenticateUser` en todos mis proyectos"
 
 El servidor llama a `gitlab_search` con `action: code`, buscando en todos los proyectos el patrón de código especificado.
 
-### Encontrar Deuda Técnica
+### Encontrar deuda técnica
 
 **Prompt**: "Identifica la deuda técnica en el proyecto backend"
 
 El servidor usa `gitlab_find_technical_debt` (sampling), analizando issues, patrones de código y métricas del proyecto para identificar áreas de deuda técnica acumulada.
 
-### Gestionar Miembros
+### Gestionar miembros
 
 **Prompt**: "Lista todos los miembros del proyecto frontend y sus niveles de acceso"
 
 El servidor llama a `gitlab_member` con `action: list`, devolviendo los miembros del equipo con sus roles y permisos.
 
-### Análisis de Despliegues
+### Análisis de despliegues
 
 **Prompt**: "Analiza el historial de despliegues del entorno de producción del último mes"
 

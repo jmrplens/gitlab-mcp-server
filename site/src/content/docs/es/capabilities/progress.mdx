@@ -5,7 +5,7 @@ description: Notificaciones de progreso en tiempo real
 
 GitLab MCP Server envía notificaciones de progreso en tiempo real durante operaciones de larga duración, permitiendo a los clientes MCP mostrar indicadores de progreso al usuario.
 
-## Cómo Funciona
+## Cómo funciona
 
 Cuando una herramienta realiza múltiples pasos o procesa grandes conjuntos de datos, el servidor envía mensajes `notifications/progress` al cliente:
 
@@ -28,7 +28,7 @@ sequenceDiagram
     S-->>AI: Resultado de la herramienta con todos los issues
 ```
 
-## Casos de Uso
+## Casos de uso
 
 El reporte de progreso se utiliza para operaciones que pueden tardar varios segundos:
 
@@ -40,7 +40,7 @@ El reporte de progreso se utiliza para operaciones que pueden tardar varios segu
 | **Importación CSV**                  | Progreso de importación fila por fila                               |
 | **Actualización automática**         | Pasos de descarga y aplicación                                      |
 
-## Visualización en el Cliente
+## Visualización en el cliente
 
 La forma en que se muestra el progreso depende del cliente MCP:
 
@@ -48,7 +48,7 @@ La forma en que se muestra el progreso depende del cliente MCP:
 - **Claude Desktop** — Texto de progreso mostrado durante la ejecución de la herramienta
 - **Claude Code** — Actualizaciones de progreso en tiempo real en la terminal
 
-## Formato del Mensaje de Progreso
+## Formato del mensaje de progreso
 
 Las notificaciones de progreso siguen el formato del protocolo MCP:
 

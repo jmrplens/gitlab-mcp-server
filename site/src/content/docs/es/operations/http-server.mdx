@@ -11,7 +11,7 @@ Para la referencia técnica completa, consulta [`docs/http-server-mode.md`](http
 
 Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
 
-## Cuándo Usar el Modo HTTP
+## Cuándo usar el modo HTTP
 
 | Escenario                                     | Modo Recomendado |
 | --------------------------------------------- | ---------------- |
@@ -21,7 +21,7 @@ Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de 
 | Integración CI/CD con MCP                     | **HTTP**         |
 | Pruebas con curl o clientes HTTP              | **HTTP**         |
 
-## Iniciar el Servidor
+## Iniciar el servidor
 
 ```bash
 gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com
@@ -54,13 +54,13 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 Los clientes deben proporcionar su Token de Acceso Personal de GitLab en cada solicitud HTTP usando una de dos cabeceras:
 
-### Cabecera PRIVATE-TOKEN (Recomendada)
+### Cabecera private-token (recomendada)
 
 ```
 PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-### Cabecera Authorization Bearer
+### Cabecera authorization Bearer
 
 ```
 Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
@@ -68,9 +68,9 @@ Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 
 Si ambas cabeceras están presentes, `PRIVATE-TOKEN` tiene precedencia. Las solicitudes sin un token válido son rechazadas.
 
-## Gestión de Sesiones
+## Gestión de sesiones
 
-### Arquitectura del Pool de Servidores
+### Arquitectura del pool de servidores
 
 El núcleo del modo HTTP es un **pool LRU limitado** de instancias de servidor MCP, indexado por el hash SHA-256 del token de cada cliente.
 
@@ -98,14 +98,14 @@ graph TD
 - Los tokens sin procesar **nunca se almacenan** — solo se mantienen hashes SHA-256 en memoria
 - Cuando el pool alcanza `--max-http-clients`, la entrada menos usada recientemente es desalojada
 
-### Ciclo de Vida de la Sesión
+### Ciclo de vida de la sesión
 
 1. **Primera solicitud**: El token se extrae, se hashea, y se crea un nuevo servidor MCP + cliente GitLab
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
 4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
 
-## Configuración del Cliente
+## Configuración del cliente
 
 <Tabs>
 <TabItem label="VS Code / Copilot">
@@ -178,7 +178,7 @@ Iniciar el servicio:
 docker compose up -d
 ```
 
-## Verificación de Salud
+## Verificación de salud
 
 Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
 

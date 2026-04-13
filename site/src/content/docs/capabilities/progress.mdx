@@ -5,7 +5,7 @@ description: Real-time progress notifications
 
 GitLab MCP Server sends real-time progress notifications during long-running operations, allowing MCP clients to display progress indicators to the user.
 
-## How It Works
+## How it works
 
 When a tool performs multiple steps or processes large datasets, the server sends `notifications/progress` messages to the client:
 
@@ -28,7 +28,7 @@ sequenceDiagram
     S-->>AI: Tool result with all issues
 ```
 
-## Use Cases
+## Use cases
 
 Progress reporting is used for operations that may take several seconds:
 
@@ -40,7 +40,7 @@ Progress reporting is used for operations that may take several seconds:
 | **CSV import**               | Per-row import progress                     |
 | **Auto-update**              | Download and apply steps                    |
 
-## Client Display
+## Client display
 
 How progress is displayed depends on the MCP client:
 
@@ -48,7 +48,7 @@ How progress is displayed depends on the MCP client:
 - **Claude Desktop** — Progress text shown during tool execution
 - **Claude Code** — Real-time terminal progress updates
 
-## Progress Message Format
+## Progress message format
 
 Progress notifications follow the MCP protocol format:
 
