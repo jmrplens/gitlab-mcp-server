@@ -26,6 +26,11 @@ A **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP 
     - [Docker Compose](#docker-compose)
     - [Configuration](#configuration)
     - [Health Check](#health-check)
+  - [FAQ](#faq)
+  - [Related Projects](#related-projects)
+  - [Contributing](#contributing)
+  - [Security](#security)
+  - [Code of Conduct](#code-of-conduct)
 
 ## Highlights
 
@@ -321,3 +326,60 @@ curl -f http://localhost:8080/health
 ```
 
 > For building the Docker image from source, publishing to the registry, and development workflows, see the [Development Guide](docs/development/development.md#docker).
+
+## FAQ
+
+<details>
+<summary><strong>Does it work with self-hosted GitLab?</strong></summary>
+
+Yes. Set `GITLAB_URL` to your instance URL. Self-signed TLS certificates are supported via `GITLAB_SKIP_TLS_VERIFY=true`.
+</details>
+
+<details>
+<summary><strong>Is my data safe?</strong></summary>
+
+The server runs locally on your machine (stdio mode) or on your own infrastructure (HTTP mode). No data is sent to third parties — all API calls go directly to your GitLab instance. See <a href="SECURITY.md">SECURITY.md</a> for details.
+</details>
+
+<details>
+<summary><strong>Can I use it in read-only mode?</strong></summary>
+
+Yes. Set `GITLAB_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read operations will be available.
+</details>
+
+<details>
+<summary><strong>What GitLab editions are supported?</strong></summary>
+
+Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_ENTERPRISE=true` to enable 19 additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.).
+</details>
+
+<details>
+<summary><strong>How does it handle rate limiting?</strong></summary>
+
+The server includes retry logic with backoff for GitLab API rate limits. Errors are classified as transient (retryable) or permanent, with actionable hints in error messages.
+</details>
+
+<details>
+<summary><strong>Which AI clients are supported?</strong></summary>
+
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, and others. The built-in setup wizard can auto-configure most clients.
+</details>
+
+## Related Projects
+
+- [Redmine MCP Server](https://github.com/jmrplens/redmine-mcp-server) — Sister project: MCP server for Redmine with 152 tools
+- [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) — The official Go SDK this server is built on
+- [Model Context Protocol](https://modelcontextprotocol.io/) — The MCP specification
+- [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers) — Curated list of MCP servers
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch naming, commit conventions, and pull request process.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the security policy and vulnerability reporting.
+
+## Code of Conduct
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
