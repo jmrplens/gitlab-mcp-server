@@ -86,6 +86,7 @@ Create or edit `.vscode/mcp.json` in your workspace root:
 {
 	"servers": {
 		"gitlab": {
+			"type": "stdio",
 			"command": "/path/to/gitlab-mcp-server",
 			"env": {
 				"GITLAB_URL": "https://gitlab.example.com",
@@ -111,6 +112,7 @@ Use VS Code input variables to avoid storing the token in plain text:
 	],
 	"servers": {
 		"gitlab": {
+			"type": "stdio",
 			"command": "/path/to/gitlab-mcp-server",
 			"env": {
 				"GITLAB_URL": "https://gitlab.example.com",
@@ -220,12 +222,11 @@ Edit your Zed `settings.json` and add:
 {
 	"context_servers": {
 		"gitlab": {
-			"command": {
-				"path": "/path/to/gitlab-mcp-server",
-				"env": {
-					"GITLAB_URL": "https://gitlab.example.com",
-					"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-				}
+			"command": "/path/to/gitlab-mcp-server",
+			"args": [],
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
 	}
@@ -242,6 +243,7 @@ Create or edit `.kiro/mcp.json` in your project root:
 	"mcpServers": {
 		"gitlab": {
 			"command": "/path/to/gitlab-mcp-server",
+			"args": [],
 			"env": {
 				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"

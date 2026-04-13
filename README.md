@@ -63,6 +63,7 @@ Add to `.vscode/mcp.json` in your workspace:
 {
   "servers": {
     "gitlab": {
+      "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_URL": "https://gitlab.example.com",
@@ -158,6 +159,7 @@ Add to the MCP configuration in **Settings → Tools → AI Assistant → MCP Se
 {
   "servers": {
     "gitlab": {
+      "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
         "GITLAB_URL": "https://gitlab.example.com",
@@ -179,12 +181,11 @@ Add to Zed settings (`settings.json`):
 {
   "context_servers": {
     "gitlab": {
-      "command": {
-        "path": "/path/to/gitlab-mcp-server",
-        "env": {
-          "GITLAB_URL": "https://gitlab.example.com",
-          "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-        }
+      "command": "/path/to/gitlab-mcp-server",
+      "args": [],
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
   }
@@ -203,6 +204,7 @@ Add to `.kiro/settings/mcp.json`:
   "mcpServers": {
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
+      "args": [],
       "env": {
         "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"

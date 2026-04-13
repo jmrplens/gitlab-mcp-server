@@ -59,8 +59,9 @@ Para usuarios de VS Code, puedes usar variables de entrada para evitar almacenar
 
 ```json
 {
-	"mcpServers": {
+	"servers": {
 		"gitlab": {
+			"type": "stdio",
 			"command": "gitlab-mcp-server",
 			"env": {
 				"GITLAB_URL": "https://gitlab.example.com",
