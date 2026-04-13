@@ -51,6 +51,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - run: go mod download
       - run: go build -o /dev/null ./cmd/server
+      - name: Verify E2E tests compile
+        run: go test -tags e2e -c -o /dev/null ./test/e2e/
 
   goimports:
     name: goimports
