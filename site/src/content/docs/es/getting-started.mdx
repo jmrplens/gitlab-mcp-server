@@ -5,6 +5,10 @@ description: Instala y configura GitLab MCP Server con tu cliente de IA favorito
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
 
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/getting-started.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md) en el repositorio.
+:::
+
 Pon en marcha GitLab MCP Server en menos de 5 minutos.
 
 ## Requisitos previos
@@ -92,8 +96,31 @@ Crea o edita `.vscode/mcp.json` en la raíz de tu workspace:
 }
 ```
 
-:::tip
-Para mayor seguridad, usa variables de entrada de VS Code para evitar almacenar el token en texto plano. Consulta la página de [Configuración](/es/configuration/) para más detalles.
+:::tip[Almacenamiento seguro de tokens]
+Usa variables de entrada de VS Code para evitar almacenar el token en texto plano:
+
+```json
+{
+	"inputs": [
+		{
+			"type": "promptString",
+			"id": "gitlab-token",
+			"description": "GitLab Personal Access Token",
+			"password": true
+		}
+	],
+	"servers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlab-token}"
+			}
+		}
+	}
+}
+```
+
 :::
 
 </TabItem>
@@ -153,6 +180,76 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
 O crea un archivo `.env` en tu directorio de trabajo con las variables anteriores.
+
+</TabItem>
+<TabItem label="Windsurf">
+
+Edita `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="JetBrains">
+
+1. Abre **Settings → Tools → AI Assistant → MCP Servers**
+2. Haz clic en **+ Add** y selecciona **stdio**
+3. Establece el comando a `/ruta/a/gitlab-mcp-server`
+4. Añade las variables de entorno:
+   - `GITLAB_URL` = `https://gitlab.example.com`
+   - `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
+5. Haz clic en **OK** y reinicia el IDE
+
+</TabItem>
+<TabItem label="Zed">
+
+Edita tu `settings.json` de Zed y añade:
+
+```json
+{
+	"context_servers": {
+		"gitlab": {
+			"command": {
+				"path": "/ruta/a/gitlab-mcp-server",
+				"env": {
+					"GITLAB_URL": "https://gitlab.example.com",
+					"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+				}
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="Kiro">
+
+Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
 
 </TabItem>
 </Tabs>

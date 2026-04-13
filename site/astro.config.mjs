@@ -240,6 +240,11 @@ export default defineConfig({
 							label: "Architecture",
 							translations: { es: "Arquitectura" },
 						},
+						{
+							slug: "compatibility",
+							label: "Compatibility",
+							translations: { es: "Compatibilidad" },
+						},
 					],
 				},
 				{
@@ -345,6 +350,11 @@ export default defineConfig({
 					label: "Examples",
 					translations: { es: "Ejemplos" },
 					items: [
+						{
+							slug: "use-cases",
+							label: "Use Cases",
+							translations: { es: "Casos de uso" },
+						},
 						{
 							slug: "examples/usage",
 							label: "Usage Examples",

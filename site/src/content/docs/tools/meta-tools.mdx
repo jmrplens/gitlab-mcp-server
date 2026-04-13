@@ -3,6 +3,10 @@ title: Meta-tools
 description: Domain-level tools that consolidate related operations
 ---
 
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/meta-tools.md) in the repository.
+:::
+
 Meta-tools are the default operating mode of GitLab MCP Server. Instead of exposing each GitLab API operation as a separate MCP tool, meta-tools **group related operations under a single tool** with an `action` parameter that dispatches to the correct handler.
 
 ## Why Meta-tools?

@@ -10,6 +10,8 @@ In meta-tool mode (`META_TOOLS=true`, default), the server registers **40 base t
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 
+> 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
+
 ## How Meta-Tools Work
 
 Each meta-tool accepts a common input format:

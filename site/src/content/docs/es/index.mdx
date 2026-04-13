@@ -68,6 +68,40 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 > La corrección del N+1 cambió la consulta para devolver todos los resultados sin aplicar el límite de paginación predeterminado.
 > **Solución sugerida:** Añadir `.Limit(defaultPageSize)` a la consulta en `user_repository.go:87`.
 
+## Ejemplos de prompts
+
+Prueba estos con tu asistente de IA una vez conectado GitLab MCP Server:
+
+**Proyectos y código**
+
+- _"Lista mis proyectos de GitLab"_
+- _"Muestra el README del proyecto my-app"_
+- _"Busca comentarios TODO en el código"_
+
+**Merge Requests y revisión de código**
+
+- _"Muestra los merge requests abiertos en my-app"_
+- _"Resume los cambios del MR !42"_
+- _"¿Es seguro mergear el MR !15? Revisa problemas de seguridad"_
+
+**Issues y planificación**
+
+- _"Lista los issues abiertos asignados a mí"_
+- _"Crea un bug report titulado 'Arreglar página de login' con etiqueta 'bug'"_
+- _"¿Cuál es el progreso del milestone v2.0?"_
+
+**CI/CD y Pipelines**
+
+- _"¿Cuál es el estado del último pipeline de my-app?"_
+- _"¿Por qué falló el último pipeline?"_
+- _"Muestra las variables CI del proyecto my-app"_
+
+**Informes y análisis**
+
+- _"Genera notas de release de v1.0 a v2.0"_
+- _"Dame un resumen de standup diario"_
+- _"Evalúa el riesgo del merge request !23"_
+
 ## Comenzar
 
 <CardGrid>

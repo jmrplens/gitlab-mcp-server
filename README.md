@@ -1,36 +1,6 @@
-# Gitlab MCP
+# GitLab MCP Server
 
 A **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools, resources, and prompts for AI assistants. Written in Go — single static binary per platform.
-
-## Table of Contents
-
-- [Gitlab MCP](#gitlab-mcp)
-  - [Table of Contents](#table-of-contents)
-  - [Highlights](#highlights)
-  - [Quick Start](#quick-start)
-    - [1. Download](#1-download)
-    - [2. Run the Setup Wizard](#2-run-the-setup-wizard)
-      - [Windows](#windows)
-      - [Linux](#linux)
-      - [macOS](#macos)
-  - [What Can You Do With It?](#what-can-you-do-with-it)
-  - [Tool Modes](#tool-modes)
-    - [Individual Tools (1004 tools)](#individual-tools-1004-tools)
-    - [Meta-Tools (40 base / 59 enterprise)](#meta-tools-40-base--59-enterprise)
-  - [Project Structure](#project-structure)
-  - [Documentation](#documentation)
-  - [Tech Stack](#tech-stack)
-  - [Building from Source](#building-from-source)
-  - [Docker](#docker)
-    - [Quick Start](#quick-start-1)
-    - [Docker Compose](#docker-compose)
-    - [Configuration](#configuration)
-    - [Health Check](#health-check)
-  - [FAQ](#faq)
-  - [Related Projects](#related-projects)
-  - [Contributing](#contributing)
-  - [Security](#security)
-  - [Code of Conduct](#code-of-conduct)
 
 ## Highlights
 
@@ -47,285 +17,310 @@ A **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP 
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 - **Self-hosted GitLab** with self-signed TLS certificate support
 
+## Example Prompts
+
+Once connected, just talk to your AI assistant in natural language:
+
+> "List my GitLab projects"
+> "Show me open merge requests in my-app"
+> "Create a merge request from feature-login to main"
+> "Review merge request !15 — is it safe to merge?"
+> "List open issues assigned to me"
+> "What's the pipeline status for project 42?"
+> "Why did the last pipeline fail?"
+> "Generate release notes from v1.0 to v2.0"
+
+The server handles the translation from natural language to GitLab API calls. You do not need to know project IDs, API endpoints, or JSON syntax — the AI assistant figures that out for you. See [Usage Examples](docs/examples/usage-examples.md) for more scenarios.
+
 ## Quick Start
 
 ### 1. Download
 
-Download the latest binary for your platform from [Releases](../../releases):
-
-| Platform              | Binary                            |
-| --------------------- | --------------------------------- |
-| Linux amd64           | `gitlab-mcp-server-linux-amd64`       |
-| Linux arm64           | `gitlab-mcp-server-linux-arm64`       |
-| Windows amd64         | `gitlab-mcp-server-windows-amd64.exe` |
-| Windows arm64         | `gitlab-mcp-server-windows-arm64.exe` |
-| macOS Intel (amd64)   | `gitlab-mcp-server-darwin-amd64`      |
-| macOS Apple Silicon   | `gitlab-mcp-server-darwin-arm64`      |
-
-Make it executable on Linux/macOS:
+Download the latest binary for your platform from [GitHub Releases](../../releases) and make it executable:
 
 ```bash
-chmod +x gitlab-mcp-server-linux-amd64
+chmod +x gitlab-mcp-server-*  # Linux/macOS only
 ```
 
-### 2. Run the Setup Wizard
+### 2. Configure your MCP client
 
-The binary includes a built-in **Setup Wizard** that configures everything: GitLab connection, token, and MCP client config files — all in one step.
-
-#### Windows
-
-**Double-click** the `.exe` file. The wizard opens automatically in your browser.
-
-Or from a terminal:
-
-```powershell
-.\gitlab-mcp-server-windows-amd64.exe --setup
-```
-
-#### Linux
+**Recommended**: Run the built-in setup wizard — it configures your GitLab connection and MCP client in one step:
 
 ```bash
-./gitlab-mcp-server-linux-amd64 --setup
+./gitlab-mcp-server --setup
 ```
 
-#### macOS
+> **Tip**: The wizard supports Web UI, Terminal UI, and plain CLI modes. On Windows, double-click the `.exe` to launch the wizard automatically.
+
+**Or configure manually** — expand your client below:
+
+<details>
+<summary><strong>VS Code (GitHub Copilot)</strong></summary>
+
+Add to `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Code</strong></summary>
 
 ```bash
-./gitlab-mcp-server-darwin-arm64 --setup
+claude mcp add gitlab /path/to/gitlab-mcp-server \
+  -e GITLAB_URL=https://gitlab.example.com \
+  -e GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-The wizard auto-detects the best UI available:
+</details>
 
-1. **Web UI** (default) — opens in your browser with a visual form
-2. **Terminal UI** — interactive Bubble Tea interface (if browser is unavailable)
-3. **Plain CLI** — text prompts (universal fallback)
+<details>
+<summary><strong>Windsurf</strong></summary>
 
-You can force a specific mode:
+Add to `~/.codeium/windsurf/mcp_config.json`:
 
-```bash
-gitlab-mcp-server --setup -setup-mode web   # Browser-based UI
-gitlab-mcp-server --setup -setup-mode tui   # Terminal UI
-gitlab-mcp-server --setup -setup-mode cli   # Plain text prompts
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
 ```
 
-<p align="center">
-  <img src=".github/assets/setup-wizard-web.png" alt="Setup Wizard — Web UI" width="500">
-</p>
+</details>
 
-The wizard supports **10 MCP clients**: VS Code (GitHub Copilot), Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Copilot CLI, OpenCode, Crush, and Zed.
+<details>
+<summary><strong>JetBrains IDEs</strong></summary>
 
-After setup, open your AI client and try: _"List my GitLab projects"_
+Add to the MCP configuration in **Settings → Tools → AI Assistant → MCP Servers**:
 
-> **Manual configuration**: If you prefer to configure clients manually, see [Configuration](docs/configuration.md#mcp-client-configuration-manual) for JSON examples per client.
+```json
+{
+  "servers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
 
-## What Can You Do With It?
+</details>
 
-Once connected, just talk to your AI assistant in natural language. Here are some things you can try in your first 5 minutes:
+<details>
+<summary><strong>Zed</strong></summary>
 
-**Explore your projects:**
+Add to Zed settings (`settings.json`):
 
-> "List my GitLab projects"
-> "Show me the branches in project my-app"
-> "What's in the README of project 42?"
+```json
+{
+  "context_servers": {
+    "gitlab": {
+      "command": {
+        "path": "/path/to/gitlab-mcp-server",
+        "env": {
+          "GITLAB_URL": "https://gitlab.example.com",
+          "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        }
+      }
+    }
+  }
+}
+```
 
-**Work with merge requests:**
+</details>
 
-> "Show me open merge requests in my-app"
-> "Create a merge request from feature-login to main"
-> "Review merge request !15 — is it safe to merge?"
+<details>
+<summary><strong>Kiro</strong></summary>
 
-**Track issues and pipelines:**
+Add to `.kiro/settings/mcp.json`:
 
-> "List open issues assigned to me"
-> "What's the pipeline status for project 42?"
-> "Why did the last pipeline fail?"
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
 
-**Generate reports:**
+</details>
 
-> "Generate release notes from v1.0 to v2.0"
-> "Give me a daily standup summary"
-> "Assess the risk of merge request !23"
+### 3. Verify
 
-The server handles the translation from your natural language to GitLab API calls. You do not need to know project IDs, API endpoints, or JSON syntax — the AI assistant figures that out for you.
+Open your AI client and try:
 
-See [Usage Examples](docs/examples/usage-examples.md) for more scenarios.
+> _"List my GitLab projects"_
+
+See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for detailed setup instructions.
 
 ## Tool Modes
 
-gitlab-mcp-server supports two tool registration modes, controlled by the `META_TOOLS` environment variable:
+Two registration modes, controlled by the `META_TOOLS` environment variable:
 
-### Individual Tools (1004 tools)
+| Mode | Tools | Description |
+|------|-------|-------------|
+| **Meta-Tools** (default) | 40 base / 59 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Individual** | 1004 | Every GitLab operation as a separate MCP tool. |
 
-Set `META_TOOLS=false` to register all 1004 tools as separate MCP endpoints across 162 domain sub-packages. Each GitLab operation has its own tool with a dedicated name.
+Meta-tool summary:
 
-### Meta-Tools (40 base / 59 enterprise)
+| Meta-Tool | Domain |
+|-----------|--------|
+| `gitlab_project` | Projects, uploads, hooks, badges, boards, import/export, pages |
+| `gitlab_branch` | Branches, protected branches |
+| `gitlab_tag` | Tags, protected tags |
+| `gitlab_release` | Releases, release links |
+| `gitlab_merge_request` | MR CRUD, approvals, context-commits |
+| `gitlab_mr_review` | MR notes, discussions, drafts, changes |
+| `gitlab_repository` | Repository tree/compare, commit discussions, files |
+| `gitlab_group` | Groups, members, labels, milestones, boards, uploads |
+| `gitlab_issue` | Issues, notes, discussions, links, statistics, emoji, events |
+| `gitlab_pipeline` | Pipelines, pipeline triggers |
+| `gitlab_job` | Jobs, job token scope |
+| `gitlab_user` | Users, events, notifications, keys, namespaces |
+| `gitlab_wiki` | Project/group wikis |
+| `gitlab_environment` | Environments, protected envs, freeze periods |
+| `gitlab_deployment` | Deployments |
+| `gitlab_ci_variable` | CI/CD variables (project, group, instance) |
+| `gitlab_search` | Global, project, group search |
 
-Set `META_TOOLS=true` (or omit — default) to register 40 domain meta-tools (or 59 with `GITLAB_ENTERPRISE=true`). Each meta-tool groups related operations under a single tool with an `action` parameter. This reduces the number of tools the LLM must evaluate, lowering token usage while preserving full functionality.
+Plus 11 sampling tools, 4 elicitation tools, and additional domain tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
 
-| Meta-Tool                    | Domain                                                       |
-| ---------------------------- | ------------------------------------------------------------ |
-| `gitlab_project`             | Projects, uploads, hooks, badges, boards, import/export, pages |
-| `gitlab_branch`              | Branches, protected branches                                 |
-| `gitlab_tag`                 | Tags, protected tags                                         |
-| `gitlab_release`             | Releases, release links                                      |
-| `gitlab_merge_request`       | MR CRUD, approvals, context-commits                          |
-| `gitlab_mr_review`           | MR notes, discussions, drafts, changes                       |
-| `gitlab_repository`          | Repository tree/compare, commit discussions, files            |
-| `gitlab_group`               | Groups, members, labels, milestones, boards, uploads          |
-| `gitlab_issue`               | Issues, notes, discussions, links, statistics, emoji, events  |
-| `gitlab_pipeline`            | Pipelines, pipeline triggers                                 |
-| `gitlab_job`                 | Jobs, job token scope                                        |
-| `gitlab_user`                | Users, events, notifications, keys, namespaces               |
-| `gitlab_wiki`                | Project/group wikis                                          |
-| `gitlab_environment`         | Environments, protected envs, freeze periods                 |
-| `gitlab_deployment`          | Deployments                                                  |
-| `gitlab_pipeline_schedule`   | Pipeline schedules, schedule variables                       |
-| `gitlab_ci_variable`         | CI/CD variables (project, group, instance)                   |
-| `gitlab_template`            | CI/CD, Dockerfile, gitignore templates                       |
-| `gitlab_admin`               | Server settings, broadcasts, error tracking, terraform, etc. |
-| `gitlab_access`              | Access tokens, deploy tokens, deploy keys, invites           |
-| `gitlab_package`             | Packages, container registry                                 |
-| `gitlab_snippet`             | Snippets, snippet discussions                                |
-| `gitlab_feature_flags`       | Feature flags, feature flag user lists                       |
-| `gitlab_search`              | Global, project, group search                                |
-| `gitlab_runner`              | Runners, runner management                                   |
-| `gitlab_summarize_issue`     | LLM-powered issue summarization (sampling)                   |
-| `gitlab_analyze_mr_changes`  | LLM-powered MR analysis (sampling)                           |
-| `gitlab_generate_release_notes` | LLM-powered release notes generation (sampling)           |
-| `gitlab_analyze_pipeline_failure` | LLM-powered pipeline failure analysis (sampling)        |
-| `gitlab_summarize_mr_review` | LLM-powered MR review summarization (sampling)              |
-| `gitlab_generate_milestone_report` | LLM-powered milestone report generation (sampling)    |
-| `gitlab_analyze_ci_configuration` | LLM-powered CI configuration analysis (sampling)       |
-| `gitlab_analyze_issue_scope` | LLM-powered issue scope analysis (sampling)                  |
-| `gitlab_review_mr_security`  | LLM-powered MR security review (sampling)                    |
-| `gitlab_find_technical_debt` | LLM-powered technical debt detection (sampling)              |
-| `gitlab_analyze_deployment_history` | LLM-powered deployment history analysis (sampling)  |
+## Compatibility
 
-> **Full reference**: See [docs/meta-tools.md](docs/meta-tools.md) for action lists and examples.
+| MCP Capability | Support |
+|----------------|---------|
+| **Tools** | 1004 individual / 40–59 meta |
+| **Resources** | 24 (static + templates) |
+| **Prompts** | 38 templates |
+| **Completions** | Project, user, group, branch, tag |
+| **Logging** | Structured (text/JSON) + MCP notifications |
+| **Progress** | Tool execution progress reporting |
+| **Sampling** | 11 LLM-powered analysis tools |
+| **Elicitation** | 4 interactive creation wizards |
+| **Roots** | Workspace root tracking |
 
-## Project Structure
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro.
 
-```text
-gitlab-mcp-server/
-+-- cmd/server/              # Entry point (main.go)
-+-- internal/
-|   +-- config/              # Environment variable configuration
-|   +-- gitlab/              # GitLab API client wrapper
-|   +-- serverpool/          # HTTP mode: bounded LRU pool of per-token MCP servers
-|   +-- toolutil/            # Shared tool utilities (errors, pagination, markdown, logging)
-|   +-- testutil/            # Shared test helpers (NewTestClient, RespondJSON)
-|   +-- tools/               # MCP tool handlers (1004 tools / 40-59 meta-tools)
-|   +-- resources/           # MCP resource handlers (24 resources)
-|   +-- prompts/             # MCP prompt handlers (38 prompts)
-|   +-- completions/         # Autocomplete for prompts and resource URIs
-|   +-- logging/             # Structured MCP session logging
-|   +-- roots/               # Client workspace root tracking
-|   +-- progress/            # Progress notification tracking
-|   +-- sampling/            # LLM-assisted analysis via MCP sampling
-|   +-- elicitation/         # Interactive user input via MCP elicitation
-+-- test/e2e/                # End-to-end integration tests
-+-- docs/                    # Documentation
-+-- Makefile                 # Build automation
-+-- .gitlab-ci.yml           # CI/CD pipeline
-```
+See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/) for detailed client support.
 
 ## Documentation
 
-| Document                                           | Description                                               |
-| -------------------------------------------------- | --------------------------------------------------------- |
-| [Architecture](docs/architecture.md)               | System architecture, component design, and data flow      |
-| [Configuration](docs/configuration.md)             | Environment variables, transport modes, TLS, client setup |
-| [Tools Reference](docs/tools/README.md)            | All 1004 individual tools with input/output schemas       |
-| [Meta-Tools Reference](docs/meta-tools.md)         | 40/59 domain meta-tools with action dispatching           |
-| [Tools (per domain)](docs/tools/README.md)         | Detailed docs per meta-tool + sampling/elicitation tools  |
-| [Resources Reference](docs/resources-reference.md) | All 24 resources with URI templates                       |
-| [Prompts Reference](docs/prompts-reference.md)     | All 38 prompts with arguments and output format           |
-| [Capabilities](docs/capabilities.md)               | 6 MCP capabilities: logging, completions, roots, etc.     |
-| [Auto-Update](docs/auto-update.md)                 | Self-update mechanism, modes, MCP tools, release format   |
-| [Security](docs/security.md)                       | Security model, token scopes, input validation            |
-| [Usage Examples](docs/examples/usage-examples.md)  | Real-world MCP usage scenarios                            |
-| [Development Guide](docs/development/development.md) | Building, testing, CI/CD, adding tools, contributing      |
-| [ADRs](docs/adr/)                                  | Architectural Decision Records                            |
+Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**.
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
+| [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
+| [Tools Reference](docs/tools/README.md) | All 1004 individual tools with input/output schemas |
+| [Meta-Tools](docs/meta-tools.md) | 40/59 domain meta-tools with action dispatching |
+| [Resources](docs/resources-reference.md) | All 24 resources with URI templates |
+| [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
+| [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
+| [Security](docs/security.md) | Security model, token scopes, input validation |
+| [Architecture](docs/architecture.md) | System architecture, component design, data flow |
+| [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing |
 
 ## Tech Stack
 
-| Component     | Technology                                      |
-| ------------- | ----------------------------------------------- |
-| Language      | Go 1.26+                                        |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.5.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.17.0   |
-| Transport     | stdio (default), HTTP (Streamable HTTP)         |
-| CI/CD         | GitHub Actions with lint, test, build pipeline  |
+| Component | Technology |
+|-----------|------------|
+| Language | Go 1.26+ |
+| MCP SDK | `github.com/modelcontextprotocol/go-sdk` v1.5.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.17.0 |
+| Transport | stdio (default), HTTP (Streamable HTTP) |
 
 ## Building from Source
 
-If you prefer to compile from source instead of using pre-built binaries:
-
 ```bash
-git clone <repository-url>
+git clone https://github.com/jmrplens/gitlab-mcp-server.git
 cd gitlab-mcp-server
 make build
 ```
 
-See the [Development Guide](docs/development/development.md) for full build instructions, cross-compilation targets, and contributing guidelines.
+See the [Development Guide](docs/development/development.md) for cross-compilation and contributing guidelines.
 
 ## Docker
 
-### Quick Start
-
-Pull and run the pre-built image from the GitHub Container Registry — **no source code required**:
-
 ```bash
-# Pull the latest image
 docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 
-# Run in HTTP mode
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
   -e GITLAB_URL=https://gitlab.example.com \
   -e GITLAB_SKIP_TLS_VERIFY=true \
   ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-Each client authenticates by sending its own `GITLAB_TOKEN` via the `PRIVATE-TOKEN` header or `Authorization: Bearer` header.
-
-### Docker Compose
-
-Download `docker-compose.yml` from this repository and create a `.env` file (see `.env.example`):
-
-```bash
-cp .env.example .env
-# Edit .env with your values
-
-docker compose up -d
-```
-
-The Compose file uses the pre-built image by default. No build step needed.
-
-### Configuration
-
-| Environment Variable       | Default | Description                                             |
-| -------------------------- | ------- | ------------------------------------------------------- |
-| `GITLAB_URL`               | —       | GitLab instance URL (**required**)                      |
-| `GITLAB_SKIP_TLS_VERIFY`   | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS`               | `true`  | Enable meta-tools for tool discovery                    |
-| `GITLAB_ENTERPRISE`        | `false` | Enable Enterprise/Premium meta-tools                    |
-| `GITLAB_READ_ONLY`         | `false` | Expose only read-only tools                             |
-
-### Health Check
-
-The container exposes a health endpoint at `GET /health`:
-
-```json
-{"status": "ok", "version": "1.8.0", "commit": "abc1234"}
-```
-
-Docker Compose healthcheck is pre-configured. For custom setups:
-
-```bash
-curl -f http://localhost:8080/health
-```
-
-> For building the Docker image from source, publishing to the registry, and development workflows, see the [Development Guide](docs/development/development.md#docker).
+Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
 
 ## FAQ
 
@@ -362,7 +357,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, and others. The built-in setup wizard can auto-configure most clients.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
 </details>
 
 ## Related Projects

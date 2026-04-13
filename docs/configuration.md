@@ -6,6 +6,8 @@ gitlab-mcp-server is configured through environment variables. A `.env` file in 
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: A running GitLab instance with a Personal Access Token
 
+> 📖 **User documentation**: See the [Configuration](https://jmrplens.github.io/gitlab-mcp-server/configuration/) on the documentation site for a user-friendly version.
+
 ---
 
 ## Personal Setup
@@ -68,139 +70,11 @@ The wizard supports 10 MCP clients: VS Code (GitHub Copilot), Claude Desktop, Cl
 
 ---
 
-## MCP Client Configuration (Manual)
+## MCP Client Configuration
 
-If you prefer to configure clients manually instead of using the wizard, add the server to your client's MCP configuration file.
+For per-client setup instructions (VS Code, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains, Zed, Kiro), see [Getting Started](getting-started.md).
 
-### VS Code / GitHub Copilot
-
-Add to `.vscode/mcp.json` in your project, or to User Settings for all workspaces:
-
-```json
-{
-  "servers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance",
-        "GITLAB_TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-> **Note**: On Windows, use `.exe` extension and double backslashes: `"C:\\Tools\\gitlab-mcp-server.exe"`.
-
-### Cursor
-
-Add to `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance",
-        "GITLAB_TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance",
-        "GITLAB_TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-### Claude Code (CLI)
-
-Add to `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance",
-        "GITLAB_TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-### OpenCode
-
-Add to your OpenCode MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance",
-        "GITLAB_TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-### Copilot CLI
-
-Set environment variables in your shell profile (`~/.bashrc`, `~/.zshrc`):
-
-```bash
-export GITLAB_URL="https://your-gitlab-instance"
-export GITLAB_TOKEN="glpat-your-token"
-```
-
-Then configure the MCP server via Copilot CLI's MCP settings (`~/.copilot/mcp-config.json`).
-
-### HTTP Server Mode (Remote/Multi-User)
-
-For team deployments, the server can run in HTTP mode where each client provides its own token per request:
-
-```bash
-gitlab-mcp-server --http --gitlab-url=https://your-gitlab-instance --http-addr=:8080
-```
-
-Clients connect via HTTP:
-
-```json
-{
-  "servers": {
-    "gitlab": {
-      "type": "http",
-      "url": "http://your-server:8080/mcp",
-      "headers": {
-        "PRIVATE-TOKEN": "glpat-your-token"
-      }
-    }
-  }
-}
-```
-
-See [HTTP Server Mode](http-server-mode.md) for full configuration options.
+For HTTP mode (remote/multi-user), see [HTTP Server Mode](http-server-mode.md).
 
 ---
 

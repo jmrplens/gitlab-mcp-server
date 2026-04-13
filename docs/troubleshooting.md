@@ -6,6 +6,8 @@ Common issues and solutions for gitlab-mcp-server.
 > **Audience**: 👤 End users, AI assistant users
 > **Prerequisites**: gitlab-mcp-server installed and configured
 
+> 📖 **User documentation**: See the [Troubleshooting](https://jmrplens.github.io/gitlab-mcp-server/operations/troubleshooting/) on the documentation site for a user-friendly version.
+
 ---
 
 ## Connection and Authentication

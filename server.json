@@ -1,0 +1,61 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.jmrplens/gitlab-mcp-server",
+  "title": "GitLab MCP Server",
+  "description": "MCP server exposing 1004 GitLab REST API operations as tools for AI assistants.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/jmrplens/gitlab-mcp-server",
+    "source": "github",
+    "id": "1208139072"
+  },
+  "websiteUrl": "https://jmrplens.github.io/gitlab-mcp-server/",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-${os}-${arch}",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GITLAB_URL",
+          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
+          "isRequired": true,
+          "placeholder": "https://gitlab.example.com"
+        },
+        {
+          "name": "GITLAB_TOKEN",
+          "description": "GitLab Personal Access Token (glpat-...)",
+          "isRequired": true,
+          "isSecret": true,
+          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{host}:{port}/mcp",
+      "headers": [
+        {
+          "name": "X-Gitlab-Token",
+          "description": "GitLab Personal Access Token for authentication",
+          "isSecret": true
+        }
+      ],
+      "variables": {
+        "host": {
+          "description": "Hostname of the GitLab MCP Server HTTP instance",
+          "placeholder": "localhost"
+        },
+        "port": {
+          "description": "Port of the GitLab MCP Server HTTP instance",
+          "default": "8080",
+          "placeholder": "8080"
+        }
+      }
+    }
+  ]
+}

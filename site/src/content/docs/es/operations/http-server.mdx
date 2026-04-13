@@ -5,6 +5,10 @@ description: Despliegue multiusuario con autenticación por solicitud
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/http-server-mode.md) en el repositorio.
+:::
+
 Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
 
 ## Cuándo Usar el Modo HTTP

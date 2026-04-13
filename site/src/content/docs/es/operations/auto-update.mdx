@@ -3,6 +3,10 @@ title: Actualización Automática
 description: Actualizaciones automáticas del binario desde releases de GitHub
 ---
 
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/auto-update.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/auto-update.md) en el repositorio.
+:::
+
 GitLab MCP Server puede detectar, descargar y aplicar automáticamente nuevas versiones desde GitHub. Las actualizaciones usan un **truco de renombrado** — el binario en ejecución se renombra a `.old`, el nuevo binario se coloca en la ruta original, y en Unix el proceso se re-ejecuta sin interrupciones.
 
 ## Modos de Actualización

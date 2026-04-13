@@ -3,6 +3,10 @@ title: Meta-herramientas
 description: Herramientas a nivel de dominio que consolidan operaciones relacionadas
 ---
 
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/meta-tools.md) en el repositorio.
+:::
+
 Las meta-herramientas son el modo de operación predeterminado de GitLab MCP Server. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
 
 ## ¿Por qué meta-herramientas?
