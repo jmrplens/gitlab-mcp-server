@@ -9,20 +9,20 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The `GITLAB_ENTERPRISE` environment variable unlocks 19 additional enterprise-only meta-tools.
 
-| Feature | Community (CE) | Enterprise (EE) |
-|---------|:-:|:-:|
-| Projects, Issues, MRs, Pipelines, CI/CD | ✅ | ✅ |
-| Wikis, Labels, Milestones, Releases | ✅ | ✅ |
-| Users, Groups, Members, Search | ✅ | ✅ |
-| Deployments, Environments, Packages | ✅ | ✅ |
-| 40 base meta-tools | ✅ | ✅ |
-| 24 resources, 38 prompts | ✅ | ✅ |
-| Merge Trains | ❌ | ✅ |
-| DORA Metrics | ❌ | ✅ |
-| Vulnerability Management | ❌ | ✅ |
-| Audit Events | ❌ | ✅ |
-| Compliance Policies | ❌ | ✅ |
-| +19 enterprise meta-tools | ❌ | ✅ |
+| Feature                                 | Community (CE) | Enterprise (EE) |
+| --------------------------------------- | :------------: | :-------------: |
+| Projects, Issues, MRs, Pipelines, CI/CD |       ✅       |       ✅        |
+| Wikis, Labels, Milestones, Releases     |       ✅       |       ✅        |
+| Users, Groups, Members, Search          |       ✅       |       ✅        |
+| Deployments, Environments, Packages     |       ✅       |       ✅        |
+| 40 base meta-tools                      |       ✅       |       ✅        |
+| 24 resources, 38 prompts                |       ✅       |       ✅        |
+| Merge Trains                            |       ❌       |       ✅        |
+| DORA Metrics                            |       ❌       |       ✅        |
+| Vulnerability Management                |       ❌       |       ✅        |
+| Audit Events                            |       ❌       |       ✅        |
+| Compliance Policies                     |       ❌       |       ✅        |
+| +19 enterprise meta-tools               |       ❌       |       ✅        |
 
 To enable enterprise features, set `GITLAB_ENTERPRISE=true`.
 
@@ -30,41 +30,41 @@ To enable enterprise features, set `GITLAB_ENTERPRISE=true`.
 
 Pre-built binaries are available for all major platforms:
 
-| OS | Architecture | Binary |
-|---|---|---|
-| Linux | amd64 | `gitlab-mcp-server-linux-amd64` |
-| Linux | arm64 | `gitlab-mcp-server-linux-arm64` |
-| macOS | amd64 (Intel) | `gitlab-mcp-server-darwin-amd64` |
-| macOS | arm64 (Apple Silicon) | `gitlab-mcp-server-darwin-arm64` |
-| Windows | amd64 | `gitlab-mcp-server-windows-amd64.exe` |
-| Windows | arm64 | `gitlab-mcp-server-windows-arm64.exe` |
+| OS      | Architecture          | Binary                                |
+| ------- | --------------------- | ------------------------------------- |
+| Linux   | amd64                 | `gitlab-mcp-server-linux-amd64`       |
+| Linux   | arm64                 | `gitlab-mcp-server-linux-arm64`       |
+| macOS   | amd64 (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
+| macOS   | arm64 (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
+| Windows | amd64                 | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows | arm64                 | `gitlab-mcp-server-windows-arm64.exe` |
 
 ## MCP Client Compatibility
 
 Any client supporting the Model Context Protocol stdio transport can use this server. Tested clients:
 
-| Client | Transport | Status |
-|--------|-----------|:------:|
-| VS Code + GitHub Copilot | stdio | ✅ |
-| Claude Desktop | stdio | ✅ |
-| Cursor | stdio | ✅ |
-| Claude Code (CLI) | stdio | ✅ |
-| Windsurf | stdio | ✅ |
-| JetBrains IDEs | stdio | ✅ |
-| Zed | stdio | ✅ |
-| Kiro | stdio | ✅ |
-| Any Streamable HTTP client | HTTP | ✅ |
+| Client                     | Transport | Status |
+| -------------------------- | --------- | :----: |
+| VS Code + GitHub Copilot   | stdio     |   ✅   |
+| Claude Desktop             | stdio     |   ✅   |
+| Cursor                     | stdio     |   ✅   |
+| Claude Code (CLI)          | stdio     |   ✅   |
+| Windsurf                   | stdio     |   ✅   |
+| JetBrains IDEs             | stdio     |   ✅   |
+| Zed                        | stdio     |   ✅   |
+| Kiro                       | stdio     |   ✅   |
+| Any Streamable HTTP client | HTTP      |   ✅   |
 
 ## MCP Protocol Features
 
-| Capability | Supported |
-|-----------|:---------:|
-| Tools | ✅ (1004 individual / 40–59 meta) |
-| Resources | ✅ (24) |
-| Prompts | ✅ (38) |
-| Completions | ✅ (17 argument types) |
-| Sampling | ✅ |
-| Elicitation | ✅ |
-| Roots | ✅ |
-| Logging | ✅ |
-| Progress | ✅ |
+| Capability  |             Supported             |
+| ----------- | :-------------------------------: |
+| Tools       | ✅ (1004 individual / 40–59 meta) |
+| Resources   |              ✅ (24)              |
+| Prompts     |              ✅ (38)              |
+| Completions |      ✅ (17 argument types)       |
+| Sampling    |                ✅                 |
+| Elicitation |                ✅                 |
+| Roots       |                ✅                 |
+| Logging     |                ✅                 |
+| Progress    |                ✅                 |

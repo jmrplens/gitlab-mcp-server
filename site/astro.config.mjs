@@ -38,8 +38,7 @@ const jsonLd = JSON.stringify({
 			operatingSystem: "Windows, Linux, macOS",
 			programmingLanguage: "Go",
 			url: "https://github.com/jmrplens/gitlab-mcp-server",
-			downloadUrl:
-				"https://github.com/jmrplens/gitlab-mcp-server/releases",
+			downloadUrl: "https://github.com/jmrplens/gitlab-mcp-server/releases",
 			license: "https://opensource.org/licenses/MIT",
 			description:
 				"Model Context Protocol server that exposes 1000+ GitLab operations as AI-accessible tools.",
@@ -105,8 +104,7 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						property: "og:image:alt",
-						content:
-							"GitLab MCP Server — 1000+ GitLab tools for AI assistants",
+						content: "GitLab MCP Server — 1000+ GitLab tools for AI assistants",
 					},
 				},
 				{
