@@ -2,6 +2,24 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import mermaid from "astro-mermaid";
 
+// Converts deprecated HTML align attributes to CSS text-align (WCAG2AA compliance)
+function rehypeTableAlign() {
+	return (tree) => {
+		(function visit(node) {
+			if (
+				node.type === "element" &&
+				(node.tagName === "td" || node.tagName === "th") &&
+				node.properties?.align
+			) {
+				const val = node.properties.align;
+				node.properties.style = `text-align:${val}`;
+				delete node.properties.align;
+			}
+			if (node.children) node.children.forEach(visit);
+		})(tree);
+	};
+}
+
 const siteUrl = "https://jmrplens.github.io";
 const basePath = "/gitlab-mcp-server";
 const fullUrl = `${siteUrl}${basePath}`;
@@ -364,4 +382,7 @@ export default defineConfig({
 			customCss: ["./src/styles/custom.css"],
 		}),
 	],
+	markdown: {
+		rehypePlugins: [rehypeTableAlign],
+	},
 });
