@@ -1724,7 +1724,7 @@ func testMergeMR(ctx context.Context, t *testing.T) {
 	out, err := callTool[mergerequests.Output](ctx, "gitlab_mr_merge", mergerequests.MergeInput{
 		ProjectID:                pidStr(),
 		MRIID:                    state.mrIID,
-		ShouldRemoveSourceBranch: gl.Ptr(true), //nolint:modernize // gl.Ptr is the idiomatic GitLab client helper
+		ShouldRemoveSourceBranch: new(true),
 	})
 	requireNoError(t, err, "merge MR")
 	requireTrue(t, out.State == "merged", "expected state 'merged', got %q", out.State)

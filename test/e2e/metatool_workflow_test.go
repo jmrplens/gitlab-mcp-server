@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/attestations"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/auditevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
@@ -26,18 +28,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/civariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/compliancepolicy"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dependencies"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploykeys"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/geo"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuediscussions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/members"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
@@ -46,14 +59,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectaliases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/securityfindings"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/settings"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/topics"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
@@ -359,6 +376,38 @@ func TestMetaToolWorkflow(t *testing.T) {
 	t.Run("112_AwardEmojiCreate", func(t *testing.T) { metaAwardEmojiCreate(ctx, t) })
 	t.Run("113_AwardEmojiList", func(t *testing.T) { metaAwardEmojiList(ctx, t) })
 	t.Run("114_AwardEmojiDelete", func(t *testing.T) { metaAwardEmojiDelete(ctx, t) })
+
+	// --- Previously untested meta-tools (gap coverage) ---
+
+	// CE-testable: gitlab_deployment, gitlab_job, gitlab_user extensions, gitlab_template, gitlab_admin.
+	t.Run("115_DeploymentList", func(t *testing.T) { metaDeploymentList(ctx, t) })
+	t.Run("116_JobList", func(t *testing.T) { metaJobList(ctx, t) })
+	t.Run("117_UserSSHKeyList", func(t *testing.T) { metaUserSSHKeyList(ctx, t) })
+	t.Run("118_UserGPGKeyList", func(t *testing.T) { metaUserGPGKeyList(ctx, t) })
+	t.Run("119_TemplateGitignoreList", func(t *testing.T) { metaTemplateGitignoreList(ctx, t) })
+	t.Run("120_TemplateCIYmlList", func(t *testing.T) { metaTemplateCIYmlList(ctx, t) })
+	t.Run("121_AdminTopicList", func(t *testing.T) { metaAdminTopicList(ctx, t) })
+	t.Run("122_AdminSettingsGet", func(t *testing.T) { metaAdminSettingsGet(ctx, t) })
+	t.Run("123_SearchIssues", func(t *testing.T) { metaSearchIssues(ctx, t) })
+	t.Run("124_SearchProjects", func(t *testing.T) { metaSearchProjects(ctx, t) })
+
+	// Enterprise / Premium meta-tools (graceful skip on CE).
+	t.Run("125_FeatureFlagList", func(t *testing.T) { metaFeatureFlagList(ctx, t) })
+	t.Run("126_MergeTrainList", func(t *testing.T) { metaMergeTrainList(ctx, t) })
+	t.Run("127_AuditEventList", func(t *testing.T) { metaAuditEventList(ctx, t) })
+	t.Run("128_DORAMetrics", func(t *testing.T) { metaDORAMetrics(ctx, t) })
+	t.Run("129_DependencyList", func(t *testing.T) { metaDependencyList(ctx, t) })
+	t.Run("130_ExternalStatusCheckList", func(t *testing.T) { metaExternalStatusCheckList(ctx, t) })
+	t.Run("131_GroupSCIMList", func(t *testing.T) { metaGroupSCIMList(ctx, t) })
+	t.Run("132_MemberRoleList", func(t *testing.T) { metaMemberRoleList(ctx, t) })
+	t.Run("133_EnterpriseUserList", func(t *testing.T) { metaEnterpriseUserList(ctx, t) })
+	t.Run("134_AttestationList", func(t *testing.T) { metaAttestationList(ctx, t) })
+	t.Run("135_CompliancePolicyGet", func(t *testing.T) { metaCompliancePolicyGet(ctx, t) })
+	t.Run("136_ProjectAliasList", func(t *testing.T) { metaProjectAliasList(ctx, t) })
+	t.Run("137_GeoList", func(t *testing.T) { metaGeoList(ctx, t) })
+	t.Run("138_StorageMoveList", func(t *testing.T) { metaStorageMoveList(ctx, t) })
+	t.Run("139_SecurityFindingList", func(t *testing.T) { metaSecurityFindingList(ctx, t) })
+	t.Run("140_ModelRegistryDownload", func(t *testing.T) { metaModelRegistryDownload(ctx, t) })
 
 	// Cleanup.
 	t.Run("99_Cleanup_DeleteProject", func(t *testing.T) { metaDeleteProject(ctx, t) })
@@ -2717,6 +2766,313 @@ func metaAwardEmojiDelete(ctx context.Context, t *testing.T) {
 		"issue_iid":  mState.issueIID,
 	})
 	mState.issueIID = 0
+}
+
+// ---------------------------------------------------------------------------
+// Gap coverage: CE-testable meta-tools
+// ---------------------------------------------------------------------------.
+
+func metaDeploymentList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[deployments.ListOutput](ctx, "gitlab_deployment", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta deployment list")
+	t.Log("Deployment list OK (may be empty without CI pipeline)")
+}
+
+func metaJobList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[jobs.ListOutput](ctx, "gitlab_job", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta job list")
+	t.Log("Job list OK (may be empty without CI pipeline)")
+}
+
+func metaUserSSHKeyList(ctx context.Context, t *testing.T) {
+	err := callMetaVoid(ctx, "gitlab_user", "ssh_key_list", map[string]any{})
+	requireNoError(t, err, "meta user ssh key list")
+	t.Log("SSH key list OK")
+}
+
+func metaUserGPGKeyList(ctx context.Context, t *testing.T) {
+	err := callMetaVoid(ctx, "gitlab_user", "gpg_key_list", map[string]any{})
+	requireNoError(t, err, "meta user gpg key list")
+	t.Log("GPG key list OK")
+}
+
+func metaTemplateGitignoreList(ctx context.Context, t *testing.T) {
+	out, err := callMeta[gitignoretemplates.ListOutput](ctx, "gitlab_template", "gitignore_list", map[string]any{})
+	requireNoError(t, err, "meta gitignore template list")
+	requireTrue(t, len(out.Templates) > 0, "expected at least one gitignore template, got %d", len(out.Templates))
+	t.Logf("Listed %d gitignore templates", len(out.Templates))
+}
+
+func metaTemplateCIYmlList(ctx context.Context, t *testing.T) {
+	out, err := callMeta[gitignoretemplates.ListOutput](ctx, "gitlab_template", "ci_yml_list", map[string]any{})
+	requireNoError(t, err, "meta CI yml template list")
+	requireTrue(t, len(out.Templates) > 0, "expected at least one CI yml template, got %d", len(out.Templates))
+	t.Logf("Listed %d CI yml templates", len(out.Templates))
+}
+
+func metaAdminTopicList(ctx context.Context, t *testing.T) {
+	out, err := callMeta[topics.ListOutput](ctx, "gitlab_admin", "topic_list", map[string]any{})
+	if err != nil {
+		if isFeatureUnavailable(err) {
+			t.Skipf("topic list not available: %v", err)
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Logf("Listed %d topics", len(out.Topics))
+}
+
+func metaAdminSettingsGet(ctx context.Context, t *testing.T) {
+	_, err := callMeta[settings.GetOutput](ctx, "gitlab_admin", "settings_get", map[string]any{})
+	if err != nil {
+		if isFeatureUnavailable(err) {
+			t.Skipf("settings get not available (admin required): %v", err)
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Log("Admin settings get OK")
+}
+
+func metaSearchIssues(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	err := callMetaVoid(ctx, "gitlab_search", "issues", map[string]any{
+		"project_id": mPID(),
+		"search":     "test",
+	})
+	if err != nil {
+		if isFeatureUnavailable(err) {
+			t.Skipf("issue search not available: %v", err)
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Log("Search issues OK")
+}
+
+func metaSearchProjects(ctx context.Context, t *testing.T) {
+	err := callMetaVoid(ctx, "gitlab_search", "projects", map[string]any{
+		"search": "test",
+	})
+	if err != nil {
+		if isFeatureUnavailable(err) {
+			t.Skipf("project search not available: %v", err)
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Log("Search projects OK")
+}
+
+// ---------------------------------------------------------------------------
+// Gap coverage: Enterprise / Premium meta-tools (graceful skip on CE)
+// ---------------------------------------------------------------------------.
+
+func metaFeatureFlagList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[featureflags.ListOutput](ctx, "gitlab_feature_flags", "feature_flag_list", map[string]any{
+		"project_id": mPID(),
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "feature flags")
+	}
+	t.Log("Feature flag list OK")
+}
+
+func metaMergeTrainList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[mergetrains.ListOutput](ctx, "gitlab_merge_train", "list_project", map[string]any{
+		"project_id": mPID(),
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "merge trains")
+	}
+	t.Log("Merge train list OK")
+}
+
+func metaAuditEventList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[auditevents.ListOutput](ctx, "gitlab_audit_event", "list_project", map[string]any{
+		"project_id": mPID(),
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "audit events")
+	}
+	t.Log("Audit event list OK")
+}
+
+func metaDORAMetrics(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	err := callMetaVoid(ctx, "gitlab_dora_metrics", "project", map[string]any{
+		"project_id": mPID(),
+		"metric":     "deployment_frequency",
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "DORA metrics")
+	}
+	t.Log("DORA metrics OK")
+}
+
+func metaDependencyList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[dependencies.ListOutput](ctx, "gitlab_dependency", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "dependencies")
+	}
+	t.Log("Dependency list OK")
+}
+
+func metaExternalStatusCheckList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	err := callMetaVoid(ctx, "gitlab_external_status_check", "list_project_checks", map[string]any{
+		"project_id": mPID(),
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "external status checks")
+	}
+	t.Log("External status check list OK")
+}
+
+func metaGroupSCIMList(ctx context.Context, t *testing.T) {
+	if mState.groupPath == "" {
+		t.Skip("no group discovered — skipping SCIM list")
+	}
+	_, err := callMeta[groupscim.ListOutput](ctx, "gitlab_group_scim", "list", map[string]any{
+		"group_id": mState.groupPath,
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "group SCIM")
+	}
+	t.Log("Group SCIM list OK")
+}
+
+func metaMemberRoleList(ctx context.Context, t *testing.T) {
+	_, err := callMeta[memberroles.ListOutput](ctx, "gitlab_member_role", "list_instance", map[string]any{})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "member roles")
+	}
+	t.Log("Member role list OK")
+}
+
+func metaEnterpriseUserList(ctx context.Context, t *testing.T) {
+	if mState.groupPath == "" {
+		t.Skip("no group discovered — skipping enterprise user list")
+	}
+	_, err := callMeta[enterpriseusers.ListOutput](ctx, "gitlab_enterprise_user", "list", map[string]any{
+		"group_id": mState.groupPath,
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "enterprise users")
+	}
+	t.Log("Enterprise user list OK")
+}
+
+func metaAttestationList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[attestations.ListOutput](ctx, "gitlab_attestation", "list", map[string]any{
+		"project_id":     mPID(),
+		"subject_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "attestations")
+	}
+	t.Log("Attestation list OK")
+}
+
+func metaCompliancePolicyGet(ctx context.Context, t *testing.T) {
+	_, err := callMeta[compliancepolicy.Output](ctx, "gitlab_compliance_policy", "get", map[string]any{})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "compliance policy")
+	}
+	t.Log("Compliance policy get OK")
+}
+
+func metaProjectAliasList(ctx context.Context, t *testing.T) {
+	_, err := callMeta[projectaliases.ListOutput](ctx, "gitlab_project_alias", "list", map[string]any{})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "project aliases")
+	}
+	t.Log("Project alias list OK")
+}
+
+func metaGeoList(ctx context.Context, t *testing.T) {
+	_, err := callMeta[geo.ListOutput](ctx, "gitlab_geo", "list", map[string]any{})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "Geo sites")
+	}
+	t.Log("Geo list OK")
+}
+
+func metaStorageMoveList(ctx context.Context, t *testing.T) {
+	err := callMetaVoid(ctx, "gitlab_storage_move", "retrieve_all_project", map[string]any{})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "storage moves")
+	}
+	t.Log("Storage move list OK")
+}
+
+func metaSecurityFindingList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	_, err := callMeta[securityfindings.ListOutput](ctx, "gitlab_security_finding", "list", map[string]any{
+		"project_path": mState.projectPath,
+		"pipeline_iid": "1",
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "security findings")
+	}
+	t.Log("Security finding list OK")
+}
+
+func metaModelRegistryDownload(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	err := callMetaVoid(ctx, "gitlab_model_registry", "download", map[string]any{
+		"project_id":       mPID(),
+		"model_version_id": "1",
+		"path":             "model",
+		"filename":         "model.bin",
+	})
+	if err != nil {
+		skipOnPremiumFeature(t, err, "model registry")
+	}
+	t.Log("Model registry download OK")
+}
+
+// ---------------------------------------------------------------------------
+// Premium feature skip helpers
+// ---------------------------------------------------------------------------.
+
+// isFeatureUnavailable returns true if the error indicates the feature is not
+// available (403, 404, admin required, or premium/enterprise only).
+func isFeatureUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "403") ||
+		strings.Contains(msg, "404") ||
+		strings.Contains(msg, "forbidden") ||
+		strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "admin") ||
+		strings.Contains(msg, "premium") ||
+		strings.Contains(msg, "ultimate") ||
+		strings.Contains(msg, "cannot query field") ||
+		strings.Contains(msg, "not available") ||
+		strings.Contains(msg, "access denied")
+}
+
+// skipOnPremiumFeature skips the test if the error indicates the feature
+// requires a premium/ultimate license or admin permissions. Fails if the error
+// is unexpected.
+func skipOnPremiumFeature(t *testing.T, err error, feature string) {
+	t.Helper()
+	if isFeatureUnavailable(err) {
+		t.Skipf("%s not available (Premium/Ultimate or admin required): %v", feature, err)
+	}
+	t.Fatalf("unexpected error calling %s: %v", feature, err)
 }
 
 // ---------------------------------------------------------------------------

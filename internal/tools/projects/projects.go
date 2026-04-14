@@ -30,9 +30,9 @@ func boolToAccessLevel(b *bool) *gl.AccessControlValue {
 		return nil
 	}
 	if *b {
-		return gl.Ptr(gl.EnabledAccessControl)
+		return new(gl.EnabledAccessControl)
 	}
-	return gl.Ptr(gl.DisabledAccessControl)
+	return new(gl.DisabledAccessControl)
 }
 
 // accessLevelEnabled returns true if the access level indicates the feature is not disabled.
