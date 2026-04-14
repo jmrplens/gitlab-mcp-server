@@ -159,7 +159,7 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	}
 }
 
-// commitFile creates or updates a file via the gitlab_commit_create tool.
+// commitFile creates a file via the gitlab_commit_create tool.
 func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
 	out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
@@ -167,14 +167,14 @@ func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, p
 		Branch:        branch,
 		CommitMessage: message,
 		Actions: []commits.Action{
-			{Action: "update", FilePath: path, Content: content},
+			{Action: "create", FilePath: path, Content: content},
 		},
 	})
 	requireNoError(t, err, "commit file "+path)
 	return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
 }
 
-// commitFileMeta creates or updates a file via the gitlab_repository meta-tool.
+// commitFileMeta creates a file via the gitlab_repository meta-tool.
 func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
 	out, err := callToolOn[commits.Output](ctx, session, "gitlab_repository", map[string]any{
@@ -184,7 +184,7 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 			"branch":         branch,
 			"commit_message": message,
 			"actions": []map[string]any{
-				{"action": "update", "file_path": path, "content": content},
+				{"action": "create", "file_path": path, "content": content},
 			},
 		},
 	})
