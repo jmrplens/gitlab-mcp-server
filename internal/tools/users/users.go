@@ -174,6 +174,9 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, input GetStatus
 	if err != nil {
 		return StatusOutput{}, toolutil.WrapErrWithMessage("get_user_status", err)
 	}
+	if s == nil {
+		return StatusOutput{}, nil
+	}
 	return toStatusOutput(s), nil
 }
 
@@ -208,6 +211,9 @@ func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatus
 	s, _, err := client.GL().Users.SetUserStatus(opts, gl.WithContext(ctx))
 	if err != nil {
 		return StatusOutput{}, toolutil.WrapErrWithMessage("set_user_status", err)
+	}
+	if s == nil {
+		return StatusOutput{}, nil
 	}
 	return toStatusOutput(s), nil
 }

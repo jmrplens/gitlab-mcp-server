@@ -571,7 +571,9 @@ func testListProtectedBranches(ctx context.Context, t *testing.T) {
 // Step 10: Unprotect feature branch (so we can push commits to it).
 
 // testBranchUnprotectFeature removes protection from the feature branch so
-// commits can be pushed to it.
+// commits can be pushed to it. After unprotecting, it verifies the branch is
+// no longer in the protected list — GitLab CE may have a brief propagation
+// delay between the unprotect API response and the commit authorization check.
 func testBranchUnprotectFeature(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
 	err := callToolVoid(ctx, "gitlab_branch_unprotect", branches.UnprotectInput{
@@ -579,7 +581,18 @@ func testBranchUnprotectFeature(ctx context.Context, t *testing.T) {
 		BranchName: testE2EBranch,
 	})
 	requireNoError(t, err, "unprotect feature branch")
-	t.Log("Unprotected feature/e2e-changes branch")
+
+	// Verify the branch is no longer protected (also serves as propagation delay).
+	out, err := callTool[branches.ProtectedListOutput](ctx, "gitlab_protected_branches_list", branches.ProtectedListInput{
+		ProjectID: pidStr(),
+	})
+	requireNoError(t, err, "list protected after unprotect")
+	for _, b := range out.Branches {
+		if b.Name == testE2EBranch {
+			t.Fatalf("branch %q still appears in protected list after unprotect", testE2EBranch)
+		}
+	}
+	t.Log("Unprotected feature/e2e-changes branch (verified)")
 }
 
 // Step 11: Commit changes on the feature branch via MCP tool.
@@ -1211,7 +1224,23 @@ func testGroupCreate(ctx context.Context, t *testing.T) {
 		Path:       "e2e-test-group",
 		Visibility: "public",
 	})
-	requireNoError(t, err, "create group")
+	if err != nil {
+		// Group may already exist from a previous run; look it up instead of failing.
+		listOut, listErr := callTool[groups.ListOutput](ctx, "gitlab_group_list", groups.ListInput{
+			Search: "e2e-test-group",
+		})
+		if listErr == nil {
+			for _, g := range listOut.Groups {
+				if g.Path == "e2e-test-group" {
+					state.groupID = g.ID
+					state.groupPath = g.FullPath
+					t.Logf("Group already exists, reusing group %d (%s)", g.ID, g.FullPath)
+					return
+				}
+			}
+		}
+		requireNoError(t, err, "create group")
+	}
 	requireTrue(t, out.ID > 0, "group ID should be positive, got %d", out.ID)
 	state.groupID = out.ID
 	state.groupPath = out.FullPath
