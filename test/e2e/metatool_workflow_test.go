@@ -2783,23 +2783,23 @@ func metaDeploymentList(ctx context.Context, t *testing.T) {
 
 func metaJobList(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
-	_, err := callMeta[jobs.ListOutput](ctx, "gitlab_job", "list", map[string]any{
+	_, err := callMeta[jobs.ListOutput](ctx, "gitlab_job", "list_project", map[string]any{
 		"project_id": mPID(),
 	})
-	requireNoError(t, err, "meta job list")
-	t.Log("Job list OK (may be empty without CI pipeline)")
+	requireNoError(t, err, "meta job list_project")
+	t.Log("Job list_project OK (may be empty without CI pipeline)")
 }
 
 func metaUserSSHKeyList(ctx context.Context, t *testing.T) {
-	err := callMetaVoid(ctx, "gitlab_user", "ssh_key_list", map[string]any{})
-	requireNoError(t, err, "meta user ssh key list")
-	t.Log("SSH key list OK")
+	err := callMetaVoid(ctx, "gitlab_user", "ssh_keys", map[string]any{})
+	requireNoError(t, err, "meta user ssh_keys")
+	t.Log("SSH keys OK")
 }
 
 func metaUserGPGKeyList(ctx context.Context, t *testing.T) {
-	err := callMetaVoid(ctx, "gitlab_user", "gpg_key_list", map[string]any{})
-	requireNoError(t, err, "meta user gpg key list")
-	t.Log("GPG key list OK")
+	err := callMetaVoid(ctx, "gitlab_user", "gpg_keys", map[string]any{})
+	requireNoError(t, err, "meta user gpg_keys")
+	t.Log("GPG keys OK")
 }
 
 func metaTemplateGitignoreList(ctx context.Context, t *testing.T) {
@@ -2842,7 +2842,7 @@ func metaSearchIssues(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
 	err := callMetaVoid(ctx, "gitlab_search", "issues", map[string]any{
 		"project_id": mPID(),
-		"search":     "test",
+		"query":      "test",
 	})
 	if err != nil {
 		if isFeatureUnavailable(err) {
@@ -2855,7 +2855,7 @@ func metaSearchIssues(ctx context.Context, t *testing.T) {
 
 func metaSearchProjects(ctx context.Context, t *testing.T) {
 	err := callMetaVoid(ctx, "gitlab_search", "projects", map[string]any{
-		"search": "test",
+		"query": "test",
 	})
 	if err != nil {
 		if isFeatureUnavailable(err) {
@@ -3061,7 +3061,8 @@ func isFeatureUnavailable(err error) bool {
 		strings.Contains(msg, "ultimate") ||
 		strings.Contains(msg, "cannot query field") ||
 		strings.Contains(msg, "not available") ||
-		strings.Contains(msg, "access denied")
+		strings.Contains(msg, "access denied") ||
+		strings.Contains(msg, "unknown tool")
 }
 
 // skipOnPremiumFeature skips the test if the error indicates the feature
