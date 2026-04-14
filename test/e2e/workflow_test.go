@@ -228,9 +228,11 @@ func TestFullWorkflow(t *testing.T) {
 		t.Run("44_DeletePushRule", func(t *testing.T) { testDeletePushRule(ctx, t) })
 	}
 
-	// User-scoped project listings.
-	t.Run("45_ListUserContributed", func(t *testing.T) { testListUserContributed(ctx, t) })
-	t.Run("46_ListUserStarred", func(t *testing.T) { testListUserStarred(ctx, t) })
+	// User-scoped project listings (require GITLAB_USER).
+	if os.Getenv("GITLAB_USER") != "" {
+		t.Run("45_ListUserContributed", func(t *testing.T) { testListUserContributed(ctx, t) })
+		t.Run("46_ListUserStarred", func(t *testing.T) { testListUserStarred(ctx, t) })
+	}
 
 	// GraphQL tools (branch rules, CI catalog, custom emoji — CE; vulnerabilities — Enterprise).
 	t.Run("47_ListBranchRules", func(t *testing.T) { testListBranchRules(ctx, t) })
@@ -239,7 +241,9 @@ func TestFullWorkflow(t *testing.T) {
 		t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { testVulnerabilitySeverityCount(ctx, t) })
 		t.Run("50_ListVulnerabilities", func(t *testing.T) { testListVulnerabilities(ctx, t) })
 	}
-	t.Run("51_ListCustomEmoji", func(t *testing.T) { testListCustomEmoji(ctx, t) })
+	if state.groupPath != "" {
+		t.Run("51_ListCustomEmoji", func(t *testing.T) { testListCustomEmoji(ctx, t) })
+	}
 
 	// Group cleanup (delete the group created in 38c).
 	t.Run("51a_GroupDelete", func(t *testing.T) { testGroupDelete(ctx, t) })
@@ -342,16 +346,18 @@ func TestFullWorkflow(t *testing.T) {
 	t.Run("114_AwardEmojiDelete", func(t *testing.T) { testAwardEmojiDelete(ctx, t) })
 
 	// Pipeline & Job lifecycle (Docker mode only — requires CI runner).
-	t.Run("200_PipelineCICommit", func(t *testing.T) { testPipelineCICommit(ctx, t) })
-	t.Run("201_PipelineCreate", func(t *testing.T) { testPipelineCreate(ctx, t) })
-	t.Run("202_PipelineGet", func(t *testing.T) { testPipelineGet(ctx, t) })
-	t.Run("203_PipelineListWithCI", func(t *testing.T) { testPipelineListWithCI(ctx, t) })
-	t.Run("204_PipelineWaitAndJobList", func(t *testing.T) { testPipelineWaitAndJobList(ctx, t) })
-	t.Run("205_JobGet", func(t *testing.T) { testJobGet(ctx, t) })
-	t.Run("206_JobTrace", func(t *testing.T) { testJobTrace(ctx, t) })
-	t.Run("207_PipelineRetry", func(t *testing.T) { testPipelineRetry(ctx, t) })
-	t.Run("207a_SamplingAnalyzePipelineFailure", func(t *testing.T) { testSamplingAnalyzePipelineFailure(ctx, t) })
-	t.Run("208_PipelineDelete", func(t *testing.T) { testPipelineDelete(ctx, t) })
+	if hasRunner() {
+		t.Run("200_PipelineCICommit", func(t *testing.T) { testPipelineCICommit(ctx, t) })
+		t.Run("201_PipelineCreate", func(t *testing.T) { testPipelineCreate(ctx, t) })
+		t.Run("202_PipelineGet", func(t *testing.T) { testPipelineGet(ctx, t) })
+		t.Run("203_PipelineListWithCI", func(t *testing.T) { testPipelineListWithCI(ctx, t) })
+		t.Run("204_PipelineWaitAndJobList", func(t *testing.T) { testPipelineWaitAndJobList(ctx, t) })
+		t.Run("205_JobGet", func(t *testing.T) { testJobGet(ctx, t) })
+		t.Run("206_JobTrace", func(t *testing.T) { testJobTrace(ctx, t) })
+		t.Run("207_PipelineRetry", func(t *testing.T) { testPipelineRetry(ctx, t) })
+		t.Run("207a_SamplingAnalyzePipelineFailure", func(t *testing.T) { testSamplingAnalyzePipelineFailure(ctx, t) })
+		t.Run("208_PipelineDelete", func(t *testing.T) { testPipelineDelete(ctx, t) })
+	}
 
 	// Sampling tools (require sampling-enabled session — mock LLM handler).
 	// Create temporary resources needed by sampling tools.
@@ -1841,9 +1847,6 @@ func testDeletePushRule(ctx context.Context, t *testing.T) {
 // testListUserContributed lists projects the authenticated user has contributed to.
 func testListUserContributed(ctx context.Context, t *testing.T) {
 	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set, skipping user contributed projects test")
-	}
 	out, err := callTool[projects.ListOutput](ctx, "gitlab_project_list_user_contributed", projects.ListUserContributedProjectsInput{
 		UserID: toolutil.StringOrInt(user),
 	})
@@ -1854,9 +1857,6 @@ func testListUserContributed(ctx context.Context, t *testing.T) {
 // testListUserStarred lists projects the authenticated user has starred.
 func testListUserStarred(ctx context.Context, t *testing.T) {
 	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set, skipping user starred projects test")
-	}
 	out, err := callTool[projects.ListOutput](ctx, "gitlab_project_list_user_starred", projects.ListUserStarredProjectsInput{
 		UserID: toolutil.StringOrInt(user),
 	})
@@ -1893,9 +1893,7 @@ func testVulnerabilitySeverityCount(ctx context.Context, t *testing.T) {
 	out, err := callTool[vulnerabilities.SeverityCountOutput](ctx, "gitlab_vulnerability_severity_count", vulnerabilities.SeverityCountInput{
 		ProjectPath: state.projectPath,
 	})
-	if err != nil {
-		t.Skipf("vulnerability_severity_count not available (may require Ultimate): %v", err)
-	}
+	requireNoError(t, err, "vulnerability_severity_count")
 	requireTrue(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
 	t.Logf("Vulnerability severity counts: critical=%d high=%d medium=%d low=%d total=%d",
 		out.Critical, out.High, out.Medium, out.Low, out.Total)
@@ -1909,9 +1907,7 @@ func testListVulnerabilities(ctx context.Context, t *testing.T) {
 	out, err := callTool[vulnerabilities.ListOutput](ctx, "gitlab_list_vulnerabilities", vulnerabilities.ListInput{
 		ProjectPath: state.projectPath,
 	})
-	if err != nil {
-		t.Skipf("list_vulnerabilities not available (may require Ultimate): %v", err)
-	}
+	requireNoError(t, err, "list vulnerabilities")
 	t.Logf("Project %s has %d vulnerabilities", state.projectPath, len(out.Vulnerabilities))
 }
 
@@ -1922,9 +1918,7 @@ func testListCustomEmoji(ctx context.Context, t *testing.T) {
 	out, err := callTool[customemoji.ListOutput](ctx, "gitlab_list_custom_emoji", customemoji.ListInput{
 		GroupPath: state.groupPath,
 	})
-	if err != nil {
-		t.Skipf("list_custom_emoji not available (may require Premium): %v", err)
-	}
+	requireNoError(t, err, "list custom emoji")
 	t.Logf("Group %s has %d custom emoji", state.groupPath, len(out.Emoji))
 }
 
@@ -2894,23 +2888,22 @@ fast-pass:
   tags: []
 `
 
-func skipIfNoRunner(t *testing.T) {
-	t.Helper()
-	if !isDockerMode() {
-		// In self-hosted mode, check if runners are available.
-		runnerType := "instance_type"
-		runners, _, err := state.glClient.GL().Runners.ListRunners(&gl.ListRunnersOptions{
-			Type: &runnerType,
-		})
-		if err != nil || len(runners) == 0 {
-			t.Skip("skipping pipeline test: no CI runner available (non-Docker mode)")
-		}
+// hasRunner returns true if a CI runner is available for pipeline tests.
+// In Docker mode it always returns true; in self-hosted mode it checks the
+// Runners API for registered instance runners.
+func hasRunner() bool {
+	if isDockerMode() {
+		return true
 	}
+	runnerType := "instance_type"
+	runners, _, err := state.glClient.GL().Runners.ListRunners(&gl.ListRunnersOptions{
+		Type: &runnerType,
+	})
+	return err == nil && len(runners) > 0
 }
 
 func testPipelineCICommit(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 
 	_, err := callTool[commits.Output](ctx, "gitlab_commit_create", commits.CreateInput{
 		ProjectID:     pidStr(),
@@ -2928,7 +2921,6 @@ func testPipelineCICommit(ctx context.Context, t *testing.T) {
 
 func testPipelineCreate(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 
 	out, err := callTool[pipelines.DetailOutput](ctx, "gitlab_pipeline_create", pipelines.CreateInput{
 		ProjectID: pidStr(),
@@ -2942,7 +2934,6 @@ func testPipelineCreate(ctx context.Context, t *testing.T) {
 
 func testPipelineGet(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.pipelineID > 0, "pipeline ID not set")
 
 	out, err := callTool[pipelines.DetailOutput](ctx, "gitlab_pipeline_get", pipelines.GetInput{
@@ -2956,7 +2947,6 @@ func testPipelineGet(ctx context.Context, t *testing.T) {
 
 func testPipelineListWithCI(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 
 	out, err := callTool[pipelines.ListOutput](ctx, "gitlab_pipeline_list", pipelines.ListInput{
 		ProjectID: pidStr(),
@@ -2968,7 +2958,6 @@ func testPipelineListWithCI(ctx context.Context, t *testing.T) {
 
 func testPipelineWaitAndJobList(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.pipelineID > 0, "pipeline ID not set")
 
 	// Wait for pipeline to finish.
@@ -2988,7 +2977,6 @@ func testPipelineWaitAndJobList(ctx context.Context, t *testing.T) {
 
 func testJobGet(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.jobID > 0, "job ID not set")
 
 	out, err := callTool[jobs.Output](ctx, "gitlab_job_get", jobs.GetInput{
@@ -3002,7 +2990,6 @@ func testJobGet(ctx context.Context, t *testing.T) {
 
 func testJobTrace(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.jobID > 0, "job ID not set")
 
 	out, err := callTool[jobs.TraceOutput](ctx, "gitlab_job_trace", jobs.TraceInput{
@@ -3016,7 +3003,6 @@ func testJobTrace(ctx context.Context, t *testing.T) {
 
 func testPipelineRetry(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.pipelineID > 0, "pipeline ID not set")
 
 	out, err := callTool[pipelines.DetailOutput](ctx, "gitlab_pipeline_retry", pipelines.ActionInput{
@@ -3032,7 +3018,6 @@ func testPipelineRetry(ctx context.Context, t *testing.T) {
 
 func testPipelineDelete(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.pipelineID > 0, "pipeline ID not set")
 
 	err := callToolVoid(ctx, "gitlab_pipeline_delete", pipelines.DeleteInput{
@@ -3221,7 +3206,6 @@ func testSamplingAnalyzeDeploymentHistory(ctx context.Context, t *testing.T) {
 // Runs in the pipeline lifecycle section (after retry, before delete) so the pipeline exists.
 func testSamplingAnalyzePipelineFailure(ctx context.Context, t *testing.T) {
 	requireProjectID(t)
-	skipIfNoRunner(t)
 	requireTrue(t, state.pipelineID > 0, "pipeline ID not set")
 
 	out, err := callSamplingTool[samplingtools.AnalyzePipelineFailureOutput](ctx, "gitlab_analyze_pipeline_failure", samplingtools.AnalyzePipelineFailureInput{

@@ -52,12 +52,24 @@ fi
 
 # 3. Register in the runner container
 echo "  [3/3] Configuring runner container..."
-RUNNER_CONTAINER=$(docker compose -f docker-compose.e2e.yml ps -q gitlab-runner 2>/dev/null || true)
+RUNNER_CONTAINER=$(docker compose ps -q gitlab-runner 2>/dev/null || true)
 
 if [ -z "$RUNNER_CONTAINER" ]; then
     echo "  WARN: gitlab-runner container not found. Skipping runner registration."
     exit 0
 fi
+
+# Detect the Docker network created by compose (varies by directory name)
+COMPOSE_NETWORK=$(docker compose ps --format json 2>/dev/null | python3 -c "
+import sys, json
+for line in sys.stdin:
+    obj = json.loads(line)
+    for net in obj.get('Networks', '').split(','):
+        net = net.strip()
+        if net:
+            print(net)
+            sys.exit(0)
+" 2>/dev/null || echo "e2e_default")
 
 docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --non-interactive \
@@ -65,7 +77,7 @@ docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --token "${RUNNER_TOKEN}" \
     --executor docker \
     --docker-image "alpine:latest" \
-    --docker-network-mode "pe-mcp-gitlab_default" \
+    --docker-network-mode "${COMPOSE_NETWORK}" \
     --description "e2e-docker-runner" 2>/dev/null || \
 docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --non-interactive \
@@ -73,7 +85,7 @@ docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --registration-token "${RUNNER_TOKEN}" \
     --executor docker \
     --docker-image "alpine:latest" \
-    --docker-network-mode "pe-mcp-gitlab_default" \
+    --docker-network-mode "${COMPOSE_NETWORK}" \
     --description "e2e-docker-runner" 2>/dev/null || true
 
 echo ""

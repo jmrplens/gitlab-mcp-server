@@ -238,10 +238,12 @@ func TestMetaToolWorkflow(t *testing.T) {
 
 	// Group tools (read-only, use whatever groups are accessible).
 	t.Run("38c_GroupList", func(t *testing.T) { metaGroupList(ctx, t) })
-	t.Run("38d_GroupGet", func(t *testing.T) { metaGroupGet(ctx, t) })
-	t.Run("38e_GroupMembersList", func(t *testing.T) { metaGroupMembersList(ctx, t) })
-	t.Run("38f_SubgroupsList", func(t *testing.T) { metaSubgroupsList(ctx, t) })
-	t.Run("38g_GroupIssues", func(t *testing.T) { metaGroupIssues(ctx, t) })
+	if mState.groupID != 0 {
+		t.Run("38d_GroupGet", func(t *testing.T) { metaGroupGet(ctx, t) })
+		t.Run("38e_GroupMembersList", func(t *testing.T) { metaGroupMembersList(ctx, t) })
+		t.Run("38f_SubgroupsList", func(t *testing.T) { metaSubgroupsList(ctx, t) })
+		t.Run("38g_GroupIssues", func(t *testing.T) { metaGroupIssues(ctx, t) })
+	}
 
 	// Pipeline list (read-only, may return empty without CI config).
 	t.Run("38h_PipelineList", func(t *testing.T) { metaPipelineList(ctx, t) })
@@ -268,9 +270,11 @@ func TestMetaToolWorkflow(t *testing.T) {
 		t.Run("44_DeletePushRule", func(t *testing.T) { metaDeletePushRule(ctx, t) })
 	}
 
-	// User-scoped project listings.
-	t.Run("45_ListUserContributed", func(t *testing.T) { metaListUserContributed(ctx, t) })
-	t.Run("46_ListUserStarred", func(t *testing.T) { metaListUserStarred(ctx, t) })
+	// User-scoped project listings (require GITLAB_USER).
+	if os.Getenv("GITLAB_USER") != "" {
+		t.Run("45_ListUserContributed", func(t *testing.T) { metaListUserContributed(ctx, t) })
+		t.Run("46_ListUserStarred", func(t *testing.T) { metaListUserStarred(ctx, t) })
+	}
 
 	// GraphQL tools (branch rules, CI catalog, custom emoji — CE; vulnerabilities — Enterprise).
 	t.Run("47_BranchRuleList", func(t *testing.T) { metaBranchRuleList(ctx, t) })
@@ -279,7 +283,9 @@ func TestMetaToolWorkflow(t *testing.T) {
 		t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { metaVulnerabilitySeverityCount(ctx, t) })
 		t.Run("50_VulnerabilityList", func(t *testing.T) { metaVulnerabilityList(ctx, t) })
 	}
-	t.Run("51_CustomEmojiList", func(t *testing.T) { metaCustomEmojiList(ctx, t) })
+	if mState.groupPath != "" {
+		t.Run("51_CustomEmojiList", func(t *testing.T) { metaCustomEmojiList(ctx, t) })
+	}
 
 	// --- Phase 5: New domain meta-tool coverage ---
 
@@ -391,23 +397,30 @@ func TestMetaToolWorkflow(t *testing.T) {
 	t.Run("123_SearchIssues", func(t *testing.T) { metaSearchIssues(ctx, t) })
 	t.Run("124_SearchProjects", func(t *testing.T) { metaSearchProjects(ctx, t) })
 
-	// Enterprise / Premium meta-tools (graceful skip on CE).
+	// Enterprise / Premium meta-tools (only registered when GITLAB_ENTERPRISE=true).
+	// FeatureFlagList is CE-compatible — always registered.
 	t.Run("125_FeatureFlagList", func(t *testing.T) { metaFeatureFlagList(ctx, t) })
-	t.Run("126_MergeTrainList", func(t *testing.T) { metaMergeTrainList(ctx, t) })
-	t.Run("127_AuditEventList", func(t *testing.T) { metaAuditEventList(ctx, t) })
-	t.Run("128_DORAMetrics", func(t *testing.T) { metaDORAMetrics(ctx, t) })
-	t.Run("129_DependencyList", func(t *testing.T) { metaDependencyList(ctx, t) })
-	t.Run("130_ExternalStatusCheckList", func(t *testing.T) { metaExternalStatusCheckList(ctx, t) })
-	t.Run("131_GroupSCIMList", func(t *testing.T) { metaGroupSCIMList(ctx, t) })
-	t.Run("132_MemberRoleList", func(t *testing.T) { metaMemberRoleList(ctx, t) })
-	t.Run("133_EnterpriseUserList", func(t *testing.T) { metaEnterpriseUserList(ctx, t) })
-	t.Run("134_AttestationList", func(t *testing.T) { metaAttestationList(ctx, t) })
-	t.Run("135_CompliancePolicyGet", func(t *testing.T) { metaCompliancePolicyGet(ctx, t) })
-	t.Run("136_ProjectAliasList", func(t *testing.T) { metaProjectAliasList(ctx, t) })
-	t.Run("137_GeoList", func(t *testing.T) { metaGeoList(ctx, t) })
-	t.Run("138_StorageMoveList", func(t *testing.T) { metaStorageMoveList(ctx, t) })
-	t.Run("139_SecurityFindingList", func(t *testing.T) { metaSecurityFindingList(ctx, t) })
-	t.Run("140_ModelRegistryDownload", func(t *testing.T) { metaModelRegistryDownload(ctx, t) })
+	if state.enterprise {
+		t.Run("126_MergeTrainList", func(t *testing.T) { metaMergeTrainList(ctx, t) })
+		t.Run("127_AuditEventList", func(t *testing.T) { metaAuditEventList(ctx, t) })
+		t.Run("128_DORAMetrics", func(t *testing.T) { metaDORAMetrics(ctx, t) })
+		t.Run("129_DependencyList", func(t *testing.T) { metaDependencyList(ctx, t) })
+		t.Run("130_ExternalStatusCheckList", func(t *testing.T) { metaExternalStatusCheckList(ctx, t) })
+		if mState.groupPath != "" {
+			t.Run("131_GroupSCIMList", func(t *testing.T) { metaGroupSCIMList(ctx, t) })
+		}
+		t.Run("132_MemberRoleList", func(t *testing.T) { metaMemberRoleList(ctx, t) })
+		if mState.groupPath != "" {
+			t.Run("133_EnterpriseUserList", func(t *testing.T) { metaEnterpriseUserList(ctx, t) })
+		}
+		t.Run("134_AttestationList", func(t *testing.T) { metaAttestationList(ctx, t) })
+		t.Run("135_CompliancePolicyGet", func(t *testing.T) { metaCompliancePolicyGet(ctx, t) })
+		t.Run("136_ProjectAliasList", func(t *testing.T) { metaProjectAliasList(ctx, t) })
+		t.Run("137_GeoList", func(t *testing.T) { metaGeoList(ctx, t) })
+		t.Run("138_StorageMoveList", func(t *testing.T) { metaStorageMoveList(ctx, t) })
+		t.Run("139_SecurityFindingList", func(t *testing.T) { metaSecurityFindingList(ctx, t) })
+		t.Run("140_ModelRegistryDownload", func(t *testing.T) { metaModelRegistryDownload(ctx, t) })
+	}
 
 	// Cleanup.
 	t.Run("99_Cleanup_DeleteProject", func(t *testing.T) { metaDeleteProject(ctx, t) })
@@ -555,9 +568,6 @@ func metaAddPushRule(ctx context.Context, t *testing.T) {
 		"commit_message_regex": "^[A-Z].*",
 		"max_file_size":        50,
 	})
-	if err != nil && strings.Contains(err.Error(), "404") {
-		t.Skip("push rules not available on GitLab CE — skipping")
-	}
 	requireNoError(t, err, "meta add push rule")
 	requireTrue(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
 	t.Logf("Added push rule %d via meta-tool", out.ID)
@@ -569,9 +579,6 @@ func metaGetPushRules(ctx context.Context, t *testing.T) {
 	out, err := callMeta[projects.PushRuleOutput](ctx, "gitlab_project", "push_rule_get", map[string]any{
 		"project_id": mPID(),
 	})
-	if err != nil && strings.Contains(err.Error(), "404") {
-		t.Skip("push rules not available on GitLab CE — skipping")
-	}
 	requireNoError(t, err, "meta get push rules")
 	requireTrue(t, out.ID > 0, "push rule ID should be positive")
 	requireTrue(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
@@ -585,9 +592,6 @@ func metaEditPushRule(ctx context.Context, t *testing.T) {
 		"project_id":    mPID(),
 		"max_file_size": 100,
 	})
-	if err != nil && strings.Contains(err.Error(), "404") {
-		t.Skip("push rules not available on GitLab CE — skipping")
-	}
 	requireNoError(t, err, "meta edit push rule")
 	requireTrue(t, out.MaxFileSize == 100, "expected max_file_size=100, got %d", out.MaxFileSize)
 	t.Logf("Edited push rule via meta-tool: max_file_size=%d", out.MaxFileSize)
@@ -599,9 +603,6 @@ func metaDeletePushRule(ctx context.Context, t *testing.T) {
 	err := callMetaVoid(ctx, "gitlab_project", "push_rule_delete", map[string]any{
 		"project_id": mPID(),
 	})
-	if err != nil && strings.Contains(err.Error(), "404") {
-		t.Skip("push rules not available on GitLab CE — skipping")
-	}
 	requireNoError(t, err, "meta delete push rule")
 	t.Logf("Deleted push rules via meta-tool")
 }
@@ -611,9 +612,6 @@ func metaDeletePushRule(ctx context.Context, t *testing.T) {
 // metaListUserContributed lists user contributed projects via the gitlab_project meta-tool.
 func metaListUserContributed(ctx context.Context, t *testing.T) {
 	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set, skipping meta user contributed projects test")
-	}
 	out, err := callMeta[projects.ListOutput](ctx, "gitlab_project", "list_user_contributed", map[string]any{
 		"user_id": user,
 	})
@@ -624,9 +622,6 @@ func metaListUserContributed(ctx context.Context, t *testing.T) {
 // metaListUserStarred lists user starred projects via the gitlab_project meta-tool.
 func metaListUserStarred(ctx context.Context, t *testing.T) {
 	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set, skipping meta user starred projects test")
-	}
 	out, err := callMeta[projects.ListOutput](ctx, "gitlab_project", "list_user_starred", map[string]any{
 		"user_id": user,
 	})
@@ -662,9 +657,7 @@ func metaVulnerabilitySeverityCount(ctx context.Context, t *testing.T) {
 	out, err := callMeta[vulnerabilities.SeverityCountOutput](ctx, "gitlab_vulnerability", "severity_count", map[string]any{
 		"project_path": mState.projectPath,
 	})
-	if err != nil {
-		t.Skipf("meta vulnerability severity_count not available (may require Ultimate): %v", err)
-	}
+	requireNoError(t, err, "meta vulnerability severity_count")
 	requireTrue(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
 	t.Logf("Vulnerability severity counts via meta-tool: critical=%d high=%d medium=%d low=%d total=%d",
 		out.Critical, out.High, out.Medium, out.Low, out.Total)
@@ -677,24 +670,17 @@ func metaVulnerabilityList(ctx context.Context, t *testing.T) {
 	out, err := callMeta[vulnerabilities.ListOutput](ctx, "gitlab_vulnerability", "list", map[string]any{
 		"project_path": mState.projectPath,
 	})
-	if err != nil {
-		t.Skipf("meta vulnerability list not available (may require Ultimate): %v", err)
-	}
+	requireNoError(t, err, "meta vulnerability list")
 	t.Logf("Project %s has %d vulnerabilities (via meta-tool)", mState.projectPath, len(out.Vulnerabilities))
 }
 
 // metaCustomEmojiList lists custom emoji for the discovered group via
-// the gitlab_custom_emoji meta-tool. Skips if no group was found.
+// the gitlab_custom_emoji meta-tool.
 func metaCustomEmojiList(ctx context.Context, t *testing.T) {
-	if mState.groupPath == "" {
-		t.Skip("no groups available — skipping meta custom emoji list")
-	}
 	out, err := callMeta[customemoji.ListOutput](ctx, "gitlab_custom_emoji", "list", map[string]any{
 		"group_path": mState.groupPath,
 	})
-	if err != nil {
-		t.Skipf("meta custom emoji list not available (may require Premium): %v", err)
-	}
+	requireNoError(t, err, "meta custom emoji list")
 	t.Logf("Group %s has %d custom emoji (via meta-tool)", mState.groupPath, len(out.Emoji))
 }
 
@@ -806,7 +792,10 @@ func metaListProtectedBranches(ctx context.Context, t *testing.T) {
 }
 
 // metaBranchUnprotect removes protection from the feature branch via the
-// gitlab_branch meta-tool so commits can be pushed to it.
+// gitlab_branch meta-tool so commits can be pushed to it. After unprotecting,
+// it verifies the branch is no longer in the protected list — GitLab CE may
+// have a brief propagation delay between the unprotect API response and the
+// commit authorization check.
 func metaBranchUnprotect(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
 	err := callMetaVoid(ctx, "gitlab_branch", "unprotect", map[string]any{
@@ -814,14 +803,28 @@ func metaBranchUnprotect(ctx context.Context, t *testing.T) {
 		"branch_name": testMetaBranch,
 	})
 	requireNoError(t, err, "meta branch unprotect")
-	t.Log("Unprotected feature/meta-changes")
+
+	// Verify the branch is no longer protected (also serves as a propagation delay).
+	out, err := callMeta[branches.ProtectedListOutput](ctx, "gitlab_branch", "list_protected", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta list protected after unprotect")
+	for _, b := range out.Branches {
+		if b.Name == testMetaBranch {
+			t.Fatalf("branch %q still appears in protected list after unprotect", testMetaBranch)
+		}
+	}
+	t.Log("Unprotected feature/meta-changes (verified)")
 }
 
 // metaCommitFeatureChanges pushes an updated main.go with a multiply
 // function to the feature branch via the gitlab_repository meta-tool.
+// Retries once after a short delay if the commit is rejected with 403,
+// which can happen on fresh GitLab CE instances due to branch protection
+// propagation lag after unprotect.
 func metaCommitFeatureChanges(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
-	out, err := callMeta[commits.Output](ctx, "gitlab_repository", "commit_create", map[string]any{
+	params := map[string]any{
 		"project_id":     mPID(),
 		"branch":         testMetaBranch,
 		"commit_message": "refactor: add multiply via meta-tool",
@@ -832,7 +835,13 @@ func metaCommitFeatureChanges(ctx context.Context, t *testing.T) {
 				"content":   "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello, Meta-tool E2E!\")\n\tresult := multiply(3, 4)\n\tfmt.Println(\"3 * 4 =\", result)\n}\n\nfunc add(a, b int) int {\n\treturn a + b\n}\n\nfunc multiply(a, b int) int {\n\treturn a * b\n}\n",
 			},
 		},
-	})
+	}
+	out, err := callMeta[commits.Output](ctx, "gitlab_repository", "commit_create", params)
+	if err != nil && strings.Contains(err.Error(), "403") {
+		t.Logf("commit_create got 403, retrying after 1s (branch protection propagation lag)")
+		time.Sleep(1 * time.Second)
+		out, err = callMeta[commits.Output](ctx, "gitlab_repository", "commit_create", params)
+	}
 	requireNoError(t, err, "meta commit feature changes")
 	requireTrue(t, out.ID != "", msgCommitIDEmpty)
 	t.Logf("Committed feature changes via meta-tool (SHA=%s)", out.ShortID)
@@ -1671,11 +1680,8 @@ func metaGroupList(ctx context.Context, t *testing.T) {
 	}
 }
 
-// metaGroupGet retrieves group details. Skips if no group was discovered.
+// metaGroupGet retrieves group details.
 func metaGroupGet(ctx context.Context, t *testing.T) {
-	if mState.groupID == 0 {
-		t.Skip("no groups available — skipping meta group get")
-	}
 	gid := strconv.FormatInt(mState.groupID, 10)
 	out, err := callMeta[groups.Output](ctx, "gitlab_group", "get", map[string]any{
 		"group_id": gid,
@@ -1685,11 +1691,8 @@ func metaGroupGet(ctx context.Context, t *testing.T) {
 	t.Logf("Group %d: %s (visibility=%s)", out.ID, out.FullPath, out.Visibility)
 }
 
-// metaGroupMembersList lists members of the discovered group. Skips if none available.
+// metaGroupMembersList lists members of the discovered group.
 func metaGroupMembersList(ctx context.Context, t *testing.T) {
-	if mState.groupID == 0 {
-		t.Skip("no groups available — skipping meta group members list")
-	}
 	gid := strconv.FormatInt(mState.groupID, 10)
 	out, err := callMeta[groups.MemberListOutput](ctx, "gitlab_group", "members", map[string]any{
 		"group_id": gid,
@@ -1700,9 +1703,6 @@ func metaGroupMembersList(ctx context.Context, t *testing.T) {
 
 // metaSubgroupsList lists subgroups of the discovered group. May return empty.
 func metaSubgroupsList(ctx context.Context, t *testing.T) {
-	if mState.groupID == 0 {
-		t.Skip("no groups available — skipping meta subgroups list")
-	}
 	gid := strconv.FormatInt(mState.groupID, 10)
 	out, err := callMeta[groups.ListOutput](ctx, "gitlab_group", "subgroups", map[string]any{
 		"group_id": gid,
@@ -1713,9 +1713,6 @@ func metaSubgroupsList(ctx context.Context, t *testing.T) {
 
 // metaGroupIssues lists issues across all projects in the discovered group.
 func metaGroupIssues(ctx context.Context, t *testing.T) {
-	if mState.groupID == 0 {
-		t.Skip("no groups available — skipping meta group issues")
-	}
 	gid := strconv.FormatInt(mState.groupID, 10)
 	out, err := callMeta[issues.ListGroupOutput](ctx, "gitlab_group", "issues", map[string]any{
 		"group_id": gid,
@@ -2818,23 +2815,13 @@ func metaTemplateCIYmlList(ctx context.Context, t *testing.T) {
 
 func metaAdminTopicList(ctx context.Context, t *testing.T) {
 	out, err := callMeta[topics.ListOutput](ctx, "gitlab_admin", "topic_list", map[string]any{})
-	if err != nil {
-		if isFeatureUnavailable(err) {
-			t.Skipf("topic list not available: %v", err)
-		}
-		t.Fatalf("unexpected error: %v", err)
-	}
+	requireNoError(t, err, "meta admin topic list")
 	t.Logf("Listed %d topics", len(out.Topics))
 }
 
 func metaAdminSettingsGet(ctx context.Context, t *testing.T) {
 	_, err := callMeta[settings.GetOutput](ctx, "gitlab_admin", "settings_get", map[string]any{})
-	if err != nil {
-		if isFeatureUnavailable(err) {
-			t.Skipf("settings get not available (admin required): %v", err)
-		}
-		t.Fatalf("unexpected error: %v", err)
-	}
+	requireNoError(t, err, "meta admin settings get")
 	t.Log("Admin settings get OK")
 }
 
@@ -2844,12 +2831,7 @@ func metaSearchIssues(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 		"query":      "test",
 	})
-	if err != nil {
-		if isFeatureUnavailable(err) {
-			t.Skipf("issue search not available: %v", err)
-		}
-		t.Fatalf("unexpected error: %v", err)
-	}
+	requireNoError(t, err, "meta search issues")
 	t.Log("Search issues OK")
 }
 
@@ -2857,12 +2839,7 @@ func metaSearchProjects(ctx context.Context, t *testing.T) {
 	err := callMetaVoid(ctx, "gitlab_search", "projects", map[string]any{
 		"query": "test",
 	})
-	if err != nil {
-		if isFeatureUnavailable(err) {
-			t.Skipf("project search not available: %v", err)
-		}
-		t.Fatalf("unexpected error: %v", err)
-	}
+	requireNoError(t, err, "meta search projects")
 	t.Log("Search projects OK")
 }
 
@@ -2876,7 +2853,7 @@ func metaFeatureFlagList(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "feature flags")
+		requirePremiumFeature(t, err, "feature flags")
 	}
 	t.Log("Feature flag list OK")
 }
@@ -2887,7 +2864,7 @@ func metaMergeTrainList(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "merge trains")
+		requirePremiumFeature(t, err, "merge trains")
 	}
 	t.Log("Merge train list OK")
 }
@@ -2898,7 +2875,7 @@ func metaAuditEventList(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "audit events")
+		requirePremiumFeature(t, err, "audit events")
 	}
 	t.Log("Audit event list OK")
 }
@@ -2910,7 +2887,7 @@ func metaDORAMetrics(ctx context.Context, t *testing.T) {
 		"metric":     "deployment_frequency",
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "DORA metrics")
+		requirePremiumFeature(t, err, "DORA metrics")
 	}
 	t.Log("DORA metrics OK")
 }
@@ -2921,7 +2898,7 @@ func metaDependencyList(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "dependencies")
+		requirePremiumFeature(t, err, "dependencies")
 	}
 	t.Log("Dependency list OK")
 }
@@ -2932,20 +2909,17 @@ func metaExternalStatusCheckList(ctx context.Context, t *testing.T) {
 		"project_id": mPID(),
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "external status checks")
+		requirePremiumFeature(t, err, "external status checks")
 	}
 	t.Log("External status check list OK")
 }
 
 func metaGroupSCIMList(ctx context.Context, t *testing.T) {
-	if mState.groupPath == "" {
-		t.Skip("no group discovered — skipping SCIM list")
-	}
 	_, err := callMeta[groupscim.ListOutput](ctx, "gitlab_group_scim", "list", map[string]any{
 		"group_id": mState.groupPath,
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "group SCIM")
+		requirePremiumFeature(t, err, "group SCIM")
 	}
 	t.Log("Group SCIM list OK")
 }
@@ -2953,20 +2927,17 @@ func metaGroupSCIMList(ctx context.Context, t *testing.T) {
 func metaMemberRoleList(ctx context.Context, t *testing.T) {
 	_, err := callMeta[memberroles.ListOutput](ctx, "gitlab_member_role", "list_instance", map[string]any{})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "member roles")
+		requirePremiumFeature(t, err, "member roles")
 	}
 	t.Log("Member role list OK")
 }
 
 func metaEnterpriseUserList(ctx context.Context, t *testing.T) {
-	if mState.groupPath == "" {
-		t.Skip("no group discovered — skipping enterprise user list")
-	}
 	_, err := callMeta[enterpriseusers.ListOutput](ctx, "gitlab_enterprise_user", "list", map[string]any{
 		"group_id": mState.groupPath,
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "enterprise users")
+		requirePremiumFeature(t, err, "enterprise users")
 	}
 	t.Log("Enterprise user list OK")
 }
@@ -2978,7 +2949,7 @@ func metaAttestationList(ctx context.Context, t *testing.T) {
 		"subject_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "attestations")
+		requirePremiumFeature(t, err, "attestations")
 	}
 	t.Log("Attestation list OK")
 }
@@ -2986,7 +2957,7 @@ func metaAttestationList(ctx context.Context, t *testing.T) {
 func metaCompliancePolicyGet(ctx context.Context, t *testing.T) {
 	_, err := callMeta[compliancepolicy.Output](ctx, "gitlab_compliance_policy", "get", map[string]any{})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "compliance policy")
+		requirePremiumFeature(t, err, "compliance policy")
 	}
 	t.Log("Compliance policy get OK")
 }
@@ -2994,7 +2965,7 @@ func metaCompliancePolicyGet(ctx context.Context, t *testing.T) {
 func metaProjectAliasList(ctx context.Context, t *testing.T) {
 	_, err := callMeta[projectaliases.ListOutput](ctx, "gitlab_project_alias", "list", map[string]any{})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "project aliases")
+		requirePremiumFeature(t, err, "project aliases")
 	}
 	t.Log("Project alias list OK")
 }
@@ -3002,7 +2973,7 @@ func metaProjectAliasList(ctx context.Context, t *testing.T) {
 func metaGeoList(ctx context.Context, t *testing.T) {
 	_, err := callMeta[geo.ListOutput](ctx, "gitlab_geo", "list", map[string]any{})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "Geo sites")
+		requirePremiumFeature(t, err, "Geo sites")
 	}
 	t.Log("Geo list OK")
 }
@@ -3010,7 +2981,7 @@ func metaGeoList(ctx context.Context, t *testing.T) {
 func metaStorageMoveList(ctx context.Context, t *testing.T) {
 	err := callMetaVoid(ctx, "gitlab_storage_move", "retrieve_all_project", map[string]any{})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "storage moves")
+		requirePremiumFeature(t, err, "storage moves")
 	}
 	t.Log("Storage move list OK")
 }
@@ -3022,7 +2993,7 @@ func metaSecurityFindingList(ctx context.Context, t *testing.T) {
 		"pipeline_iid": "1",
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "security findings")
+		requirePremiumFeature(t, err, "security findings")
 	}
 	t.Log("Security finding list OK")
 }
@@ -3036,44 +3007,24 @@ func metaModelRegistryDownload(ctx context.Context, t *testing.T) {
 		"filename":         "model.bin",
 	})
 	if err != nil {
-		skipOnPremiumFeature(t, err, "model registry")
+		requirePremiumFeature(t, err, "model registry")
 	}
 	t.Log("Model registry download OK")
 }
 
 // ---------------------------------------------------------------------------
-// Premium feature skip helpers
+// Premium feature helpers
 // ---------------------------------------------------------------------------.
 
-// isFeatureUnavailable returns true if the error indicates the feature is not
-// available (403, 404, admin required, or premium/enterprise only).
-func isFeatureUnavailable(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "403") ||
-		strings.Contains(msg, "404") ||
-		strings.Contains(msg, "forbidden") ||
-		strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "admin") ||
-		strings.Contains(msg, "premium") ||
-		strings.Contains(msg, "ultimate") ||
-		strings.Contains(msg, "cannot query field") ||
-		strings.Contains(msg, "not available") ||
-		strings.Contains(msg, "access denied") ||
-		strings.Contains(msg, "unknown tool")
-}
-
-// skipOnPremiumFeature skips the test if the error indicates the feature
-// requires a premium/ultimate license or admin permissions. Fails if the error
-// is unexpected.
-func skipOnPremiumFeature(t *testing.T, err error, feature string) {
+// requirePremiumFeature fails the test if the error indicates the feature
+// requires a premium/ultimate license or admin permissions. Fails unconditionally
+// on any error — enterprise tests are gated at registration level so they only
+// run when the GitLab instance supports them.
+func requirePremiumFeature(t *testing.T, err error, feature string) {
 	t.Helper()
-	if isFeatureUnavailable(err) {
-		t.Skipf("%s not available (Premium/Ultimate or admin required): %v", feature, err)
+	if err != nil {
+		t.Fatalf("%s failed: %v", feature, err)
 	}
-	t.Fatalf("unexpected error calling %s: %v", feature, err)
 }
 
 // ---------------------------------------------------------------------------
