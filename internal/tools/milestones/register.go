@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_milestone_get", start, nil)
+			return toolutil.NotFoundResult("Milestone", fmt.Sprintf("IID %d in project %s", input.MilestoneIID, input.ProjectID),
+				"Use gitlab_milestone_list with project_id to list milestones",
+				"Verify the milestone IID is correct for this project",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_milestone_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatMarkdown(out))
 		return toolutil.WithHints(result, out, err)

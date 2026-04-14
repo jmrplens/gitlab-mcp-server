@@ -38,6 +38,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_issue_get", start, nil)
+			return toolutil.NotFoundResult("Issue", fmt.Sprintf("#%d in project %s", input.IssueIID, input.ProjectID),
+				"Use gitlab_issue_list with project_id to list available issues",
+				"Verify the issue IID is correct for this project (the '#N' number, not the global ID)",
+				"For global IDs, use gitlab_issue_get_by_id instead",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
 		return toolutil.WithHints(result, out, err)
@@ -123,6 +131,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetByIDInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetByID(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_issue_get_by_id", start, nil)
+			return toolutil.NotFoundResult("Issue", fmt.Sprintf("global ID %d", input.IssueID),
+				"Use gitlab_issue_list with project_id to find issues",
+				"Verify the global issue ID is correct (not the '#N' IID)",
+				"For project-scoped IIDs, use gitlab_issue_get instead",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_get_by_id", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatMarkdown(out)), out, err)
 	})

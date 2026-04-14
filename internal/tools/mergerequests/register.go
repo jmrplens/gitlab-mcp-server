@@ -40,6 +40,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_get", start, nil)
+			return toolutil.NotFoundResult("Merge Request", fmt.Sprintf("!%d in project %s", input.MRIID, input.ProjectID),
+				"Use gitlab_mr_list with project_id to list available merge requests",
+				"Verify the merge request IID is correct for this project",
+				"The merge request may have been deleted",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
 		return toolutil.WithHints(result, out, err)

@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_issue_link_get", start, nil)
+			return toolutil.NotFoundResult("Issue Link", fmt.Sprintf("link %d on issue #%d in project %s", input.IssueLinkID, input.IssueIID, input.ProjectID),
+				"Use gitlab_issue_link_list to list links on this issue",
+				"Verify the issue_link_id and issue_iid are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_link_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
 	})

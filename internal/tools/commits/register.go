@@ -4,6 +4,7 @@ package commits
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -49,6 +50,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, DetailOutput, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_commit_get", start, nil)
+			return toolutil.NotFoundResult("Commit", fmt.Sprintf("%s in project %s", input.SHA, input.ProjectID),
+				"Use gitlab_commit_list with project_id to list recent commits",
+				"Verify the SHA hash is correct and complete",
+				"The commit may be in a different branch — try specifying ref_name in gitlab_commit_list",
+			), DetailOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_commit_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatDetailMarkdown(out), toolutil.ContentDetail)
 		return toolutil.WithHints(result, out, err)

@@ -80,6 +80,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_discussion_get", start, nil)
+			return toolutil.NotFoundResult("MR Discussion", fmt.Sprintf("discussion %q on MR !%d in project %s", input.DiscussionID, input.MRIID, input.ProjectID),
+				"Use gitlab_mr_discussion_list to list discussions on this merge request",
+				"Verify the discussion_id and mr_iid are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_discussion_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
 	})

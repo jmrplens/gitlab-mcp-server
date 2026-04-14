@@ -252,6 +252,7 @@ Error handling guidelines:
 - **Don't expose internals**: Hide stack traces, internal paths, credentials
 - **Wrap with context**: Use `fmt.Errorf("context: %w", err)` for error chains
 - **Report tool errors in results**: Use `IsError: true` in `CallToolResult` for recoverable errors, not protocol-level errors
+- **404 as informational**: In get handlers, intercept `IsHTTPStatus(err, 404)` before logging and return `NotFoundResult(resource, identifier, hints...)` with `nil` error — this logs at INFO and gives the LLM actionable next steps
 - **Clean up resources**: Always release connections, files, etc. on errors
 
 ## Response Formats

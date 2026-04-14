@@ -4,6 +4,7 @@ package awardemoji
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,6 +38,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetIssueAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_issue_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on issue IID %d in project %s", input.AwardID, input.IID, input.ProjectID),
+				"Use gitlab_issue_emoji_list to list emojis on this issue",
+				"Verify the award_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
@@ -94,6 +102,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetOnNoteInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetIssueNoteAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_issue_note_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on note %d (issue IID %d) in project %s", input.AwardID, input.NoteID, input.IID, input.ProjectID),
+				"Use gitlab_issue_note_emoji_list to list emojis on this note",
+				"Verify the award_id, note_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_note_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
@@ -151,6 +166,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetMRAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on MR IID %d in project %s", input.AwardID, input.IID, input.ProjectID),
+				"Use gitlab_mr_emoji_list to list emojis on this merge request",
+				"Verify the award_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
@@ -208,6 +230,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetOnNoteInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetMRNoteAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on note %d (MR IID %d) in project %s", input.AwardID, input.NoteID, input.IID, input.ProjectID),
+				"Use gitlab_mr_note_emoji_list to list emojis on this note",
+				"Verify the award_id, note_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
@@ -265,6 +294,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetSnippetAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on snippet IID %d in project %s", input.AwardID, input.IID, input.ProjectID),
+				"Use gitlab_snippet_emoji_list to list emojis on this snippet",
+				"Verify the award_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})
@@ -322,6 +358,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetOnNoteInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetSnippetNoteAwardEmoji(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_note_emoji_get", start, nil)
+			return toolutil.NotFoundResult("Award Emoji", fmt.Sprintf("award %d on note %d (snippet IID %d) in project %s", input.AwardID, input.NoteID, input.IID, input.ProjectID),
+				"Use gitlab_snippet_note_emoji_list to list emojis on this note",
+				"Verify the award_id, note_id, iid, and project_id are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_note_emoji_get", start, err)
 		return toolutil.WithHints(FormatMarkdown(out), out, err)
 	})

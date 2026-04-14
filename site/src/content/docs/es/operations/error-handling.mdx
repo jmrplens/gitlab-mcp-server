@@ -43,7 +43,7 @@ El servidor usa tres funciones de envoltura de errores, elegidas según el tipo 
 
 Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
 
-```
+```text
 list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
 ```
 
@@ -51,7 +51,7 @@ list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
 
 Usada para operaciones `create`, `update` y `delete`. Incluye el detalle específico del error extraído de la respuesta de la API de GitLab:
 
-```
+```text
 fileCreate: bad request — A file with this name already exists: POST .../files: 400
 ```
 
@@ -61,7 +61,7 @@ El servidor extrae el mensaje de error detallado de la respuesta de la API de Gi
 
 Usada cuando se conoce la acción correctiva para un error específico. Añade una sugerencia accionable:
 
-```
+```text
 branchProtect: conflict — Protected branch rule already exists.
 Suggestion: use gitlab_protected_branch_get to view current rules
 ```
@@ -73,6 +73,23 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Operación de solo lectura (list, get, search)   | `WrapErr`            |
 | Operación de escritura (create, update, delete) | `WrapErrWithMessage` |
 | Error específico con corrección conocida        | `WrapErrWithHint`    |
+| Operación get que devuelve 404                  | `NotFoundResult`     |
+
+### NotFoundResult — Respuestas informativas para 404
+
+Para los handlers de tipo `get`, los errores 404 se tratan como informativos en lugar de fallos. En vez de devolver un error Go opaco (registrado a nivel ERROR), el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio:
+
+```markdown
+## ❓ Branch Not Found
+
+Branch `feature/old` was not found in the project.
+
+💡 **Next steps:**
+- Use `gitlab_list_branches` to see available branches
+- Check branch name spelling and case sensitivity
+```
+
+Este patrón se aplica a los 27 handlers get en 21 dominios. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
 
 ## Sugerencias de validación
 
@@ -123,14 +140,14 @@ El servidor clasifica los errores como **transitorios** (reintentables) o **perm
 
 ### Token inválido
 
-```
+```text
 ❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
 ### Permiso denegado
 
-```
+```text
 ❌ create_issue: access denied — your token lacks the required permissions
 Detail: 403 Forbidden
 💡 Ensure the token has api scope and you have Developer+ access to the project
@@ -138,14 +155,14 @@ Detail: 403 Forbidden
 
 ### Conflicto de recurso
 
-```
+```text
 ❌ branchProtect: conflict — Protected branch rule already exists
 💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
 ```
 
 ### Error de validación
 
-```
+```text
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```

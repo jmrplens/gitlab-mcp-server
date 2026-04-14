@@ -63,6 +63,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := GetNote(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_get", start, nil)
+			return toolutil.NotFoundResult("MR Note", fmt.Sprintf("note %d on MR !%d in project %s", input.NoteID, input.MRIID, input.ProjectID),
+				"Use gitlab_mr_note_list to list notes on this merge request",
+				"Verify the note_id and mr_iid are correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
 	})

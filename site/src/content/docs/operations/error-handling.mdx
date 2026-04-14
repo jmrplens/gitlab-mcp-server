@@ -43,7 +43,7 @@ The server uses three error wrapping functions, chosen based on the operation ty
 
 Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
 
-```
+```text
 list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
 ```
 
@@ -51,7 +51,7 @@ list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
 
 Used for `create`, `update`, and `delete` operations. Includes the specific error detail extracted from the GitLab API response:
 
-```
+```text
 fileCreate: bad request — A file with this name already exists: POST .../files: 400
 ```
 
@@ -61,7 +61,7 @@ The server extracts the detailed error message from GitLab's API response, handl
 
 Used when the corrective action for a specific error is known. Appends an actionable suggestion:
 
-```
+```text
 branchProtect: conflict — Protected branch rule already exists.
 Suggestion: use gitlab_protected_branch_get to view current rules
 ```
@@ -73,6 +73,23 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Read-only operation (list, get, search)     | `WrapErr`            |
 | Mutating operation (create, update, delete) | `WrapErrWithMessage` |
 | Specific error with known fix               | `WrapErrWithHint`    |
+| Get operation returning 404                 | `NotFoundResult`     |
+
+### NotFoundResult — Informational 404 responses
+
+For `get` handlers, 404 errors are treated as informational rather than failures. Instead of returning an opaque Go error (logged at ERROR level), the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints:
+
+```markdown
+## ❓ Branch Not Found
+
+Branch `feature/old` was not found in the project.
+
+💡 **Next steps:**
+- Use `gitlab_list_branches` to see available branches
+- Check branch name spelling and case sensitivity
+```
+
+This pattern is applied to all 27 get handlers across 21 domains. It logs at INFO level (expected outcome) and provides the AI assistant with actionable next steps.
 
 ## Validation hints
 
@@ -123,14 +140,14 @@ The server classifies errors as **transient** (retryable) or **permanent**:
 
 ### Invalid token
 
-```
+```text
 ❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
 💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
 ```
 
 ### Permission denied
 
-```
+```text
 ❌ create_issue: access denied — your token lacks the required permissions
 Detail: 403 Forbidden
 💡 Ensure the token has api scope and you have Developer+ access to the project
@@ -138,14 +155,14 @@ Detail: 403 Forbidden
 
 ### Resource conflict
 
-```
+```text
 ❌ branchProtect: conflict — Protected branch rule already exists
 💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
 ```
 
 ### Validation error
 
-```
+```text
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```

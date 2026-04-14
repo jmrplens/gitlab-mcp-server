@@ -37,6 +37,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_group_get", start, nil)
+			return toolutil.NotFoundResult("Group", string(input.GroupID),
+				"Use gitlab_group_list to list accessible groups",
+				"If using a path, ensure it is URL-encoded (e.g. my%2Fgroup)",
+				"Verify your token has access to this group",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_group_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
 		return toolutil.WithHints(result, out, err)

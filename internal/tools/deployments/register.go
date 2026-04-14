@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_deployment_get", start, nil)
+			return toolutil.NotFoundResult("Deployment", fmt.Sprintf("ID %d in project %s", input.DeploymentID, input.ProjectID),
+				"Use gitlab_deployment_list with project_id to list deployments",
+				"Verify the deployment_id is correct for this project",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_deployment_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
 	})

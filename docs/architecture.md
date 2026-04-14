@@ -507,6 +507,7 @@ Tool handlers follow a consistent pattern:
 - `DetailedError` provides domain/action/message/details with Markdown rendering
 - Errors propagate to the MCP client as `CallToolResult` with `isError: true`
 - `ErrorResultMarkdown()` builds human-readable error responses
+- `NotFoundResult()` intercepts 404 errors in get handlers, returning actionable hints instead of opaque errors
 
 ### Logging
 

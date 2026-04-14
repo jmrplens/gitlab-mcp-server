@@ -68,6 +68,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_release_get", start, nil)
+			return toolutil.NotFoundResult("Release", fmt.Sprintf("tag %q in project %s", input.TagName, input.ProjectID),
+				"Use gitlab_release_list with project_id to list releases",
+				"Verify the tag_name is correct (case-sensitive)",
+				"A tag may exist without a release — check with gitlab_tag_get",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_release_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail), out, err)
 	})

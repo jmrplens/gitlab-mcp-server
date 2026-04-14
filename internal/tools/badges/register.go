@@ -39,6 +39,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetProjectInput) (*mcp.CallToolResult, GetProjectOutput, error) {
 		start := time.Now()
 		out, err := GetProject(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_get_project_badge", start, nil)
+			return toolutil.NotFoundResult("Project Badge", fmt.Sprintf("badge %d in project %s", input.BadgeID, input.ProjectID),
+				"Use gitlab_list_project_badges to list badges for this project",
+				"Verify the badge_id is correct",
+			), GetProjectOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_project_badge", start, err)
 		return toolutil.WithHints(FormatBadgeMarkdown(out.Badge), out, err)
 	})
@@ -126,6 +133,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetGroupInput) (*mcp.CallToolResult, GetGroupOutput, error) {
 		start := time.Now()
 		out, err := GetGroup(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_get_group_badge", start, nil)
+			return toolutil.NotFoundResult("Group Badge", fmt.Sprintf("badge %d in group %s", input.BadgeID, input.GroupID),
+				"Use gitlab_list_group_badges to list badges for this group",
+				"Verify the badge_id and group_id are correct",
+			), GetGroupOutput{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_group_badge", start, err)
 		return toolutil.WithHints(FormatBadgeMarkdown(out.Badge), out, err)
 	})

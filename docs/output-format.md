@@ -211,6 +211,22 @@ When you ask *"Create a new issue titled 'Fix the login page'"*:
 - Add a comment with more details
 ```
 
+### Not Found Response
+
+When a "get" operation targets a resource that does not exist the server returns an informational result instead of an opaque error:
+
+```text
+## ❓ Branch Not Found
+
+The branch **"nonexistent" in project 42** does not exist or is not accessible with your current permissions.
+
+💡 **Next steps:**
+- Use gitlab_branch_list with project_id to list available branches
+- Verify the branch name is spelled correctly (case-sensitive)
+```
+
+Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 27 "get" handlers across 21 domains.
+
 ## See Also
 
 - [Architecture — Response Format](architecture.md#design-patterns) — implementation patterns for dual-output

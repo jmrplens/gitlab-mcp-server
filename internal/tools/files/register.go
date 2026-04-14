@@ -24,6 +24,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_file_get", start, nil)
+			return toolutil.NotFoundResult("File", fmt.Sprintf("%q in project %s", input.FilePath, input.ProjectID),
+				"Use gitlab_repository_tree to browse the repository",
+				"Verify the file_path and ref are correct (paths are case-sensitive)",
+				"The file may not exist in the specified branch or ref",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_file_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatOutputMarkdown(out), toolutil.ContentDetail), out, err)
 	})

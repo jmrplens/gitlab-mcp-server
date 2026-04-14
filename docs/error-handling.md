@@ -140,8 +140,34 @@ if toolutil.IsHTTPStatus(err, 409) {
 | Scenario | Function | Example |
 | --- | --- | --- |
 | Read-only operation (list, get, search) | `WrapErr` | `WrapErr("listBranches", err)` |
+| Get operation returning 404 | `NotFoundResult` | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")` |
 | Mutating operation (create, update, delete) | `WrapErrWithMessage` | `WrapErrWithMessage("fileCreate", err)` |
 | Specific error with known corrective action | `WrapErrWithHint` | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")` |
+
+### NotFoundResult — Informational 404 Responses
+
+For "get" handlers, HTTP 404 errors are intercepted **before** the standard error flow and returned as structured, informational results instead of opaque Go errors. This improves the LLM experience: instead of a raw error, the assistant receives an `IsError: true` result with a human-readable explanation and domain-specific next-step hints.
+
+```go
+// In register.go handler closures:
+out, err := Get(ctx, client, input)
+if err != nil && toolutil.IsHTTPStatus(err, 404) {
+    toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, nil) // nil → INFO log
+    return toolutil.NotFoundResult("Branch", fmt.Sprintf("%q in project %s", input.BranchName, input.ProjectID),
+        "Use gitlab_branch_list with project_id to list available branches",
+        "Verify the branch name is spelled correctly (case-sensitive)",
+    ), Output{}, nil // nil error → SDK logs at INFO, not ERROR
+}
+```
+
+The `NotFoundResult(resource, identifier string, hints ...string)` function in `internal/toolutil/not_found.go`:
+
+1. Creates a Markdown-formatted `CallToolResult` with `IsError: true`
+2. Includes a `## ❓ {Resource} Not Found` heading with the identifier
+3. Appends `💡 Next steps` hints specific to the domain
+4. The handler returns `nil` as the Go error so `LogToolCallAll` logs at INFO level
+
+This pattern is applied to **27 get handlers** across 21 domains: projects, groups, branches, tags, commits, files, issues (get + get_by_id), merge requests, milestones, labels, pipelines, releases, release links, environments, deployments, snippets, wikis, users, issue links, issue notes, MR notes, MR discussions, MR draft notes, badges (project + group), and award emoji (6 variants).
 
 ### ErrorResultMarkdown
 
@@ -233,6 +259,7 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 | File | Purpose |
 | --- | --- |
 | `internal/toolutil/errors.go` | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
+| `internal/toolutil/not_found.go` | NotFoundResult — informational 404 pattern for get handlers |
 | `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction |
 | `internal/toolutil/confirm.go` | Destructive action confirmation flow |
 | `internal/toolutil/output.go` | SuccessResult, ErrorResult helpers |

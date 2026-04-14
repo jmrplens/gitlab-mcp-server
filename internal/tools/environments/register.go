@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_environment_get", start, nil)
+			return toolutil.NotFoundResult("Environment", fmt.Sprintf("ID %d in project %s", input.EnvironmentID, input.ProjectID),
+				"Use gitlab_environment_list with project_id to list environments",
+				"Verify the environment_id is correct for this project",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_environment_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
 	})

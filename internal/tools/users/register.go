@@ -4,6 +4,7 @@ package users
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -59,6 +60,13 @@ func registerCoreTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_get_user", start, nil)
+			return toolutil.NotFoundResult("User", fmt.Sprintf("ID %d", input.UserID),
+				"Use gitlab_list_users to search users by username or email",
+				"The user may have been blocked or deleted",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_get_user", start, err)
 		result := FormatMarkdown(out)
 		return toolutil.WithHints(result, out, err)

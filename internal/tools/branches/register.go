@@ -24,6 +24,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, nil)
+			return toolutil.NotFoundResult("Branch", fmt.Sprintf("%q in project %s", input.BranchName, input.ProjectID),
+				"Use gitlab_branch_list with project_id to list available branches",
+				"Verify the branch name is spelled correctly (case-sensitive)",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
 		return toolutil.WithHints(result, out, err)

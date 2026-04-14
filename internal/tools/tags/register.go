@@ -24,6 +24,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_tag_get", start, nil)
+			return toolutil.NotFoundResult("Tag", fmt.Sprintf("%q in project %s", input.TagName, input.ProjectID),
+				"Use gitlab_tag_list with project_id to list tags",
+				"Verify the tag name is spelled correctly (case-sensitive)",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_tag_get", start, err)
 		return toolutil.WithHints(FormatOutputMarkdown(out), out, err)
 	})

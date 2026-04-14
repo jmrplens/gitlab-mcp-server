@@ -55,6 +55,14 @@ func registerCRUDTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_project_get", start, nil)
+			return toolutil.NotFoundResult("Project", string(input.ProjectID),
+				"Use gitlab_project_list to search for projects by name or path",
+				"Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')",
+				"The project may have been deleted or you may lack access",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
 		return toolutil.WithHints(result, out, err)

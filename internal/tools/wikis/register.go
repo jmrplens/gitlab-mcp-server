@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_wiki_get", start, nil)
+			return toolutil.NotFoundResult("Wiki Page", fmt.Sprintf("slug %q in project %s", input.Slug, input.ProjectID),
+				"Use gitlab_wiki_list with project_id to list wiki pages",
+				"Wiki slugs are case-sensitive and may differ from the page title",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_wiki_get", start, err)
 		return toolutil.WithHints(FormatOutputMarkdown(out), out, err)
 	})

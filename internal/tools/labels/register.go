@@ -37,6 +37,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_label_get", start, nil)
+			return toolutil.NotFoundResult("Label", fmt.Sprintf("ID %s in project %s", input.LabelID, input.ProjectID),
+				"Use gitlab_label_list with project_id to list labels",
+				"Labels can be referenced by ID or name — verify the value is correct",
+			), Output{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_label_get", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatMarkdown(out)), out, err)
 	})
