@@ -37,6 +37,23 @@ const (
 // tests. Configurable via E2E_PROJECT_PREFIX env var.
 var e2eProjectPrefix = "e2e-"
 
+// sessions holds read-only MCP sessions and infrastructure created once in
+// TestMain. Domain test files access these but never mutate them — all
+// mutable test state is kept in local variables within each test function.
+type sessions struct {
+	individual  *mcp.ClientSession
+	meta        *mcp.ClientSession
+	sampling    *mcp.ClientSession
+	elicitation *mcp.ClientSession
+	glClient    *gitlabclient.Client
+	enterprise  bool
+	snapshot    *resourceSnapshot
+}
+
+// sess is the global read-only sessions instance populated by TestMain.
+// New domain test files should use sess instead of the legacy state global.
+var sess sessions
+
 // isDockerMode returns true when running against an ephemeral Docker GitLab
 // instance (E2E_MODE=docker). In Docker mode, snapshot guardrails are skipped
 // because the entire instance is disposable.
@@ -260,6 +277,16 @@ func TestMain(m *testing.M) {
 		elicitSession:   elicitSession,
 	}
 
+	// Populate the new read-only sessions struct for domain test files.
+	sess = sessions{
+		individual:  session,
+		meta:        metaSession,
+		sampling:    samplingSession,
+		elicitation: elicitSession,
+		glClient:    glClient,
+		enterprise:  enterprise,
+	}
+
 	// Snapshot pre-existing resources in self-hosted mode.
 	if !isDockerMode() {
 		snap, snapErr := snapshotState(glClient)
@@ -267,6 +294,7 @@ func TestMain(m *testing.M) {
 			log.Fatalf("e2e: snapshot pre-existing state: %v", snapErr)
 		}
 		state.snapshot = snap
+		sess.snapshot = snap
 		log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
 	}
 
