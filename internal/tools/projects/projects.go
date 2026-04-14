@@ -589,7 +589,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // Delete deletes a GitLab project by its ID or URL-encoded path.
 // When the GitLab instance has delayed deletion enabled, the project is marked
-// for deletion rather than removed immediately.
+// for deletion rather than removed immediately. When permanently_remove is true
+// and the instance requires a two-step process (mark-then-remove), the handler
+// performs both steps automatically.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (DeleteOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DeleteOutput{}, err
@@ -615,6 +617,12 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				PermanentlyRemoved: false,
 			}, nil
 		}
+
+		// GitLab CE may require marking for deletion before permanent removal.
+		if input.PermanentlyRemove && toolutil.ContainsAny(err, "must be marked for deletion first", "marked for deletion first") {
+			return deleteTwoStep(ctx, client, input)
+		}
+
 		return DeleteOutput{}, toolutil.WrapErrWithMessage("projectDelete", err)
 	}
 
@@ -641,6 +649,45 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return DeleteOutput{
 		Status:             "success",
 		Message:            fmt.Sprintf("Project %s has been deleted.", input.ProjectID),
+		PermanentlyRemoved: true,
+	}, nil
+}
+
+// deleteTwoStep handles GitLab instances that require marking a project
+// for deletion before it can be permanently removed (e.g. CE with delayed deletion).
+func deleteTwoStep(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (DeleteOutput, error) {
+	// Step 1: Mark for deletion (no options).
+	_, err := client.GL().Projects.DeleteProject(string(input.ProjectID), nil, gl.WithContext(ctx))
+	if err != nil {
+		if !toolutil.ContainsAny(err, "already been marked for deletion", "already marked for deletion") {
+			return DeleteOutput{}, toolutil.WrapErrWithMessage("projectDelete (mark)", err)
+		}
+	}
+
+	// The project path changes after marking for deletion (GitLab appends "-deletion_scheduled-{ID}").
+	// Re-fetch the current path.
+	fullPath := input.FullPath
+	if fullPath != "" {
+		p, _, getErr := client.GL().Projects.GetProject(string(input.ProjectID), &gl.GetProjectOptions{}, gl.WithContext(ctx))
+		if getErr == nil {
+			fullPath = p.PathWithNamespace
+		}
+	}
+
+	// Step 2: Permanently remove.
+	permOpts := &gl.DeleteProjectOptions{
+		PermanentlyRemove: new(true),
+	}
+	if fullPath != "" {
+		permOpts.FullPath = &fullPath
+	}
+	_, err = client.GL().Projects.DeleteProject(string(input.ProjectID), permOpts, gl.WithContext(ctx))
+	if err != nil {
+		return DeleteOutput{}, toolutil.WrapErrWithMessage("projectDelete (permanent)", err)
+	}
+	return DeleteOutput{
+		Status:             "success",
+		Message:            fmt.Sprintf("Project %s has been permanently deleted (two-step: marked then removed).", input.ProjectID),
 		PermanentlyRemoved: true,
 	}, nil
 }

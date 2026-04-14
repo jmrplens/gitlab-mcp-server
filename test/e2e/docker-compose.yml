@@ -1,0 +1,49 @@
+services:
+  gitlab:
+    image: ${GITLAB_IMAGE:-gitlab/gitlab-ce:latest}
+    hostname: gitlab-e2e
+    ports:
+      - "8929:80"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8929'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0', '::/0']
+        gitlab_rails['initial_root_password'] = 'E2e_R0ot!xK9mZ#2026'
+        # Performance tuning for CI environment
+        puma['workers'] = 2
+        sidekiq['concurrency'] = 5
+        postgresql['shared_buffers'] = '256MB'
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        # Disable unnecessary services
+        gitlab_kas['enable'] = false
+        sentinel['enable'] = false
+        registry['enable'] = false
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    shm_size: '256m'
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/-/readiness?all=1"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 120s
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - runner-config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+  runner-config:

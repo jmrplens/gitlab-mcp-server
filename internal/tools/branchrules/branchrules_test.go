@@ -71,6 +71,7 @@ func TestList_Success(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
+	client.SetEnterprise(true)
 	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -214,6 +215,59 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
+// TestList_CE verifies that CE clients use the CE-compatible query and
+// correctly parse responses without EE-only fields.
+func TestList_CE(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"branchRules": {
+						"nodes": [{
+							"name": "main",
+							"isDefault": true,
+							"isProtected": true,
+							"matchingBranchesCount": 1,
+							"createdAt": "2025-01-15T10:00:00Z",
+							"updatedAt": null,
+							"branchProtection": {"allowForcePush": false}
+						}],
+						"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}
+					}
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(out.Rules))
+	}
+	r := out.Rules[0]
+	if r.Name != "main" {
+		t.Errorf("rule.Name = %q, want %q", r.Name, "main")
+	}
+	if r.BranchProtection == nil {
+		t.Fatal("BranchProtection should not be nil")
+	}
+	if r.BranchProtection.AllowForcePush {
+		t.Error("AllowForcePush = true, want false")
+	}
+	if r.BranchProtection.CodeOwnerApprovalRequired {
+		t.Error("CodeOwnerApprovalRequired should be false on CE")
+	}
+	if len(r.ApprovalRules) != 0 {
+		t.Errorf("ApprovalRules length = %d, want 0 on CE", len(r.ApprovalRules))
+	}
+	if len(r.ExternalStatusChecks) != 0 {
+		t.Errorf("ExternalStatusChecks length = %d, want 0 on CE", len(r.ExternalStatusChecks))
+	}
+}
+
 // TestList_Pagination verifies that cursor-based pagination parameters
 // are correctly forwarded to the GraphQL API and page info is returned.
 func TestList_Pagination(t *testing.T) {
@@ -309,6 +363,7 @@ func TestList_NullOptionalFields(t *testing.T) {
 	})
 
 	client := testutil.NewTestClient(t, handler)
+	client.SetEnterprise(true)
 	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)

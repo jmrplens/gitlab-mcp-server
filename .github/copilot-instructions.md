@@ -128,15 +128,25 @@ E2E tests run against a real GitLab instance via in-memory MCP transport (build 
 go test -v -tags e2e -timeout 300s ./test/e2e/
 make test-e2e
 
+# Docker mode (ephemeral GitLab CE with CI runner)
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
+set -a && source .env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/
+docker compose -f test/e2e/docker-compose.yml down -v
+
+# Or via Makefile
+make test-e2e-docker
+
 # Compile-only check (no GitLab needed)
 go test -tags e2e -c -o NUL ./test/e2e/       # Windows
 go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
 ```
 
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
-- Two sequential workflows: `TestFullWorkflow` (~77 subtests, individual tools) and `TestMetaToolWorkflow` (~78 subtests, meta-tools)
-- Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages
-- Not covered (needs infrastructure): pipeline CRUD (CI runner), job tools, sampling/elicitation (MCP capabilities)
+- Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
+- Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
+- Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
 
 ### Build & Cross-Compilation
 
@@ -180,7 +190,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
-| `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium meta-tools (14 additional) | `false` (default) |
+| `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
 

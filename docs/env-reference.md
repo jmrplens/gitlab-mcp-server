@@ -31,7 +31,7 @@
 | Variable | Default | Description |
 | --- | --- | --- |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools: `true` (40 base / 59 enterprise) or `false` (1004 individual tools) |
-| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium meta-tools: 14 additional domain tools for Premium/Ultimate features |
+| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features. Gates 35 individual tool sub-packages and 15 dedicated meta-tools (plus enterprise routes in 3 base meta-tools) |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `ISSUE_REPORTS` | `false` | Generate GitLab issue reports on unrecoverable tool errors (`true`/`false`) |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |

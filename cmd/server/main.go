@@ -428,7 +428,7 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		tools.RegisterAllMeta(server, client, cfg.Enterprise)
 		tools.RegisterMCPMeta(server, client, updater)
 	} else {
-		tools.RegisterAll(server, client)
+		tools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
 	}
 

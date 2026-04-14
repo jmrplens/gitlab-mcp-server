@@ -26,6 +26,11 @@ import (
 type Client struct {
 	inner *gl.Client
 
+	// enterprise indicates whether the GitLab instance is Premium/Ultimate.
+	// Used to select EE-specific API queries (e.g. GraphQL branch rules with
+	// approval rules, code owner approval, external status checks).
+	enterprise bool
+
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
 	token        string       // Token for health check authentication
@@ -51,6 +56,12 @@ const initCooldown = 30 * time.Second
 // used during initialization (bypasses the SDK transport chain).
 const healthTimeout = 10 * time.Second
 
+// SetEnterprise marks the client as connected to a Premium/Ultimate instance.
+func (c *Client) SetEnterprise(v bool) { c.enterprise = v }
+
+// IsEnterprise reports whether the GitLab instance is Premium/Ultimate.
+func (c *Client) IsEnterprise() bool { return c.enterprise }
+
 // NewClient creates an authenticated GitLab client from the provided configuration.
 // When cfg.SkipTLSVerify is true, TLS certificate verification is disabled (for self-signed certs).
 // The client includes a resilience transport that enables automatic recovery
@@ -62,6 +73,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + "/api/v4/version",
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
+		enterprise:   cfg.Enterprise,
 	}
 
 	sdkHTTPClient := &http.Client{

@@ -19,7 +19,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	registerProjectActionTools(server, client)
 	registerWebhookTools(server, client)
 	registerProjectMembershipTools(server, client)
-	registerUserScopedAndPushRuleTools(server, client)
+	registerUserScopedTools(server, client)
 	registerWebhookCustomizationTools(server, client)
 	registerForkRelationTools(server, client)
 	registerAvatarTools(server, client)
@@ -429,10 +429,8 @@ func registerProjectMembershipTools(server *mcp.Server, client *gitlabclient.Cli
 	})
 }
 
-// registerUserScopedAndPushRuleTools is an internal helper for the projects package.
-func registerUserScopedAndPushRuleTools(server *mcp.Server, client *gitlabclient.Client) {
-	// User-scoped project listings.
-
+// registerUserScopedTools is an internal helper for user-scoped project listings.
+func registerUserScopedTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_project_list_user_contributed",
 		Title:       toolutil.TitleFromName("gitlab_project_list_user_contributed"),
@@ -458,9 +456,11 @@ func registerUserScopedAndPushRuleTools(server *mcp.Server, client *gitlabclient
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_list_user_starred", start, err)
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatListMarkdown(out)), out, err)
 	})
+}
 
-	// Push Rules.
-
+// RegisterPushRuleTools registers push rule tools (Premium/Ultimate only).
+// Called separately from RegisterAll when enterprise mode is enabled.
+func RegisterPushRuleTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_project_get_push_rules",
 		Title:       toolutil.TitleFromName("gitlab_project_get_push_rules"),

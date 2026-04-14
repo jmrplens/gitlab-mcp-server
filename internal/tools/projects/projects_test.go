@@ -4427,6 +4427,7 @@ func newProjectsMCPSession(t *testing.T) *mcp.ClientSession {
 	client := testutil.NewTestClient(t, mcpMockHandler())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
+	RegisterPushRuleTools(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

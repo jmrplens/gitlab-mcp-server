@@ -69,6 +69,7 @@ type ProtectedOutput struct {
 	MergeAccessLevel          int    `json:"merge_access_level"`
 	AllowForcePush            bool   `json:"allow_force_push"`
 	CodeOwnerApprovalRequired bool   `json:"code_owner_approval_required"`
+	AlreadyProtected          bool   `json:"already_protected,omitempty"`
 }
 
 // UnprotectInput defines parameters for unprotecting a branch.
@@ -135,32 +136,58 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	}
 	b, _, err := client.GL().ProtectedBranches.ProtectRepositoryBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		// 409 Conflict means branch is already protected — idempotent success
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
-			return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", err,
-				"protected branch rule already exists. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
+			existing, _, getErr := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
+			if getErr != nil {
+				return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", err,
+					"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
+			}
+			out := ProtectedToOutput(existing)
+			out.AlreadyProtected = true
+			return out, nil
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithMessage("branchProtect", err)
 	}
 	return ProtectedToOutput(b), nil
 }
 
-// Unprotect removes protection from a branch in the specified GitLab
-// project. Returns an error if the branch is not found or the API call fails.
-func Unprotect(ctx context.Context, client *gitlabclient.Client, input UnprotectInput) error {
+// UnprotectOutput holds the result of an unprotect operation.
+type UnprotectOutput struct {
+	toolutil.HintableOutput
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// Unprotect removes protection from a branch in the specified GitLab project.
+// The operation is idempotent: if the branch is not protected, it returns
+// success with an informational message instead of an error.
+func Unprotect(ctx context.Context, client *gitlabclient.Client, input UnprotectInput) (UnprotectOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return UnprotectOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return errors.New("branchUnprotect: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return UnprotectOutput{}, errors.New("branchUnprotect: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
-		return toolutil.ErrRequiredString("branchUnprotect", "branch_name")
+		return UnprotectOutput{}, toolutil.ErrRequiredString("branchUnprotect", "branch_name")
 	}
 	_, err := client.GL().ProtectedBranches.UnprotectRepositoryBranches(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("branchUnprotect", err)
+		// 404 means the branch is not protected — idempotent success.
+		// client-go may return *ErrorResponse (with status code) or plain error "404 Not Found".
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.ContainsAny(err, "404") {
+			return UnprotectOutput{
+				Status:  "already_unprotected",
+				Message: fmt.Sprintf("Branch %q in project %s is not protected — no action needed.", input.BranchName, input.ProjectID),
+			}, nil
+		}
+		return UnprotectOutput{}, toolutil.WrapErrWithMessage("branchUnprotect", err)
 	}
-	return nil
+	return UnprotectOutput{
+		Status:  "success",
+		Message: fmt.Sprintf("Protection removed from branch %q in project %s.", input.BranchName, input.ProjectID),
+	}, nil
 }
 
 // ProtectedList retrieves a paginated list of protected branches for

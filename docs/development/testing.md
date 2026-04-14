@@ -14,9 +14,9 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 6,449   |
+| Total test functions        | 6,729   |
 | Unit test functions         | 6,322   |
-| E2E test functions          | 86      |
+| E2E test functions          | 366     |
 | cmd test functions          | 36      |
 | Test files (internal/)      | 217     |
 | Tool sub-packages tested    | 122     |
@@ -41,9 +41,9 @@
 | Core packages            |            962 |         61 | autoupdate, config, gitlab, wizard…  |
 | Tools orchestration      |            205 |         14 | register, metatool, markdown, errors |
 | Tool sub-packages (122)  |          5,163 |        142 | Domain-specific tool handlers        |
-| E2E integration          |             86 |          3 | Full workflow against real GitLab    |
+| E2E integration          |            366 |          3 | Full workflow against real GitLab    |
 | cmd/server               |             36 |          1 | Main entry point tests               |
-| **Total**                |      **6,449** |    **221** |                                      |
+| **Total**                |      **6,729** |    **221** |                                      |
 
 ### Core Packages
 
@@ -420,32 +420,86 @@ func TestGetBranch_Success(t *testing.T) {
 
 ### End-to-End Tests
 
-E2E tests run against a **real GitLab instance** using in-memory MCP transport (build tag `e2e`):
+E2E tests run against a **real GitLab instance** using in-memory MCP transport (build tag `e2e`). Two modes are supported:
+
+#### Self-Hosted Mode
+
+Requires a running GitLab instance with credentials in `.env`:
+
+```bash
+# .env
+GITLAB_URL=https://gitlab.example.com
+GITLAB_TOKEN=glpat-...
+```
 
 ```bash
 go test -v -tags e2e -timeout 300s ./test/e2e/
+make test-e2e
 ```
 
-**Requirements:**
+#### Docker Mode
 
-- `.env` with `GITLAB_URL` and `GITLAB_TOKEN`
-- User must have permissions to create/delete projects
+Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Docker and ~4 GB RAM.
+
+All E2E Docker infrastructure is version-controlled under `test/e2e/`:
+
+- `test/e2e/docker-compose.yml` — GitLab CE + Runner compose definition
+- `test/e2e/scripts/setup-gitlab.sh` — Creates test user, PAT, writes `.env.docker`
+- `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
+- `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
+
+```bash
+# Start GitLab container and provision test environment
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh
+./test/e2e/scripts/setup-gitlab.sh    # Creates .env.docker
+./test/e2e/scripts/register-runner.sh # Registers CI runner
+
+# Run tests
+set -a && source .env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/
+
+# Cleanup
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+Or use the Makefile target that automates the full lifecycle:
+
+```bash
+make test-e2e-docker
+```
+
+Docker mode enables pipeline and job tests that require a CI runner.
+
+#### Test Architecture
+
+The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
+
+| Session            | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `session`          | Individual tools (TestFullWorkflow)         |
+| `metaSession`      | Meta-tools (TestMetaToolWorkflow)           |
+| `samplingSession`  | Sampling tools with mock LLM handler       |
+| `elicitSession`    | Elicitation tools with mock user handler   |
 
 **Workflows:**
 
-| Workflow               | Subtests | Description                                     |
-| ---------------------- | -------: | ----------------------------------------------- |
-| TestFullWorkflow       |      ~77 | Individual tools through complete project lifecycle |
-| TestMetaToolWorkflow   |      ~78 | Same operations via meta-tools (domain dispatch)   |
+| Workflow               | Subtests | Functions | Description                                         |
+| ---------------------- | -------: | --------: | --------------------------------------------------- |
+| TestFullWorkflow       |     ~174 |       186 | Individual tools through complete project lifecycle  |
+| TestMetaToolWorkflow   |     ~151 |       156 | Same operations via meta-tools (domain dispatch)     |
 
-**Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → cleanup
+**Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 
-**Not covered** (requires infrastructure unavailable in test environment):
+**Domains added in Docker mode** (require CI runner):
 
-- Pipeline create/get/cancel/retry/delete — requires CI runner
-- Job tools — requires running pipeline
-- Sampling tools — requires MCP sampling capability
-- Elicitation tools — requires MCP elicitation capability
+- Pipeline create/get/cancel/retry/delete
+- Job get/log/retry/cancel
+
+**MCP capability tests** (mock handlers):
+
+- Sampling tools (11 tests): summarize issue, analyze MR changes, generate release notes, etc.
+- Elicitation tools (1 test): confirm destructive action
 
 ### Meta-Tool Tests
 
@@ -475,7 +529,7 @@ go test ./internal/tools/ -run TestBranch -count=1 -v
 
 **E2E meta-tool tests:**
 
-The `TestMetaToolWorkflow` E2E test (~78 subtests) exercises the same project lifecycle as `TestFullWorkflow` but through meta-tool action dispatch instead of individual tools. This validates routing, parameter passthrough, and response formatting in a real GitLab environment.
+The `TestMetaToolWorkflow` E2E test (~151 subtests) exercises the same project lifecycle as `TestFullWorkflow` but through meta-tool action dispatch instead of individual tools. This validates routing, parameter passthrough, and response formatting in a real GitLab environment. It covers 15 additional domains beyond the core workflow: wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, and milestones.
 
 ```bash
 # Run only the meta-tool E2E workflow
@@ -522,9 +576,20 @@ go test ./internal/... -race -count=1
 ### E2E Tests
 
 ```bash
-# Full suite
+# Full suite (self-hosted GitLab)
 go test -v -tags e2e -timeout 300s ./test/e2e/
 make test-e2e
+
+# Docker mode (ephemeral GitLab CE container)
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
+set -a && source .env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/
+docker compose -f test/e2e/docker-compose.yml down -v
+
+# Individual workflows
+go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/
+go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/
 
 # Compile-only (verify builds without GitLab)
 go test -tags e2e -c -o NUL ./test/e2e/       # Windows

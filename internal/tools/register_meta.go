@@ -207,6 +207,12 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	registerSnippetMeta(server, client)
 	registerFeatureFlagsMeta(server, client)
 
+	// Free-tier meta-tools (available on CE — GraphQL/REST based)
+	registerModelRegistryMeta(server, client)
+	registerCICatalogMeta(server, client)
+	registerBranchRulesMeta(server, client)
+	registerCustomEmojiMeta(server, client)
+
 	// Enterprise meta-tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
 	if enterprise {
 		registerMergeTrainMeta(server, client)
@@ -221,13 +227,9 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 		registerCompliancePolicyMeta(server, client)
 		registerProjectAliasMeta(server, client)
 		registerGeoMeta(server, client)
-		registerModelRegistryMeta(server, client)
 		registerStorageMoveMeta(server, client)
 		registerVulnerabilityMeta(server, client)
 		registerSecurityFindingsMeta(server, client)
-		registerCICatalogMeta(server, client)
-		registerBranchRulesMeta(server, client)
-		registerCustomEmojiMeta(server, client)
 	}
 
 	// Delegated meta-tools (sub-package RegisterMeta)
@@ -246,7 +248,7 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 // create, get, list, update, delete, restore, fork, star, unstar, archive, unarchive, transfer, list_forks, languages,
 // hook_list, hook_get, hook_add, hook_edit, hook_delete, hook_test,
 // list_user_projects, list_users, list_groups, list_starrers, share_with_group, delete_shared_group, list_invited_groups,
-// list_user_contributed, list_user_starred, push_rule_get, push_rule_add, push_rule_edit, push_rule_delete,
+// list_user_contributed, list_user_starred,
 // members, upload, upload_list, upload_delete, label_list, label_get, label_create, label_update, label_delete,
 // label_subscribe, label_unsubscribe, label_promote, milestone_list, milestone_get, milestone_create,
 // milestone_update, milestone_delete, milestone_issues, milestone_merge_requests,
@@ -289,10 +291,6 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"list_invited_groups":      wrapAction(client, projects.ListInvitedGroups),
 		"list_user_contributed":    wrapAction(client, projects.ListUserContributedProjects),
 		"list_user_starred":        wrapAction(client, projects.ListUserStarredProjects),
-		"push_rule_get":            wrapAction(client, projects.GetPushRules),
-		"push_rule_add":            wrapAction(client, projects.AddPushRule),
-		"push_rule_edit":           wrapAction(client, projects.EditPushRule),
-		"push_rule_delete":         wrapVoidAction(client, projects.DeletePushRule),
 		"members":                  wrapAction(client, members.List),
 		"member_get":               wrapAction(client, members.Get),
 		"member_inherited":         wrapAction(client, members.GetInherited),
@@ -378,6 +376,10 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 	}
 
 	if enterprise {
+		routes["push_rule_get"] = wrapAction(client, projects.GetPushRules)
+		routes["push_rule_add"] = wrapAction(client, projects.AddPushRule)
+		routes["push_rule_edit"] = wrapAction(client, projects.EditPushRule)
+		routes["push_rule_delete"] = wrapVoidAction(client, projects.DeletePushRule)
 		routes["mirror_list"] = wrapAction(client, projectmirrors.List)
 		routes["mirror_get"] = wrapAction(client, projectmirrors.Get)
 		routes["mirror_get_public_key"] = wrapAction(client, projectmirrors.GetPublicKey)
@@ -433,12 +435,6 @@ Users and groups:
 - list_invited_groups: List groups invited to a project. Params: project_id (required), search, min_access_level (int), page, per_page
 - list_user_contributed: List projects a user has contributed to. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
 - list_user_starred: List projects a user has starred. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
-
-Push rules:
-- push_rule_get: Get push rule configuration. Params: project_id (required)
-- push_rule_add: Add push rules. Params: project_id (required), commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size (int), deny_delete_tag (bool), member_check (bool), prevent_secrets (bool), commit_committer_check (bool), commit_committer_name_check (bool), reject_unsigned_commits (bool), reject_non_dco_commits (bool)
-- push_rule_edit: Edit push rules. Params: project_id (required), same fields as push_rule_add (all optional)
-- push_rule_delete: Delete push rules from a project. Params: project_id (required)
 
 Members:
 - members: List all project members (including inherited). Params: project_id (required), query (filter by name/username), page, per_page
@@ -545,6 +541,12 @@ Admin:
 	if enterprise {
 		desc += `
 
+Push Rules (Premium+ — requires GITLAB_ENTERPRISE=true):
+- push_rule_get: Get push rule configuration. Params: project_id (required)
+- push_rule_add: Add push rules. Params: project_id (required), commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size (int), deny_delete_tag (bool), member_check (bool), prevent_secrets (bool), commit_committer_check (bool), commit_committer_name_check (bool), reject_unsigned_commits (bool), reject_non_dco_commits (bool)
+- push_rule_edit: Edit push rules. Params: project_id (required), same fields as push_rule_add (all optional)
+- push_rule_delete: Delete push rules from a project. Params: project_id (required)
+
 Push Mirrors (Premium+ — requires GITLAB_ENTERPRISE=true):
 - mirror_list: List all remote push mirrors. Params: project_id (required), page, per_page
 - mirror_get: Get a single remote mirror. Params: project_id (required), mirror_id (required)
@@ -572,7 +574,7 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"delete":           wrapVoidAction(client, branches.Delete),
 		"delete_merged":    wrapVoidAction(client, branches.DeleteMerged),
 		"protect":          wrapAction(client, branches.Protect),
-		"unprotect":        wrapVoidAction(client, branches.Unprotect),
+		"unprotect":        wrapAction(client, branches.Unprotect),
 		"list_protected":   wrapAction(client, branches.ProtectedList),
 		"get_protected":    wrapAction(client, branches.ProtectedGet),
 		"update_protected": wrapAction(client, branches.ProtectedUpdate),
@@ -1023,63 +1025,63 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		"group_export_schedule":          wrapAction(client, groupimportexport.ScheduleExport),
 		"group_export_download":          wrapAction(client, groupimportexport.ExportDownload),
 		"group_import_file":              wrapAction(client, groupimportexport.ImportFile),
-		"epic_discussion_list":           wrapAction(client, epicdiscussions.List),
-		"epic_discussion_get":            wrapAction(client, epicdiscussions.Get),
-		"epic_discussion_create":         wrapAction(client, epicdiscussions.Create),
-		"epic_discussion_add_note":       wrapAction(client, epicdiscussions.AddNote),
-		"epic_discussion_update_note":    wrapAction(client, epicdiscussions.UpdateNote),
-		"epic_discussion_delete_note":    wrapVoidAction(client, epicdiscussions.DeleteNote),
-		"epic_list":                      wrapAction(client, epics.List),
-		"epic_get":                       wrapAction(client, epics.Get),
-		"epic_get_links":                 wrapAction(client, epics.GetLinks),
-		"epic_create":                    wrapAction(client, epics.Create),
-		"epic_update":                    wrapAction(client, epics.Update),
-		"epic_delete":                    wrapVoidAction(client, epics.Delete),
-		"epic_issue_list":                wrapAction(client, epicissues.List),
-		"epic_issue_assign":              wrapAction(client, epicissues.Assign),
-		"epic_issue_remove":              wrapAction(client, epicissues.Remove),
-		"epic_issue_update":              wrapAction(client, epicissues.UpdateOrder),
-		"epic_note_list":                 wrapAction(client, epicnotes.List),
-		"epic_note_get":                  wrapAction(client, epicnotes.Get),
-		"epic_note_create":               wrapAction(client, epicnotes.Create),
-		"epic_note_update":               wrapAction(client, epicnotes.Update),
-		"epic_note_delete":               wrapVoidAction(client, epicnotes.Delete),
-		"epic_board_list":                wrapAction(client, groupepicboards.List),
-		"epic_board_get":                 wrapAction(client, groupepicboards.Get),
-		"wiki_list":                      wrapAction(client, groupwikis.List),
-		"wiki_get":                       wrapAction(client, groupwikis.Get),
-		"wiki_create":                    wrapAction(client, groupwikis.Create),
-		"wiki_edit":                      wrapAction(client, groupwikis.Edit),
-		"wiki_delete":                    wrapVoidAction(client, groupwikis.Delete),
-		"protected_branch_list":          wrapAction(client, groupprotectedbranches.List),
-		"protected_branch_get":           wrapAction(client, groupprotectedbranches.Get),
-		"protected_branch_protect":       wrapAction(client, groupprotectedbranches.Protect),
-		"protected_branch_update":        wrapAction(client, groupprotectedbranches.Update),
-		"protected_branch_unprotect":     wrapVoidAction(client, groupprotectedbranches.Unprotect),
-		"protected_env_list":             wrapAction(client, groupprotectedenvs.List),
-		"protected_env_get":              wrapAction(client, groupprotectedenvs.Get),
-		"protected_env_protect":          wrapAction(client, groupprotectedenvs.Protect),
-		"protected_env_update":           wrapAction(client, groupprotectedenvs.Update),
-		"protected_env_unprotect":        wrapVoidAction(client, groupprotectedenvs.Unprotect),
-		"release_list":                   wrapAction(client, groupreleases.List),
-		"ldap_link_list":                 wrapAction(client, groupldap.List),
-		"ldap_link_add":                  wrapAction(client, groupldap.Add),
-		"ldap_link_delete":               wrapVoidAction(client, groupldap.DeleteWithCNOrFilter),
-		"ldap_link_delete_for_provider":  wrapVoidAction(client, groupldap.DeleteForProvider),
-		"saml_link_list":                 wrapAction(client, groupsaml.List),
-		"saml_link_get":                  wrapAction(client, groupsaml.Get),
-		"saml_link_add":                  wrapAction(client, groupsaml.Add),
-		"saml_link_delete":               wrapVoidAction(client, groupsaml.Delete),
-		"service_account_list":           wrapAction(client, groupserviceaccounts.List),
-		"service_account_create":         wrapAction(client, groupserviceaccounts.Create),
-		"service_account_update":         wrapAction(client, groupserviceaccounts.Update),
-		"service_account_delete":         wrapVoidAction(client, groupserviceaccounts.Delete),
-		"service_account_pat_list":       wrapAction(client, groupserviceaccounts.ListPATs),
-		"service_account_pat_create":     wrapAction(client, groupserviceaccounts.CreatePAT),
-		"service_account_pat_revoke":     wrapVoidAction(client, groupserviceaccounts.RevokePAT),
 	}
 
 	if enterprise {
+		routes["epic_discussion_list"] = wrapAction(client, epicdiscussions.List)
+		routes["epic_discussion_get"] = wrapAction(client, epicdiscussions.Get)
+		routes["epic_discussion_create"] = wrapAction(client, epicdiscussions.Create)
+		routes["epic_discussion_add_note"] = wrapAction(client, epicdiscussions.AddNote)
+		routes["epic_discussion_update_note"] = wrapAction(client, epicdiscussions.UpdateNote)
+		routes["epic_discussion_delete_note"] = wrapVoidAction(client, epicdiscussions.DeleteNote)
+		routes["epic_list"] = wrapAction(client, epics.List)
+		routes["epic_get"] = wrapAction(client, epics.Get)
+		routes["epic_get_links"] = wrapAction(client, epics.GetLinks)
+		routes["epic_create"] = wrapAction(client, epics.Create)
+		routes["epic_update"] = wrapAction(client, epics.Update)
+		routes["epic_delete"] = wrapVoidAction(client, epics.Delete)
+		routes["epic_issue_list"] = wrapAction(client, epicissues.List)
+		routes["epic_issue_assign"] = wrapAction(client, epicissues.Assign)
+		routes["epic_issue_remove"] = wrapAction(client, epicissues.Remove)
+		routes["epic_issue_update"] = wrapAction(client, epicissues.UpdateOrder)
+		routes["epic_note_list"] = wrapAction(client, epicnotes.List)
+		routes["epic_note_get"] = wrapAction(client, epicnotes.Get)
+		routes["epic_note_create"] = wrapAction(client, epicnotes.Create)
+		routes["epic_note_update"] = wrapAction(client, epicnotes.Update)
+		routes["epic_note_delete"] = wrapVoidAction(client, epicnotes.Delete)
+		routes["epic_board_list"] = wrapAction(client, groupepicboards.List)
+		routes["epic_board_get"] = wrapAction(client, groupepicboards.Get)
+		routes["wiki_list"] = wrapAction(client, groupwikis.List)
+		routes["wiki_get"] = wrapAction(client, groupwikis.Get)
+		routes["wiki_create"] = wrapAction(client, groupwikis.Create)
+		routes["wiki_edit"] = wrapAction(client, groupwikis.Edit)
+		routes["wiki_delete"] = wrapVoidAction(client, groupwikis.Delete)
+		routes["protected_branch_list"] = wrapAction(client, groupprotectedbranches.List)
+		routes["protected_branch_get"] = wrapAction(client, groupprotectedbranches.Get)
+		routes["protected_branch_protect"] = wrapAction(client, groupprotectedbranches.Protect)
+		routes["protected_branch_update"] = wrapAction(client, groupprotectedbranches.Update)
+		routes["protected_branch_unprotect"] = wrapVoidAction(client, groupprotectedbranches.Unprotect)
+		routes["protected_env_list"] = wrapAction(client, groupprotectedenvs.List)
+		routes["protected_env_get"] = wrapAction(client, groupprotectedenvs.Get)
+		routes["protected_env_protect"] = wrapAction(client, groupprotectedenvs.Protect)
+		routes["protected_env_update"] = wrapAction(client, groupprotectedenvs.Update)
+		routes["protected_env_unprotect"] = wrapVoidAction(client, groupprotectedenvs.Unprotect)
+		routes["release_list"] = wrapAction(client, groupreleases.List)
+		routes["ldap_link_list"] = wrapAction(client, groupldap.List)
+		routes["ldap_link_add"] = wrapAction(client, groupldap.Add)
+		routes["ldap_link_delete"] = wrapVoidAction(client, groupldap.DeleteWithCNOrFilter)
+		routes["ldap_link_delete_for_provider"] = wrapVoidAction(client, groupldap.DeleteForProvider)
+		routes["saml_link_list"] = wrapAction(client, groupsaml.List)
+		routes["saml_link_get"] = wrapAction(client, groupsaml.Get)
+		routes["saml_link_add"] = wrapAction(client, groupsaml.Add)
+		routes["saml_link_delete"] = wrapVoidAction(client, groupsaml.Delete)
+		routes["service_account_list"] = wrapAction(client, groupserviceaccounts.List)
+		routes["service_account_create"] = wrapAction(client, groupserviceaccounts.Create)
+		routes["service_account_update"] = wrapAction(client, groupserviceaccounts.Update)
+		routes["service_account_delete"] = wrapVoidAction(client, groupserviceaccounts.Delete)
+		routes["service_account_pat_list"] = wrapAction(client, groupserviceaccounts.ListPATs)
+		routes["service_account_pat_create"] = wrapAction(client, groupserviceaccounts.CreatePAT)
+		routes["service_account_pat_revoke"] = wrapVoidAction(client, groupserviceaccounts.RevokePAT)
 		routes["analytics_issues_count"] = wrapAction(client, groupanalytics.GetIssuesCount)
 		routes["analytics_mr_count"] = wrapAction(client, groupanalytics.GetMRCount)
 		routes["analytics_members_count"] = wrapAction(client, groupanalytics.GetMembersCount)
@@ -1160,7 +1162,12 @@ Actions:
 - group_relations_list_status: List group relations export status. Params: group_id (required)
 - group_export_schedule: Schedule group export. Params: group_id (required)
 - group_export_download: Download group export archive. Params: group_id (required)
-- group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id
+- group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id`
+
+	if enterprise {
+		desc += `
+
+Epics (Premium+ — requires GITLAB_ENTERPRISE=true):
 - epic_discussion_list: List epic discussions. Params: group_id (required), epic_id (required), page, per_page
 - epic_discussion_get: Get an epic discussion. Params: group_id (required), epic_id (required), discussion_id (required)
 - epic_discussion_create: Create an epic discussion. Params: group_id (required), epic_id (required), body (required)
@@ -1184,42 +1191,51 @@ Actions:
 - epic_note_delete: Delete an epic note. Params: group_id (required), epic_iid (required), note_id (required)
 - epic_board_list: List group epic boards. Params: group_id (required), page, per_page
 - epic_board_get: Get a group epic board. Params: group_id (required), board_id (required)
+
+Group Wikis (Premium+ — requires GITLAB_ENTERPRISE=true):
 - wiki_list: List group wiki pages. Params: group_id (required), with_content (bool)
 - wiki_get: Get a group wiki page. Params: group_id (required), slug (required), render_html (bool), version
 - wiki_create: Create a group wiki page. Params: group_id (required), title (required), content (required), format (markdown/rdoc/asciidoc/org)
 - wiki_edit: Edit a group wiki page. Params: group_id (required), slug (required), title, content, format
 - wiki_delete: Delete a group wiki page. Params: group_id (required), slug (required)
+
+Group Protected Branches (Premium+ — requires GITLAB_ENTERPRISE=true):
 - protected_branch_list: List group protected branches. Params: group_id (required), search, page, per_page
 - protected_branch_get: Get a group protected branch. Params: group_id (required), branch (required)
 - protected_branch_protect: Protect a group branch. Params: group_id (required), name (required), push_access_level, merge_access_level, unprotect_access_level, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
 - protected_branch_update: Update a group protected branch. Params: group_id (required), branch (required), name, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
 - protected_branch_unprotect: Unprotect a group branch. Params: group_id (required), branch (required)
+
+Group Protected Environments (Premium+ — requires GITLAB_ENTERPRISE=true):
 - protected_env_list: List group protected environments. Params: group_id (required), page, per_page
 - protected_env_get: Get a group protected environment. Params: group_id (required), environment (required)
 - protected_env_protect: Protect a group environment. Params: group_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
 - protected_env_update: Update a group protected environment. Params: group_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
 - protected_env_unprotect: Unprotect a group environment. Params: group_id (required), environment (required)
+
+Group Releases (Premium+ — requires GITLAB_ENTERPRISE=true):
 - release_list: List releases across group projects. Params: group_id (required), simple (bool), page, per_page
+
+LDAP Links (Premium+ — requires GITLAB_ENTERPRISE=true):
 - ldap_link_list: List group LDAP links. Params: group_id (required)
 - ldap_link_add: Add a group LDAP link. Params: group_id (required), cn (required), group_access (required, access level int), provider (required)
 - ldap_link_delete: Delete a group LDAP link by CN or filter. Params: group_id (required), cn, filter, provider
 - ldap_link_delete_for_provider: Delete a group LDAP link for a specific provider. Params: group_id (required), provider (required), cn (required)
+
+SAML Links (Premium+ — requires GITLAB_ENTERPRISE=true):
 - saml_link_list: List group SAML links. Params: group_id (required)
 - saml_link_get: Get a group SAML link. Params: group_id (required), saml_group_name (required)
 - saml_link_add: Add a group SAML link. Params: group_id (required), saml_group_name (required), access_level (required, access level int)
 - saml_link_delete: Delete a group SAML link. Params: group_id (required), saml_group_name (required)
+
+Service Accounts (Premium+ — requires GITLAB_ENTERPRISE=true):
 - service_account_list: List group service accounts. Params: group_id (required), order_by, sort, page, per_page
 - service_account_create: Create a group service account. Params: group_id (required), name (required), username (required)
 - service_account_update: Update a group service account. Params: group_id (required), service_account_id (required), name, username
 - service_account_delete: Delete a group service account. Params: group_id (required), service_account_id (required), hard_delete (bool)
 - service_account_pat_list: List personal access tokens for a group service account. Params: group_id (required), service_account_id (required), page, per_page
 - service_account_pat_create: Create a personal access token for a group service account. Params: group_id (required), service_account_id (required), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
-- service_account_pat_revoke: Revoke a personal access token for a group service account. Params: group_id (required), service_account_id (required), token_id (required)`
-
-	if enterprise {
-		desc += `
-
-Analytics (Premium+ — requires GITLAB_ENTERPRISE=true):
+- service_account_pat_revoke: Revoke a personal access token for a group service account. Params: group_id (required), service_account_id (required), token_id (required)
 - analytics_issues_count: Get count of recently created issues. Params: group_path (required, URL-encoded path)
 - analytics_mr_count: Get count of recently created merge requests. Params: group_path (required, URL-encoded path)
 - analytics_members_count: Get count of recently added members. Params: group_path (required, URL-encoded path)

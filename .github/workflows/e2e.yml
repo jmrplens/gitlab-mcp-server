@@ -1,0 +1,91 @@
+# E2E test workflow for gitlab-mcp-server
+#
+# Runs against an ephemeral Docker-based GitLab CE instance.
+# Triggered: manually (workflow_dispatch) or weekly schedule.
+# Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
+
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      gitlab_image:
+        description: "GitLab CE Docker image"
+        default: "gitlab/gitlab-ce:latest"
+        type: string
+  schedule:
+    # Weekly: Sunday at 03:00 UTC.
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26.2"
+  GITLAB_IMAGE: ${{ github.event.inputs.gitlab_image || 'gitlab/gitlab-ce:latest' }}
+
+jobs:
+  e2e:
+    name: E2E (Docker GitLab)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
+      - name: Pull GitLab image
+        run: docker pull "${GITLAB_IMAGE}"
+
+      - name: Start GitLab via Docker Compose
+        working-directory: test/e2e
+        run: |
+          GITLAB_IMAGE="${GITLAB_IMAGE}" docker compose up -d
+          echo "GitLab container started — waiting for readiness..."
+
+      - name: Wait for GitLab readiness
+        working-directory: test/e2e
+        run: bash scripts/wait-for-gitlab.sh
+        timeout-minutes: 10
+
+      - name: Setup GitLab user and token
+        working-directory: test/e2e
+        run: bash scripts/setup-gitlab.sh
+
+      - name: Register GitLab Runner
+        working-directory: test/e2e
+        run: bash scripts/register-runner.sh
+
+      - name: Load environment
+        working-directory: test/e2e
+        run: |
+          # setup-gitlab.sh writes .env.docker with GITLAB_URL, GITLAB_TOKEN, etc.
+          cat .env.docker >> "$GITHUB_ENV"
+
+      - name: Run E2E tests
+        run: |
+          gotestsum \
+            --junitfile test-results/e2e-junit.xml \
+            --format standard-verbose \
+            -- -v -tags e2e -timeout 300s -count=1 ./test/e2e/
+        env:
+          E2E_MODE: "docker"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/
+          retention-days: 14
+
+      - name: Tear down GitLab
+        if: always()
+        working-directory: test/e2e
+        run: docker compose down -v --remove-orphans

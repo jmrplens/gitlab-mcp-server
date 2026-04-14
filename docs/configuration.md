@@ -27,7 +27,7 @@ These are the settings every user needs to get started.
 | `GITLAB_USER` | _(none)_ | GitLab username (used by some prompts and resources) |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools (40 base / 59 enterprise instead of 1004) |
-| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium meta-tools (19 additional) |
+| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 

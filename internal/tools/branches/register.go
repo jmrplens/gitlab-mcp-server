@@ -107,17 +107,21 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Remove all protection rules from a GitLab branch, allowing unrestricted push, merge, and force-push access.\n\nReturns: confirmation message. See also: gitlab_branch_protect, gitlab_protected_branches_list.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconBranch,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input UnprotectInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input UnprotectInput) (*mcp.CallToolResult, UnprotectOutput, error) {
 		if r := toolutil.ConfirmAction(ctx, req, fmt.Sprintf("Remove protection from branch %q in project %q?", input.BranchName, input.ProjectID)); r != nil {
-			return r, toolutil.DeleteOutput{}, nil
+			return r, UnprotectOutput{}, nil
 		}
 		start := time.Now()
-		err := Unprotect(ctx, client, input)
+		out, err := Unprotect(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_branch_unprotect", start, err)
 		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
+			return nil, UnprotectOutput{}, err
 		}
-		return toolutil.DeleteResult(fmt.Sprintf("protection from branch %q in project %s", input.BranchName, input.ProjectID))
+		md := fmt.Sprintf(toolutil.EmojiSuccess+" Successfully removed protection from branch **%q** in project **%s**.", input.BranchName, input.ProjectID)
+		if out.Status == "already_unprotected" {
+			md = fmt.Sprintf(toolutil.EmojiSuccess+" Branch **%q** in project **%s** is already unprotected — no action needed.", input.BranchName, input.ProjectID)
+		}
+		return toolutil.ToolResultAnnotated(md, toolutil.ContentMutate), out, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

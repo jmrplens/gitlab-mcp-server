@@ -167,6 +167,7 @@ func (p *ServerPool) GetOrCreate(token string) (*mcp.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client for pool: %w", err)
 	}
+	client.SetEnterprise(p.cfg.Enterprise)
 
 	server := p.factory(client)
 	element := p.lru.PushFront(key)

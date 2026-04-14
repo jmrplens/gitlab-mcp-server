@@ -16,13 +16,19 @@ const (
 	fmtListToolsErr = "ListTools() error: %v"
 )
 
-// newMCPSession creates an MCP session with all individual tools registered.
-func newMCPSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
+// newMCPSession creates an MCP session with individual tools registered.
+// When enterprise is true, Enterprise/Premium tools are included.
+func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.ClientSession {
 	t.Helper()
 	client := newTestClient(t, handler)
 
+	ent := true
+	if len(enterprise) > 0 {
+		ent = enterprise[0]
+	}
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, client)
+	RegisterAll(server, client, ent)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -71,26 +77,44 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 // TestRegisterAll_ToolCount verifies that RegisterAll registers exactly
 // the expected number of individual tools on the MCP server.
 func TestRegisterAll_ToolCount(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-	}))
+	})
 
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf(fmtListToolsErr, err)
-	}
-
-	const expectedTools = 1004
-	if len(result.Tools) != expectedTools {
-		t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
-		for _, tool := range result.Tools {
-			t.Logf("  tool: %s", tool.Name)
+	t.Run("Enterprise", func(t *testing.T) {
+		session := newMCPSession(t, handler, true)
+		result, err := session.ListTools(context.Background(), nil)
+		if err != nil {
+			t.Fatalf(fmtListToolsErr, err)
 		}
-	}
+		const expectedTools = 1004
+		if len(result.Tools) != expectedTools {
+			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
+			for _, tool := range result.Tools {
+				t.Logf("  tool: %s", tool.Name)
+			}
+		}
+	})
+
+	t.Run("CE", func(t *testing.T) {
+		session := newMCPSession(t, handler, false)
+		result, err := session.ListTools(context.Background(), nil)
+		if err != nil {
+			t.Fatalf(fmtListToolsErr, err)
+		}
+		t.Logf("CE tool count: %d", len(result.Tools))
+		const expectedTools = 849
+		if len(result.Tools) != expectedTools {
+			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
+			for _, tool := range result.Tools {
+				t.Logf("  tool: %s", tool.Name)
+			}
+		}
+	})
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 40 base, 59 with enterprise.
+// the expected number of meta-tools: 44 base, 59 with enterprise.
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -102,7 +126,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 40
+		const expectedTools = 44
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

@@ -100,11 +100,15 @@ func TestBranchUnprotect_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	if err := Unprotect(context.Background(), client, UnprotectInput{
+	out, err := Unprotect(context.Background(), client, UnprotectInput{
 		ProjectID:  "42",
 		BranchName: "main",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Errorf("Unprotect() unexpected error: %v", err)
+	}
+	if out.Status != "success" {
+		t.Errorf("Unprotect() expected status=success, got %q", out.Status)
 	}
 }
 
@@ -115,11 +119,15 @@ func TestBranchUnprotect_NotFound(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
 	}))
 
-	if err := Unprotect(context.Background(), client, UnprotectInput{
+	out, err := Unprotect(context.Background(), client, UnprotectInput{
 		ProjectID:  "42",
 		BranchName: "nonexistent",
-	}); err == nil {
-		t.Fatal("Unprotect() expected error for non-existent branch, got nil")
+	})
+	if err != nil {
+		t.Fatalf("Unprotect() should be idempotent, got error: %v", err)
+	}
+	if out.Status != "already_unprotected" {
+		t.Errorf("Unprotect() expected status=already_unprotected, got %q", out.Status)
 	}
 }
 
@@ -735,7 +743,7 @@ func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	}))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", BranchName: "main"})
+	_, err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
 	}
@@ -796,7 +804,7 @@ func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	err := Unprotect(context.Background(), client, UnprotectInput{BranchName: "main"})
+	_, err := Unprotect(context.Background(), client, UnprotectInput{BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
@@ -889,7 +897,7 @@ func TestBranchUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
-	err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42", BranchName: "main"})
+	_, err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
 	}

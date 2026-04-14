@@ -13,16 +13,26 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/civariables"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploykeys"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuediscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
@@ -31,18 +41,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
 )
 
 // Branch name, tag version, and assertion format used across meta-tool
@@ -70,6 +85,21 @@ type metaState struct {
 	groupPath     string // group full path discovered via group list
 	packageID     int64  // package ID for package lifecycle tests
 	packageFileID int64  // package file ID for package file tests
+	// Phase 5: new domain state fields.
+	wikiSlug              string
+	envID                 int64
+	labelID               int64
+	milestoneIID          int64
+	issue2IID             int64
+	deployKeyID           int64
+	snippetID             int64
+	issueDiscussionID     string
+	issueDiscussionNoteID int64
+	draftNoteID           int64
+	pipelineScheduleID    int
+	badgeID               int64
+	accessTokenID         int64
+	awardEmojiID          int64
 }
 
 // mState is the shared [metaState] instance used by [TestMetaToolWorkflow]
@@ -84,7 +114,7 @@ func TestMetaToolWorkflow(t *testing.T) {
 		t.Skip("meta session not configured — set META_TOOLS=true")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 580*time.Second)
 	defer cancel()
 
 	// User identity.
@@ -213,22 +243,122 @@ func TestMetaToolWorkflow(t *testing.T) {
 	t.Run("39_UpdateProject", func(t *testing.T) { metaUpdateProject(ctx, t) })
 	t.Run("40_ListProjects", func(t *testing.T) { metaListProjects(ctx, t) })
 
-	// Push rules.
-	t.Run("41_AddPushRule", func(t *testing.T) { metaAddPushRule(ctx, t) })
-	t.Run("42_GetPushRules", func(t *testing.T) { metaGetPushRules(ctx, t) })
-	t.Run("43_EditPushRule", func(t *testing.T) { metaEditPushRule(ctx, t) })
-	t.Run("44_DeletePushRule", func(t *testing.T) { metaDeletePushRule(ctx, t) })
+	// Push rules (Enterprise/Premium only).
+	if state.enterprise {
+		t.Run("41_AddPushRule", func(t *testing.T) { metaAddPushRule(ctx, t) })
+		t.Run("42_GetPushRules", func(t *testing.T) { metaGetPushRules(ctx, t) })
+		t.Run("43_EditPushRule", func(t *testing.T) { metaEditPushRule(ctx, t) })
+		t.Run("44_DeletePushRule", func(t *testing.T) { metaDeletePushRule(ctx, t) })
+	}
 
 	// User-scoped project listings.
 	t.Run("45_ListUserContributed", func(t *testing.T) { metaListUserContributed(ctx, t) })
 	t.Run("46_ListUserStarred", func(t *testing.T) { metaListUserStarred(ctx, t) })
 
-	// GraphQL tools (branch rules, CI catalog, vulnerabilities, custom emoji).
+	// GraphQL tools (branch rules, CI catalog, custom emoji — CE; vulnerabilities — Enterprise).
 	t.Run("47_BranchRuleList", func(t *testing.T) { metaBranchRuleList(ctx, t) })
 	t.Run("48_CICatalogList", func(t *testing.T) { metaCICatalogList(ctx, t) })
-	t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { metaVulnerabilitySeverityCount(ctx, t) })
-	t.Run("50_VulnerabilityList", func(t *testing.T) { metaVulnerabilityList(ctx, t) })
+	if state.enterprise {
+		t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { metaVulnerabilitySeverityCount(ctx, t) })
+		t.Run("50_VulnerabilityList", func(t *testing.T) { metaVulnerabilityList(ctx, t) })
+	}
 	t.Run("51_CustomEmojiList", func(t *testing.T) { metaCustomEmojiList(ctx, t) })
+
+	// --- Phase 5: New domain meta-tool coverage ---
+
+	// Wiki lifecycle (gitlab_wiki).
+	t.Run("52_WikiCreate", func(t *testing.T) { metaWikiCreate(ctx, t) })
+	t.Run("53_WikiGet", func(t *testing.T) { metaWikiGet(ctx, t) })
+	t.Run("54_WikiList", func(t *testing.T) { metaWikiList(ctx, t) })
+	t.Run("55_WikiUpdate", func(t *testing.T) { metaWikiUpdate(ctx, t) })
+	t.Run("56_WikiDelete", func(t *testing.T) { metaWikiDelete(ctx, t) })
+
+	// CI Variables lifecycle (gitlab_ci_variable).
+	t.Run("57_CIVariableCreate", func(t *testing.T) { metaCIVariableCreate(ctx, t) })
+	t.Run("58_CIVariableGet", func(t *testing.T) { metaCIVariableGet(ctx, t) })
+	t.Run("59_CIVariableList", func(t *testing.T) { metaCIVariableList(ctx, t) })
+	t.Run("60_CIVariableUpdate", func(t *testing.T) { metaCIVariableUpdate(ctx, t) })
+	t.Run("61_CIVariableDelete", func(t *testing.T) { metaCIVariableDelete(ctx, t) })
+
+	// CI Lint (gitlab_template).
+	t.Run("62_CILint", func(t *testing.T) { metaCILint(ctx, t) })
+
+	// Environment lifecycle (gitlab_environment).
+	t.Run("63_EnvironmentCreate", func(t *testing.T) { metaEnvironmentCreate(ctx, t) })
+	t.Run("64_EnvironmentGet", func(t *testing.T) { metaEnvironmentGet(ctx, t) })
+	t.Run("65_EnvironmentList", func(t *testing.T) { metaEnvironmentList(ctx, t) })
+	t.Run("66_EnvironmentStop", func(t *testing.T) { metaEnvironmentStop(ctx, t) })
+	t.Run("67_EnvironmentDelete", func(t *testing.T) { metaEnvironmentDelete(ctx, t) })
+
+	// Label CRUD (gitlab_project).
+	t.Run("68_LabelCreate", func(t *testing.T) { metaLabelCreate(ctx, t) })
+	t.Run("69_LabelUpdate", func(t *testing.T) { metaLabelUpdate(ctx, t) })
+	t.Run("70_LabelDelete", func(t *testing.T) { metaLabelDelete(ctx, t) })
+
+	// Milestone CRUD (gitlab_project).
+	t.Run("71_MilestoneCreate", func(t *testing.T) { metaMilestoneCreate(ctx, t) })
+	t.Run("72_MilestoneGet", func(t *testing.T) { metaMilestoneGet(ctx, t) })
+	t.Run("73_MilestoneUpdate", func(t *testing.T) { metaMilestoneUpdate(ctx, t) })
+	t.Run("74_MilestoneDelete", func(t *testing.T) { metaMilestoneDelete(ctx, t) })
+
+	// Issue Links (gitlab_issue — needs 2 issues).
+	t.Run("75_IssueCreateSecond", func(t *testing.T) { metaIssueCreateSecond(ctx, t) })
+	t.Run("76_IssueLinkCreate", func(t *testing.T) { metaIssueLinkCreate(ctx, t) })
+	t.Run("77_IssueLinkList", func(t *testing.T) { metaIssueLinkList(ctx, t) })
+	t.Run("78_IssueLinkDelete", func(t *testing.T) { metaIssueLinkDelete(ctx, t) })
+	t.Run("79_IssueDeleteSecond", func(t *testing.T) { metaIssueDeleteSecond(ctx, t) })
+
+	// Todos (gitlab_user).
+	t.Run("80_TodoList", func(t *testing.T) { metaTodoList(ctx, t) })
+	t.Run("81_TodoMarkAllDone", func(t *testing.T) { metaTodoMarkAllDone(ctx, t) })
+
+	// Deploy Keys (gitlab_access).
+	t.Run("82_DeployKeyCreate", func(t *testing.T) { metaDeployKeyCreate(ctx, t) })
+	t.Run("83_DeployKeyGet", func(t *testing.T) { metaDeployKeyGet(ctx, t) })
+	t.Run("84_DeployKeyList", func(t *testing.T) { metaDeployKeyList(ctx, t) })
+	t.Run("85_DeployKeyDelete", func(t *testing.T) { metaDeployKeyDelete(ctx, t) })
+
+	// Snippets (gitlab_snippet).
+	t.Run("86_SnippetCreate", func(t *testing.T) { metaSnippetCreate(ctx, t) })
+	t.Run("87_SnippetGet", func(t *testing.T) { metaSnippetGet(ctx, t) })
+	t.Run("88_SnippetList", func(t *testing.T) { metaSnippetList(ctx, t) })
+	t.Run("89_SnippetUpdate", func(t *testing.T) { metaSnippetUpdate(ctx, t) })
+	t.Run("90_SnippetDelete", func(t *testing.T) { metaSnippetDelete(ctx, t) })
+
+	// Issue Discussions (gitlab_issue).
+	t.Run("91_IssueDiscussionCreate", func(t *testing.T) { metaIssueDiscussionCreate(ctx, t) })
+	t.Run("92_IssueDiscussionList", func(t *testing.T) { metaIssueDiscussionList(ctx, t) })
+	t.Run("93_IssueDiscussionAddNote", func(t *testing.T) { metaIssueDiscussionAddNote(ctx, t) })
+	t.Run("94_IssueDiscussionDeleteNote", func(t *testing.T) { metaIssueDiscussionDeleteNote(ctx, t) })
+
+	// MR Draft Notes (gitlab_mr_review).
+	t.Run("95_DraftNoteCreate", func(t *testing.T) { metaDraftNoteCreate(ctx, t) })
+	t.Run("96_DraftNoteList", func(t *testing.T) { metaDraftNoteList(ctx, t) })
+	t.Run("97_DraftNoteUpdate", func(t *testing.T) { metaDraftNoteUpdate(ctx, t) })
+	t.Run("98_DraftNotePublishAll", func(t *testing.T) { metaDraftNotePublishAll(ctx, t) })
+
+	// Pipeline Schedules (gitlab_pipeline_schedule).
+	t.Run("100_PipelineScheduleCreate", func(t *testing.T) { metaPipelineScheduleCreate(ctx, t) })
+	t.Run("101_PipelineScheduleGet", func(t *testing.T) { metaPipelineScheduleGet(ctx, t) })
+	t.Run("102_PipelineScheduleList", func(t *testing.T) { metaPipelineScheduleList(ctx, t) })
+	t.Run("103_PipelineScheduleUpdate", func(t *testing.T) { metaPipelineScheduleUpdate(ctx, t) })
+	t.Run("104_PipelineScheduleDelete", func(t *testing.T) { metaPipelineScheduleDelete(ctx, t) })
+
+	// Badges (gitlab_project).
+	t.Run("105_BadgeCreate", func(t *testing.T) { metaBadgeCreate(ctx, t) })
+	t.Run("106_BadgeList", func(t *testing.T) { metaBadgeList(ctx, t) })
+	t.Run("107_BadgeUpdate", func(t *testing.T) { metaBadgeUpdate(ctx, t) })
+	t.Run("108_BadgeDelete", func(t *testing.T) { metaBadgeDelete(ctx, t) })
+
+	// Access Tokens (gitlab_access).
+	t.Run("109_AccessTokenCreate", func(t *testing.T) { metaAccessTokenCreate(ctx, t) })
+	t.Run("110_AccessTokenList", func(t *testing.T) { metaAccessTokenList(ctx, t) })
+	t.Run("111_AccessTokenRevoke", func(t *testing.T) { metaAccessTokenRevoke(ctx, t) })
+
+	// Award Emoji (gitlab_issue).
+	t.Run("112_AwardEmojiCreate", func(t *testing.T) { metaAwardEmojiCreate(ctx, t) })
+	t.Run("113_AwardEmojiList", func(t *testing.T) { metaAwardEmojiList(ctx, t) })
+	t.Run("114_AwardEmojiDelete", func(t *testing.T) { metaAwardEmojiDelete(ctx, t) })
 
 	// Cleanup.
 	t.Run("99_Cleanup_DeleteProject", func(t *testing.T) { metaDeleteProject(ctx, t) })
@@ -298,18 +428,16 @@ func metaGetProject(ctx context.Context, t *testing.T) {
 }
 
 // metaUnprotectMain removes protection from the main branch via the
-// gitlab_branch meta-tool so subsequent commits can be pushed directly.
-// It first waits for GitLab to apply the default branch protection
-// (async job after project creation) before attempting to unprotect.
+// gitlab_branch meta-tool. The MCP tool is idempotent — calling it on an
+// already-unprotected branch returns success without error.
 func metaUnprotectMain(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
-	waitForBranchProtection(ctx, t, int(mState.projectID), defaultBranch)
 	err := callMetaVoid(ctx, "gitlab_branch", "unprotect", map[string]any{
 		"project_id":  mPID(),
 		"branch_name": defaultBranch,
 	})
 	requireNoError(t, err, "meta unprotect main")
-	t.Logf("Unprotected %s branch", defaultBranch)
+	t.Logf("Unprotected %s branch via meta-tool", defaultBranch)
 }
 
 // metaUpdateProject updates the project description via the
@@ -345,15 +473,26 @@ func metaListProjects(ctx context.Context, t *testing.T) {
 	t.Logf("Found %d owned projects", len(out.Projects))
 }
 
-// metaDeleteProject deletes the E2E test project via the gitlab_project
-// meta-tool and resets the project ID.
+// metaDeleteProject permanently deletes the E2E test project via the
+// gitlab_project meta-tool and verifies it is no longer accessible.
 func metaDeleteProject(ctx context.Context, t *testing.T) {
 	requireMetaProjectID(t)
-	err := callMetaVoid(ctx, "gitlab_project", "delete", map[string]any{
-		"project_id": mPID(),
+
+	// Step 1: Permanently delete via meta-tool.
+	out, err := callMeta[projects.DeleteOutput](ctx, "gitlab_project", "delete", map[string]any{
+		"project_id":         mPID(),
+		"permanently_remove": true,
+		"full_path":          mState.projectPath,
 	})
 	requireNoError(t, err, "meta delete project")
-	t.Logf("Deleted project %s (ID=%d)", mState.projectPath, mState.projectID)
+	t.Logf("Delete response: status=%s, permanently_removed=%v", out.Status, out.PermanentlyRemoved)
+
+	// Step 2: Verify the project is gone (GET should fail).
+	_, getErr := callMeta[projects.Output](ctx, "gitlab_project", "get", map[string]any{
+		"project_id": mPID(),
+	})
+	requireTrue(t, getErr != nil, "expected project %d to be deleted, but GET succeeded", mState.projectID)
+	t.Logf("Verified project %s (ID=%d) is permanently deleted", mState.projectPath, mState.projectID)
 	mState.projectID = 0
 }
 
@@ -367,6 +506,9 @@ func metaAddPushRule(ctx context.Context, t *testing.T) {
 		"commit_message_regex": "^[A-Z].*",
 		"max_file_size":        50,
 	})
+	if err != nil && strings.Contains(err.Error(), "404") {
+		t.Skip("push rules not available on GitLab CE — skipping")
+	}
 	requireNoError(t, err, "meta add push rule")
 	requireTrue(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
 	t.Logf("Added push rule %d via meta-tool", out.ID)
@@ -378,6 +520,9 @@ func metaGetPushRules(ctx context.Context, t *testing.T) {
 	out, err := callMeta[projects.PushRuleOutput](ctx, "gitlab_project", "push_rule_get", map[string]any{
 		"project_id": mPID(),
 	})
+	if err != nil && strings.Contains(err.Error(), "404") {
+		t.Skip("push rules not available on GitLab CE — skipping")
+	}
 	requireNoError(t, err, "meta get push rules")
 	requireTrue(t, out.ID > 0, "push rule ID should be positive")
 	requireTrue(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
@@ -391,6 +536,9 @@ func metaEditPushRule(ctx context.Context, t *testing.T) {
 		"project_id":    mPID(),
 		"max_file_size": 100,
 	})
+	if err != nil && strings.Contains(err.Error(), "404") {
+		t.Skip("push rules not available on GitLab CE — skipping")
+	}
 	requireNoError(t, err, "meta edit push rule")
 	requireTrue(t, out.MaxFileSize == 100, "expected max_file_size=100, got %d", out.MaxFileSize)
 	t.Logf("Edited push rule via meta-tool: max_file_size=%d", out.MaxFileSize)
@@ -402,6 +550,9 @@ func metaDeletePushRule(ctx context.Context, t *testing.T) {
 	err := callMetaVoid(ctx, "gitlab_project", "push_rule_delete", map[string]any{
 		"project_id": mPID(),
 	})
+	if err != nil && strings.Contains(err.Error(), "404") {
+		t.Skip("push rules not available on GitLab CE — skipping")
+	}
 	requireNoError(t, err, "meta delete push rule")
 	t.Logf("Deleted push rules via meta-tool")
 }
@@ -1387,11 +1538,21 @@ func metaProjectUpload(ctx context.Context, t *testing.T) {
 // metaMRCommits lists commits in the merge request.
 func metaMRCommits(ctx context.Context, t *testing.T) {
 	requireMetaMRIID(t)
-	out, err := callMeta[mergerequests.CommitsOutput](ctx, "gitlab_merge_request", "commits", map[string]any{
-		"project_id": mPID(),
-		"mr_iid":     mState.mrIID,
-	})
-	requireNoError(t, err, "meta MR commits")
+	var out mergerequests.CommitsOutput
+	var err error
+	for attempt := range 3 {
+		out, err = callMeta[mergerequests.CommitsOutput](ctx, "gitlab_merge_request", "commits", map[string]any{
+			"project_id": mPID(),
+			"mr_iid":     mState.mrIID,
+		})
+		requireNoError(t, err, "meta MR commits")
+		if len(out.Commits) > 0 {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(2 * time.Second)
+		}
+	}
 	requireTrue(t, len(out.Commits) >= 1, "expected at least 1 MR commit, got %d", len(out.Commits))
 	t.Logf("MR !%d has %d commits via meta-tool", mState.mrIID, len(out.Commits))
 }
@@ -1667,6 +1828,895 @@ func metaUploadFilePath(ctx context.Context, t *testing.T) {
 	requireTrue(t, out.URL != "", "upload URL should not be empty")
 	requireTrue(t, out.Markdown != "", "upload markdown should not be empty")
 	t.Logf("Meta uploaded via file_path: %s (markdown=%s)", out.URL, out.Markdown)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Wiki lifecycle (gitlab_wiki)
+// ---------------------------------------------------------------------------.
+
+func metaWikiCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[wikis.Output](ctx, "gitlab_wiki", "create", map[string]any{
+		"project_id": mPID(),
+		"title":      "E2E Meta Wiki",
+		"content":    "# Meta wiki\nCreated by E2E meta-tool test.",
+	})
+	requireNoError(t, err, "meta wiki create")
+	requireTrue(t, out.Slug != "", "expected non-empty wiki slug")
+	mState.wikiSlug = out.Slug
+	t.Logf("Created wiki page: %s", out.Slug)
+}
+
+func metaWikiGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.wikiSlug != "", "wikiSlug not set")
+	out, err := callMeta[wikis.Output](ctx, "gitlab_wiki", "get", map[string]any{
+		"project_id": mPID(),
+		"slug":       mState.wikiSlug,
+	})
+	requireNoError(t, err, "meta wiki get")
+	requireTrue(t, out.Slug == mState.wikiSlug, "expected slug %q, got %q", mState.wikiSlug, out.Slug)
+	t.Logf("Got wiki page: %s", out.Title)
+}
+
+func metaWikiList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[wikis.ListOutput](ctx, "gitlab_wiki", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta wiki list")
+	requireTrue(t, len(out.WikiPages) > 0, "expected at least one wiki page")
+	t.Logf("Listed %d wiki pages", len(out.WikiPages))
+}
+
+func metaWikiUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.wikiSlug != "", "wikiSlug not set")
+	out, err := callMeta[wikis.Output](ctx, "gitlab_wiki", "update", map[string]any{
+		"project_id": mPID(),
+		"slug":       mState.wikiSlug,
+		"content":    "# Updated Meta Wiki\nUpdated by E2E meta-tool test.",
+	})
+	requireNoError(t, err, "meta wiki update")
+	requireTrue(t, out.Slug == mState.wikiSlug, "slug mismatch after update")
+	t.Logf("Updated wiki page: %s", out.Slug)
+}
+
+func metaWikiDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.wikiSlug != "", "wikiSlug not set")
+	err := callMetaVoid(ctx, "gitlab_wiki", "delete", map[string]any{
+		"project_id": mPID(),
+		"slug":       mState.wikiSlug,
+	})
+	requireNoError(t, err, "meta wiki delete")
+	t.Logf("Deleted wiki page: %s", mState.wikiSlug)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: CI Variables lifecycle (gitlab_ci_variable)
+// ---------------------------------------------------------------------------.
+
+func metaCIVariableCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[civariables.Output](ctx, "gitlab_ci_variable", "create", map[string]any{
+		"project_id": mPID(),
+		"key":        "E2E_META_VAR",
+		"value":      "meta-test-value",
+	})
+	requireNoError(t, err, "meta CI variable create")
+	requireTrue(t, out.Key == "E2E_META_VAR", "expected key E2E_META_VAR, got %q", out.Key)
+	t.Logf("Created CI variable: %s", out.Key)
+}
+
+func metaCIVariableGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[civariables.Output](ctx, "gitlab_ci_variable", "get", map[string]any{
+		"project_id": mPID(),
+		"key":        "E2E_META_VAR",
+	})
+	requireNoError(t, err, "meta CI variable get")
+	requireTrue(t, out.Value == "meta-test-value", "expected value meta-test-value, got %q", out.Value)
+	t.Logf("Got CI variable: %s=%s", out.Key, out.Value)
+}
+
+func metaCIVariableList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[civariables.ListOutput](ctx, "gitlab_ci_variable", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta CI variable list")
+	requireTrue(t, len(out.Variables) > 0, "expected at least one CI variable")
+	t.Logf("Listed %d CI variables", len(out.Variables))
+}
+
+func metaCIVariableUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[civariables.Output](ctx, "gitlab_ci_variable", "update", map[string]any{
+		"project_id": mPID(),
+		"key":        "E2E_META_VAR",
+		"value":      "updated-meta-value",
+	})
+	requireNoError(t, err, "meta CI variable update")
+	requireTrue(t, out.Value == "updated-meta-value", "expected updated value, got %q", out.Value)
+	t.Logf("Updated CI variable: %s=%s", out.Key, out.Value)
+}
+
+func metaCIVariableDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	err := callMetaVoid(ctx, "gitlab_ci_variable", "delete", map[string]any{
+		"project_id": mPID(),
+		"key":        "E2E_META_VAR",
+	})
+	requireNoError(t, err, "meta CI variable delete")
+	t.Log("Deleted CI variable E2E_META_VAR")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: CI Lint (gitlab_template)
+// ---------------------------------------------------------------------------.
+
+func metaCILint(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[cilint.Output](ctx, "gitlab_template", "lint", map[string]any{
+		"project_id": mPID(),
+		"content":    "stages:\n  - build\nbuild_job:\n  stage: build\n  script:\n    - echo hello",
+	})
+	requireNoError(t, err, "meta CI lint")
+	requireTrue(t, out.Valid, "CI config should be valid, errors: %v", out.Errors)
+	t.Logf("CI lint valid=%v, warnings=%d", out.Valid, len(out.Warnings))
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Environment lifecycle (gitlab_environment)
+// ---------------------------------------------------------------------------.
+
+func metaEnvironmentCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[environments.Output](ctx, "gitlab_environment", "create", map[string]any{
+		"project_id": mPID(),
+		"name":       "e2e-meta-staging",
+	})
+	requireNoError(t, err, "meta environment create")
+	requireTrue(t, out.ID > 0, "expected positive environment ID")
+	mState.envID = out.ID
+	t.Logf("Created environment: %s (ID=%d)", out.Name, out.ID)
+}
+
+func metaEnvironmentGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.envID > 0, "envID not set")
+	out, err := callMeta[environments.Output](ctx, "gitlab_environment", "get", map[string]any{
+		"project_id":     mPID(),
+		"environment_id": mState.envID,
+	})
+	requireNoError(t, err, "meta environment get")
+	requireTrue(t, out.ID == mState.envID, "expected env ID %d, got %d", mState.envID, out.ID)
+	t.Logf("Got environment: %s (state=%s)", out.Name, out.State)
+}
+
+func metaEnvironmentList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[environments.ListOutput](ctx, "gitlab_environment", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta environment list")
+	requireTrue(t, len(out.Environments) > 0, "expected at least one environment")
+	t.Logf("Listed %d environments", len(out.Environments))
+}
+
+func metaEnvironmentStop(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.envID > 0, "envID not set")
+	out, err := callMeta[environments.Output](ctx, "gitlab_environment", "stop", map[string]any{
+		"project_id":     mPID(),
+		"environment_id": mState.envID,
+	})
+	requireNoError(t, err, "meta environment stop")
+	requireTrue(t, out.ID == mState.envID, "expected env ID %d after stop", mState.envID)
+	t.Logf("Stopped environment: %s", out.Name)
+}
+
+func metaEnvironmentDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.envID > 0, "envID not set")
+	err := callMetaVoid(ctx, "gitlab_environment", "delete", map[string]any{
+		"project_id":     mPID(),
+		"environment_id": mState.envID,
+	})
+	requireNoError(t, err, "meta environment delete")
+	t.Logf("Deleted environment ID=%d", mState.envID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Label CRUD (gitlab_project)
+// ---------------------------------------------------------------------------.
+
+func metaLabelCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[labels.Output](ctx, "gitlab_project", "label_create", map[string]any{
+		"project_id": mPID(),
+		"name":       "e2e-meta-label",
+		"color":      "#FF0000",
+	})
+	requireNoError(t, err, "meta label create")
+	requireTrue(t, out.ID > 0, "expected positive label ID")
+	mState.labelID = out.ID
+	t.Logf("Created label: %s (ID=%d)", out.Name, out.ID)
+}
+
+func metaLabelUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.labelID > 0, "labelID not set")
+	out, err := callMeta[labels.Output](ctx, "gitlab_project", "label_update", map[string]any{
+		"project_id": mPID(),
+		"label_id":   mState.labelID,
+		"color":      "#00FF00",
+	})
+	requireNoError(t, err, "meta label update")
+	requireTrue(t, out.ID == mState.labelID, "label ID mismatch after update")
+	t.Logf("Updated label: %s (color=%s)", out.Name, out.Color)
+}
+
+func metaLabelDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.labelID > 0, "labelID not set")
+	err := callMetaVoid(ctx, "gitlab_project", "label_delete", map[string]any{
+		"project_id": mPID(),
+		"label_id":   mState.labelID,
+	})
+	requireNoError(t, err, "meta label delete")
+	t.Logf("Deleted label ID=%d", mState.labelID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Milestone CRUD (gitlab_project)
+// ---------------------------------------------------------------------------.
+
+func metaMilestoneCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[milestones.Output](ctx, "gitlab_project", "milestone_create", map[string]any{
+		"project_id": mPID(),
+		"title":      "e2e-meta-milestone",
+	})
+	requireNoError(t, err, "meta milestone create")
+	requireTrue(t, out.IID > 0, "expected positive milestone IID")
+	mState.milestoneIID = out.IID
+	t.Logf("Created milestone: %s (IID=%d)", out.Title, out.IID)
+}
+
+func metaMilestoneGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.milestoneIID > 0, "milestoneIID not set")
+	out, err := callMeta[milestones.Output](ctx, "gitlab_project", "milestone_get", map[string]any{
+		"project_id":    mPID(),
+		"milestone_iid": mState.milestoneIID,
+	})
+	requireNoError(t, err, "meta milestone get")
+	requireTrue(t, out.IID == mState.milestoneIID, "milestone IID mismatch")
+	t.Logf("Got milestone: %s (state=%s)", out.Title, out.State)
+}
+
+func metaMilestoneUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.milestoneIID > 0, "milestoneIID not set")
+	out, err := callMeta[milestones.Output](ctx, "gitlab_project", "milestone_update", map[string]any{
+		"project_id":    mPID(),
+		"milestone_iid": mState.milestoneIID,
+		"description":   "Updated by E2E meta-tool test",
+	})
+	requireNoError(t, err, "meta milestone update")
+	requireTrue(t, out.IID == mState.milestoneIID, "milestone IID mismatch after update")
+	t.Logf("Updated milestone: %s", out.Title)
+}
+
+func metaMilestoneDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.milestoneIID > 0, "milestoneIID not set")
+	err := callMetaVoid(ctx, "gitlab_project", "milestone_delete", map[string]any{
+		"project_id":    mPID(),
+		"milestone_iid": mState.milestoneIID,
+	})
+	requireNoError(t, err, "meta milestone delete")
+	t.Logf("Deleted milestone IID=%d", mState.milestoneIID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Issue Links (gitlab_issue — needs 2 issues)
+// ---------------------------------------------------------------------------.
+
+func metaIssueCreateSecond(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Create two issues for link testing.
+	out1, err := callMeta[issues.Output](ctx, "gitlab_issue", "create", map[string]any{
+		"project_id": mPID(),
+		"title":      "E2E Meta Issue Link Source",
+	})
+	requireNoError(t, err, "meta issue create (link source)")
+	mState.issueIID = out1.IID
+
+	out2, err := callMeta[issues.Output](ctx, "gitlab_issue", "create", map[string]any{
+		"project_id": mPID(),
+		"title":      "E2E Meta Issue Link Target",
+	})
+	requireNoError(t, err, "meta issue create (link target)")
+	mState.issue2IID = out2.IID
+	t.Logf("Created issues for linking: IID=%d, IID=%d", mState.issueIID, mState.issue2IID)
+}
+
+func metaIssueLinkCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueIID > 0, msgMetaIssueIIDNotSet)
+	requireTrue(t, mState.issue2IID > 0, "issue2IID not set")
+	out, err := callMeta[issuelinks.Output](ctx, "gitlab_issue", "link_create", map[string]any{
+		"project_id":        mPID(),
+		"issue_iid":         mState.issueIID,
+		"target_project_id": mPID(),
+		"target_issue_iid":  strconv.FormatInt(mState.issue2IID, 10),
+	})
+	requireNoError(t, err, "meta issue link create")
+	requireTrue(t, out.ID > 0, "expected positive issue link ID")
+	t.Logf("Created issue link: ID=%d (source=%d → target=%d)", out.ID, out.SourceIssueIID, out.TargetIssueIID)
+}
+
+func metaIssueLinkList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueIID > 0, msgMetaIssueIIDNotSet)
+	out, err := callMeta[issuelinks.ListOutput](ctx, "gitlab_issue", "link_list", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+	})
+	requireNoError(t, err, "meta issue link list")
+	requireTrue(t, len(out.Relations) > 0, "expected at least one issue link")
+	t.Logf("Listed %d issue links", len(out.Relations))
+}
+
+func metaIssueLinkDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueIID > 0, msgMetaIssueIIDNotSet)
+	// Get the link to find its ID.
+	listOut, err := callMeta[issuelinks.ListOutput](ctx, "gitlab_issue", "link_list", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+	})
+	requireNoError(t, err, "meta issue link list for delete")
+	requireTrue(t, len(listOut.Relations) > 0, "no links to delete")
+	linkID := listOut.Relations[0].IssueLinkID
+
+	err = callMetaVoid(ctx, "gitlab_issue", "link_delete", map[string]any{
+		"project_id":    mPID(),
+		"issue_iid":     mState.issueIID,
+		"issue_link_id": linkID,
+	})
+	requireNoError(t, err, "meta issue link delete")
+	t.Logf("Deleted issue link ID=%d", linkID)
+}
+
+func metaIssueDeleteSecond(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Delete both issues created for link testing.
+	if mState.issueIID > 0 {
+		err := callMetaVoid(ctx, "gitlab_issue", "delete", map[string]any{
+			"project_id": mPID(),
+			"issue_iid":  mState.issueIID,
+		})
+		requireNoError(t, err, "meta delete issue (link source)")
+	}
+	if mState.issue2IID > 0 {
+		err := callMetaVoid(ctx, "gitlab_issue", "delete", map[string]any{
+			"project_id": mPID(),
+			"issue_iid":  mState.issue2IID,
+		})
+		requireNoError(t, err, "meta delete issue (link target)")
+	}
+	t.Logf("Deleted link-test issues IID=%d, IID=%d", mState.issueIID, mState.issue2IID)
+	mState.issueIID = 0
+	mState.issue2IID = 0
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Todos (gitlab_user)
+// ---------------------------------------------------------------------------.
+
+func metaTodoList(ctx context.Context, t *testing.T) {
+	out, err := callMeta[todos.ListOutput](ctx, "gitlab_user", "todo_list", map[string]any{})
+	requireNoError(t, err, "meta todo list")
+	t.Logf("Listed %d todos", len(out.Todos))
+}
+
+func metaTodoMarkAllDone(ctx context.Context, t *testing.T) {
+	out, err := callMeta[todos.MarkAllDoneOutput](ctx, "gitlab_user", "todo_mark_all_done", map[string]any{})
+	requireNoError(t, err, "meta todo mark all done")
+	t.Logf("Mark all done: %s", out.Message)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Deploy Keys (gitlab_deploy_key)
+// ---------------------------------------------------------------------------.
+
+func metaDeployKeyCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Use a separate ED25519 key to avoid collision with workflow_test deploy key.
+	const metaDeployKeyPub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDFKs4H4EDnEetOywhF6xBXCRN8b9XpGtlw+TQJhLM9B e2e-meta-disposable-key"
+	out, err := callMeta[deploykeys.Output](ctx, "gitlab_access", "deploy_key_add", map[string]any{
+		"project_id": mPID(),
+		"title":      "e2e-meta-deploy-key",
+		"key":        metaDeployKeyPub,
+	})
+	requireNoError(t, err, "meta deploy key add")
+	requireTrue(t, out.ID > 0, "expected positive deploy key ID")
+	mState.deployKeyID = out.ID
+	t.Logf("Created deploy key: %s (ID=%d)", out.Title, out.ID)
+}
+
+func metaDeployKeyGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.deployKeyID > 0, "deployKeyID not set")
+	out, err := callMeta[deploykeys.Output](ctx, "gitlab_access", "deploy_key_get", map[string]any{
+		"project_id":    mPID(),
+		"deploy_key_id": mState.deployKeyID,
+	})
+	requireNoError(t, err, "meta deploy key get")
+	requireTrue(t, out.ID == mState.deployKeyID, "deploy key ID mismatch")
+	t.Logf("Got deploy key: %s", out.Title)
+}
+
+func metaDeployKeyList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[deploykeys.ListOutput](ctx, "gitlab_access", "deploy_key_list_project", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta deploy key list")
+	requireTrue(t, len(out.DeployKeys) > 0, "expected at least one deploy key")
+	t.Logf("Listed %d deploy keys", len(out.DeployKeys))
+}
+
+func metaDeployKeyDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.deployKeyID > 0, "deployKeyID not set")
+	err := callMetaVoid(ctx, "gitlab_access", "deploy_key_delete", map[string]any{
+		"project_id":    mPID(),
+		"deploy_key_id": mState.deployKeyID,
+	})
+	requireNoError(t, err, "meta deploy key delete")
+	t.Logf("Deleted deploy key ID=%d", mState.deployKeyID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Snippets (gitlab_snippet)
+// ---------------------------------------------------------------------------.
+
+func metaSnippetCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[snippets.Output](ctx, "gitlab_snippet", "project_create", map[string]any{
+		"project_id":  mPID(),
+		"title":       "E2E Meta Snippet",
+		"file_name":   "meta-snippet.txt",
+		"content":     "Meta snippet content for E2E testing",
+		"visibility":  "private",
+		"description": "Created by E2E meta-tool test",
+	})
+	requireNoError(t, err, "meta snippet create")
+	requireTrue(t, out.ID > 0, "expected positive snippet ID")
+	mState.snippetID = out.ID
+	t.Logf("Created snippet: %s (ID=%d)", out.Title, out.ID)
+}
+
+func metaSnippetGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.snippetID > 0, "snippetID not set")
+	out, err := callMeta[snippets.Output](ctx, "gitlab_snippet", "project_get", map[string]any{
+		"project_id": mPID(),
+		"snippet_id": mState.snippetID,
+	})
+	requireNoError(t, err, "meta snippet get")
+	requireTrue(t, out.ID == mState.snippetID, "snippet ID mismatch")
+	t.Logf("Got snippet: %s", out.Title)
+}
+
+func metaSnippetList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[snippets.ListOutput](ctx, "gitlab_snippet", "project_list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta snippet list")
+	requireTrue(t, len(out.Snippets) > 0, "expected at least one snippet")
+	t.Logf("Listed %d snippets", len(out.Snippets))
+}
+
+func metaSnippetUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.snippetID > 0, "snippetID not set")
+	out, err := callMeta[snippets.Output](ctx, "gitlab_snippet", "project_update", map[string]any{
+		"project_id":  mPID(),
+		"snippet_id":  mState.snippetID,
+		"title":       "E2E Meta Snippet Updated",
+		"description": "Updated by E2E meta-tool test",
+	})
+	requireNoError(t, err, "meta snippet update")
+	requireTrue(t, out.ID == mState.snippetID, "snippet ID mismatch after update")
+	t.Logf("Updated snippet: %s", out.Title)
+}
+
+func metaSnippetDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.snippetID > 0, "snippetID not set")
+	err := callMetaVoid(ctx, "gitlab_snippet", "project_delete", map[string]any{
+		"project_id": mPID(),
+		"snippet_id": mState.snippetID,
+	})
+	requireNoError(t, err, "meta snippet delete")
+	t.Logf("Deleted snippet ID=%d", mState.snippetID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Issue Discussions (gitlab_issue)
+// ---------------------------------------------------------------------------.
+
+func metaIssueDiscussionCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Create a temporary issue for discussion tests.
+	issue, err := callMeta[issues.Output](ctx, "gitlab_issue", "create", map[string]any{
+		"project_id": mPID(),
+		"title":      "E2E Meta Discussion Issue",
+	})
+	requireNoError(t, err, "meta create issue for discussions")
+	mState.issueIID = issue.IID
+
+	out, err := callMeta[issuediscussions.Output](ctx, "gitlab_issue", "discussion_create", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+		"body":       "E2E meta-tool discussion thread",
+	})
+	requireNoError(t, err, "meta issue discussion create")
+	requireTrue(t, out.ID != "", "expected non-empty discussion ID")
+	mState.issueDiscussionID = out.ID
+	if len(out.Notes) > 0 {
+		mState.issueDiscussionNoteID = out.Notes[0].ID
+	}
+	t.Logf("Created issue discussion: %s", out.ID)
+}
+
+func metaIssueDiscussionList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueIID > 0, msgMetaIssueIIDNotSet)
+	out, err := callMeta[issuediscussions.ListOutput](ctx, "gitlab_issue", "discussion_list", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+	})
+	requireNoError(t, err, "meta issue discussion list")
+	requireTrue(t, len(out.Discussions) > 0, "expected at least one discussion")
+	t.Logf("Listed %d issue discussions", len(out.Discussions))
+}
+
+func metaIssueDiscussionAddNote(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueDiscussionID != "", "issueDiscussionID not set")
+	out, err := callMeta[issuediscussions.NoteOutput](ctx, "gitlab_issue", "discussion_add_note", map[string]any{
+		"project_id":    mPID(),
+		"issue_iid":     mState.issueIID,
+		"discussion_id": mState.issueDiscussionID,
+		"body":          "Reply from E2E meta-tool test",
+	})
+	requireNoError(t, err, "meta issue discussion add note")
+	requireTrue(t, out.ID > 0, "expected positive note ID")
+	mState.issueDiscussionNoteID = out.ID
+	t.Logf("Added note to discussion: note ID=%d", out.ID)
+}
+
+func metaIssueDiscussionDeleteNote(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueDiscussionNoteID > 0, "issueDiscussionNoteID not set")
+	err := callMetaVoid(ctx, "gitlab_issue", "discussion_delete_note", map[string]any{
+		"project_id":    mPID(),
+		"issue_iid":     mState.issueIID,
+		"discussion_id": mState.issueDiscussionID,
+		"note_id":       mState.issueDiscussionNoteID,
+	})
+	requireNoError(t, err, "meta issue discussion delete note")
+	t.Logf("Deleted discussion note ID=%d", mState.issueDiscussionNoteID)
+
+	// Clean up the temporary issue.
+	_ = callMetaVoid(ctx, "gitlab_issue", "delete", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+	})
+	mState.issueIID = 0
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: MR Draft Notes (gitlab_mr_review)
+// ---------------------------------------------------------------------------.
+
+func metaDraftNoteCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Draft notes require an open MR. Create a branch + commit + MR.
+	_, err := callMeta[branches.Output](ctx, "gitlab_branch", "create", map[string]any{
+		"project_id":  mPID(),
+		"branch_name": "feature/meta-draft-notes",
+		"ref":         defaultBranch,
+	})
+	requireNoError(t, err, "create branch for draft notes")
+
+	_, err = callMeta[commits.Output](ctx, "gitlab_repository", "commit_create", map[string]any{
+		"project_id":     mPID(),
+		"branch":         "feature/meta-draft-notes",
+		"commit_message": "chore: draft note test file",
+		"actions": []map[string]any{{
+			"action":    "create",
+			"file_path": "draft-note-test.md",
+			"content":   "Draft note test",
+		}},
+	})
+	requireNoError(t, err, "commit for draft notes")
+
+	mr, err := callMeta[mergerequests.Output](ctx, "gitlab_merge_request", "create", map[string]any{
+		"project_id":    mPID(),
+		"source_branch": "feature/meta-draft-notes",
+		"target_branch": defaultBranch,
+		"title":         "E2E Meta Draft Note MR",
+	})
+	requireNoError(t, err, "create MR for draft notes")
+	mState.mrIID = mr.IID
+
+	out, err := callMeta[mrdraftnotes.Output](ctx, "gitlab_mr_review", "draft_note_create", map[string]any{
+		"project_id": mPID(),
+		"mr_iid":     mState.mrIID,
+		"note":       "E2E meta-tool draft note",
+	})
+	requireNoError(t, err, "meta draft note create")
+	requireTrue(t, out.ID > 0, "expected positive draft note ID")
+	mState.draftNoteID = out.ID
+	t.Logf("Created draft note: ID=%d on MR !%d", out.ID, mState.mrIID)
+}
+
+func metaDraftNoteList(ctx context.Context, t *testing.T) {
+	requireMetaMRIID(t)
+	out, err := callMeta[mrdraftnotes.ListOutput](ctx, "gitlab_mr_review", "draft_note_list", map[string]any{
+		"project_id": mPID(),
+		"mr_iid":     mState.mrIID,
+	})
+	requireNoError(t, err, "meta draft note list")
+	requireTrue(t, len(out.DraftNotes) > 0, "expected at least one draft note")
+	t.Logf("Listed %d draft notes", len(out.DraftNotes))
+}
+
+func metaDraftNoteUpdate(ctx context.Context, t *testing.T) {
+	requireMetaMRIID(t)
+	requireTrue(t, mState.draftNoteID > 0, "draftNoteID not set")
+	out, err := callMeta[mrdraftnotes.Output](ctx, "gitlab_mr_review", "draft_note_update", map[string]any{
+		"project_id": mPID(),
+		"mr_iid":     mState.mrIID,
+		"note_id":    mState.draftNoteID,
+		"note":       "Updated E2E meta-tool draft note",
+	})
+	requireNoError(t, err, "meta draft note update")
+	requireTrue(t, out.ID == mState.draftNoteID, "draft note ID mismatch after update")
+	t.Logf("Updated draft note: ID=%d", out.ID)
+}
+
+func metaDraftNotePublishAll(ctx context.Context, t *testing.T) {
+	requireMetaMRIID(t)
+	err := callMetaVoid(ctx, "gitlab_mr_review", "draft_note_publish_all", map[string]any{
+		"project_id": mPID(),
+		"mr_iid":     mState.mrIID,
+	})
+	requireNoError(t, err, "meta draft note publish all")
+	t.Log("Published all draft notes")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Pipeline Schedules (gitlab_pipeline_schedule)
+// ---------------------------------------------------------------------------.
+
+func metaPipelineScheduleCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[pipelineschedules.Output](ctx, "gitlab_pipeline_schedule", "create", map[string]any{
+		"project_id":  mPID(),
+		"description": "E2E Meta Schedule",
+		"ref":         defaultBranch,
+		"cron":        "0 3 * * *",
+		"active":      false,
+	})
+	requireNoError(t, err, "meta pipeline schedule create")
+	requireTrue(t, out.ID > 0, "expected positive pipeline schedule ID")
+	mState.pipelineScheduleID = out.ID
+	t.Logf("Created pipeline schedule: %s (ID=%d)", out.Description, out.ID)
+}
+
+func metaPipelineScheduleGet(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.pipelineScheduleID > 0, "pipelineScheduleID not set")
+	out, err := callMeta[pipelineschedules.Output](ctx, "gitlab_pipeline_schedule", "get", map[string]any{
+		"project_id":  mPID(),
+		"schedule_id": mState.pipelineScheduleID,
+	})
+	requireNoError(t, err, "meta pipeline schedule get")
+	requireTrue(t, out.ID == mState.pipelineScheduleID, "schedule ID mismatch")
+	t.Logf("Got pipeline schedule: %s (cron=%s)", out.Description, out.Cron)
+}
+
+func metaPipelineScheduleList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[pipelineschedules.ListOutput](ctx, "gitlab_pipeline_schedule", "list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta pipeline schedule list")
+	requireTrue(t, len(out.Schedules) > 0, "expected at least one pipeline schedule")
+	t.Logf("Listed %d pipeline schedules", len(out.Schedules))
+}
+
+func metaPipelineScheduleUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.pipelineScheduleID > 0, "pipelineScheduleID not set")
+	out, err := callMeta[pipelineschedules.Output](ctx, "gitlab_pipeline_schedule", "update", map[string]any{
+		"project_id":  mPID(),
+		"schedule_id": mState.pipelineScheduleID,
+		"description": "E2E Meta Schedule Updated",
+	})
+	requireNoError(t, err, "meta pipeline schedule update")
+	requireTrue(t, out.ID == mState.pipelineScheduleID, "schedule ID mismatch after update")
+	t.Logf("Updated pipeline schedule: %s", out.Description)
+}
+
+func metaPipelineScheduleDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.pipelineScheduleID > 0, "pipelineScheduleID not set")
+	err := callMetaVoid(ctx, "gitlab_pipeline_schedule", "delete", map[string]any{
+		"project_id":  mPID(),
+		"schedule_id": mState.pipelineScheduleID,
+	})
+	requireNoError(t, err, "meta pipeline schedule delete")
+	t.Logf("Deleted pipeline schedule ID=%d", mState.pipelineScheduleID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Badges (gitlab_project)
+// ---------------------------------------------------------------------------.
+
+func metaBadgeCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[badges.AddProjectOutput](ctx, "gitlab_project", "badge_add", map[string]any{
+		"project_id": mPID(),
+		"link_url":   "https://example.com/badge",
+		"image_url":  "https://img.shields.io/badge/test-passing-green",
+	})
+	requireNoError(t, err, "meta badge add")
+	requireTrue(t, out.Badge.ID > 0, "expected positive badge ID")
+	mState.badgeID = out.Badge.ID
+	t.Logf("Created badge: ID=%d", out.Badge.ID)
+}
+
+func metaBadgeList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[badges.ListProjectOutput](ctx, "gitlab_project", "badge_list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta badge list")
+	requireTrue(t, len(out.Badges) > 0, "expected at least one badge")
+	t.Logf("Listed %d badges", len(out.Badges))
+}
+
+func metaBadgeUpdate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.badgeID > 0, "badgeID not set")
+	out, err := callMeta[badges.EditProjectOutput](ctx, "gitlab_project", "badge_edit", map[string]any{
+		"project_id": mPID(),
+		"badge_id":   mState.badgeID,
+		"link_url":   "https://example.com/badge-updated",
+	})
+	requireNoError(t, err, "meta badge edit")
+	requireTrue(t, out.Badge.ID == mState.badgeID, "badge ID mismatch after edit")
+	t.Logf("Updated badge: ID=%d", out.Badge.ID)
+}
+
+func metaBadgeDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.badgeID > 0, "badgeID not set")
+	err := callMetaVoid(ctx, "gitlab_project", "badge_delete", map[string]any{
+		"project_id": mPID(),
+		"badge_id":   mState.badgeID,
+	})
+	requireNoError(t, err, "meta badge delete")
+	t.Logf("Deleted badge ID=%d", mState.badgeID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Access Tokens (gitlab_access_token)
+// ---------------------------------------------------------------------------.
+
+func metaAccessTokenCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Token expires in 30 days.
+	expires := time.Now().AddDate(0, 0, 30).Format("2006-01-02")
+	out, err := callMeta[accesstokens.Output](ctx, "gitlab_access", "token_project_create", map[string]any{
+		"project_id": mPID(),
+		"name":       "e2e-meta-token",
+		"scopes":     []string{"read_api"},
+		"expires_at": expires,
+	})
+	requireNoError(t, err, "meta access token create")
+	requireTrue(t, out.ID > 0, "expected positive access token ID")
+	requireTrue(t, out.Token != "", "expected non-empty token value")
+	mState.accessTokenID = out.ID
+	t.Logf("Created access token: %s (ID=%d)", out.Name, out.ID)
+}
+
+func metaAccessTokenList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	out, err := callMeta[accesstokens.ListOutput](ctx, "gitlab_access", "token_project_list", map[string]any{
+		"project_id": mPID(),
+	})
+	requireNoError(t, err, "meta access token list")
+	requireTrue(t, len(out.Tokens) > 0, "expected at least one access token")
+	t.Logf("Listed %d access tokens", len(out.Tokens))
+}
+
+func metaAccessTokenRevoke(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.accessTokenID > 0, "accessTokenID not set")
+	err := callMetaVoid(ctx, "gitlab_access", "token_project_revoke", map[string]any{
+		"project_id": mPID(),
+		"token_id":   mState.accessTokenID,
+	})
+	requireNoError(t, err, "meta access token revoke")
+	t.Logf("Revoked access token ID=%d", mState.accessTokenID)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Award Emoji (gitlab_issue)
+// ---------------------------------------------------------------------------.
+
+func metaAwardEmojiCreate(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	// Create a temporary issue for emoji tests.
+	issue, err := callMeta[issues.Output](ctx, "gitlab_issue", "create", map[string]any{
+		"project_id": mPID(),
+		"title":      "E2E Meta Emoji Issue",
+	})
+	requireNoError(t, err, "meta create issue for emoji")
+	mState.issueIID = issue.IID
+
+	out, err := callMeta[awardemoji.Output](ctx, "gitlab_issue", "emoji_issue_create", map[string]any{
+		"project_id": mPID(),
+		"iid":        mState.issueIID,
+		"name":       "thumbsup",
+	})
+	requireNoError(t, err, "meta award emoji create")
+	requireTrue(t, out.ID > 0, "expected positive award emoji ID")
+	mState.awardEmojiID = out.ID
+	t.Logf("Created award emoji: %s (ID=%d)", out.Name, out.ID)
+}
+
+func metaAwardEmojiList(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.issueIID > 0, msgMetaIssueIIDNotSet)
+	out, err := callMeta[awardemoji.ListOutput](ctx, "gitlab_issue", "emoji_issue_list", map[string]any{
+		"project_id": mPID(),
+		"iid":        mState.issueIID,
+	})
+	requireNoError(t, err, "meta award emoji list")
+	requireTrue(t, len(out.AwardEmoji) > 0, "expected at least one award emoji")
+	t.Logf("Listed %d award emoji", len(out.AwardEmoji))
+}
+
+func metaAwardEmojiDelete(ctx context.Context, t *testing.T) {
+	requireMetaProjectID(t)
+	requireTrue(t, mState.awardEmojiID > 0, "awardEmojiID not set")
+	err := callMetaVoid(ctx, "gitlab_issue", "emoji_issue_delete", map[string]any{
+		"project_id": mPID(),
+		"iid":        mState.issueIID,
+		"award_id":   mState.awardEmojiID,
+	})
+	requireNoError(t, err, "meta award emoji delete")
+	t.Logf("Deleted award emoji ID=%d", mState.awardEmojiID)
+
+	// Clean up the temporary issue.
+	_ = callMetaVoid(ctx, "gitlab_issue", "delete", map[string]any{
+		"project_id": mPID(),
+		"issue_iid":  mState.issueIID,
+	})
+	mState.issueIID = 0
 }
 
 // ---------------------------------------------------------------------------

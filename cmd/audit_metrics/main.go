@@ -142,7 +142,7 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 	if meta {
 		tools.RegisterAllMeta(server, client, enterprise)
 	} else {
-		tools.RegisterAll(server, client)
+		tools.RegisterAll(server, client, true)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

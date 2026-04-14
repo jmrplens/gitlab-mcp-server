@@ -31,20 +31,20 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 ## Flags de CLI
 
-| Flag                     | Por Defecto                  | Descripción                                                            |
-| ------------------------ | ---------------------------- | ---------------------------------------------------------------------- |
-| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                      |
-| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                              |
-| `--gitlab-url`           | _(requerido)_                | URL base de la instancia de GitLab                                     |
-| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados |
-| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (40 o 59 con --enterprise)      |
-| `--enterprise`           | `false`                      | Habilitar meta-herramientas Enterprise/Premium (14 adicionales)        |
-| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura      |
-| `--max-http-clients`     | `100`                        | Máximo de tokens únicos en el pool del servidor                        |
-| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                         |
-| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`            |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                          |
-| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                 |
+| Flag                     | Por Defecto                  | Descripción                                                                 |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------- |
+| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                           |
+| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                   |
+| `--gitlab-url`           | _(requerido)_                | URL base de la instancia de GitLab                                          |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados      |
+| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (40 o 59 con --enterprise)           |
+| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) |
+| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura           |
+| `--max-http-clients`     | `100`                        | Máximo de tokens únicos en el pool del servidor                             |
+| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                              |
+| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                 |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                               |
+| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                      |
 
 :::note
 `--gitlab-url` es el único flag requerido. Todos los demás tienen valores predeterminados sensatos.

@@ -114,7 +114,9 @@ gitlab-mcp-server/
 │   ├── capabilities/            # MCP capability docs
 │   └── examples/                # Usage examples
 ├── test/e2e/                    # End-to-end integration tests
-│   ├── setup_test.go            # Dual MCP server setup, test helpers, shared state
+│   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner for Docker mode
+│   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
+│   ├── setup_test.go            # 4 MCP server/client pairs, test helpers, shared state
 │   ├── workflow_test.go         # TestFullWorkflow — sequential subtests (individual tools)
 │   └── metatool_workflow_test.go # TestMetaToolWorkflow — sequential subtests (meta-tools)
 ├── plan/                        # Implementation plans for features
@@ -230,7 +232,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
-| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium meta-tools: 14 additional domain tools (`false` default) |
+| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate (`false` default) |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
@@ -240,7 +242,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--gitlab-url`        | —       | GitLab instance URL (required)                           |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
-| `--enterprise`        | `false` | Enable Enterprise/Premium meta-tools (14 additional)     |
+| `--enterprise`        | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
 | `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
@@ -433,29 +435,23 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 - `internal/tools/markdown.go` is a thin delegator (~19 lines) that calls `toolutil.MarkdownForResult`
 - ~266 formatters across 76 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
 
-### Meta-tool consolidation
+### Enterprise tool gating
 
-Meta-tools (domain-level dispatch) provide two tiers controlled by `GITLAB_ENTERPRISE`:
+`GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in both individual and meta-tool modes:
 
-**Base mode** (`GITLAB_ENTERPRISE=false`, default) — 40 meta-tools:
+**Individual mode** (`META_TOOLS=false`) — gates 35 tool sub-package registrations in `register.go`:
 
-- 23 inline handlers
-- 5 delegated meta-tools (search, runner, runner_controller, runner_controller_token, runner_controller_scope via sub-package RegisterMeta)
-- 11 sampling tools (analyze_mr_changes, summarize_issue, generate_release_notes, analyze_pipeline_failure, summarize_mr_review, generate_milestone_report, analyze_ci_configuration, analyze_issue_scope, review_mr_security, find_technical_debt, analyze_deployment_history via samplingtools.RegisterTools)
-- 1 standalone tool (resolve_project_from_remote via projectdiscovery.RegisterTools)
+- projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
-**Enterprise mode** (`GITLAB_ENTERPRISE=true`) — 59 meta-tools (+19 enterprise inline):
+**Meta-tool mode** (`META_TOOLS=true`, default) — gates 15 dedicated meta-tools in `register_meta.go`:
 
-- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_model_registry, gitlab_storage_move, gitlab_vulnerability, gitlab_security_finding, gitlab_ci_catalog, gitlab_branch_rule, gitlab_custom_emoji
+- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_storage_move, gitlab_vulnerability, gitlab_security_finding
 
-6 former standalone meta-tools were consolidated into existing meta-tools (enterprise-only routes):
+Plus enterprise-only routes injected into 3 base meta-tools:
 
-- `gitlab_iteration` → routes in `gitlab_issue`
-- `gitlab_project_mirror` → routes in `gitlab_project`
-- `gitlab_group_ssh_certificate` → routes in `gitlab_group`
-- `gitlab_security_settings` → split between `gitlab_project` and `gitlab_group`
-- `gitlab_group_credential` → routes in `gitlab_group`
-- `gitlab_group_analytics` → routes in `gitlab_group`
+- `gitlab_project` → push_rule_*, mirror_*, security_settings_*
+- `gitlab_group` → iterations, epics, wikis, protected branches/envs, releases, LDAP, SAML, SSH certs, credentials, analytics, service accounts
+- `gitlab_issue` → iterations
 
 ---
 
@@ -494,7 +490,9 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 ### Running E2E tests
 
-E2E tests run against a real GitLab instance using in-memory MCP transport (no network). They require a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects).
+E2E tests run against a real GitLab instance using in-memory MCP transport (no network). Two modes are supported:
+
+**Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
 
 ```bash
 # Run full E2E suite (two workflows: individual tools + meta-tools)
@@ -506,14 +504,27 @@ go test -tags e2e -c -o NUL ./test/e2e/       # Windows
 go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
 ```
 
+**Docker mode** — ephemeral GitLab CE container with CI runner (enables pipeline/job tests):
+
+```bash
+docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
+set -a && source .env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/
+docker compose -f test/e2e/docker-compose.yml down -v
+```
+
 The suite runs two sequential workflows:
 
-- **TestFullWorkflow** (~77 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → cleanup)
-- **TestMetaToolWorkflow** (~78 subtests): exercises the same operations through meta-tools (domain-level tools that wrap individual tools)
+- **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → sampling → elicitation → cleanup)
+- **TestMetaToolWorkflow** (~151 subtests): exercises the same operations through meta-tools plus 15 additional domains (wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, milestones)
 
-Domains **not** covered in E2E (require infrastructure unavailable in test environment):
+Domains **added in Docker mode** (require CI runner):
 
-- Pipeline create/get/cancel/retry/delete — requires CI runner
-- Job tools — requires running pipeline
-- Sampling tools — requires MCP sampling capability
-- Elicitation tools — requires MCP elicitation capability
+- Pipeline create/get/cancel/retry/delete
+- Job get/log/retry/cancel
+
+**MCP capability tests** (mock handlers, always available):
+
+- Sampling tools (11 tests): summarize issue, analyze MR, generate release notes, etc.
+- Elicitation tools (1 test): confirm destructive action

@@ -198,9 +198,14 @@ func TestAllHintReferencesValid(t *testing.T) {
 
 	// 2. Build set of all meta-tool action keys from route maps.
 	validActions := make(map[string]bool)
-	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction
+	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
 	reInlineAction := regexp.MustCompile(`"(\w+)":\s+wrap(?:Action|VoidAction|DelegateAction)\b`)
 	for _, m := range reInlineAction.FindAllStringSubmatch(string(metaSrc), -1) {
+		validActions[m[1]] = true
+	}
+	// Pattern for register_meta.go: routes["key"] = wrapAction(...) (enterprise assignment)
+	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*wrap(?:Action|VoidAction|DelegateAction)\b`)
+	for _, m := range reRouteAssign.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
 	// Also match custom action variables (e.g., "publish": publishAction).

@@ -1,4 +1,4 @@
-.PHONY: build build-all run test test-short test-race test-pkg test-integration test-e2e coverage \
+.PHONY: build build-all run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
        lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
@@ -89,6 +89,21 @@ test-integration:
 ## test-e2e: run end-to-end tests against a real GitLab instance
 test-e2e:
 	go test -v -tags e2e -timeout 120s ./test/e2e/
+
+## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
+test-e2e-docker:
+	@echo "=== Starting ephemeral GitLab CE ==="
+	docker compose -f test/e2e/docker-compose.yml up -d
+	@echo "=== Waiting for GitLab readiness ==="
+	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
+	@echo "=== Setting up test user and token ==="
+	./test/e2e/scripts/setup-gitlab.sh http://localhost:8929
+	@echo "=== Registering GitLab Runner ==="
+	./test/e2e/scripts/register-runner.sh http://localhost:8929
+	@echo "=== Running E2E tests ==="
+	set -a && . .env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/ || true
+	@echo "=== Tearing down ==="
+	docker compose -f test/e2e/docker-compose.yml down -v
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test

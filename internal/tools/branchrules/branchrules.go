@@ -49,7 +49,9 @@ type ExternalStatusCheck struct {
 
 // GraphQL query.
 
-const queryListBranchRules = `
+// queryListBranchRulesEE includes Enterprise-only fields (codeOwnerApprovalRequired,
+// approvalRules, externalStatusChecks). Used when GITLAB_ENTERPRISE=true.
+const queryListBranchRulesEE = `
 query($projectPath: ID!, $first: Int!, $after: String) {
   project(fullPath: $projectPath) {
     branchRules(first: $first, after: $after) {
@@ -76,6 +78,33 @@ query($projectPath: ID!, $first: Int!, $after: String) {
             name
             externalUrl
           }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        endCursor
+        startCursor
+      }
+    }
+  }
+}
+`
+
+// queryListBranchRulesCE uses only fields available on GitLab Community Edition.
+const queryListBranchRulesCE = `
+query($projectPath: ID!, $first: Int!, $after: String) {
+  project(fullPath: $projectPath) {
+    branchRules(first: $first, after: $after) {
+      nodes {
+        name
+        isDefault
+        isProtected
+        matchingBranchesCount
+        createdAt
+        updatedAt
+        branchProtection {
+          allowForcePush
         }
       }
       pageInfo {
@@ -180,6 +209,9 @@ type ListOutput struct {
 }
 
 // List retrieves branch rules for a project via the GitLab GraphQL API.
+// It selects the EE query (with approval rules, external status checks, and
+// code owner approval) when the client is configured for Enterprise, otherwise
+// it uses the CE-compatible query that omits EE-only fields.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.ProjectPath == "" {
 		return ListOutput{}, errors.New("list_branch_rules: project_path is required")
@@ -188,19 +220,35 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	vars := input.GraphQLPaginationInput.Variables()
 	vars["projectPath"] = input.ProjectPath
 
-	var resp struct {
-		Data struct {
-			Project *struct {
-				BranchRules struct {
-					Nodes    []gqlBranchRuleNode         `json:"nodes"`
-					PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-				} `json:"branchRules"`
-			} `json:"project"`
-		} `json:"data"`
+	query := queryListBranchRulesCE
+	if client.IsEnterprise() {
+		query = queryListBranchRulesEE
 	}
 
+	return doGraphQLList(ctx, client, query, vars, input.ProjectPath)
+}
+
+// gqlResponse is the generic GraphQL response envelope for branch rules.
+type gqlResponse struct {
+	Data struct {
+		Project *struct {
+			BranchRules struct {
+				Nodes    []gqlBranchRuleNode         `json:"nodes"`
+				PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+			} `json:"branchRules"`
+		} `json:"project"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+// doGraphQLList executes a branch rules GraphQL query and returns the output.
+func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, projectPath string) (ListOutput, error) {
+	var resp gqlResponse
+
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     queryListBranchRules,
+		Query:     query,
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
@@ -208,7 +256,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	if resp.Data.Project == nil {
-		return ListOutput{}, fmt.Errorf("list_branch_rules: project %q not found", input.ProjectPath)
+		return ListOutput{}, fmt.Errorf("list_branch_rules: project %q not found", projectPath)
 	}
 
 	items := make([]BranchRuleItem, 0, len(resp.Data.Project.BranchRules.Nodes))

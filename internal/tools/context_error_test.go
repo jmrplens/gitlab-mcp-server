@@ -90,7 +90,7 @@ func TestBranchUnprotect_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := branches.Unprotect(ctx, client, branches.UnprotectInput{ProjectID: "42", BranchName: "main"})
+	_, err := branches.Unprotect(ctx, client, branches.UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(msgCancelledCtxErr)
 	}

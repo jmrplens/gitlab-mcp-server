@@ -73,7 +73,7 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 		Name:    serverName,
 		Version: "test",
 	}, nil)
-	tools.RegisterAll(server, client)
+	tools.RegisterAll(server, client, true)
 	resources.Register(server, client)
 	prompts.Register(server, client)
 	return server
