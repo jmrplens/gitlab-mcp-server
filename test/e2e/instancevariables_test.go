@@ -11,6 +11,7 @@ import (
 
 // TestMeta_CIVariablesInstance exercises instance-level CI variable CRUD via the gitlab_ci_variable meta-tool.
 func TestMeta_CIVariablesInstance(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	varKey := "E2E_INSTANCE_VAR"
 

@@ -12,6 +12,7 @@ import (
 
 // TestIndividual_Milestones exercises milestone CRUD using individual MCP tools.
 func TestIndividual_Milestones(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -72,6 +73,7 @@ func TestIndividual_Milestones(t *testing.T) {
 
 // TestMeta_Milestones exercises milestone CRUD using the gitlab_project meta-tool.
 func TestMeta_Milestones(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

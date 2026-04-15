@@ -12,6 +12,7 @@ import (
 )
 
 func TestIndividual_IssueNotes(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -77,6 +78,7 @@ func TestIndividual_IssueNotes(t *testing.T) {
 }
 
 func TestMeta_IssueNotes(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

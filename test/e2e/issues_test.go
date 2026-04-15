@@ -13,6 +13,7 @@ import (
 
 // TestIndividual_Issues exercises the issue lifecycle using individual MCP tools.
 func TestIndividual_Issues(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -129,6 +130,7 @@ func TestIndividual_Issues(t *testing.T) {
 
 // TestMeta_Issues exercises the issue lifecycle using the gitlab_issue meta-tool.
 func TestMeta_Issues(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

@@ -12,6 +12,7 @@ import (
 
 // TestMeta_Templates exercises template listing via the gitlab_template meta-tool.
 func TestMeta_Templates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/Template/GitignoreList", func(t *testing.T) {
@@ -37,6 +38,7 @@ func TestMeta_Templates(t *testing.T) {
 
 // TestMeta_MarkdownRender exercises markdown rendering via the gitlab_repository meta-tool.
 func TestMeta_MarkdownRender(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/Markdown/Render", func(t *testing.T) {

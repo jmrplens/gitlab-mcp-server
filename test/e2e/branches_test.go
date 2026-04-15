@@ -16,6 +16,7 @@ import (
 // TestIndividual_Branches exercises the branch lifecycle using individual
 // MCP tools (gitlab_branch_create, gitlab_branch_get, etc.).
 func TestIndividual_Branches(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -129,6 +130,7 @@ func TestIndividual_Branches(t *testing.T) {
 // TestMeta_Branches exercises the branch lifecycle using the gitlab_branch
 // meta-tool.
 func TestMeta_Branches(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

@@ -13,6 +13,7 @@ import (
 // TestElicitation exercises the interactive elicitation tools via the
 // elicitation-enabled session (auto-accept mock handler).
 func TestElicitation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	proj := createProject(ctx, t, sess.elicitation)

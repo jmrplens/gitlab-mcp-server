@@ -15,6 +15,7 @@ import (
 
 // TestIndividual_Groups exercises group CRUD using individual MCP tools.
 func TestIndividual_Groups(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -102,6 +103,7 @@ func TestIndividual_Groups(t *testing.T) {
 
 // TestMeta_Groups exercises group operations using the gitlab_group meta-tool.
 func TestMeta_Groups(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

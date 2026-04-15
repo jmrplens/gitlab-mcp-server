@@ -12,6 +12,7 @@ import (
 
 // TestIndividual_Wikis exercises wiki page CRUD using individual MCP tools.
 func TestIndividual_Wikis(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -79,6 +80,7 @@ func TestIndividual_Wikis(t *testing.T) {
 
 // TestMeta_Wikis exercises wiki page CRUD using the gitlab_wiki meta-tool.
 func TestMeta_Wikis(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

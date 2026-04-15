@@ -12,6 +12,7 @@ import (
 
 // TestMeta_ProtectedTags exercises protected tag CRUD via the gitlab_tag meta-tool.
 func TestMeta_ProtectedTags(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

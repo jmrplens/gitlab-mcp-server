@@ -12,6 +12,7 @@ import (
 
 // TestIndividual_MRApproval exercises the MR approval/merge lifecycle via individual tools.
 func TestIndividual_MRApproval(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProject(ctx, t, sess.individual)
 
@@ -60,7 +61,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 	t.Run("Individual/MR/Merge", func(t *testing.T) {
 		var out mergerequests.Output
 		var err error
-		for i := range 5 {
+		for i := range 10 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.individual, "gitlab_mr_merge", mergerequests.MergeInput{
 				ProjectID:                proj.pidOf(),
 				MRIID:                    mr.IID,
@@ -69,7 +70,8 @@ func TestIndividual_MRApproval(t *testing.T) {
 			if err == nil {
 				break
 			}
-			time.Sleep(time.Duration(i+1) * 500 * time.Millisecond)
+			t.Logf("merge attempt %d: %v", i+1, err)
+			time.Sleep(time.Duration(i+1) * time.Second)
 		}
 		requireNoError(t, err, "merge MR")
 		requireTrue(t, out.State == "merged", "expected state 'merged', got %q", out.State)
@@ -79,6 +81,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 
 // TestMeta_MRApproval exercises the MR approval/merge lifecycle via the gitlab_merge_request meta-tool.
 func TestMeta_MRApproval(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
@@ -139,7 +142,7 @@ func TestMeta_MRApproval(t *testing.T) {
 	t.Run("Meta/MR/Merge", func(t *testing.T) {
 		var out mergerequests.Output
 		var err error
-		for i := range 5 {
+		for i := range 10 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 				"action": "merge",
 				"params": map[string]any{
@@ -151,7 +154,8 @@ func TestMeta_MRApproval(t *testing.T) {
 			if err == nil {
 				break
 			}
-			time.Sleep(time.Duration(i+1) * 500 * time.Millisecond)
+			t.Logf("meta merge attempt %d: %v", i+1, err)
+			time.Sleep(time.Duration(i+1) * time.Second)
 		}
 		requireNoError(t, err, "meta merge MR")
 		requireTrue(t, out.State == "merged", "expected state merged, got %q", out.State)

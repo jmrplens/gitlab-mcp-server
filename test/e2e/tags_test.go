@@ -12,6 +12,7 @@ import (
 
 // TestIndividual_Tags exercises the tag lifecycle using individual MCP tools.
 func TestIndividual_Tags(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -77,6 +78,7 @@ func TestIndividual_Tags(t *testing.T) {
 
 // TestMeta_Tags exercises the tag lifecycle using the gitlab_tag meta-tool.
 func TestMeta_Tags(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

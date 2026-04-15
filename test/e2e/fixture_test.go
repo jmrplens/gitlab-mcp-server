@@ -285,7 +285,8 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
 	t.Helper()
 	pid := int(projectID)
-	for range 15 {
+	const maxAttempts = 30
+	for range maxAttempts {
 		_, resp, err := sess.glClient.GL().Branches.GetBranch(pid, branch)
 		if err == nil {
 			t.Logf("Branch %q ready in project %d", branch, projectID)
@@ -301,5 +302,5 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 		}
 		requireNoError(t, err, fmt.Sprintf("get branch %s in project %d", branch, projectID))
 	}
-	t.Fatalf("branch %q not available in project %d after 15s", branch, projectID)
+	t.Fatalf("branch %q not available in project %d after %ds", branch, projectID, maxAttempts)
 }

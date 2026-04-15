@@ -13,6 +13,7 @@ import (
 // TestIndividual_Repository exercises repository tree and compare operations
 // using individual MCP tools.
 func TestIndividual_Repository(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -66,6 +67,7 @@ func TestIndividual_Repository(t *testing.T) {
 
 // TestMeta_Repository exercises repository operations using the gitlab_repository meta-tool.
 func TestMeta_Repository(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

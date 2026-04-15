@@ -12,6 +12,7 @@ import (
 
 // TestMeta_Boards exercises issue board CRUD via the gitlab_project meta-tool.
 func TestMeta_Boards(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

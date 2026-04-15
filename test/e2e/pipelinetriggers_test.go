@@ -12,6 +12,7 @@ import (
 
 // TestMeta_PipelineTriggers exercises pipeline trigger CRUD via the gitlab_pipeline meta-tool.
 func TestMeta_PipelineTriggers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

@@ -14,6 +14,7 @@ import (
 
 // TestIndividual_Labels exercises label CRUD using individual MCP tools.
 func TestIndividual_Labels(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -71,6 +72,7 @@ func TestIndividual_Labels(t *testing.T) {
 
 // TestMeta_Labels exercises label CRUD using the gitlab_project meta-tool.
 func TestMeta_Labels(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

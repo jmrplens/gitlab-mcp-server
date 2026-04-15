@@ -11,6 +11,7 @@ import (
 )
 
 func TestIndividual_Badges(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -78,6 +79,7 @@ func TestIndividual_Badges(t *testing.T) {
 }
 
 func TestMeta_Badges(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

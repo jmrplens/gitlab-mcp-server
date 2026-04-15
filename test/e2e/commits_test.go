@@ -13,6 +13,7 @@ import (
 
 // TestIndividual_Commits exercises commit operations using individual MCP tools.
 func TestIndividual_Commits(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -72,6 +73,7 @@ func TestIndividual_Commits(t *testing.T) {
 
 // TestMeta_Commits exercises commit operations using the gitlab_repository meta-tool.
 func TestMeta_Commits(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

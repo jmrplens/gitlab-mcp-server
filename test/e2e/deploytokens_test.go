@@ -12,6 +12,7 @@ import (
 
 // TestMeta_DeployTokens exercises project deploy token CRUD via the gitlab_access meta-tool.
 func TestMeta_DeployTokens(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

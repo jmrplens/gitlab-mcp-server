@@ -14,6 +14,7 @@ import (
 
 // TestIndividual_Releases exercises the release lifecycle using individual MCP tools.
 func TestIndividual_Releases(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -138,6 +139,7 @@ func TestIndividual_Releases(t *testing.T) {
 
 // TestMeta_Releases exercises the release lifecycle using the gitlab_release meta-tool.
 func TestMeta_Releases(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

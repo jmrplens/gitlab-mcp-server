@@ -16,6 +16,7 @@ import (
 
 // TestMeta_GroupMilestones exercises group milestone CRUD via the gitlab_group meta-tool.
 func TestMeta_GroupMilestones(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

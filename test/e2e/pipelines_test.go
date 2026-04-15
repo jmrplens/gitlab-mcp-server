@@ -26,6 +26,7 @@ fast-pass:
 // TestPipelines exercises the pipeline lifecycle: create, get, list, wait for jobs,
 // job get, job trace, retry, and delete. Requires Docker mode with a CI runner.
 func TestPipelines(t *testing.T) {
+	t.Parallel()
 	if !isDockerMode() {
 		t.Skip("pipeline tests require Docker mode with CI runner")
 	}

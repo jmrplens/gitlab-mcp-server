@@ -13,6 +13,7 @@ import (
 
 // TestIndividual_UserProjects exercises user contributed/starred project listing via individual tools.
 func TestIndividual_UserProjects(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	user := os.Getenv("GITLAB_USER")
 	if user == "" {
@@ -38,6 +39,7 @@ func TestIndividual_UserProjects(t *testing.T) {
 
 // TestMeta_UserProjects exercises user contributed/starred project listing via the gitlab_project meta-tool.
 func TestMeta_UserProjects(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	user := os.Getenv("GITLAB_USER")
 	if user == "" {

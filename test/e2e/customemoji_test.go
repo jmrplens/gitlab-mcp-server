@@ -13,6 +13,7 @@ import (
 
 // TestIndividual_CustomEmoji exercises custom emoji listing via the individual tool.
 func TestIndividual_CustomEmoji(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Create a temporary group for custom emoji listing.
@@ -38,6 +39,7 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 
 // TestMeta_CustomEmoji exercises custom emoji listing via the gitlab_custom_emoji meta-tool.
 func TestMeta_CustomEmoji(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	groupOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{

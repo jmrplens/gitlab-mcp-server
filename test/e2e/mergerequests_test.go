@@ -41,6 +41,7 @@ func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSe
 }
 
 func TestIndividual_MergeRequests(t *testing.T) {
+	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
@@ -94,11 +95,19 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		time.Sleep(1 * time.Second)
-		out, err := callToolOn[mergerequests.CommitsOutput](ctx, sess.individual, "gitlab_mr_commits", mergerequests.CommitsInput{
-			ProjectID: proj.pidOf(),
-			MRIID:     mrIID,
-		})
+		var out mergerequests.CommitsOutput
+		var err error
+		for i := range 10 {
+			time.Sleep(2 * time.Second)
+			out, err = callToolOn[mergerequests.CommitsOutput](ctx, sess.individual, "gitlab_mr_commits", mergerequests.CommitsInput{
+				ProjectID: proj.pidOf(),
+				MRIID:     mrIID,
+			})
+			if err == nil && len(out.Commits) >= 1 {
+				break
+			}
+			t.Logf("MR commits attempt %d: count=%d err=%v", i+1, len(out.Commits), err)
+		}
 		requireNoError(t, err, "MR commits")
 		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
 	})
@@ -122,6 +131,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 }
 
 func TestMeta_MergeRequests(t *testing.T) {
+	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
@@ -187,14 +197,22 @@ func TestMeta_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		time.Sleep(1 * time.Second)
-		out, err := callToolOn[mergerequests.CommitsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
-			"action": "commits",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-			},
-		})
+		var out mergerequests.CommitsOutput
+		var err error
+		for i := range 10 {
+			time.Sleep(2 * time.Second)
+			out, err = callToolOn[mergerequests.CommitsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+				"action": "commits",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+					"mr_iid":     mrIID,
+				},
+			})
+			if err == nil && len(out.Commits) >= 1 {
+				break
+			}
+			t.Logf("MR commits meta attempt %d: count=%d err=%v", i+1, len(out.Commits), err)
+		}
 		requireNoError(t, err, "MR commits meta")
 		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
 	})

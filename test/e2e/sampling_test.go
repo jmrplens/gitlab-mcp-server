@@ -15,6 +15,7 @@ import (
 // Each sampling tool invokes an LLM via mock handler; we verify non-empty results
 // and that the mock model name is returned.
 func TestSampling(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Create a project with an issue, milestone, MR, and a commit for sampling tools.

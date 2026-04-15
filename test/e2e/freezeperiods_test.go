@@ -12,6 +12,7 @@ import (
 
 // TestMeta_FreezePeriods exercises freeze period CRUD via the gitlab_environment meta-tool.
 func TestMeta_FreezePeriods(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

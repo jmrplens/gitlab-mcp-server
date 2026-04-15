@@ -11,6 +11,7 @@ import (
 
 // TestMeta_Notifications exercises notification settings via the gitlab_user meta-tool.
 func TestMeta_Notifications(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/Notification/GlobalGet", func(t *testing.T) {

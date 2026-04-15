@@ -15,6 +15,7 @@ import (
 // TestMeta_FeatureFlags exercises feature flag listing via the gitlab_feature_flags meta-tool.
 // Feature flags may require a Premium/Ultimate license; errors are fatal.
 func TestMeta_FeatureFlags(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
@@ -34,6 +35,7 @@ func TestMeta_FeatureFlags(t *testing.T) {
 
 // TestMeta_BranchRules exercises branch rule listing via the gitlab_branch_rule meta-tool.
 func TestMeta_BranchRules(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
@@ -51,6 +53,7 @@ func TestMeta_BranchRules(t *testing.T) {
 
 // TestMeta_CICatalog exercises CI/CD catalog listing via the gitlab_ci_catalog meta-tool.
 func TestMeta_CICatalog(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/CICatalog/List", func(t *testing.T) {
@@ -65,6 +68,7 @@ func TestMeta_CICatalog(t *testing.T) {
 
 // TestMeta_Deployments exercises deployment listing via the gitlab_deployment meta-tool.
 func TestMeta_Deployments(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
@@ -82,6 +86,7 @@ func TestMeta_Deployments(t *testing.T) {
 
 // TestMeta_UserKeys exercises SSH and GPG key listing via the gitlab_user meta-tool.
 func TestMeta_UserKeys(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/User/SSHKeys", func(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 // TestMeta_StateEvents exercises issue/MR state event listing via meta-tools.
 // It creates an issue, closes it, lists state events, then verifies MR state events too.
 func TestMeta_StateEvents(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

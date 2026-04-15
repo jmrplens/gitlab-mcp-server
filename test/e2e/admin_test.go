@@ -14,6 +14,7 @@ import (
 
 // TestMeta_Admin exercises admin-level meta-tool actions (topics, settings).
 func TestMeta_Admin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("Meta/Admin/TopicList", func(t *testing.T) {
@@ -37,6 +38,7 @@ func TestMeta_Admin(t *testing.T) {
 
 // TestMeta_JobTokens exercises job listing and token scope via the gitlab_job meta-tool.
 func TestMeta_JobTokens(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 

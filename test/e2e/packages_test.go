@@ -20,6 +20,7 @@ func i64soi(v int64) toolutil.StringOrInt {
 // TestPackages exercises the package registry lifecycle: publish, list, file-list,
 // download, file-delete, and package-delete through both individual and meta-tool sessions.
 func TestPackages(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// --- Individual tool session ---
