@@ -281,26 +281,49 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // ---------------------------------------------------------------------------
 
 // waitForBranchOn polls the GitLab API until the named branch exists in the
-// given project or the context is canceled.
+// given project or the context is canceled. Under parallel load (~60 projects)
+// branch creation can take well over 30s, so we allow up to 90s with
+// progressive backoff. Transient errors (429, 5xx) are retried silently.
 func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
 	t.Helper()
 	pid := int(projectID)
-	const maxAttempts = 30
-	for range maxAttempts {
+
+	const maxWait = 90 * time.Second
+	deadline := time.Now().Add(maxWait)
+	delay := 500 * time.Millisecond
+
+	for time.Now().Before(deadline) {
 		_, resp, err := sess.glClient.GL().Branches.GetBranch(pid, branch)
 		if err == nil {
 			t.Logf("Branch %q ready in project %d", branch, projectID)
 			return
 		}
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			select {
-			case <-ctx.Done():
-				t.Fatalf("context canceled waiting for branch %q: %v", branch, ctx.Err())
-			case <-time.After(1 * time.Second):
+
+		retryable := false
+		if resp != nil {
+			switch {
+			case resp.StatusCode == http.StatusNotFound:
+				retryable = true
+			case resp.StatusCode == http.StatusTooManyRequests:
+				retryable = true
+			case resp.StatusCode >= 500:
+				retryable = true
 			}
-			continue
 		}
-		requireNoError(t, err, fmt.Sprintf("get branch %s in project %d", branch, projectID))
+		if !retryable {
+			requireNoError(t, err, fmt.Sprintf("get branch %s in project %d", branch, projectID))
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("context canceled waiting for branch %q: %v", branch, ctx.Err())
+		case <-time.After(delay):
+		}
+
+		// Progressive backoff: 500ms → 1s → 2s (capped)
+		if delay < 2*time.Second {
+			delay *= 2
+		}
 	}
-	t.Fatalf("branch %q not available in project %d after %ds", branch, projectID, maxAttempts)
+	t.Fatalf("branch %q not available in project %d after %s", branch, projectID, maxWait)
 }
