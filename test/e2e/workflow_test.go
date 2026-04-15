@@ -73,154 +73,20 @@ const (
 	msgIssueIIDNotSet = "issue IID not set"
 )
 
-// TestFullWorkflow runs a sequential E2E test that exercises the complete
-// project lifecycle using individual MCP tools:
-//
-//   - User identity
-//   - Project CRUD and configuration
-//   - Commits, file operations, and commit inspection
-//   - Branch management (create, get, list, protect, list protected, unprotect, delete)
-//   - Repository tree listing and compare
-//   - Tags and releases with asset links
-//   - Issue lifecycle and notes
-//   - Labels and milestones
-//   - Project members
-//   - Merge request lifecycle (create, review, approve, rebase, merge)
-//   - MR commits and pipelines
-//   - Notes and threaded discussions on MRs
-//   - Search (code and merge requests)
-//   - Project upload
+// TestFullWorkflow runs a sequential E2E test covering enterprise-only,
+// Docker-only, and GraphQL individual tools that have no standalone coverage.
+// All other domains are tested by self-contained Test{Individual,Meta}_* files.
 func TestFullWorkflow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 580*time.Second)
 	defer cancel()
 
-	// User identity.
-	t.Run("00_UserCurrent", func(t *testing.T) { testUserCurrent(ctx, t) })
-
-	// Project setup.
+	// Minimal project setup for enterprise/Docker/GraphQL tests below.
 	t.Run("01_CreateProject", func(t *testing.T) { testCreateProject(ctx, t) })
-	t.Run("02_GetProject", func(t *testing.T) { testGetProject(ctx, t) })
 	t.Run("03_UnprotectMain", func(t *testing.T) { testUnprotectMain(ctx, t) })
-
-	// Repository: commits & files via MCP tools.
 	t.Run("04_CommitCreateMainFile", func(t *testing.T) { testCommitCreateMainFile(ctx, t) })
-	t.Run("05_FileGet", func(t *testing.T) { testFileGet(ctx, t) })
-
-	// Commit inspection.
-	t.Run("05a_CommitList", func(t *testing.T) { testCommitList(ctx, t) })
-	t.Run("05b_CommitGet", func(t *testing.T) { testCommitGet(ctx, t) })
-	t.Run("05c_CommitDiff", func(t *testing.T) { testCommitDiff(ctx, t) })
-
-	// Repository tree & compare.
-	t.Run("05d_RepositoryTree", func(t *testing.T) { testRepositoryTree(ctx, t) })
-
-	// Branch management via MCP tools.
 	t.Run("06_BranchCreate", func(t *testing.T) { testBranchCreate(ctx, t) })
-	t.Run("06a_BranchGet", func(t *testing.T) { testBranchGet(ctx, t) })
-	t.Run("07_BranchList", func(t *testing.T) { testBranchList(ctx, t) })
-	t.Run("08_BranchProtect", func(t *testing.T) { testBranchProtect(ctx, t) })
-	t.Run("09_ListProtectedBranches", func(t *testing.T) { testListProtectedBranches(ctx, t) })
-	t.Run("10_BranchUnprotect", func(t *testing.T) { testBranchUnprotectFeature(ctx, t) })
 
-	// Commit changes on feature branch for MR.
-	t.Run("11_CommitFeatureChanges", func(t *testing.T) { testCommitFeatureChanges(ctx, t) })
-
-	// Repository compare (main vs feature).
-	t.Run("11a_RepositoryCompare", func(t *testing.T) { testRepositoryCompare(ctx, t) })
-
-	// Tags & releases.
-	t.Run("12_TagCreate", func(t *testing.T) { testTagCreate(ctx, t) })
-	t.Run("12a_TagGet", func(t *testing.T) { testTagGet(ctx, t) })
-	t.Run("13_TagList", func(t *testing.T) { testTagList(ctx, t) })
-	t.Run("14_ReleaseCreate", func(t *testing.T) { testReleaseCreate(ctx, t) })
-	t.Run("15_ReleaseGet", func(t *testing.T) { testReleaseGet(ctx, t) })
-	t.Run("16_ReleaseUpdate", func(t *testing.T) { testReleaseUpdate(ctx, t) })
-	t.Run("17_ReleaseList", func(t *testing.T) { testReleaseList(ctx, t) })
-	t.Run("18_ReleaseLinkCreate", func(t *testing.T) { testReleaseLinkCreate(ctx, t) })
-	t.Run("19_ReleaseLinkList", func(t *testing.T) { testReleaseLinkList(ctx, t) })
-	t.Run("20_ReleaseLinkDelete", func(t *testing.T) { testReleaseLinkDelete(ctx, t) })
-	t.Run("21_ReleaseDelete", func(t *testing.T) { testReleaseDelete(ctx, t) })
-	t.Run("22_TagDelete", func(t *testing.T) { testTagDelete(ctx, t) })
-
-	// Issue lifecycle.
-	t.Run("22a_IssueCreate", func(t *testing.T) { testIssueCreate(ctx, t) })
-	t.Run("22b_IssueGet", func(t *testing.T) { testIssueGet(ctx, t) })
-	t.Run("22c_IssueList", func(t *testing.T) { testIssueList(ctx, t) })
-	t.Run("22d_IssueUpdate", func(t *testing.T) { testIssueUpdate(ctx, t) })
-	t.Run("22e_IssueNoteCreate", func(t *testing.T) { testIssueNoteCreate(ctx, t) })
-	t.Run("22f_IssueNoteList", func(t *testing.T) { testIssueNoteList(ctx, t) })
-	t.Run("22g_IssueDelete", func(t *testing.T) { testIssueDelete(ctx, t) })
-
-	// Labels & milestones.
-	t.Run("22h_LabelList", func(t *testing.T) { testLabelList(ctx, t) })
-	t.Run("22i_MilestoneList", func(t *testing.T) { testMilestoneList(ctx, t) })
-
-	// Project members.
-	t.Run("22j_ProjectMembersList", func(t *testing.T) { testProjectMembersList(ctx, t) })
-
-	// Project upload.
-	t.Run("22k_ProjectUpload", func(t *testing.T) { testProjectUpload(ctx, t) })
-
-	// Merge request lifecycle.
-	t.Run("23_CreateMR", func(t *testing.T) { testCreateMR(ctx, t) })
-	t.Run("24_GetMR", func(t *testing.T) { testGetMR(ctx, t) })
-	t.Run("25_ListMRs", func(t *testing.T) { testListMRs(ctx, t) })
-	t.Run("26_UpdateMR", func(t *testing.T) { testUpdateMR(ctx, t) })
-
-	// MR commits & pipelines.
-	t.Run("26a_MRCommits", func(t *testing.T) { testMRCommits(ctx, t) })
-	t.Run("26b_MRPipelines", func(t *testing.T) { testMRPipelines(ctx, t) })
-
-	// Notes (general comments).
-	t.Run("27_AddNote", func(t *testing.T) { testAddNote(ctx, t) })
-	t.Run("28_ListNotes", func(t *testing.T) { testListNotes(ctx, t) })
-	t.Run("29_UpdateNote", func(t *testing.T) { testUpdateNote(ctx, t) })
-	t.Run("30_DeleteNote", func(t *testing.T) { testDeleteNote(ctx, t) })
-
-	// MR diffs & threaded discussions.
-	t.Run("31_GetMRChanges", func(t *testing.T) { testGetMRChanges(ctx, t) })
-	t.Run("32_CreateInlineDiscussion", func(t *testing.T) { testCreateInlineDiscussion(ctx, t) })
-	t.Run("33_ReplyToDiscussion", func(t *testing.T) { testReplyToDiscussion(ctx, t) })
-	t.Run("34_ResolveDiscussion", func(t *testing.T) { testResolveDiscussion(ctx, t) })
-	t.Run("35_ListDiscussions", func(t *testing.T) { testListDiscussions(ctx, t) })
-
-	// MR rebase (before merge, while MR is open).
-	t.Run("35a_RebaseMR", func(t *testing.T) { testRebaseMR(ctx, t) })
-
-	// Approve, merge, project update/list.
-	t.Run("36_ApproveMR", func(t *testing.T) { testApproveMR(ctx, t) })
-	t.Run("37_UnapproveMR", func(t *testing.T) { testUnapproveMR(ctx, t) })
-	t.Run("38_MergeMR", func(t *testing.T) { testMergeMR(ctx, t) })
-
-	// Search (after merge so content is on default branch).
-	t.Run("38a_SearchCode", func(t *testing.T) { testSearchCode(ctx, t) })
-	t.Run("38b_SearchMergeRequests", func(t *testing.T) { testSearchMergeRequests(ctx, t) })
-
-	// Group tools (create a group for deterministic testing).
-	t.Run("38c_GroupCreate", func(t *testing.T) { testGroupCreate(ctx, t) })
-	t.Run("38d_GroupList", func(t *testing.T) { testGroupList(ctx, t) })
-	t.Run("38e_GroupGet", func(t *testing.T) { testGroupGet(ctx, t) })
-	t.Run("38f_GroupMembersList", func(t *testing.T) { testGroupMembersList(ctx, t) })
-	t.Run("38g_SubgroupsList", func(t *testing.T) { testSubgroupsList(ctx, t) })
-
-	// Pipeline list (read-only, may return empty without CI config).
-	t.Run("38h_PipelineList", func(t *testing.T) { testPipelineList(ctx, t) })
-
-	// Package lifecycle.
-	t.Run("38h_PackagePublish", func(t *testing.T) { testPackagePublish(ctx, t) })
-	t.Run("38i_PackageList", func(t *testing.T) { testPackageList(ctx, t) })
-	t.Run("38j_PackageFileList", func(t *testing.T) { testPackageFileList(ctx, t) })
-	t.Run("38k_PackageDownload", func(t *testing.T) { testPackageDownload(ctx, t) })
-	t.Run("38l_PackageFileDelete", func(t *testing.T) { testPackageFileDelete(ctx, t) })
-	t.Run("38m_PackageDelete", func(t *testing.T) { testPackageDelete(ctx, t) })
-
-	// Upload with file_path.
-	t.Run("38n_UploadFilePath", func(t *testing.T) { testUploadFilePath(ctx, t) })
-
-	t.Run("39_UpdateProject", func(t *testing.T) { testUpdateProject(ctx, t) })
-	t.Run("40_ListProjects", func(t *testing.T) { testListProjects(ctx, t) })
-
-	// Push rules (Enterprise/Premium only).
+	// Push rules (Enterprise/Premium only — no standalone coverage).
 	if state.enterprise {
 		t.Run("41_AddPushRule", func(t *testing.T) { testAddPushRule(ctx, t) })
 		t.Run("42_GetPushRules", func(t *testing.T) { testGetPushRules(ctx, t) })
@@ -228,122 +94,13 @@ func TestFullWorkflow(t *testing.T) {
 		t.Run("44_DeletePushRule", func(t *testing.T) { testDeletePushRule(ctx, t) })
 	}
 
-	// User-scoped project listings (require GITLAB_USER).
-	if os.Getenv("GITLAB_USER") != "" {
-		t.Run("45_ListUserContributed", func(t *testing.T) { testListUserContributed(ctx, t) })
-		t.Run("46_ListUserStarred", func(t *testing.T) { testListUserStarred(ctx, t) })
-	}
-
-	// GraphQL tools (branch rules, CI catalog, custom emoji — CE; vulnerabilities — Enterprise).
+	// GraphQL tools (no standalone individual tool coverage).
 	t.Run("47_ListBranchRules", func(t *testing.T) { testListBranchRules(ctx, t) })
 	t.Run("48_ListCatalogResources", func(t *testing.T) { testListCatalogResources(ctx, t) })
 	if state.enterprise {
 		t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { testVulnerabilitySeverityCount(ctx, t) })
 		t.Run("50_ListVulnerabilities", func(t *testing.T) { testListVulnerabilities(ctx, t) })
 	}
-	if state.groupPath != "" {
-		t.Run("51_ListCustomEmoji", func(t *testing.T) { testListCustomEmoji(ctx, t) })
-	}
-
-	// Group cleanup (delete the group created in 38c).
-	t.Run("51a_GroupDelete", func(t *testing.T) { testGroupDelete(ctx, t) })
-
-	// --- Phase 3: New coverage domains ---
-
-	// Wiki lifecycle.
-	t.Run("52_WikiCreate", func(t *testing.T) { testWikiCreate(ctx, t) })
-	t.Run("53_WikiGet", func(t *testing.T) { testWikiGet(ctx, t) })
-	t.Run("54_WikiList", func(t *testing.T) { testWikiList(ctx, t) })
-	t.Run("55_WikiUpdate", func(t *testing.T) { testWikiUpdate(ctx, t) })
-	t.Run("56_WikiDelete", func(t *testing.T) { testWikiDelete(ctx, t) })
-
-	// CI variables lifecycle.
-	t.Run("57_CIVariableCreate", func(t *testing.T) { testCIVariableCreate(ctx, t) })
-	t.Run("58_CIVariableGet", func(t *testing.T) { testCIVariableGet(ctx, t) })
-	t.Run("59_CIVariableList", func(t *testing.T) { testCIVariableList(ctx, t) })
-	t.Run("60_CIVariableUpdate", func(t *testing.T) { testCIVariableUpdate(ctx, t) })
-	t.Run("61_CIVariableDelete", func(t *testing.T) { testCIVariableDelete(ctx, t) })
-
-	// CI lint.
-	t.Run("62_CILint", func(t *testing.T) { testCILint(ctx, t) })
-
-	// Environment lifecycle.
-	t.Run("63_EnvironmentCreate", func(t *testing.T) { testEnvironmentCreate(ctx, t) })
-	t.Run("64_EnvironmentGet", func(t *testing.T) { testEnvironmentGet(ctx, t) })
-	t.Run("65_EnvironmentList", func(t *testing.T) { testEnvironmentList(ctx, t) })
-	t.Run("66_EnvironmentStop", func(t *testing.T) { testEnvironmentStop(ctx, t) })
-	t.Run("67_EnvironmentDelete", func(t *testing.T) { testEnvironmentDelete(ctx, t) })
-
-	// Label lifecycle (create, update, delete — list already tested at 22h).
-	t.Run("68_LabelCreate", func(t *testing.T) { testLabelCreate(ctx, t) })
-	t.Run("69_LabelUpdate", func(t *testing.T) { testLabelUpdate(ctx, t) })
-	t.Run("70_LabelDelete", func(t *testing.T) { testLabelDelete(ctx, t) })
-
-	// Milestone lifecycle (create, get, update, close, delete — list already tested at 22i).
-	t.Run("71_MilestoneCreate", func(t *testing.T) { testMilestoneCreate(ctx, t) })
-	t.Run("72_MilestoneGet", func(t *testing.T) { testMilestoneGet(ctx, t) })
-	t.Run("73_MilestoneUpdate", func(t *testing.T) { testMilestoneUpdate(ctx, t) })
-	t.Run("74_MilestoneDelete", func(t *testing.T) { testMilestoneDelete(ctx, t) })
-
-	// Issue links (needs 2 issues).
-	t.Run("75_IssueCreateSecond", func(t *testing.T) { testIssueCreateSecond(ctx, t) })
-	t.Run("76_IssueLinkCreate", func(t *testing.T) { testIssueLinkCreate(ctx, t) })
-	t.Run("77_IssueLinkList", func(t *testing.T) { testIssueLinkList(ctx, t) })
-	t.Run("78_IssueLinkDelete", func(t *testing.T) { testIssueLinkDelete(ctx, t) })
-	t.Run("79_IssueDeleteSecond", func(t *testing.T) { testIssueDeleteSecond(ctx, t) })
-
-	// Todos (create from issue, list, mark done).
-	t.Run("80_TodoCreateFromIssue", func(t *testing.T) { testTodoCreateFromIssue(ctx, t) })
-	t.Run("81_TodoList", func(t *testing.T) { testTodoList(ctx, t) })
-	t.Run("82_TodoMarkAllDone", func(t *testing.T) { testTodoMarkAllDone(ctx, t) })
-
-	// Deploy Keys (CRUD).
-	t.Run("83_DeployKeyCreate", func(t *testing.T) { testDeployKeyCreate(ctx, t) })
-	t.Run("84_DeployKeyGet", func(t *testing.T) { testDeployKeyGet(ctx, t) })
-	t.Run("85_DeployKeyList", func(t *testing.T) { testDeployKeyList(ctx, t) })
-	t.Run("86_DeployKeyDelete", func(t *testing.T) { testDeployKeyDelete(ctx, t) })
-
-	// Snippets (project CRUD).
-	t.Run("87_ProjectSnippetCreate", func(t *testing.T) { testProjectSnippetCreate(ctx, t) })
-	t.Run("88_ProjectSnippetGet", func(t *testing.T) { testProjectSnippetGet(ctx, t) })
-	t.Run("89_ProjectSnippetList", func(t *testing.T) { testProjectSnippetList(ctx, t) })
-	t.Run("90_ProjectSnippetUpdate", func(t *testing.T) { testProjectSnippetUpdate(ctx, t) })
-	t.Run("91_ProjectSnippetDelete", func(t *testing.T) { testProjectSnippetDelete(ctx, t) })
-
-	// Issue Discussions (create, list, reply, delete note).
-	t.Run("92_IssueDiscussionCreate", func(t *testing.T) { testIssueDiscussionCreate(ctx, t) })
-	t.Run("93_IssueDiscussionList", func(t *testing.T) { testIssueDiscussionList(ctx, t) })
-	t.Run("94_IssueDiscussionAddNote", func(t *testing.T) { testIssueDiscussionAddNote(ctx, t) })
-	t.Run("95_IssueDiscussionDeleteNote", func(t *testing.T) { testIssueDiscussionDeleteNote(ctx, t) })
-
-	// MR Draft Notes (CRUD + publish).
-	t.Run("96_MRDraftNoteCreate", func(t *testing.T) { testMRDraftNoteCreate(ctx, t) })
-	t.Run("97_MRDraftNoteList", func(t *testing.T) { testMRDraftNoteList(ctx, t) })
-	t.Run("98_MRDraftNoteUpdate", func(t *testing.T) { testMRDraftNoteUpdate(ctx, t) })
-	t.Run("99_MRDraftNotePublishAll", func(t *testing.T) { testMRDraftNotePublishAll(ctx, t) })
-
-	// Pipeline Schedules (CRUD).
-	t.Run("100_PipelineScheduleCreate", func(t *testing.T) { testPipelineScheduleCreate(ctx, t) })
-	t.Run("101_PipelineScheduleGet", func(t *testing.T) { testPipelineScheduleGet(ctx, t) })
-	t.Run("102_PipelineScheduleList", func(t *testing.T) { testPipelineScheduleList(ctx, t) })
-	t.Run("103_PipelineScheduleUpdate", func(t *testing.T) { testPipelineScheduleUpdate(ctx, t) })
-	t.Run("104_PipelineScheduleDelete", func(t *testing.T) { testPipelineScheduleDelete(ctx, t) })
-
-	// Badges (project CRUD).
-	t.Run("105_BadgeCreate", func(t *testing.T) { testBadgeCreate(ctx, t) })
-	t.Run("106_BadgeList", func(t *testing.T) { testBadgeList(ctx, t) })
-	t.Run("107_BadgeUpdate", func(t *testing.T) { testBadgeUpdate(ctx, t) })
-	t.Run("108_BadgeDelete", func(t *testing.T) { testBadgeDelete(ctx, t) })
-
-	// Access Tokens (project: create, list, revoke).
-	t.Run("109_AccessTokenCreate", func(t *testing.T) { testAccessTokenCreate(ctx, t) })
-	t.Run("110_AccessTokenList", func(t *testing.T) { testAccessTokenList(ctx, t) })
-	t.Run("111_AccessTokenRevoke", func(t *testing.T) { testAccessTokenRevoke(ctx, t) })
-
-	// Award Emoji (on issue: create, list, delete).
-	t.Run("112_AwardEmojiCreate", func(t *testing.T) { testAwardEmojiCreate(ctx, t) })
-	t.Run("113_AwardEmojiList", func(t *testing.T) { testAwardEmojiList(ctx, t) })
-	t.Run("114_AwardEmojiDelete", func(t *testing.T) { testAwardEmojiDelete(ctx, t) })
 
 	// Pipeline & Job lifecycle (Docker mode only — requires CI runner).
 	if hasRunner() {
@@ -358,24 +115,6 @@ func TestFullWorkflow(t *testing.T) {
 		t.Run("207a_SamplingAnalyzePipelineFailure", func(t *testing.T) { testSamplingAnalyzePipelineFailure(ctx, t) })
 		t.Run("208_PipelineDelete", func(t *testing.T) { testPipelineDelete(ctx, t) })
 	}
-
-	// Sampling tools (require sampling-enabled session — mock LLM handler).
-	// Create temporary resources needed by sampling tools.
-	t.Run("298_SamplingSetupIssue", func(t *testing.T) { testSamplingSetupIssue(ctx, t) })
-	t.Run("299_SamplingSetupMilestone", func(t *testing.T) { testSamplingSetupMilestone(ctx, t) })
-	t.Run("300_SamplingAnalyzeMRChanges", func(t *testing.T) { testSamplingAnalyzeMRChanges(ctx, t) })
-	t.Run("301_SamplingSummarizeIssue", func(t *testing.T) { testSamplingSummarizeIssue(ctx, t) })
-	t.Run("302_SamplingGenerateReleaseNotes", func(t *testing.T) { testSamplingGenerateReleaseNotes(ctx, t) })
-	t.Run("303_SamplingSummarizeMRReview", func(t *testing.T) { testSamplingSummarizeMRReview(ctx, t) })
-	t.Run("304_SamplingAnalyzeCIConfig", func(t *testing.T) { testSamplingAnalyzeCIConfig(ctx, t) })
-	t.Run("305_SamplingAnalyzeIssueScope", func(t *testing.T) { testSamplingAnalyzeIssueScope(ctx, t) })
-	t.Run("306_SamplingReviewMRSecurity", func(t *testing.T) { testSamplingReviewMRSecurity(ctx, t) })
-	t.Run("307_SamplingFindTechnicalDebt", func(t *testing.T) { testSamplingFindTechnicalDebt(ctx, t) })
-	t.Run("308_SamplingAnalyzeDeploymentHistory", func(t *testing.T) { testSamplingAnalyzeDeploymentHistory(ctx, t) })
-	t.Run("309_SamplingGenerateMilestoneReport", func(t *testing.T) { testSamplingGenerateMilestoneReport(ctx, t) })
-
-	// Elicitation tools (require elicitation-enabled session — auto-accept mock).
-	t.Run("400_ElicitInteractiveIssueCreate", func(t *testing.T) { testElicitInteractiveIssueCreate(ctx, t) })
 
 	// Cleanup.
 	t.Run("999_Cleanup_DeleteProject", func(t *testing.T) { testDeleteProject(ctx, t) })

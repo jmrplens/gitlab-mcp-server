@@ -206,9 +206,8 @@ type metaState struct {
 // sequential test steps.
 var mState metaState
 
-// TestMetaToolWorkflow exercises the same lifecycle as TestFullWorkflow but
-// through the 8 domain meta-tools (gitlab_project, gitlab_branch, etc.)
-// instead of the 52 individual tools.
+// TestMetaToolWorkflow exercises gap-coverage and enterprise meta-tool actions.
+// Common CRUD meta-tool paths are tested by standalone TestMeta_* files.
 func TestMetaToolWorkflow(t *testing.T) {
 	if state.metaSession == nil {
 		t.Skip("meta session not configured — set META_TOOLS=true")
@@ -217,147 +216,16 @@ func TestMetaToolWorkflow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 580*time.Second)
 	defer cancel()
 
-	// User identity.
-	t.Run("00_UserCurrent", func(t *testing.T) { metaUserCurrent(ctx, t) })
-
-	// Project.
+	// Minimal project setup for gap-coverage and enterprise tests below.
 	t.Run("01_CreateProject", func(t *testing.T) { metaCreateProject(ctx, t) })
-	t.Run("02_GetProject", func(t *testing.T) { metaGetProject(ctx, t) })
 	t.Run("03_UnprotectMain", func(t *testing.T) { metaUnprotectMain(ctx, t) })
-
-	// Repository: commits & files.
 	t.Run("04_CommitCreate", func(t *testing.T) { metaCommitCreate(ctx, t) })
-	t.Run("05_FileGet", func(t *testing.T) { metaFileGet(ctx, t) })
-
-	// Commit inspection.
-	t.Run("05a_CommitList", func(t *testing.T) { metaCommitList(ctx, t) })
-	t.Run("05b_CommitGet", func(t *testing.T) { metaCommitGet(ctx, t) })
-	t.Run("05c_CommitDiff", func(t *testing.T) { metaCommitDiff(ctx, t) })
-
-	// Repository tree.
-	t.Run("05d_RepositoryTree", func(t *testing.T) { metaRepositoryTree(ctx, t) })
-
-	// Branch management.
 	t.Run("06_BranchCreate", func(t *testing.T) { metaBranchCreate(ctx, t) })
-	t.Run("06a_BranchGet", func(t *testing.T) { metaBranchGet(ctx, t) })
-	t.Run("07_BranchList", func(t *testing.T) { metaBranchList(ctx, t) })
-	t.Run("08_BranchProtect", func(t *testing.T) { metaBranchProtect(ctx, t) })
-	t.Run("08a_BranchGetProtected", func(t *testing.T) { metaBranchGetProtected(ctx, t) })
-	t.Run("08b_BranchUpdateProtected", func(t *testing.T) { metaBranchUpdateProtected(ctx, t) })
-	t.Run("09_ListProtectedBranches", func(t *testing.T) { metaListProtectedBranches(ctx, t) })
-	t.Run("10_BranchUnprotect", func(t *testing.T) { metaBranchUnprotect(ctx, t) })
-
-	// Commit feature changes.
 	t.Run("11_CommitFeatureChanges", func(t *testing.T) { metaCommitFeatureChanges(ctx, t) })
-
-	// Repository compare.
-	t.Run("11a_RepositoryCompare", func(t *testing.T) { metaRepositoryCompare(ctx, t) })
-
-	// Tags & releases.
-	t.Run("12_TagCreate", func(t *testing.T) { metaTagCreate(ctx, t) })
-	t.Run("12a_TagGet", func(t *testing.T) { metaTagGet(ctx, t) })
-	t.Run("13_TagList", func(t *testing.T) { metaTagList(ctx, t) })
-	t.Run("13a_TagGetSignature", func(t *testing.T) { metaTagGetSignature(ctx, t) })
-	t.Run("14_ReleaseCreate", func(t *testing.T) { metaReleaseCreate(ctx, t) })
-	t.Run("14a_ReleaseGetLatest", func(t *testing.T) { metaReleaseGetLatest(ctx, t) })
-	t.Run("15_ReleaseGet", func(t *testing.T) { metaReleaseGet(ctx, t) })
-	t.Run("16_ReleaseUpdate", func(t *testing.T) { metaReleaseUpdate(ctx, t) })
-	t.Run("17_ReleaseList", func(t *testing.T) { metaReleaseList(ctx, t) })
-	t.Run("18_ReleaseLinkCreate", func(t *testing.T) { metaReleaseLinkCreate(ctx, t) })
-	t.Run("18a_ReleaseLinkGet", func(t *testing.T) { metaReleaseLinkGet(ctx, t) })
-	t.Run("18b_ReleaseLinkUpdate", func(t *testing.T) { metaReleaseLinkUpdate(ctx, t) })
-	t.Run("19_ReleaseLinkList", func(t *testing.T) { metaReleaseLinkList(ctx, t) })
-	t.Run("20_ReleaseLinkDelete", func(t *testing.T) { metaReleaseLinkDelete(ctx, t) })
-	t.Run("21_ReleaseDelete", func(t *testing.T) { metaReleaseDelete(ctx, t) })
-	t.Run("22_TagDelete", func(t *testing.T) { metaTagDelete(ctx, t) })
-
-	// Issue lifecycle.
 	t.Run("22a_IssueCreate", func(t *testing.T) { metaIssueCreate(ctx, t) })
-	t.Run("22b_IssueGet", func(t *testing.T) { metaIssueGet(ctx, t) })
-	t.Run("22c_IssueList", func(t *testing.T) { metaIssueList(ctx, t) })
-	t.Run("22d_IssueUpdate", func(t *testing.T) { metaIssueUpdate(ctx, t) })
-	t.Run("22e_IssueNoteCreate", func(t *testing.T) { metaIssueNoteCreate(ctx, t) })
-	t.Run("22f_IssueNoteList", func(t *testing.T) { metaIssueNoteList(ctx, t) })
-	t.Run("22g_IssueDelete", func(t *testing.T) { metaIssueDelete(ctx, t) })
-
-	// Labels & milestones.
-	t.Run("22h_LabelList", func(t *testing.T) { metaLabelList(ctx, t) })
-	t.Run("22i_MilestoneList", func(t *testing.T) { metaMilestoneList(ctx, t) })
-
-	// Project members.
-	t.Run("22j_ProjectMembersList", func(t *testing.T) { metaProjectMembersList(ctx, t) })
-
-	// Project upload.
-	t.Run("22k_ProjectUpload", func(t *testing.T) { metaProjectUpload(ctx, t) })
-
-	// Merge request lifecycle.
 	t.Run("23_CreateMR", func(t *testing.T) { metaCreateMR(ctx, t) })
-	t.Run("24_GetMR", func(t *testing.T) { metaGetMR(ctx, t) })
-	t.Run("25_ListMRs", func(t *testing.T) { metaListMRs(ctx, t) })
-	t.Run("26_UpdateMR", func(t *testing.T) { metaUpdateMR(ctx, t) })
 
-	// MR commits & pipelines.
-	t.Run("26a_MRCommits", func(t *testing.T) { metaMRCommits(ctx, t) })
-	t.Run("26b_MRPipelines", func(t *testing.T) { metaMRPipelines(ctx, t) })
-
-	// Notes (via gitlab_mr_review).
-	t.Run("27_NoteCreate", func(t *testing.T) { metaNoteCreate(ctx, t) })
-	t.Run("28_NoteList", func(t *testing.T) { metaNoteList(ctx, t) })
-	t.Run("28a_NoteGet", func(t *testing.T) { metaNoteGet(ctx, t) })
-	t.Run("29_NoteUpdate", func(t *testing.T) { metaNoteUpdate(ctx, t) })
-	t.Run("30_NoteDelete", func(t *testing.T) { metaNoteDelete(ctx, t) })
-
-	// MR review: diffs & discussions.
-	t.Run("31_ChangesGet", func(t *testing.T) { metaChangesGet(ctx, t) })
-	t.Run("32_DiscussionCreate", func(t *testing.T) { metaDiscussionCreate(ctx, t) })
-	t.Run("33_DiscussionReply", func(t *testing.T) { metaDiscussionReply(ctx, t) })
-	t.Run("34_DiscussionResolve", func(t *testing.T) { metaDiscussionResolve(ctx, t) })
-	t.Run("35_DiscussionList", func(t *testing.T) { metaDiscussionList(ctx, t) })
-
-	// MR rebase (before merge).
-	t.Run("35a_RebaseMR", func(t *testing.T) { metaRebaseMR(ctx, t) })
-
-	// Approve, merge, project update/list.
-	t.Run("36_ApproveMR", func(t *testing.T) { metaApproveMR(ctx, t) })
-	t.Run("37_UnapproveMR", func(t *testing.T) { metaUnapproveMR(ctx, t) })
-	t.Run("38_MergeMR", func(t *testing.T) { metaMergeMR(ctx, t) })
-
-	// Search (after merge so content is on default branch).
-	t.Run("38a_SearchCode", func(t *testing.T) { metaSearchCode(ctx, t) })
-	t.Run("38b_SearchMergeRequests", func(t *testing.T) { metaSearchMergeRequests(ctx, t) })
-
-	// Group tools (read-only, use whatever groups are accessible).
-	t.Run("38c_GroupList", func(t *testing.T) { metaGroupList(ctx, t) })
-	if mState.groupID != 0 {
-		t.Run("38d_GroupGet", func(t *testing.T) { metaGroupGet(ctx, t) })
-		t.Run("38e_GroupMembersList", func(t *testing.T) { metaGroupMembersList(ctx, t) })
-		t.Run("38f_SubgroupsList", func(t *testing.T) { metaSubgroupsList(ctx, t) })
-		t.Run("38g_GroupIssues", func(t *testing.T) { metaGroupIssues(ctx, t) })
-	}
-
-	// Pipeline list (read-only, may return empty without CI config).
-	t.Run("38h_PipelineList", func(t *testing.T) { metaPipelineList(ctx, t) })
-	t.Run("38ha_PipelineGet", func(t *testing.T) { metaPipelineGet(ctx, t) })
-	t.Run("38hb_PipelineVariables", func(t *testing.T) { metaPipelineVariables(ctx, t) })
-	t.Run("38hc_PipelineTestReport", func(t *testing.T) { metaPipelineTestReport(ctx, t) })
-	t.Run("38hd_PipelineTestReportSummary", func(t *testing.T) { metaPipelineTestReportSummary(ctx, t) })
-	t.Run("38he_PipelineLatest", func(t *testing.T) { metaPipelineLatest(ctx, t) })
-
-	// Package lifecycle.
-	t.Run("38i_PackagePublish", func(t *testing.T) { metaPackagePublish(ctx, t) })
-	t.Run("38j_PackageList", func(t *testing.T) { metaPackageList(ctx, t) })
-	t.Run("38k_PackageFileList", func(t *testing.T) { metaPackageFileList(ctx, t) })
-	t.Run("38l_PackageDownload", func(t *testing.T) { metaPackageDownload(ctx, t) })
-	t.Run("38m_PackageFileDelete", func(t *testing.T) { metaPackageFileDelete(ctx, t) })
-	t.Run("38n_PackageDelete", func(t *testing.T) { metaPackageDelete(ctx, t) })
-
-	// Upload with file_path (meta-tool).
-	t.Run("38o_UploadFilePath", func(t *testing.T) { metaUploadFilePath(ctx, t) })
-
-	t.Run("39_UpdateProject", func(t *testing.T) { metaUpdateProject(ctx, t) })
-	t.Run("40_ListProjects", func(t *testing.T) { metaListProjects(ctx, t) })
-
-	// Push rules (Enterprise/Premium only).
+	// Enterprise push rules (no standalone coverage).
 	if state.enterprise {
 		t.Run("41_AddPushRule", func(t *testing.T) { metaAddPushRule(ctx, t) })
 		t.Run("42_GetPushRules", func(t *testing.T) { metaGetPushRules(ctx, t) })
@@ -365,136 +233,25 @@ func TestMetaToolWorkflow(t *testing.T) {
 		t.Run("44_DeletePushRule", func(t *testing.T) { metaDeletePushRule(ctx, t) })
 	}
 
-	// User-scoped project listings (require GITLAB_USER).
-	if os.Getenv("GITLAB_USER") != "" {
-		t.Run("45_ListUserContributed", func(t *testing.T) { metaListUserContributed(ctx, t) })
-		t.Run("46_ListUserStarred", func(t *testing.T) { metaListUserStarred(ctx, t) })
-	}
+	// Group discovery (sets groupPath for conditional blocks below).
+	t.Run("38c_GroupList", func(t *testing.T) { metaGroupList(ctx, t) })
 
-	// GraphQL tools (branch rules, CI catalog, custom emoji — CE; vulnerabilities — Enterprise).
+	// GQL meta-tools.
 	t.Run("47_BranchRuleList", func(t *testing.T) { metaBranchRuleList(ctx, t) })
 	t.Run("48_CICatalogList", func(t *testing.T) { metaCICatalogList(ctx, t) })
 	if state.enterprise {
 		t.Run("49_VulnerabilitySeverityCount", func(t *testing.T) { metaVulnerabilitySeverityCount(ctx, t) })
 		t.Run("50_VulnerabilityList", func(t *testing.T) { metaVulnerabilityList(ctx, t) })
 	}
-	if mState.groupPath != "" {
-		t.Run("51_CustomEmojiList", func(t *testing.T) { metaCustomEmojiList(ctx, t) })
-	}
 
-	// --- Phase 5: New domain meta-tool coverage ---
-
-	// Wiki lifecycle (gitlab_wiki).
-	t.Run("52_WikiCreate", func(t *testing.T) { metaWikiCreate(ctx, t) })
-	t.Run("53_WikiGet", func(t *testing.T) { metaWikiGet(ctx, t) })
-	t.Run("54_WikiList", func(t *testing.T) { metaWikiList(ctx, t) })
-	t.Run("55_WikiUpdate", func(t *testing.T) { metaWikiUpdate(ctx, t) })
-	t.Run("55a_WikiUploadAttachment", func(t *testing.T) { metaWikiUploadAttachment(ctx, t) })
-	t.Run("56_WikiDelete", func(t *testing.T) { metaWikiDelete(ctx, t) })
-
-	// CI Variables lifecycle (gitlab_ci_variable).
-	t.Run("57_CIVariableCreate", func(t *testing.T) { metaCIVariableCreate(ctx, t) })
-	t.Run("58_CIVariableGet", func(t *testing.T) { metaCIVariableGet(ctx, t) })
-	t.Run("59_CIVariableList", func(t *testing.T) { metaCIVariableList(ctx, t) })
-	t.Run("60_CIVariableUpdate", func(t *testing.T) { metaCIVariableUpdate(ctx, t) })
-	t.Run("61_CIVariableDelete", func(t *testing.T) { metaCIVariableDelete(ctx, t) })
-
-	// Instance-level CI Variables (admin).
+	// Instance-level CI variables (no standalone coverage).
 	t.Run("61a_CIVariableInstanceCreate", func(t *testing.T) { metaCIVariableInstanceCreate(ctx, t) })
 	t.Run("61b_CIVariableInstanceList", func(t *testing.T) { metaCIVariableInstanceList(ctx, t) })
 	t.Run("61c_CIVariableInstanceGet", func(t *testing.T) { metaCIVariableInstanceGet(ctx, t) })
 	t.Run("61d_CIVariableInstanceUpdate", func(t *testing.T) { metaCIVariableInstanceUpdate(ctx, t) })
 	t.Run("61e_CIVariableInstanceDelete", func(t *testing.T) { metaCIVariableInstanceDelete(ctx, t) })
 
-	// CI Lint (gitlab_template).
-	t.Run("62_CILint", func(t *testing.T) { metaCILint(ctx, t) })
-
-	// Environment lifecycle (gitlab_environment).
-	t.Run("63_EnvironmentCreate", func(t *testing.T) { metaEnvironmentCreate(ctx, t) })
-	t.Run("64_EnvironmentGet", func(t *testing.T) { metaEnvironmentGet(ctx, t) })
-	t.Run("64a_EnvironmentUpdate", func(t *testing.T) { metaEnvironmentUpdate(ctx, t) })
-	t.Run("65_EnvironmentList", func(t *testing.T) { metaEnvironmentList(ctx, t) })
-	t.Run("66_EnvironmentStop", func(t *testing.T) { metaEnvironmentStop(ctx, t) })
-	t.Run("67_EnvironmentDelete", func(t *testing.T) { metaEnvironmentDelete(ctx, t) })
-
-	// Label CRUD (gitlab_project).
-	t.Run("68_LabelCreate", func(t *testing.T) { metaLabelCreate(ctx, t) })
-	t.Run("69_LabelUpdate", func(t *testing.T) { metaLabelUpdate(ctx, t) })
-	t.Run("70_LabelDelete", func(t *testing.T) { metaLabelDelete(ctx, t) })
-
-	// Milestone CRUD (gitlab_project).
-	t.Run("71_MilestoneCreate", func(t *testing.T) { metaMilestoneCreate(ctx, t) })
-	t.Run("72_MilestoneGet", func(t *testing.T) { metaMilestoneGet(ctx, t) })
-	t.Run("73_MilestoneUpdate", func(t *testing.T) { metaMilestoneUpdate(ctx, t) })
-	t.Run("74_MilestoneDelete", func(t *testing.T) { metaMilestoneDelete(ctx, t) })
-
-	// Issue Links (gitlab_issue — needs 2 issues).
-	t.Run("75_IssueCreateSecond", func(t *testing.T) { metaIssueCreateSecond(ctx, t) })
-	t.Run("76_IssueLinkCreate", func(t *testing.T) { metaIssueLinkCreate(ctx, t) })
-	t.Run("77_IssueLinkList", func(t *testing.T) { metaIssueLinkList(ctx, t) })
-	t.Run("78_IssueLinkDelete", func(t *testing.T) { metaIssueLinkDelete(ctx, t) })
-	t.Run("79_IssueDeleteSecond", func(t *testing.T) { metaIssueDeleteSecond(ctx, t) })
-
-	// Todos (gitlab_user).
-	t.Run("80_TodoList", func(t *testing.T) { metaTodoList(ctx, t) })
-	t.Run("81_TodoMarkAllDone", func(t *testing.T) { metaTodoMarkAllDone(ctx, t) })
-
-	// Deploy Keys (gitlab_access).
-	t.Run("82_DeployKeyCreate", func(t *testing.T) { metaDeployKeyCreate(ctx, t) })
-	t.Run("83_DeployKeyGet", func(t *testing.T) { metaDeployKeyGet(ctx, t) })
-	t.Run("84_DeployKeyList", func(t *testing.T) { metaDeployKeyList(ctx, t) })
-	t.Run("85_DeployKeyDelete", func(t *testing.T) { metaDeployKeyDelete(ctx, t) })
-
-	// Snippets (gitlab_snippet).
-	t.Run("86_SnippetCreate", func(t *testing.T) { metaSnippetCreate(ctx, t) })
-	t.Run("87_SnippetGet", func(t *testing.T) { metaSnippetGet(ctx, t) })
-	t.Run("88_SnippetList", func(t *testing.T) { metaSnippetList(ctx, t) })
-	t.Run("89_SnippetUpdate", func(t *testing.T) { metaSnippetUpdate(ctx, t) })
-	t.Run("90_SnippetDelete", func(t *testing.T) { metaSnippetDelete(ctx, t) })
-
-	// Issue Discussions (gitlab_issue).
-	t.Run("91_IssueDiscussionCreate", func(t *testing.T) { metaIssueDiscussionCreate(ctx, t) })
-	t.Run("92_IssueDiscussionList", func(t *testing.T) { metaIssueDiscussionList(ctx, t) })
-	t.Run("93_IssueDiscussionAddNote", func(t *testing.T) { metaIssueDiscussionAddNote(ctx, t) })
-	t.Run("94_IssueDiscussionDeleteNote", func(t *testing.T) { metaIssueDiscussionDeleteNote(ctx, t) })
-
-	// MR Draft Notes (gitlab_mr_review).
-	t.Run("95_DraftNoteCreate", func(t *testing.T) { metaDraftNoteCreate(ctx, t) })
-	t.Run("95a_DraftNoteGet", func(t *testing.T) { metaDraftNoteGet(ctx, t) })
-	t.Run("96_DraftNoteList", func(t *testing.T) { metaDraftNoteList(ctx, t) })
-	t.Run("97_DraftNoteUpdate", func(t *testing.T) { metaDraftNoteUpdate(ctx, t) })
-	t.Run("98_DraftNotePublishAll", func(t *testing.T) { metaDraftNotePublishAll(ctx, t) })
-
-	// Pipeline Schedules (gitlab_pipeline_schedule).
-	t.Run("100_PipelineScheduleCreate", func(t *testing.T) { metaPipelineScheduleCreate(ctx, t) })
-	t.Run("101_PipelineScheduleGet", func(t *testing.T) { metaPipelineScheduleGet(ctx, t) })
-	t.Run("102_PipelineScheduleList", func(t *testing.T) { metaPipelineScheduleList(ctx, t) })
-	t.Run("103_PipelineScheduleUpdate", func(t *testing.T) { metaPipelineScheduleUpdate(ctx, t) })
-	t.Run("103a_PipelineScheduleRun", func(t *testing.T) { metaPipelineScheduleRun(ctx, t) })
-	t.Run("103b_PipelineScheduleTakeOwnership", func(t *testing.T) { metaPipelineScheduleTakeOwnership(ctx, t) })
-	t.Run("103c_PipelineScheduleCreateVariable", func(t *testing.T) { metaPipelineScheduleCreateVariable(ctx, t) })
-	t.Run("103d_PipelineScheduleEditVariable", func(t *testing.T) { metaPipelineScheduleEditVariable(ctx, t) })
-	t.Run("103e_PipelineScheduleDeleteVariable", func(t *testing.T) { metaPipelineScheduleDeleteVariable(ctx, t) })
-	t.Run("103f_PipelineScheduleListTriggered", func(t *testing.T) { metaPipelineScheduleListTriggered(ctx, t) })
-	t.Run("104_PipelineScheduleDelete", func(t *testing.T) { metaPipelineScheduleDelete(ctx, t) })
-
-	// Badges (gitlab_project).
-	t.Run("105_BadgeCreate", func(t *testing.T) { metaBadgeCreate(ctx, t) })
-	t.Run("106_BadgeList", func(t *testing.T) { metaBadgeList(ctx, t) })
-	t.Run("107_BadgeUpdate", func(t *testing.T) { metaBadgeUpdate(ctx, t) })
-	t.Run("108_BadgeDelete", func(t *testing.T) { metaBadgeDelete(ctx, t) })
-
-	// Access Tokens (gitlab_access).
-	t.Run("109_AccessTokenCreate", func(t *testing.T) { metaAccessTokenCreate(ctx, t) })
-	t.Run("110_AccessTokenList", func(t *testing.T) { metaAccessTokenList(ctx, t) })
-	t.Run("111_AccessTokenRevoke", func(t *testing.T) { metaAccessTokenRevoke(ctx, t) })
-
-	// Award Emoji (gitlab_issue).
-	t.Run("112_AwardEmojiCreate", func(t *testing.T) { metaAwardEmojiCreate(ctx, t) })
-	t.Run("113_AwardEmojiList", func(t *testing.T) { metaAwardEmojiList(ctx, t) })
-	t.Run("114_AwardEmojiDelete", func(t *testing.T) { metaAwardEmojiDelete(ctx, t) })
-
-	// --- Previously untested meta-tools (gap coverage) ---
+	// --- Gap-coverage and enterprise meta-tool tests ---
 
 	// CE-testable: gitlab_deployment, gitlab_job, gitlab_user extensions, gitlab_template, gitlab_admin.
 	t.Run("115_DeploymentList", func(t *testing.T) { metaDeploymentList(ctx, t) })
