@@ -449,15 +449,15 @@ func requireTrue(t *testing.T, condition bool, format string, args ...any) {
 func disableRateLimiting(client *gitlabclient.Client) {
 	falseVal := false
 	_, _, err := client.GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{
-		ThrottleAuthenticatedAPIEnabled:            &falseVal,
-		ThrottleAuthenticatedWebEnabled:            &falseVal,
-		ThrottleUnauthenticatedAPIEnabled:          &falseVal,
-		ThrottleUnauthenticatedWebEnabled:          &falseVal,
-		ThrottleAuthenticatedPackagesAPIEnabled:    &falseVal,
-		ThrottleAuthenticatedGitLFSEnabled:         &falseVal,
-		ThrottleAuthenticatedFilesAPIEnabled:       &falseVal,
-		ThrottleUnauthenticatedFilesAPIEnabled:     &falseVal,
-		ThrottleAuthenticatedDeprecatedAPIEnabled:  &falseVal,
+		ThrottleAuthenticatedAPIEnabled:             &falseVal,
+		ThrottleAuthenticatedWebEnabled:             &falseVal,
+		ThrottleUnauthenticatedAPIEnabled:           &falseVal,
+		ThrottleUnauthenticatedWebEnabled:           &falseVal,
+		ThrottleAuthenticatedPackagesAPIEnabled:     &falseVal,
+		ThrottleAuthenticatedGitLFSEnabled:          &falseVal,
+		ThrottleAuthenticatedFilesAPIEnabled:        &falseVal,
+		ThrottleUnauthenticatedFilesAPIEnabled:      &falseVal,
+		ThrottleAuthenticatedDeprecatedAPIEnabled:   &falseVal,
 		ThrottleUnauthenticatedDeprecatedAPIEnabled: &falseVal,
 	})
 	if err != nil {
