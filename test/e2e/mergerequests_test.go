@@ -97,8 +97,14 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	t.Run("Commits", func(t *testing.T) {
 		var out mergerequests.CommitsOutput
 		var err error
-		for i := range 10 {
-			time.Sleep(2 * time.Second)
+		deadline := time.Now().Add(60 * time.Second)
+		delay := 1 * time.Second
+		for attempt := 1; time.Now().Before(deadline); attempt++ {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("context canceled waiting for MR commits: %v", ctx.Err())
+			case <-time.After(delay):
+			}
 			out, err = callToolOn[mergerequests.CommitsOutput](ctx, sess.individual, "gitlab_mr_commits", mergerequests.CommitsInput{
 				ProjectID: proj.pidOf(),
 				MRIID:     mrIID,
@@ -106,7 +112,10 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			if err == nil && len(out.Commits) >= 1 {
 				break
 			}
-			t.Logf("MR commits attempt %d: count=%d err=%v", i+1, len(out.Commits), err)
+			t.Logf("MR commits attempt %d: count=%d err=%v", attempt, len(out.Commits), err)
+			if delay < 4*time.Second {
+				delay *= 2
+			}
 		}
 		requireNoError(t, err, "MR commits")
 		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
@@ -199,8 +208,14 @@ func TestMeta_MergeRequests(t *testing.T) {
 	t.Run("Commits", func(t *testing.T) {
 		var out mergerequests.CommitsOutput
 		var err error
-		for i := range 10 {
-			time.Sleep(2 * time.Second)
+		deadline := time.Now().Add(60 * time.Second)
+		delay := 1 * time.Second
+		for attempt := 1; time.Now().Before(deadline); attempt++ {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("context canceled waiting for MR commits: %v", ctx.Err())
+			case <-time.After(delay):
+			}
 			out, err = callToolOn[mergerequests.CommitsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 				"action": "commits",
 				"params": map[string]any{
@@ -211,7 +226,10 @@ func TestMeta_MergeRequests(t *testing.T) {
 			if err == nil && len(out.Commits) >= 1 {
 				break
 			}
-			t.Logf("MR commits meta attempt %d: count=%d err=%v", i+1, len(out.Commits), err)
+			t.Logf("MR commits meta attempt %d: count=%d err=%v", attempt, len(out.Commits), err)
+			if delay < 4*time.Second {
+				delay *= 2
+			}
 		}
 		requireNoError(t, err, "MR commits meta")
 		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
