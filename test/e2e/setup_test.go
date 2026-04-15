@@ -31,6 +31,8 @@ const (
 	fmtCallErr       = "call %s: %w"
 	testFileMainGo   = "main.go"
 	msgCommitIDEmpty = "commit ID should not be empty"
+	defaultBranch    = "main"
+	testE2EBranch    = "feature/e2e-changes"
 )
 
 // e2eProjectPrefix is the required prefix for all projects created by E2E
@@ -51,7 +53,6 @@ type sessions struct {
 }
 
 // sess is the global read-only sessions instance populated by TestMain.
-// New domain test files should use sess instead of the legacy state global.
 var sess sessions
 
 // isDockerMode returns true when running against an ephemeral Docker GitLab
@@ -69,55 +70,11 @@ type resourceSnapshot struct {
 	projects map[int64]string // ID → path_with_namespace
 }
 
-// testState holds shared state across sequential test steps.
-type testState struct {
-	glClient              *gitlabclient.Client
-	enterprise            bool // true when GITLAB_ENTERPRISE=true
-	session               *mcp.ClientSession
-	metaSession           *mcp.ClientSession // meta-tools session
-	samplingSession       *mcp.ClientSession // sampling-enabled session (mock LLM)
-	elicitSession         *mcp.ClientSession // elicitation-enabled session (auto-accept mock)
-	snapshot              *resourceSnapshot  // pre-existing resources (self-hosted mode only)
-	projectID             int64
-	projectPath           string
-	mrIID                 int64
-	noteID                int64
-	discussionID          string
-	releaseLinkID         int64
-	lastCommitSHA         string // SHA from most recent commit (for commit get/diff tests)
-	issueIID              int64  // issue IID for issue lifecycle tests
-	issueNoteID           int64  // issue note ID for issue note tests
-	groupID               int64  // group ID discovered via group_list (0 if none)
-	groupPath             string // group full path discovered via group_list
-	packageID             int64  // package ID for package lifecycle tests
-	packageFileID         int64  // package file ID for package file tests
-	wikiSlug              string // wiki page slug for wiki lifecycle tests
-	envID                 int64  // environment ID for environment lifecycle tests
-	labelID               int64  // label ID for label lifecycle tests
-	milestoneIID          int64  // milestone IID for milestone lifecycle tests
-	draftNoteID           int64  // draft note ID for MR draft note tests
-	issue2IID             int64  // second issue IID for issue link tests
-	deployKeyID           int64  // deploy key ID for deploy key lifecycle tests
-	snippetID             int64  // project snippet ID for snippet lifecycle tests
-	issueDiscussionID     string // issue discussion ID for issue discussion tests
-	issueDiscussionNoteID int64  // note ID within issue discussion
-	pipelineScheduleID    int    // pipeline schedule ID for schedule lifecycle tests
-	badgeID               int64  // project badge ID for badge lifecycle tests
-	accessTokenID         int64  // project access token ID for token lifecycle tests
-	awardEmojiID          int64  // award emoji ID for emoji lifecycle tests
-	pipelineID            int64  // pipeline ID for pipeline lifecycle tests (Docker mode)
-	jobID                 int64  // job ID for job lifecycle tests (Docker mode)
-}
-
-// state is the shared [testState] instance populated by [TestMain] and
-// used by all sequential test steps across both workflow files.
-var state testState
-
 // TestMain initializes the E2E test environment by loading configuration,
-// creating a GitLab client, verifying connectivity, and starting two
-// in-process MCP server/client pairs: one for individual tools and one
-// for meta-tools. It populates the global [state] and tears down servers
-// after all tests complete.
+// creating a GitLab client, verifying connectivity, and starting four
+// in-process MCP server/client pairs: individual tools, meta-tools,
+// sampling-enabled, and elicitation-enabled. It populates the global
+// [sess] struct and tears down servers after all tests complete.
 //
 // In self-hosted mode, it snapshots all pre-existing groups and projects
 // before running tests, and verifies they remain unchanged after tests
@@ -153,6 +110,8 @@ func TestMain(m *testing.M) {
 	if _, err = glClient.Ping(ctx); err != nil {
 		log.Fatalf("e2e: gitlab ping failed: %v", err)
 	}
+
+	disableRateLimiting(glClient)
 
 	// Create MCP server with all individual tools registered.
 	server := mcp.NewServer(&mcp.Implementation{
@@ -268,16 +227,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("e2e: connect elicit MCP client: %v", err)
 	}
 
-	state = testState{
-		glClient:        glClient,
-		enterprise:      enterprise,
-		session:         session,
-		metaSession:     metaSession,
-		samplingSession: samplingSession,
-		elicitSession:   elicitSession,
-	}
-
-	// Populate the new read-only sessions struct for domain test files.
 	sess = sessions{
 		individual:  session,
 		meta:        metaSession,
@@ -293,7 +242,6 @@ func TestMain(m *testing.M) {
 		if snapErr != nil {
 			log.Fatalf("e2e: snapshot pre-existing state: %v", snapErr)
 		}
-		state.snapshot = snap
 		sess.snapshot = snap
 		log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
 	}
@@ -304,8 +252,8 @@ func TestMain(m *testing.M) {
 	cleanupOrphanedProjects(glClient)
 
 	// Verify snapshot integrity in self-hosted mode.
-	if !isDockerMode() && state.snapshot != nil {
-		if intErr := verifySnapshotIntegrity(glClient, state.snapshot); intErr != nil {
+	if !isDockerMode() && sess.snapshot != nil {
+		if intErr := verifySnapshotIntegrity(glClient, sess.snapshot); intErr != nil {
 			log.Printf("e2e: SNAPSHOT INTEGRITY FAILURE: %v", intErr)
 			if code == 0 {
 				code = 1
@@ -400,122 +348,6 @@ func elicitTextValue(fieldName string) string {
 // MCP call helpers
 // ---------------------------------------------------------------------------.
 
-// callSamplingTool invokes an MCP tool via the sampling-enabled session.
-func callSamplingTool[O any](ctx context.Context, name string, input any) (O, error) {
-	var zero O
-	result, err := state.samplingSession.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
-	if err != nil {
-		return zero, fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return zero, extractToolError(name, result)
-	}
-	if result.StructuredContent != nil {
-		var data []byte
-		data, err = json.Marshal(result.StructuredContent)
-		if err != nil {
-			return zero, fmt.Errorf("unmarshal structured content for %s: %w", name, err)
-		}
-		var out O
-		if umErr := json.Unmarshal(data, &out); umErr != nil {
-			return zero, fmt.Errorf("decode structured content for %s: %w", name, umErr)
-		}
-		return out, nil
-	}
-	return zero, fmt.Errorf("no structured content in %s response", name)
-}
-
-// callElicitTool invokes an MCP tool via the elicitation-enabled session.
-func callElicitTool[O any](ctx context.Context, name string, input any) (O, error) {
-	var zero O
-	result, err := state.elicitSession.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
-	if err != nil {
-		return zero, fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return zero, extractToolError(name, result)
-	}
-	if result.StructuredContent != nil {
-		var data []byte
-		data, err = json.Marshal(result.StructuredContent)
-		if err != nil {
-			return zero, fmt.Errorf("unmarshal structured content for %s: %w", name, err)
-		}
-		var out O
-		if umErr := json.Unmarshal(data, &out); umErr != nil {
-			return zero, fmt.Errorf("decode structured content for %s: %w", name, umErr)
-		}
-		return out, nil
-	}
-	return zero, fmt.Errorf("no structured content in %s response", name)
-}
-
-// callTool invokes an MCP tool via the client session and unmarshals the
-// structured result into the output type O.
-func callTool[O any](ctx context.Context, name string, input any) (O, error) {
-	var zero O
-	result, err := state.session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
-	if err != nil {
-		return zero, fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return zero, extractToolError(name, result)
-	}
-
-	// Prefer structured content (typed ToolHandlerFor output).
-	if result.StructuredContent != nil {
-		var data []byte
-		data, err = json.Marshal(result.StructuredContent)
-		if err != nil {
-			return zero, fmt.Errorf("marshal structured content: %w", err)
-		}
-		var out O
-		err = json.Unmarshal(data, &out)
-		if err != nil {
-			return zero, fmt.Errorf("unmarshal %s result to %T: %w", name, out, err)
-		}
-		return out, nil
-	}
-
-	// Fallback: extract JSON from the first text content block.
-	if len(result.Content) > 0 {
-		if tc, ok := result.Content[0].(*mcp.TextContent); ok {
-			var out O
-			err = json.Unmarshal([]byte(tc.Text), &out)
-			if err != nil {
-				return zero, fmt.Errorf("unmarshal %s text to %T: %w", name, out, err)
-			}
-			return out, nil
-		}
-	}
-
-	return zero, fmt.Errorf("tool %s: no extractable output", name)
-}
-
-// callToolVoid invokes an MCP tool that returns no structured output (e.g. delete, unapprove).
-func callToolVoid(ctx context.Context, name string, input any) error {
-	result, err := state.session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
-	if err != nil {
-		return fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return extractToolError(name, result)
-	}
-	return nil
-}
-
 // extractToolError reads the first text content block from a failed
 // [mcp.CallToolResult] and returns it as a formatted error.
 func extractToolError(name string, result *mcp.CallToolResult) error {
@@ -525,26 +357,6 @@ func extractToolError(name string, result *mcp.CallToolResult) error {
 		}
 	}
 	return fmt.Errorf("tool %s returned error", name)
-}
-
-// ---------------------------------------------------------------------------
-// Meta-tool call helpers (use metaSession)
-// ---------------------------------------------------------------------------.
-
-// callMeta invokes a meta-tool via the meta session and unmarshals the output.
-func callMeta[O any](ctx context.Context, metaTool, action string, params map[string]any) (O, error) {
-	return callToolOn[O](ctx, state.metaSession, metaTool, map[string]any{
-		"action": action,
-		"params": params,
-	})
-}
-
-// callMetaVoid invokes a meta-tool action that returns no structured output.
-func callMetaVoid(ctx context.Context, metaTool, action string, params map[string]any) error {
-	return callToolVoidOn(ctx, state.metaSession, metaTool, map[string]any{
-		"action": action,
-		"params": params,
-	})
 }
 
 // callToolOn is a session-parameterized version of callTool.
@@ -630,6 +442,30 @@ func requireTrue(t *testing.T, condition bool, format string, args ...any) {
 // ---------------------------------------------------------------------------
 // Snapshot guardrails (self-hosted mode only)
 // ---------------------------------------------------------------------------.
+
+// disableRateLimiting turns off all GitLab rate limiting via the application
+// settings API. This prevents 429 errors when many parallel E2E tests hit
+// the API simultaneously. Requires admin permissions; failures are non-fatal.
+func disableRateLimiting(client *gitlabclient.Client) {
+	falseVal := false
+	_, _, err := client.GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{
+		ThrottleAuthenticatedAPIEnabled:            &falseVal,
+		ThrottleAuthenticatedWebEnabled:            &falseVal,
+		ThrottleUnauthenticatedAPIEnabled:          &falseVal,
+		ThrottleUnauthenticatedWebEnabled:          &falseVal,
+		ThrottleAuthenticatedPackagesAPIEnabled:    &falseVal,
+		ThrottleAuthenticatedGitLFSEnabled:         &falseVal,
+		ThrottleAuthenticatedFilesAPIEnabled:       &falseVal,
+		ThrottleUnauthenticatedFilesAPIEnabled:     &falseVal,
+		ThrottleAuthenticatedDeprecatedAPIEnabled:  &falseVal,
+		ThrottleUnauthenticatedDeprecatedAPIEnabled: &falseVal,
+	})
+	if err != nil {
+		log.Printf("e2e: warning: could not disable rate limiting (requires admin): %v", err)
+	} else {
+		log.Println("e2e: rate limiting disabled for E2E test run")
+	}
+}
 
 // snapshotState queries GitLab for all groups and projects visible to the
 // authenticated user and returns a resourceSnapshot. Used in self-hosted mode
@@ -751,7 +587,7 @@ func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout ti
 	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		p, _, err := state.glClient.GL().Pipelines.GetPipeline(projectID, pipelineID)
+		p, _, err := sess.glClient.GL().Pipelines.GetPipeline(projectID, pipelineID)
 		if err != nil {
 			t.Logf("waitForPipeline: error polling pipeline %d: %v", pipelineID, err)
 			time.Sleep(5 * time.Second)
@@ -768,3 +604,30 @@ func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout ti
 	t.Fatalf("waitForPipeline: pipeline %d did not reach terminal status within %s", pipelineID, timeout)
 	return ""
 }
+
+// hasRunner returns true if a CI runner is available for pipeline tests.
+// In Docker mode it always returns true; in self-hosted mode it checks the
+// Runners API for registered instance runners.
+func hasRunner() bool {
+	if isDockerMode() {
+		return true
+	}
+	runnerType := "instance_type"
+	runners, _, err := sess.glClient.GL().Runners.ListRunners(&gl.ListRunnersOptions{
+		Type: &runnerType,
+	})
+	return err == nil && len(runners) > 0
+}
+
+// requirePremiumFeature fails the test if the error indicates the feature
+// requires a premium/ultimate license or admin permissions. Enterprise tests
+// are gated at skip level so they only run when the GitLab instance supports them.
+func requirePremiumFeature(t *testing.T, err error, feature string) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%s failed: %v", feature, err)
+	}
+}
+
+// int64Ptr returns a pointer to v. Used for optional int64 fields in tool inputs.
+func int64Ptr(v int64) *int64 { return &v }

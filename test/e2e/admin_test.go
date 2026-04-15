@@ -27,12 +27,13 @@ func TestMeta_Admin(t *testing.T) {
 	})
 
 	t.Run("Meta/Admin/SettingsGet", func(t *testing.T) {
-		_, err := callToolOn[settings.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+		out, err := callToolOn[settings.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "settings_get",
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "meta admin settings get")
-		t.Log("Admin settings get OK")
+		requireTrue(t, len(out.Settings) > 0, "expected non-empty settings map, got %d keys", len(out.Settings))
+		t.Logf("Admin settings: %d keys", len(out.Settings))
 	})
 }
 
@@ -54,16 +55,13 @@ func TestMeta_JobTokens(t *testing.T) {
 	})
 
 	t.Run("Meta/Job/TokenScopeGet", func(t *testing.T) {
-		_, err := callToolOn[jobtokenscope.AccessSettingsOutput](ctx, sess.meta, "gitlab_job", map[string]any{
+		out, err := callToolOn[jobtokenscope.AccessSettingsOutput](ctx, sess.meta, "gitlab_job", map[string]any{
 			"action": "token_scope_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
-		if err != nil {
-			t.Logf("Job token scope get returned error (non-fatal): %v", err)
-			return
-		}
-		t.Log("Retrieved job token scope (meta)")
+		requireNoError(t, err, "meta job token_scope_get")
+		t.Logf("Job token scope: inbound_enabled=%v", out.InboundEnabled)
 	})
 }

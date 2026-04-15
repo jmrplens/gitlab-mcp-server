@@ -20,16 +20,14 @@ func TestMeta_FeatureFlags(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/FeatureFlag/List", func(t *testing.T) {
-		_, err := callToolOn[featureflags.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+		out, err := callToolOn[featureflags.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
 			"action": "feature_flag_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
-		if err != nil {
-			t.Fatalf("feature flags failed: %v", err)
-		}
-		t.Log("Feature flag list OK")
+		requireNoError(t, err, "feature flag list")
+		t.Logf("Feature flag list: %d flags", len(out.FeatureFlags))
 	})
 }
 
@@ -73,14 +71,14 @@ func TestMeta_Deployments(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/Deployment/List", func(t *testing.T) {
-		_, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_deployment", map[string]any{
+		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_deployment", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
 		requireNoError(t, err, "deployment list")
-		t.Log("Deployment list OK (may be empty without CI pipeline)")
+		t.Logf("Deployments: %d (may be empty without CI pipeline)", len(out.Deployments))
 	})
 }
 
@@ -105,5 +103,32 @@ func TestMeta_UserKeys(t *testing.T) {
 		})
 		requireNoError(t, err, "user gpg_keys")
 		t.Log("GPG keys OK")
+	})
+}
+
+// TestIndividual_BranchRules exercises the gitlab_list_branch_rules individual tool (GraphQL).
+func TestIndividual_BranchRules(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	proj := createProject(ctx, t, sess.individual)
+
+	t.Run("ListBranchRules", func(t *testing.T) {
+		out, err := callToolOn[branchrules.ListOutput](ctx, sess.individual, "gitlab_list_branch_rules", branchrules.ListInput{
+			ProjectPath: proj.Path,
+		})
+		requireNoError(t, err, "list branch rules")
+		t.Logf("Project %s has %d branch rule(s)", proj.Path, len(out.Rules))
+	})
+}
+
+// TestIndividual_CICatalog exercises CI/CD catalog individual tools (GraphQL).
+func TestIndividual_CICatalog(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	t.Run("ListCatalogResources", func(t *testing.T) {
+		out, err := callToolOn[cicatalog.ListOutput](ctx, sess.individual, "gitlab_list_catalog_resources", cicatalog.ListInput{})
+		requireNoError(t, err, "list catalog resources")
+		t.Logf("Found %d CI/CD catalog resource(s)", len(out.Resources))
 	})
 }

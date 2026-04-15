@@ -28,14 +28,25 @@ if [ -z "$ROOT_TOKEN" ]; then
 fi
 echo "    Root OAuth token obtained"
 
-# 1b. Disable default branch protection so E2E tests can push to main
-# and reduce deletion_adjourned_period to 1 day (minimum) so permanent deletes work immediately.
+# 1b. Disable default branch protection so E2E tests can push to main,
+# reduce deletion_adjourned_period to 1 day (minimum) so permanent deletes work immediately,
+# and disable all rate limiting to avoid 429 errors during parallel E2E tests.
 curl -sf "${GITLAB_URL}/api/v4/application/settings" \
     -X PUT \
     -H "Authorization: Bearer ${ROOT_TOKEN}" \
     -d "default_branch_protection=0" \
-    -d "deletion_adjourned_period=1" > /dev/null 2>&1
-echo "    Default branch protection disabled, deletion_adjourned_period=1"
+    -d "deletion_adjourned_period=1" \
+    -d "throttle_authenticated_api_enabled=false" \
+    -d "throttle_authenticated_web_enabled=false" \
+    -d "throttle_unauthenticated_api_enabled=false" \
+    -d "throttle_unauthenticated_web_enabled=false" \
+    -d "throttle_authenticated_packages_api_enabled=false" \
+    -d "throttle_authenticated_git_lfs_enabled=false" \
+    -d "throttle_authenticated_files_api_enabled=false" \
+    -d "throttle_unauthenticated_files_api_enabled=false" \
+    -d "throttle_authenticated_deprecated_api_enabled=false" \
+    -d "throttle_unauthenticated_deprecated_api_enabled=false" > /dev/null 2>&1
+echo "    Default branch protection disabled, deletion_adjourned_period=1, rate limiting disabled"
 
 # 2. Create test user
 echo "  [2/4] Creating test user '${TEST_USER}'..."

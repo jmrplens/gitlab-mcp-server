@@ -32,13 +32,15 @@ func TestIndividual_CILint(t *testing.T) {
 	})
 
 	t.Run("LintProject", func(t *testing.T) {
-		// Project may not have a .gitlab-ci.yml, which is fine — we test the call works.
-		_, err := callToolOn[cilint.Output](ctx, sess.individual, "gitlab_ci_lint_project", cilint.ProjectInput{
+		// Project may not have a .gitlab-ci.yml, which is expected.
+		out, err := callToolOn[cilint.Output](ctx, sess.individual, "gitlab_ci_lint_project", cilint.ProjectInput{
 			ProjectID: proj.pidOf(),
 		})
-		// Not necessarily valid — no CI file — but the call should not fail.
-		_ = err
-		t.Log("CI lint project call completed")
+		if err != nil {
+			t.Logf("CI lint project returned error (expected without CI file): %v", err)
+			return
+		}
+		t.Logf("CI lint project: valid=%v errors=%v", out.Valid, out.Errors)
 	})
 }
 
@@ -66,13 +68,16 @@ func TestMeta_CILint(t *testing.T) {
 	})
 
 	t.Run("LintProject", func(t *testing.T) {
-		_, err := callToolOn[cilint.Output](ctx, sess.meta, "gitlab_template", map[string]any{
+		out, err := callToolOn[cilint.Output](ctx, sess.meta, "gitlab_template", map[string]any{
 			"action": "lint_project",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
-		_ = err
-		t.Log("CI lint project (meta) call completed")
+		if err != nil {
+			t.Logf("CI lint project (meta) returned error (expected without CI file): %v", err)
+			return
+		}
+		t.Logf("CI lint project (meta): valid=%v errors=%v", out.Valid, out.Errors)
 	})
 }
