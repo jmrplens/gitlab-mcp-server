@@ -4,6 +4,8 @@ package namespaces
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -107,10 +109,30 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 }
 
 // Get retrieves a single namespace by ID or path.
+// Uses a raw HTTP request to work around upstream client-go issue where
+// GetNamespace expects a single JSON object but some GitLab versions
+// return an array for path-based lookups.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	ns, _, err := client.GL().Namespaces.GetNamespace(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("namespace_get", err)
+		if !strings.Contains(err.Error(), "cannot unmarshal array") {
+			return Output{}, toolutil.WrapErrWithMessage("namespace_get", err)
+		}
+		// Fallback: GitLab returned an array instead of a single object.
+		req, reqErr := client.GL().NewRequest("GET", fmt.Sprintf("namespaces/%s", gl.PathEscape(input.ID)), nil, nil)
+		if reqErr != nil {
+			return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
+		}
+		req = req.WithContext(ctx)
+
+		var nsList []*gl.Namespace
+		if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
+			return Output{}, toolutil.WrapErrWithMessage("namespace_get", doErr)
+		}
+		if len(nsList) == 0 {
+			return Output{}, toolutil.WrapErrWithMessage("namespace_get", fmt.Errorf("namespace %q not found", input.ID))
+		}
+		return toOutput(nsList[0]), nil
 	}
 	return toOutput(ns), nil
 }

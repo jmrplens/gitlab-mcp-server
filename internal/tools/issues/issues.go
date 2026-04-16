@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -766,6 +767,11 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	}
 	issue, _, err := client.GL().Issues.SubscribeToIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		// GitLab returns 304 Not Modified with empty body when already subscribed,
+		// which causes EOF during JSON decode. Fall back to Get.
+		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
+			return Get(ctx, client, GetInput{ProjectID: input.ProjectID, IssueIID: input.IssueIID})
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueSubscribe", err)
 	}
 	return ToOutput(issue), nil
@@ -790,6 +796,9 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 	}
 	issue, _, err := client.GL().Issues.UnsubscribeFromIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
+			return Get(ctx, client, GetInput{ProjectID: input.ProjectID, IssueIID: input.IssueIID})
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUnsubscribe", err)
 	}
 	return ToOutput(issue), nil

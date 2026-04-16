@@ -20,6 +20,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	registerCRUDTools(server, client)
 	registerSSHKeyTools(server, client)
 	registerMiscTools(server, client)
+	registerCurrentUserPATTools(server, client)
+}
+
+// RegisterEnterpriseTools registers enterprise-only user tools (service accounts).
+func RegisterEnterpriseTools(server *mcp.Server, client *gitlabclient.Client) {
 	registerServiceAccountTools(server, client)
 }
 

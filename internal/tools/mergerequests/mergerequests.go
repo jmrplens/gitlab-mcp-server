@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -1300,6 +1301,11 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input GetInput)
 	}
 	mr, _, err := client.GL().MergeRequests.SubscribeToMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
+		// GitLab returns 304 Not Modified with empty body when already subscribed,
+		// which causes EOF during JSON decode. Fall back to Get.
+		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
+			return Get(ctx, client, input)
+		}
 		return Output{}, toolutil.WrapErrWithMessage("mrSubscribe", err)
 	}
 	return ToOutput(mr), nil
@@ -1319,6 +1325,9 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input GetInpu
 	}
 	mr, _, err := client.GL().MergeRequests.UnsubscribeFromMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
+		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
+			return Get(ctx, client, input)
+		}
 		return Output{}, toolutil.WrapErrWithMessage("mrUnsubscribe", err)
 	}
 	return ToOutput(mr), nil

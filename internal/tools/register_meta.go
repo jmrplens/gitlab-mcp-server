@@ -192,7 +192,7 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	registerIssueMeta(server, client, enterprise)
 	registerPipelineMeta(server, client)
 	registerJobMeta(server, client)
-	registerUserMeta(server, client)
+	registerUserMeta(server, client, enterprise)
 	registerWikiMeta(server, client)
 	registerEnvironmentMeta(server, client)
 	registerDeploymentMeta(server, client)
@@ -1524,7 +1524,7 @@ Actions:
 
 // registerUserMeta registers the gitlab_user meta-tool with user,
 // SSH key, email, event, notification, key, GPG key, impersonation token, and task-list management actions.
-func registerUserMeta(server *mcp.Server, client *gitlabclient.Client) {
+func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
 	routes := map[string]actionFunc{
 		"current":                     wrapAction(client, users.Current),
 		"list":                        wrapAction(client, users.List),
@@ -1604,10 +1604,14 @@ func registerUserMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create_impersonation_token":   wrapAction(client, impersonationtokens.Create),
 		"revoke_impersonation_token":   wrapAction(client, impersonationtokens.Revoke),
 		"create_personal_access_token": wrapAction(client, impersonationtokens.CreatePAT),
-		// Service accounts
-		"create_service_account":  wrapAction(client, users.CreateServiceAccount),
-		"list_service_accounts":   wrapAction(client, users.ListServiceAccounts),
+		// Current user PAT (CE-compatible)
 		"create_current_user_pat": wrapAction(client, users.CreateCurrentUserPAT),
+	}
+
+	// Service accounts are enterprise-only (require Premium/Ultimate)
+	if enterprise {
+		routes["create_service_account"] = wrapAction(client, users.CreateServiceAccount)
+		routes["list_service_accounts"] = wrapAction(client, users.ListServiceAccounts)
 	}
 
 	addMetaTool(server, "gitlab_user", `GitLab user, SSH keys, GPG keys, emails, impersonation tokens, service accounts, to-do, namespace, and notification operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
@@ -1666,8 +1670,8 @@ Actions:
 - create_impersonation_token: Create impersonation token (admin). Params: user_id (required, int), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
 - revoke_impersonation_token: Revoke impersonation token (admin). Params: user_id (required, int), token_id (required, int)
 - create_personal_access_token: Create PAT for a user (admin). Params: user_id (required, int), name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
-- create_service_account: Create a service account. Params: name, username, email
-- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page
+- create_service_account: (Enterprise) Create a service account. Params: name, username, email
+- list_service_accounts: (Enterprise) List service accounts. Params: order_by, sort, page, per_page
 - create_current_user_pat: Create PAT for current user. Params: name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
 - todo_list: List to-do items with optional filters. Params: action (assigned/mentioned/build_failed/marked/approval_required/directly_addressed), author_id (int), project_id (int), group_id (int), state (pending/done), type (Issue/MergeRequest/DesignManagement::Design/AlertManagement::Alert), page, per_page
 - todo_mark_done: Mark a single to-do item as done. Params: id (required, int)

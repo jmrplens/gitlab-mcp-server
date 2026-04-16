@@ -161,24 +161,48 @@ func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDef
 }
 
 // Set creates or updates a feature flag.
+// Uses a raw HTTP request to work around upstream client-go issue where
+// SetFeatureFlagOptions fields lack omitempty, causing GitLab to reject
+// the request with "mutually exclusive" errors for empty string fields.
 func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetOutput, error) {
-	opts := &gl.SetFeatureFlagOptions{
-		Value:        input.Value,
-		Key:          input.Key,
-		FeatureGroup: input.FeatureGroup,
-		User:         input.User,
-		Group:        input.Group,
-		Namespace:    input.Namespace,
-		Project:      input.Project,
-		Repository:   input.Repository,
-		Force:        input.Force,
+	body := map[string]any{"value": input.Value}
+	if input.Force {
+		body["force"] = true
+	}
+	if input.Key != "" {
+		body["key"] = input.Key
+	}
+	if input.FeatureGroup != "" {
+		body["feature_group"] = input.FeatureGroup
+	}
+	if input.User != "" {
+		body["user"] = input.User
+	}
+	if input.Group != "" {
+		body["group"] = input.Group
+	}
+	if input.Namespace != "" {
+		body["namespace"] = input.Namespace
+	}
+	if input.Project != "" {
+		body["project"] = input.Project
+	}
+	if input.Repository != "" {
+		body["repository"] = input.Repository
 	}
 
-	feature, _, err := client.GL().Features.SetFeatureFlag(input.Name, opts, gl.WithContext(ctx))
+	path := fmt.Sprintf("features/%s", gl.PathEscape(input.Name))
+	req, err := client.GL().NewRequest("POST", path, body, nil)
 	if err != nil {
 		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
 	}
-	return SetOutput{Feature: toFeatureItem(feature)}, nil
+	req = req.WithContext(ctx)
+
+	var feature gl.Feature
+	if _, err := client.GL().Do(req, &feature); err != nil {
+		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
+	}
+	return SetOutput{Feature: toFeatureItem(&feature)}, nil
 }
 
 // Delete removes a feature flag.

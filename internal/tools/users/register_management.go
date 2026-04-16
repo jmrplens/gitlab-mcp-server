@@ -328,7 +328,9 @@ func registerServiceAccountTools(server *mcp.Server, client *gitlabclient.Client
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_service_accounts", start, err)
 		return toolutil.ToolResultWithMarkdown(FormatServiceAccountListMarkdownString(out)), out, err
 	})
+}
 
+func registerCurrentUserPATTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_current_user_pat",
 		Title:       toolutil.TitleFromName("gitlab_create_current_user_pat"),

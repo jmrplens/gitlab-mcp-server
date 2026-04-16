@@ -344,5 +344,6 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 		groupldap.RegisterTools(server, client)
 		groupsaml.RegisterTools(server, client)
 		groupserviceaccounts.RegisterTools(server, client)
+		users.RegisterEnterpriseTools(server, client)
 	}
 }
