@@ -87,12 +87,12 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		requireNoError(t, err, "create group for list_group")
 		defer func() {
 			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(grp.ID, 10)},
 			})
 		}()
 		out, err := callToolOn[issues.ListGroupOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "list_group",
-			"params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+			"params": map[string]any{"group_id": strconv.FormatInt(grp.ID, 10)},
 		})
 		requireNoError(t, err, "list_group")
 		t.Logf("Listed %d group issues", len(out.Issues))
@@ -296,12 +296,12 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		requireNoError(t, err, "create group for statistics_get_group")
 		defer func() {
 			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(grp.ID, 10)},
 			})
 		}()
 		_, err = callToolOn[issuestatistics.StatisticsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "statistics_get_group",
-			"params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+			"params": map[string]any{"group_id": strconv.FormatInt(grp.ID, 10)},
 		})
 		requireNoError(t, err, "statistics_get_group")
 		t.Log("Got group issue statistics")

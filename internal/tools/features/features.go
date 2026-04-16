@@ -199,7 +199,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 	req = req.WithContext(ctx)
 
 	var feature gl.Feature
-	if _, err := client.GL().Do(req, &feature); err != nil {
+	if _, err = client.GL().Do(req, &feature); err != nil {
 		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
 	}
 	return SetOutput{Feature: toFeatureItem(&feature)}, nil

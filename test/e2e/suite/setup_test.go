@@ -664,4 +664,6 @@ func requirePremiumFeature(t *testing.T, err error, feature string) {
 }
 
 // int64Ptr returns a pointer to v. Used for optional int64 fields in tool inputs.
-func int64Ptr(v int64) *int64 { return &v }
+//
+//go:fix inline
+func int64Ptr(v int64) *int64 { return new(v) }

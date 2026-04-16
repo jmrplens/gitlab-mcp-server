@@ -24,13 +24,13 @@ func TestSampling(t *testing.T) {
 
 	issue := createIssue(ctx, t, sess.sampling, proj, "Sampling test issue")
 
-	ms, err := callToolOn[milestones.Output](ctx, sess.sampling, "gitlab_milestone_create", milestones.CreateInput{
+	ms, msErr := callToolOn[milestones.Output](ctx, sess.sampling, "gitlab_milestone_create", milestones.CreateInput{
 		ProjectID:   proj.pidOf(),
 		Title:       "Sampling Milestone v1",
 		Description: "Milestone for sampling tests",
 	})
-	if err != nil {
-		t.Fatalf("create milestone: %v", err)
+	if msErr != nil {
+		t.Fatalf("create milestone: %v", msErr)
 	}
 
 	branch := createBranch(ctx, t, sess.sampling, proj, "sampling-feature")

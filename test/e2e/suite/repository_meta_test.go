@@ -167,11 +167,11 @@ func TestMeta_CommitExtended(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "cmt.txt", "commit content", "commit for extended tests")
 
 	// Get the latest commit SHA
-	listOut, err := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+	listOut, setupErr := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_list",
 		"params": map[string]any{"project_id": proj.pidStr(), "ref_name": "main", "per_page": 1},
 	})
-	requireNoError(t, err, "commit_list for SHA")
+	requireNoError(t, setupErr, "commit_list for SHA")
 	requireTrue(t, len(listOut.Commits) > 0, "expected at least 1 commit")
 	sha := listOut.Commits[0].ID
 
@@ -243,7 +243,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 	})
 
 	// Cherry-pick: create target branch first, then add a new commit on main that isn't on the target
-	_, err = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
+	_, setupErr = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_create",
 		"params": map[string]any{
 			"project_id":     proj.pidStr(),
@@ -255,17 +255,17 @@ func TestMeta_CommitExtended(t *testing.T) {
 			},
 		},
 	})
-	requireNoError(t, err, "create branch for cherry-pick")
+	requireNoError(t, setupErr, "create branch for cherry-pick")
 
 	// Add a new commit on main (not on cherry-pick-target)
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "cherry-main.txt", "only on main", "commit to cherry-pick")
 
 	// Get the new commit SHA from main
-	cpListOut, err := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+	cpListOut, setupErr := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_list",
 		"params": map[string]any{"project_id": proj.pidStr(), "ref_name": "main", "per_page": 1},
 	})
-	requireNoError(t, err, "commit_list for cherry-pick SHA")
+	requireNoError(t, setupErr, "commit_list for cherry-pick SHA")
 	cpSHA := cpListOut.Commits[0].ID
 
 	t.Run("CommitCherryPick", func(t *testing.T) {
@@ -296,15 +296,15 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "disc.txt", "discussion content", "for commit discussions")
 
-	listOut, err := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+	listOut, listErr := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_list",
 		"params": map[string]any{"project_id": proj.pidStr(), "ref_name": "main", "per_page": 1},
 	})
-	requireNoError(t, err, "commit_list for discussions")
+	requireNoError(t, listErr, "commit_list for discussions")
 	sha := listOut.Commits[0].ID
 
 	t.Run("DiscussionCreate", func(t *testing.T) {
-		out, err := callToolOn[commitdiscussions.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
+		out, discErr := callToolOn[commitdiscussions.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 			"action": "commit_discussion_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -312,7 +312,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				"body":       "E2E commit discussion",
 			},
 		})
-		requireNoError(t, err, "commit_discussion_create")
+		requireNoError(t, discErr, "commit_discussion_create")
 		requireTrue(t, out.ID != "", "expected discussion ID")
 		discID := out.ID
 		t.Logf("Created commit discussion: %s", discID)
@@ -331,7 +331,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				"action": "commit_discussion_get",
 				"params": map[string]any{
 					"project_id":    proj.pidStr(),
-					"commit_sha": sha,
+					"commit_sha":    sha,
 					"discussion_id": discID,
 				},
 			})
@@ -340,16 +340,16 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 		})
 
 		t.Run("DiscussionAddNote", func(t *testing.T) {
-			nOut, err := callToolOn[commitdiscussions.NoteOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+			nOut, noteErr := callToolOn[commitdiscussions.NoteOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 				"action": "commit_discussion_add_note",
 				"params": map[string]any{
 					"project_id":    proj.pidStr(),
-					"commit_sha": sha,
+					"commit_sha":    sha,
 					"discussion_id": discID,
 					"body":          "E2E reply note",
 				},
 			})
-			requireNoError(t, err, "commit_discussion_add_note")
+			requireNoError(t, noteErr, "commit_discussion_add_note")
 			requireTrue(t, nOut.ID > 0, "expected note ID")
 			noteIDForUpdate := nOut.ID
 
@@ -358,7 +358,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 					"action": "commit_discussion_update_note",
 					"params": map[string]any{
 						"project_id":    proj.pidStr(),
-						"commit_sha": sha,
+						"commit_sha":    sha,
 						"discussion_id": discID,
 						"note_id":       noteIDForUpdate,
 						"body":          "E2E updated note",
@@ -372,7 +372,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 					"action": "commit_discussion_delete_note",
 					"params": map[string]any{
 						"project_id":    proj.pidStr(),
-						"commit_sha": sha,
+						"commit_sha":    sha,
 						"discussion_id": discID,
 						"note_id":       noteIDForUpdate,
 					},

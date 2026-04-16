@@ -401,9 +401,9 @@ func TestMeta_GroupDeep(t *testing.T) {
 		out, err := callToolOn[groupmilestones.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_update",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
+				"group_id":      groupIDStr,
 				"milestone_iid": milestoneID,
-				"description":  "Updated milestone",
+				"description":   "Updated milestone",
 			},
 		})
 		requireNoError(t, err, "milestone update")
@@ -415,7 +415,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		out, err := callToolOn[groupmilestones.IssuesOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_issues",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
+				"group_id":      groupIDStr,
 				"milestone_iid": milestoneID,
 			},
 		})
@@ -428,7 +428,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		out, err := callToolOn[groupmilestones.MergeRequestsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_merge_requests",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
+				"group_id":      groupIDStr,
 				"milestone_iid": milestoneID,
 			},
 		})
@@ -444,7 +444,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		_, err := callToolOn[groupmilestones.BurndownChartEventsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_burndown",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
+				"group_id":      groupIDStr,
 				"milestone_iid": milestoneID,
 			},
 		})

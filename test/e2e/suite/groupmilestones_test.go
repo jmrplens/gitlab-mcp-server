@@ -22,7 +22,7 @@ func TestMeta_GroupMilestones(t *testing.T) {
 
 	// Create a dedicated group for this test.
 	groupPath := fmt.Sprintf("e2e-grpms-%d", time.Now().UnixMilli())
-	grp, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	grp, grpErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"name":       groupPath,
@@ -30,7 +30,7 @@ func TestMeta_GroupMilestones(t *testing.T) {
 			"visibility": "public",
 		},
 	})
-	requireNoError(t, err, "create group for milestones")
+	requireNoError(t, grpErr, "create group for milestones")
 	requireTrue(t, grp.ID > 0, "group ID should be positive")
 	groupID := grp.ID
 	t.Logf("Created group %d (%s) for milestone tests", groupID, grp.FullPath)

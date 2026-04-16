@@ -236,12 +236,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 		out, err := callToolOn[projects.HookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_add",
 			"params": map[string]any{
-				"project_id":   proj.pidStr(),
-				"url":          "https://example.com/hook",
-				"push_events":  true,
-				"token":        "test-secret-token",
-				"name":         "E2E Test Hook",
-				"description":  "Hook created by E2E test",
+				"project_id":  proj.pidStr(),
+				"url":         "https://example.com/hook",
+				"push_events": true,
+				"token":       "test-secret-token",
+				"name":        "E2E Test Hook",
+				"description": "Hook created by E2E test",
 			},
 		})
 		requireNoError(t, err, "meta project hook_add")
@@ -782,8 +782,8 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 		_, err := callToolOn[projects.ApprovalConfigOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "approval_config_change",
 			"params": map[string]any{
-				"project_id":                             proj.pidStr(),
-				"reset_approvals_on_push":                true,
+				"project_id":              proj.pidStr(),
+				"reset_approvals_on_push": true,
 				"disable_overriding_approvers_per_merge_request": false,
 			},
 		})

@@ -442,11 +442,11 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 	defer cancel()
 
 	// Get current user ID for custom attributes
-	usr, err := callToolOn[struct{ ID int64 }](ctx, sess.meta, "gitlab_user", map[string]any{
+	usr, usrErr := callToolOn[struct{ ID int64 }](ctx, sess.meta, "gitlab_user", map[string]any{
 		"action": "current",
 		"params": map[string]any{},
 	})
-	requireNoError(t, err, "get current user")
+	requireNoError(t, usrErr, "get current user")
 	attrKey := "e2e_test_attr"
 
 	t.Run("CustomAttrSet", func(t *testing.T) {

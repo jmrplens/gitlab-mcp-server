@@ -24,7 +24,7 @@ func TestMeta_WikiUploadAttachment(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	// Create a wiki page first (required for uploads)
-	_, err := callToolOn[wikis.Output](ctx, sess.meta, "gitlab_wiki", map[string]any{
+	_, pageErr := callToolOn[wikis.Output](ctx, sess.meta, "gitlab_wiki", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -32,7 +32,7 @@ func TestMeta_WikiUploadAttachment(t *testing.T) {
 			"content":    "Page for attachment test",
 		},
 	})
-	requireNoError(t, err, "create wiki page")
+	requireNoError(t, pageErr, "create wiki page")
 
 	t.Run("UploadAttachment", func(t *testing.T) {
 		content := base64.StdEncoding.EncodeToString([]byte("E2E test file content"))

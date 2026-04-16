@@ -28,13 +28,13 @@ func TestIndividual_Releases(t *testing.T) {
 	const tagName = "v1.0.0-releases-e2e"
 
 	// Create tag first (releases require a tag).
-	tagOut, err := callToolOn[tags.Output](ctx, sess.individual, "gitlab_tag_create", tags.CreateInput{
+	tagOut, tagErr := callToolOn[tags.Output](ctx, sess.individual, "gitlab_tag_create", tags.CreateInput{
 		ProjectID: proj.pidOf(),
 		TagName:   tagName,
 		Ref:       defaultBranch,
 		Message:   "Release E2E tag",
 	})
-	requireNoError(t, err, "create tag for release")
+	requireNoError(t, tagErr, "create tag for release")
 	t.Logf("Created tag %s (target=%s)", tagOut.Name, tagOut.Target)
 
 	var releaseLinkID int64
@@ -153,7 +153,7 @@ func TestMeta_Releases(t *testing.T) {
 	const tagName = "v1.0.0-releases-meta-e2e"
 
 	// Create tag first.
-	_, err := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
+	_, tagErr := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -162,7 +162,7 @@ func TestMeta_Releases(t *testing.T) {
 			"message":    "Meta release E2E tag",
 		},
 	})
-	requireNoError(t, err, "create tag for release (meta)")
+	requireNoError(t, tagErr, "create tag for release (meta)")
 
 	var releaseLinkID int64
 

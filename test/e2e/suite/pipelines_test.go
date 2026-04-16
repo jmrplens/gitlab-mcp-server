@@ -38,7 +38,7 @@ func TestPipelines(t *testing.T) {
 	commitFile(ctx, t, sess.individual, proj, "main", "init.txt", "bootstrap", "init commit")
 
 	// Commit a .gitlab-ci.yml to enable pipelines.
-	_, err := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
+	_, ciErr := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
 		ProjectID:     proj.pidOf(),
 		Branch:        "main",
 		CommitMessage: "ci: add .gitlab-ci.yml for pipeline tests",
@@ -48,8 +48,8 @@ func TestPipelines(t *testing.T) {
 			Content:  pipelineCIYAML,
 		}},
 	})
-	if err != nil {
-		t.Fatalf("commit CI config: %v", err)
+	if ciErr != nil {
+		t.Fatalf("commit CI config: %v", ciErr)
 	}
 
 	var pipelineID int64
@@ -167,7 +167,7 @@ func TestPipelines(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, projM, "main", "init.txt", "bootstrap", "init commit")
 
 	// Commit CI config via meta.
-	_, err = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
+	_, ciErr = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_create",
 		"params": map[string]any{
 			"project_id":     projM.pidStr(),
@@ -180,8 +180,8 @@ func TestPipelines(t *testing.T) {
 			}},
 		},
 	})
-	if err != nil {
-		t.Fatalf("meta commit CI config: %v", err)
+	if ciErr != nil {
+		t.Fatalf("meta commit CI config: %v", ciErr)
 	}
 
 	var mPipelineID int64

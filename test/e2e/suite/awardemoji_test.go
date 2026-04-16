@@ -27,7 +27,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 	t.Run("Create", func(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.individual, "gitlab_issue_emoji_create", awardemoji.CreateInput{
 			ProjectID: proj.pidOf(),
-			IID:       int64(issue.IID),
+			IID:       issue.IID,
 			Name:      "thumbsup",
 		})
 		requireNoError(t, err, "create award emoji")
@@ -39,7 +39,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		out, err := callToolOn[awardemoji.ListOutput](ctx, sess.individual, "gitlab_issue_emoji_list", awardemoji.ListInput{
 			ProjectID: proj.pidOf(),
-			IID:       int64(issue.IID),
+			IID:       issue.IID,
 		})
 		requireNoError(t, err, "list award emoji")
 		requireTrue(t, len(out.AwardEmoji) >= 1, "expected at least 1 emoji")
@@ -49,7 +49,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 		requireTrue(t, awardID > 0, "awardID not set")
 		out, err := callToolOn[awardemoji.Output](ctx, sess.individual, "gitlab_issue_emoji_get", awardemoji.GetInput{
 			ProjectID: proj.pidOf(),
-			IID:       int64(issue.IID),
+			IID:       issue.IID,
 			AwardID:   awardID,
 		})
 		requireNoError(t, err, "get award emoji")
@@ -60,7 +60,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 		requireTrue(t, awardID > 0, "awardID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_issue_emoji_delete", awardemoji.DeleteInput{
 			ProjectID: proj.pidOf(),
-			IID:       int64(issue.IID),
+			IID:       issue.IID,
 			AwardID:   awardID,
 		})
 		requireNoError(t, err, "delete award emoji")
@@ -86,7 +86,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        int64(issue.IID),
+				"iid":        issue.IID,
 				"name":       "thumbsup",
 			},
 		})
@@ -101,7 +101,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        int64(issue.IID),
+				"iid":        issue.IID,
 			},
 		})
 		requireNoError(t, err, "meta list emoji")
@@ -114,7 +114,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        int64(issue.IID),
+				"iid":        issue.IID,
 				"award_id":   awardID,
 			},
 		})
@@ -128,7 +128,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        int64(issue.IID),
+				"iid":        issue.IID,
 				"award_id":   awardID,
 			},
 		})

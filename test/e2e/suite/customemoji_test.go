@@ -17,11 +17,11 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary group for custom emoji listing.
-	groupOut, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name: "e2e-custom-emoji-ind",
 		Path: "e2e-custom-emoji-ind",
 	})
-	requireNoError(t, err, "create group for custom emoji")
+	requireNoError(t, groupErr, "create group for custom emoji")
 	t.Cleanup(func() {
 		_ = callToolVoidOn(ctx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
 			GroupID: toolutil.StringOrInt(groupOut.Path),
@@ -42,14 +42,14 @@ func TestMeta_CustomEmoji(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	groupOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"name": "e2e-custom-emoji-meta",
 			"path": "e2e-custom-emoji-meta",
 		},
 	})
-	requireNoError(t, err, "create group for custom emoji (meta)")
+	requireNoError(t, groupErr, "create group for custom emoji (meta)")
 	t.Cleanup(func() {
 		_ = callToolVoidOn(ctx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
 			GroupID: toolutil.StringOrInt(groupOut.Path),

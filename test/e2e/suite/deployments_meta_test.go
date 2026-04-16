@@ -35,7 +35,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "deploy-get.txt", "deploy content", "deploy commit")
 
 	// Create a deployment
-	createOut, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
+	createOut, createErr := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
@@ -46,7 +46,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 			"status":      "running",
 		},
 	})
-	requireNoError(t, err, "deployment create")
+	requireNoError(t, createErr, "deployment create")
 	requireTrue(t, createOut.ID > 0, "expected deployment ID > 0")
 	deployID := strconv.Itoa(createOut.ID)
 

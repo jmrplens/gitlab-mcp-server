@@ -29,14 +29,14 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 
 	// Create an environment to protect
 	envName := "staging-" + uniqueName("")
-	_, err := callToolOn[struct{ Name string }](ctx, sess.meta, "gitlab_environment", map[string]any{
+	_, envErr := callToolOn[struct{ Name string }](ctx, sess.meta, "gitlab_environment", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
 			"name":       envName,
 		},
 	})
-	requireNoError(t, err, "create environment")
+	requireNoError(t, envErr, "create environment")
 
 	t.Run("ProtectedList", func(t *testing.T) {
 		out, err := callToolOn[protectedenvs.ListOutput](ctx, sess.meta, "gitlab_environment", map[string]any{
@@ -175,14 +175,14 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 
 	// Create an environment for deployments
 	envName := "production-" + uniqueName("")
-	_, err := callToolOn[struct{ Name string }](ctx, sess.meta, "gitlab_environment", map[string]any{
+	_, envErr := callToolOn[struct{ Name string }](ctx, sess.meta, "gitlab_environment", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
 			"name":       envName,
 		},
 	})
-	requireNoError(t, err, "create environment for deployments")
+	requireNoError(t, envErr, "create environment for deployments")
 
 	t.Run("DeploymentList", func(t *testing.T) {
 		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_deployment", map[string]any{

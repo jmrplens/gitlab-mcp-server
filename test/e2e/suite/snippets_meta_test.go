@@ -189,7 +189,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	// Create a project snippet for discussion testing
-	snipOut, err := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
+	snipOut, snipErr := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 		"action": "project_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -199,7 +199,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			"visibility": "private",
 		},
 	})
-	requireNoError(t, err, "create snippet for discussions")
+	requireNoError(t, snipErr, "create snippet for discussions")
 	snippetID := snipOut.ID
 	snippetIDStr := strconv.FormatInt(snippetID, 10)
 	defer func() {
@@ -312,7 +312,7 @@ func TestMeta_SnippetNotes(t *testing.T) {
 
 	proj := createProjectMeta(ctx, t, sess.meta)
 
-	snipOut, err := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
+	snipOut, snipErr := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 		"action": "project_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -322,7 +322,7 @@ func TestMeta_SnippetNotes(t *testing.T) {
 			"visibility": "private",
 		},
 	})
-	requireNoError(t, err, "create snippet for notes")
+	requireNoError(t, snipErr, "create snippet for notes")
 	snippetID := snipOut.ID
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
@@ -415,7 +415,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 
 	proj := createProjectMeta(ctx, t, sess.meta)
 
-	snipOut, err := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
+	snipOut, snipErr := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 		"action": "project_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -425,7 +425,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"visibility": "private",
 		},
 	})
-	requireNoError(t, err, "create snippet for emoji")
+	requireNoError(t, snipErr, "create snippet for emoji")
 	// The emoji endpoints use IID, which for project snippets should match
 	snippetIID := snipOut.ID
 	defer func() {
@@ -492,7 +492,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 	})
 
 	// Create a note for emoji-on-note tests
-	noteOut, err := callToolOn[snippetnotes.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
+	noteOut, noteErr := callToolOn[snippetnotes.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 		"action": "note_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -500,7 +500,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"body":       "emoji note target",
 		},
 	})
-	requireNoError(t, err, "create note for emoji")
+	requireNoError(t, noteErr, "create note for emoji")
 	noteID := noteOut.ID
 
 	var noteEmojiID int64

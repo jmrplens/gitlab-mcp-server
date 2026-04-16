@@ -26,7 +26,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 
 	// Create a tag to protect
 	tagName := uniqueName("prot-tag")
-	_, err := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
+	_, tagErr := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -34,7 +34,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			"ref":        "main",
 		},
 	})
-	requireNoError(t, err, "create tag for protection")
+	requireNoError(t, tagErr, "create tag for protection")
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_tag", map[string]any{
 			"action": "delete",

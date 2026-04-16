@@ -26,7 +26,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "sched.txt", "content", "init for schedules")
 
 	// Create a schedule for testing
-	schedOut, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
+	schedOut, schedErr := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
@@ -35,7 +35,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 			"cron":        "0 1 * * *",
 		},
 	})
-	requireNoError(t, err, "create schedule")
+	requireNoError(t, schedErr, "create schedule")
 	schedID := strconv.Itoa(schedOut.ID)
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
@@ -56,7 +56,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 
 	// Create a variable, then edit it
 	varKey := "SCHED_VAR"
-	_, err = callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
+	_, schedErr = callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
 		"action": "create_variable",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
@@ -65,7 +65,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 			"value":       "original",
 		},
 	})
-	requireNoError(t, err, "create_variable for edit test")
+	requireNoError(t, schedErr, "create_variable for edit test")
 
 	t.Run("EditVariable", func(t *testing.T) {
 		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{

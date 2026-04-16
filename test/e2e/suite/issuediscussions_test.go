@@ -30,7 +30,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 	t.Run("Create", func(t *testing.T) {
 		out, err := callToolOn[issuediscussions.Output](ctx, sess.individual, "gitlab_create_issue_discussion", issuediscussions.CreateInput{
 			ProjectID: proj.pidOf(),
-			IssueIID:  int64(issue.IID),
+			IssueIID:  issue.IID,
 			Body:      "E2E discussion body",
 		})
 		requireNoError(t, err, "create issue discussion")
@@ -44,7 +44,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		out, err := callToolOn[issuediscussions.ListOutput](ctx, sess.individual, "gitlab_list_issue_discussions", issuediscussions.ListInput{
 			ProjectID: proj.pidOf(),
-			IssueIID:  int64(issue.IID),
+			IssueIID:  issue.IID,
 		})
 		requireNoError(t, err, "list issue discussions")
 		requireTrue(t, len(out.Discussions) >= 1, "expected at least 1 discussion")
@@ -54,7 +54,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 		requireTrue(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.Output](ctx, sess.individual, "gitlab_get_issue_discussion", issuediscussions.GetInput{
 			ProjectID:    proj.pidOf(),
-			IssueIID:     int64(issue.IID),
+			IssueIID:     issue.IID,
 			DiscussionID: discussionID,
 		})
 		requireNoError(t, err, "get issue discussion")
@@ -65,7 +65,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 		requireTrue(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.individual, "gitlab_add_issue_discussion_note", issuediscussions.AddNoteInput{
 			ProjectID:    proj.pidOf(),
-			IssueIID:     int64(issue.IID),
+			IssueIID:     issue.IID,
 			DiscussionID: discussionID,
 			Body:         "E2E reply note",
 		})
@@ -78,7 +78,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 		requireTrue(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.individual, "gitlab_update_issue_discussion_note", issuediscussions.UpdateNoteInput{
 			ProjectID:    proj.pidOf(),
-			IssueIID:     int64(issue.IID),
+			IssueIID:     issue.IID,
 			DiscussionID: discussionID,
 			NoteID:       noteID,
 			Body:         "E2E updated note body",
@@ -91,7 +91,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 		requireTrue(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_issue_discussion_note", issuediscussions.DeleteNoteInput{
 			ProjectID:    proj.pidOf(),
-			IssueIID:     int64(issue.IID),
+			IssueIID:     issue.IID,
 			DiscussionID: discussionID,
 			NoteID:       noteID,
 		})
@@ -121,7 +121,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":  int64(issue.IID),
+				"issue_iid":  issue.IID,
 				"body":       "E2E meta discussion body",
 			},
 		})
@@ -138,7 +138,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":  int64(issue.IID),
+				"issue_iid":  issue.IID,
 			},
 		})
 		requireNoError(t, err, "meta list discussions")
@@ -151,7 +151,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_get",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
-				"issue_iid":     int64(issue.IID),
+				"issue_iid":     issue.IID,
 				"discussion_id": discussionID,
 			},
 		})
@@ -165,7 +165,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_add_note",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
-				"issue_iid":     int64(issue.IID),
+				"issue_iid":     issue.IID,
 				"discussion_id": discussionID,
 				"body":          "E2E meta reply",
 			},
@@ -180,7 +180,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_update_note",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
-				"issue_iid":     int64(issue.IID),
+				"issue_iid":     issue.IID,
 				"discussion_id": discussionID,
 				"note_id":       noteID,
 				"body":          "E2E meta updated note",
@@ -196,7 +196,7 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			"action": "discussion_delete_note",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
-				"issue_iid":     int64(issue.IID),
+				"issue_iid":     issue.IID,
 				"discussion_id": discussionID,
 				"note_id":       noteID,
 			},

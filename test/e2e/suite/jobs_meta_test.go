@@ -30,11 +30,11 @@ func TestMeta_JobTokenScope(t *testing.T) {
 
 	// Create a group for group allowlist testing
 	grpName := uniqueName("job-token-grp")
-	grpOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	grpOut, grpErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{"name": grpName, "path": grpName},
 	})
-	requireNoError(t, err, "create group for job token scope")
+	requireNoError(t, grpErr, "create group for job token scope")
 	groupIDStr := strconv.FormatInt(grpOut.ID, 10)
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{

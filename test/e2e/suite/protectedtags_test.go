@@ -1,6 +1,5 @@
 //go:build e2e
 
-
 package suite
 
 import (
@@ -19,7 +18,7 @@ func TestMeta_ProtectedTags(t *testing.T) {
 	// Create a tag to protect.
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "ptag.txt", "content", "add file for protected tag test")
 	tagName := "e2e-protected-tag"
-	err := callToolVoidOn(ctx, sess.meta, "gitlab_tag", map[string]any{
+	tagErr := callToolVoidOn(ctx, sess.meta, "gitlab_tag", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -27,7 +26,7 @@ func TestMeta_ProtectedTags(t *testing.T) {
 			"ref":        "main",
 		},
 	})
-	requireNoError(t, err, "create tag for protection")
+	requireNoError(t, tagErr, "create tag for protection")
 
 	t.Run("Meta/ProtectedTag/Protect", func(t *testing.T) {
 		out, err := callToolOn[tags.ProtectedTagOutput](ctx, sess.meta, "gitlab_tag", map[string]any{

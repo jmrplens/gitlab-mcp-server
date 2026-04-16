@@ -45,9 +45,9 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 		out, err := callToolOn[containerregistry.ProtectionRuleOutput](ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "registry_rule_create",
 			"params": map[string]any{
-				"project_id":                     proj.pidStr(),
-				"repository_path_pattern":        proj.Path + "/e2e-test",
-				"minimum_access_level_for_push":  "maintainer",
+				"project_id":                      proj.pidStr(),
+				"repository_path_pattern":         proj.Path + "/e2e-test",
+				"minimum_access_level_for_push":   "maintainer",
 				"minimum_access_level_for_delete": "maintainer",
 			},
 		})
@@ -91,9 +91,9 @@ func TestMeta_PackagesProtectionRules(t *testing.T) {
 		createOut, err := callToolOn[protectedpackages.Output](ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "protection_rule_create",
 			"params": map[string]any{
-				"project_id":           proj.pidStr(),
-				"package_name_pattern": "e2e-test-*",
-				"package_type":         "generic",
+				"project_id":                    proj.pidStr(),
+				"package_name_pattern":          "e2e-test-*",
+				"package_type":                  "generic",
 				"minimum_access_level_for_push": "maintainer",
 			},
 		})

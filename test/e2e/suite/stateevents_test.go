@@ -39,8 +39,8 @@ func TestMeta_StateEvents(t *testing.T) {
 		out, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"issue_iid":  issueIID,
+				"project_id":  proj.pidStr(),
+				"issue_iid":   issueIID,
 				"state_event": "close",
 			},
 		})

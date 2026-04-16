@@ -28,13 +28,13 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 
 	// Create tag + release
 	tagName := uniqueName("rel-link-tag")
-	_, err := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
+	_, setupErr := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
 		"action": "create",
 		"params": map[string]any{"project_id": proj.pidStr(), "tag_name": tagName, "ref": "main"},
 	})
-	requireNoError(t, err, "create tag")
+	requireNoError(t, setupErr, "create tag")
 
-	_, err = callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
+	_, setupErr = callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
@@ -43,7 +43,7 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 			"description": "For link extended tests",
 		},
 	})
-	requireNoError(t, err, "create release")
+	requireNoError(t, setupErr, "create release")
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_release", map[string]any{
 			"action": "delete",
@@ -52,7 +52,7 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 	}()
 
 	// Create a link for get/update testing
-	linkOut, err := callToolOn[releaselinks.Output](ctx, sess.meta, "gitlab_release", map[string]any{
+	linkOut, setupErr := callToolOn[releaselinks.Output](ctx, sess.meta, "gitlab_release", map[string]any{
 		"action": "link_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -62,7 +62,7 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 			"link_type":  "other",
 		},
 	})
-	requireNoError(t, err, "link_create")
+	requireNoError(t, setupErr, "link_create")
 	linkID := linkOut.ID
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_release", map[string]any{

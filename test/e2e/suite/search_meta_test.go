@@ -30,7 +30,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "merge_requests",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "test",
+				"query":      "test",
 			},
 		})
 		requireNoError(t, err, "search merge_requests")
@@ -42,7 +42,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "issues",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "test",
+				"query":      "test",
 			},
 		})
 		requireNoError(t, err, "search issues")
@@ -54,7 +54,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "commits",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "searchable",
+				"query":      "searchable",
 			},
 		})
 		requireNoError(t, err, "search commits")
@@ -66,7 +66,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "milestones",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "test",
+				"query":      "test",
 			},
 		})
 		requireNoError(t, err, "search milestones")
@@ -78,7 +78,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "notes",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "test",
+				"query":      "test",
 			},
 		})
 		requireNoError(t, err, "search notes")
@@ -112,7 +112,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "wiki",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"query":     "test",
+				"query":      "test",
 			},
 		})
 		requireNoError(t, err, "search wiki")

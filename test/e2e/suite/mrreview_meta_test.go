@@ -35,7 +35,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	})
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-changes", "new.txt", "new content", "add file")
 
-	mrOut, err := callToolOn[struct {
+	mrOut, mrErr := callToolOn[struct {
 		IID int64 `json:"mr_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
@@ -46,7 +46,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 			"title":         "MR for changes test",
 		},
 	})
-	requireNoError(t, err, "create MR")
+	requireNoError(t, mrErr, "create MR")
 	requireTrue(t, mrOut.IID > 0, "MR IID should be > 0")
 	mrIID := strconv.FormatInt(mrOut.IID, 10)
 
@@ -62,15 +62,15 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	t.Run("DiffVersionsList", func(t *testing.T) {
 		drainSidekiq(ctx, t)
 		var out mrchanges.DiffVersionsListOutput
-		var err error
+		var listErr error
 		deadline := time.Now().Add(120 * time.Second)
 		delay := time.Second
 		for time.Now().Before(deadline) {
-			out, err = callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
+			out, listErr = callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 				"action": "diff_versions_list",
 				"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
 			})
-			if err == nil && len(out.DiffVersions) > 0 {
+			if listErr == nil && len(out.DiffVersions) > 0 {
 				break
 			}
 			select {
@@ -82,7 +82,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 				delay *= 2
 			}
 		}
-		requireNoError(t, err, "diff_versions_list")
+		requireNoError(t, listErr, "diff_versions_list")
 		requireTrue(t, len(out.DiffVersions) > 0, "expected at least 1 diff version")
 		t.Logf("Diff versions: %d", len(out.DiffVersions))
 

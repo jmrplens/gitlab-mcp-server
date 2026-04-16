@@ -56,7 +56,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 	req = req.WithContext(ctx)
 
 	var raw flexibleStats
-	if _, err := client.GL().Do(req, &raw); err != nil {
+	if _, err = client.GL().Do(req, &raw); err != nil {
 		return GetOutput{}, toolutil.WrapErrWithMessage("get_application_statistics", err)
 	}
 

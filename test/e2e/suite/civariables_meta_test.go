@@ -25,11 +25,11 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 
 	// Create a group for testing
 	grpName := uniqueName("civar-grp")
-	grpOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	grpOut, grpErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{"name": grpName, "path": grpName},
 	})
-	requireNoError(t, err, "create group")
+	requireNoError(t, grpErr, "create group")
 	groupIDStr := strconv.FormatInt(grpOut.ID, 10)
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
