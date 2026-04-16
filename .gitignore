@@ -81,3 +81,4 @@ site/dist/
 site/.astro/
 public/
 .scannerwork/
+.sonarlint/
