@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Provision a test user and Personal Access Token on the ephemeral GitLab instance.
-# Writes credentials to .env.docker in the project root.
+# Writes credentials to test/e2e/.env.docker.
 # Usage: ./test/e2e/scripts/setup-gitlab.sh [GITLAB_URL]
 
 GITLAB_URL="${1:-http://localhost:8929}"
@@ -10,7 +10,7 @@ ROOT_PASSWORD="E2e_R0ot!xK9mZ#2026"
 TEST_USER="e2e-tester"
 TEST_EMAIL="e2e-tester@example.com"
 TEST_PASSWORD="E2e_T3st!vQ7nW#2026"
-ENV_FILE=".env.docker"
+ENV_FILE="test/e2e/.env.docker"
 
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"

@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -274,9 +275,12 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// uniqueName generates a timestamped name to avoid collisions.
+// uniqueCounter provides a monotonic counter for guaranteed unique project names.
+var uniqueCounter atomic.Int64
+
+// uniqueName generates a timestamped name with an atomic counter to avoid collisions.
 func uniqueName(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixMilli())
+	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixMilli(), uniqueCounter.Add(1))
 }
 
 // mockCreateMessageHandler returns a deterministic mock LLM response for
@@ -578,10 +582,40 @@ func cleanupOrphanedProjects(client *gitlabclient.Client) {
 	}
 }
 
+// drainSidekiq polls the GitLab Sidekiq metrics API until all background job
+// queues are idle (enqueued == 0). Accelerates E2E tests by allowing async
+// operations (MR merge checks, pipeline creation, commit indexing) to complete
+// before assertions. No-op if the API is unavailable or context is done.
+func drainSidekiq(ctx context.Context, t *testing.T) {
+	t.Helper()
+	if sess.glClient == nil {
+		return
+	}
+	const maxWait = 15 * time.Second
+	const pollInterval = 250 * time.Millisecond
+
+	deadline := time.Now().Add(maxWait)
+	for time.Now().Before(deadline) {
+		stats, _, err := sess.glClient.GL().Sidekiq.GetJobStats()
+		if err != nil {
+			return
+		}
+		if stats.Jobs.Enqueued == 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(pollInterval):
+		}
+	}
+}
+
 // waitForPipeline polls the GitLab API until the pipeline reaches a terminal
 // state (success, failed, canceled, skipped) or the timeout expires.
 func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
+	drainSidekiq(context.Background(), t)
 	if timeout == 0 {
 		timeout = 120 * time.Second
 	}

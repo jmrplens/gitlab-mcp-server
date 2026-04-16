@@ -37,7 +37,7 @@ version: build
 build:
 	go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)$(BINARY_EXT) $(CMD_PATH)
 
-build-all: build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64
+build-all: build-linx-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64
 
 build-linux-amd64:
 	$(call MKDIR_P,dist)
@@ -101,7 +101,7 @@ test-e2e-docker:
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running E2E tests ==="
-	set -a && . .env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/ || true
+	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/ || true
 	@echo "=== Tearing down ==="
 	docker compose -f test/e2e/docker-compose.yml down -v
 

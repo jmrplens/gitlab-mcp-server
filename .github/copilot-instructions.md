@@ -131,7 +131,7 @@ make test-e2e
 # Docker mode (ephemeral GitLab CE with CI runner)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
-set -a && source .env.docker && set +a
+set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/
 docker compose -f test/e2e/docker-compose.yml down -v
 

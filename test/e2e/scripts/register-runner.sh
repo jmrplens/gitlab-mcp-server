@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Register a GitLab Runner against the ephemeral GitLab instance.
-# Requires: GitLab already healthy, .env.docker exists with root-level access.
+# Requires: GitLab already healthy, test/e2e/.env.docker exists with root-level access.
 # Usage: ./test/e2e/scripts/register-runner.sh [GITLAB_URL]
 
 GITLAB_URL="${1:-http://localhost:8929}"

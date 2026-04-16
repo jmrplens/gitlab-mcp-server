@@ -86,18 +86,35 @@ func sanitizeTestName(name string) string {
 // Individual tool fixture builders (use sess.individual session)
 // ---------------------------------------------------------------------------
 
+// projectCreateRetries is the max number of attempts for project creation.
+// GitLab CE has a race condition when many projects are created concurrently
+// with initialize_with_readme, returning spurious "already been taken" errors.
+const projectCreateRetries = 5
+
 // createProject creates a private project via individual MCP tools and
 // registers deletion in t.Cleanup.
 func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
-	name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
-	out, err := callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
-		Name:                 name,
-		Description:          "E2E: " + t.Name(),
-		Visibility:           "private",
-		InitializeWithReadme: true,
-		DefaultBranch:        defaultBranch,
-	})
+	var out projects.Output
+	var err error
+	for attempt := range projectCreateRetries {
+		name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
+		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
+			Name:                 name,
+			Description:          "E2E: " + t.Name(),
+			Visibility:           "private",
+			InitializeWithReadme: true,
+			DefaultBranch:        defaultBranch,
+		})
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "already been taken") && attempt < projectCreateRetries-1 {
+			t.Logf("project create attempt %d failed (name collision), retrying: %v", attempt+1, err)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+	}
 	requireNoError(t, err, "create project fixture")
 
 	t.Cleanup(func() {
@@ -118,17 +135,29 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 // and registers deletion in t.Cleanup.
 func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
-	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
-	out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
-		"action": "create",
-		"params": map[string]any{
-			"name":                   name,
-			"description":            "E2E meta: " + t.Name(),
-			"visibility":             "private",
-			"initialize_with_readme": true,
-			"default_branch":         defaultBranch,
-		},
-	})
+	var out projects.Output
+	var err error
+	for attempt := range projectCreateRetries {
+		name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
+		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
+			"action": "create",
+			"params": map[string]any{
+				"name":                   name,
+				"description":            "E2E meta: " + t.Name(),
+				"visibility":             "private",
+				"initialize_with_readme": true,
+				"default_branch":         defaultBranch,
+			},
+		})
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "already been taken") && attempt < projectCreateRetries-1 {
+			t.Logf("project create attempt %d failed (name collision), retrying: %v", attempt+1, err)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+	}
 	requireNoError(t, err, "create project fixture (meta)")
 
 	t.Cleanup(func() {
@@ -162,34 +191,74 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 // commitFile creates a file via the gitlab_commit_create tool.
 func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
-	out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
-		ProjectID:     proj.pidOf(),
-		Branch:        branch,
-		CommitMessage: message,
-		Actions: []commits.Action{
-			{Action: "create", FilePath: path, Content: content},
-		},
-	})
-	requireNoError(t, err, "commit file "+path)
-	return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+	const maxRetries = 5
+	for attempt := range maxRetries {
+		out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
+			ProjectID:     proj.pidOf(),
+			Branch:        branch,
+			CommitMessage: message,
+			Actions: []commits.Action{
+				{Action: "create", FilePath: path, Content: content},
+			},
+		})
+		if err == nil {
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+		}
+		if attempt < maxRetries-1 && strings.Contains(err.Error(), "only create or edit files when you are on a branch") {
+			t.Logf("commitFile %s: retry %d/%d (branch not ready)", path, attempt+1, maxRetries)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+		requireNoError(t, err, "commit file "+path)
+	}
+	t.Fatalf("commitFile %s: exhausted %d retries", path, maxRetries)
+	return CommitFixture{}
 }
 
 // commitFileMeta creates a file via the gitlab_repository meta-tool.
+// Retries on transient "not on a branch" errors caused by GitLab CE race conditions.
 func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
-	out, err := callToolOn[commits.Output](ctx, session, "gitlab_repository", map[string]any{
-		"action": "commit_create",
-		"params": map[string]any{
+	const maxRetries = 8
+	needStartBranch := false
+	for attempt := range maxRetries {
+		params := map[string]any{
 			"project_id":     proj.pidStr(),
 			"branch":         branch,
 			"commit_message": message,
 			"actions": []map[string]any{
 				{"action": "create", "file_path": path, "content": content},
 			},
-		},
-	})
-	requireNoError(t, err, "commit file meta "+path)
-	return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+		}
+		if needStartBranch && branch != defaultBranch {
+			params["start_branch"] = defaultBranch
+		}
+		out, err := callToolOn[commits.Output](ctx, session, "gitlab_repository", map[string]any{
+			"action": "commit_create",
+			"params": params,
+		})
+		if err == nil {
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+		}
+		if attempt < maxRetries-1 {
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "only create or edit files when you are on a branch") {
+				needStartBranch = true
+				t.Logf("commitFileMeta %s: retry %d/%d (branch not ready, adding start_branch)", path, attempt+1, maxRetries)
+				time.Sleep(time.Duration(attempt+1) * time.Second)
+				continue
+			}
+			if strings.Contains(errMsg, "already exists") {
+				needStartBranch = false
+				t.Logf("commitFileMeta %s: retry %d/%d (branch already exists, removing start_branch)", path, attempt+1, maxRetries)
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+		requireNoError(t, err, "commit file meta "+path)
+	}
+	t.Fatalf("commitFileMeta %s: exhausted %d retries", path, maxRetries)
+	return CommitFixture{}
 }
 
 // createBranch creates a branch from the default branch via individual tools.
@@ -286,6 +355,7 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // progressive backoff. Transient errors (429, 5xx) are retried silently.
 func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
 	t.Helper()
+	drainSidekiq(ctx, t)
 	pid := int(projectID)
 
 	const maxWait = 90 * time.Second

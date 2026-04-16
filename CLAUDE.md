@@ -510,7 +510,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
 ```bash
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
-set -a && source .env.docker && set +a
+set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
