@@ -115,10 +115,12 @@ gitlab-mcp-server/
 │   └── examples/                # Usage examples
 ├── test/e2e/                    # End-to-end integration tests
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner for Docker mode
+│   ├── .env.docker              # Docker mode environment variables
+│   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
-│   ├── setup_test.go            # 4 MCP server/client pairs, test helpers, shared state
-│   ├── workflow_test.go         # TestFullWorkflow — sequential subtests (individual tools)
-│   └── metatool_workflow_test.go # TestMetaToolWorkflow — sequential subtests (meta-tools)
+│   └── suite/                   # Go test package (82 test files)
+│       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
+│       └── fixture_test.go      # Self-contained GitLab resource builders
 ├── plan/                        # Implementation plans for features
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
@@ -182,10 +184,10 @@ go test ./internal/tools/ -run TestBranch -count=1  # Run specific tests
 go vet ./...                             # Static analysis
 
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
-go test -v -tags e2e -timeout 300s ./test/e2e/   # Run all e2e tests
-make test-e2e                                     # Same via Makefile
-go test -tags e2e -c -o NUL ./test/e2e/           # Compile-only check (Windows)
-go test -tags e2e -c -o /dev/null ./test/e2e/     # Compile-only check (Linux)
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
+make test-e2e                                          # Same via Makefile
+go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
 ```
 
 ### Release process
@@ -497,12 +499,12 @@ E2E tests run against a real GitLab instance using in-memory MCP transport (no n
 
 ```bash
 # Run full E2E suite (two workflows: individual tools + meta-tools)
-go test -v -tags e2e -timeout 300s ./test/e2e/
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
 # Compile-only check (no GitLab needed)
-go test -tags e2e -c -o NUL ./test/e2e/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
 **Docker mode** — ephemeral GitLab CE container with CI runner (enables pipeline/job tests):
@@ -511,7 +513,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
 

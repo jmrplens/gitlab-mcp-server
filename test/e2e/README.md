@@ -17,7 +17,7 @@ GITLAB_USER=your-username
 EOF
 
 # Run
-go test -v -tags e2e -timeout 300s ./test/e2e/
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 ```
 
 ### Docker Mode
@@ -40,7 +40,7 @@ docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/register-runner.sh
 
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 # Cleanup
 docker compose -f test/e2e/docker-compose.yml down -v
@@ -58,11 +58,13 @@ Docker mode enables pipeline and job tests that require a CI runner.
 
 ### Test Files
 
+All Go test files live in the `suite/` subdirectory (package `suite`):
+
 | File                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
-| `setup_test.go`            | TestMain, 4 MCP sessions, helpers, shared state      |
-| `workflow_test.go`         | TestFullWorkflow — individual tool subtests (~174)    |
-| `metatool_workflow_test.go`| TestMetaToolWorkflow — meta-tool subtests (~151)      |
+| `suite/setup_test.go`      | TestMain, 4 MCP sessions, helpers, shared state      |
+| `suite/fixture_test.go`    | Self-contained GitLab resource builders               |
+| `suite/*_test.go`          | 82 domain-specific test files                         |
 
 ### MCP Sessions
 
@@ -83,10 +85,10 @@ Docker mode enables pipeline and job tests that require a CI runner.
 
 ```bash
 # Individual tools only
-go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/
+go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/suite/
 
 # Meta-tools only
-go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/
+go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
 ```
 
 ## Compile-Only Check

@@ -88,7 +88,7 @@ test-integration:
 
 ## test-e2e: run end-to-end tests against a real GitLab instance
 test-e2e:
-	go test -v -tags e2e -timeout 120s ./test/e2e/
+	go test -v -tags e2e -timeout 120s ./test/e2e/suite/
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
 test-e2e-docker:
@@ -101,7 +101,7 @@ test-e2e-docker:
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running E2E tests ==="
-	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/ || true
+	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/suite/ || true
 	@echo "=== Tearing down ==="
 	docker compose -f test/e2e/docker-compose.yml down -v
 

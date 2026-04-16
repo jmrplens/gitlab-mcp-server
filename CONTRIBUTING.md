@@ -49,7 +49,7 @@ make test-e2e
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
 set -a && source .env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 
 # Check test coverage
@@ -193,7 +193,7 @@ go test ./internal/tools/... -coverprofile=cover.out
 go tool cover -func=cover.out
 
 # E2E tests (requires real GitLab)
-go test -tags e2e -timeout 120s ./test/e2e/
+go test -tags e2e -timeout 120s ./test/e2e/suite/
 ```
 
 ## Documentation

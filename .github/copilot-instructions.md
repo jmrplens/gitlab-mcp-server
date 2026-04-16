@@ -125,22 +125,22 @@ E2E tests run against a real GitLab instance via in-memory MCP transport (build 
 
 ```bash
 # Run full E2E suite
-go test -v -tags e2e -timeout 300s ./test/e2e/
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
 # Docker mode (ephemeral GitLab CE with CI runner)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 
 # Or via Makefile
 make test-e2e-docker
 
 # Compile-only check (no GitLab needed)
-go test -tags e2e -c -o NUL ./test/e2e/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)

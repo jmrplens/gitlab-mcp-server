@@ -433,7 +433,7 @@ GITLAB_TOKEN=glpat-...
 ```
 
 ```bash
-go test -v -tags e2e -timeout 300s ./test/e2e/
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 ```
 
@@ -457,7 +457,7 @@ docker compose -f test/e2e/docker-compose.yml up -d
 
 # Run tests
 set -a && source .env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 # Cleanup
 docker compose -f test/e2e/docker-compose.yml down -v
@@ -533,7 +533,7 @@ The `TestMetaToolWorkflow` E2E test (~151 subtests) exercises the same project l
 
 ```bash
 # Run only the meta-tool E2E workflow
-go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/
+go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
 ```
 
 ### Validation Tests
@@ -577,23 +577,23 @@ go test ./internal/... -race -count=1
 
 ```bash
 # Full suite (self-hosted GitLab)
-go test -v -tags e2e -timeout 300s ./test/e2e/
+go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
 # Docker mode (ephemeral GitLab CE container)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
 set -a && source .env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 
 # Individual workflows
-go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/
-go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/
+go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/suite/
+go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
 
 # Compile-only (verify builds without GitLab)
-go test -tags e2e -c -o NUL ./test/e2e/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
 ### Coverage Report
@@ -662,9 +662,17 @@ internal/tools/samplingtools/
 
 ```text
 test/e2e/
-├── setup_test.go             # Dual MCP server setup, helpers, shared state
-├── workflow_test.go          # TestFullWorkflow (individual tools)
-└── metatool_workflow_test.go # TestMetaToolWorkflow (meta-tools)
+├── docker-compose.yml        # Ephemeral GitLab CE + Runner
+├── .env.docker               # Docker mode environment variables
+├── README.md                 # E2E documentation
+├── scripts/                  # Provisioning scripts
+│   ├── register-runner.sh
+│   ├── setup-gitlab.sh
+│   └── wait-for-gitlab.sh
+└── suite/                    # Go test package (82 test files)
+    ├── setup_test.go         # MCP server setup, helpers, shared state
+    ├── fixture_test.go       # Self-contained GitLab resource builders
+    └── *_test.go             # Domain-specific test files
 ```
 
 ### Wizard Test Helpers

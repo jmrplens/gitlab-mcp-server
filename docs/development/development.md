@@ -50,7 +50,7 @@ gitlab-mcp-server/
 │   │   └── ...                  # 162 domain sub-packages total
 │   ├── resources/               # 24 MCP resource handlers
 │   └── prompts/                 # 38 MCP prompt handlers (12 core + 26 extended)
-├── test/e2e/                    # End-to-end integration tests
+├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
 ├── docs/                        # Documentation (this directory)
 ├── plan/                        # Implementation plans
 ├── VERSION                      # Single source of truth for project version
@@ -236,11 +236,11 @@ E2E tests run against a real GitLab instance via in-memory MCP transport (build 
 
 ```bash
 make test-e2e
-# or: go test -v -tags e2e -timeout 300s ./test/e2e/
+# or: go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 
 # Compile-only check (no GitLab instance needed)
-go test -tags e2e -c -o NUL ./test/e2e/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
 #### E2E Prerequisites
@@ -256,9 +256,9 @@ GITLAB_SKIP_TLS_VERIFY=true
 
 | File                                 | Description                                                        |
 | ------------------------------------ | ------------------------------------------------------------------ |
-| `test/e2e/setup_test.go`            | Shared state, dual MCP server setup (individual + meta), helpers   |
-| `test/e2e/workflow_test.go`         | `TestFullWorkflow` — ~77 sequential subtests using individual tools|
-| `test/e2e/metatool_workflow_test.go` | `TestMetaToolWorkflow` — ~78 sequential subtests using meta-tools  |
+| `test/e2e/suite/setup_test.go`       | Shared state, MCP server setup, helpers, drainSidekiq              |
+| `test/e2e/suite/fixture_test.go`     | Self-contained GitLab resource builders                             |
+| `test/e2e/suite/*_test.go`           | 82 domain-specific test files (individual + meta)                   |
 
 ## Linting & Formatting
 
