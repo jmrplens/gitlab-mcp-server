@@ -243,6 +243,18 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
+#### Docker Mode (Ephemeral GitLab)
+
+Run the full E2E suite against an ephemeral GitLab CE container. Requires Docker and ~4 GB RAM. This mode also enables pipeline/job tests that need a CI runner.
+
+```bash
+make test-e2e-docker
+```
+
+This single command handles the full lifecycle: start GitLab CE container, wait for readiness, create test user/token, register CI runner, run tests, and tear down.
+
+For manual step-by-step execution, see [E2E Docker Mode](testing.md#docker-mode) in the testing guide.
+
 #### E2E Prerequisites
 
 ```env

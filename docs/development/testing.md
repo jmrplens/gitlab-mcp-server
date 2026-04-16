@@ -691,7 +691,8 @@ go test ./internal/... -cover -count=1
 ```bash
 make test          # Run all unit tests
 make test-race     # Run with race detector
-make test-e2e      # Run E2E tests
+make test-e2e      # Run E2E tests (self-hosted GitLab)
+make test-e2e-docker # Run E2E tests with ephemeral GitLab CE container
 make coverage      # Generate coverage report
 make lint          # Run go vet + staticcheck
 make inspector     # Compile + launch MCP Inspector UI via stdio

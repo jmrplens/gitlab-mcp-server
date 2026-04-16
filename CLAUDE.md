@@ -186,6 +186,7 @@ go vet ./...                             # Static analysis
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
+make test-e2e-docker                                   # Ephemeral GitLab CE container (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
 ```

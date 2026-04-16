@@ -45,12 +45,8 @@ make test-race
 # Run end-to-end tests (requires .env with real GitLab credentials)
 make test-e2e
 
-# Run end-to-end tests in Docker mode (ephemeral GitLab)
-docker compose -f test/e2e/docker-compose.yml up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml down -v
+# Run end-to-end tests in Docker mode (ephemeral GitLab CE, ~4 GB RAM)
+make test-e2e-docker
 
 # Check test coverage
 make coverage
