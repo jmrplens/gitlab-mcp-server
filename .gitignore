@@ -80,3 +80,4 @@ site/node_modules/
 site/dist/
 site/.astro/
 public/
+.scannerwork/
