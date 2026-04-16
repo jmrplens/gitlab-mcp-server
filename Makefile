@@ -3,7 +3,8 @@
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
        analyze analyze-fix analyze-report install-tools audit-output gen-llms \
-       docker-build docker-push docker-run
+       docker-build docker-push docker-run \
+       inspector inspector-stop help
 
 BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
@@ -397,7 +398,44 @@ release-check:
 checksum:
 	@cat dist/checksums.txt
 
+# ─── MCP Inspector ───────────────────────────────────────────────────────────
+# Requires: Node.js >= 22, npx, .env with GITLAB_URL and GITLAB_TOKEN.
+# Compiles a fresh binary to /tmp, launches the Inspector, and cleans up on exit.
+
+INSPECTOR_BIN := /tmp/$(BINARY_NAME)-inspector$(BINARY_EXT)
+
+## inspector: compile the server and launch MCP Inspector UI via stdio.
+## Reads credentials from .env. The temporary binary is removed on exit.
+inspector:
+	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Create it with GITLAB_URL and GITLAB_TOKEN."; exit 1; fi
+	@echo "Compiling $(BINARY_NAME) to $(INSPECTOR_BIN)..."
+	@go build -ldflags="$(LDFLAGS)" -o $(INSPECTOR_BIN) $(CMD_PATH)
+	@echo "Starting MCP Inspector (stdio) — press Ctrl+C to stop..."
+	@trap 'rm -f $(INSPECTOR_BIN); echo "Cleaned up $(INSPECTOR_BIN)"' EXIT INT TERM && \
+		set -a && . ./.env && set +a && \
+		ALLOWED_ORIGINS="http://localhost:6274,http://127.0.0.1:6274,http://0.0.0.0:6274" \
+		HOST=0.0.0.0 \
+		npx -y @modelcontextprotocol/inspector \
+			-e GITLAB_URL="$$GITLAB_URL" \
+			-e GITLAB_TOKEN="$$GITLAB_TOKEN" \
+			-e GITLAB_SKIP_TLS_VERIFY="$${GITLAB_SKIP_TLS_VERIFY:-false}" \
+			-e AUTO_UPDATE=false \
+			-e META_TOOLS=true \
+			-- $(INSPECTOR_BIN)
+
+## inspector-stop: stop any running MCP Inspector and server processes.
+inspector-stop:
+	@pkill -f "@modelcontextprotocol/inspector" 2>/dev/null || true
+	@pkill -f "node.*inspector" 2>/dev/null || true
+	@rm -f $(INSPECTOR_BIN)
+	@echo "MCP Inspector stopped."
+
 clean:
 	$(call RM_RF,dist)
 	$(call RM_F,coverage.out)
 	$(call RM_F,coverage.html)
+
+## help: show available targets
+help:
+	@echo "Available targets:"
+	@grep -E '^## ' Makefile | sed 's/## /  /'
