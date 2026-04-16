@@ -1,5 +1,8 @@
 //go:build e2e
 
+// stateevents_test.go tests the resource state event MCP tools against a live GitLab
+// instance. Covers issue and merge request state event listing via the gitlab_issue and
+// gitlab_merge_request meta-tools.
 package suite
 
 import (

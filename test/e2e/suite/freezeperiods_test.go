@@ -1,5 +1,7 @@
 //go:build e2e
 
+// freezeperiods_test.go tests the freeze period MCP tools against a live GitLab instance.
+// Exercises create, list, get, update, and delete via the gitlab_environment meta-tool.
 package suite
 
 import (

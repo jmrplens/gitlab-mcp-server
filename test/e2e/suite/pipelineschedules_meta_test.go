@@ -1,5 +1,8 @@
 //go:build e2e
 
+// pipelineschedules_meta_test.go tests extended pipeline schedule actions via the
+// gitlab_pipeline_schedule meta-tool against a live GitLab instance. Covers get,
+// edit_variable, and list_triggered_pipelines actions not exercised by the main schedule tests.
 package suite
 
 import (

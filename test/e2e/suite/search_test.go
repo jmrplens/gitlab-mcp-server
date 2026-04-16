@@ -1,6 +1,7 @@
 //go:build e2e
 
-// search_test.go — E2E tests for search domain.
+// search_test.go tests the search MCP tools against a live GitLab instance.
+// Covers code and project search via both individual tools and the gitlab_search meta-tool.
 package suite
 
 import (
@@ -11,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
 )
 
+// TestIndividual_Search exercises code and project search via individual MCP tools.
+// Creates a project with unique content, waits for Sidekiq indexing, then searches.
 func TestIndividual_Search(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -46,6 +49,8 @@ func TestIndividual_Search(t *testing.T) {
 	})
 }
 
+// TestMeta_Search exercises code and project search via the gitlab_search meta-tool.
+// Creates a project with unique content, waits for indexing, then searches.
 func TestMeta_Search(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

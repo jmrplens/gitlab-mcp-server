@@ -12,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 )
 
+// TestIndividual_Uploads exercises the project upload tools via individual MCP tools:
+// uploads a base64-encoded file to a project, then lists uploads to verify.
 func TestIndividual_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -46,6 +48,8 @@ func TestIndividual_Uploads(t *testing.T) {
 	})
 }
 
+// TestMeta_Uploads exercises the same upload lifecycle via the gitlab_project meta-tool:
+// upload and upload_list actions with base64-encoded file content.
 func TestMeta_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

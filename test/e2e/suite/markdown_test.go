@@ -1,5 +1,8 @@
 //go:build e2e
 
+// markdown_test.go tests the GitLab markdown rendering MCP tool against a live
+// GitLab instance. Covers basic markdown-to-HTML rendering and GitLab Flavored
+// Markdown (GFM) rendering with project context.
 package suite
 
 import (

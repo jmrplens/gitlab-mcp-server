@@ -1,5 +1,8 @@
 //go:build e2e
 
+// tags_meta_test.go tests extended tag MCP tools against a live GitLab instance via the
+// gitlab_tag meta-tool. Covers protected tag lifecycle (protect → list → get → unprotect)
+// and tag signature retrieval.
 package suite
 
 import (

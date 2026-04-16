@@ -1,6 +1,8 @@
 //go:build e2e
 
-// mergerequests_test.go — E2E tests for merge request CRUD domain.
+// mergerequests_test.go tests the core merge request CRUD MCP tools against a
+// live GitLab instance. Covers create, get, list, update, commits, participants,
+// and delete for both individual and meta-tool modes.
 package suite
 
 import (
@@ -40,6 +42,8 @@ func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSe
 	return proj, branch
 }
 
+// TestIndividual_MergeRequests exercises the MR lifecycle using individual tools:
+// create → get → list → update → commits → participants → delete.
 func TestIndividual_MergeRequests(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -140,6 +144,8 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	})
 }
 
+// TestMeta_MergeRequests exercises the same MR lifecycle via the
+// gitlab_merge_request meta-tool.
 func TestMeta_MergeRequests(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

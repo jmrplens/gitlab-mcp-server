@@ -1,5 +1,9 @@
 //go:build e2e
 
+// civariables_test.go tests the project-level CI variable MCP tools against
+// a live GitLab instance using both individual tools and the gitlab_ci_variable
+// meta-tool. Exercises the full variable lifecycle: create → get → list →
+// update → delete.
 package suite
 
 import (
@@ -10,6 +14,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/civariables"
 )
 
+// TestIndividual_CIVariables exercises the project CI variable lifecycle
+// using individual MCP tools: create → get → list → update → delete.
 func TestIndividual_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -76,6 +82,8 @@ func TestIndividual_CIVariables(t *testing.T) {
 	})
 }
 
+// TestMeta_CIVariables exercises the same project CI variable lifecycle via
+// the gitlab_ci_variable meta-tool.
 func TestMeta_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

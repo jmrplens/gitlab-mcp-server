@@ -1,5 +1,7 @@
 //go:build e2e
 
+// environments_test.go tests the environment MCP tools against a live GitLab instance.
+// Covers create, get, list, update, stop, and delete for both individual and meta-tool modes.
 package suite
 
 import (
@@ -10,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/environments"
 )
 
+// TestIndividual_Environments exercises the environment lifecycle using individual tools:
+// create → get → list → update → stop → delete.
 func TestIndividual_Environments(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -87,6 +91,7 @@ func TestIndividual_Environments(t *testing.T) {
 	})
 }
 
+// TestMeta_Environments exercises the same environment lifecycle via the gitlab_environment meta-tool.
 func TestMeta_Environments(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

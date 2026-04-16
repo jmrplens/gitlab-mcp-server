@@ -1,5 +1,8 @@
 //go:build e2e
 
+// packages_meta_test.go tests the container registry and package protection rule
+// MCP tools against a live GitLab instance via the gitlab_package meta-tool.
+// Covers registry listing, registry protection rule CRUD, and package protection rule CRUD.
 package suite
 
 import (

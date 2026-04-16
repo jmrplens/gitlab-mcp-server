@@ -1,5 +1,8 @@
 //go:build e2e
 
+// enterprise_test.go tests GitLab Premium/Ultimate (Enterprise) MCP tools against a live
+// instance. Each test requires GITLAB_ENTERPRISE=true and gracefully skips via
+// requirePremiumFeature when the feature is unavailable.
 package suite
 
 import (

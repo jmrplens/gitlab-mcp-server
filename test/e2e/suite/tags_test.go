@@ -1,5 +1,8 @@
 //go:build e2e
 
+// tags_test.go tests the tag MCP tools against a live GitLab instance.
+// Covers the full tag lifecycle: create → get → list → delete via both individual
+// tools and the gitlab_tag meta-tool.
 package suite
 
 import (

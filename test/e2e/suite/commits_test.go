@@ -1,5 +1,8 @@
 //go:build e2e
 
+// commits_test.go tests the commit and file MCP tools against a live GitLab
+// instance using both individual tools and the gitlab_repository meta-tool.
+// Exercises: commit list, get, diff, and file retrieval.
 package suite
 
 import (

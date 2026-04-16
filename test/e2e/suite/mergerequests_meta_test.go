@@ -1,5 +1,10 @@
 //go:build e2e
 
+// mergerequests_meta_test.go tests advanced gitlab_merge_request meta-tool
+// actions against a live GitLab instance. Covers list variants (global, group),
+// reviewers, issues closed, subscribe/unsubscribe, time tracking, approval
+// state/rules/config, context commits, award emoji on MRs and MR notes,
+// resource events (label, milestone, state), and cancel auto merge.
 package suite
 
 import (

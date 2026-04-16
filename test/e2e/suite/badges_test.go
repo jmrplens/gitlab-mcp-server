@@ -1,5 +1,8 @@
 //go:build e2e
 
+// badges_test.go tests the project badge MCP tools against a live GitLab
+// instance using both individual tools and the gitlab_project meta-tool.
+// Exercises the full badge lifecycle: create → get → list → update → delete.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
 )
 
+// TestIndividual_Badges exercises the project badge lifecycle using
+// individual MCP tools: create → get → list → update → delete.
 func TestIndividual_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -78,6 +83,8 @@ func TestIndividual_Badges(t *testing.T) {
 	})
 }
 
+// TestMeta_Badges exercises the same badge lifecycle via the
+// gitlab_project meta-tool.
 func TestMeta_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

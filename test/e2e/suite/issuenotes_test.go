@@ -1,6 +1,8 @@
 //go:build e2e
 
-// issuenotes_test.go — E2E tests for issue notes domain.
+// issuenotes_test.go tests the issue note MCP tools against a live GitLab
+// instance. Covers note create, list, get, update, and delete for both
+// individual and meta-tool modes.
 package suite
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 )
 
+// TestIndividual_IssueNotes exercises issue note CRUD using individual tools:
+// create → list → get → update → delete.
 func TestIndividual_IssueNotes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -77,6 +81,8 @@ func TestIndividual_IssueNotes(t *testing.T) {
 	})
 }
 
+// TestMeta_IssueNotes exercises note CRUD via the gitlab_issue meta-tool
+// with note_create, note_list, note_get, note_update, and note_delete actions.
 func TestMeta_IssueNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

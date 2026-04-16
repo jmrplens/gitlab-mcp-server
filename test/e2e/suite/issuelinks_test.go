@@ -1,5 +1,8 @@
 //go:build e2e
 
+// issuelinks_test.go tests the issue link MCP tools against a live GitLab
+// instance. Covers link create, list, get, and delete between two issues
+// for both individual and meta-tool modes.
 package suite
 
 import (
@@ -11,6 +14,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 )
 
+// TestIndividual_IssueLinks exercises issue link CRUD using individual tools:
+// create a link between two issues → list → get → delete.
 func TestIndividual_IssueLinks(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -70,6 +75,8 @@ func TestIndividual_IssueLinks(t *testing.T) {
 	})
 }
 
+// TestMeta_IssueLinks exercises issue link CRUD via the gitlab_issue meta-tool
+// with link_create, link_list, and link_delete actions.
 func TestMeta_IssueLinks(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

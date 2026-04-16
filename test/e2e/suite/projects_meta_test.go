@@ -1,5 +1,8 @@
 //go:build e2e
 
+// projects_meta_test.go tests project-level MCP tools via the gitlab_project meta-tool
+// against a live GitLab instance. Covers core CRUD, fork, star, archive, hooks, labels,
+// milestones, members, badges, boards, approvals, export/import, integrations, and pages.
 package suite
 
 import (

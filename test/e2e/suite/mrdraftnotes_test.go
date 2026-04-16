@@ -1,6 +1,8 @@
 //go:build e2e
 
-// mrdraftnotes_test.go — E2E tests for MR draft notes domain.
+// mrdraftnotes_test.go tests the MR draft note MCP tools against a live GitLab instance.
+// Covers draft note create, list, get, update, and publish-all for both
+// individual tools and the gitlab_mr_review meta-tool.
 package suite
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
 )
 
+// TestIndividual_MRDraftNotes exercises the MR draft note lifecycle using individual tools:
+// create → list → get → update → publish all.
 func TestIndividual_MRDraftNotes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -76,6 +80,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 	})
 }
 
+// TestMeta_MRDraftNotes exercises the same MR draft note lifecycle via the gitlab_mr_review meta-tool.
 func TestMeta_MRDraftNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

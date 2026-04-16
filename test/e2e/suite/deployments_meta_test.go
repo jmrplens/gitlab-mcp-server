@@ -1,5 +1,7 @@
 //go:build e2e
 
+// deployments_meta_test.go tests the deployment MCP tools against a live GitLab instance.
+// Exercises get, update, and delete via the gitlab_deployment meta-tool.
 package suite
 
 import (

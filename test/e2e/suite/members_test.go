@@ -1,5 +1,8 @@
 //go:build e2e
 
+// members_test.go tests the project member MCP tools against a live GitLab
+// instance. Covers member listing and retrieval of the project owner for both
+// individual and meta-tool modes.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/members"
 )
 
+// TestIndividual_Members exercises project member tools: list members and get
+// the owner member by ID. Asserts at least one member (the project owner) exists.
 func TestIndividual_Members(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -49,6 +54,8 @@ func TestIndividual_Members(t *testing.T) {
 	})
 }
 
+// TestMeta_Members exercises project member tools via the gitlab_project
+// meta-tool with members and member_get actions.
 func TestMeta_Members(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

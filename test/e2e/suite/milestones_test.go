@@ -1,5 +1,8 @@
 //go:build e2e
 
+// milestones_test.go tests the project milestone MCP tools against a live
+// GitLab instance. Covers milestone create, get, update (with close), and
+// delete for both individual and meta-tool modes.
 package suite
 
 import (

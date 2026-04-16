@@ -1,5 +1,8 @@
 //go:build e2e
 
+// pushrules_test.go tests the project push rule MCP tools against a live GitLab instance.
+// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true). Covers add → get → edit → delete
+// for both individual tools and the gitlab_project meta-tool.
 package suite
 
 import (

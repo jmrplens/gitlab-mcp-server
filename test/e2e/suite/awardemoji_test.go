@@ -1,5 +1,8 @@
 //go:build e2e
 
+// awardemoji_test.go tests the award emoji MCP tools against a live GitLab
+// instance using both individual tools and the gitlab_issue meta-tool.
+// Exercises the full emoji lifecycle on issues: create → list → get → delete.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
 )
 
+// TestIndividual_AwardEmoji exercises the issue award emoji lifecycle using
+// individual MCP tools: create → list → get → delete.
 func TestIndividual_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -67,6 +72,8 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 	})
 }
 
+// TestMeta_AwardEmoji exercises the same emoji lifecycle via the
+// gitlab_issue meta-tool.
 func TestMeta_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

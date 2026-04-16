@@ -1,5 +1,7 @@
 //go:build e2e
 
+// grouplabels_test.go tests the group label MCP tools against a live GitLab instance.
+// Exercises create, list, and delete via the gitlab_group meta-tool.
 package suite
 
 import (

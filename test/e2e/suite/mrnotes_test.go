@@ -1,6 +1,8 @@
 //go:build e2e
 
-// mrnotes_test.go — E2E tests for MR notes domain.
+// mrnotes_test.go tests the MR note MCP tools against a live GitLab instance.
+// Covers note create, list, get, update, and delete for both individual tools
+// and the gitlab_mr_review meta-tool.
 package suite
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
 )
 
+// TestIndividual_MRNotes exercises the MR note lifecycle using individual tools:
+// create → list → get → update → delete.
 func TestIndividual_MRNotes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -77,6 +81,7 @@ func TestIndividual_MRNotes(t *testing.T) {
 	})
 }
 
+// TestMeta_MRNotes exercises the same MR note lifecycle via the gitlab_mr_review meta-tool.
 func TestMeta_MRNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

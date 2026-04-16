@@ -1,5 +1,8 @@
 //go:build e2e
 
+// customemoji_test.go tests the custom emoji MCP tools against a live
+// GitLab instance using both individual tools and the gitlab_custom_emoji
+// meta-tool. Exercises custom emoji listing within a temporary group.
 package suite
 
 import (

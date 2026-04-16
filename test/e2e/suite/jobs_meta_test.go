@@ -1,5 +1,9 @@
 //go:build e2e
 
+// jobs_meta_test.go tests job-related MCP tools against a live GitLab instance.
+// Covers job token scope management (patch, inbound allowlist, group allowlist)
+// and extended job actions (list bridges, delete project artifacts) via the
+// gitlab_job meta-tool.
 package suite
 
 import (

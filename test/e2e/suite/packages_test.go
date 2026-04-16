@@ -1,5 +1,8 @@
 //go:build e2e
 
+// packages_test.go tests the package registry MCP tools against a live GitLab instance.
+// Covers the full generic package lifecycle: publish, list, file-list, download,
+// file-delete, and package-delete for both individual tools and the gitlab_package meta-tool.
 package suite
 
 import (
@@ -13,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// i64soi converts an int64 to a StringOrInt for use in package tool inputs.
 func i64soi(v int64) toolutil.StringOrInt {
 	return toolutil.StringOrInt(strconv.FormatInt(v, 10))
 }

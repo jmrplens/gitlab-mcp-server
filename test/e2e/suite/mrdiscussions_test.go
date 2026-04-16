@@ -1,6 +1,8 @@
 //go:build e2e
 
-// mrdiscussions_test.go — E2E tests for MR discussions domain.
+// mrdiscussions_test.go tests the MR discussion MCP tools against a live GitLab instance.
+// Covers discussion create, list, get, reply, resolve, and note delete for both
+// individual tools and the gitlab_mr_review meta-tool.
 package suite
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
 )
 
+// TestIndividual_MRDiscussions exercises the MR discussion lifecycle using individual tools:
+// create → list → get → reply → resolve → note delete.
 func TestIndividual_MRDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -92,6 +96,7 @@ func TestIndividual_MRDiscussions(t *testing.T) {
 	})
 }
 
+// TestMeta_MRDiscussions exercises the same MR discussion lifecycle via the gitlab_mr_review meta-tool.
 func TestMeta_MRDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

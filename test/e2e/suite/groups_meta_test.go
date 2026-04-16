@@ -1,5 +1,8 @@
 //go:build e2e
 
+// groups_meta_test.go tests advanced gitlab_group meta-tool actions against a live GitLab
+// instance, covering hooks, badges, members, labels (deep CRUD), milestones (deep CRUD),
+// and group boards (Premium/Ultimate).
 package suite
 
 import (

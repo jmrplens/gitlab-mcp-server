@@ -1,5 +1,8 @@
 //go:build e2e
 
+// vulnerabilities_test.go tests the GitLab vulnerability GraphQL MCP tools
+// against a live GitLab instance. Requires GitLab Premium/Ultimate
+// (GITLAB_ENTERPRISE=true) — tests are skipped otherwise.
 package suite
 
 import (

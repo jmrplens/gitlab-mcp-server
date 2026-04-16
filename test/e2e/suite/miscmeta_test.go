@@ -1,5 +1,9 @@
 //go:build e2e
 
+// miscmeta_test.go tests miscellaneous MCP tools against a live GitLab instance.
+// Covers feature flags, branch rules (GraphQL), CI/CD catalog (GraphQL),
+// deployments, and user SSH/GPG key listing for both individual and meta-tool
+// modes.
 package suite
 
 import (

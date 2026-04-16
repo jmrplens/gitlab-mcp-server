@@ -1,5 +1,8 @@
 //go:build e2e
 
+// wikis_test.go tests the GitLab wiki page MCP tools against a live GitLab
+// instance. Covers the full CRUD lifecycle (create → get → list → update →
+// delete) via both individual tools and the gitlab_wiki meta-tool.
 package suite
 
 import (

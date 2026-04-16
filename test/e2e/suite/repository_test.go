@@ -1,5 +1,7 @@
 //go:build e2e
 
+// repository_test.go tests the repository tree and compare MCP tools against a live
+// GitLab instance. Covers both individual tools and the gitlab_repository meta-tool.
 package suite
 
 import (

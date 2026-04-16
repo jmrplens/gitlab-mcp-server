@@ -1,5 +1,7 @@
 //go:build e2e
 
+// environments_meta_test.go tests environment-related meta-tool actions against a live
+// GitLab instance, including protected environments, freeze periods, and deployment CRUD.
 package suite
 
 import (

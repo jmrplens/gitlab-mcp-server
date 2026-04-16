@@ -1,5 +1,7 @@
 //go:build e2e
 
+// snippets_test.go tests the snippet MCP tools against a live GitLab instance.
+// Covers personal snippet CRUD via both individual tools and the gitlab_snippet meta-tool.
 package suite
 
 import (
@@ -10,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
 )
 
+// TestIndividual_Snippets exercises the personal snippet lifecycle via individual MCP tools:
+// create → get → content → list → update → delete.
 func TestIndividual_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -82,6 +86,8 @@ func TestIndividual_Snippets(t *testing.T) {
 	})
 }
 
+// TestMeta_Snippets exercises the personal snippet lifecycle via the gitlab_snippet meta-tool:
+// create → get → content → list → update → delete.
 func TestMeta_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

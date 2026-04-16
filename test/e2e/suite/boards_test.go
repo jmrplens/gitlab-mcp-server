@@ -1,5 +1,8 @@
 //go:build e2e
 
+// boards_test.go tests the issue board MCP tools via the gitlab_project
+// meta-tool against a live GitLab instance. Exercises the full board
+// lifecycle: create → list → get → delete.
 package suite
 
 import (

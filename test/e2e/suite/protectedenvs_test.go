@@ -1,5 +1,8 @@
 //go:build e2e
 
+// protectedenvs_test.go tests the protected environment MCP tools against a live GitLab
+// instance. Covers protect, list, get, and unprotect via the gitlab_environment meta-tool.
+// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 package suite
 
 import (

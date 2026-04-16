@@ -1,5 +1,8 @@
 //go:build e2e
 
+// releases_test.go tests the release and release link MCP tools against a live GitLab instance.
+// Covers the full lifecycle: tag → release create → get → update → list → link CRUD → delete,
+// using both individual tools and the gitlab_release meta-tool.
 package suite
 
 import (

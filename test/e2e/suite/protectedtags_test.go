@@ -1,5 +1,7 @@
 //go:build e2e
 
+// protectedtags_test.go tests the protected tag MCP tools against a live GitLab instance.
+// It exercises create-protect-list-get-unprotect via the gitlab_tag meta-tool.
 package suite
 
 import (

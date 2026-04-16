@@ -1,5 +1,8 @@
 //go:build e2e
 
+// pipelines_meta_test.go tests extended pipeline and resource group actions via the
+// gitlab_pipeline meta-tool against a live GitLab instance. Covers latest, variables,
+// test reports, metadata updates, cancel, and resource group listing.
 package suite
 
 import (

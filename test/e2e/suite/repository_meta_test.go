@@ -1,5 +1,9 @@
 //go:build e2e
 
+// repository_meta_test.go tests extended repository, file, commit, and commit discussion
+// MCP tools against a live GitLab instance via the gitlab_repository meta-tool.
+// Covers file CRUD, blame, metadata, raw content, contributors, archive, commit refs,
+// comments, statuses, cherry-pick, signature, and commit discussion lifecycle.
 package suite
 
 import (

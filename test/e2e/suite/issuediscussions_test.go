@@ -1,5 +1,8 @@
 //go:build e2e
 
+// issuediscussions_test.go tests the issue discussion MCP tools against a live
+// GitLab instance. Covers threaded discussion create, list, get, add note,
+// update note, and delete note for both individual and meta-tool modes.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuediscussions"
 )
 
+// TestIndividual_IssueDiscussions exercises the issue discussion lifecycle using
+// individual tools: create → list → get → add note → update note → delete note.
 func TestIndividual_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -99,6 +104,8 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 	})
 }
 
+// TestMeta_IssueDiscussions exercises the same discussion lifecycle via the
+// gitlab_issue meta-tool with discussion_* actions.
 func TestMeta_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

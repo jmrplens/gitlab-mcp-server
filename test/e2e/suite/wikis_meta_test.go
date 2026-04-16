@@ -1,5 +1,8 @@
 //go:build e2e
 
+// wikis_meta_test.go tests the wiki attachment upload action via the
+// gitlab_wiki meta-tool against a live GitLab instance, complementing
+// the CRUD coverage in wikis_test.go.
 package suite
 
 import (

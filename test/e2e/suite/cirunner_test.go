@@ -1,5 +1,10 @@
 //go:build e2e
 
+// cirunner_test.go tests the pipeline and job MCP tools against a live
+// GitLab instance with a CI runner. Exercises the full CI lifecycle:
+// commit CI config → create pipeline → get/list pipelines → wait for
+// completion → list/get/trace jobs → retry → delete pipeline.
+// Also tests the sampling tool for pipeline failure analysis.
 package suite
 
 import (

@@ -1,5 +1,7 @@
 //go:build e2e
 
+// instancevariables_test.go tests the instance-level CI variable MCP tools against a live
+// GitLab instance. Exercises create, list, get, update, and delete via the gitlab_ci_variable meta-tool.
 package suite
 
 import (

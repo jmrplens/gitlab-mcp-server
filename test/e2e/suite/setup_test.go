@@ -1,8 +1,18 @@
 //go:build e2e
 
-// Package e2e contains end-to-end tests that exercise the MCP server tools
-// against a real GitLab instance via the in-process MCP client-server loop.
-// Run with: go test -v -tags e2e -timeout 120s ./test/e2e/.
+// setup_test.go is the main E2E test infrastructure file. It provides
+// [TestMain] for initializing the test environment, four in-process MCP
+// server/client pairs (individual, meta, sampling, elicitation), snapshot
+// guardrails for self-hosted mode, and shared helper functions used across
+// all domain test files.
+
+// Package suite contains end-to-end integration tests that exercise the
+// MCP server tools against a real GitLab instance via in-process MCP
+// client-server transport.
+//
+// Run with:
+//
+//	go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 package suite
 
 import (
@@ -363,7 +373,12 @@ func extractToolError(name string, result *mcp.CallToolResult) error {
 	return fmt.Errorf("tool %s returned error", name)
 }
 
-// callToolOn is a session-parameterized version of callTool.
+// callToolOn invokes the named MCP tool on the given session and
+// unmarshals the response into output type O. It first tries
+// [mcp.CallToolResult.StructuredContent], falling back to JSON-parsing
+// the first [mcp.TextContent] block. Returns a zero value of O and an
+// error if the call fails, the tool reports an error, or no extractable
+// output is found.
 func callToolOn[O any](ctx context.Context, session *mcp.ClientSession, name string, input any) (O, error) {
 	var zero O
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
@@ -402,7 +417,9 @@ func callToolOn[O any](ctx context.Context, session *mcp.ClientSession, name str
 	return zero, fmt.Errorf("tool %s: no extractable output", name)
 }
 
-// callToolVoidOn is a session-parameterized version of callToolVoid.
+// callToolVoidOn invokes the named MCP tool on the given session and
+// discards the response body. Returns an error if the call fails or the
+// tool reports an error via [mcp.CallToolResult.IsError].
 func callToolVoidOn(ctx context.Context, session *mcp.ClientSession, name string, input any) error {
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,

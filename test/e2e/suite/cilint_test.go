@@ -1,6 +1,8 @@
 //go:build e2e
 
-// cilint_test.go — E2E tests for CI lint domain.
+// cilint_test.go tests the CI lint MCP tools against a live GitLab instance
+// using both individual tools and the gitlab_template meta-tool. Validates
+// CI configuration content and project-level linting.
 package suite
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cilint"
 )
 
+// TestIndividual_CILint exercises CI lint operations using individual MCP
+// tools: validates inline YAML content and lints a project without a CI config.
 func TestIndividual_CILint(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -41,6 +45,8 @@ func TestIndividual_CILint(t *testing.T) {
 	})
 }
 
+// TestMeta_CILint exercises the same CI lint operations via the
+// gitlab_template meta-tool.
 func TestMeta_CILint(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

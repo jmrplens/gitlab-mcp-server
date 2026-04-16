@@ -1,5 +1,8 @@
 //go:build e2e
 
+// accesstokens_test.go tests the project access token MCP tools against a
+// live GitLab instance using both individual tools and the gitlab_access
+// meta-tool. Exercises the full token lifecycle: create → get → list → revoke.
 package suite
 
 import (
@@ -10,10 +13,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
 )
 
+// expiresAtNextYear returns a date string ~1 year from now, formatted as
+// YYYY-MM-DD, for use as a token expiration date in E2E tests.
 func expiresAtNextYear() string {
 	return time.Now().AddDate(0, 0, 364).Format("2006-01-02")
 }
 
+// TestIndividual_AccessTokens exercises the project access token lifecycle
+// using individual MCP tools: create → get → list → revoke.
 func TestIndividual_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -68,6 +75,8 @@ func TestIndividual_AccessTokens(t *testing.T) {
 	})
 }
 
+// TestMeta_AccessTokens exercises the same token lifecycle via the
+// gitlab_access meta-tool.
 func TestMeta_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -1,5 +1,8 @@
 //go:build e2e
 
+// mrreview_meta_test.go tests advanced MR review actions via the gitlab_mr_review meta-tool
+// against a live GitLab instance. Covers MR changes, diff versions, discussion note
+// updates, and individual draft note publishing.
 package suite
 
 import (

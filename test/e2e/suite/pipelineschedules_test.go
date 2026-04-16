@@ -1,5 +1,8 @@
 //go:build e2e
 
+// pipelineschedules_test.go tests the pipeline schedule MCP tools against a live GitLab
+// instance. Covers the full schedule lifecycle: create, get, list, update, variable CRUD,
+// take ownership, run, and delete for both individual tools and the gitlab_pipeline_schedule meta-tool.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
 )
 
+// TestIndividual_PipelineSchedules exercises the pipeline schedule lifecycle using individual tools:
+// create → get → list → update → create variable → edit variable → delete variable → take ownership → delete.
 func TestIndividual_PipelineSchedules(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -119,6 +124,8 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 	})
 }
 
+// TestMeta_PipelineSchedules exercises the same pipeline schedule lifecycle via the
+// gitlab_pipeline_schedule meta-tool, including variable CRUD, take ownership, and run.
 func TestMeta_PipelineSchedules(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

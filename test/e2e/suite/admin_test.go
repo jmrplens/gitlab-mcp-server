@@ -1,5 +1,8 @@
 //go:build e2e
 
+// admin_test.go tests lightweight admin and job-related MCP tools against
+// a live GitLab instance. Covers topic listing, settings retrieval via
+// gitlab_admin, and job token scope via gitlab_job.
 package suite
 
 import (

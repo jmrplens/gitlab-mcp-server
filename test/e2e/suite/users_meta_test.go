@@ -1,5 +1,9 @@
 //go:build e2e
 
+// users_meta_test.go tests GitLab user domain MCP tools via the gitlab_user
+// meta-tool against a live GitLab instance. Covers self-info, status, emails,
+// events, namespaces, notifications, SSH keys, GPG keys, impersonation tokens,
+// admin operations (create/block/deactivate/ban/delete), and service accounts.
 package suite
 
 import (
@@ -696,6 +700,9 @@ func TestMeta_UserAdmin(t *testing.T) {
 }
 
 // TestMeta_UserServiceAccounts exercises service account operations.
+// TestMeta_UserServiceAccounts exercises service account and current-user PAT
+// operations via the gitlab_user meta-tool. Enterprise-only tests list and
+// create service accounts; the PAT test runs on all tiers.
 func TestMeta_UserServiceAccounts(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

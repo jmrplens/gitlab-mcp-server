@@ -1,5 +1,8 @@
 //go:build e2e
 
+// mrapproval_test.go tests the MR approval and merge lifecycle MCP tools against
+// a live GitLab instance. Covers pipelines listing, rebase, approve, unapprove,
+// and merge for both individual and meta-tool modes.
 package suite
 
 import (

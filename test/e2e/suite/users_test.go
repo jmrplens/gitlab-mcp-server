@@ -11,6 +11,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
 )
 
+// TestIndividual_Users exercises user tools via individual MCP tools:
+// get current user, list all users, then get a specific user by ID.
 func TestIndividual_Users(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -46,6 +48,8 @@ func TestIndividual_Users(t *testing.T) {
 	})
 }
 
+// TestMeta_Users exercises the same user operations via the gitlab_user meta-tool:
+// current, list, and get actions.
 func TestMeta_Users(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

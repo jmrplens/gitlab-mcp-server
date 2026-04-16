@@ -1,5 +1,7 @@
 //go:build e2e
 
+// deploykeys_test.go tests the deploy key MCP tools against a live GitLab instance.
+// Covers add, get, list, update, and delete for both individual and meta-tool modes.
 package suite
 
 import (
@@ -28,6 +30,8 @@ func generateTestSSHKey(t *testing.T) string {
 	return string(ssh.MarshalAuthorizedKey(sshPub))
 }
 
+// TestIndividual_DeployKeys exercises the deploy key lifecycle using individual tools:
+// add → get → list → update → delete. Generates a fresh ED25519 SSH key per run.
 func TestIndividual_DeployKeys(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -93,6 +97,7 @@ func TestIndividual_DeployKeys(t *testing.T) {
 	})
 }
 
+// TestMeta_DeployKeys exercises the same deploy key lifecycle via the gitlab_access meta-tool.
 func TestMeta_DeployKeys(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -1,5 +1,11 @@
 //go:build e2e
 
+// issues_meta_test.go tests advanced gitlab_issue meta-tool actions against a
+// live GitLab instance. Covers retrieval variants (get_by_id, list_all,
+// list_group), subscribe/unsubscribe, create_todo, reorder, participants,
+// closing/related MRs, time tracking, issue links, statistics, award emoji
+// on notes, resource events (label, milestone, state, iteration), move,
+// and work items CRUD.
 package suite
 
 import (
@@ -597,7 +603,8 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_IssueWorkItems tests the work_item_* actions on gitlab_issue.
+// TestMeta_IssueWorkItems exercises the work_item_* actions on gitlab_issue
+// meta-tool: create → list → get → update → delete. Requires Enterprise license.
 func TestMeta_IssueWorkItems(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

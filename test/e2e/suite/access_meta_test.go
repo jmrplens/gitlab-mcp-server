@@ -1,5 +1,9 @@
 //go:build e2e
 
+// access_meta_test.go tests the access-management MCP tools via the
+// gitlab_access meta-tool against a live GitLab instance. Covers project
+// access tokens, personal tokens, deploy tokens, deploy keys, access
+// requests, and invitations.
 package suite
 
 import (

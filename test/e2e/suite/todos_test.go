@@ -1,5 +1,8 @@
 //go:build e2e
 
+// todos_test.go tests the GitLab todo MCP tools against a live GitLab instance.
+// Covers listing todos and marking all as done via both individual tools and
+// the gitlab_user meta-tool.
 package suite
 
 import (
@@ -10,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
 )
 
+// TestIndividual_Todos exercises the todo tools via individual MCP tools:
+// list all todos, then mark all as done.
 func TestIndividual_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -32,6 +37,8 @@ func TestIndividual_Todos(t *testing.T) {
 	})
 }
 
+// TestMeta_Todos exercises the same todo lifecycle via the gitlab_user meta-tool:
+// todo_list and todo_mark_all_done actions.
 func TestMeta_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

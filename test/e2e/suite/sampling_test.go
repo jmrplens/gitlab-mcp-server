@@ -1,5 +1,8 @@
 //go:build e2e
 
+// sampling_test.go tests all 11 LLM sampling MCP tools against a live GitLab instance
+// using a mock sampling handler. Verifies that each tool produces non-empty results
+// and returns the expected mock model name.
 package suite
 
 import (

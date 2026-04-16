@@ -1,5 +1,8 @@
 //go:build e2e
 
+// notifications_test.go tests the notification settings MCP tools against a live GitLab
+// instance. Covers global and per-project notification level retrieval via the
+// gitlab_user meta-tool.
 package suite
 
 import (

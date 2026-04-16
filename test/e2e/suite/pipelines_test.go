@@ -1,5 +1,8 @@
 //go:build e2e
 
+// pipelines_test.go tests the pipeline and job MCP tools against a live GitLab instance.
+// Requires Docker mode with a CI runner. Covers pipeline create, get, list, retry, delete,
+// and job list, get, trace for both individual tools and the gitlab_pipeline/gitlab_job meta-tools.
 package suite
 
 import (
@@ -12,7 +15,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
 )
 
-// pipelineCIYAML is a minimal CI configuration for pipeline E2E tests.
+// pipelineCIYAML is a minimal .gitlab-ci.yml that runs a single fast job
+// for pipeline E2E tests. Uses no runner tags to ensure execution on any runner.
 const pipelineCIYAML = `stages:
   - test
 

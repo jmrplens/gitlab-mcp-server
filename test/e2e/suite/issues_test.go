@@ -1,5 +1,8 @@
 //go:build e2e
 
+// issues_test.go tests the core issue CRUD MCP tools against a live GitLab
+// instance. Covers create, get, list, update, note create/list, and delete
+// for both individual and meta-tool modes.
 package suite
 
 import (

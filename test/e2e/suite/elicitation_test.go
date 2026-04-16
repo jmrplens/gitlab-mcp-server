@@ -1,5 +1,7 @@
 //go:build e2e
 
+// elicitation_test.go tests the MCP elicitation capability against a live GitLab instance.
+// Uses the elicitation-enabled session with an auto-accept mock handler.
 package suite
 
 import (

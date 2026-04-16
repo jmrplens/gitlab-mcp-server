@@ -1,5 +1,8 @@
 //go:build e2e
 
+// civariables_meta_test.go tests the group-level CI variable MCP tools via
+// the gitlab_ci_variable meta-tool against a live GitLab instance.
+// Exercises the group variable lifecycle: list → create → get → update.
 package suite
 
 import (

@@ -1,5 +1,7 @@
 //go:build e2e
 
+// userprojects_test.go tests user contributed and starred project listing
+// MCP tools against a live GitLab instance. Requires GITLAB_USER env var.
 package suite
 
 import (
