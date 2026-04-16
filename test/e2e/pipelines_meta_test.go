@@ -20,7 +20,7 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -30,15 +30,28 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 		"stages:\n  - test\ntest_job:\n  stage: test\n  script:\n    - echo hello\n",
 		"add CI config")
 
-	// Wait briefly for pipeline creation
-	time.Sleep(2 * time.Second)
-
+	// Wait for pipeline creation with polling
 	t.Run("Latest", func(t *testing.T) {
-		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "latest",
-			"params": map[string]any{"project_id": proj.pidStr()},
-		})
-		requireNoError(t, err, "latest")
+		drainSidekiq(ctx, t)
+		var out pipelines.DetailOutput
+		var err error
+		deadline := time.Now().Add(120 * time.Second)
+		delay := 2 * time.Second
+		for time.Now().Before(deadline) {
+			out, err = callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "latest",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			if err == nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatalf("context canceled waiting for pipeline: %v", ctx.Err())
+			case <-time.After(delay):
+			}
+		}
+		requireNoError(t, err, "latest pipeline")
 		requireTrue(t, out.ID > 0, "latest: expected ID > 0")
 		t.Logf("Latest pipeline: %d (status: %s)", out.ID, out.Status)
 	})

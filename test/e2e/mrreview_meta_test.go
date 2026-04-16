@@ -21,7 +21,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -31,12 +31,12 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	// Create a branch and MR to get changes
 	callToolVoidOn(ctx, sess.meta, "gitlab_branch", map[string]any{
 		"action": "create",
-		"params": map[string]any{"project_id": proj.pidStr(), "branch": "feat-changes", "ref": "main"},
+		"params": map[string]any{"project_id": proj.pidStr(), "branch_name": "feat-changes", "ref": "main"},
 	})
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-changes", "new.txt", "new content", "add file")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"iid"`
+		IID int64 `json:"mr_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -47,6 +47,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "create MR")
+	requireTrue(t, mrOut.IID > 0, "MR IID should be > 0")
 	mrIID := strconv.FormatInt(mrOut.IID, 10)
 
 	t.Run("ChangesGet", func(t *testing.T) {
@@ -59,12 +60,30 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	})
 
 	t.Run("DiffVersionsList", func(t *testing.T) {
-		out, err := callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
-			"action": "diff_versions_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
-		})
+		drainSidekiq(ctx, t)
+		var out mrchanges.DiffVersionsListOutput
+		var err error
+		deadline := time.Now().Add(120 * time.Second)
+		delay := time.Second
+		for time.Now().Before(deadline) {
+			out, err = callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
+				"action": "diff_versions_list",
+				"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			})
+			if err == nil && len(out.DiffVersions) > 0 {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatalf("context canceled waiting for diff versions: %v", ctx.Err())
+			case <-time.After(delay):
+			}
+			if delay < 4*time.Second {
+				delay *= 2
+			}
+		}
 		requireNoError(t, err, "diff_versions_list")
-		requireTrue(t, len(out.DiffVersions) > 0, "expected at least one diff version")
+		requireTrue(t, len(out.DiffVersions) > 0, "expected at least 1 diff version")
 		t.Logf("Diff versions: %d", len(out.DiffVersions))
 
 		t.Run("DiffVersionGet", func(t *testing.T) {
@@ -101,12 +120,12 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 
 	callToolVoidOn(ctx, sess.meta, "gitlab_branch", map[string]any{
 		"action": "create",
-		"params": map[string]any{"project_id": proj.pidStr(), "branch": "feat-disc-note", "ref": "main"},
+		"params": map[string]any{"project_id": proj.pidStr(), "branch_name": "feat-disc-note", "ref": "main"},
 	})
-	commitFileMeta(ctx, t, sess.meta, proj, "feat-disc-note", "disc.txt", "v2", "update file")
+	commitFileMeta(ctx, t, sess.meta, proj, "feat-disc-note", "disc-branch.txt", "v2", "add branch file")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"iid"`
+		IID int64 `json:"mr_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -177,12 +196,12 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 
 	callToolVoidOn(ctx, sess.meta, "gitlab_branch", map[string]any{
 		"action": "create",
-		"params": map[string]any{"project_id": proj.pidStr(), "branch": "feat-draft-pub", "ref": "main"},
+		"params": map[string]any{"project_id": proj.pidStr(), "branch_name": "feat-draft-pub", "ref": "main"},
 	})
-	commitFileMeta(ctx, t, sess.meta, proj, "feat-draft-pub", "draft.txt", "v2", "update")
+	commitFileMeta(ctx, t, sess.meta, proj, "feat-draft-pub", "draft-v2.txt", "v2", "update")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"iid"`
+		IID int64 `json:"mr_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{

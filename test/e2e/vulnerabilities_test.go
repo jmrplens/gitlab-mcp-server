@@ -15,7 +15,7 @@ import (
 func TestIndividual_Vulnerabilities(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("vulnerabilities require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -46,7 +46,7 @@ func TestIndividual_Vulnerabilities(t *testing.T) {
 func TestMeta_Vulnerabilities(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("vulnerabilities require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()

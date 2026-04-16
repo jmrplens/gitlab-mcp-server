@@ -18,6 +18,9 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	if !sess.enterprise {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

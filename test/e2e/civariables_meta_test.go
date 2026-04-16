@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 		})
 	}()
 
-	varKey := "E2E_GRP_" + uniqueName("")
+	varKey := fmt.Sprintf("E2E_GRP_%d", time.Now().UnixMilli())
 
 	t.Run("GroupList", func(t *testing.T) {
 		out, err := callToolOn[groupvariables.ListOutput](ctx, sess.meta, "gitlab_ci_variable", map[string]any{
@@ -90,5 +91,3 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 		requireTrue(t, out.Key == varKey, "group_update: key mismatch")
 	})
 }
-
-

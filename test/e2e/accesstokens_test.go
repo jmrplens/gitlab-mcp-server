@@ -11,7 +11,7 @@ import (
 )
 
 func expiresAtNextYear() string {
-	return time.Now().AddDate(1, 0, 0).Format("2006-01-02")
+	return time.Now().AddDate(0, 0, 364).Format("2006-01-02")
 }
 
 func TestIndividual_AccessTokens(t *testing.T) {

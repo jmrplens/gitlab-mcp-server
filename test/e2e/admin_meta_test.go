@@ -4,7 +4,7 @@ package e2e
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"testing"
 	"time"
 
@@ -52,7 +52,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 		if topicID > 0 {
 			_ = callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 				"action": "topic_delete",
-				"params": map[string]any{"id": topicID},
+				"params": map[string]any{"topic_id": topicID},
 			})
 		}
 	}()
@@ -61,7 +61,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 		requireTrue(t, topicID > 0, "topicID not set")
 		out, err := callToolOn[topics.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "topic_get",
-			"params": map[string]any{"id": topicID},
+			"params": map[string]any{"topic_id": topicID},
 		})
 		requireNoError(t, err, "topic_get")
 		requireTrue(t, out.Topic.ID == topicID, "topic_get: ID mismatch")
@@ -73,7 +73,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 		out, err := callToolOn[topics.UpdateOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "topic_update",
 			"params": map[string]any{
-				"id":          topicID,
+				"topic_id":    topicID,
 				"description": "Updated by E2E test",
 			},
 		})
@@ -96,7 +96,7 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 		out, err := callToolOn[settings.UpdateOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "settings_update",
 			"params": map[string]any{
-				"default_branch_name": "main",
+				"settings": map[string]any{"default_branch_name": "main"},
 			},
 		})
 		requireNoError(t, err, "settings_update")
@@ -201,7 +201,7 @@ func TestMeta_AdminFeatures(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	featureName := "e2e_test_feature_" + uniqueName("")
+	featureName := fmt.Sprintf("e2e_test_feature_%d", time.Now().UnixMilli())
 
 	t.Run("FeatureList", func(t *testing.T) {
 		out, err := callToolOn[features.ListOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
@@ -230,6 +230,7 @@ func TestMeta_AdminFeatures(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "feature_set")
+		requireTrue(t, out.Feature.Name == featureName, "feature name mismatch")
 		t.Logf("Set feature: %s", out.Feature.Name)
 	})
 
@@ -446,17 +447,16 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 		"params": map[string]any{},
 	})
 	requireNoError(t, err, "get current user")
-	userIDStr := strconv.FormatInt(usr.ID, 10)
 	attrKey := "e2e_test_attr"
 
 	t.Run("CustomAttrSet", func(t *testing.T) {
 		out, err := callToolOn[customattributes.SetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "custom_attr_set",
 			"params": map[string]any{
-				"resource": "users",
-				"id":       userIDStr,
-				"key":      attrKey,
-				"value":    "test-value",
+				"resource_type": "user",
+				"resource_id":   usr.ID,
+				"key":           attrKey,
+				"value":         "test-value",
 			},
 		})
 		requireNoError(t, err, "custom_attr_set")
@@ -466,9 +466,9 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "custom_attr_delete",
 			"params": map[string]any{
-				"resource": "users",
-				"id":       userIDStr,
-				"key":      attrKey,
+				"resource_type": "user",
+				"resource_id":   usr.ID,
+				"key":           attrKey,
 			},
 		})
 	}()
@@ -477,9 +477,9 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 		out, err := callToolOn[customattributes.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "custom_attr_get",
 			"params": map[string]any{
-				"resource": "users",
-				"id":       userIDStr,
-				"key":      attrKey,
+				"resource_type": "user",
+				"resource_id":   usr.ID,
+				"key":           attrKey,
 			},
 		})
 		requireNoError(t, err, "custom_attr_get")
@@ -490,8 +490,8 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 		out, err := callToolOn[customattributes.ListOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "custom_attr_list",
 			"params": map[string]any{
-				"resource": "users",
-				"id":       userIDStr,
+				"resource_type": "user",
+				"resource_id":   usr.ID,
 			},
 		})
 		requireNoError(t, err, "custom_attr_list")

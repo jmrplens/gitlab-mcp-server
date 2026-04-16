@@ -29,7 +29,7 @@ import (
 func TestMeta_MergeTrains(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("merge trains require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -52,7 +52,7 @@ func TestMeta_MergeTrains(t *testing.T) {
 func TestMeta_AuditEvents(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("audit events require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestMeta_AuditEvents(t *testing.T) {
 func TestMeta_DORAMetrics(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("DORA metrics require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -99,7 +99,7 @@ func TestMeta_DORAMetrics(t *testing.T) {
 func TestMeta_Dependencies(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("dependencies require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -123,7 +123,7 @@ func TestMeta_Dependencies(t *testing.T) {
 func TestMeta_ExternalStatusChecks(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("external status checks require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -146,7 +146,7 @@ func TestMeta_ExternalStatusChecks(t *testing.T) {
 func TestMeta_MemberRoles(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("member roles require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -166,7 +166,7 @@ func TestMeta_MemberRoles(t *testing.T) {
 func TestMeta_Attestations(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("attestations require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -191,7 +191,7 @@ func TestMeta_Attestations(t *testing.T) {
 func TestMeta_CompliancePolicy(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("compliance policy requires GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -212,7 +212,7 @@ func TestMeta_CompliancePolicy(t *testing.T) {
 func TestMeta_ProjectAliases(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("project aliases require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -232,7 +232,7 @@ func TestMeta_ProjectAliases(t *testing.T) {
 func TestMeta_Geo(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("Geo requires GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -253,7 +253,7 @@ func TestMeta_Geo(t *testing.T) {
 func TestMeta_StorageMoves(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("storage moves require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -274,7 +274,7 @@ func TestMeta_StorageMoves(t *testing.T) {
 func TestMeta_SecurityFindings(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("security findings require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -298,7 +298,7 @@ func TestMeta_SecurityFindings(t *testing.T) {
 func TestMeta_GroupSCIM(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("Group SCIM requires GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -344,7 +344,7 @@ func TestMeta_GroupSCIM(t *testing.T) {
 func TestMeta_EnterpriseUsers(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise users require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

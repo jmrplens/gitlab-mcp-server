@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 			"params": map[string]any{
 				"project_id":   proj.pidStr(),
 				"name":         "e2e-token-" + uniqueName(""),
-				"scopes":       "api",
+				"scopes":       []string{"api"},
 				"expires_at":   expires,
 				"access_level": 30,
 			},
@@ -155,7 +156,7 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"name":       "e2e-dt-" + uniqueName(""),
-				"scopes":     "read_repository",
+				"scopes":     []string{"read_repository"},
 				"expires_at": expires,
 			},
 		})
@@ -259,7 +260,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 	t.Run("DeployKeyListUserProject", func(t *testing.T) {
 		out, err := callToolOn[deploykeys.ListOutput](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_list_user_project",
-			"params": map[string]any{"project_id": proj.pidStr()},
+			"params": map[string]any{"user_id": os.Getenv("GITLAB_USER")},
 		})
 		requireNoError(t, err, "deploy_key_list_user_project")
 		t.Logf("User project deploy keys: %d", len(out.DeployKeys))

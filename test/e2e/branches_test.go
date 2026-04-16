@@ -287,10 +287,7 @@ func TestMeta_Branches(t *testing.T) {
 				"project_id": proj.pidStr(),
 			},
 		})
-		if err != nil {
-			t.Logf("delete_merged returned error (acceptable if no merged branches): %v", err)
-			return
-		}
+		requireNoError(t, err, "delete_merged")
 		t.Log("Deleted merged branches")
 	})
 

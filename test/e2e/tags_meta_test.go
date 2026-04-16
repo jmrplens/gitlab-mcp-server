@@ -47,7 +47,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			"action": "protect",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"name":       tagName,
+				"tag_name":   tagName,
 			},
 		})
 		requireNoError(t, err, "protect tag")
@@ -70,7 +70,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			"action": "get_protected",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"name":       tagName,
+				"tag_name":   tagName,
 			},
 		})
 		requireNoError(t, err, "get_protected")
@@ -82,7 +82,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			"action": "unprotect",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"name":       tagName,
+				"tag_name":   tagName,
 			},
 		})
 		requireNoError(t, err, "unprotect")

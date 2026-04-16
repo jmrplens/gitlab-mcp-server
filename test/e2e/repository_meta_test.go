@@ -242,7 +242,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 		t.Log("commit_signature route exercised (may 404 for unsigned commits)")
 	})
 
-	// Cherry-pick needs a separate branch
+	// Cherry-pick: create target branch first, then add a new commit on main that isn't on the target
 	_, err = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 		"action": "commit_create",
 		"params": map[string]any{
@@ -257,12 +257,23 @@ func TestMeta_CommitExtended(t *testing.T) {
 	})
 	requireNoError(t, err, "create branch for cherry-pick")
 
+	// Add a new commit on main (not on cherry-pick-target)
+	commitFileMeta(ctx, t, sess.meta, proj, "main", "cherry-main.txt", "only on main", "commit to cherry-pick")
+
+	// Get the new commit SHA from main
+	cpListOut, err := callToolOn[commits.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+		"action": "commit_list",
+		"params": map[string]any{"project_id": proj.pidStr(), "ref_name": "main", "per_page": 1},
+	})
+	requireNoError(t, err, "commit_list for cherry-pick SHA")
+	cpSHA := cpListOut.Commits[0].ID
+
 	t.Run("CommitCherryPick", func(t *testing.T) {
 		out, err := callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 			"action": "commit_cherry_pick",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"sha":        sha,
+				"sha":        cpSHA,
 				"branch":     "cherry-pick-target",
 			},
 		})
@@ -297,7 +308,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 			"action": "commit_discussion_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"commit_id":  sha,
+				"commit_sha": sha,
 				"body":       "E2E commit discussion",
 			},
 		})
@@ -309,7 +320,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 		t.Run("DiscussionList", func(t *testing.T) {
 			listOut, err := callToolOn[commitdiscussions.ListOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 				"action": "commit_discussion_list",
-				"params": map[string]any{"project_id": proj.pidStr(), "commit_id": sha},
+				"params": map[string]any{"project_id": proj.pidStr(), "commit_sha": sha},
 			})
 			requireNoError(t, err, "commit_discussion_list")
 			requireTrue(t, len(listOut.Discussions) >= 1, "expected at least 1 discussion")
@@ -320,7 +331,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				"action": "commit_discussion_get",
 				"params": map[string]any{
 					"project_id":    proj.pidStr(),
-					"commit_id":     sha,
+					"commit_sha": sha,
 					"discussion_id": discID,
 				},
 			})
@@ -333,7 +344,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				"action": "commit_discussion_add_note",
 				"params": map[string]any{
 					"project_id":    proj.pidStr(),
-					"commit_id":     sha,
+					"commit_sha": sha,
 					"discussion_id": discID,
 					"body":          "E2E reply note",
 				},
@@ -347,7 +358,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 					"action": "commit_discussion_update_note",
 					"params": map[string]any{
 						"project_id":    proj.pidStr(),
-						"commit_id":     sha,
+						"commit_sha": sha,
 						"discussion_id": discID,
 						"note_id":       noteIDForUpdate,
 						"body":          "E2E updated note",
@@ -361,7 +372,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 					"action": "commit_discussion_delete_note",
 					"params": map[string]any{
 						"project_id":    proj.pidStr(),
-						"commit_id":     sha,
+						"commit_sha": sha,
 						"discussion_id": discID,
 						"note_id":       noteIDForUpdate,
 					},

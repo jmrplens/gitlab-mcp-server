@@ -32,15 +32,12 @@ func TestIndividual_CILint(t *testing.T) {
 	})
 
 	t.Run("LintProject", func(t *testing.T) {
-		// Project may not have a .gitlab-ci.yml, which is expected.
 		out, err := callToolOn[cilint.Output](ctx, sess.individual, "gitlab_ci_lint_project", cilint.ProjectInput{
 			ProjectID: proj.pidOf(),
 		})
-		if err != nil {
-			t.Logf("CI lint project returned error (expected without CI file): %v", err)
-			return
-		}
-		t.Logf("CI lint project: valid=%v errors=%v", out.Valid, out.Errors)
+		requireNoError(t, err, "CI lint project")
+		requireTrue(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
+		t.Logf("CI lint project: valid=%v, errors=%v", out.Valid, out.Errors)
 	})
 }
 
@@ -74,10 +71,8 @@ func TestMeta_CILint(t *testing.T) {
 				"project_id": proj.pidStr(),
 			},
 		})
-		if err != nil {
-			t.Logf("CI lint project (meta) returned error (expected without CI file): %v", err)
-			return
-		}
-		t.Logf("CI lint project (meta): valid=%v errors=%v", out.Valid, out.Errors)
+		requireNoError(t, err, "CI lint project meta")
+		requireTrue(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
+		t.Logf("CI lint project: valid=%v, errors=%v", out.Valid, out.Errors)
 	})
 }

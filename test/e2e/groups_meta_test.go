@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -71,7 +70,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	t.Run("Search", func(t *testing.T) {
 		out, err := callToolOn[groups.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "search",
-			"params": map[string]any{"search": grpName},
+			"params": map[string]any{"query": grpName},
 		})
 		requireNoError(t, err, "group search")
 		requireTrue(t, len(out.Groups) >= 1, "expected at least 1 group in search")
@@ -91,6 +90,9 @@ func TestMeta_GroupDeep(t *testing.T) {
 	// ── Hooks ────────────────────────────────────────────────────────────
 	var hookID int64
 	t.Run("HookAdd", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_add",
@@ -106,6 +108,9 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("HookList", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.HookListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_list",
@@ -117,6 +122,9 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("HookGet", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_get",
@@ -128,13 +136,16 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("HookEdit", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_edit",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
-				"hook_id":      hookID,
-				"url":          "https://example.com/hook-updated",
+				"group_id":      groupIDStr,
+				"hook_id":       hookID,
+				"url":           "https://example.com/hook-updated",
 				"issues_events": true,
 			},
 		})
@@ -143,6 +154,9 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("HookDelete", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, hookID > 0, "hookID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_delete",
@@ -231,29 +245,23 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	// ── Members ──────────────────────────────────────────────────────────
-	t.Run("GroupMemberAdd", func(t *testing.T) {
+	t.Run("GroupMemberGet", func(t *testing.T) {
 		requireTrue(t, groupID > 0, "groupID not set")
-		username := os.Getenv("GITLAB_USER")
-		if username == "" {
-			t.Skip("GITLAB_USER not set")
-		}
-		// Get user ID by listing group members (we're already a member as creator)
-		out, err := callToolOn[groupmembers.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		// User ID 1 (root) is NOT a member of a freshly created group by e2e-tester
+		_, err := callToolOn[groupmembers.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_member_get",
 			"params": map[string]any{
 				"group_id": groupIDStr,
 				"user_id":  "1",
 			},
 		})
-		if err != nil {
-			t.Logf("group_member_get may fail (user not member): %v", err)
-			return
-		}
-		t.Logf("Got group member: %s (ID=%d)", out.Username, out.ID)
+		requireTrue(t, err != nil, "expected error: user 1 is not a member of the group")
+		t.Logf("Expected error for non-member user: %v", err)
 	})
 
 	t.Run("GroupMemberGetInherited", func(t *testing.T) {
 		requireTrue(t, groupID > 0, "groupID not set")
+		// Standalone group has no inherited members
 		_, err := callToolOn[groupmembers.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_member_get_inherited",
 			"params": map[string]any{
@@ -261,11 +269,8 @@ func TestMeta_GroupDeep(t *testing.T) {
 				"user_id":  "1",
 			},
 		})
-		if err != nil {
-			t.Logf("group_member_get_inherited may fail: %v", err)
-			return
-		}
-		t.Log("Got inherited member")
+		requireTrue(t, err != nil, "expected error: user 1 is not an inherited member")
+		t.Logf("Expected error for non-inherited member: %v", err)
 	})
 
 	// ── Labels deep ──────────────────────────────────────────────────────
@@ -314,10 +319,10 @@ func TestMeta_GroupDeep(t *testing.T) {
 		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_update",
 			"params": map[string]any{
-				"group_id":  groupIDStr,
-				"label_id":  labelName,
-				"new_name":  labelName + "-upd",
-				"color":     "#00FF00",
+				"group_id": groupIDStr,
+				"label_id": labelName,
+				"new_name": labelName + "-upd",
+				"color":    "#00FF00",
 			},
 		})
 		requireNoError(t, err, "label update")
@@ -377,18 +382,18 @@ func TestMeta_GroupDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "milestone create")
-		milestoneID = out.ID
+		milestoneID = out.IID
 
 		got, err := callToolOn[groupmilestones.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_get",
 			"params": map[string]any{
-				"group_id":     groupIDStr,
-				"milestone_id": milestoneID,
+				"group_id":      groupIDStr,
+				"milestone_iid": milestoneID,
 			},
 		})
 		requireNoError(t, err, "milestone get")
-		requireTrue(t, got.ID == milestoneID, "milestone ID mismatch")
-		t.Logf("Got milestone %d: %s", got.ID, got.Title)
+		requireTrue(t, got.IID == milestoneID, "milestone IID mismatch")
+		t.Logf("Got milestone IID %d: %s", got.IID, got.Title)
 	})
 
 	t.Run("MilestoneUpdate", func(t *testing.T) {
@@ -397,7 +402,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 			"action": "group_milestone_update",
 			"params": map[string]any{
 				"group_id":     groupIDStr,
-				"milestone_id": milestoneID,
+				"milestone_iid": milestoneID,
 				"description":  "Updated milestone",
 			},
 		})
@@ -411,7 +416,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 			"action": "group_milestone_issues",
 			"params": map[string]any{
 				"group_id":     groupIDStr,
-				"milestone_id": milestoneID,
+				"milestone_iid": milestoneID,
 			},
 		})
 		requireNoError(t, err, "milestone issues")
@@ -424,7 +429,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 			"action": "group_milestone_merge_requests",
 			"params": map[string]any{
 				"group_id":     groupIDStr,
-				"milestone_id": milestoneID,
+				"milestone_iid": milestoneID,
 			},
 		})
 		requireNoError(t, err, "milestone merge_requests")
@@ -432,110 +437,104 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("MilestoneBurndown", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, milestoneID > 0, "milestoneID not set")
 		_, err := callToolOn[groupmilestones.BurndownChartEventsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_burndown",
 			"params": map[string]any{
 				"group_id":     groupIDStr,
-				"milestone_id": milestoneID,
+				"milestone_iid": milestoneID,
 			},
 		})
-		if err != nil {
-			t.Logf("burndown may require Premium: %v", err)
-			return
-		}
+		requireNoError(t, err, "group_milestone_burndown")
 		t.Log("Got burndown chart events")
 	})
 
-	// ── Boards ───────────────────────────────────────────────────────────
-	var boardID int64
-	t.Run("BoardCreate", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
-		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_create",
-			"params": map[string]any{
-				"group_id": groupIDStr,
-				"name":     "Test Board",
-			},
-		})
-		if err != nil {
-			t.Logf("board_create may require Premium: %v", err)
-			return
-		}
-		boardID = out.ID
-		t.Logf("Created group board %d", boardID)
-	})
+	// ── Boards (Premium/Ultimate) ────────────────────────────────────────
+	if sess.enterprise {
+		var boardID int64
 
-	t.Run("BoardList", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
-		out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_list",
-			"params": map[string]any{"group_id": groupIDStr},
+		t.Run("BoardCreate", func(t *testing.T) {
+			requireTrue(t, groupID > 0, "groupID not set")
+			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_create",
+				"params": map[string]any{
+					"group_id": groupIDStr,
+					"name":     "Test Board",
+				},
+			})
+			requireNoError(t, err, "group_board_create")
+			boardID = out.ID
+			t.Logf("Created group board %d", boardID)
 		})
-		requireNoError(t, err, "board_list")
-		requireTrue(t, len(out.Boards) >= 1, "expected at least 1 board")
-		t.Logf("Listed %d group boards", len(out.Boards))
-		if boardID == 0 && len(out.Boards) > 0 {
-			boardID = out.Boards[0].ID
-		}
-	})
 
-	t.Run("BoardGet", func(t *testing.T) {
-		if boardID == 0 {
-			t.Skip("boardID not set")
-		}
-		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_get",
-			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		t.Run("BoardList", func(t *testing.T) {
+			requireTrue(t, groupID > 0, "groupID not set")
+			out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_list",
+				"params": map[string]any{"group_id": groupIDStr},
+			})
+			requireNoError(t, err, "group_board_list")
+			requireTrue(t, len(out.Boards) > 0, "expected at least 1 group board")
+			t.Logf("Listed %d group boards", len(out.Boards))
+			if boardID == 0 && len(out.Boards) > 0 {
+				boardID = out.Boards[0].ID
+			}
 		})
-		requireNoError(t, err, "board_get")
-		requireTrue(t, out.ID == boardID, "board ID mismatch")
-		t.Logf("Got board %d: %s", out.ID, out.Name)
-	})
 
-	t.Run("BoardUpdate", func(t *testing.T) {
-		if boardID == 0 {
-			t.Skip("boardID not set")
-		}
-		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_update",
-			"params": map[string]any{
-				"group_id": groupIDStr,
-				"board_id": boardID,
-				"name":     "Updated Board",
-			},
+		t.Run("BoardGet", func(t *testing.T) {
+			if boardID == 0 {
+				return
+			}
+			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_get",
+				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+			})
+			requireNoError(t, err, "board_get")
+			requireTrue(t, out.ID == boardID, "board ID mismatch")
+			t.Logf("Got board %d: %s", out.ID, out.Name)
 		})
-		if err != nil {
-			t.Logf("board_update may require Premium: %v", err)
-			return
-		}
-		t.Logf("Updated board %d: %s", out.ID, out.Name)
-	})
 
-	t.Run("BoardListLists", func(t *testing.T) {
-		if boardID == 0 {
-			t.Skip("boardID not set")
-		}
-		out, err := callToolOn[groupboards.ListBoardListsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_list_lists",
-			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		t.Run("BoardUpdate", func(t *testing.T) {
+			if boardID == 0 {
+				return
+			}
+			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_update",
+				"params": map[string]any{
+					"group_id": groupIDStr,
+					"board_id": boardID,
+					"name":     "Updated Board",
+				},
+			})
+			requireNoError(t, err, "group_board_update")
+			t.Logf("Updated board %d: %s", out.ID, out.Name)
 		})
-		requireNoError(t, err, "board_list_lists")
-		t.Logf("Board has %d lists", len(out.Lists))
-	})
 
-	t.Run("BoardDelete", func(t *testing.T) {
-		if boardID == 0 {
-			t.Skip("boardID not set")
-		}
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_delete",
-			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		t.Run("BoardListLists", func(t *testing.T) {
+			if boardID == 0 {
+				return
+			}
+			out, err := callToolOn[groupboards.ListBoardListsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_list_lists",
+				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+			})
+			requireNoError(t, err, "board_list_lists")
+			t.Logf("Board has %d lists", len(out.Lists))
 		})
-		if err != nil {
-			t.Logf("board_delete may require Premium: %v", err)
-			return
-		}
-		t.Logf("Deleted board %d", boardID)
-	})
+
+		t.Run("BoardDelete", func(t *testing.T) {
+			if boardID == 0 {
+				return
+			}
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_delete",
+				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+			})
+			requireNoError(t, err, "group_board_delete")
+			t.Logf("Deleted board %d", boardID)
+		})
+	}
 }

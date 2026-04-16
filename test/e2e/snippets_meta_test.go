@@ -76,7 +76,8 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 			"action": "file_content",
 			"params": map[string]any{
 				"snippet_id": snippetID,
-				"file_path":  "test.txt",
+				"ref":        "main",
+				"file_name":  "test.txt",
 			},
 		})
 		requireNoError(t, err, "file_content")
@@ -215,6 +216,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 		out, err := callToolOn[snippetdiscussions.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_create",
 			"params": map[string]any{
+				"project_id": proj.pidStr(),
 				"snippet_id": snippetIDStr,
 				"body":       "E2E discussion on snippet",
 			},
@@ -231,7 +233,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 	t.Run("DiscussionList", func(t *testing.T) {
 		out, err := callToolOn[snippetdiscussions.ListOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_list",
-			"params": map[string]any{"snippet_id": snippetIDStr},
+			"params": map[string]any{"project_id": proj.pidStr(), "snippet_id": snippetIDStr},
 		})
 		requireNoError(t, err, "discussion_list")
 		requireTrue(t, len(out.Discussions) > 0, "discussion_list: expected at least 1")
@@ -242,6 +244,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 		out, err := callToolOn[snippetdiscussions.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_get",
 			"params": map[string]any{
+				"project_id":    proj.pidStr(),
 				"snippet_id":    snippetIDStr,
 				"discussion_id": discID,
 			},
@@ -255,6 +258,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 		out, err := callToolOn[snippetdiscussions.NoteOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_add_note",
 			"params": map[string]any{
+				"project_id":    proj.pidStr(),
 				"snippet_id":    snippetIDStr,
 				"discussion_id": discID,
 				"body":          "Reply to discussion",
@@ -270,6 +274,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 		out, err := callToolOn[snippetdiscussions.NoteOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_update_note",
 			"params": map[string]any{
+				"project_id":    proj.pidStr(),
 				"snippet_id":    snippetIDStr,
 				"discussion_id": discID,
 				"note_id":       noteID,
@@ -285,6 +290,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_delete_note",
 			"params": map[string]any{
+				"project_id":    proj.pidStr(),
 				"snippet_id":    snippetIDStr,
 				"discussion_id": discID,
 				"note_id":       noteID,

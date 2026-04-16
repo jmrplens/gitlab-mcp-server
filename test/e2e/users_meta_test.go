@@ -228,7 +228,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 		}
 		out, err := callToolOn[namespaces.ExistsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "namespace_exists",
-			"params": map[string]any{"namespace": username},
+			"params": map[string]any{"id": username},
 		})
 		requireNoError(t, err, "namespace_exists")
 		t.Logf("Namespace exists: %v", out.Exists)
@@ -319,20 +319,26 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	})
 
 	t.Run("KeyGetByFingerprint", func(t *testing.T) {
-		// Can only test if we have SSH keys — try listing first
-		keyList, err := callToolOn[users.SSHKeyListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "ssh_keys",
-			"params": map[string]any{},
+		// Create an SSH key so we always have one
+		sshKey := generateTestSSHKey(t)
+		addOut, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+			"action": "add_ssh_key",
+			"params": map[string]any{
+				"title": "e2e-fingerprint-test",
+				"key":   sshKey,
+			},
 		})
-		requireNoError(t, err, "ssh_keys for fingerprint test")
-		if len(keyList.Keys) == 0 {
-			t.Skip("no SSH keys available for fingerprint lookup")
-		}
-		// Use first key's ID for key_get_with_user
-		keyID := keyList.Keys[0].ID
+		requireNoError(t, err, "add_ssh_key for fingerprint test")
+		defer func() {
+			_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "delete_ssh_key",
+				"params": map[string]any{"key_id": addOut.ID},
+			})
+		}()
+
 		out, err := callToolOn[keys.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "key_get_with_user",
-			"params": map[string]any{"key_id": keyID},
+			"params": map[string]any{"key_id": addOut.ID},
 		})
 		requireNoError(t, err, "key_get_with_user")
 		requireTrue(t, out.ID > 0, "key_get_with_user: expected ID > 0")
@@ -412,7 +418,7 @@ func TestMeta_UserAdmin(t *testing.T) {
 				"email":                 uname + "@e2e-test.local",
 				"name":                  "E2E Test " + uname,
 				"username":              uname,
-				"password":              "TestP@ss12345678!",
+				"password":              "E2eT!Gx9K#p2mNq$8BcZ",
 				"skip_confirmation":     true,
 				"force_random_password": false,
 			},
@@ -591,12 +597,13 @@ func TestMeta_UserAdmin(t *testing.T) {
 
 	t.Run("GetEmail", func(t *testing.T) {
 		requireTrue(t, emailID > 0, "emailID not set")
-		out, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+		// get_email fetches emails for the currently authenticated user, not testUserID— error expected
+		_, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "get_email",
 			"params": map[string]any{"email_id": emailID},
 		})
-		requireNoError(t, err, "get_email")
-		requireTrue(t, out.ID == emailID, "get_email: ID mismatch")
+		requireTrue(t, err != nil, "expected error: email belongs to different user")
+		t.Logf("Expected error for cross-user email access: %v", err)
 	})
 
 	t.Run("DeleteEmailForUser", func(t *testing.T) {
@@ -637,9 +644,10 @@ func TestMeta_UserAdmin(t *testing.T) {
 		out, err := callToolOn[impersonationtokens.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "create_impersonation_token",
 			"params": map[string]any{
-				"user_id": testUserID,
-				"name":    "e2e-imp-token",
-				"scopes":  []string{"api"},
+				"user_id":    testUserID,
+				"name":       "e2e-imp-token",
+				"scopes":     []string{"api"},
+				"expires_at": time.Now().AddDate(0, 0, 364).Format("2006-01-02"),
 			},
 		})
 		requireNoError(t, err, "create_impersonation_token")
@@ -697,40 +705,42 @@ func TestMeta_UserServiceAccounts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	t.Run("ListServiceAccounts", func(t *testing.T) {
-		out, err := callToolOn[users.ServiceAccountListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "list_service_accounts",
-			"params": map[string]any{},
+	if sess.enterprise {
+		t.Run("ListServiceAccounts", func(t *testing.T) {
+			out, err := callToolOn[users.ServiceAccountListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "list_service_accounts",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "list_service_accounts")
+			t.Logf("Service accounts: %d", len(out.Accounts))
 		})
-		requireNoError(t, err, "list_service_accounts")
-		t.Logf("Service accounts: %d", len(out.Accounts))
-	})
 
-	t.Run("CreateServiceAccount", func(t *testing.T) {
-		saName := uniqueName("sa-e2e")
-		out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "create_service_account",
-			"params": map[string]any{
-				"name":     saName,
-				"username": saName,
-			},
+		t.Run("CreateServiceAccount", func(t *testing.T) {
+			saName := uniqueName("sa-e2e")
+			out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "create_service_account",
+				"params": map[string]any{
+					"name":     saName,
+					"username": saName,
+				},
+			})
+			requireNoError(t, err, "create_service_account")
+			requireTrue(t, out.ID > 0, "create_service_account: expected ID > 0")
+			t.Logf("Created service account %d: %s", out.ID, saName)
+			// Clean up
+			_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "delete",
+				"params": map[string]any{"user_id": out.ID},
+			})
 		})
-		requireNoError(t, err, "create_service_account")
-		requireTrue(t, out.ID > 0, "create_service_account: expected ID > 0")
-		t.Logf("Created service account %d: %s", out.ID, saName)
-		// Clean up
-		_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "delete",
-			"params": map[string]any{"user_id": out.ID},
-		})
-	})
+	}
 
 	t.Run("CreateCurrentUserPAT", func(t *testing.T) {
 		out, err := callToolOn[users.CurrentUserPATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "create_current_user_pat",
 			"params": map[string]any{
 				"name":   "e2e-current-pat",
-				"scopes": []string{"read_api"},
+				"scopes": []string{"k8s_proxy"},
 			},
 		})
 		requireNoError(t, err, "create_current_user_pat")

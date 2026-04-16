@@ -4,14 +4,18 @@ package e2e
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuestatistics"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/workitems"
 )
@@ -29,7 +33,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
-	commitFileMeta(ctx, t, sess.meta, proj, "main", "README.md", "issue-deep test", "init commit")
+	commitFileMeta(ctx, t, sess.meta, proj, "main", testFileMainGo, "issue-deep test", "init commit")
 
 	// Create base issue for sub-tests
 	var issueIID int64
@@ -75,16 +79,23 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	})
 
 	t.Run("ListGroup", func(t *testing.T) {
-		// Need a group — skip if none available
-		_, err := callToolOn[issues.ListGroupOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
-			"action": "list_group",
-			"params": map[string]any{"group_id": "1"},
+		// Create a temporary group for this test
+		grp, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "create",
+			"params": map[string]any{"name": uniqueName("grp"), "path": uniqueName("grp")},
 		})
-		if err != nil {
-			t.Logf("list_group may fail without group: %v", err)
-			return
-		}
-		t.Log("Listed group issues")
+		requireNoError(t, err, "create group for list_group")
+		defer func() {
+			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+			})
+		}()
+		out, err := callToolOn[issues.ListGroupOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "list_group",
+			"params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+		})
+		requireNoError(t, err, "list_group")
+		t.Logf("Listed %d group issues", len(out.Issues))
 	})
 
 	// ── Actions on issue ─────────────────────────────────────────────────
@@ -94,7 +105,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "subscribe",
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
-		requireNoError(t, err, "issue subscribe")
+		requireNoError(t, err, "subscribe")
 		t.Logf("Subscribed to issue !%d", out.IID)
 	})
 
@@ -121,18 +132,16 @@ func TestMeta_IssuesDeep(t *testing.T) {
 
 	t.Run("Reorder", func(t *testing.T) {
 		requireTrue(t, issueIID > 0, "issueIID not set")
-		out, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+		// Reorder without move_after_id/move_before_id is expected to fail
+		_, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "reorder",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"issue_iid":  issueIID,
 			},
 		})
-		if err != nil {
-			t.Logf("reorder may fail without move params: %v", err)
-			return
-		}
-		t.Logf("Reordered issue !%d", out.IID)
+		requireTrue(t, err != nil, "expected reorder to fail without move_after_id/move_before_id")
+		t.Logf("Expected error for reorder without move params: %v", err)
 	})
 
 	t.Run("Participants", func(t *testing.T) {
@@ -241,7 +250,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 				"project_id":        proj.pidStr(),
 				"issue_iid":         issueIID,
 				"target_project_id": proj.pidStr(),
-				"target_issue_iid":  issue2.IID,
+				"target_issue_iid":  strconv.FormatInt(issue2.IID, 10),
 			},
 		})
 		requireNoError(t, err, "link_create for link_get test")
@@ -279,14 +288,22 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	})
 
 	t.Run("StatisticsGetGroup", func(t *testing.T) {
-		_, err := callToolOn[issuestatistics.StatisticsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
-			"action": "statistics_get_group",
-			"params": map[string]any{"group_id": "1"},
+		// Create a temporary group for this test
+		grp, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "create",
+			"params": map[string]any{"name": uniqueName("grp"), "path": uniqueName("grp")},
 		})
-		if err != nil {
-			t.Logf("statistics_get_group may fail without group: %v", err)
-			return
-		}
+		requireNoError(t, err, "create group for statistics_get_group")
+		defer func() {
+			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "delete", "params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+			})
+		}()
+		_, err = callToolOn[issuestatistics.StatisticsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "statistics_get_group",
+			"params": map[string]any{"group_id": strconv.FormatInt(int64(grp.ID), 10)},
+		})
+		requireNoError(t, err, "statistics_get_group")
 		t.Log("Got group issue statistics")
 	})
 
@@ -314,7 +331,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":  issueIID,
+				"iid":        issueIID,
 				"note_id":    noteID,
 				"name":       "thumbsup",
 			},
@@ -330,7 +347,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":  issueIID,
+				"iid":        issueIID,
 				"note_id":    noteID,
 			},
 		})
@@ -344,10 +361,10 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "emoji_issue_note_get",
 			"params": map[string]any{
-				"project_id":     proj.pidStr(),
-				"issue_iid":      issueIID,
-				"note_id":        noteID,
-				"award_emoji_id": noteEmojiID,
+				"project_id": proj.pidStr(),
+				"iid":        issueIID,
+				"note_id":    noteID,
+				"award_id":   noteEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_issue_note_get")
@@ -360,14 +377,88 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "emoji_issue_note_delete",
 			"params": map[string]any{
-				"project_id":     proj.pidStr(),
-				"issue_iid":      issueIID,
-				"note_id":        noteID,
-				"award_emoji_id": noteEmojiID,
+				"project_id": proj.pidStr(),
+				"iid":        issueIID,
+				"note_id":    noteID,
+				"award_id":   noteEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_issue_note_delete")
 		t.Logf("Deleted note emoji %d", noteEmojiID)
+	})
+
+	// ── Resource event setup: generate label, milestone, and state events ──
+	t.Run("SetupLabelEvent", func(t *testing.T) {
+		requireTrue(t, issueIID > 0, "issueIID not set")
+		lbl, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "label_create",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"name":       "e2e-event-label",
+				"color":      "#FF0000",
+			},
+		})
+		requireNoError(t, err, "label_create for event setup")
+		t.Logf("Created label %q (ID=%d)", lbl.Name, lbl.ID)
+
+		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"issue_iid":  issueIID,
+				"add_labels": "e2e-event-label",
+			},
+		})
+		requireNoError(t, err, "add label to issue")
+		t.Log("Added label to issue")
+	})
+
+	t.Run("SetupMilestoneEvent", func(t *testing.T) {
+		requireTrue(t, issueIID > 0, "issueIID not set")
+		ms, err := callToolOn[milestones.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "milestone_create",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"title":      "e2e-event-milestone",
+			},
+		})
+		requireNoError(t, err, "milestone_create for event setup")
+		t.Logf("Created milestone %q (ID=%d)", ms.Title, ms.ID)
+
+		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"project_id":   proj.pidStr(),
+				"issue_iid":    issueIID,
+				"milestone_id": ms.ID,
+			},
+		})
+		requireNoError(t, err, "set milestone on issue")
+		t.Log("Set milestone on issue")
+	})
+
+	t.Run("SetupStateEvent", func(t *testing.T) {
+		requireTrue(t, issueIID > 0, "issueIID not set")
+		_, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"project_id":  proj.pidStr(),
+				"issue_iid":   issueIID,
+				"state_event": "close",
+			},
+		})
+		requireNoError(t, err, "close issue for state event")
+
+		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"project_id":  proj.pidStr(),
+				"issue_iid":   issueIID,
+				"state_event": "reopen",
+			},
+		})
+		requireNoError(t, err, "reopen issue for state event")
+		t.Log("Closed and reopened issue to generate state events")
 	})
 
 	// ── Resource events ──────────────────────────────────────────────────
@@ -399,15 +490,13 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "list state events to get ID")
-		if len(list.Events) == 0 {
-			t.Skip("no state events to get")
-		}
+		requireTrue(t, len(list.Events) > 0, "expected at least 1 state event after close/reopen")
 		out, err := callToolOn[resourceevents.StateEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_state_get",
 			"params": map[string]any{
-				"project_id":      proj.pidStr(),
-				"issue_iid":       issueIID,
-				"state_event_id":  list.Events[0].ID,
+				"project_id":     proj.pidStr(),
+				"issue_iid":      issueIID,
+				"state_event_id": list.Events[0].ID,
 			},
 		})
 		requireNoError(t, err, "event_issue_state_get")
@@ -421,9 +510,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "list label events")
-		if len(list.Events) == 0 {
-			t.Skip("no label events to get")
-		}
+		requireTrue(t, len(list.Events) > 0, "expected at least 1 label event after adding label")
 		_, err = callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_label_get",
 			"params": map[string]any{
@@ -443,9 +530,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "list milestone events")
-		if len(list.Events) == 0 {
-			t.Skip("no milestone events to get")
-		}
+		requireTrue(t, len(list.Events) > 0, "expected at least 1 milestone event after setting milestone")
 		_, err = callToolOn[resourceevents.MilestoneEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_milestone_get",
 			"params": map[string]any{
@@ -459,27 +544,29 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	})
 
 	t.Run("EventIssueIterationList", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, issueIID > 0, "issueIID not set")
 		_, err := callToolOn[resourceevents.ListIterationEventsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_list",
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
-		if err != nil {
-			t.Logf("iteration events may require Premium: %v", err)
-			return
-		}
+		requireNoError(t, err, "event_issue_iteration_list")
 		t.Log("Listed iteration events")
 	})
 
 	t.Run("EventIssueIterationGet", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
 		requireTrue(t, issueIID > 0, "issueIID not set")
 		list, err := callToolOn[resourceevents.ListIterationEventsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_list",
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
-		if err != nil || len(list.Events) == 0 {
-			t.Skip("no iteration events to get")
-		}
+		requireNoError(t, err, "list iteration events for get")
+		requireTrue(t, len(list.Events) > 0, "expected at least 1 iteration event")
 		_, err = callToolOn[resourceevents.IterationEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_get",
 			"params": map[string]any{
@@ -500,15 +587,12 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		out, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "move",
 			"params": map[string]any{
-				"project_id":     proj.pidStr(),
-				"issue_iid":      issueIID,
-				"to_project_id":  proj2.pidStr(),
+				"project_id":    proj.pidStr(),
+				"issue_iid":     issueIID,
+				"to_project_id": proj2.pidStr(),
 			},
 		})
-		if err != nil {
-			t.Logf("move may fail depending on permissions: %v", err)
-			return
-		}
+		requireNoError(t, err, "issue move")
 		t.Logf("Moved issue to project %s → IID %d", proj2.pidStr(), out.IID)
 	})
 }
@@ -524,9 +608,13 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
-	commitFileMeta(ctx, t, sess.meta, proj, "main", "README.md", "work items test", "init commit")
+	commitFileMeta(ctx, t, sess.meta, proj, "main", testFileMainGo, "work items test", "init commit")
 
 	var workItemIID int64
+
+	if !sess.enterprise {
+		return
+	}
 
 	t.Run("WorkItemCreate", func(t *testing.T) {
 		out, err := callToolOn[workitems.GetOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
@@ -537,10 +625,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 				"type":       "ISSUE",
 			},
 		})
-		if err != nil {
-			t.Logf("work_item_create may fail on older GitLab: %v", err)
-			return
-		}
+		requireNoError(t, err, "work_item_create")
 		workItemIID = out.WorkItem.IID
 		t.Logf("Created work item IID=%d", workItemIID)
 	})
@@ -550,17 +635,13 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 			"action": "work_item_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		if err != nil {
-			t.Logf("work_item_list may fail on older GitLab: %v", err)
-			return
-		}
+		requireNoError(t, err, "work_item_list")
 		t.Logf("Listed %d work items", len(out.WorkItems))
 	})
 
-
 	t.Run("WorkItemGet", func(t *testing.T) {
 		if workItemIID == 0 {
-			t.Skip("workItemIID not set")
+			return
 		}
 		out, err := callToolOn[workitems.GetOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "work_item_get",
@@ -575,7 +656,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 
 	t.Run("WorkItemUpdate", func(t *testing.T) {
 		if workItemIID == 0 {
-			t.Skip("workItemIID not set")
+			return
 		}
 		out, err := callToolOn[workitems.GetOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "work_item_update",
@@ -591,7 +672,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 
 	t.Run("WorkItemDelete", func(t *testing.T) {
 		if workItemIID == 0 {
-			t.Skip("workItemIID not set")
+			return
 		}
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "work_item_delete",

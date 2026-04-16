@@ -46,7 +46,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProject(ctx, t, sess.individual)
@@ -95,9 +95,10 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
+		drainSidekiq(ctx, t)
 		var out mergerequests.CommitsOutput
 		var err error
-		deadline := time.Now().Add(60 * time.Second)
+		deadline := time.Now().Add(120 * time.Second)
 		delay := 1 * time.Second
 		for attempt := 1; time.Now().Before(deadline); attempt++ {
 			select {
@@ -118,7 +119,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			}
 		}
 		requireNoError(t, err, "MR commits")
-		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
+		requireTrue(t, len(out.Commits) >= 1, "expected >=1 MR commit, got %d", len(out.Commits))
 	})
 
 	t.Run("Participants", func(t *testing.T) {
@@ -145,7 +146,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProjectMeta(ctx, t, sess.meta)
@@ -206,9 +207,10 @@ func TestMeta_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
+		drainSidekiq(ctx, t)
 		var out mergerequests.CommitsOutput
 		var err error
-		deadline := time.Now().Add(60 * time.Second)
+		deadline := time.Now().Add(120 * time.Second)
 		delay := 1 * time.Second
 		for attempt := 1; time.Now().Before(deadline); attempt++ {
 			select {
@@ -232,7 +234,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			}
 		}
 		requireNoError(t, err, "MR commits meta")
-		requireTrue(t, len(out.Commits) >= 1, "expected >=1 commit, got %d", len(out.Commits))
+		requireTrue(t, len(out.Commits) >= 1, "expected >=1 MR commit via meta, got %d", len(out.Commits))
 	})
 
 	t.Run("Participants", func(t *testing.T) {

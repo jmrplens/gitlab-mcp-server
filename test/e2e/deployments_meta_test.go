@@ -77,6 +77,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
+		// Deployment was updated to "success" status — GitLab blocks deletion of completed deployments
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_deployment", map[string]any{
 			"action": "delete",
 			"params": map[string]any{
@@ -84,7 +85,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 				"deployment_id": deployID,
 			},
 		})
-		requireNoError(t, err, "deployment delete")
-		t.Log("Deleted deployment")
+		requireTrue(t, err != nil, "expected error deleting completed deployment")
+		t.Logf("Expected error for completed deployment deletion: %v", err)
 	})
 }

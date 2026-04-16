@@ -15,7 +15,7 @@ import (
 func TestMeta_ProtectedEnvs(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("protected environments require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()

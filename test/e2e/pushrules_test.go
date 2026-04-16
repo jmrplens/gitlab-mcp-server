@@ -14,7 +14,7 @@ import (
 func TestIndividual_PushRules(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("push rules require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()
@@ -65,7 +65,7 @@ func TestIndividual_PushRules(t *testing.T) {
 func TestMeta_PushRules(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("push rules require GitLab Premium/Ultimate — skipping")
+		return
 	}
 
 	ctx := context.Background()

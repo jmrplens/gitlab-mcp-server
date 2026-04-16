@@ -59,9 +59,10 @@ func TestIndividual_MRApproval(t *testing.T) {
 	})
 
 	t.Run("Individual/MR/Merge", func(t *testing.T) {
+		drainSidekiq(ctx, t)
 		var out mergerequests.Output
 		var err error
-		for i := range 10 {
+		for i := range 20 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.individual, "gitlab_mr_merge", mergerequests.MergeInput{
 				ProjectID:                proj.pidOf(),
 				MRIID:                    mr.IID,
@@ -140,9 +141,10 @@ func TestMeta_MRApproval(t *testing.T) {
 	})
 
 	t.Run("Meta/MR/Merge", func(t *testing.T) {
+		drainSidekiq(ctx, t)
 		var out mergerequests.Output
 		var err error
-		for i := range 10 {
+		for i := range 20 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 				"action": "merge",
 				"params": map[string]any{

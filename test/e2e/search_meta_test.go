@@ -23,15 +23,14 @@ func TestMeta_SearchExtended(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "search_target.txt", "searchable content for e2e", "add searchable file")
 
-	// Wait briefly for indexing
-	time.Sleep(2 * time.Second)
+	drainSidekiq(ctx, t)
 
 	t.Run("SearchMergeRequests", func(t *testing.T) {
 		out, err := callToolOn[search.MergeRequestsOutput](ctx, sess.meta, "gitlab_search", map[string]any{
 			"action": "merge_requests",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "test",
+				"query":     "test",
 			},
 		})
 		requireNoError(t, err, "search merge_requests")
@@ -43,7 +42,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "issues",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "test",
+				"query":     "test",
 			},
 		})
 		requireNoError(t, err, "search issues")
@@ -55,7 +54,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "commits",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "searchable",
+				"query":     "searchable",
 			},
 		})
 		requireNoError(t, err, "search commits")
@@ -67,7 +66,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "milestones",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "test",
+				"query":     "test",
 			},
 		})
 		requireNoError(t, err, "search milestones")
@@ -79,7 +78,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "notes",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "test",
+				"query":     "test",
 			},
 		})
 		requireNoError(t, err, "search notes")
@@ -90,7 +89,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 		out, err := callToolOn[search.SnippetsOutput](ctx, sess.meta, "gitlab_search", map[string]any{
 			"action": "snippets",
 			"params": map[string]any{
-				"search": "test",
+				"query": "test",
 			},
 		})
 		requireNoError(t, err, "search snippets")
@@ -101,7 +100,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 		out, err := callToolOn[search.UsersOutput](ctx, sess.meta, "gitlab_search", map[string]any{
 			"action": "users",
 			"params": map[string]any{
-				"search": "root",
+				"query": "root",
 			},
 		})
 		requireNoError(t, err, "search users")
@@ -113,7 +112,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 			"action": "wiki",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"search":     "test",
+				"query":     "test",
 			},
 		})
 		requireNoError(t, err, "search wiki")
