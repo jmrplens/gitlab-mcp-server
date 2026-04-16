@@ -160,22 +160,13 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
 
 #### Publish to Container Registry
 
-The publish scripts read credentials from `.env` automatically (see `.env.example`):
+Publish via Makefile or manually:
 
 ```bash
-# Linux / macOS
-./scripts/docker-publish.sh
-
-# Windows (PowerShell)
-.\scripts\docker-publish.ps1
-
-# Or via Makefile (requires DOCKER_REGISTRY env var or .env)
+# Via Makefile
 make docker-push
-```
 
-To publish manually without the scripts:
-
-```bash
+# Or manually
 docker login ghcr.io -u "$GITHUB_USER" --password-stdin <<< "$GITHUB_TOKEN"
 docker push ghcr.io/jmrplens/gitlab-mcp-server:1.7.1
 docker push ghcr.io/jmrplens/gitlab-mcp-server:latest

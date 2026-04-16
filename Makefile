@@ -387,9 +387,24 @@ fmt:
 	gofmt -s -w .
 
 ## release: build release binaries using GoReleaser (local snapshot, no publish).
-## Produces binaries in dist/ for all 6 platform targets.
+## Produces flat binaries in dist/ matching GitHub Release asset names.
 release:
 	goreleaser release --snapshot --clean
+	@# Flatten dist/: move binaries out of subdirs, remove GoReleaser metadata
+	@for dir in dist/gitlab-mcp-server_*; do \
+		if [ -d "$$dir" ]; then \
+			os_arch=$$(echo "$$dir" | sed -E 's|dist/gitlab-mcp-server_([^_]+)_([^_]+).*|\1-\2|'); \
+			src=$$(find "$$dir" -maxdepth 1 -type f | head -1); \
+			if echo "$$src" | grep -q '\.exe$$'; then \
+				mv "$$src" "dist/gitlab-mcp-server-$${os_arch}.exe"; \
+			else \
+				mv "$$src" "dist/gitlab-mcp-server-$${os_arch}"; \
+			fi; \
+			rm -rf "$$dir"; \
+		fi; \
+	done
+	@rm -f dist/artifacts.json dist/config.yaml dist/metadata.json
+	@echo "dist/ contents:" && ls -1 dist/
 
 ## release-check: validate .goreleaser.yml configuration
 release-check:

@@ -167,7 +167,7 @@ GOOS=darwin GOARCH=arm64 go build -o dist/gitlab-mcp-server-darwin-arm64 ./cmd/s
 
 When creating a new release and uploading binaries to GitHub Releases:
 
-1. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
+1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
 2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
 
 ### Git Workflow

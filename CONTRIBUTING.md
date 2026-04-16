@@ -227,7 +227,7 @@ All project artifacts must be written in **English**:
 
 When creating a new release and uploading binaries to GitHub Releases:
 
-1. Build cross-platform binaries with `scripts/build-release.ps1` (Windows) or `scripts/build-release.sh` (Linux/macOS)
+1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
 2. Create a GitHub release with the new tag and upload the binaries + checksum
 
 ## Issue Reporting
