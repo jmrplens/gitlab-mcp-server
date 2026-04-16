@@ -39,7 +39,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-gitlab-url` | string | _(required)_ | GitLab instance URL (e.g. `https://gitlab.example.com`) |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools (40 base / 59 enterprise instead of 1004) |
-| `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (14 additional) |
+| `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (19 additional) |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
 | `-max-http-clients` | int | `100` | Maximum concurrent client sessions (upper bound: 10,000) |
 | `-session-timeout` | duration | `30m` | Idle MCP session timeout (upper bound: 24h) |

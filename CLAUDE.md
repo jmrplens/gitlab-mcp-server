@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.17.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.1.0                                               |
+| Version       | 1.0.0                                               |
 
 ### Scale
 
@@ -26,7 +26,7 @@
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
-| MCP Icons                 | 43 domain SVG icons on all tools, resources, and prompts                                                     |
+| MCP Icons                 | 44 domain SVG icons on all tools, resources, and prompts                                                     |
 | Source files (tools)      | 512+ (infrastructure + 162 sub-packages)                                                                     |
 | Test files (tools)        | 206                                                                                                          |
 | Go packages               | 188 (16 core + 162 tool sub-packages + 8 cmd + 2 other)                                                      |
@@ -124,11 +124,11 @@ gitlab-mcp-server/
 ├── plan/                        # Implementation plans for features
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
-│   ├── agents/                  # 9 specialized AI agents
+│   ├── agents/                  # 7 specialized AI agents
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.1.0)
+└── VERSION                      # Semantic version (1.0.0)
 ```
 
 ## Key Development Patterns

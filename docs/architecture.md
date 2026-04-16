@@ -77,7 +77,7 @@ graph TD
         PROG[progress<br/>Progress notifications]
         SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
-        ICN[icons<br/>43 SVG domain icons]
+        ICN[icons<br/>44 SVG domain icons]
         SRV[MCP Server<br/>go-sdk/mcp v1.5.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
@@ -177,7 +177,7 @@ The largest package — contains 1004 MCP tool implementations organized across 
 | `errors.go`        | Error helpers (`wrapErr`, `handleGitLabError`)                |
 | `logging.go`       | `logToolCall` helper                                          |
 
-**Domain sub-packages** (117 total, grouped by category):
+**Domain sub-packages** (162 total, grouped by category):
 
 | Category          | Sub-packages                                                                                    |
 | ----------------- | ----------------------------------------------------------------------------------------------- |
@@ -533,7 +533,7 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 
 ## New Contributor Quick Start
 
-1. **Read [MCP Concepts](mcp-concepts.md)** — understand the protocol
+1. **Read [MCP Concepts](mcp-protocol/README.md)** — understand the protocol
 2. **Read `cmd/server/main.go`** — entry point shows how everything connects
 3. **Study one sub-package** (e.g., `internal/tools/branches/`) — understand the handler pattern
 4. **Look at `internal/tools/register_meta.go`** — see how handlers become meta-tools
@@ -561,7 +561,7 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 - [HTTP Server Mode](http-server-mode.md) — multi-client HTTP architecture and session lifecycle
 - [Resource Consumption](resource-consumption.md) — memory, CPU, and capacity planning
 - [Configuration](configuration.md) — environment variables, CLI flags, and setup
-- [Development](development.md) — building, testing, and contributing
+- [Development](development/development.md) — building, testing, and contributing
 - [Capabilities](capabilities.md) — all 6 capabilities in detail
 - [Tools Overview](tools/README.md) — tool registration modes and inventory
 

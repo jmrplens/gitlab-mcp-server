@@ -48,7 +48,7 @@ make test-e2e
 # Run end-to-end tests in Docker mode (ephemeral GitLab)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
-set -a && source .env.docker && set +a
+set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 
@@ -158,15 +158,18 @@ docs(readme): update tool count after wiki tools
 
 ```text
 internal/tools/
-├── <domain>.go              # Tool handler functions
-├── <domain>_test.go         # Table-driven unit tests
-├── register.go              # Individual tool registration
-├── register_meta.go         # Meta-tool registration
-├── metatool.go              # Meta-tool dispatcher
-├── pagination.go            # Pagination utilities
-├── errors.go                # Error formatting
-├── text.go                  # Markdown formatting
-└── logging.go               # Tool call logging
+├── register.go              # RegisterAll() — delegates to sub-package RegisterTools()
+├── register_meta.go         # RegisterAllMeta() — meta-tool registration
+├── metatool.go              # Meta-tool registration infrastructure
+├── pagination.go            # Pagination type aliases
+├── errors.go                # Error helpers (bridge to toolutil)
+├── markdown.go              # Markdown formatting (bridge to toolutil)
+├── logging.go               # Tool call logging (bridge to toolutil)
+└── <domain>/                # 162 domain sub-packages
+    ├── register.go          # RegisterTools() for this domain
+    ├── <domain>.go          # Typed input/output structs + handlers
+    ├── <domain>_test.go     # Table-driven unit tests
+    └── markdown.go          # Markdown formatters (self-registered via init())
 ```
 
 ## Testing
@@ -193,7 +196,7 @@ go test ./internal/tools/... -coverprofile=cover.out
 go tool cover -func=cover.out
 
 # E2E tests (requires real GitLab)
-go test -tags e2e -timeout 120s ./test/e2e/suite/
+go test -tags e2e -timeout 300s ./test/e2e/suite/
 ```
 
 ## Documentation

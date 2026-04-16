@@ -41,9 +41,9 @@
 | Core packages            |            962 |         61 | autoupdate, config, gitlab, wizard…  |
 | Tools orchestration      |            205 |         14 | register, metatool, markdown, errors |
 | Tool sub-packages (122)  |          5,163 |        142 | Domain-specific tool handlers        |
-| E2E integration          |            366 |          3 | Full workflow against real GitLab    |
+| E2E integration          |            366 |         82 | Full workflow against real GitLab    |
 | cmd/server               |             36 |          1 | Main entry point tests               |
-| **Total**                |      **6,729** |    **221** |                                      |
+| **Total**                |      **6,729** |    **300** |                                      |
 
 ### Core Packages
 
@@ -456,7 +456,7 @@ docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/register-runner.sh # Registers CI runner
 
 # Run tests
-set -a && source .env.docker && set +a
+set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 # Cleanup
@@ -583,7 +583,7 @@ make test-e2e
 # Docker mode (ephemeral GitLab CE container)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
-set -a && source .env.docker && set +a
+set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 docker compose -f test/e2e/docker-compose.yml down -v
 

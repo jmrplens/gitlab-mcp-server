@@ -37,7 +37,6 @@ Capabilities are declared in `cmd/server/main.go` when constructing the MCP serv
 server := mcp.NewServer(
     &mcp.ServerCapabilities{
         Logging:     &mcp.LoggingCapabilities{},
-        Completions: &mcp.CompletionCapability{},
     },
     &mcp.ServerOptions{
         CompletionHandler:           completionHandler.Complete,
@@ -55,7 +54,7 @@ Additional cross-cutting features implemented alongside capabilities.
 
 | # | Feature | Package | Purpose |
 | --: | ------- | ------- | ------- |
-| 1 | [Icons](icons.md) | `internal/toolutil/` | 43 SVG icons for tools, resources, and prompts |
+| 1 | [Icons](icons.md) | `internal/toolutil/` | 44 SVG icons for tools, resources, and prompts |
 
 ## Design Principles
 

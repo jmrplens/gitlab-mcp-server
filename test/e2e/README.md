@@ -96,8 +96,8 @@ go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
 Verify E2E code compiles without needing a GitLab instance:
 
 ```bash
-go test -tags e2e -c -o /dev/null ./test/e2e/  # Linux/macOS
-go test -tags e2e -c -o NUL ./test/e2e/         # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux/macOS
+go test -tags e2e -c -o NUL ./test/e2e/suite/         # Windows
 ```
 
 ## Domain Coverage

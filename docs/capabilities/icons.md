@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **43 unique SVG icons** assigned to all 1004 individual tools, 40/59 meta-tools, 24 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, etc.).
+gitlab-mcp-server ships **44 unique SVG icons** assigned to all 1004 individual tools, 40/59 meta-tools, 24 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -88,7 +88,7 @@ func icon(svg string) []mcp.Icon {
 
 ## Icon Gallery
 
-All 43 icons with their SVG preview, exported variable name, and the tool packages that use each one.
+All 44 icons with their SVG preview, exported variable name, and the tool packages that use each one.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -111,6 +111,7 @@ All 43 icons with their SVG preview, exported variable name, and the tool packag
 | <img src="icons/milestone.svg" width="32" height="32" alt="Milestone"> | `IconMilestone` | groupmilestones, milestones |
 | <img src="icons/board.svg" width="32" height="32" alt="Board"> | `IconBoard` | boards, groupboards |
 | <img src="icons/link.svg" width="32" height="32" alt="Link"> | `IconLink` | issuelinks, releaselinks |
+| <img src="icons/epic.svg" width="32" height="32" alt="Epic"> | `IconEpic` | epicissues, epicnotes, epics |
 | <img src="icons/todo.svg" width="32" height="32" alt="Todo"> | `IconTodo` | todos |
 
 ### Merge Requests
@@ -204,7 +205,7 @@ All 43 icons with their SVG preview, exported variable name, and the tool packag
 
 ## Complete Icon-to-Package Reference
 
-Alphabetical listing of all 43 icons and every sub-package that uses each one.
+Alphabetical listing of all 44 icons and every sub-package that uses each one.
 
 | Icon | Variable | Packages (110 total) |
 | ---- | -------- | -------------------- |
@@ -217,6 +218,7 @@ Alphabetical listing of all 43 icons and every sub-package that uses each one.
 | Container | `IconContainer` | containerregistry |
 | Deploy | `IconDeploy` | deployments |
 | Discussion | `IconDiscussion` | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions |
+| Epic | `IconEpic` | epicissues, epicnotes, epics |
 | Environment | `IconEnvironment` | environments |
 | Event | `IconEvent` | events, resourceevents |
 | File | `IconFile` | files, markdown, pages |

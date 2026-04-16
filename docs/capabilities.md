@@ -33,8 +33,7 @@ Capabilities are declared in `cmd/server/main.go` when constructing the MCP serv
 
 ```go
 mcp.ServerCapabilities{
-    Logging:     &mcp.LoggingCapability{},
-    Completions: &mcp.CompletionCapability{},
+    Logging:     &mcp.LoggingCapabilities{},
 }
 ```
 
