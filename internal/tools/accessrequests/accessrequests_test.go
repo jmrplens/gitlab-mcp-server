@@ -586,8 +586,8 @@ func TestDenyGroup_MissingGroupID(t *testing.T) {
 // TestConvertAccessRequest_WithDates verifies the behavior of convert access request with dates.
 func TestConvertAccessRequest_WithDates(t *testing.T) {
 	// gl.AccessRequest uses *time.Time for CreatedAt and RequestedAt
-	now := testTime(t, "2025-06-15T10:30:00Z")
-	later := testTime(t, "2025-06-16T08:00:00Z")
+	now := testTime(t, "2026-06-15T10:30:00Z")
+	later := testTime(t, "2026-06-16T08:00:00Z")
 
 	ar := mockAccessRequest(1, "alice", "Alice", "pending", 30)
 	ar.CreatedAt = now
@@ -598,13 +598,13 @@ func TestConvertAccessRequest_WithDates(t *testing.T) {
 	if out.CreatedAt == "" {
 		t.Fatal("expected CreatedAt to be populated")
 	}
-	if !strings.Contains(out.CreatedAt, "2025-06-15") {
+	if !strings.Contains(out.CreatedAt, "2026-06-15") {
 		t.Errorf("unexpected CreatedAt: %s", out.CreatedAt)
 	}
 	if out.RequestedAt == "" {
 		t.Fatal("expected RequestedAt to be populated")
 	}
-	if !strings.Contains(out.RequestedAt, "2025-06-16") {
+	if !strings.Contains(out.RequestedAt, "2026-06-16") {
 		t.Errorf("unexpected RequestedAt: %s", out.RequestedAt)
 	}
 }
@@ -637,8 +637,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Name:        "Alice Smith",
 		State:       "approved",
 		AccessLevel: 30,
-		CreatedAt:   "2025-06-15T10:30:00Z",
-		RequestedAt: "2025-06-16T08:00:00Z",
+		CreatedAt:   "2026-06-15T10:30:00Z",
+		RequestedAt: "2026-06-16T08:00:00Z",
 	}
 	md := FormatOutputMarkdown(out)
 
@@ -649,8 +649,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Name | Alice Smith |",
 		"| State | approved |",
 		"| Access Level | 30 |",
-		"| Created At | 15 Jun 2025 10:30 UTC |",
-		"| Requested At | 16 Jun 2025 08:00 UTC |",
+		"| Created At | 15 Jun 2026 10:30 UTC |",
+		"| Requested At | 16 Jun 2026 08:00 UTC |",
 	}
 	for _, c := range checks {
 		if !strings.Contains(md, c) {

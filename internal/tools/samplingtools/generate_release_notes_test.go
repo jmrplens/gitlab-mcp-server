@@ -208,8 +208,8 @@ func TestGenerateReleaseNotes_FullFlow(t *testing.T) {
 	mux.HandleFunc("/api/v4/projects/42/repository/compare", func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"commits": [
-				{"id": "abc123", "short_id": "abc123", "title": "feat: login", "author_name": "alice", "authored_date": "2024-06-01T10:00:00Z"},
-				{"id": "def456", "short_id": "def456", "title": "fix: auth", "author_name": "bob", "authored_date": "2024-06-02T10:00:00Z"}
+				{"id": "abc123", "short_id": "abc123", "title": "feat: login", "author_name": "alice", "authored_date": "2026-06-01T10:00:00Z"},
+				{"id": "def456", "short_id": "def456", "title": "fix: auth", "author_name": "bob", "authored_date": "2026-06-02T10:00:00Z"}
 			],
 			"diffs": [
 				{"old_path": "auth.go", "new_path": "auth.go", "diff": "@@ -1 +1 @@\n-old\n+new"}

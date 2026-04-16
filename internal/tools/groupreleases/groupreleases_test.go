@@ -22,7 +22,7 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","created_at":"2024-01-01T00:00:00Z","released_at":"2024-01-01T00:00:00Z","author":{"username":"admin"},"upcoming_release":false,"_links":{"self":"https://git.example.com/group/proj/-/releases/v1.0.0"}}
+				{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","author":{"username":"admin"},"upcoming_release":false,"_links":{"self":"https://git.example.com/group/proj/-/releases/v1.0.0"}}
 			]`)
 			return
 		}
@@ -266,9 +266,9 @@ func TestList_MultipleReleases(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"tag_name":"v2.0.0","name":"Major","created_at":"2024-07-01T00:00:00Z","author":{"username":"lead"}},
-				{"tag_name":"v1.1.0","name":"Minor","created_at":"2024-06-01T00:00:00Z","author":{"username":"dev"}},
-				{"tag_name":"v1.0.0","name":"Initial","created_at":"2024-05-01T00:00:00Z","author":{"username":"admin"}}
+				{"tag_name":"v2.0.0","name":"Major","created_at":"2026-07-01T00:00:00Z","author":{"username":"lead"}},
+				{"tag_name":"v1.1.0","name":"Minor","created_at":"2026-06-01T00:00:00Z","author":{"username":"dev"}},
+				{"tag_name":"v1.0.0","name":"Initial","created_at":"2026-05-01T00:00:00Z","author":{"username":"admin"}}
 			]`)
 			return
 		}

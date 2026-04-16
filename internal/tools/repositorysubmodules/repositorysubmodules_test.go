@@ -28,8 +28,8 @@ func TestUpdate_Success(t *testing.T) {
 			"author_name": "Dev User",
 			"author_email": "dev@example.com",
 			"message": "Update submodule lib to abc123",
-			"created_at": "2024-01-15T10:30:00Z",
-			"committed_date": "2024-01-15T10:30:00Z"
+			"created_at": "2026-01-15T10:30:00Z",
+			"committed_date": "2026-01-15T10:30:00Z"
 		}`)
 	})
 

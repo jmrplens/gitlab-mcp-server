@@ -21,8 +21,8 @@ import (
 func TestFormatDeploymentHistoryForAnalysis(t *testing.T) {
 	depList := deployments.ListOutput{
 		Deployments: []deployments.Output{
-			{ID: 1, Status: "success", Ref: "main", SHA: "abc123", EnvironmentName: "production", UserName: "alice", CreatedAt: "2024-01-15T10:00:00Z"},
-			{ID: 2, Status: "failed", Ref: "main", SHA: "def456", EnvironmentName: "production", UserName: "bob", CreatedAt: "2024-01-16T10:00:00Z"},
+			{ID: 1, Status: "success", Ref: "main", SHA: "abc123", EnvironmentName: "production", UserName: "alice", CreatedAt: "2026-01-15T10:00:00Z"},
+			{ID: 2, Status: "failed", Ref: "main", SHA: "def456", EnvironmentName: "production", UserName: "bob", CreatedAt: "2026-01-16T10:00:00Z"},
 		},
 	}
 	result := FormatDeploymentHistoryForAnalysis(depList, "production")
@@ -156,8 +156,8 @@ func TestAnalyzeDeploymentHistory_FullFlow(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/deployments", func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id": 1, "iid": 1, "ref": "main", "sha": "abc123", "status": "success", "environment": {"name": "production"}, "user": {"username": "alice"}, "created_at": "2024-01-15T10:00:00Z"},
-			{"id": 2, "iid": 2, "ref": "main", "sha": "def456", "status": "failed", "environment": {"name": "production"}, "user": {"username": "bob"}, "created_at": "2024-01-16T10:00:00Z"}
+			{"id": 1, "iid": 1, "ref": "main", "sha": "abc123", "status": "success", "environment": {"name": "production"}, "user": {"username": "alice"}, "created_at": "2026-01-15T10:00:00Z"},
+			{"id": 2, "iid": 2, "ref": "main", "sha": "def456", "status": "failed", "environment": {"name": "production"}, "user": {"username": "bob"}, "created_at": "2026-01-16T10:00:00Z"}
 		]`)
 	})
 	client := testutil.NewTestClient(t, mux)

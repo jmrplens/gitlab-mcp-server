@@ -10,7 +10,7 @@ import (
 
 const storageMoveJSON = `{
 	"id": 1,
-	"created_at": "2024-01-15T10:30:00Z",
+	"created_at": "2026-01-15T10:30:00Z",
 	"state": "finished",
 	"source_storage_name": "default",
 	"destination_storage_name": "storage2",

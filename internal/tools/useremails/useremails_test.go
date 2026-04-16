@@ -18,8 +18,8 @@ const (
 	pathAddEmailUser   = "/api/v4/users/42/emails"
 	pathDeleteEmail    = "/api/v4/user/emails/1"
 	pathDeleteEmailUsr = "/api/v4/users/42/emails/1"
-	emailJSON          = `{"id":1,"email":"test@example.com","confirmed_at":"2024-01-15T10:00:00Z"}`
-	emailListJSON      = `[{"id":1,"email":"test@example.com","confirmed_at":"2024-01-15T10:00:00Z"},{"id":2,"email":"dev@example.com"}]`
+	emailJSON          = `{"id":1,"email":"test@example.com","confirmed_at":"2026-01-15T10:00:00Z"}`
+	emailListJSON      = `[{"id":1,"email":"test@example.com","confirmed_at":"2026-01-15T10:00:00Z"},{"id":2,"email":"dev@example.com"}]`
 )
 
 func TestListForUser_Success(t *testing.T) {
@@ -204,7 +204,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 }
 
 func TestFormatMarkdownString(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2024-01-15"})
+	md := FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"})
 	if md == "" {
 		t.Fatal("expected non-empty markdown")
 	}
@@ -298,7 +298,7 @@ func TestAdd_TableDriven(t *testing.T) {
 			name:       "adds email with skip_confirmation",
 			input:      AddInput{Email: "admin@example.com", SkipConfirmation: true},
 			mockStatus: http.StatusCreated,
-			mockBody:   `{"id":5,"email":"admin@example.com","confirmed_at":"2024-06-01T12:00:00Z"}`,
+			mockBody:   `{"id":5,"email":"admin@example.com","confirmed_at":"2026-06-01T12:00:00Z"}`,
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
 				if out.ID != 5 {
@@ -356,7 +356,7 @@ func TestAddForUser_TableDriven(t *testing.T) {
 			name:       "adds email with skip_confirmation for user",
 			input:      AddForUserInput{UserID: 42, Email: "skip@example.com", SkipConfirmation: true},
 			mockStatus: http.StatusCreated,
-			mockBody:   `{"id":10,"email":"skip@example.com","confirmed_at":"2024-03-01T08:00:00Z"}`,
+			mockBody:   `{"id":10,"email":"skip@example.com","confirmed_at":"2026-03-01T08:00:00Z"}`,
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
 				if out.ID != 10 {
@@ -477,7 +477,7 @@ func TestDeleteForUser_TableDriven(t *testing.T) {
 func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 	out := ListOutput{
 		Emails: []Output{
-			{ID: 1, Email: "confirmed@example.com", ConfirmedAt: "2024-01-15T10:00:00Z"},
+			{ID: 1, Email: "confirmed@example.com", ConfirmedAt: "2026-01-15T10:00:00Z"},
 			{ID: 2, Email: "unconfirmed@example.com"},
 		},
 	}
@@ -490,7 +490,7 @@ func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 	}{
 		{"header count", "## Emails (2)"},
 		{"table header", "| ID | Email | Confirmed At |"},
-		{"confirmed email row", "| 1 | confirmed@example.com | 2024-01-15T10:00:00Z |"},
+		{"confirmed email row", "| 1 | confirmed@example.com | 2026-01-15T10:00:00Z |"},
 		{"unconfirmed email dash", "| 2 | unconfirmed@example.com | - |"},
 	}
 	for _, c := range checks {

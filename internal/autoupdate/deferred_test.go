@@ -288,3 +288,28 @@ func TestWriteToFile_PartialCopyError(t *testing.T) {
 		t.Error("file should be removed after partial write failure")
 	}
 }
+
+// TestHasPendingUpdate_ResolveError verifies HasPendingUpdate returns false
+// when resolveExecutable fails (e.g. binary deleted from under us).
+func TestHasPendingUpdate_ResolveError(t *testing.T) {
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) {
+		return "", errors.New("cannot resolve")
+	}
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	path, ok := HasPendingUpdate()
+	if ok {
+		t.Errorf("expected no pending update, got path=%q", path)
+	}
+}
+
+// TestHasPendingUpdate_NoStagedFiles verifies HasPendingUpdate returns false
+// when neither .tmp nor .new files exist next to the executable.
+func TestHasPendingUpdate_NoStagedFiles(t *testing.T) {
+	stubExecutablePath(t)
+	path, ok := HasPendingUpdate()
+	if ok {
+		t.Errorf("expected no pending update, got path=%q", path)
+	}
+}

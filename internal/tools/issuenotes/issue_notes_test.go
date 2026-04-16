@@ -21,9 +21,9 @@ import (
 // Test endpoint paths and JSON response fixtures for issue note operation tests.
 const (
 	pathIssueNotes        = "/api/v4/projects/42/issues/10/notes"
-	noteJSONSimple        = `{"id":100,"body":"Looks good to me","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z"}`
-	noteJSONInternal      = `{"id":101,"body":"Internal note","author":{"username":"bob"},"system":false,"internal":true,"created_at":"2024-01-15T11:00:00Z","updated_at":"2024-01-15T11:00:00Z"}`
-	noteJSONSystem        = `{"id":102,"body":"changed the description","author":{"username":"admin"},"system":true,"internal":false,"created_at":"2024-01-15T12:00:00Z","updated_at":"2024-01-15T12:00:00Z"}`
+	noteJSONSimple        = `{"id":100,"body":"Looks good to me","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`
+	noteJSONInternal      = `{"id":101,"body":"Internal note","author":{"username":"bob"},"system":false,"internal":true,"created_at":"2026-01-15T11:00:00Z","updated_at":"2026-01-15T11:00:00Z"}`
+	noteJSONSystem        = `{"id":102,"body":"changed the description","author":{"username":"admin"},"system":true,"internal":false,"created_at":"2026-01-15T12:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	testNoteLGTM          = "Looks good to me"
 	fmtIssueNoteListErr   = "List() unexpected error: %v"
 	fmtIssueNoteCreateErr = "Create() unexpected error: %v"
@@ -218,7 +218,7 @@ func TestIssueNoteCreate_SuccessEnrichedFields(t *testing.T) {
 "id":150,"body":"Threaded comment",
 "author":{"username":"charlie"},
 "system":false,"internal":false,
-"created_at":"2024-02-01T10:00:00Z","updated_at":"2024-02-01T10:00:00Z",
+"created_at":"2026-02-01T10:00:00Z","updated_at":"2026-02-01T10:00:00Z",
 "resolvable":true,"resolved":false,
 "noteable_type":"Issue",
 "type":"DiscussionNote"
@@ -311,7 +311,7 @@ func TestGetNote_MissingProjectID(t *testing.T) {
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssueNote100 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":100,"body":"Updated text","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T14:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":100,"body":"Updated text","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T14:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -329,8 +329,8 @@ func TestUpdate_Success(t *testing.T) {
 	if out.Body != testUpdatedText {
 		t.Errorf(fmtBodyWant, out.Body, testUpdatedText)
 	}
-	if out.UpdatedAt != "2024-01-15T14:00:00Z" {
-		t.Errorf("out.UpdatedAt = %q, want %q", out.UpdatedAt, "2024-01-15T14:00:00Z")
+	if out.UpdatedAt != "2026-01-15T14:00:00Z" {
+		t.Errorf("out.UpdatedAt = %q, want %q", out.UpdatedAt, "2026-01-15T14:00:00Z")
 	}
 }
 
@@ -467,7 +467,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 		ID:         200,
 		Body:       "Full note body",
 		Author:     "fulluser",
-		CreatedAt:  "2024-03-01T09:00:00Z",
+		CreatedAt:  "2026-03-01T09:00:00Z",
 		System:     true,
 		Internal:   true,
 		Resolvable: true,
@@ -481,7 +481,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	}{
 		{"header", "## Issue Note #200"},
 		{"author", "**Author**: fulluser"},
-		{"created", "**Created**: 1 Mar 2024 09:00 UTC"},
+		{"created", "**Created**: 1 Mar 2026 09:00 UTC"},
 		{"system", "**System note**"},
 		{"internal", "**Internal note**"},
 		{"resolvable resolved", "**Resolvable**: resolved"},
@@ -500,7 +500,7 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 		ID:         201,
 		Body:       "Unresolved note",
 		Author:     "reviewer",
-		CreatedAt:  "2024-03-02T09:00:00Z",
+		CreatedAt:  "2026-03-02T09:00:00Z",
 		Resolvable: true,
 		Resolved:   false,
 	}
@@ -542,8 +542,8 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Notes: []Output{
-			{ID: 1, Author: "alice", CreatedAt: "2024-01-01T00:00:00Z", System: false, Internal: false},
-			{ID: 2, Author: "bob", CreatedAt: "2024-01-02T00:00:00Z", System: true, Internal: true},
+			{ID: 1, Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", System: false, Internal: false},
+			{ID: 2, Author: "bob", CreatedAt: "2026-01-02T00:00:00Z", System: true, Internal: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -579,8 +579,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 
 // TestToOutput_AllFields verifies the behavior of to output all fields.
 func TestToOutput_AllFields(t *testing.T) {
-	ts1 := mustParseTime(t, "2024-03-01T09:00:00Z")
-	ts2 := mustParseTime(t, "2024-03-01T10:00:00Z")
+	ts1 := mustParseTime(t, "2026-03-01T09:00:00Z")
+	ts2 := mustParseTime(t, "2026-03-01T10:00:00Z")
 
 	n := &gl.Note{
 		ID:           200,
@@ -644,10 +644,10 @@ func TestToOutput_AllFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error("Confidential = false, want true (mirrors Internal)")
 	}
-	if out.CreatedAt != "2024-03-01T09:00:00Z" {
+	if out.CreatedAt != "2026-03-01T09:00:00Z" {
 		t.Errorf("CreatedAt = %q", out.CreatedAt)
 	}
-	if out.UpdatedAt != "2024-03-01T10:00:00Z" {
+	if out.UpdatedAt != "2026-03-01T10:00:00Z" {
 		t.Errorf("UpdatedAt = %q", out.UpdatedAt)
 	}
 }

@@ -16,7 +16,7 @@ const (
 	testModelName        = "test-model"
 	mdSectionDescription = "## Description"
 	testLoginBug         = "Login bug"
-	noteJSONSimple       = `{"id":100,"body":"Looks good to me","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z"}`
+	noteJSONSimple       = `{"id":100,"body":"Looks good to me","author":{"username":"alice"},"system":false,"internal":false,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`
 )
 
 // setupSamplingSession creates a connected MCP server+client pair where the

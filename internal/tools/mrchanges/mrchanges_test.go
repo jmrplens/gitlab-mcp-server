@@ -112,8 +112,8 @@ func TestMRChangesGet_TruncatedFiles(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const diffVersionsListResponse = `[
-  {"id":1,"head_commit_sha":"abc123","base_commit_sha":"def456","start_commit_sha":"ghi789","created_at":"2024-01-15T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"3"},
-  {"id":2,"head_commit_sha":"jkl012","base_commit_sha":"mno345","start_commit_sha":"pqr678","created_at":"2024-01-16T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"5"}
+  {"id":1,"head_commit_sha":"abc123","base_commit_sha":"def456","start_commit_sha":"ghi789","created_at":"2026-01-15T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"3"},
+  {"id":2,"head_commit_sha":"jkl012","base_commit_sha":"mno345","start_commit_sha":"pqr678","created_at":"2026-01-16T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"5"}
 ]`
 
 const diffVersionGetResponse = `{
@@ -121,12 +121,12 @@ const diffVersionGetResponse = `{
   "head_commit_sha":"jkl012",
   "base_commit_sha":"mno345",
   "start_commit_sha":"pqr678",
-  "created_at":"2024-01-16T10:00:00Z",
+  "created_at":"2026-01-16T10:00:00Z",
   "merge_request_id":1,
   "state":"collected",
   "real_size":"5",
   "commits":[
-    {"id":"jkl012abc","short_id":"jkl012a","title":"Fix bug","author_name":"Dev","created_at":"2024-01-16T09:00:00Z"}
+    {"id":"jkl012abc","short_id":"jkl012a","title":"Fix bug","author_name":"Dev","created_at":"2026-01-16T09:00:00Z"}
   ],
   "diffs":[
     {"diff":"@@ -1 +1 @@\n-old\n+new","new_path":"main.go","old_path":"main.go","a_mode":"100644","b_mode":"100644","new_file":false,"renamed_file":false,"deleted_file":false}
@@ -409,8 +409,8 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 func TestFormatDiffVersionsListMarkdown_WithVersions(t *testing.T) {
 	out := DiffVersionsListOutput{
 		DiffVersions: []DiffVersionOutput{
-			{ID: 1, State: "collected", HeadCommitSHA: "abcdef1234567890", BaseCommitSHA: "1234567890abcdef", CreatedAt: "2024-01-15T10:00:00Z"},
-			{ID: 2, State: "overflow", HeadCommitSHA: "short", BaseCommitSHA: "short2", CreatedAt: "2024-01-16T10:00:00Z"},
+			{ID: 1, State: "collected", HeadCommitSHA: "abcdef1234567890", BaseCommitSHA: "1234567890abcdef", CreatedAt: "2026-01-15T10:00:00Z"},
+			{ID: 2, State: "overflow", HeadCommitSHA: "short", BaseCommitSHA: "short2", CreatedAt: "2026-01-16T10:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -456,7 +456,7 @@ func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 		HeadCommitSHA:  "abc123",
 		BaseCommitSHA:  "def456",
 		StartCommitSHA: "ghi789",
-		CreatedAt:      "2024-01-16T10:00:00Z",
+		CreatedAt:      "2026-01-16T10:00:00Z",
 		RealSize:       "3",
 		Commits: []DiffVersionCommitOutput{
 			{ID: "fullhashvalue", ShortID: "shrt123", Title: "Fix bug", AuthorName: "Dev"},
@@ -477,7 +477,7 @@ func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 		"**Head SHA**: abc123",
 		"**Base SHA**: def456",
 		"**Start SHA**: ghi789",
-		"**Created**: 16 Jan 2024 10:00 UTC",
+		"**Created**: 16 Jan 2026 10:00 UTC",
 		"**Real Size**: 3",
 		"### Commits (2)",
 		"| shrt123 |",
@@ -766,7 +766,7 @@ func newMRChangesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
 	const diffsJSON = `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1 +1 @@\n-old\n+new","new_file":false,"renamed_file":false,"deleted_file":false,"a_mode":"100644","b_mode":"100644"}]`
-	const versionsJSON = `[{"id":1,"head_commit_sha":"abc123","base_commit_sha":"def456","start_commit_sha":"ghi789","created_at":"2024-01-15T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"3"}]`
+	const versionsJSON = `[{"id":1,"head_commit_sha":"abc123","base_commit_sha":"def456","start_commit_sha":"ghi789","created_at":"2026-01-15T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"3"}]`
 	const rawDiffBody = "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-old\n+new\n"
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

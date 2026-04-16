@@ -103,8 +103,8 @@ func TestCreateCurrentUserPAT_WithDescription(t *testing.T) {
 				"id":11,"name":"my-pat","active":true,"token":"glpat-desc",
 				"scopes":["api"],"revoked":false,"user_id":1,
 				"description":"Automation token",
-				"created_at":"2024-01-15T10:00:00Z",
-				"last_used_at":"2024-06-01T12:00:00Z"
+				"created_at":"2026-01-15T10:00:00Z",
+				"last_used_at":"2026-06-01T12:00:00Z"
 			}`)
 			return
 		}
@@ -159,7 +159,7 @@ func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
 		Token:       "glpat-secret",
 		Scopes:      []string{"api", "read_user"},
 		Description: "Test token",
-		ExpiresAt:   "2025-01-15",
+		ExpiresAt:   "2026-01-15",
 		UserID:      1,
 	})
 
@@ -169,7 +169,7 @@ func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
 		"**Active**: true",
 		"**Scopes**: api, read_user",
 		"**Description**: Test token",
-		"**Expires At**: 2025-01-15",
+		"**Expires At**: 2026-01-15",
 		"`glpat-secret`",
 	} {
 		if !strings.Contains(md, want) {

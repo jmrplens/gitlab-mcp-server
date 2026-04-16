@@ -37,7 +37,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				TwoFactorEnabled: true,
 				External:         false,
 				Locked:           false,
-				CreatedAt:        "2024-01-01T00:00:00Z",
+				CreatedAt:        "2026-01-01T00:00:00Z",
 			},
 			contains: []string{
 				"## Enterprise User: Alice Wonderland",
@@ -51,7 +51,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"**Locked**: false",
 				"**Bot**: false",
 				"https://gitlab.example.com/alice",
-				"2024-01-01T00:00:00Z",
+				"2026-01-01T00:00:00Z",
 				"gitlab_disable_2fa_enterprise_user",
 				"gitlab_list_enterprise_users",
 			},

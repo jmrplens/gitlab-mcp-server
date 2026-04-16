@@ -652,7 +652,7 @@ func TestMemberAdd_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/members" {
 			testutil.RespondJSON(w, http.StatusCreated,
-				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","expires_at":"2025-06-30"}`)
+				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","expires_at":"2026-06-30"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -662,7 +662,7 @@ func TestMemberAdd_WithExpiresAt(t *testing.T) {
 		ProjectID:   "42",
 		UserID:      10,
 		AccessLevel: 30,
-		ExpiresAt:   "2025-06-30",
+		ExpiresAt:   "2026-06-30",
 	})
 	if err != nil {
 		t.Fatalf("Add() unexpected error: %v", err)
@@ -717,7 +717,7 @@ func TestMemberEdit_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/members/10" {
 			testutil.RespondJSON(w, http.StatusOK,
-				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":40,"web_url":"https://gitlab.example.com/alice","expires_at":"2025-12-31"}`)
+				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":40,"web_url":"https://gitlab.example.com/alice","expires_at":"2026-12-31"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -727,7 +727,7 @@ func TestMemberEdit_WithExpiresAt(t *testing.T) {
 		ProjectID:   "42",
 		UserID:      10,
 		AccessLevel: 40,
-		ExpiresAt:   "2025-12-31",
+		ExpiresAt:   "2026-12-31",
 	})
 	if err != nil {
 		t.Fatalf("Edit() unexpected error: %v", err)
@@ -782,7 +782,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/members/10" {
 			testutil.RespondJSON(w, http.StatusOK,
-				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","created_at":"2024-01-15T10:00:00Z"}`)
+				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","created_at":"2026-01-15T10:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -795,8 +795,8 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	if out.CreatedAt == "" {
 		t.Error("out.CreatedAt is empty, want non-empty")
 	}
-	if !strings.Contains(out.CreatedAt, "2024-01-15") {
-		t.Errorf("out.CreatedAt = %q, want to contain %q", out.CreatedAt, "2024-01-15")
+	if !strings.Contains(out.CreatedAt, "2026-01-15") {
+		t.Errorf("out.CreatedAt = %q, want to contain %q", out.CreatedAt, "2026-01-15")
 	}
 }
 
@@ -805,7 +805,7 @@ func TestToOutput_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/members/10" {
 			testutil.RespondJSON(w, http.StatusOK,
-				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","expires_at":"2025-06-30"}`)
+				`{"id":10,"username":"alice","name":"Alice","state":"active","access_level":30,"web_url":"https://gitlab.example.com/alice","expires_at":"2026-06-30"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -818,8 +818,8 @@ func TestToOutput_WithExpiresAt(t *testing.T) {
 	if out.ExpiresAt == "" {
 		t.Error("out.ExpiresAt is empty, want non-empty")
 	}
-	if !strings.Contains(out.ExpiresAt, "2025-06-30") {
-		t.Errorf("out.ExpiresAt = %q, want to contain %q", out.ExpiresAt, "2025-06-30")
+	if !strings.Contains(out.ExpiresAt, "2026-06-30") {
+		t.Errorf("out.ExpiresAt = %q, want to contain %q", out.ExpiresAt, "2026-06-30")
 	}
 }
 
@@ -839,8 +839,8 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 		WebURL:                 "https://gitlab.example.com/alice",
 		Email:                  "alice@example.com",
 		MemberRoleName:         "Security Lead",
-		ExpiresAt:              "2025-06-30",
-		CreatedAt:              "2024-01-15T10:00:00Z",
+		ExpiresAt:              "2026-06-30",
+		CreatedAt:              "2026-01-15T10:00:00Z",
 	}
 
 	md := FormatMarkdown(out)
@@ -858,8 +858,8 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 		{"web_url", "- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)"},
 		{"email", "- **Email**: alice@example.com"},
 		{"member_role", "- **Member Role**: Security Lead"},
-		{"expires_at", "- **Expires At**: 30 Jun 2025"},
-		{"created_at", "- **Created**: 15 Jan 2024 10:00 UTC"},
+		{"expires_at", "- **Expires At**: 30 Jun 2026"},
+		{"created_at", "- **Created**: 15 Jan 2026 10:00 UTC"},
 	}
 	for _, tc := range checks {
 		t.Run(tc.name, func(t *testing.T) {

@@ -397,7 +397,7 @@ const configResponse = `{
 	"approved": true, "approvals_required": 2, "approvals_left": 0,
 	"approvals_before_merge": 2, "has_approval_rules": true,
 	"user_has_approved": true, "user_can_approve": false,
-	"approved_by": [{"user": {"name": "Alice"}, "approved_at": "2025-01-15T10:30:00Z"}],
+	"approved_by": [{"user": {"name": "Alice"}, "approved_at": "2026-01-15T10:30:00Z"}],
 	"suggested_approvers": [{"name": "Bob"}]
 }`
 
@@ -428,10 +428,10 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 		t.Error("UserHasApproved = false, want true")
 	}
 	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Alice" {
-		t.Errorf("ApprovedBy = %v, want [{Alice 2025-01-15T10:30:00Z}]", out.ApprovedBy)
+		t.Errorf("ApprovedBy = %v, want [{Alice 2026-01-15T10:30:00Z}]", out.ApprovedBy)
 	}
-	if out.ApprovedBy[0].ApprovedAt != "2025-01-15T10:30:00Z" {
-		t.Errorf("ApprovedAt = %q, want %q", out.ApprovedBy[0].ApprovedAt, "2025-01-15T10:30:00Z")
+	if out.ApprovedBy[0].ApprovedAt != "2026-01-15T10:30:00Z" {
+		t.Errorf("ApprovedAt = %q, want %q", out.ApprovedBy[0].ApprovedAt, "2026-01-15T10:30:00Z")
 	}
 	if len(out.SuggestedNames) != 1 || out.SuggestedNames[0] != "Bob" {
 		t.Errorf("SuggestedNames = %v, want [Bob]", out.SuggestedNames)

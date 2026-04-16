@@ -24,7 +24,7 @@ const errExpectedErrZeroID = "expected error for zero ID, got nil"
 
 const errAPINotCalledZeroID = "API should not be called when ID is 0"
 
-const hookJSON = `{"id":1,"url":"https://example.com/hook","created_at":"2024-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
+const hookJSON = `{"id":1,"url":"https://example.com/hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
 
 // TestList_Success verifies the behavior of list success.
 func TestList_Success(t *testing.T) {
@@ -249,7 +249,7 @@ func TestAdd_APIError(t *testing.T) {
 func TestAdd_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"url":"https://example.com/hook2","created_at":"2024-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"url":"https://example.com/hook2","created_at":"2026-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -313,10 +313,10 @@ func TestFormatHookMarkdown_WithCreatedAt(t *testing.T) {
 	result := FormatHookMarkdown(HookItem{
 		ID:        1,
 		URL:       "https://example.com/hook",
-		CreatedAt: "2024-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 	})
 	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "1 Jan 2024 00:00 UTC") {
+	if !strings.Contains(text, "1 Jan 2026 00:00 UTC") {
 		t.Errorf("expected created_at in output, got: %s", text)
 	}
 }
@@ -384,7 +384,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func newSystemHooksMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	hookJSON := `{"id":1,"url":"https://example.com/hook","created_at":"2024-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
+	hookJSON := `{"id":1,"url":"https://example.com/hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
 
 	handler := http.NewServeMux()
 

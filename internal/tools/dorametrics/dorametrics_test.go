@@ -37,8 +37,8 @@ func TestGetProjectMetrics(t *testing.T) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/dora/metrics")
 				testutil.RespondJSON(w, http.StatusOK, `[
-					{"date":"2024-01-15","value":1.5},
-					{"date":"2024-01-16","value":2.0}
+					{"date":"2026-01-15","value":1.5},
+					{"date":"2026-01-16","value":2.0}
 				]`)
 			},
 			validate: func(t *testing.T, out Output) {
@@ -46,14 +46,14 @@ func TestGetProjectMetrics(t *testing.T) {
 				if len(out.Metrics) != 2 {
 					t.Fatalf("got %d metrics, want 2", len(out.Metrics))
 				}
-				if out.Metrics[0].Date != "2024-01-15" {
-					t.Errorf("date[0] = %q, want %q", out.Metrics[0].Date, "2024-01-15")
+				if out.Metrics[0].Date != "2026-01-15" {
+					t.Errorf("date[0] = %q, want %q", out.Metrics[0].Date, "2026-01-15")
 				}
 				if out.Metrics[0].Value != 1.5 {
 					t.Errorf("value[0] = %f, want 1.5", out.Metrics[0].Value)
 				}
-				if out.Metrics[1].Date != "2024-01-16" {
-					t.Errorf("date[1] = %q, want %q", out.Metrics[1].Date, "2024-01-16")
+				if out.Metrics[1].Date != "2026-01-16" {
+					t.Errorf("date[1] = %q, want %q", out.Metrics[1].Date, "2026-01-16")
 				}
 				if out.Metrics[1].Value != 2.0 {
 					t.Errorf("value[1] = %f, want 2.0", out.Metrics[1].Value)
@@ -65,8 +65,8 @@ func TestGetProjectMetrics(t *testing.T) {
 			input: ProjectInput{
 				ProjectID:        "99",
 				Metric:           "lead_time_for_changes",
-				StartDate:        "2024-01-01",
-				EndDate:          "2024-01-31",
+				StartDate:        "2026-01-01",
+				EndDate:          "2026-01-31",
 				Interval:         "monthly",
 				EnvironmentTiers: []string{"production", "staging"},
 			},
@@ -75,11 +75,11 @@ func TestGetProjectMetrics(t *testing.T) {
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/99/dora/metrics")
 
 				q := r.URL.Query()
-				if got := q.Get("start_date"); got != "2024-01-01" {
-					t.Errorf("start_date = %q, want %q", got, "2024-01-01")
+				if got := q.Get("start_date"); got != "2026-01-01" {
+					t.Errorf("start_date = %q, want %q", got, "2026-01-01")
 				}
-				if got := q.Get("end_date"); got != "2024-01-31" {
-					t.Errorf("end_date = %q, want %q", got, "2024-01-31")
+				if got := q.Get("end_date"); got != "2026-01-31" {
+					t.Errorf("end_date = %q, want %q", got, "2026-01-31")
 				}
 				if got := q.Get("interval"); got != "monthly" {
 					t.Errorf("interval = %q, want %q", got, "monthly")
@@ -88,7 +88,7 @@ func TestGetProjectMetrics(t *testing.T) {
 				if !strings.Contains(rawQuery, "environment_tiers") {
 					t.Errorf("query missing environment_tiers, got: %s", rawQuery)
 				}
-				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2024-01","value":5.0}]`)
+				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2026-01","value":5.0}]`)
 			},
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
@@ -159,7 +159,7 @@ func TestGetProjectMetrics(t *testing.T) {
 				EndDate:   "also-bad",
 			},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2024-03-01","value":0.5}]`)
+				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2026-03-01","value":0.5}]`)
 			},
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
@@ -231,15 +231,15 @@ func TestGetGroupMetrics(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/groups/5/dora/metrics")
-				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2024-02-01","value":3.0}]`)
+				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2026-02-01","value":3.0}]`)
 			},
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
 				if len(out.Metrics) != 1 {
 					t.Fatalf("got %d metrics, want 1", len(out.Metrics))
 				}
-				if out.Metrics[0].Date != "2024-02-01" {
-					t.Errorf("date = %q, want %q", out.Metrics[0].Date, "2024-02-01")
+				if out.Metrics[0].Date != "2026-02-01" {
+					t.Errorf("date = %q, want %q", out.Metrics[0].Date, "2026-02-01")
 				}
 				if out.Metrics[0].Value != 3.0 {
 					t.Errorf("value = %f, want 3.0", out.Metrics[0].Value)
@@ -251,24 +251,24 @@ func TestGetGroupMetrics(t *testing.T) {
 			input: GroupInput{
 				GroupID:          "10",
 				Metric:           "time_to_restore_service",
-				StartDate:        "2024-06-01",
-				EndDate:          "2024-06-30",
+				StartDate:        "2026-06-01",
+				EndDate:          "2026-06-30",
 				Interval:         "daily",
 				EnvironmentTiers: []string{"production"},
 			},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestPath(t, r, "/api/v4/groups/10/dora/metrics")
 				q := r.URL.Query()
-				if got := q.Get("start_date"); got != "2024-06-01" {
-					t.Errorf("start_date = %q, want %q", got, "2024-06-01")
+				if got := q.Get("start_date"); got != "2026-06-01" {
+					t.Errorf("start_date = %q, want %q", got, "2026-06-01")
 				}
-				if got := q.Get("end_date"); got != "2024-06-30" {
-					t.Errorf("end_date = %q, want %q", got, "2024-06-30")
+				if got := q.Get("end_date"); got != "2026-06-30" {
+					t.Errorf("end_date = %q, want %q", got, "2026-06-30")
 				}
 				if got := q.Get("interval"); got != "daily" {
 					t.Errorf("interval = %q, want %q", got, "daily")
 				}
-				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2024-06-15","value":1.0}]`)
+				testutil.RespondJSON(w, http.StatusOK, `[{"date":"2026-06-15","value":1.0}]`)
 			},
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
@@ -389,16 +389,16 @@ func TestFormatMarkdown(t *testing.T) {
 			name: "renders metrics table with data points",
 			output: Output{
 				Metrics: []MetricOutput{
-					{Date: "2024-01-15", Value: 1.5},
-					{Date: "2024-01-16", Value: 2.0},
+					{Date: "2026-01-15", Value: 1.5},
+					{Date: "2026-01-16", Value: 2.0},
 				},
 			},
 			metric: "lead_time_for_changes",
 			wantContains: []string{
 				"DORA Metrics — lead_time_for_changes",
 				"| Date | Value |",
-				"| 2024-01-15 | 1.5000 |",
-				"| 2024-01-16 | 2.0000 |",
+				"| 2026-01-15 | 1.5000 |",
+				"| 2026-01-16 | 2.0000 |",
 				"**Total data points:** 2",
 				"gitlab_deployment_list",
 			},
@@ -407,13 +407,13 @@ func TestFormatMarkdown(t *testing.T) {
 			name: "renders generic title when metric is empty",
 			output: Output{
 				Metrics: []MetricOutput{
-					{Date: "2024-03-01", Value: 0.0},
+					{Date: "2026-03-01", Value: 0.0},
 				},
 			},
 			metric: "",
 			wantContains: []string{
 				"## DORA Metrics\n",
-				"| 2024-03-01 | 0.0000 |",
+				"| 2026-03-01 | 0.0000 |",
 				"**Total data points:** 1",
 			},
 			wantAbsent: []string{
@@ -423,7 +423,7 @@ func TestFormatMarkdown(t *testing.T) {
 		{
 			name: "escapes pipe characters in metric name",
 			output: Output{
-				Metrics: []MetricOutput{{Date: "2024-01-01", Value: 1.0}},
+				Metrics: []MetricOutput{{Date: "2026-01-01", Value: 1.0}},
 			},
 			metric: "metric|with|pipes",
 			wantContains: []string{

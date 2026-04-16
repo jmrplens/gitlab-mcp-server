@@ -138,3 +138,36 @@ func TestParseGraphQLVariables_NoVariables(t *testing.T) {
 		t.Errorf("expected empty variables, got %v", vars)
 	}
 }
+
+// TestGraphQLHandler_InvalidJSON verifies that GraphQLHandler returns 400
+// when the request body is not valid JSON.
+func TestGraphQLHandler_InvalidJSON(t *testing.T) {
+	handler := GraphQLHandler(map[string]http.HandlerFunc{
+		"test": func(w http.ResponseWriter, _ *http.Request) {
+			RespondGraphQL(w, http.StatusOK, `{}`)
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+		strings.NewReader(`not valid json`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d for invalid JSON", w.Code, http.StatusBadRequest)
+	}
+}
+
+// TestParseGraphQLVariables_InvalidJSON verifies that ParseGraphQLVariables
+// returns an error when the request body is not valid JSON.
+func TestParseGraphQLVariables_InvalidJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+		strings.NewReader(`not json at all`))
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err := ParseGraphQLVariables(req)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON body")
+	}
+}

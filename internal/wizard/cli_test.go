@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,34 @@ func TestStepInstall_EOF(t *testing.T) {
 	_, err := stepInstall(p, &w)
 	if err == nil {
 		t.Fatal("expected error for EOF, got nil")
+	}
+}
+
+// TestStepInstall_InstallBinaryFails verifies that when installBinaryFn fails,
+// stepInstall falls back to the current executable path instead of returning an error.
+func TestStepInstall_InstallBinaryFails(t *testing.T) {
+	orig := installBinaryFn
+	installBinaryFn = func(string) (string, error) {
+		return "", fmt.Errorf("permission denied")
+	}
+	t.Cleanup(func() { installBinaryFn = orig })
+
+	tmpDir := t.TempDir()
+	input := tmpDir + "\n"
+	r := strings.NewReader(input)
+	var w bytes.Buffer
+	p := NewPrompter(r, &w)
+
+	path, err := stepInstall(p, &w)
+	if err != nil {
+		t.Fatalf("stepInstall should not return error on install failure, got: %v", err)
+	}
+	if path == "" {
+		t.Error("expected fallback path, got empty")
+	}
+	output := w.String()
+	if !strings.Contains(output, "Could not install binary") {
+		t.Error("expected 'Could not install binary' warning in output")
 	}
 }
 
@@ -349,6 +378,60 @@ func TestRunCLI_AdvancedOptions(t *testing.T) {
 	}
 	if !strings.Contains(output, "Setup Complete") {
 		t.Error("expected 'Setup Complete' in output")
+	}
+}
+
+// TestRunCLI_AdvancedOptionsEOF verifies that RunCLI returns an error when
+// the user answers "y" to advanced options but then EOF is reached during
+// the options prompting.
+func TestRunCLI_AdvancedOptionsEOF(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+	stubLoadExistingConfig(t)
+
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "bin")
+
+	input := strings.Join([]string{
+		installDir + string(os.PathSeparator) + DefaultBinaryName(),
+		"https://gitlab.example.com",
+		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"y", // yes to advanced → triggers stepOptions
+		// EOF here — no answers for stepOptions
+	}, "\n") + "\n"
+
+	r := strings.NewReader(input)
+	var w bytes.Buffer
+
+	err := RunCLI("1.0.0-test", r, &w)
+	if err == nil {
+		t.Fatal("expected error from EOF during advanced options")
+	}
+}
+
+// TestRunCLI_AskAdvancedEOF verifies RunCLI returns an error when EOF is
+// reached at the "Configure advanced options?" prompt itself.
+func TestRunCLI_AskAdvancedEOF(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+	stubLoadExistingConfig(t)
+
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "bin")
+
+	input := strings.Join([]string{
+		installDir + string(os.PathSeparator) + DefaultBinaryName(),
+		"https://gitlab.example.com",
+		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		// EOF here — no answer for "Configure advanced options?"
+	}, "\n") + "\n"
+
+	r := strings.NewReader(input)
+	var w bytes.Buffer
+
+	err := RunCLI("1.0.0-test", r, &w)
+	if err == nil {
+		t.Fatal("expected error from EOF at advanced options prompt")
 	}
 }
 

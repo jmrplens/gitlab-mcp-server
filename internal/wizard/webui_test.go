@@ -574,6 +574,35 @@ func TestHandlePickDirectory_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestHandlePickDirectory_Success verifies the handler returns the selected
+// directory as JSON when the directory picker succeeds.
+func TestHandlePickDirectory_Success(t *testing.T) {
+	stubPickDirectory(t, "/home/user/mydir", nil)
+	handler := handlePickDirectory()
+
+	body := `{"start_dir":"/home/user"}`
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/pick-directory", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp map[string]string
+	if err = json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if got := resp["path"]; got != "/home/user/mydir" {
+		t.Errorf("path = %q, want %q", got, "/home/user/mydir")
+	}
+}
+
 // TestServeIndex_ContainsHTML verifies the served index page contains HTML.
 func TestServeIndex_ContainsHTML(t *testing.T) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)

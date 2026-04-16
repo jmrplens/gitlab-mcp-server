@@ -1148,7 +1148,7 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 			return
 		}
 		testutil.AssertQueryParam(t, r, "ref_name", "main")
-		testutil.AssertQueryParam(t, r, "since", "2025-01-01T00:00:00Z")
+		testutil.AssertQueryParam(t, r, "since", "2026-01-01T00:00:00Z")
 		testutil.AssertQueryParam(t, r, "until", "2026-12-31T23:59:59Z")
 		testutil.AssertQueryParam(t, r, "path", "src/")
 		testutil.AssertQueryParam(t, r, "author", "Alice")
@@ -1165,7 +1165,7 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID:   "42",
 		RefName:     "main",
-		Since:       "2025-01-01T00:00:00Z",
+		Since:       "2026-01-01T00:00:00Z",
 		Until:       "2026-12-31T23:59:59Z",
 		Path:        "src/",
 		Author:      "Alice",

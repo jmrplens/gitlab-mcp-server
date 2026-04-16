@@ -1225,3 +1225,143 @@ func TestSelectMulti_NonStringElement(t *testing.T) {
 		t.Error("SelectMulti(int element) should return error")
 	}
 }
+
+// ConfirmAction tests.
+
+// TestConfirmAction_NilRequest verifies that [ConfirmAction] returns nil
+// when the request is nil (elicitation not supported — backward compatible).
+func TestConfirmAction_NilRequest(t *testing.T) {
+	result := ConfirmAction(context.Background(), nil, "Delete?")
+	if result != nil {
+		t.Error("expected nil result for nil request (not supported)")
+	}
+}
+
+// TestConfirmAction_Confirmed verifies that [ConfirmAction] returns nil
+// when the user confirms the action.
+func TestConfirmAction_Confirmed(t *testing.T) {
+	ctx := context.Background()
+	server, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"confirmed": true},
+		}, nil
+	})
+	defer cleanup()
+	_ = server
+
+	req := &mcp.CallToolRequest{}
+	req.Session = ss
+	result := ConfirmAction(ctx, req, "Delete project?")
+	if result != nil {
+		t.Error("expected nil result when user confirms")
+	}
+}
+
+// TestConfirmAction_Declined verifies that [ConfirmAction] returns a
+// non-nil cancellation result when the user declines.
+func TestConfirmAction_Declined(t *testing.T) {
+	ctx := context.Background()
+	server, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "decline"}, nil
+	})
+	defer cleanup()
+	_ = server
+
+	req := &mcp.CallToolRequest{}
+	req.Session = ss
+	result := ConfirmAction(ctx, req, "Delete?")
+	if result == nil {
+		t.Fatal("expected non-nil result when user declines")
+	}
+}
+
+// TestConfirmAction_NotConfirmed verifies that [ConfirmAction] returns
+// a cancellation result when the user accepts but does not confirm.
+func TestConfirmAction_NotConfirmed(t *testing.T) {
+	ctx := context.Background()
+	server, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"confirmed": false},
+		}, nil
+	})
+	defer cleanup()
+	_ = server
+
+	req := &mcp.CallToolRequest{}
+	req.Session = ss
+	result := ConfirmAction(ctx, req, "Delete?")
+	if result == nil {
+		t.Fatal("expected non-nil result when user does not confirm")
+	}
+}
+
+// CancelledResult tests.
+
+// TestCancelledResult verifies that [CancelledResult] returns a
+// CallToolResult with the given message as TextContent.
+func TestCancelledResult(t *testing.T) {
+	msg := "Operation canceled by user."
+	result := CancelledResult(msg)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("expected 1 content element, got %d", len(result.Content))
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+	if tc.Text != msg {
+		t.Errorf("Text = %q, want %q", tc.Text, msg)
+	}
+}
+
+// TestSelectOneInt_NaN verifies that [Client.SelectOneInt] returns an error
+// when the elicitation response contains a non-numeric value.
+func TestSelectOneInt_NaN(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"selection": "not_a_number"},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for non-numeric selection")
+	}
+}
+
+// TestPromptNumber_NaN verifies that [Client.PromptNumber] returns an error
+// when the response is not a number.
+func TestPromptNumber_NaN(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"value": "text"},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.PromptNumber(ctx, "Enter number", "", 0, 100)
+	if err == nil {
+		t.Error("expected error for non-numeric value")
+	}
+}
+
+// TestIsURLSupported_NilParams verifies that [Client.IsURLSupported] returns
+// false when the session's InitializeParams are nil.
+func TestIsURLSupported_NilParams(t *testing.T) {
+	c := Client{session: &mcp.ServerSession{}}
+	if c.IsURLSupported() {
+		t.Error("expected false for nil InitializeParams")
+	}
+}

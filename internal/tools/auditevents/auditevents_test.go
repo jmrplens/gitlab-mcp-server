@@ -18,7 +18,7 @@ func TestListInstance_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"user_login","event_type":"auth","details":{"author_name":"admin","ip_address":"127.0.0.1"},"created_at":"2024-01-15T10:00:00Z"}
+			{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"user_login","event_type":"auth","details":{"author_name":"admin","ip_address":"127.0.0.1"},"created_at":"2026-01-15T10:00:00Z"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -47,7 +47,7 @@ func TestGetInstance_Success(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"user_login","event_type":"auth","details":{"author_name":"admin"},"created_at":"2024-01-15T10:00:00Z"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"user_login","event_type":"auth","details":{"author_name":"admin"},"created_at":"2026-01-15T10:00:00Z"}`)
 	}))
 
 	out, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: 1})
@@ -81,7 +81,7 @@ func TestListGroup_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":2,"author_id":10,"entity_id":5,"entity_type":"Group","event_name":"group_update","event_type":"auth","details":{"entity_path":"my-group"},"created_at":"2024-01-16T10:00:00Z"}
+			{"id":2,"author_id":10,"entity_id":5,"entity_type":"Group","event_name":"group_update","event_type":"auth","details":{"entity_path":"my-group"},"created_at":"2026-01-16T10:00:00Z"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -115,7 +115,7 @@ func TestGetGroup_Success(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":2,"author_id":10,"entity_id":5,"entity_type":"Group","event_name":"group_update","event_type":"auth","details":{},"created_at":"2024-01-16T10:00:00Z"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":2,"author_id":10,"entity_id":5,"entity_type":"Group","event_name":"group_update","event_type":"auth","details":{},"created_at":"2026-01-16T10:00:00Z"}`)
 	}))
 
 	out, err := GetGroup(context.Background(), client, GetGroupInput{GroupID: "5", EventID: 2})
@@ -146,7 +146,7 @@ func TestListProject_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":3,"author_id":10,"entity_id":42,"entity_type":"Project","event_name":"project_update","event_type":"auth","details":{"target_type":"Project","target_details":"my-project"},"created_at":"2024-01-17T10:00:00Z"}
+			{"id":3,"author_id":10,"entity_id":42,"entity_type":"Project","event_name":"project_update","event_type":"auth","details":{"target_type":"Project","target_details":"my-project"},"created_at":"2026-01-17T10:00:00Z"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -180,7 +180,7 @@ func TestGetProject_Success(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":3,"author_id":10,"entity_id":42,"entity_type":"Project","event_name":"project_update","event_type":"auth","details":{},"created_at":"2024-01-17T10:00:00Z"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":3,"author_id":10,"entity_id":42,"entity_type":"Project","event_name":"project_update","event_type":"auth","details":{},"created_at":"2026-01-17T10:00:00Z"}`)
 	}))
 
 	out, err := GetProject(context.Background(), client, GetProjectInput{ProjectID: "42", EventID: 3})
@@ -215,7 +215,7 @@ func TestListInstance_WithDateFilter(t *testing.T) {
 	}))
 
 	out, err := ListInstance(context.Background(), client, ListInstanceInput{
-		CreatedAfter: "2024-01-01",
+		CreatedAfter: "2026-01-01",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

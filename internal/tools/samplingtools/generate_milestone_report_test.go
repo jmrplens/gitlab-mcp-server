@@ -21,7 +21,7 @@ import (
 func TestFormatMilestoneForAnalysis(t *testing.T) {
 	ms := milestones.Output{
 		Title: "v1.0", State: "active", Description: "First release",
-		StartDate: "2024-01-01", DueDate: "2024-03-01", Expired: false,
+		StartDate: "2026-01-01", DueDate: "2026-03-01", Expired: false,
 	}
 	msIssues := milestones.MilestoneIssuesOutput{
 		Issues: []milestones.IssueItem{
@@ -41,8 +41,8 @@ func TestFormatMilestoneForAnalysis(t *testing.T) {
 		{"title", "# Milestone: v1.0"},
 		{"state", "**State**: active"},
 		{"description", "**Description**: First release"},
-		{"start_date", "**Start Date**: 1 Jan 2024"},
-		{"due_date", "**Due Date**: 1 Mar 2024"},
+		{"start_date", "**Start Date**: 1 Jan 2026"},
+		{"due_date", "**Due Date**: 1 Mar 2026"},
 		{"expired", "**Expired**: false"},
 		{"issues_section", "## Issues (2 total: 1 open, 1 closed)"},
 		{"issue_entry", "#1 — Bug fix [closed]"},
@@ -145,7 +145,7 @@ func TestGenerateMilestoneReport_FullFlow(t *testing.T) {
 	mux.HandleFunc("/api/v4/projects/42/milestones/999", func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id": 999, "iid": 5, "title": "v1.0", "state": "active",
-			"description": "First release", "start_date": "2024-01-01", "due_date": "2024-03-01"
+			"description": "First release", "start_date": "2026-01-01", "due_date": "2026-03-01"
 		}`)
 	})
 	// Milestone issues (also calls resolveIID, but /milestones matches above)

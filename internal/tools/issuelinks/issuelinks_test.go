@@ -142,8 +142,8 @@ func TestIssueLinkGet_Success(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/10/issues/5/links/1" && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,
-				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
-				"target_issue":{"id":80,"iid":8,"project_id":10,"title":"Target","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
+				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+				"target_issue":{"id":80,"iid":8,"project_id":10,"title":"Target","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
 				"link_type":"blocks"
 			}`)
 			return
@@ -229,8 +229,8 @@ func TestIssueLinkCreate_Success(t *testing.T) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodPost {
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":2,
-				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
-				"target_issue":{"id":120,"iid":12,"project_id":20,"title":"Target","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
+				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+				"target_issue":{"id":120,"iid":12,"project_id":20,"title":"Target","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
 				"link_type":"is_blocked_by"
 			}`)
 			return
@@ -268,8 +268,8 @@ func TestIssueLinkCreate_WithoutLinkType(t *testing.T) {
 		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodPost {
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":3,
-				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
-				"target_issue":{"id":70,"iid":7,"project_id":10,"title":"Target","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
+				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+				"target_issue":{"id":70,"iid":7,"project_id":10,"title":"Target","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
 				"link_type":"relates_to"
 			}`)
 			return
@@ -358,8 +358,8 @@ func TestIssueLinkDelete_Success(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/10/issues/5/links/1" && r.Method == http.MethodDelete {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,
-				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
-				"target_issue":{"id":80,"iid":8,"project_id":10,"title":"Target","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
+				"source_issue":{"id":50,"iid":5,"project_id":10,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+				"target_issue":{"id":80,"iid":8,"project_id":10,"title":"Target","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
 				"link_type":"relates_to"
 			}`)
 			return
@@ -798,8 +798,8 @@ const (
 
 	issueLinkJSON = `{
 		"id":99,
-		"source_issue":{"id":50,"iid":10,"project_id":42,"title":"Source","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
-		"target_issue":{"id":80,"iid":20,"project_id":42,"title":"Target","state":"opened","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"},
+		"source_issue":{"id":50,"iid":10,"project_id":42,"title":"Source","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+		"target_issue":{"id":80,"iid":20,"project_id":42,"title":"Target","state":"opened","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
 		"link_type":"relates_to"
 	}`
 

@@ -30,7 +30,7 @@ func TestGetServicePing(t *testing.T) {
 			t.Fatalf("unexpected method: %s", r.Method)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"recorded_at": "2024-01-15T10:00:00Z",
+			"recorded_at": "2026-01-15T10:00:00Z",
 			"license": {"plan": "premium"},
 			"counts": {"users": 100, "projects": 50}
 		}`)
@@ -40,8 +40,8 @@ func TestGetServicePing(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.RecordedAt != "2024-01-15T10:00:00Z" {
-		t.Errorf("RecordedAt = %q, want %q", out.RecordedAt, "2024-01-15T10:00:00Z")
+	if out.RecordedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("RecordedAt = %q, want %q", out.RecordedAt, "2026-01-15T10:00:00Z")
 	}
 	if out.License["plan"] != "premium" {
 		t.Errorf("License[plan] = %q, want premium", out.License["plan"])
@@ -88,7 +88,7 @@ func TestGetNonSQLMetrics(t *testing.T) {
 			t.Fatalf(fmtUnexpPath, r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"recorded_at": "2024-01-15",
+			"recorded_at": "2026-01-15",
 			"uuid": "abc-123",
 			"hostname": "gitlab.example.com",
 			"version": "16.8.0",
@@ -101,8 +101,8 @@ func TestGetNonSQLMetrics(t *testing.T) {
 			"historical_max_users": 200,
 			"licensee": {"name": "ACME"},
 			"license_user_count": 300,
-			"license_starts_at": "2024-01-01",
-			"license_expires_at": "2025-01-01",
+			"license_starts_at": "2026-01-01",
+			"license_expires_at": "2026-01-01",
 			"license_plan": "premium",
 			"license_add_ons": {"code_suggestions": 50},
 			"license_trial": "false",
@@ -155,7 +155,7 @@ func TestGetQueries(t *testing.T) {
 			t.Fatalf(fmtUnexpPath, r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"recorded_at": "2024-01-15T10:00:00Z",
+			"recorded_at": "2026-01-15T10:00:00Z",
 			"uuid": "abc-123",
 			"hostname": "gitlab.example.com",
 			"version": "16.8.0",
@@ -184,8 +184,8 @@ func TestGetQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.RecordedAt != "2024-01-15T10:00:00Z" {
-		t.Errorf("RecordedAt = %q, want 2024-01-15T10:00:00Z", out.RecordedAt)
+	if out.RecordedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("RecordedAt = %q, want 2026-01-15T10:00:00Z", out.RecordedAt)
 	}
 	if out.Counts["users_count"] != "SELECT COUNT(*) FROM users" {
 		t.Errorf("Counts[users_count] = %q, want SQL query", out.Counts["users_count"])
@@ -300,7 +300,7 @@ func TestTrackEvents(t *testing.T) {
 // TestFormatServicePingMarkdown verifies the behavior of format service ping markdown.
 func TestFormatServicePingMarkdown(t *testing.T) {
 	out := GetServicePingOutput{
-		RecordedAt: "2024-01-15T10:00:00Z",
+		RecordedAt: "2026-01-15T10:00:00Z",
 		License:    map[string]string{"plan": "premium"},
 		Counts:     map[string]int64{"users": 100},
 	}
@@ -308,7 +308,7 @@ func TestFormatServicePingMarkdown(t *testing.T) {
 	if !strings.Contains(md, "Service Ping Data") {
 		t.Error("missing header")
 	}
-	if !strings.Contains(md, "15 Jan 2024 10:00 UTC") {
+	if !strings.Contains(md, "15 Jan 2026 10:00 UTC") {
 		t.Error("missing recorded_at")
 	}
 	if !strings.Contains(md, "premium") {
@@ -472,7 +472,7 @@ func TestFormatServicePingMarkdown_ManyCounts(t *testing.T) {
 		counts["metric_"+string(rune('a'+i))] = int64(i)
 	}
 	md := FormatServicePingMarkdown(GetServicePingOutput{
-		RecordedAt: "2024-01-15T10:00:00Z",
+		RecordedAt: "2026-01-15T10:00:00Z",
 		Counts:     counts,
 	})
 	if !strings.Contains(md, "more metrics") {
@@ -547,15 +547,15 @@ func newUsageDataMCPSession(t *testing.T) *mcp.ClientSession {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("GET /api/v4/usage_data/service_ping", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2024-01-15T10:00:00Z","license":{"plan":"premium"},"counts":{"users":100}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2026-01-15T10:00:00Z","license":{"plan":"premium"},"counts":{"users":100}}`)
 	})
 
 	handler.HandleFunc("GET /api/v4/usage_data/non_sql_metrics", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2024-01-15","uuid":"abc-123","hostname":"h","version":"16.8.0","installation_type":"omnibus","active_user_count":150,"edition":"EE","license_md5":"","license_sha256":"","license_id":"","historical_max_users":200,"licensee":{},"license_user_count":300,"license_starts_at":"","license_expires_at":"","license_plan":"premium","license_add_ons":{},"license_trial":"","license_subscription_id":"","license":{},"settings":{}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2026-01-15","uuid":"abc-123","hostname":"h","version":"16.8.0","installation_type":"omnibus","active_user_count":150,"edition":"EE","license_md5":"","license_sha256":"","license_id":"","historical_max_users":200,"licensee":{},"license_user_count":300,"license_starts_at":"","license_expires_at":"","license_plan":"premium","license_add_ons":{},"license_trial":"","license_subscription_id":"","license":{},"settings":{}}`)
 	})
 
 	handler.HandleFunc("GET /api/v4/usage_data/queries", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2024-01-15T10:00:00Z","uuid":"abc","hostname":"h","version":"16.8.0","installation_type":"omnibus","active_user_count":"SELECT 1","edition":"CE","license_md5":"","license_sha256":"","license_id":"","historical_max_users":0,"licensee":{},"license_user_count":0,"license_starts_at":"","license_expires_at":"","license_plan":"","license_add_ons":{},"license_trial":"","license_subscription_id":"","license":{},"settings":{},"counts":{"users":"SELECT COUNT(*) FROM users"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"recorded_at":"2026-01-15T10:00:00Z","uuid":"abc","hostname":"h","version":"16.8.0","installation_type":"omnibus","active_user_count":"SELECT 1","edition":"CE","license_md5":"","license_sha256":"","license_id":"","historical_max_users":0,"licensee":{},"license_user_count":0,"license_starts_at":"","license_expires_at":"","license_plan":"","license_add_ons":{},"license_trial":"","license_subscription_id":"","license":{},"settings":{},"counts":{"users":"SELECT COUNT(*) FROM users"}}`)
 	})
 
 	handler.HandleFunc("GET /api/v4/usage_data/metric_definitions", func(w http.ResponseWriter, _ *http.Request) {

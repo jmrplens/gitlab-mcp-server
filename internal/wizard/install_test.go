@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -115,5 +116,28 @@ func TestCopyFile_SourceNotExists(t *testing.T) {
 	err := copyFile(filepath.Join(t.TempDir(), "nonexistent"), dest)
 	if err == nil {
 		t.Fatal("expected error for nonexistent source, got nil")
+	}
+}
+
+// TestInstallBinaryImpl_MkdirAllFails verifies installBinaryImpl returns
+// an error when it cannot create the destination directory (e.g. read-only parent).
+func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission test not reliable on Windows")
+	}
+	tmpDir := t.TempDir()
+	blocked := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(blocked, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	deepDir := filepath.Join(blocked, "nested", "dir")
+	_, err := installBinaryImpl(deepDir)
+	if err == nil {
+		t.Fatal("expected error when MkdirAll fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "creating directory") {
+		t.Errorf("error = %v, want to contain 'creating directory'", err)
 	}
 }

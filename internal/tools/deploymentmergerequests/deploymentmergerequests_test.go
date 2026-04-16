@@ -31,7 +31,7 @@ func TestList_Success(t *testing.T) {
 				"source_branch": "feature-x",
 				"target_branch": "main",
 				"web_url": "https://gitlab.example.com/project/-/merge_requests/10",
-				"merged_at": "2024-01-15T10:30:00Z"
+				"merged_at": "2026-01-15T10:30:00Z"
 			},
 			{
 				"iid": 11,
@@ -542,7 +542,7 @@ func newDeploymentMRMCPSession(t *testing.T) *mcp.ClientSession {
 				"source_branch": "feature-x",
 				"target_branch": "main",
 				"web_url": "https://gitlab.example.com/project/-/merge_requests/10",
-				"merged_at": "2024-01-15T10:30:00Z"
+				"merged_at": "2026-01-15T10:30:00Z"
 			},
 			{
 				"iid": 11,

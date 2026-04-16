@@ -378,3 +378,67 @@ func TestPreStartUpdate_ExecSelfFails_Integration(t *testing.T) {
 		t.Errorf("newVersion = %q, want %q", newVersion, "3.0.0")
 	}
 }
+
+// TestCleanupOldBinary_ResolveError verifies CleanupOldBinary is a no-op
+// when resolveExecutable returns an error (e.g. in a deleted-binary scenario).
+func TestCleanupOldBinary_ResolveError(t *testing.T) {
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) {
+		return "", errors.New("cannot resolve")
+	}
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	// Should not panic.
+	CleanupOldBinary()
+}
+
+// TestDownloadAndReplace_FullSuccess verifies the complete DownloadAndReplace
+// flow using a downloadableMockSource with valid binary data and a stubbed
+// executable path to avoid touching the production binary.
+func TestDownloadAndReplace_FullSuccess(t *testing.T) {
+	exe := stubExecutablePath(t)
+
+	rel := newMockReleaseForPlatform("v3.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{rel},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	version, err := u.DownloadAndReplace(context.Background())
+	if err != nil {
+		t.Fatalf("DownloadAndReplace: %v", err)
+	}
+	if version != "3.0.0" {
+		t.Errorf("version = %q, want %q", version, "3.0.0")
+	}
+
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatalf("reading replaced binary: %v", err)
+	}
+	if !bytes.Equal(data, fakeBinary()) {
+		t.Error("binary content not updated")
+	}
+}
+
+// TestPreStartUpdate_CheckForUpdateFails verifies PreStartUpdate returns an
+// empty result when CheckForUpdate fails (e.g. network error). This is tested
+// indirectly since PreStartUpdate creates its own Updater with a real GitHub
+// source; we use a cancelled context to trigger the error path.
+func TestPreStartUpdate_CheckForUpdateFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := PreStartUpdate(ctx, Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when context is cancelled")
+	}
+}

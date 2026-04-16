@@ -440,7 +440,7 @@ func TestSearchNotes_ProjectScope(t *testing.T) {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
 				"id":55,"body":"Looks good to me","author":{"username":"reviewer"},
 				"noteable_type":"Issue","noteable_id":101,"noteable_iid":5,
-				"system":false,"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"
+				"system":false,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"
 			}]`, defaultPagination)
 			return
 		}
@@ -559,7 +559,7 @@ func TestSearchSnippets_GlobalScope(t *testing.T) {
 				"author":{"username":"dev1"},
 				"web_url":"https://gitlab.example.com/-/snippets/301",
 				"raw_url":"https://gitlab.example.com/-/snippets/301/raw",
-				"created_at":"2025-06-01T12:00:00Z","updated_at":"2025-06-01T12:00:00Z"
+				"created_at":"2026-06-01T12:00:00Z","updated_at":"2026-06-01T12:00:00Z"
 			}]`, defaultPagination)
 			return
 		}
@@ -1237,7 +1237,7 @@ func TestFormatCommitsMarkdown_Empty(t *testing.T) {
 // TestFormatCommitsMarkdown_WithResults verifies the behavior of format commits markdown with results.
 func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
 	s := FormatCommitsMarkdown(CommitsOutput{
-		Commits:    []commits.Output{{ShortID: "abc123", Title: "Initial commit", AuthorName: "Dev", CommittedDate: "2025-01-01"}},
+		Commits:    []commits.Output{{ShortID: "abc123", Title: "Initial commit", AuthorName: "Dev", CommittedDate: "2026-01-01"}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "abc123") {
@@ -1263,7 +1263,7 @@ func TestFormatMilestonesMarkdown_Empty(t *testing.T) {
 // TestFormatMilestonesMarkdown_WithResults verifies the behavior of format milestones markdown with results.
 func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
 	s := FormatMilestonesMarkdown(MilestonesOutput{
-		Milestones: []milestones.Output{{IID: 1, Title: "v1.0", State: "active", DueDate: "2025-06-01"}},
+		Milestones: []milestones.Output{{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-06-01"}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "v1.0") {
@@ -1800,7 +1800,7 @@ func TestSearchIssues_QueryWithUnicode(t *testing.T) {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
 				"id":1,"iid":5,"title":"\u00e9l\u00e8ve probl\u00e8me","state":"opened",
 				"web_url":"https://gitlab.example.com/issues/5",
-				"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z",
+				"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z",
 				"labels":[],"assignees":[],"author":{"username":"alice"}
 			}]`, defaultPagination)
 			return

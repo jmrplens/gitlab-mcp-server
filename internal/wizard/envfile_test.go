@@ -175,3 +175,31 @@ func TestLoadExistingConfigFromPath_SensibleDefaults(t *testing.T) {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
 }
+
+// TestWriteEnvFile_Wrapper verifies the public WriteEnvFile function
+// delegates to writeEnvFileToPath with the path from EnvFilePath().
+// We override HOME to avoid writing to the real home directory.
+func TestWriteEnvFile_Wrapper(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	cfg := ServerConfig{
+		GitLabURL:   "https://gitlab.example.com",
+		GitLabToken: "glpat-wrapper-test",
+	}
+
+	path, err := WriteEnvFile(cfg)
+	if err != nil {
+		t.Fatalf("WriteEnvFile: %v", err)
+	}
+	if path == "" {
+		t.Fatal("WriteEnvFile returned empty path")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading file: %v", err)
+	}
+	if !strings.Contains(string(data), "glpat-wrapper-test") {
+		t.Error("written file does not contain expected token")
+	}
+}

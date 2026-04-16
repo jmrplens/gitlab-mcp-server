@@ -26,8 +26,8 @@ const (
 		"system": false,
 		"noteable_type": "Epic",
 		"noteable_id": 1,
-		"created_at": "2024-01-15T10:00:00Z",
-		"updated_at": "2024-01-15T10:00:00Z"
+		"created_at": "2026-01-15T10:00:00Z",
+		"updated_at": "2026-01-15T10:00:00Z"
 	}`
 
 	noteSystemJSON = `{
@@ -37,8 +37,8 @@ const (
 		"system": true,
 		"noteable_type": "Epic",
 		"noteable_id": 1,
-		"created_at": "2024-01-15T12:00:00Z",
-		"updated_at": "2024-01-15T12:00:00Z"
+		"created_at": "2026-01-15T12:00:00Z",
+		"updated_at": "2026-01-15T12:00:00Z"
 	}`
 
 	testGroupID = "mygroup"
@@ -531,7 +531,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:        100,
 				Body:      "This looks good",
 				Author:    "alice",
-				CreatedAt: "2024-01-15T10:00:00Z",
+				CreatedAt: "2026-01-15T10:00:00Z",
 				System:    false,
 			},
 			contains: []string{
@@ -548,7 +548,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:        101,
 				Body:      "changed the description",
 				Author:    "admin",
-				CreatedAt: "2024-01-15T12:00:00Z",
+				CreatedAt: "2026-01-15T12:00:00Z",
 				System:    true,
 			},
 			contains: []string{
@@ -583,8 +583,8 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders table with notes",
 			input: ListOutput{
 				Notes: []Output{
-					{ID: 100, Author: "alice", CreatedAt: "2024-01-15T10:00:00Z", System: false},
-					{ID: 101, Author: "admin", CreatedAt: "2024-01-15T12:00:00Z", System: true},
+					{ID: 100, Author: "alice", CreatedAt: "2026-01-15T10:00:00Z", System: false},
+					{ID: 101, Author: "admin", CreatedAt: "2026-01-15T12:00:00Z", System: true},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 			},

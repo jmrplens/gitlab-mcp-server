@@ -27,7 +27,7 @@ import (
 )
 
 // rawISOTimestampRE detects raw ISO 8601 timestamps that should have been
-// formatted by toolutil.FormatTime (e.g. "2024-01-15T10:30:00Z").
+// formatted by toolutil.FormatTime (e.g. "2026-01-15T10:30:00Z").
 var rawISOTimestampRE = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)
 
 // markdownQualityCase defines a test case for markdown quality validation.
@@ -50,7 +50,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: projects.Output{
 				ID: 1, Name: "test-project", PathWithNamespace: "group/test-project",
 				Visibility: "private", DefaultBranch: "main", WebURL: "https://gitlab.example.com/group/test-project",
-				CreatedAt: "2024-01-15 10:30", LastActivityAt: "2024-06-01 15:00",
+				CreatedAt: "2026-01-15 10:30", LastActivityAt: "2026-06-01 15:00",
 			},
 			expectWebURL: true,
 		},
@@ -68,7 +68,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: issues.Output{
 				ID: 10, IID: 5, Title: "Fix login bug", State: "opened",
 				WebURL: "https://gitlab.example.com/group/project/-/issues/5",
-				Author: "alice", CreatedAt: "2024-02-01 09:00",
+				Author: "alice", CreatedAt: "2026-02-01 09:00",
 			},
 			expectWebURL: true,
 		},
@@ -87,7 +87,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 				ID: 20, IID: 3, Title: "Feature branch", State: "opened",
 				SourceBranch: "feature/x", TargetBranch: "main", Author: "alice",
 				WebURL:    "https://gitlab.example.com/group/project/-/merge_requests/3",
-				CreatedAt: "2024-03-10 14:00",
+				CreatedAt: "2026-03-10 14:00",
 			},
 			expectWebURL: true,
 		},
@@ -120,7 +120,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: commits.Output{
 				ID: "abc123def456", ShortID: "abc123d", Title: "Initial commit",
 				AuthorName: "alice", WebURL: "https://gitlab.example.com/group/project/-/commit/abc123d",
-				CommittedDate: "2024-04-01 12:00",
+				CommittedDate: "2026-04-01 12:00",
 			},
 			expectWebURL: true,
 		},
@@ -129,7 +129,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: pipelines.DetailOutput{
 				ID: 100, Status: "success", Ref: "main", SHA: "abc123",
 				WebURL:    "https://gitlab.example.com/group/project/-/pipelines/100",
-				CreatedAt: "2024-05-01 08:00",
+				CreatedAt: "2026-05-01 08:00",
 			},
 			expectWebURL: true,
 		},
@@ -143,7 +143,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "releases.Output",
 			result: releases.Output{
 				Name: "v1.0.0", TagName: "v1.0.0", Description: "First release",
-				CreatedAt: "2024-06-01 10:00",
+				CreatedAt: "2026-06-01 10:00",
 			},
 		},
 		{

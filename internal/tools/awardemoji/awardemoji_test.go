@@ -43,7 +43,7 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji" {
 			t.Errorf(fmtUnexpPath, r.URL.Path)
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2024-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
 	out, err := ListIssueAwardEmoji(t.Context(), client, ListInput{
@@ -85,7 +85,7 @@ func TestGetIssueAwardEmoji_Success(t *testing.T) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji/10" {
 			t.Errorf(fmtUnexpPath, r.URL.Path)
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2024-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
 	}))
 
 	out, err := GetIssueAwardEmoji(t.Context(), client, GetInput{
@@ -116,7 +116,7 @@ func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 				t.Errorf(fmtNameWantThumbsup, body["name"])
 			}
 		}
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2024-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
 	}))
 
 	out, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{
@@ -194,7 +194,7 @@ func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/notes/5/award_emoji" {
 			t.Errorf(fmtUnexpPath, r.URL.Path)
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":20,"name":"heart","user":{"id":2,"username":"dev"},"created_at":"2024-02-01T00:00:00Z","awardable_id":5,"awardable_type":"Note"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":20,"name":"heart","user":{"id":2,"username":"dev"},"created_at":"2026-02-01T00:00:00Z","awardable_id":5,"awardable_type":"Note"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
 	out, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{
@@ -241,7 +241,7 @@ func TestListMRAwardEmoji_Success(t *testing.T) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/merge_requests/3/award_emoji" {
 			t.Errorf(fmtUnexpPath, r.URL.Path)
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"rocket","user":{"id":3,"username":"user3"},"created_at":"2024-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"rocket","user":{"id":3,"username":"user3"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
 	out, err := ListMRAwardEmoji(t.Context(), client, ListInput{
@@ -283,7 +283,7 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/snippets/7/award_emoji" {
 			t.Errorf(fmtUnexpPath, r.URL.Path)
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":40,"name":"100","user":{"id":4,"username":"user4"},"created_at":"2024-04-01T00:00:00Z","awardable_id":7,"awardable_type":"Snippet"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":40,"name":"100","user":{"id":4,"username":"user4"},"created_at":"2026-04-01T00:00:00Z","awardable_id":7,"awardable_type":"Snippet"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
 	out, err := ListSnippetAwardEmoji(t.Context(), client, ListInput{
@@ -307,8 +307,8 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
-			{ID: 10, Name: testEmojiThumbsup, UserID: 1, Username: "admin", CreatedAt: "2024-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
-			{ID: 11, Name: "heart", UserID: 2, Username: "dev", CreatedAt: "2024-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+			{ID: 10, Name: testEmojiThumbsup, UserID: 1, Username: "admin", CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+			{ID: 11, Name: "heart", UserID: 2, Username: "dev", CreatedAt: "2026-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
 		},
 	}
 	md := FormatListMarkdownString(out)
@@ -339,7 +339,7 @@ func TestFormatMarkdownString(t *testing.T) {
 		Name:      testEmojiThumbsup,
 		UserID:    1,
 		Username:  "admin",
-		CreatedAt: "2024-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	md := FormatMarkdownString(out)
 	if !contains(md, ":thumbsup:") {
@@ -657,8 +657,8 @@ func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 
 const errExpectedValidation = "expected validation error"
 
-const covEmojiJSON = `[{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2024-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}]`
-const covEmojiSingle = `{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2024-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}`
+const covEmojiJSON = `[{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2026-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}]`
+const covEmojiSingle = `{"id":1,"name":"thumbsup","user":{"id":5,"username":"alice"},"created_at":"2026-06-01T10:00:00Z","awardable_id":10,"awardable_type":"Issue"}`
 
 // covBadHandler is an internal helper for the awardemoji package.
 func covBadHandler() http.Handler {
@@ -1246,8 +1246,8 @@ func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 
 // TestFormatMarkdownString_WithCreatedAt verifies the behavior of cov format markdown string with created at.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice", CreatedAt: "2024-06-01T10:00:00Z"})
-	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2024") {
+	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice", CreatedAt: "2026-06-01T10:00:00Z"})
+	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2026") {
 		t.Error("expected Created date")
 	}
 }

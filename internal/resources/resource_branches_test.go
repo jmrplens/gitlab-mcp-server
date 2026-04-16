@@ -17,7 +17,7 @@ func TestMilestonesResource_WithDueDate(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/milestones" {
 			respondJSON(w, http.StatusOK, `[
-				{"id":1,"iid":1,"title":"v1.0","description":"First","state":"active","web_url":"https://x.com/m/1","due_date":"2025-06-30"},
+				{"id":1,"iid":1,"title":"v1.0","description":"First","state":"active","web_url":"https://x.com/m/1","due_date":"2026-06-30"},
 				{"id":2,"iid":2,"title":"v2.0","description":"Second","state":"active","web_url":"https://x.com/m/2"}
 			]`)
 			return

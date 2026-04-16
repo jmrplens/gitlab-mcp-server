@@ -27,8 +27,8 @@ func TestDeploymentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodGet {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2025-01-01T00:00:00Z"},
-				{"id":2,"iid":2,"ref":"develop","sha":"def456","status":"running","user":{"username":"dev"},"environment":{"name":"staging"},"created_at":"2025-01-02T00:00:00Z"}
+				{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"iid":2,"ref":"develop","sha":"def456","status":"running","user":{"username":"dev"},"environment":{"name":"staging"},"created_at":"2026-01-02T00:00:00Z"}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
@@ -115,7 +115,7 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 func TestDeploymentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T01:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z"}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -165,7 +165,7 @@ func TestDeploymentGet_CancelledContext(t *testing.T) {
 func TestDeploymentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"iid":3,"ref":"main","sha":"abc123","status":"created","environment":{"name":"staging"},"created_at":"2025-06-01T00:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"iid":3,"ref":"main","sha":"abc123","status":"created","environment":{"name":"staging"},"created_at":"2026-06-01T00:00:00Z"}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -518,7 +518,7 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 				"id":5,"iid":5,"ref":"v1.0.0","sha":"aaa111","status":"running",
 				"user":{"username":"deployer"},
 				"environment":{"name":"production"},
-				"created_at":"2025-06-01T00:00:00Z"
+				"created_at":"2026-06-01T00:00:00Z"
 			}`)
 			return
 		}
@@ -631,8 +631,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Status:          "success",
 		UserName:        "admin",
 		EnvironmentName: "production",
-		CreatedAt:       "2025-06-01T00:00:00Z",
-		UpdatedAt:       "2025-06-01T01:00:00Z",
+		CreatedAt:       "2026-06-01T00:00:00Z",
+		UpdatedAt:       "2026-06-01T01:00:00Z",
 	})
 
 	for _, want := range []string{
@@ -643,8 +643,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Status | success |",
 		"| User | admin |",
 		"| Environment | production |",
-		"| Created | 1 Jun 2025 00:00 UTC |",
-		"| Updated | 1 Jun 2025 01:00 UTC |",
+		"| Created | 1 Jun 2026 00:00 UTC |",
+		"| Updated | 1 Jun 2026 01:00 UTC |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
@@ -781,8 +781,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		Status:          "failed",
 		UserName:        "deployer",
 		EnvironmentName: "canary",
-		CreatedAt:       "2025-12-01T00:00:00Z",
-		UpdatedAt:       "2025-12-01T12:00:00Z",
+		CreatedAt:       "2026-12-01T00:00:00Z",
+		UpdatedAt:       "2026-12-01T12:00:00Z",
 	})
 
 	for _, want := range []string{
@@ -793,8 +793,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		"| Status | failed |",
 		"| User | deployer |",
 		"| Environment | canary |",
-		"| Created | 1 Dec 2025 00:00 UTC |",
-		"| Updated | 1 Dec 2025 12:00 UTC |",
+		"| Created | 1 Dec 2026 00:00 UTC |",
+		"| Updated | 1 Dec 2026 12:00 UTC |",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("markdown missing %q:\n%s", want, out)
@@ -866,7 +866,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func newDeploymentsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	deploymentJSON := `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T01:00:00Z"}`
+	deploymentJSON := `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z"}`
 
 	handler := http.NewServeMux()
 

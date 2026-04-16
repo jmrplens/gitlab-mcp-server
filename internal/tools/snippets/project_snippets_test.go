@@ -261,7 +261,7 @@ func TestProjectDelete_MissingParams(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-const covSnippetJSON = `{"id":1,"title":"Hello","file_name":"hello.rb","description":"test","visibility":"private","author":{"id":10,"username":"user","name":"User","email":"u@e.com","state":"active"},"web_url":"https://x","raw_url":"https://r","files":[{"path":"hello.rb","raw_url":"https://f"}],"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}`
+const covSnippetJSON = `{"id":1,"title":"Hello","file_name":"hello.rb","description":"test","visibility":"private","author":{"id":10,"username":"user","name":"User","email":"u@e.com","state":"active"},"web_url":"https://x","raw_url":"https://r","files":[{"path":"hello.rb","raw_url":"https://f"}],"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
 const covListSnippetJSON = `[` + covSnippetJSON + `]`
 
 const (
@@ -311,8 +311,8 @@ func TestListAll_WithDateFilters(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, covListSnippetJSON)
 	}))
 	out, err := ListAll(context.Background(), client, ListAllInput{
-		CreatedAfter:  "2024-01-01T00:00:00Z",
-		CreatedBefore: "2025-01-01T00:00:00Z",
+		CreatedAfter:  "2026-01-01T00:00:00Z",
+		CreatedBefore: "2026-01-01T00:00:00Z",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)

@@ -229,7 +229,7 @@ func TestTagList_AllOptionalParams(t *testing.T) {
 // TestReleaseList_AllOptionalParams exercises every optional branch in releaseList.
 func TestReleaseList_AllOptionalParams(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusOK, `[{"tag_name":"v1.0","name":"v1.0","description":"notes","created_at":"2024-01-01T00:00:00Z","released_at":"2024-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}]`)
+		respondJSON(w, http.StatusOK, `[{"tag_name":"v1.0","name":"v1.0","description":"notes","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}]`)
 	}))
 
 	out, err := releases.List(context.Background(), client, releases.ListInput{
@@ -248,7 +248,7 @@ func TestReleaseList_AllOptionalParams(t *testing.T) {
 // TestReleaseUpdate_AllOptionalParams exercises every optional branch in releaseUpdate.
 func TestReleaseUpdate_AllOptionalParams(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusOK, `{"tag_name":"v1.0","name":"Updated","description":"new notes","created_at":"2024-01-01T00:00:00Z","released_at":"2024-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}`)
+		respondJSON(w, http.StatusOK, `{"tag_name":"v1.0","name":"Updated","description":"new notes","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}`)
 	}))
 
 	out, err := releases.Update(context.Background(), client, releases.UpdateInput{
@@ -268,7 +268,7 @@ func TestReleaseUpdate_AllOptionalParams(t *testing.T) {
 // TestMRNotesList_AllOptionalParams exercises optional branches in mrNotesList.
 func TestMRNotesList_AllOptionalParams(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusOK, `[{"id":1,"body":"note","author":{"username":"test"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","system":false}]`)
+		respondJSON(w, http.StatusOK, `[{"id":1,"body":"note","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","system":false}]`)
 	}))
 
 	out, err := mrnotes.List(context.Background(), client, mrnotes.ListInput{
@@ -288,7 +288,7 @@ func TestMRNotesList_AllOptionalParams(t *testing.T) {
 // TestMRDiscussionCreate_InlineWithOldPath exercises the OldPath and OldLine branches.
 func TestMRDiscussionCreateInline_WithOldPath(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusCreated, `{"id":"disc1","individual_note":false,"notes":[{"id":1,"body":"inline","author":{"username":"test"},"created_at":"2024-01-01T00:00:00Z","resolved":false}]}`)
+		respondJSON(w, http.StatusCreated, `{"id":"disc1","individual_note":false,"notes":[{"id":1,"body":"inline","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","resolved":false}]}`)
 	}))
 
 	out, err := mrdiscussions.Create(context.Background(), client, mrdiscussions.CreateInput{
@@ -316,7 +316,7 @@ func TestMRDiscussionCreateInline_WithOldPath(t *testing.T) {
 // TestCommitCreate_AllOptionalParams exercises optional branches in commitCreate.
 func TestCommitCreate_AllOptionalParams(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusCreated, `{"id":"abc123","short_id":"abc1","title":"custom commit","message":"custom commit","author_name":"Custom Author","author_email":"custom@example.com","created_at":"2024-01-01T00:00:00Z","web_url":"https://example.com/c/abc123","stats":{"additions":1,"deletions":0,"total":1}}`)
+		respondJSON(w, http.StatusCreated, `{"id":"abc123","short_id":"abc1","title":"custom commit","message":"custom commit","author_name":"Custom Author","author_email":"custom@example.com","created_at":"2026-01-01T00:00:00Z","web_url":"https://example.com/c/abc123","stats":{"additions":1,"deletions":0,"total":1}}`)
 	}))
 
 	out, err := commits.Create(context.Background(), client, commits.CreateInput{

@@ -329,7 +329,7 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 		}]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":"d1","notes":[{"id":1,"body":"LGTM","author":{"username":"bob"},"system":false,"created_at":"2024-01-15T10:00:00Z"}]}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"d1","notes":[{"id":1,"body":"LGTM","author":{"username":"bob"},"system":false,"created_at":"2026-01-15T10:00:00Z"}]}]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/approval_state", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"rules":[]}`)
@@ -341,7 +341,7 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 			"id":200,"iid":10,"title":"Login bug",
 			"description":"Login fails","state":"opened",
 			"author":{"username":"alice"},
-			"created_at":"2024-01-15T10:00:00Z",
+			"created_at":"2026-01-15T10:00:00Z",
 			"web_url":"https://gitlab.example.com/issues/10"
 		}`)
 	})
@@ -349,7 +349,7 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{
 			"id":100,"body":"Looks good","author":{"username":"bob"},
 			"system":false,"internal":false,
-			"created_at":"2024-01-16T10:00:00Z","updated_at":"2024-01-16T10:00:00Z"
+			"created_at":"2026-01-16T10:00:00Z","updated_at":"2026-01-16T10:00:00Z"
 		}]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/issues/10/time_stats", func(w http.ResponseWriter, _ *http.Request) {
@@ -367,7 +367,7 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 
 	// Compare endpoint (generate_release_notes).
 	mux.HandleFunc("/api/v4/projects/42/repository/compare", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"commits":[{"id":"abc","short_id":"abc","title":"feat: add login","author_name":"alice","committed_date":"2024-01-15T00:00:00Z","web_url":"u"}],"diffs":[],"compare_timeout":false,"compare_same_ref":false,"web_url":"u"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"commits":[{"id":"abc","short_id":"abc","title":"feat: add login","author_name":"alice","committed_date":"2026-01-15T00:00:00Z","web_url":"u"}],"diffs":[],"compare_timeout":false,"compare_same_ref":false,"web_url":"u"}`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -375,10 +375,10 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 
 	// Pipeline endpoint (analyze_pipeline_failure).
 	mux.HandleFunc("/api/v4/projects/42/pipelines/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"project_id":42,"status":"failed","ref":"main","sha":"abc","source":"push","web_url":"https://gitlab.example.com/pipeline/1","created_at":"2024-01-15T10:00:00Z","user":{"username":"alice"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"project_id":42,"status":"failed","ref":"main","sha":"abc","source":"push","web_url":"https://gitlab.example.com/pipeline/1","created_at":"2026-01-15T10:00:00Z","user":{"username":"alice"}}`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/pipelines/1/jobs", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"build","stage":"build","status":"failed","ref":"main","web_url":"https://gitlab.example.com/job/10","pipeline":{"id":1},"created_at":"2024-01-15T10:00:00Z","user":{"username":"alice"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"build","stage":"build","status":"failed","ref":"main","web_url":"https://gitlab.example.com/job/10","pipeline":{"id":1},"created_at":"2026-01-15T10:00:00Z","user":{"username":"alice"}}]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/jobs/10/trace", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -411,7 +411,7 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 
 	// Deployments endpoint (analyze_deployment_history).
 	mux.HandleFunc("/api/v4/projects/42/deployments", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"ref":"main","sha":"abc","status":"success","created_at":"2024-01-15T00:00:00Z","updated_at":"2024-01-15T01:00:00Z","user":{"username":"alice"},"environment":{"name":"production"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"ref":"main","sha":"abc","status":"success","created_at":"2026-01-15T00:00:00Z","updated_at":"2026-01-15T01:00:00Z","user":{"username":"alice"},"environment":{"name":"production"}}]`)
 	})
 
 	gitlabClient := testutil.NewTestClient(t, mux)
@@ -516,7 +516,7 @@ func TestFormatCIConfig_Errors(t *testing.T) {
 func TestFormatDeployment_HistoryOtherStatus(t *testing.T) {
 	depList := deployments.ListOutput{
 		Deployments: []deployments.Output{
-			{ID: 1, Status: "running", Ref: "main", SHA: "abc", EnvironmentName: "", UserName: "eve", CreatedAt: "2024-01-15"},
+			{ID: 1, Status: "running", Ref: "main", SHA: "abc", EnvironmentName: "", UserName: "eve", CreatedAt: "2026-01-15"},
 		},
 	}
 	result := FormatDeploymentHistoryForAnalysis(depList, "")
@@ -545,8 +545,8 @@ func TestFormatMR_ReviewBranches(t *testing.T) {
 				ID: "d1",
 				Notes: []mrdiscussions.NoteOutput{
 					{Author: "sys", Body: "approved", System: true},
-					{Author: "bob", Body: "needs work", Resolvable: true, Resolved: false, CreatedAt: "2024-01-15"},
-					{Author: "carol", Body: "general comment", Resolvable: false, CreatedAt: "2024-01-16"},
+					{Author: "bob", Body: "needs work", Resolvable: true, Resolved: false, CreatedAt: "2026-01-15"},
+					{Author: "carol", Body: "general comment", Resolvable: false, CreatedAt: "2026-01-16"},
 				},
 			},
 		},
@@ -592,7 +592,7 @@ func TestFormatMR_ReviewBranches(t *testing.T) {
 func TestFormatIssue_ScopeSparse(t *testing.T) {
 	issue := issues.Output{
 		IID: 42, Title: "Minimal", State: "closed",
-		Author: "alice", CreatedAt: "2024-01-01",
+		Author: "alice", CreatedAt: "2026-01-01",
 	}
 	timeStats := issues.TimeStatsOutput{}
 	participants := issues.ParticipantsOutput{}
@@ -622,7 +622,7 @@ func TestFormatIssue_ScopeSparse(t *testing.T) {
 // TestFormatIssueScopeNote_EmptyTimestamp verifies the note with empty
 // CreatedAt renders as "unknown" in FormatIssueScopeForAnalysis.
 func TestFormatIssueScopeNote_EmptyTimestamp(t *testing.T) {
-	issue := issues.Output{IID: 50, Title: "ts test", State: "opened", Author: "a", CreatedAt: "2024-01-01"}
+	issue := issues.Output{IID: 50, Title: "ts test", State: "opened", Author: "a", CreatedAt: "2026-01-01"}
 	notes := issuenotes.ListOutput{
 		Notes: []issuenotes.Output{
 			{Author: "bob", Body: "comment", CreatedAt: ""},

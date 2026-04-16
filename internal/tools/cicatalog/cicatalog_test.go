@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -24,10 +26,10 @@ const sampleResourceNode = `{
 	"forksCount": 5,
 	"openIssuesCount": 3,
 	"openMergeRequestsCount": 1,
-	"latestReleasedAt": "2025-06-15T10:30:00Z",
+	"latestReleasedAt": "2026-06-15T10:30:00Z",
 	"latestVersion": {
 		"name": "2.1.0",
-		"releasedAt": "2025-06-15T10:30:00Z",
+		"releasedAt": "2026-06-15T10:30:00Z",
 		"components": [
 			{
 				"name": "build",
@@ -101,7 +103,7 @@ func TestList_Success(t *testing.T) {
 	if r.LatestVersionName != "2.1.0" {
 		t.Errorf("LatestVersionName = %q, want 2.1.0", r.LatestVersionName)
 	}
-	if r.LatestReleasedAt != "2025-06-15T10:30:00Z" {
+	if r.LatestReleasedAt != "2026-06-15T10:30:00Z" {
 		t.Errorf("LatestReleasedAt = %q", r.LatestReleasedAt)
 	}
 	if r.WebURL != "https://gitlab.example.com/my-group/go-pipeline" {
@@ -243,14 +245,14 @@ func TestGet_ByFullPath(t *testing.T) {
 				"versions": {"nodes": [
 					{
 						"name": "2.1.0",
-						"releasedAt": "2025-06-15T10:30:00Z",
+						"releasedAt": "2026-06-15T10:30:00Z",
 						"components": [
 							{"name": "build", "description": "Build Go binary", "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.1.0", "inputs": []}
 						]
 					},
 					{
 						"name": "2.0.0",
-						"releasedAt": "2025-03-01T08:00:00Z",
+						"releasedAt": "2026-03-01T08:00:00Z",
 						"components": [
 							{"name": "build", "description": null, "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.0.0", "inputs": []}
 						]
@@ -441,7 +443,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 				StarCount:         42,
 				ForksCount:        5,
 				LatestVersionName: "2.1.0",
-				LatestReleasedAt:  "2025-06-15T10:30:00Z",
+				LatestReleasedAt:  "2026-06-15T10:30:00Z",
 			},
 		},
 	})
@@ -479,7 +481,7 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 				},
 			},
 			Versions: []VersionItem{
-				{Name: "2.1.0", ReleasedAt: "2025-06-15T10:30:00Z"},
+				{Name: "2.1.0", ReleasedAt: "2026-06-15T10:30:00Z"},
 			},
 		},
 	})
@@ -532,8 +534,8 @@ func TestFormatDate(t *testing.T) {
 		want  string
 	}{
 		{"empty", "", ""},
-		{"iso", "2025-06-15T10:30:00Z", "2025-06-15"},
-		{"short", "2025-06", "2025-06"},
+		{"iso", "2026-06-15T10:30:00Z", "2026-06-15"},
+		{"short", "2026-06", "2026-06"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -543,4 +545,127 @@ func TestFormatDate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGet_ServerError verifies that Get propagates GraphQL API errors when
+// the server returns a non-200 response.
+func TestGet_ServerError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Get(context.Background(), client, GetInput{ID: "gid://gitlab/Ci::CatalogResource/99"})
+	if err == nil {
+		t.Fatal("expected error from server error response, got nil")
+	}
+}
+
+// TestFormatGetMarkdown_MinimalResource verifies that FormatGetMarkdown handles
+// a resource with no optional fields (no description, no components, no versions,
+// no latest release/version name) producing clean Markdown without empty sections.
+func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{
+		Resource: ResourceDetail{
+			ResourceItem: ResourceItem{
+				ID:                "gid://gitlab/Ci::CatalogResource/2",
+				Name:              "minimal",
+				Description:       "A minimal catalog resource",
+				FullPath:          "group/minimal",
+				WebURL:            "https://gitlab.example.com/group/minimal",
+				LatestReleasedAt:  "2026-01-01T00:00:00Z",
+				LatestVersionName: "1.0.0",
+			},
+		},
+	})
+	if !strings.Contains(md, "### Description") {
+		t.Error("expected Description section for non-empty description")
+	}
+	if !strings.Contains(md, "Latest Release") {
+		t.Error("expected Latest Release row for non-empty LatestReleasedAt")
+	}
+	if !strings.Contains(md, "Latest Version") {
+		t.Error("expected Latest Version row for non-empty LatestVersionName")
+	}
+	if strings.Contains(md, "### Components") {
+		t.Error("expected no Components section for empty components")
+	}
+	if strings.Contains(md, "### Released Versions") {
+		t.Error("expected no Versions section for empty versions")
+	}
+}
+
+// TestRegisterTools_CallThroughMCP verifies that both CI/CD catalog tools
+// can be called through the MCP in-memory transport, exercising the
+// RegisterTools closures.
+func TestRegisterTools_CallThroughMCP(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResources": {
+					"nodes": [`+sampleResourceNode+`],
+					"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null}
+				}
+			}`)
+		},
+		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResource": `+sampleResourceNode+`
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_list_catalog_resources", map[string]any{}},
+		{"gitlab_get_catalog_resource", map[string]any{"full_path": "my-group/go-pipeline"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("CallTool(%s) returned nil", tt.name)
+			}
+		})
+	}
+}
+
+// TestMarkdownHints_Outputs verifies the init()-registered markdown formatters
+// for ListOutput and GetOutput produce non-nil content via MarkdownForResult.
+func TestMarkdownHints_Outputs(t *testing.T) {
+	t.Run("ListOutput", func(t *testing.T) {
+		md := toolutil.MarkdownForResult(ListOutput{})
+		if md == nil {
+			t.Fatal("expected non-nil result from MarkdownForResult(ListOutput{})")
+		}
+	})
+	t.Run("GetOutput", func(t *testing.T) {
+		md := toolutil.MarkdownForResult(GetOutput{})
+		if md == nil {
+			t.Fatal("expected non-nil result from MarkdownForResult(GetOutput{})")
+		}
+	})
 }

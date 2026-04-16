@@ -31,7 +31,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-					{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged","web_url":"https://gitlab.example.com/-/merge_requests/5","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-16T10:00:00Z"},"user":{"id":1,"username":"admin"},"pipeline":{"id":200},"target_branch":"main","status":"merged","duration":120,"created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-16T10:00:00Z","merged_at":"2024-01-17T10:00:00Z"}
+					{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged","web_url":"https://gitlab.example.com/-/merge_requests/5","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z"},"user":{"id":1,"username":"admin"},"pipeline":{"id":200},"target_branch":"main","status":"merged","duration":120,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z","merged_at":"2026-01-17T10:00:00Z"}
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
@@ -160,7 +160,7 @@ func TestListMergeRequestInMergeTrain(t *testing.T) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/main")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-					{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged","web_url":"https://gitlab.example.com/-/merge_requests/5"},"user":{"id":1,"username":"admin"},"pipeline":{"id":200},"target_branch":"main","status":"merged","duration":120,"created_at":"2024-01-15T10:00:00Z"}
+					{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged","web_url":"https://gitlab.example.com/-/merge_requests/5"},"user":{"id":1,"username":"admin"},"pipeline":{"id":200},"target_branch":"main","status":"merged","duration":120,"created_at":"2026-01-15T10:00:00Z"}
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
@@ -543,8 +543,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				User:         "admin",
 				PipelineID:   200,
 				Duration:     120,
-				CreatedAt:    "2024-01-15T10:00:00Z",
-				MergedAt:     "2024-01-17T10:00:00Z",
+				CreatedAt:    "2026-01-15T10:00:00Z",
+				MergedAt:     "2026-01-17T10:00:00Z",
 				MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 			},
 			contains: []string{

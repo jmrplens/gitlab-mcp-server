@@ -15,8 +15,8 @@ const sampleBranchRuleNode = `{
 	"isDefault": true,
 	"isProtected": true,
 	"matchingBranchesCount": 1,
-	"createdAt": "2025-01-15T10:00:00Z",
-	"updatedAt": "2025-06-20T14:30:00Z",
+	"createdAt": "2026-01-15T10:00:00Z",
+	"updatedAt": "2026-06-20T14:30:00Z",
 	"branchProtection": {
 		"allowForcePush": false,
 		"codeOwnerApprovalRequired": true
@@ -39,7 +39,7 @@ const sampleUnprotectedRuleNode = `{
 	"isDefault": false,
 	"isProtected": false,
 	"matchingBranchesCount": 5,
-	"createdAt": "2025-03-01T08:00:00Z",
+	"createdAt": "2026-03-01T08:00:00Z",
 	"updatedAt": null,
 	"branchProtection": null,
 	"approvalRules": {"nodes": []},
@@ -228,7 +228,7 @@ func TestList_CE(t *testing.T) {
 							"isDefault": true,
 							"isProtected": true,
 							"matchingBranchesCount": 1,
-							"createdAt": "2025-01-15T10:00:00Z",
+							"createdAt": "2026-01-15T10:00:00Z",
 							"updatedAt": null,
 							"branchProtection": {"allowForcePush": false}
 						}],

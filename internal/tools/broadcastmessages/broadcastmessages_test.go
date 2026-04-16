@@ -16,7 +16,7 @@ import (
 
 const fmtUnexpErr = "unexpected error: %v"
 
-const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2025-01-01T00:00:00Z","ends_at":"2025-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
+const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
 
 const (
 	pathBroadcastMessages = "/api/v4/broadcast_messages"
@@ -121,8 +121,8 @@ func TestCreate_WithTimes(t *testing.T) {
 
 	_, err := Create(t.Context(), client, CreateInput{
 		Message:  testMessage,
-		StartsAt: "2025-01-01T00:00:00Z",
-		EndsAt:   "2025-01-02T00:00:00Z",
+		StartsAt: "2026-01-01T00:00:00Z",
+		EndsAt:   "2026-01-02T00:00:00Z",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -225,7 +225,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatMessageMarkdown(t *testing.T) {
 	item := MessageItem{
 		ID: 1, Message: testMessage, BroadcastType: testBannerType,
-		Active: true, Theme: "indigo", StartsAt: "2025-01-01T00:00:00Z",
+		Active: true, Theme: "indigo", StartsAt: "2026-01-01T00:00:00Z",
 	}
 	result := FormatMessageMarkdown(item)
 	content := result.Content[0].(*mcp.TextContent).Text
@@ -334,7 +334,7 @@ func TestCreate_InvalidEndsAt(t *testing.T) {
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"message":"Full test","starts_at":"2025-01-01T00:00:00Z","ends_at":"2025-01-02T00:00:00Z","font":"serif","active":true,"target_access_levels":[30],"target_path":"/dashboard","broadcast_type":"notification","dismissable":true,"theme":"blue"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"message":"Full test","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"serif","active":true,"target_access_levels":[30],"target_path":"/dashboard","broadcast_type":"notification","dismissable":true,"theme":"blue"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -343,8 +343,8 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 	dismiss := true
 	out, err := Create(context.Background(), client, CreateInput{
 		Message:            "Full test",
-		StartsAt:           "2025-01-01T00:00:00Z",
-		EndsAt:             "2025-01-02T00:00:00Z",
+		StartsAt:           "2026-01-01T00:00:00Z",
+		EndsAt:             "2026-01-02T00:00:00Z",
 		Font:               "serif",
 		TargetAccessLevels: []int64{30},
 		TargetPath:         "/dashboard",
@@ -407,7 +407,7 @@ func TestUpdate_InvalidEndsAt(t *testing.T) {
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"message":"Updated all","starts_at":"2025-06-01T00:00:00Z","ends_at":"2025-06-02T00:00:00Z","font":"mono","active":true,"target_access_levels":[40],"target_path":"/admin","broadcast_type":"banner","dismissable":false,"theme":"red"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"message":"Updated all","starts_at":"2026-06-01T00:00:00Z","ends_at":"2026-06-02T00:00:00Z","font":"mono","active":true,"target_access_levels":[40],"target_path":"/admin","broadcast_type":"banner","dismissable":false,"theme":"red"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -417,8 +417,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ID:                 1,
 		Message:            "Updated all",
-		StartsAt:           "2025-06-01T00:00:00Z",
-		EndsAt:             "2025-06-02T00:00:00Z",
+		StartsAt:           "2026-06-01T00:00:00Z",
+		EndsAt:             "2026-06-02T00:00:00Z",
 		Font:               "mono",
 		TargetAccessLevels: []int64{40},
 		TargetPath:         "/admin",
@@ -446,8 +446,8 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 		BroadcastType: "notification",
 		Active:        true,
 		Dismissable:   true,
-		StartsAt:      "2025-01-01T00:00:00Z",
-		EndsAt:        "2025-01-02T00:00:00Z",
+		StartsAt:      "2026-01-01T00:00:00Z",
+		EndsAt:        "2026-01-02T00:00:00Z",
 		Theme:         "blue",
 		TargetPath:    "/admin",
 	}
@@ -524,7 +524,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func newBroadcastMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	msgJSON := `{"id":1,"message":"Hello","starts_at":"2025-01-01T00:00:00Z","ends_at":"2025-01-02T00:00:00Z","active":true,"broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
+	msgJSON := `{"id":1,"message":"Hello","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","active":true,"broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
 
 	handler := http.NewServeMux()
 

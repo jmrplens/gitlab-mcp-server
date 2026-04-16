@@ -423,7 +423,7 @@ func TestAddMember_WithUsername(t *testing.T) {
 func TestAddMember_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":31,"username":"temp","name":"Temp","state":"active","access_level":10,"expires_at":"2025-12-31"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":31,"username":"temp","name":"Temp","state":"active","access_level":10,"expires_at":"2026-12-31"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
@@ -431,7 +431,7 @@ func TestAddMember_WithExpiresAt(t *testing.T) {
 		GroupID:     "5",
 		UserID:      31,
 		AccessLevel: 10,
-		ExpiresAt:   "2025-12-31",
+		ExpiresAt:   "2026-12-31",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -689,14 +689,14 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 
 // TestConvertMember_FullFields verifies the behavior of convert member full fields.
 func TestConvertMember_FullFields(t *testing.T) {
-	now := "2025-01-15T10:00:00Z"
+	now := "2026-01-15T10:00:00Z"
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id":10,"username":"dev","name":"Developer","state":"active",
 			"avatar_url":"https://gl/avatar.png","web_url":"https://gl/dev",
 			"access_level":30,"email":"dev@example.com",
-			"created_at":"`+now+`","expires_at":"2025-12-31",
+			"created_at":"`+now+`","expires_at":"2026-12-31",
 			"member_role":{"name":"Custom Role"},
 			"is_using_seat":true
 		}`)
@@ -769,7 +769,7 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 		State:                  "active",
 		AccessLevel:            30,
 		AccessLevelDescription: "Developer",
-		ExpiresAt:              "2025-12-31",
+		ExpiresAt:              "2026-12-31",
 		WebURL:                 "https://gl/dev",
 	})
 
@@ -780,7 +780,7 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 		"| Name | Developer |",
 		"| State | active |",
 		"| Access Level | Developer (30) |",
-		"| Expires | 31 Dec 2025 |",
+		"| Expires | 31 Dec 2026 |",
 		"| URL | [dev](https://gl/dev) |",
 	} {
 		if !strings.Contains(md, want) {

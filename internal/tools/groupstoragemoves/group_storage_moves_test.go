@@ -13,7 +13,7 @@ import (
 
 const storageMoveJSON = `{
 	"id": 1,
-	"created_at": "2024-01-15T10:30:00Z",
+	"created_at": "2026-01-15T10:30:00Z",
 	"state": "finished",
 	"source_storage_name": "default",
 	"destination_storage_name": "storage2",
@@ -544,7 +544,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				State:                  "finished",
 				SourceStorageName:      "default",
 				DestinationStorageName: "storage2",
-				CreatedAt:              mustParseTime("2024-01-15T10:30:00Z"),
+				CreatedAt:              mustParseTime("2026-01-15T10:30:00Z"),
 				Group: &GroupOutput{
 					ID:     10,
 					Name:   "my-group",
@@ -557,7 +557,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"| **State** | finished |",
 				"| **Source** | default |",
 				"| **Destination** | storage2 |",
-				"2024-01-15",
+				"2026-01-15",
 				"[my-group](https://gitlab.example.com/groups/my-group)",
 				"(ID: 10)",
 			},

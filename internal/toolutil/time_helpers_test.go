@@ -6,8 +6,8 @@ import "testing"
 // TestFormatTime_ValidRFC3339 verifies that FormatTime formats a valid
 // RFC 3339 timestamp into a human-readable date string.
 func TestFormatTime_ValidRFC3339(t *testing.T) {
-	got := FormatTime("2024-03-20T15:45:00Z")
-	want := "20 Mar 2024 15:45 UTC"
+	got := FormatTime("2026-03-20T15:45:00Z")
+	want := "20 Mar 2026 15:45 UTC"
 	if got != want {
 		t.Errorf("FormatTime() = %q, want %q", got, want)
 	}
@@ -16,8 +16,8 @@ func TestFormatTime_ValidRFC3339(t *testing.T) {
 // TestFormatTime_WithTimezone verifies that FormatTime correctly handles
 // timestamps with explicit timezone offsets.
 func TestFormatTime_WithTimezone(t *testing.T) {
-	got := FormatTime("2024-03-20T10:45:00-05:00")
-	want := "20 Mar 2024 15:45 UTC"
+	got := FormatTime("2026-03-20T10:45:00-05:00")
+	want := "20 Mar 2026 15:45 UTC"
 	if got != want {
 		t.Errorf("FormatTime() = %q, want %q", got, want)
 	}
@@ -45,7 +45,7 @@ func TestFormatTime_InvalidFormat(t *testing.T) {
 // TestParseOptionalTime_Valid verifies that ParseOptionalTime correctly
 // parses a valid RFC 3339 timestamp string.
 func TestParseOptionalTime_Valid(t *testing.T) {
-	got := ParseOptionalTime("2024-01-01T00:00:00Z")
+	got := ParseOptionalTime("2026-01-01T00:00:00Z")
 	if got == nil {
 		t.Fatal("ParseOptionalTime() returned nil for valid input")
 	}

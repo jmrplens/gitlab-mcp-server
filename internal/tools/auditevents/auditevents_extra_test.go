@@ -246,7 +246,7 @@ func TestListInstance_WithCreatedBefore(t *testing.T) {
 	}))
 
 	_, err := ListInstance(context.Background(), client, ListInstanceInput{
-		CreatedBefore: "2024-12-31",
+		CreatedBefore: "2026-12-31",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -312,8 +312,8 @@ func TestListGroup_WithDateFilter(t *testing.T) {
 
 	_, err := ListGroup(context.Background(), client, ListGroupInput{
 		GroupID:       "5",
-		CreatedAfter:  "2024-01-01",
-		CreatedBefore: "2024-12-31",
+		CreatedAfter:  "2026-01-01",
+		CreatedBefore: "2026-12-31",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -333,7 +333,7 @@ func TestListProject_WithDateFilter(t *testing.T) {
 
 	_, err := ListProject(context.Background(), client, ListProjectInput{
 		ProjectID:    "42",
-		CreatedAfter: "2024-06-01",
+		CreatedAfter: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -362,7 +362,7 @@ func TestListInstance_AllDetails(t *testing.T) {
 				"ip_address": "10.0.0.1",
 				"entity_path": "group/project"
 			},
-			"created_at": "2024-03-15T08:30:00Z"
+			"created_at": "2026-03-15T08:30:00Z"
 		}]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -441,9 +441,9 @@ func TestGetInstance_NilCreatedAt(t *testing.T) {
 func TestListInstance_MultipleEvents(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"login","event_type":"auth","details":{},"created_at":"2024-01-01T00:00:00Z"},
-			{"id":2,"author_id":11,"entity_id":0,"entity_type":"User","event_name":"logout","event_type":"auth","details":{},"created_at":"2024-01-02T00:00:00Z"},
-			{"id":3,"author_id":12,"entity_id":5,"entity_type":"Group","event_name":"group_create","event_type":"admin","details":{},"created_at":"2024-01-03T00:00:00Z"}
+			{"id":1,"author_id":10,"entity_id":0,"entity_type":"User","event_name":"login","event_type":"auth","details":{},"created_at":"2026-01-01T00:00:00Z"},
+			{"id":2,"author_id":11,"entity_id":0,"entity_type":"User","event_name":"logout","event_type":"auth","details":{},"created_at":"2026-01-02T00:00:00Z"},
+			{"id":3,"author_id":12,"entity_id":5,"entity_type":"Group","event_name":"group_create","event_type":"admin","details":{},"created_at":"2026-01-03T00:00:00Z"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "3", TotalPages: "1"})
 	}))
 
@@ -489,7 +489,7 @@ func TestFormatMarkdown_Full(t *testing.T) {
 		EntityType: "Project",
 		EventName:  "project_update",
 		EventType:  "admin",
-		CreatedAt:  "2024-06-15T12:00:00Z",
+		CreatedAt:  "2026-06-15T12:00:00Z",
 		Details: DetailsOutput{
 			AuthorName:    "admin",
 			TargetType:    "Setting",
@@ -551,8 +551,8 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 func TestFormatListMarkdown_WithEvents(t *testing.T) {
 	out := ListOutput{
 		AuditEvents: []Output{
-			{ID: 1, EventName: "login", EntityType: "User", EntityID: 0, AuthorID: 10, CreatedAt: "2024-01-01T00:00:00Z"},
-			{ID: 2, EventName: "logout", EntityType: "User", EntityID: 0, AuthorID: 11, CreatedAt: "2024-01-02T00:00:00Z"},
+			{ID: 1, EventName: "login", EntityType: "User", EntityID: 0, AuthorID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, EventName: "logout", EntityType: "User", EntityID: 0, AuthorID: 11, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1},
 	}

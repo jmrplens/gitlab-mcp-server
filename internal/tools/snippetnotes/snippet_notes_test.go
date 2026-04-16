@@ -22,8 +22,8 @@ const (
 		"system": false,
 		"noteable_type": "Snippet",
 		"noteable_id": 1,
-		"created_at": "2024-03-10T09:00:00Z",
-		"updated_at": "2024-03-10T09:00:00Z"
+		"created_at": "2026-03-10T09:00:00Z",
+		"updated_at": "2026-03-10T09:00:00Z"
 	}`
 
 	noteSystemJSON = `{
@@ -33,8 +33,8 @@ const (
 		"system": true,
 		"noteable_type": "Snippet",
 		"noteable_id": 1,
-		"created_at": "2024-03-10T12:00:00Z",
-		"updated_at": "2024-03-10T12:00:00Z"
+		"created_at": "2026-03-10T12:00:00Z",
+		"updated_at": "2026-03-10T12:00:00Z"
 	}`
 
 	testProjectID = "myproject"
@@ -657,8 +657,8 @@ func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 		ID:        100,
 		Body:      "test note",
 		Author:    "bob",
-		CreatedAt: "2024-03-10T09:00:00Z",
-		UpdatedAt: "2024-03-10T10:00:00Z",
+		CreatedAt: "2026-03-10T09:00:00Z",
+		UpdatedAt: "2026-03-10T10:00:00Z",
 	})
 	if !contains(md, "bob") {
 		t.Error("missing author")

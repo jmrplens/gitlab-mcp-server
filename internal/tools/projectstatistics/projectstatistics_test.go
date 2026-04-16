@@ -20,7 +20,7 @@ func TestGet(t *testing.T) {
 		if r.URL.Path != "/api/v4/projects/1/statistics" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2024-01-01"}]}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2026-01-01"}]}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := Get(t.Context(), client, GetInput{ProjectID: "1"})
@@ -48,8 +48,8 @@ func TestGet_Error(t *testing.T) {
 
 // TestFormatMarkdown verifies the behavior of format markdown.
 func TestFormatMarkdown(t *testing.T) {
-	md := FormatMarkdown(GetOutput{TotalFetches: 42, Days: []DayStat{{Date: "2024-01-01", Count: 5}}})
-	if !strings.Contains(md, "42") || !strings.Contains(md, "1 Jan 2024") {
+	md := FormatMarkdown(GetOutput{TotalFetches: 42, Days: []DayStat{{Date: "2026-01-01", Count: 5}}})
+	if !strings.Contains(md, "42") || !strings.Contains(md, "1 Jan 2026") {
 		t.Error("missing content")
 	}
 }
@@ -95,7 +95,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 // through MCP in-memory transport.
 func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2024-01-01"}]}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2026-01-01"}]}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)

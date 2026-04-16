@@ -64,7 +64,7 @@ func TestProjectList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodGet {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"name":"bot-token","active":true,"revoked":false,"scopes":["api"],"access_level":30,"user_id":100,"created_at":"2025-01-01T00:00:00Z"},
+				{"id":1,"name":"bot-token","active":true,"revoked":false,"scopes":["api"],"access_level":30,"user_id":100,"created_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"name":"ci-token","active":true,"revoked":false,"scopes":["read_api","read_repository"],"access_level":20}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
@@ -1168,8 +1168,8 @@ func TestFromProjectToken_AllDates(t *testing.T) {
 				"id":5,"name":"dated","active":true,"revoked":false,
 				"scopes":["api"],"access_level":30,"user_id":10,
 				"description":"with dates","token":"glpat-x",
-				"created_at":"2025-06-01T10:00:00Z",
-				"last_used_at":"2025-07-15T14:30:00Z",
+				"created_at":"2026-06-01T10:00:00Z",
+				"last_used_at":"2026-07-15T14:30:00Z",
 				"expires_at":"2026-12-31"
 			}`)
 			return
@@ -1203,8 +1203,8 @@ func TestFromGroupToken_AllDates(t *testing.T) {
 				"id":3,"name":"group-dated","active":true,"revoked":false,
 				"scopes":["read_api"],"access_level":20,"user_id":5,
 				"description":"group dates","token":"glpat-g",
-				"created_at":"2025-03-01T08:00:00Z",
-				"last_used_at":"2025-04-20T12:00:00Z",
+				"created_at":"2026-03-01T08:00:00Z",
+				"last_used_at":"2026-04-20T12:00:00Z",
 				"expires_at":"2027-06-30"
 			}`)
 			return
@@ -1235,8 +1235,8 @@ func TestFromPersonalToken_AllDates(t *testing.T) {
 				"id":50,"name":"personal-dated","active":true,"revoked":false,
 				"scopes":["api"],"user_id":1,
 				"description":"personal dates","token":"glpat-p",
-				"created_at":"2025-01-15T09:00:00Z",
-				"last_used_at":"2025-02-28T16:45:00Z",
+				"created_at":"2026-01-15T09:00:00Z",
+				"last_used_at":"2026-02-28T16:45:00Z",
 				"expires_at":"2027-01-01"
 			}`)
 			return
@@ -1575,7 +1575,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Revoked:     false,
 		Scopes:      []string{"api", "read_api", "write_repository"},
 		AccessLevel: 40,
-		CreatedAt:   "2025-06-01T10:00:00Z",
+		CreatedAt:   "2026-06-01T10:00:00Z",
 		ExpiresAt:   testExpiresDate,
 		Token:       "glpat-secret123",
 	}
@@ -1589,7 +1589,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"false", // Revoked
 		"api, read_api, write_repository",
 		"Maintainer",
-		"1 Jun 2025 10:00 UTC",
+		"1 Jun 2026 10:00 UTC",
 		"31 Dec 2027",
 		"glpat-secret123",
 	}

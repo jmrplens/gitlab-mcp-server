@@ -22,7 +22,7 @@ const (
 	testStateActive     = "active"
 	testActionAdd       = "add"
 	fmtTitleWant        = "Title = %q, want %q"
-	milestoneJSON       = `{"id":1,"iid":1,"group_id":10,"title":"v1.0","description":"First release","state":"active","start_date":"2025-01-01","due_date":"2025-06-30","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-15T00:00:00Z","expired":false}`
+	milestoneJSON       = `{"id":1,"iid":1,"group_id":10,"title":"v1.0","description":"First release","state":"active","start_date":"2026-01-01","due_date":"2026-06-30","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T00:00:00Z","expired":false}`
 )
 
 // ---------- List ----------.
@@ -203,8 +203,8 @@ func TestCreate_WithDates(t *testing.T) {
 	out, err := Create(context.Background(), client, CreateInput{
 		GroupID:   testGroupID,
 		Title:     testMilestoneTitle,
-		StartDate: "2025-01-01",
-		DueDate:   "2025-06-30",
+		StartDate: "2026-01-01",
+		DueDate:   "2026-06-30",
 	})
 	if err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
@@ -336,7 +336,7 @@ func TestGetIssues_Success(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/issues" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":100,"iid":5,"title":"Fix bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2025-01-10T00:00:00Z"}]`,
+				`[{"id":100,"iid":5,"title":"Fix bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -381,7 +381,7 @@ func TestGetMergeRequests_Success(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/merge_requests" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2025-02-01T00:00:00Z"}]`,
+				`[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -426,7 +426,7 @@ func TestGetBurndownChartEvents_Success(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/burndown_events" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"created_at":"2025-01-05T00:00:00Z","weight":3,"action":"add"}]`,
+				`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -467,8 +467,8 @@ func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 1, GroupID: 10, Title: testMilestoneTitle,
 		Description: "Release", State: testStateActive,
-		StartDate: "2025-01-01", DueDate: "2025-06-30",
-		CreatedAt: "2025-01-01T00:00:00Z", UpdatedAt: "2025-01-15T00:00:00Z",
+		StartDate: "2026-01-01", DueDate: "2026-06-30",
+		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-15T00:00:00Z",
 	}
 	md := FormatMarkdown(out)
 	if md == "" {
@@ -515,7 +515,7 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 // TestFormatBurndownChartEventsMarkdown verifies the behavior of format burndown chart events markdown.
 func TestFormatBurndownChartEventsMarkdown(t *testing.T) {
 	out := BurndownChartEventsOutput{
-		Events:     []BurndownChartEventItem{{CreatedAt: "2025-01-05T00:00:00Z", Weight: 3, Action: testActionAdd}},
+		Events:     []BurndownChartEventItem{{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: testActionAdd}},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1},
 	}
 	result := FormatBurndownChartEventsMarkdown(out)
@@ -532,7 +532,7 @@ const errExpectedAPI = "expected API error, got nil"
 
 const fmtUnexpErr = "unexpected error: %v"
 
-const testDateStart = "2025-01-01"
+const testDateStart = "2026-01-01"
 
 const fmtMarkdownMissing = "markdown missing %q:\n%s"
 
@@ -648,9 +648,9 @@ func TestList_AllFilterParams(t *testing.T) {
 		SearchTitle:        "v1",
 		IncludeDescendants: true,
 		IIDs:               []int64{1, 2},
-		UpdatedBefore:      "2025-12-31",
+		UpdatedBefore:      "2026-12-31",
 		UpdatedAfter:       testDateStart,
-		ContainingDate:     "2025-06-15",
+		ContainingDate:     "2026-06-15",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -817,8 +817,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		MilestoneIID: 1,
 		Title:        "v1.0-final",
 		Description:  "Updated desc",
-		StartDate:    "2025-01-15",
-		DueDate:      "2025-07-31",
+		StartDate:    "2026-01-15",
+		DueDate:      "2026-07-31",
 		StateEvent:   "close",
 	})
 	if err != nil {
@@ -916,7 +916,7 @@ func TestGetIssues_WithPagination(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/issues" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":100,"iid":5,"title":"Bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2025-01-10T00:00:00Z"},{"id":101,"iid":6,"title":"Feature","state":"closed","created_at":"2025-01-11T00:00:00Z"}]`,
+				`[{"id":100,"iid":5,"title":"Bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"},{"id":101,"iid":6,"title":"Feature","state":"closed","created_at":"2026-01-11T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
@@ -989,7 +989,7 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/merge_requests" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":200,"iid":10,"title":"MR 1","state":"merged","source_branch":"feat","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2025-02-01T00:00:00Z"},{"id":201,"iid":11,"title":"MR 2","state":"opened","source_branch":"fix","target_branch":"main","created_at":"2025-02-02T00:00:00Z"}]`,
+				`[{"id":200,"iid":10,"title":"MR 1","state":"merged","source_branch":"feat","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"},{"id":201,"iid":11,"title":"MR 2","state":"opened","source_branch":"fix","target_branch":"main","created_at":"2026-02-02T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
@@ -1062,7 +1062,7 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/burndown_events" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"created_at":"2025-01-05T00:00:00Z","weight":3,"action":"add"},{"created_at":"2025-01-06T00:00:00Z","weight":2,"action":"remove"}]`,
+				`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"},{"created_at":"2026-01-06T00:00:00Z","weight":2,"action":"remove"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
@@ -1096,8 +1096,8 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 1, IID: 1, GroupID: 10, GroupPath: "my-org/backend", Title: "v1.0",
 		Description: "Release milestone", State: "active",
-		StartDate: testDateStart, DueDate: "2025-06-30",
-		CreatedAt: "2025-01-01T00:00:00Z", UpdatedAt: "2025-01-15T00:00:00Z",
+		StartDate: testDateStart, DueDate: "2026-06-30",
+		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-15T00:00:00Z",
 		Expired: true,
 	})
 
@@ -1107,11 +1107,11 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 		"**Group**: my-org/backend",
 		"**State**: active",
 		"**Description**: Release milestone",
-		"**Start Date**: 1 Jan 2025",
-		"**Due Date**: 30 Jun 2025",
+		"**Start Date**: 1 Jan 2026",
+		"**Due Date**: 30 Jun 2026",
 		"**Expired**: true",
-		"**Created**: 1 Jan 2025 00:00 UTC",
-		"**Updated**: 15 Jan 2025 00:00 UTC",
+		"**Created**: 1 Jan 2026 00:00 UTC",
+		"**Updated**: 15 Jan 2026 00:00 UTC",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf(fmtMarkdownMissing, want, md)
@@ -1161,8 +1161,8 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListMarkdown_WithMilestones(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{
-			{ID: 1, IID: 1, Title: "v1.0", State: "active", StartDate: testDateStart, DueDate: "2025-06-30"},
-			{ID: 2, IID: 2, Title: "v2.0", State: "closed", StartDate: "2025-07-01", DueDate: "2025-12-31"},
+			{ID: 1, IID: 1, Title: "v1.0", State: "active", StartDate: testDateStart, DueDate: "2026-06-30"},
+			{ID: 2, IID: 2, Title: "v2.0", State: "closed", StartDate: "2026-07-01", DueDate: "2026-12-31"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1284,8 +1284,8 @@ func TestFormatMergeRequestsMarkdown_Empty(t *testing.T) {
 func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 	out := BurndownChartEventsOutput{
 		Events: []BurndownChartEventItem{
-			{CreatedAt: "2025-01-05T00:00:00Z", Weight: 3, Action: "add"},
-			{CreatedAt: "2025-01-06T00:00:00Z", Weight: 2, Action: "remove"},
+			{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: "add"},
+			{CreatedAt: "2026-01-06T00:00:00Z", Weight: 2, Action: "remove"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1294,7 +1294,7 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 	for _, want := range []string{
 		"## Burndown Chart Events (2)",
 		"| Created At |",
-		"5 Jan 2025 00:00 UTC",
+		"5 Jan 2026 00:00 UTC",
 		"| 3 |",
 		"| 2 |",
 		"add",
@@ -1338,7 +1338,7 @@ func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 
 // TestParseISODate_Valid verifies the behavior of parse i s o date valid.
 func TestParseISODate_Valid(t *testing.T) {
-	d, err := parseISODate("2025-06-15")
+	d, err := parseISODate("2026-06-15")
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1349,7 +1349,7 @@ func TestParseISODate_Valid(t *testing.T) {
 
 // TestParseISODate_Invalid verifies the behavior of parse i s o date invalid.
 func TestParseISODate_Invalid(t *testing.T) {
-	_, err := parseISODate("June 15, 2025")
+	_, err := parseISODate("June 15, 2026")
 	if err == nil {
 		t.Fatal("expected error for invalid date format")
 	}
@@ -1471,21 +1471,21 @@ func newGroupMilestonesMCPSession(t *testing.T) *mcp.ClientSession {
 	// Get milestone issues
 	handler.HandleFunc("GET /api/v4/groups/10/milestones/1/issues", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":100,"iid":5,"title":"Fix bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2025-01-10T00:00:00Z"}]`,
+			`[{"id":100,"iid":5,"title":"Fix bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 
 	// Get milestone merge requests
 	handler.HandleFunc("GET /api/v4/groups/10/milestones/1/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2025-02-01T00:00:00Z"}]`,
+			`[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 
 	// Get milestone burndown chart events
 	handler.HandleFunc("GET /api/v4/groups/10/milestones/1/burndown_events", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"created_at":"2025-01-05T00:00:00Z","weight":3,"action":"add"}]`,
+			`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 

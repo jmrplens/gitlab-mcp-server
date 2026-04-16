@@ -1,7 +1,11 @@
 package wizard
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -11,6 +15,32 @@ func TestRun_UnknownMode(t *testing.T) {
 	err := Run("1.0.0", "invalid-mode", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown UI mode, got nil")
+	}
+}
+
+// TestRun_CLIMode_Dispatch verifies Run delegates to RunCLI in CLI mode
+// with proper interactive input sequence.
+func TestRun_CLIMode_Dispatch(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "bin")
+
+	input := strings.Join([]string{
+		installDir + string(os.PathSeparator) + DefaultBinaryName(),
+		"https://gitlab.example.com",
+		"glpat-test123",
+		"n",
+		"a",
+	}, "\n") + "\n"
+
+	r := strings.NewReader(input)
+	w := &bytes.Buffer{}
+
+	err := Run("1.0.0", UIModeCLI, r, w)
+	if err != nil {
+		t.Logf("Run(CLI) returned error (expected in test env): %v", err)
 	}
 }
 

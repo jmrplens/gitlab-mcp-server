@@ -13,7 +13,7 @@ import (
 
 const storageMoveJSON = `{
 	"id": 1,
-	"created_at": "2024-01-15T10:30:00Z",
+	"created_at": "2026-01-15T10:30:00Z",
 	"state": "finished",
 	"source_storage_name": "default",
 	"destination_storage_name": "storage2",
@@ -646,7 +646,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				State:                  "finished",
 				SourceStorageName:      "default",
 				DestinationStorageName: "storage2",
-				CreatedAt:              mustParseTime("2024-01-15T10:30:00Z"),
+				CreatedAt:              mustParseTime("2026-01-15T10:30:00Z"),
 				Project: &ProjectOutput{
 					ID:                42,
 					Name:              "my-project",
@@ -660,7 +660,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"| Source Storage | default |",
 				"| Destination Storage | storage2 |",
 				"| Created At |",
-				"2024-01-15",
+				"2026-01-15",
 				"| Project | group/my-project (ID: 42) |",
 			},
 		},

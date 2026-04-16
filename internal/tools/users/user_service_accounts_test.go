@@ -52,7 +52,7 @@ func TestCreateCurrentUserPAT_Success(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":10,"name":"my-pat","active":true,"token":"glpat-xyz",
 				"scopes":["api"],"revoked":false,"user_id":1,
-				"created_at":"2024-01-15T10:00:00Z","expires_at":"2025-01-15"
+				"created_at":"2026-01-15T10:00:00Z","expires_at":"2026-01-15"
 			}`)
 			return
 		}
@@ -60,7 +60,7 @@ func TestCreateCurrentUserPAT_Success(t *testing.T) {
 	}))
 
 	out, err := CreateCurrentUserPAT(context.Background(), client, CreateCurrentUserPATInput{
-		Name: "my-pat", Scopes: []string{"api"}, ExpiresAt: "2025-01-15",
+		Name: "my-pat", Scopes: []string{"api"}, ExpiresAt: "2026-01-15",
 	})
 	if err != nil {
 		t.Fatalf("CreateCurrentUserPAT() unexpected error: %v", err)

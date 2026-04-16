@@ -22,8 +22,8 @@ import (
 func TestFormatIssueScopeForAnalysis(t *testing.T) {
 	issue := issues.Output{
 		IID: 10, Title: "Improve login", State: "opened",
-		Author: "alice", CreatedAt: "2024-01-15T10:00:00Z",
-		DueDate: "2024-02-15", Labels: []string{"enhancement"},
+		Author: "alice", CreatedAt: "2026-01-15T10:00:00Z",
+		DueDate: "2026-02-15", Labels: []string{"enhancement"},
 		Assignees: []string{"alice", "bob"}, Weight: 3,
 		Description: "Improve the login flow",
 	}
@@ -48,7 +48,7 @@ func TestFormatIssueScopeForAnalysis(t *testing.T) {
 	}
 	notes := issuenotes.ListOutput{
 		Notes: []issuenotes.Output{
-			{Author: "alice", Body: "Working on this", CreatedAt: "2024-01-16T10:00:00Z"},
+			{Author: "alice", Body: "Working on this", CreatedAt: "2026-01-16T10:00:00Z"},
 		},
 	}
 	result := FormatIssueScopeForAnalysis(issue, timeStats, participants, closingMRs, relatedMRs, notes)
@@ -57,7 +57,7 @@ func TestFormatIssueScopeForAnalysis(t *testing.T) {
 	}{
 		{"header", "# Issue #10: Improve login"},
 		{"state", "**State**: opened"},
-		{"due_date", "**Due Date**: 15 Feb 2024"},
+		{"due_date", "**Due Date**: 15 Feb 2026"},
 		{"labels", "**Labels**: enhancement"},
 		{"weight", "**Weight**: 3"},
 		{"estimate", "**Estimate**: 2h"},
@@ -164,7 +164,7 @@ func TestAnalyzeIssueScope_FullFlow(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id": 200, "iid": 10, "title": "Improve login", "state": "opened",
-			"author": {"username": "alice"}, "created_at": "2024-01-15T10:00:00Z"
+			"author": {"username": "alice"}, "created_at": "2026-01-15T10:00:00Z"
 		}`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/issues/10/time_stats", func(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +180,7 @@ func TestAnalyzeIssueScope_FullFlow(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/issues/10/notes", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id": 1, "body": "Working on it", "author": {"username": "alice"}, "system": false, "created_at": "2024-01-16T10:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id": 1, "body": "Working on it", "author": {"username": "alice"}, "system": false, "created_at": "2026-01-16T10:00:00Z"}]`)
 	})
 	client := testutil.NewTestClient(t, mux)
 

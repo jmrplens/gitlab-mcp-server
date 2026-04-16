@@ -47,7 +47,7 @@ func TestTodoList_Success(t *testing.T) {
 				"state": "pending",
 				"project": {"name": "my-project"},
 				"author": {"username": "alice"},
-				"created_at": "2024-01-15T10:00:00Z"
+				"created_at": "2026-01-15T10:00:00Z"
 			},
 			{
 				"id": 2,
@@ -59,7 +59,7 @@ func TestTodoList_Success(t *testing.T) {
 				"state": "pending",
 				"project": {"name": "my-project"},
 				"author": {"username": "charlie"},
-				"created_at": "2024-01-16T12:00:00Z"
+				"created_at": "2026-01-16T12:00:00Z"
 			}
 		]`, testutil.PaginationHeaders{Page: "1", Total: "2", TotalPages: "1", PerPage: "20"})
 	}))
@@ -342,7 +342,7 @@ func todoWithNils() gl.Todo {
 func TestFormatOutputMarkdownString_Full(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
 		ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue",
-		State: "pending", ProjectName: "proj", AuthorName: "alice", CreatedAt: "2025-01-01",
+		State: "pending", ProjectName: "proj", AuthorName: "alice", CreatedAt: "2026-01-01",
 		TargetURL: "https://x", Body: "Some body",
 	})
 	if !strings.Contains(s, "To-Do #1") {
@@ -521,7 +521,7 @@ func TestMCPRoundTrip_AllTodoTools(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == pathTodos && r.Method == http.MethodGet:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"action_name":"assigned","target_type":"Issue","target":{"title":"T"},"state":"pending","project":{"name":"p"},"author":{"username":"u"},"created_at":"2025-01-01T00:00:00Z"}]`,
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"action_name":"assigned","target_type":"Issue","target":{"title":"T"},"state":"pending","project":{"name":"p"},"author":{"username":"u"},"created_at":"2026-01-01T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", Total: "1", TotalPages: "1", PerPage: "20"})
 		case r.URL.Path == pathTodoMarkDone && r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusNoContent)

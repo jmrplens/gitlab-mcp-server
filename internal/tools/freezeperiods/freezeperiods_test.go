@@ -26,7 +26,7 @@ func TestList_Success(t *testing.T) {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":1,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC","created_at":"2024-01-01T00:00:00Z"}]`,
+			`[{"id":1,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC","created_at":"2026-01-01T00:00:00Z"}]`,
 			testutil.PaginationHeaders{Page: "1", TotalPages: "1", Total: "1", PerPage: "20"})
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -159,7 +159,7 @@ func TestFormatMarkdownString(t *testing.T) {
 		FreezeStart:  testCronFreezeStart,
 		FreezeEnd:    "0 7 * * 1",
 		CronTimezone: "UTC",
-		CreatedAt:    "2024-01-01T00:00:00Z",
+		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 	md := FormatMarkdownString(out)
 	if md == "" {
@@ -421,13 +421,13 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 		FreezeStart:  "0 23 * * 5",
 		FreezeEnd:    "0 7 * * 1",
 		CronTimezone: "America/New_York",
-		CreatedAt:    "2024-01-01T00:00:00Z",
+		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 	md := FormatMarkdownString(out)
 	if !containsStr(md, "America/New_York") {
 		t.Error("expected timezone in output")
 	}
-	if !containsStr(md, "1 Jan 2024 00:00 UTC") {
+	if !containsStr(md, "1 Jan 2026 00:00 UTC") {
 		t.Error("expected created_at in output")
 	}
 }
@@ -447,7 +447,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 func TestGet_SuccessWithTimestamps(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":5,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC","created_at":"2024-06-01T12:00:00Z","updated_at":"2024-06-02T12:00:00Z"}`)
+			`{"id":5,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC","created_at":"2026-06-01T12:00:00Z","updated_at":"2026-06-02T12:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 

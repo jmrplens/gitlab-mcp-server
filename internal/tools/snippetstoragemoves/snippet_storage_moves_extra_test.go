@@ -333,7 +333,7 @@ func TestRetrieveAll_MultipleMovesWithMixedSnippets(t *testing.T) {
 // TestFormatOutputMarkdown_WithSnippet verifies that FormatOutputMarkdown
 // renders a complete table with snippet link when snippet data is present.
 func TestFormatOutputMarkdown_WithSnippet(t *testing.T) {
-	ts := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	ts := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
 	o := Output{
 		ID:                     1,
 		State:                  "finished",
@@ -354,7 +354,7 @@ func TestFormatOutputMarkdown_WithSnippet(t *testing.T) {
 		"| **State** | finished |",
 		"| **Source** | default |",
 		"| **Destination** | storage2 |",
-		"| **Created** | 2024-01-15 10:30:00 |",
+		"| **Created** | 2026-01-15 10:30:00 |",
 		"[my-snippet](https://gitlab.example.com/snippets/55)",
 		"(ID: 55)",
 	} {
@@ -395,7 +395,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatListMarkdown_WithMoves verifies that FormatListMarkdown renders
 // a table with the correct columns and snippet links.
 func TestFormatListMarkdown_WithMoves(t *testing.T) {
-	ts := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	ts := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	o := ListOutput{
 		Moves: []Output{
 			{

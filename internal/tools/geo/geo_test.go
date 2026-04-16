@@ -42,7 +42,7 @@ const geoSiteStatusJSON = `{
 	"version": "16.5.0",
 	"revision": "abc123",
 	"storage_shards_match": true,
-	"updated_at": "2024-01-15T10:30:00Z"
+	"updated_at": "2026-01-15T10:30:00Z"
 }`
 
 func TestCreate_Success(t *testing.T) {
@@ -754,7 +754,7 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 		StorageShardsMatch:             true,
 	}
 	// Set UpdatedAt to exercise the non-zero branch
-	out.UpdatedAt = out.UpdatedAt.AddDate(2024, 0, 15)
+	out.UpdatedAt = out.UpdatedAt.AddDate(2026, 0, 15)
 
 	md := FormatStatusMarkdown(out)
 

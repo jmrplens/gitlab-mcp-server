@@ -29,8 +29,8 @@ const userListJSON = `{
 	"id": 1,
 	"iid": 10,
 	"project_id": 42,
-	"created_at": "2024-01-01T00:00:00Z",
-	"updated_at": "2024-01-02T00:00:00Z"
+	"created_at": "2026-01-01T00:00:00Z",
+	"updated_at": "2026-01-02T00:00:00Z"
 }`
 
 const userListArrayJSON = `[` + userListJSON + `]`
@@ -284,8 +284,8 @@ const covUserListJSON = `{
 	"id": 1,
 	"iid": 10,
 	"project_id": 42,
-	"created_at": "2024-06-01T12:00:00Z",
-	"updated_at": "2024-06-02T12:00:00Z"
+	"created_at": "2026-06-01T12:00:00Z",
+	"updated_at": "2026-06-02T12:00:00Z"
 }`
 
 // ---------------------------------------------------------------------------
@@ -399,14 +399,14 @@ func TestFormatUserListMarkdown_WithDates(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 10, ProjectID: 42,
 		Name: "cov-list", UserXIDs: "a,b",
-		CreatedAt: "2024-06-01T12:00:00Z",
-		UpdatedAt: "2024-06-02T12:00:00Z",
+		CreatedAt: "2026-06-01T12:00:00Z",
+		UpdatedAt: "2026-06-02T12:00:00Z",
 	}
 	md := FormatUserListMarkdown(out)
-	if !strings.Contains(md, "1 Jun 2024 12:00 UTC") {
+	if !strings.Contains(md, "1 Jun 2026 12:00 UTC") {
 		t.Error("expected CreatedAt in markdown")
 	}
-	if !strings.Contains(md, "2 Jun 2024 12:00 UTC") {
+	if !strings.Contains(md, "2 Jun 2026 12:00 UTC") {
 		t.Error("expected UpdatedAt in markdown")
 	}
 }

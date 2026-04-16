@@ -28,7 +28,7 @@ func TestListDeps(t *testing.T) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/dependencies")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-					{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock","vulnerabilities":[{"name":"CVE-2024-001","severity":"high","id":1,"url":"https://vuln.example.com/1"}],"licenses":[{"name":"MIT","url":"https://mit.example.com"}]}
+					{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock","vulnerabilities":[{"name":"CVE-2026-001","severity":"high","id":1,"url":"https://vuln.example.com/1"}],"licenses":[{"name":"MIT","url":"https://mit.example.com"}]}
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			}),
 			validate: func(t *testing.T, out ListOutput) {
@@ -52,8 +52,8 @@ func TestListDeps(t *testing.T) {
 				if len(d.Vulnerabilities) != 1 {
 					t.Fatalf("got %d vulns, want 1", len(d.Vulnerabilities))
 				}
-				if d.Vulnerabilities[0].Name != "CVE-2024-001" {
-					t.Errorf("vuln name = %q, want %q", d.Vulnerabilities[0].Name, "CVE-2024-001")
+				if d.Vulnerabilities[0].Name != "CVE-2026-001" {
+					t.Errorf("vuln name = %q, want %q", d.Vulnerabilities[0].Name, "CVE-2026-001")
 				}
 				if d.Vulnerabilities[0].Severity != "high" {
 					t.Errorf("vuln severity = %q, want %q", d.Vulnerabilities[0].Severity, "high")

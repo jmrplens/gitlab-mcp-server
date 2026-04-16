@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-const sshKeyJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA...BBBB","usage_type":"auth","created_at":"2024-01-15T10:00:00Z","expires_at":"2025-01-15T00:00:00Z"}`
+const sshKeyJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA...BBBB","usage_type":"auth","created_at":"2026-01-15T10:00:00Z","expires_at":"2026-01-15T00:00:00Z"}`
 
 // TestGetSSHKeyForUser_Success verifies retrieving an SSH key for a specific user.
 func TestGetSSHKeyForUser_Success(t *testing.T) {
@@ -105,7 +105,7 @@ func TestAddSSHKeyForUser_Success(t *testing.T) {
 		UserID:    42,
 		Title:     "my-key",
 		Key:       "ssh-rsa AAAA...BBBB",
-		ExpiresAt: "2025-01-15",
+		ExpiresAt: "2026-01-15",
 		UsageType: "auth",
 	})
 	if err != nil {
@@ -347,7 +347,7 @@ func TestAddSSHKey_WithExpiresAtAndUsageType(t *testing.T) {
 	out, err := AddSSHKey(context.Background(), client, AddSSHKeyInput{
 		Title:     "my-key",
 		Key:       "ssh-rsa AAAA...BBBB",
-		ExpiresAt: "2025-01-15",
+		ExpiresAt: "2026-01-15",
 		UsageType: "auth",
 	})
 	if err != nil {
@@ -446,8 +446,8 @@ func TestFormatSSHKeyMarkdownString_WithData(t *testing.T) {
 		Title:     "Work Laptop",
 		Key:       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBig",
 		UsageType: "auth",
-		CreatedAt: "2024-01-01T00:00:00Z",
-		ExpiresAt: "2025-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		ExpiresAt: "2026-01-01T00:00:00Z",
 	}
 	md := FormatSSHKeyMarkdownString(out)
 

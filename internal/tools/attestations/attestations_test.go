@@ -20,7 +20,7 @@ import (
 // Covers nil input, full fields with all timestamps, and partial fields
 // where optional time pointers are nil.
 func TestToOutput(t *testing.T) {
-	now := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -140,8 +140,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				PredicateType: "https://slsa.dev/provenance/v0.2",
 				SubjectDigest: "sha256:deadbeef",
 				DownloadURL:   "https://gitlab.example.com/download",
-				CreatedAt:     "2024-06-15T12:00:00Z",
-				ExpireAt:      "2025-06-15T12:00:00Z",
+				CreatedAt:     "2026-06-15T12:00:00Z",
+				ExpireAt:      "2026-06-15T12:00:00Z",
 			},
 			contains: []string{
 				"## Attestation #42 (IID 7)",
@@ -152,8 +152,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"**Predicate Type**: https://slsa.dev/provenance/v0.2",
 				"`sha256:deadbeef`",
 				"**Download URL**",
-				"**Created**: 2024-06-15T12:00:00Z",
-				"**Expires**: 2025-06-15T12:00:00Z",
+				"**Created**: 2026-06-15T12:00:00Z",
+				"**Expires**: 2026-06-15T12:00:00Z",
 				"gitlab_download_attestation",
 			},
 		},
@@ -227,21 +227,21 @@ func TestFormatListMarkdown(t *testing.T) {
 						BuildID:       100,
 						Status:        "success",
 						PredicateKind: "slsa_provenance",
-						CreatedAt:     "2024-01-01T00:00:00Z",
+						CreatedAt:     "2026-01-01T00:00:00Z",
 					},
 					{
 						ID:        2,
 						IID:       2,
 						BuildID:   101,
 						Status:    "failed",
-						CreatedAt: "2024-02-01T00:00:00Z",
+						CreatedAt: "2026-02-01T00:00:00Z",
 					},
 				},
 			},
 			contains: []string{
 				"## Attestations (2)",
 				"| ID | IID | Build | Status | Predicate Kind | Created |",
-				"| 1 | 1 | 100 | success | slsa_provenance | 2024-01-01T00:00:00Z |",
+				"| 1 | 1 | 100 | success | slsa_provenance | 2026-01-01T00:00:00Z |",
 				"| 2 | 2 | 101 | failed |",
 			},
 		},
@@ -315,8 +315,8 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success","predicate_kind":"slsa_provenance","predicate_type":"https://slsa.dev/provenance/v0.2","subject_digest":"sha256:abc123","created_at":"2024-01-01T00:00:00Z"},
-				{"id":2,"iid":2,"project_id":10,"build_id":101,"status":"success","predicate_kind":"slsa_provenance","subject_digest":"sha256:abc123","created_at":"2024-02-01T00:00:00Z","expire_at":"2025-02-01T00:00:00Z"}
+				{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success","predicate_kind":"slsa_provenance","predicate_type":"https://slsa.dev/provenance/v0.2","subject_digest":"sha256:abc123","created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"iid":2,"project_id":10,"build_id":101,"status":"success","predicate_kind":"slsa_provenance","subject_digest":"sha256:abc123","created_at":"2026-02-01T00:00:00Z","expire_at":"2026-02-01T00:00:00Z"}
 			]`)
 			return
 		}

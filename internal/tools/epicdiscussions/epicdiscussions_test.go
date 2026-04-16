@@ -23,7 +23,7 @@ func TestList_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"epic note","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z"}]}]`,
+			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"epic note","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -60,7 +60,7 @@ func TestGet_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test","author":{"username":"bob"},"created_at":"2024-01-01T00:00:00Z"}]}`)
+			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test","author":{"username":"bob"},"created_at":"2026-01-01T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -77,7 +77,7 @@ func TestGet_Success(t *testing.T) {
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new epic thread","author":{"username":"carol"},"created_at":"2024-01-02T00:00:00Z"}]}`)
+			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new epic thread","author":{"username":"carol"},"created_at":"2026-01-02T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -94,7 +94,7 @@ func TestCreate_Success(t *testing.T) {
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":30,"body":"reply","author":{"username":"dave"},"created_at":"2024-01-03T00:00:00Z"}`)
+			`{"id":30,"body":"reply","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -111,7 +111,7 @@ func TestAddNote_Success(t *testing.T) {
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":30,"body":"updated","author":{"username":"dave"},"created_at":"2024-01-03T00:00:00Z","updated_at":"2024-01-04T00:00:00Z"}`)
+			`{"id":30,"body":"updated","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z","updated_at":"2026-01-04T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -378,7 +378,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 				ID:             "d1",
 				IndividualNote: false,
 				Notes: []NoteOutput{
-					{ID: 1, Body: "Hello", Author: "alice", CreatedAt: "2024-01-01T00:00:00Z"},
+					{ID: 1, Body: "Hello", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
 				},
 			},
 		},
@@ -409,7 +409,7 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 	result := FormatMarkdown(Output{
 		ID: "d1",
 		Notes: []NoteOutput{
-			{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2024-01-01T00:00:00Z"},
+			{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
 	if result == nil {
@@ -423,7 +423,7 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 
 // TestFormatNoteMarkdown verifies the behavior of format note markdown.
 func TestFormatNoteMarkdown(t *testing.T) {
-	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2024-01-01T00:00:00Z"})
+	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
 	}
@@ -564,7 +564,7 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 func epicDiscussionsHandler() *http.ServeMux {
 	handler := http.NewServeMux()
 
-	noteJSON := `{"id":30,"body":"test","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z"}`
+	noteJSON := `{"id":30,"body":"test","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}`
 	discussionJSON := `{"id":"d1","individual_note":false,"notes":[` + noteJSON + `]}`
 
 	handler.HandleFunc("GET /api/v4/groups/1/epics/5/discussions", func(w http.ResponseWriter, _ *http.Request) {
@@ -580,7 +580,7 @@ func epicDiscussionsHandler() *http.ServeMux {
 		testutil.RespondJSON(w, http.StatusCreated, noteJSON)
 	})
 	handler.HandleFunc("PUT /api/v4/groups/1/epics/5/discussions/d1/notes/30", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"body":"updated","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-02T00:00:00Z"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"body":"updated","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}`)
 	})
 	handler.HandleFunc("DELETE /api/v4/groups/1/epics/5/discussions/d1/notes/30", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

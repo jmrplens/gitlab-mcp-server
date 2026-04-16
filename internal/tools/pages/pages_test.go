@@ -26,7 +26,7 @@ func TestGetPages_Success(t *testing.T) {
 			"url":"https://myproject.pages.io",
 			"is_unique_domain_enabled":true,
 			"force_https":true,
-			"deployments":[{"created_at":"2024-01-15T10:00:00Z","url":"https://myproject.pages.io","path_prefix":"","root_directory":"public"}],
+			"deployments":[{"created_at":"2026-01-15T10:00:00Z","url":"https://myproject.pages.io","path_prefix":"","root_directory":"public"}],
 			"primary_domain":"myproject.pages.io"
 		}`)
 	}))
@@ -605,7 +605,7 @@ func TestFormatPagesMarkdown(t *testing.T) {
 		URL:        testPagesURL,
 		ForceHTTPS: true,
 		Deployments: []DeploymentOutput{
-			{URL: testPagesURL, CreatedAt: "2024-01-15T10:00:00Z", PathPrefix: "", RootDirectory: "public"},
+			{URL: testPagesURL, CreatedAt: "2026-01-15T10:00:00Z", PathPrefix: "", RootDirectory: "public"},
 		},
 	})
 	if !strings.Contains(md, testPagesURL) {
@@ -630,7 +630,7 @@ func TestFormatDomainMarkdown_WithOptionalFields(t *testing.T) {
 		Domain:       testDomain,
 		URL:          testExampleURL,
 		Verified:     true,
-		EnabledUntil: "2025-01-01T00:00:00Z",
+		EnabledUntil: "2026-01-01T00:00:00Z",
 		Certificate:  CertificateOutput{Subject: testDomain, Expired: false},
 	})
 	if !strings.Contains(md, "Enabled Until") {

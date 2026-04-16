@@ -257,3 +257,44 @@ func TestMergeServerEntry_RootKeyNotObject(t *testing.T) {
 		t.Error("gitlab entry not added")
 	}
 }
+
+// TestWriteJSONFile_MarshalError verifies writeJSONFile returns an error
+// when the data contains an unmarshable value (channel).
+func TestWriteJSONFile_MarshalError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.json")
+	ch := make(chan int)
+	data := map[string]any{"bad": ch}
+
+	err := writeJSONFile(path, data)
+	if err == nil {
+		t.Fatal("expected error for unmarshable value, got nil")
+	}
+	if !strings.Contains(err.Error(), "marshaling JSON") {
+		t.Errorf("error = %v, want to contain 'marshaling JSON'", err)
+	}
+}
+
+// TestWriteJSONFile_WriteFileFails verifies writeJSONFile returns an error
+// when the file cannot be written (read-only directory).
+func TestWriteJSONFile_WriteFileFails(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: test requires non-root")
+	}
+	tmpDir := t.TempDir()
+	readOnly := filepath.Join(tmpDir, "locked")
+	if err := os.Mkdir(readOnly, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o755) })
+
+	path := filepath.Join(readOnly, "test.json")
+	data := map[string]any{"key": "value"}
+
+	err := writeJSONFile(path, data)
+	if err == nil {
+		t.Fatal("expected error when write fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing") {
+		t.Errorf("error = %v, want to contain 'writing'", err)
+	}
+}

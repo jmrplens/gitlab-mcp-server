@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	sampleTokenJSON = `{"id":10,"runner_controller_id":1,"description":"my-token","token":"glrt-abc123","last_used_at":"2025-01-15T10:00:00Z","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-15T10:00:00Z"}`
+	sampleTokenJSON = `{"id":10,"runner_controller_id":1,"description":"my-token","token":"glrt-abc123","last_used_at":"2026-01-15T10:00:00Z","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`
 	errUnexpected   = "unexpected error: %v"
 	errExpValid     = "expected validation error, got nil"
 	errExpAPIErr    = "expected API error, got nil"
@@ -388,8 +388,8 @@ func TestRevoke_ContextCancelled(t *testing.T) {
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID: 10, RunnerControllerID: 1, Description: "my-token",
-		Token: "glrt-abc123", LastUsedAt: "2025-01-15T10:00:00Z",
-		CreatedAt: "2025-01-01T00:00:00Z",
+		Token: "glrt-abc123", LastUsedAt: "2026-01-15T10:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 
 	md := FormatOutputMarkdown(out)

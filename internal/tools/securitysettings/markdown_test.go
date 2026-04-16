@@ -11,8 +11,8 @@ import (
 func TestFormatProjectMarkdown_AllFields(t *testing.T) {
 	out := ProjectOutput{
 		ProjectID:                           42,
-		CreatedAt:                           "2024-01-01T00:00:00Z",
-		UpdatedAt:                           "2024-01-02T00:00:00Z",
+		CreatedAt:                           "2026-01-01T00:00:00Z",
+		UpdatedAt:                           "2026-01-02T00:00:00Z",
 		AutoFixContainerScanning:            true,
 		AutoFixDAST:                         false,
 		AutoFixDependencyScanning:           true,
@@ -33,7 +33,7 @@ func TestFormatProjectMarkdown_AllFields(t *testing.T) {
 		"| Auto-fix DAST | false |",
 		"| Auto-fix Dependency Scanning | true |",
 		"| Auto-fix Container Scanning | true |",
-		"**Updated**: 2024-01-02T00:00:00Z",
+		"**Updated**: 2026-01-02T00:00:00Z",
 	}
 	for _, exp := range expectations {
 		if !strings.Contains(md, exp) {

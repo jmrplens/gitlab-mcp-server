@@ -47,7 +47,7 @@ func TestListExportStatus(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2024-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2026-01-01T00:00:00Z"}]`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{GroupID: "10"})
 	if err != nil {
@@ -173,7 +173,7 @@ func TestListExportStatus_WithRelationFilter(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"milestones","status":0,"batched":true,"batches_count":2,"updated_at":"2025-06-15T10:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"milestones","status":0,"batched":true,"batches_count":2,"updated_at":"2026-06-15T10:00:00Z"}]`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
 		GroupID:  "10",
@@ -204,8 +204,8 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2025-01-01T00:00:00Z"},
-			{"relation":"milestones","status":0,"batched":true,"batches_count":3,"updated_at":"2025-01-02T00:00:00Z"}
+			{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2026-01-01T00:00:00Z"},
+			{"relation":"milestones","status":0,"batched":true,"batches_count":3,"updated_at":"2026-01-02T00:00:00Z"}
 		]`, testutil.PaginationHeaders{
 			Page:       "1",
 			PerPage:    "2",
@@ -250,7 +250,7 @@ func TestListExportStatus_EmptyResponse(t *testing.T) {
 // TestListExportStatus_WithErrorField verifies the behavior of list export status with error field.
 func TestListExportStatus_WithErrorField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":-1,"error":"export failed","batched":false,"batches_count":0,"updated_at":"2025-06-15T10:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":-1,"error":"export failed","batched":false,"batches_count":0,"updated_at":"2026-06-15T10:00:00Z"}]`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{GroupID: "10"})
 	if err != nil {
@@ -281,8 +281,8 @@ func TestFormatScheduleExport_Message(t *testing.T) {
 func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
-			{Relation: "project", Status: 1, Batched: false, BatchesCount: 0, UpdatedAt: "2025-01-01T00:00:00Z"},
-			{Relation: "milestones", Status: 0, Error: "timeout", Batched: true, BatchesCount: 3, UpdatedAt: "2025-01-02T00:00:00Z"},
+			{Relation: "project", Status: 1, Batched: false, BatchesCount: 0, UpdatedAt: "2026-01-01T00:00:00Z"},
+			{Relation: "milestones", Status: 0, Error: "timeout", Batched: true, BatchesCount: 3, UpdatedAt: "2026-01-02T00:00:00Z"},
 		},
 	}
 	md := FormatListExportStatus(out)
@@ -455,7 +455,7 @@ func newGroupRelationsExportMCPSession(t *testing.T) *mcp.ClientSession {
 
 	// List export status
 	handler.HandleFunc("GET /api/v4/groups/10/export_relations/status", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2025-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":1,"batched":false,"batches_count":0,"updated_at":"2026-01-01T00:00:00Z"}]`)
 	})
 
 	return newMCPSessionWithHandler(t, handler)

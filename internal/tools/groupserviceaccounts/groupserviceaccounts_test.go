@@ -576,7 +576,7 @@ func TestToPATOutput_TimeFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathServiceAccount42PAT {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":5,"name":"t1","scopes":["api"],"user_id":42,"active":true,"revoked":false,"created_at":"2025-06-15T10:30:00Z","expires_at":"2026-01-15"}
+				{"id":5,"name":"t1","scopes":["api"],"user_id":42,"active":true,"revoked":false,"created_at":"2026-06-15T10:30:00Z","expires_at":"2026-01-15"}
 			]`)
 			return
 		}
@@ -651,7 +651,7 @@ func TestFormatPATOutputMarkdown(t *testing.T) {
 		out := PATOutput{
 			ID: 1, Name: "deploy", Active: true, Revoked: false,
 			Scopes: []string{"api", "read_user"}, UserID: 42,
-			CreatedAt: "2025-06-15T10:30:00Z", ExpiresAt: "2026-01-15",
+			CreatedAt: "2026-06-15T10:30:00Z", ExpiresAt: "2026-01-15",
 			Token: "glpat-secret",
 		}
 		md := FormatPATOutputMarkdown(out)
@@ -739,11 +739,11 @@ func TestFormatPATMarkdownString(t *testing.T) {
 	t.Run("with all fields", func(t *testing.T) {
 		out := PATOutput{
 			ID: 1, Name: "tok", Active: true, Scopes: []string{"api"},
-			UserID: 42, CreatedAt: "2025-01-01T00:00:00Z",
-			ExpiresAt: "2025-12-31", Token: "secret",
+			UserID: 42, CreatedAt: "2026-01-01T00:00:00Z",
+			ExpiresAt: "2026-12-31", Token: "secret",
 		}
 		md := FormatPATMarkdownString(out)
-		for _, want := range []string{"tok", "api", "secret", "2025-12-31", "2025-01-01"} {
+		for _, want := range []string{"tok", "api", "secret", "2026-12-31", "2026-01-01"} {
 			if !strings.Contains(md, want) {
 				t.Errorf("FormatPATMarkdownString missing %q:\n%s", want, md)
 			}

@@ -69,8 +69,8 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","created_at":"2024-01-01T00:00:00Z"},
-				{"id":2,"title":"cert-2","key":"ssh-rsa AAAA2","created_at":"2024-02-01T00:00:00Z"}
+				{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"title":"cert-2","key":"ssh-rsa AAAA2","created_at":"2026-02-01T00:00:00Z"}
 			]`)
 			return
 		}
@@ -139,7 +139,7 @@ func TestList_APIError(t *testing.T) {
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"title":"new-cert","key":"ssh-rsa NEWKEY","created_at":"2024-03-01T00:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"title":"new-cert","key":"ssh-rsa NEWKEY","created_at":"2026-03-01T00:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)

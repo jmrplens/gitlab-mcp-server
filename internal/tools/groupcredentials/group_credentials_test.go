@@ -9,8 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const patJSON = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2024-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2025-01-01"}]`
-const sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2024-01-01T00:00:00Z","expires_at":"2025-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
+const patJSON = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2026-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2026-01-01"}]`
+const sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
 
 func TestListPATs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +376,7 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 // TestListPATs_RevokedTokenState verifies that toPATOutput assigns state "revoked"
 // when the token has revoked=true, and that the LastUsedAt date is populated.
 func TestListPATs_RevokedTokenState(t *testing.T) {
-	revokedJSON := `[{"id":2,"name":"revoked-token","revoked":true,"active":false,"created_at":"2024-01-01T00:00:00Z","scopes":["read_api"],"user_id":20,"last_used_at":"2024-03-01T12:00:00Z","expires_at":"2025-01-01"}]`
+	revokedJSON := `[{"id":2,"name":"revoked-token","revoked":true,"active":false,"created_at":"2026-01-01T00:00:00Z","scopes":["read_api"],"user_id":20,"last_used_at":"2026-03-01T12:00:00Z","expires_at":"2026-01-01"}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
 			testutil.RespondJSON(w, http.StatusOK, revokedJSON)
@@ -409,7 +409,7 @@ func TestListPATs_RevokedTokenState(t *testing.T) {
 // TestListPATs_InactiveTokenState verifies that toPATOutput assigns state "inactive"
 // when the token is neither revoked nor active, and omits unset optional dates.
 func TestListPATs_InactiveTokenState(t *testing.T) {
-	inactiveJSON := `[{"id":3,"name":"inactive-token","revoked":false,"active":false,"created_at":"2024-01-01T00:00:00Z","scopes":["read_user"],"user_id":30}]`
+	inactiveJSON := `[{"id":3,"name":"inactive-token","revoked":false,"active":false,"created_at":"2026-01-01T00:00:00Z","scopes":["read_user"],"user_id":30}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
 			testutil.RespondJSON(w, http.StatusOK, inactiveJSON)
@@ -442,7 +442,7 @@ func TestListPATs_InactiveTokenState(t *testing.T) {
 // TestListSSHKeys_WithLastUsedAt verifies that toSSHKeyOutput populates the
 // LastUsedAt field when the API response includes last_used_at.
 func TestListSSHKeys_WithLastUsedAt(t *testing.T) {
-	keyJSON := `[{"id":7,"title":"used-key","created_at":"2024-01-01T00:00:00Z","expires_at":"2025-06-01T00:00:00Z","last_used_at":"2024-06-15T10:30:00Z","usage_type":"auth","user_id":15}]`
+	keyJSON := `[{"id":7,"title":"used-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","last_used_at":"2026-06-15T10:30:00Z","usage_type":"auth","user_id":15}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
 			testutil.RespondJSON(w, http.StatusOK, keyJSON)

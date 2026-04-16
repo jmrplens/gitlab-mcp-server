@@ -66,7 +66,7 @@ func TestGetExportStatus_Success(t *testing.T) {
 				"name_with_namespace": "group / my-project",
 				"path": "my-project",
 				"path_with_namespace": "group/my-project",
-				"created_at": "2024-01-01T00:00:00Z",
+				"created_at": "2026-01-01T00:00:00Z",
 				"export_status": "finished",
 				"_links": {
 					"api_url": "https://gitlab.example.com/api/v4/projects/1/export/download",

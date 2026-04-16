@@ -23,12 +23,12 @@ import (
 const (
 	errExpMissingProjectID = "expected error for missing project_id"
 	pathIssues             = "/api/v4/projects/42/issues"
-	issueJSONMinimal       = `{"id":1,"iid":10,"title":"Test issue","description":"","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z"}`
-	issueJSONFull          = `{"id":1,"iid":10,"title":"Bug: login fails","description":"Login page returns an error","state":"opened","labels":["bug","critical"],"assignees":[{"username":"alice"},{"username":"bob"}],"milestone":{"title":"v1.0"},"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-16T12:00:00Z","due_date":"2024-02-01"}`
-	issueJSONClosed        = `{"id":1,"iid":10,"title":"Bug: login fails","description":"Login page returns an error","state":"closed","labels":["bug"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-20T09:00:00Z","closed_at":"2024-01-20T09:00:00Z"}`
+	issueJSONMinimal       = `{"id":1,"iid":10,"title":"Test issue","description":"","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`
+	issueJSONFull          = `{"id":1,"iid":10,"title":"Bug: login fails","description":"Login page returns an error","state":"opened","labels":["bug","critical"],"assignees":[{"username":"alice"},{"username":"bob"}],"milestone":{"title":"v1.0"},"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T12:00:00Z","due_date":"2026-02-01"}`
+	issueJSONClosed        = `{"id":1,"iid":10,"title":"Bug: login fails","description":"Login page returns an error","state":"closed","labels":["bug"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-20T09:00:00Z","closed_at":"2026-01-20T09:00:00Z"}`
 	fmtIssueStateWant      = "out.State = %q, want %q"
 	pathIssue10            = "/api/v4/projects/42/issues/10"
-	testDueDate            = "2024-02-01"
+	testDueDate            = "2026-02-01"
 	fmtIssueListErr        = "List() unexpected error: %v"
 	fmtIssueGetErr         = "Get() unexpected error: %v"
 	fmtIssueUpdateErr      = "Update() unexpected error: %v"
@@ -383,7 +383,7 @@ func TestUpdate_StateClose(t *testing.T) {
 func TestUpdate_Labels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Bug: login fails","description":"","state":"opened","labels":["bug","critical","urgent"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-16T12:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Bug: login fails","description":"","state":"opened","labels":["bug","critical","urgent"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T12:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -470,7 +470,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 func TestToOutput_EmptyLabels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssue10 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"no labels","description":"","state":"opened","labels":null,"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"no labels","description":"","state":"opened","labels":null,"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -493,7 +493,7 @@ func TestListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/10/issues" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"iid":5,"title":"group issue","description":"desc","state":"opened","labels":["bug"],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/group/project/issues/5","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z"}
+				{"id":1,"iid":5,"title":"group issue","description":"desc","state":"opened","labels":["bug"],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/group/project/issues/5","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z"}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -835,7 +835,7 @@ const (
 	pathUnsubscribe  = "/api/v4/projects/42/issues/10/unsubscribe"
 	pathCreateTodo   = "/api/v4/projects/42/issues/10/todo"
 
-	todoJSON = `{"id":501,"action_name":"marked","target_type":"Issue","target":{"title":"Test issue","web_url":"https://gitlab.example.com/project/issues/10"},"body":"marked todo","state":"pending","created_at":"2024-03-01T10:00:00Z"}`
+	todoJSON = `{"id":501,"action_name":"marked","target_type":"Issue","target":{"title":"Test issue","web_url":"https://gitlab.example.com/project/issues/10"},"body":"marked todo","state":"pending","created_at":"2026-03-01T10:00:00Z"}`
 )
 
 // TestListAll_Success verifies the behavior of list all success.
@@ -977,7 +977,7 @@ func TestMove_MissingToProject(t *testing.T) {
 func TestSubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSubscribe && r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Test issue","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z","subscribed":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Test issue","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z","subscribed":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1007,7 +1007,7 @@ func TestSubscribe_MissingProjectID(t *testing.T) {
 func TestUnsubscribe_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathUnsubscribe && r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Test issue","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z","subscribed":false}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"title":"Test issue","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z","subscribed":false}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1441,7 +1441,7 @@ const (
 	testDueDateCov       = "2026-06-01"
 	testCreatedAtCov     = "2026-01-01T00:00:00Z"
 	testNoIssuesFound    = "No issues found"
-	testCreatedAfterCov  = "2025-01-01T00:00:00Z"
+	testCreatedAfterCov  = "2026-01-01T00:00:00Z"
 	testCreatedBeforeCov = "2026-12-31T23:59:59Z"
 )
 
@@ -1733,11 +1733,11 @@ func TestParseDueDate_Invalid(t *testing.T) {
 // timestamps (a common LLM mistake). Only YYYY-MM-DD format is accepted.
 func TestParseDueDate_RFC3339Rejected(t *testing.T) {
 	cases := []string{
-		"2024-01-15T10:00:00Z",
-		"2024-01-15T10:00:00+02:00",
-		"2024-01-15 10:00:00",
-		"01/15/2024",
-		"15-01-2024",
+		"2026-01-15T10:00:00Z",
+		"2026-01-15T10:00:00+02:00",
+		"2026-01-15 10:00:00",
+		"01/15/2026",
+		"15-01-2026",
 	}
 	for _, tc := range cases {
 		t.Run(tc, func(t *testing.T) {
@@ -2928,7 +2928,7 @@ func TestCreate_ConfidentialTrue(t *testing.T) {
 			if v, ok := body["confidential"].(bool); !ok || !v {
 				t.Errorf("confidential = %v, want true", body["confidential"])
 			}
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"iid":10,"title":"Secret","description":"","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2024-01-15T10:00:00Z","updated_at":"2024-01-15T10:00:00Z","confidential":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"iid":10,"title":"Secret","description":"","state":"opened","labels":[],"assignees":[],"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T10:00:00Z","confidential":true}`)
 			return
 		}
 		http.NotFound(w, r)

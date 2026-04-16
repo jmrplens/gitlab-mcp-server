@@ -20,8 +20,8 @@ const featureFlagJSON = `{
 	"description": "Test feature flag",
 	"active": true,
 	"version": "new_version_flag",
-	"created_at": "2024-01-01T00:00:00Z",
-	"updated_at": "2024-01-02T00:00:00Z",
+	"created_at": "2026-01-01T00:00:00Z",
+	"updated_at": "2026-01-02T00:00:00Z",
 	"scopes": [],
 	"strategies": [
 		{
@@ -263,8 +263,8 @@ func TestFormatFeatureFlagMarkdown(t *testing.T) {
 		Description: "Test feature flag",
 		Active:      true,
 		Version:     "new_version_flag",
-		CreatedAt:   "2024-01-01T00:00:00Z",
-		UpdatedAt:   "2024-01-02T00:00:00Z",
+		CreatedAt:   "2026-01-01T00:00:00Z",
+		UpdatedAt:   "2026-01-02T00:00:00Z",
 		Strategies: []StrategyOutput{
 			{
 				ID:   1,
@@ -346,8 +346,8 @@ const covFeatureFlagJSON = `{
 	"description": "coverage flag",
 	"active": true,
 	"version": "new_version_flag",
-	"created_at": "2025-01-01T00:00:00Z",
-	"updated_at": "2025-01-02T00:00:00Z",
+	"created_at": "2026-01-01T00:00:00Z",
+	"updated_at": "2026-01-02T00:00:00Z",
 	"strategies": [
 		{
 			"id": 1,

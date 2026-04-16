@@ -1,0 +1,91 @@
+package memberroles
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+const registerRoleJSON = `{"id":1,"name":"custom_role","base_access_level":30,"description":"A custom role"}`
+const registerRoleListJSON = `[{"id":1,"name":"custom_role","base_access_level":30}]`
+
+// TestRegisterTools_NoPanic verifies that RegisterTools registers all member
+// role tools without panicking.
+func TestRegisterTools_NoPanic(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+}
+
+// TestRegisterTools_CallThroughMCP verifies all 6 member role tools can be called
+// through MCP in-memory transport, covering every handler closure in register.go.
+func TestRegisterTools_CallThroughMCP(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && (path == "/api/v4/member_roles" || strings.Contains(path, "/groups/") && strings.HasSuffix(path, "/member_roles")):
+			testutil.RespondJSON(w, http.StatusOK, registerRoleListJSON)
+		case r.Method == http.MethodPost:
+			testutil.RespondJSON(w, http.StatusCreated, registerRoleJSON)
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_list_instance_member_roles", map[string]any{}},
+		{"gitlab_create_instance_member_role", map[string]any{"name": "r", "base_access_level": 30}},
+		{"gitlab_delete_instance_member_role", map[string]any{"member_role_id": 1}},
+		{"gitlab_list_group_member_roles", map[string]any{"group_id": "mygroup"}},
+		{"gitlab_create_group_member_role", map[string]any{"group_id": "mygroup", "name": "r", "base_access_level": 30}},
+		{"gitlab_delete_group_member_role", map[string]any{"group_id": "mygroup", "member_role_id": 1}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("CallTool(%s) returned nil", tt.name)
+			}
+		})
+	}
+}
+
+// TestMarkdownInit_Registry verifies the init() markdown formatters are registered.
+func TestMarkdownInit_Registry(t *testing.T) {
+	out := toolutil.MarkdownForResult(ListOutput{})
+	if out == nil {
+		t.Fatal("expected non-nil result for ListOutput")
+	}
+}

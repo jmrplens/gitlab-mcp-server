@@ -21,7 +21,7 @@ func TestCurrentUserStatus_Success(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/status" {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"emoji":"coffee","message":"Coding","availability":"busy",
-				"message_html":"<p>Coding</p>","clear_status_at":"2024-12-31T23:59:59Z"
+				"message_html":"<p>Coding</p>","clear_status_at":"2026-12-31T23:59:59Z"
 			}`)
 			return
 		}
@@ -81,7 +81,7 @@ func TestCreateUserRunner_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/user/runners" {
 			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id":101,"token":"glrt-abc123","token_expires_at":"2025-06-01T00:00:00Z"
+				"id":101,"token":"glrt-abc123","token_expires_at":"2026-06-01T00:00:00Z"
 			}`)
 			return
 		}
@@ -238,21 +238,21 @@ func TestDeleteUserIdentity_CancelledContext(t *testing.T) {
 func TestGetUserActivities_WithFromFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/activities" {
-			testutil.RespondJSON(w, http.StatusOK, `[{"username":"user1","last_activity_on":"2024-06-15"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"username":"user1","last_activity_on":"2026-06-15"}]`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetUserActivities(context.Background(), client, GetUserActivitiesInput{From: "2024-01-01"})
+	out, err := GetUserActivities(context.Background(), client, GetUserActivitiesInput{From: "2026-01-01"})
 	if err != nil {
 		t.Fatalf("GetUserActivities() unexpected error: %v", err)
 	}
 	if len(out.Activities) != 1 {
 		t.Fatalf("got %d activities, want 1", len(out.Activities))
 	}
-	if out.Activities[0].LastActivityOn != "2024-06-15" {
-		t.Errorf("LastActivityOn = %q, want %q", out.Activities[0].LastActivityOn, "2024-06-15")
+	if out.Activities[0].LastActivityOn != "2026-06-15" {
+		t.Errorf("LastActivityOn = %q, want %q", out.Activities[0].LastActivityOn, "2026-06-15")
 	}
 }
 
@@ -339,8 +339,8 @@ func TestGetUserMemberships_CancelledContext(t *testing.T) {
 func TestFormatUserActivitiesMarkdownString_WithData(t *testing.T) {
 	out := UserActivitiesOutput{
 		Activities: []UserActivityOutput{
-			{Username: "alice", LastActivityOn: "2024-06-15"},
-			{Username: "bob", LastActivityOn: "2024-06-14"},
+			{Username: "alice", LastActivityOn: "2026-06-15"},
+			{Username: "bob", LastActivityOn: "2026-06-14"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -349,8 +349,8 @@ func TestFormatUserActivitiesMarkdownString_WithData(t *testing.T) {
 	for _, want := range []string{
 		"## User Activities (2)",
 		"| Username | Last Activity |",
-		"| alice | 2024-06-15 |",
-		"| bob | 2024-06-14 |",
+		"| alice | 2026-06-15 |",
+		"| bob | 2026-06-14 |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
@@ -401,7 +401,7 @@ func TestFormatUserMembershipsMarkdownString_Empty(t *testing.T) {
 // TestFormatUserRunnerMarkdownString verifies runner markdown output.
 func TestFormatUserRunnerMarkdownString(t *testing.T) {
 	out := UserRunnerOutput{
-		ID: 101, Token: "glrt-abc123", TokenExpiresAt: "2025-06-01T00:00:00Z",
+		ID: 101, Token: "glrt-abc123", TokenExpiresAt: "2026-06-01T00:00:00Z",
 	}
 	md := FormatUserRunnerMarkdownString(out)
 
@@ -439,12 +439,12 @@ func TestFormatDeleteUserIdentityMarkdownString(t *testing.T) {
 
 // TestParseDate_ValidDate verifies parseDate returns a valid time for YYYY-MM-DD.
 func TestParseDate_ValidDate(t *testing.T) {
-	d := parseDate("2024-06-15")
+	d := parseDate("2026-06-15")
 	if d.IsZero() {
 		t.Fatal("expected non-zero time for valid date")
 	}
-	if d.Year() != 2024 || d.Month() != 6 || d.Day() != 15 {
-		t.Errorf("date = %v, want 2024-06-15", d)
+	if d.Year() != 2026 || d.Month() != 6 || d.Day() != 15 {
+		t.Errorf("date = %v, want 2026-06-15", d)
 	}
 }
 

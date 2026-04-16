@@ -31,14 +31,14 @@ const mrContextJSON = `{
           {
             "notes": {
               "nodes": [
-                {"author": {"username": "bob"}, "body": "LGTM", "createdAt": "2024-06-01T10:00:00Z", "system": false, "resolvable": true, "resolved": true}
+                {"author": {"username": "bob"}, "body": "LGTM", "createdAt": "2026-06-01T10:00:00Z", "system": false, "resolvable": true, "resolved": true}
               ]
             }
           },
           {
             "notes": {
               "nodes": [
-                {"author": {"username": "system"}, "body": "merged", "createdAt": "2024-06-01T11:00:00Z", "system": true, "resolvable": false, "resolved": false}
+                {"author": {"username": "system"}, "body": "merged", "createdAt": "2026-06-01T11:00:00Z", "system": true, "resolvable": false, "resolved": false}
               ]
             }
           }
@@ -56,19 +56,19 @@ const issueContextJSON = `{
       "description": "Users cannot log in",
       "state": "opened",
       "author": {"username": "alice"},
-      "createdAt": "2024-01-10T08:00:00Z",
-      "dueDate": "2024-02-01",
+      "createdAt": "2026-01-10T08:00:00Z",
+      "dueDate": "2026-02-01",
       "weight": 3,
       "labels": {"nodes": [{"title": "bug"}, {"title": "P1"}]},
       "assignees": {"nodes": [{"username": "bob"}]},
-      "milestone": {"title": "v1.0", "dueDate": "2024-03-01"},
+      "milestone": {"title": "v1.0", "dueDate": "2026-03-01"},
       "humanTimeEstimate": "2h",
       "humanTotalTimeSpent": "1h 30m",
       "participants": {"nodes": [{"username": "alice"}, {"username": "bob"}]},
       "notes": {
         "nodes": [
-          {"author": {"username": "alice"}, "body": "I found the root cause", "createdAt": "2024-01-11T09:00:00Z", "system": false, "internal": false},
-          {"author": {"username": "system"}, "body": "changed the title", "createdAt": "2024-01-11T10:00:00Z", "system": true, "internal": false}
+          {"author": {"username": "alice"}, "body": "I found the root cause", "createdAt": "2026-01-11T09:00:00Z", "system": false, "internal": false},
+          {"author": {"username": "system"}, "body": "changed the title", "createdAt": "2026-01-11T10:00:00Z", "system": true, "internal": false}
         ]
       },
       "relatedMergeRequests": {

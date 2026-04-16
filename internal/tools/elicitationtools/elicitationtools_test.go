@@ -383,7 +383,7 @@ func TestReleaseCreate_FullFlow(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"tag_name": "v1.0.0", "name": "Release 1.0",
 			"description": "First release",
-			"created_at": "2024-01-15T10:00:00Z"
+			"created_at": "2026-01-15T10:00:00Z"
 		}`)
 	})
 	client := testutil.NewTestClient(t, mux)
@@ -1284,7 +1284,7 @@ func TestMCPRoundTripReleaseCreate_WithElicitation(t *testing.T) {
 	mux.HandleFunc("/api/v4/projects/42/releases", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"tag_name":"v1.0.0","name":"Release 1.0",
-			"description":"notes","created_at":"2024-01-15T10:00:00Z"
+			"description":"notes","created_at":"2026-01-15T10:00:00Z"
 		}`)
 	})
 	gitlabClient := testutil.NewTestClient(t, mux)

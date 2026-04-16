@@ -28,9 +28,9 @@ const (
 		"keep_divergent_refs": true,
 		"mirror_branch_regex": "",
 		"auth_method": "password",
-		"last_successful_update_at": "2024-03-10T09:00:00Z",
-		"last_update_at": "2024-03-10T09:00:00Z",
-		"last_update_started_at": "2024-03-10T08:59:00Z"
+		"last_successful_update_at": "2026-03-10T09:00:00Z",
+		"last_update_at": "2026-03-10T09:00:00Z",
+		"last_update_started_at": "2026-03-10T08:59:00Z"
 	}`
 
 	mirrorWithHostKeysJSON = `{
@@ -43,9 +43,9 @@ const (
 		"keep_divergent_refs": true,
 		"mirror_branch_regex": "",
 		"auth_method": "ssh_public_key",
-		"last_successful_update_at": "2024-03-10T09:00:00Z",
-		"last_update_at": "2024-03-10T09:00:00Z",
-		"last_update_started_at": "2024-03-10T08:59:00Z",
+		"last_successful_update_at": "2026-03-10T09:00:00Z",
+		"last_update_at": "2026-03-10T09:00:00Z",
+		"last_update_started_at": "2026-03-10T08:59:00Z",
 		"host_keys": [{"fingerprint_sha256": "SHA256:abc123def456"}]
 	}`
 
@@ -540,8 +540,8 @@ func TestFormatOutputMarkdown_WithTimestamps(t *testing.T) {
 		ID:                     42,
 		URL:                    "https://example.com/repo.git",
 		UpdateStatus:           "finished",
-		LastSuccessfulUpdateAt: "2024-03-10T09:00:00Z",
-		LastUpdateAt:           "2024-03-10T09:00:00Z",
+		LastSuccessfulUpdateAt: "2026-03-10T09:00:00Z",
+		LastUpdateAt:           "2026-03-10T09:00:00Z",
 		LastError:              "auth failed",
 		MirrorBranchRegex:      "^main$",
 	})

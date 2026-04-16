@@ -265,7 +265,7 @@ func TestGenerateReleaseNotesPrompt_Success(t *testing.T) {
 func TestSummarizeOpenMRsPrompt_Success(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathMRs {
-			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"Add feature","state":"opened","source_branch":"feature","target_branch":"main","author":{"username":"alice"},"created_at":"2025-01-01T00:00:00Z","detailed_merge_status":"mergeable"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"Add feature","state":"opened","source_branch":"feature","target_branch":"main","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","detailed_merge_status":"mergeable"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -299,9 +299,9 @@ func TestProjectHealthCheckPrompt_Success(t *testing.T) {
 		case "/api/v4/projects/42/pipelines/latest":
 			respondJSON(w, http.StatusOK, `{"id":100,"status":"success","ref":"main","sha":"abc12345","web_url":"https://gitlab.example.com/pipelines/100"}`)
 		case pathMRs:
-			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"Open MR","state":"opened","author":{"username":"alice"},"created_at":"2025-01-01T00:00:00Z"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"Open MR","state":"opened","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]`)
 		case "/api/v4/projects/42/repository/branches":
-			respondJSON(w, http.StatusOK, `[{"name":"main","protected":true,"merged":false,"default":true,"commit":{"committed_date":"2025-07-01T00:00:00Z"}},{"name":"old-branch","protected":false,"merged":true,"default":false,"commit":{"committed_date":"2024-01-01T00:00:00Z"}}]`)
+			respondJSON(w, http.StatusOK, `[{"name":"main","protected":true,"merged":false,"default":true,"commit":{"committed_date":"2026-07-01T00:00:00Z"}},{"name":"old-branch","protected":false,"merged":true,"default":false,"commit":{"committed_date":"2026-01-01T00:00:00Z"}}]`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -393,7 +393,7 @@ func TestDailyStandupPrompt_Success(t *testing.T) {
 			// Return same MR for all filter variants
 			respondJSON(w, http.StatusOK, `[{"id":55,"iid":5,"title":"WIP MR","state":"opened","source_branch":"feature","target_branch":"main","author":{"username":"alice"},"detailed_merge_status":"draft"}]`)
 		case pathIssues:
-			respondJSON(w, http.StatusOK, `[{"id":10,"iid":3,"title":"Bug fix","state":"opened","created_at":"2025-01-01T00:00:00Z","author":{"username":"alice"}}]`)
+			respondJSON(w, http.StatusOK, `[{"id":10,"iid":3,"title":"Bug fix","state":"opened","created_at":"2026-01-01T00:00:00Z","author":{"username":"alice"}}]`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -520,7 +520,7 @@ func TestTeamMemberWorkload_Success(t *testing.T) {
 		case pathMRs:
 			respondJSON(w, http.StatusOK, `[{"id":10,"iid":1,"title":"Feature A","state":"opened","source_branch":"feat-a","target_branch":"main","detailed_merge_status":"mergeable"}]`)
 		case pathIssues:
-			respondJSON(w, http.StatusOK, `[{"id":20,"iid":7,"title":"Task X","state":"opened","created_at":"2025-01-01T00:00:00Z","author":{"username":"carol"}}]`)
+			respondJSON(w, http.StatusOK, `[{"id":20,"iid":7,"title":"Task X","state":"opened","created_at":"2026-01-01T00:00:00Z","author":{"username":"carol"}}]`)
 		default:
 			http.NotFound(w, r)
 		}

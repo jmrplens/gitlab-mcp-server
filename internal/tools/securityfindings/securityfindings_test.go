@@ -321,7 +321,7 @@ func TestList_DastLocation(t *testing.T) {
 func TestList_ContainerScanningLocation(t *testing.T) {
 	containerNode := `{
 		"uuid": "container-uuid-001",
-		"name": "CVE-2024-9999",
+		"name": "CVE-2026-9999",
 		"title": "Critical flaw in base image",
 		"severity": "CRITICAL",
 		"confidence": "CONFIRMED",
@@ -329,7 +329,7 @@ func TestList_ContainerScanningLocation(t *testing.T) {
 		"scanner": {"name": "Trivy", "vendor": "aquasecurity", "externalId": "trivy"},
 		"description": "",
 		"solution": "Upgrade base image.",
-		"identifiers": [{"name": "CVE-2024-9999", "externalType": "CVE", "externalId": "CVE-2024-9999", "url": ""}],
+		"identifiers": [{"name": "CVE-2026-9999", "externalType": "CVE", "externalId": "CVE-2026-9999", "url": ""}],
 		"location": {"image": "registry.example.com/myapp:latest"},
 		"state": "DETECTED",
 		"evidence": null,

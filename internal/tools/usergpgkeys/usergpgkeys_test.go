@@ -17,8 +17,8 @@ const (
 	pathGPGKeysUser      = "/api/v4/users/42/gpg_keys"
 	pathGPGKey           = "/api/v4/user/gpg_keys/1"
 	pathGPGKeyUser       = "/api/v4/users/42/gpg_keys/1"
-	gpgKeyJSON           = `{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2024-01-15T10:00:00Z"}`
-	gpgKeyListJSON       = `[{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2024-01-15T10:00:00Z"},{"id":2,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2024-02-20T12:00:00Z"}]`
+	gpgKeyJSON           = `{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-01-15T10:00:00Z"}`
+	gpgKeyListJSON       = `[{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-01-15T10:00:00Z"},{"id":2,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-02-20T12:00:00Z"}]`
 	gpgKeyNilCreatedJSON = `{"id":3,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----"}`
 )
 
@@ -227,7 +227,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 }
 
 func TestFormatMarkdownString(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 1, Key: "pgp-key", CreatedAt: "2024-01-15"})
+	md := FormatMarkdownString(Output{ID: 1, Key: "pgp-key", CreatedAt: "2026-01-15"})
 	if md == "" {
 		t.Fatal("expected non-empty markdown")
 	}
@@ -530,7 +530,7 @@ func TestFormatDeleteMarkdownString(t *testing.T) {
 func TestFormatListMarkdownString_WithKeys(t *testing.T) {
 	longKey := strings.Repeat("A", 60)
 	out := ListOutput{Keys: []Output{
-		{ID: 1, Key: "short-key", CreatedAt: "2024-01-15T10:00:00Z"},
+		{ID: 1, Key: "short-key", CreatedAt: "2026-01-15T10:00:00Z"},
 		{ID: 2, Key: longKey, CreatedAt: ""},
 	}}
 	md := FormatListMarkdownString(out)

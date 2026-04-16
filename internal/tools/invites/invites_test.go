@@ -202,7 +202,7 @@ func TestGroupInvites_APIError(t *testing.T) {
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
-			{ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30, UserName: "alice", ExpiresAt: "2025-12-31T00:00:00Z"},
+			{ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30, UserName: "alice", ExpiresAt: "2026-12-31T00:00:00Z"},
 			{ID: 2, InviteEmail: "bob@example.com", AccessLevel: 40},
 		},
 	}
@@ -427,8 +427,8 @@ func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 
 // TestToPendingInviteOutput_WithDates verifies the behavior of to pending invite output with dates.
 func TestToPendingInviteOutput_WithDates(t *testing.T) {
-	created := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
-	expires := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
 	inv := &gl.PendingInvite{
 		ID:            10,
 		InviteEmail:   "alice@example.com",

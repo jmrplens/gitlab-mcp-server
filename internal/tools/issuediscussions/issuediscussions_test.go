@@ -29,7 +29,7 @@ func TestList_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":"abc123","individual_note":false,"notes":[{"id":1,"body":"Hello","author":{"username":"admin"},"created_at":"2024-01-01T00:00:00Z"}]}]`,
+			`[{"id":"abc123","individual_note":false,"notes":[{"id":1,"body":"Hello","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}]}]`,
 			testutil.PaginationHeaders{Page: "1", TotalPages: "1", Total: "1", PerPage: "20"})
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -53,7 +53,7 @@ func TestGet_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":"abc123","individual_note":false,"notes":[{"id":1,"body":"test","author":{"username":"user1"},"created_at":"2024-01-01T00:00:00Z"}]}`)
+			`{"id":"abc123","individual_note":false,"notes":[{"id":1,"body":"test","author":{"username":"user1"},"created_at":"2026-01-01T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -73,7 +73,7 @@ func TestCreate_Success(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"new123","individual_note":false,"notes":[{"id":5,"body":"New thread","author":{"username":"admin"},"created_at":"2024-01-01T00:00:00Z"}]}`)
+			`{"id":"new123","individual_note":false,"notes":[{"id":5,"body":"New thread","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -90,7 +90,7 @@ func TestCreate_Success(t *testing.T) {
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":99,"body":"Reply","author":{"username":"admin"},"created_at":"2024-01-01T00:00:00Z"}`)
+			`{"id":99,"body":"Reply","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -110,7 +110,7 @@ func TestUpdateNote_Success(t *testing.T) {
 			t.Errorf("expected PUT, got %s", r.Method)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":99,"body":"Updated","author":{"username":"admin"},"created_at":"2024-01-01T00:00:00Z"}`)
+			`{"id":99,"body":"Updated","author":{"username":"admin"},"created_at":"2026-01-01T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 

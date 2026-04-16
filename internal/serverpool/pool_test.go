@@ -3,6 +3,8 @@ package serverpool
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -502,6 +504,137 @@ func TestStats_SnapshotFields(t *testing.T) {
 	}
 	if s.CreatedAt.Before(before) {
 		t.Errorf("CreatedAt %v is before pool construction time %v", s.CreatedAt, before)
+	}
+}
+
+// TestRevalidateAll_EvictsInvalidTokens verifies that revalidateAll evicts
+// entries whose tokens fail validation (Ping returns error) and keeps entries
+// that pass. Exercises the full revalidateAll code path including the
+// RevalidationsFailed and RevalidationsSucceeded metric counters.
+func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
+	// Two httptest servers: one healthy (200), one returning 401.
+	healthyHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abc"}`))
+	})
+	unhealthyHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+	})
+
+	healthySrv := httptest.NewServer(healthyHandler)
+	t.Cleanup(healthySrv.Close)
+	unhealthySrv := httptest.NewServer(unhealthyHandler)
+	t.Cleanup(unhealthySrv.Close)
+
+	// Build pool manually: factory won't be called since we insert entries directly.
+	cfg := testConfig(healthySrv.URL)
+	pool := New(cfg, testFactory())
+
+	// Create a healthy entry.
+	healthyClient, err := gitlabclient.NewClientWithToken(healthySrv.URL, "good-token", false)
+	if err != nil {
+		t.Fatalf("healthy client: %v", err)
+	}
+	goodKey := tokenHash("good-token")
+	goodElem := pool.lru.PushFront(goodKey)
+	pool.entries[goodKey] = &poolEntry{
+		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
+		client:        healthyClient,
+		element:       goodElem,
+		createdAt:     time.Now(),
+		lastValidated: time.Now(),
+	}
+
+	// Create an unhealthy entry.
+	unhealthyClient, err := gitlabclient.NewClientWithToken(unhealthySrv.URL, "bad-token", false)
+	if err != nil {
+		t.Fatalf("unhealthy client: %v", err)
+	}
+	badKey := tokenHash("bad-token")
+	badElem := pool.lru.PushFront(badKey)
+	pool.entries[badKey] = &poolEntry{
+		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
+		client:        unhealthyClient,
+		element:       badElem,
+		createdAt:     time.Now(),
+		lastValidated: time.Now(),
+	}
+
+	if pool.Size() != 2 {
+		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
+	}
+
+	pool.revalidateAll(context.Background())
+
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d after revalidation, want 1 (unhealthy evicted)", pool.Size())
+	}
+
+	s := pool.Stats()
+	if s.RevalidationsFailed != 1 {
+		t.Errorf("RevalidationsFailed = %d, want 1", s.RevalidationsFailed)
+	}
+	if s.RevalidationsSucceeded != 1 {
+		t.Errorf("RevalidationsSucceeded = %d, want 1", s.RevalidationsSucceeded)
+	}
+}
+
+// TestRevalidateAll_CancelledContext verifies that revalidateAll stops
+// processing entries when the context is cancelled.
+func TestRevalidateAll_CancelledContext(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	_, _ = pool.GetOrCreate("tok-1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Should return quickly without panicking.
+	pool.revalidateAll(ctx)
+}
+
+// TestStartRevalidation_TriggersRevalidation verifies that StartRevalidation
+// actually triggers revalidateAll via the ticker by observing metrics change.
+func TestStartRevalidation_TriggersRevalidation(t *testing.T) {
+	healthyHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abc"}`))
+	})
+	srv := httptest.NewServer(healthyHandler)
+	t.Cleanup(srv.Close)
+
+	cfg := testConfig(srv.URL)
+	pool := New(cfg, testFactory(), WithRevalidateInterval(50*time.Millisecond))
+
+	// Insert entry with a valid client.
+	client, err := gitlabclient.NewClientWithToken(srv.URL, "valid-tok", false)
+	if err != nil {
+		t.Fatalf("creating client: %v", err)
+	}
+	key := tokenHash("valid-tok")
+	elem := pool.lru.PushFront(key)
+	pool.entries[key] = &poolEntry{
+		server:        mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.0"}, nil),
+		client:        client,
+		element:       elem,
+		createdAt:     time.Now(),
+		lastValidated: time.Now(),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	pool.StartRevalidation(ctx)
+
+	// Wait for at least one tick to complete.
+	time.Sleep(150 * time.Millisecond)
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+
+	s := pool.Stats()
+	if s.RevalidationsSucceeded < 1 {
+		t.Errorf("RevalidationsSucceeded = %d, want >= 1", s.RevalidationsSucceeded)
 	}
 }
 

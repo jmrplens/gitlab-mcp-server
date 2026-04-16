@@ -31,7 +31,7 @@ func TestListIssueLabelEvents_Success_DetailedFields(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":10,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#ff0000","text_color":"#ffffff"}}
+			{"id":10,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#ff0000","text_color":"#ffffff"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -60,7 +60,7 @@ func TestGetIssueLabelEvent_Success_DetailedFields(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#ff0000"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#ff0000"}}`)
 	}))
 
 	out, err := GetIssueLabelEvent(context.Background(), client, GetIssueLabelEventInput{ProjectID: "42", IssueIID: 1, LabelEventID: 10})
@@ -94,7 +94,7 @@ func TestListMRLabelEvents_Success_DetailedFields(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":20,"action":"remove","created_at":"2024-02-01T12:00:00Z","resource_type":"MergeRequest","resource_id":5,"user":{"id":6,"username":"bob"},"label":{"id":101,"name":"feature"}}
+			{"id":20,"action":"remove","created_at":"2026-02-01T12:00:00Z","resource_type":"MergeRequest","resource_id":5,"user":{"id":6,"username":"bob"},"label":{"id":101,"name":"feature"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -118,7 +118,7 @@ func TestListIssueMilestoneEvents_Success_DetailedFields(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":30,"action":"add","created_at":"2024-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}
+			{"id":30,"action":"add","created_at":"2026-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -141,7 +141,7 @@ func TestGetIssueMilestoneEvent_Success_DetailedFields(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"action":"add","created_at":"2024-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"action":"add","created_at":"2026-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}`)
 	}))
 
 	out, err := GetIssueMilestoneEvent(context.Background(), client, GetIssueMilestoneEventInput{ProjectID: "42", IssueIID: 1, MilestoneEventID: 30})
@@ -161,7 +161,7 @@ func TestListIssueStateEvents_Success_DetailedFields(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":40,"state":"closed","created_at":"2024-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}
+			{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -184,7 +184,7 @@ func TestGetIssueStateEvent_Success_DetailedFields(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":40,"state":"closed","created_at":"2024-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}`)
 	}))
 
 	out, err := GetIssueStateEvent(context.Background(), client, GetIssueStateEventInput{ProjectID: "42", IssueIID: 1, StateEventID: 40})
@@ -204,7 +204,7 @@ func TestListMRStateEvents_Success_DetailedFields(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":50,"state":"merged","created_at":"2024-05-01T16:00:00Z","resource_type":"MergeRequest","resource_id":5,"user":{"id":6,"username":"bob"}}
+			{"id":50,"state":"merged","created_at":"2026-05-01T16:00:00Z","resource_type":"MergeRequest","resource_id":5,"user":{"id":6,"username":"bob"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -407,12 +407,12 @@ func TestGetMRStateEvent_InvalidIDs(t *testing.T) {
 const (
 	errExpectedValidation = "expected validation error"
 	fmtUnexpErr           = "unexpected error: %v"
-	covLabelEventJSON     = `[{"id":10,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}]`
-	covLabelEventSingle   = `{"id":10,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}`
-	covMilestoneEventJSON = `[{"id":30,"action":"add","created_at":"2024-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}]`
-	covMilestoneSingle    = `{"id":30,"action":"add","created_at":"2024-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}`
-	covStateEventJSON     = `[{"id":40,"state":"closed","created_at":"2024-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}]`
-	covStateSingle        = `{"id":40,"state":"closed","created_at":"2024-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}`
+	covLabelEventJSON     = `[{"id":10,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}]`
+	covLabelEventSingle   = `{"id":10,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}`
+	covMilestoneEventJSON = `[{"id":30,"action":"add","created_at":"2026-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}]`
+	covMilestoneSingle    = `{"id":30,"action":"add","created_at":"2026-03-01T08:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"milestone":{"id":200,"title":"v1.0"}}`
+	covStateEventJSON     = `[{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}]`
+	covStateSingle        = `{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"}}`
 )
 
 // covPID is an internal helper for the resourceevents package.

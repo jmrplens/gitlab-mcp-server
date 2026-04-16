@@ -484,7 +484,7 @@ func TestGroupProjectsResource_APIError(t *testing.T) {
 func TestProjectIssuesResource_Success(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/issues" {
-			respondJSON(w, http.StatusOK, `[{"id":100,"iid":1,"title":"Fix bug","state":"opened","labels":["bug"],"assignees":[{"username":"alice"}],"author":{"username":"bob"},"web_url":"https://gitlab.example.com/issues/1","created_at":"2024-01-15T10:00:00Z"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":100,"iid":1,"title":"Fix bug","state":"opened","labels":["bug"],"assignees":[{"username":"alice"}],"author":{"username":"bob"},"web_url":"https://gitlab.example.com/issues/1","created_at":"2026-01-15T10:00:00Z"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -535,7 +535,7 @@ func TestProjectIssuesResource_APIError(t *testing.T) {
 func TestIssueResource_Success(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/issues/5" {
-			respondJSON(w, http.StatusOK, `{"id":200,"iid":5,"title":"Add feature X","state":"opened","labels":["enhancement"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/issues/5","created_at":"2024-02-01T12:00:00Z"}`)
+			respondJSON(w, http.StatusOK, `{"id":200,"iid":5,"title":"Add feature X","state":"opened","labels":["enhancement"],"assignees":[],"author":{"username":"charlie"},"web_url":"https://gitlab.example.com/issues/5","created_at":"2026-02-01T12:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -595,7 +595,7 @@ func TestIssueResource_NonNumericIID(t *testing.T) {
 func TestProjectReleasesResource_Success(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/releases" {
-			respondJSON(w, http.StatusOK, `[{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z","released_at":"2024-01-02T00:00:00Z"}]`)
+			respondJSON(w, http.StatusOK, `[{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-02T00:00:00Z"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -646,7 +646,7 @@ func TestProjectReleasesResource_APIError(t *testing.T) {
 func TestProjectTagsResource_Success(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/tags" {
-			respondJSON(w, http.StatusOK, `[{"name":"v1.0.0","message":"Release tag","target":"abc123","protected":true,"created_at":"2024-01-01T00:00:00Z"},{"name":"v0.9.0","message":"","target":"def456","protected":false,"created_at":"2023-12-01T00:00:00Z"}]`)
+			respondJSON(w, http.StatusOK, `[{"name":"v1.0.0","message":"Release tag","target":"abc123","protected":true,"created_at":"2026-01-01T00:00:00Z"},{"name":"v0.9.0","message":"","target":"def456","protected":false,"created_at":"2023-12-01T00:00:00Z"}]`)
 			return
 		}
 		http.NotFound(w, r)

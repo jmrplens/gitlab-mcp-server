@@ -483,3 +483,200 @@ func TestResilienceTransport_PassesThrough(t *testing.T) {
 		t.Errorf("version = %q, want %q", ver, "16.0.0")
 	}
 }
+
+// TestSetEnterprise_And_IsEnterprise verifies that [Client.SetEnterprise]
+// and [Client.IsEnterprise] correctly toggle the enterprise flag.
+func TestSetEnterprise_And_IsEnterprise(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	if client.IsEnterprise() {
+		t.Error("new client should not be enterprise by default")
+	}
+
+	client.SetEnterprise(true)
+	if !client.IsEnterprise() {
+		t.Error("client should be enterprise after SetEnterprise(true)")
+	}
+
+	client.SetEnterprise(false)
+	if client.IsEnterprise() {
+		t.Error("client should not be enterprise after SetEnterprise(false)")
+	}
+}
+
+// TestCurrentUsername_Success verifies that [Client.CurrentUsername] returns
+// the username from the /user API endpoint.
+func TestCurrentUsername_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/user":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":       1,
+				"username": "testuser",
+				"name":     "Test User",
+			})
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"version":  "16.0.0",
+				"revision": "abc123",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	username, err := client.CurrentUsername(context.Background())
+	if err != nil {
+		t.Fatalf("CurrentUsername() unexpected error: %v", err)
+	}
+	if username != "testuser" {
+		t.Errorf("CurrentUsername() = %q, want %q", username, "testuser")
+	}
+}
+
+// TestCurrentUsername_ContextCancelled verifies that [Client.CurrentUsername]
+// returns an error when the context is already canceled.
+func TestCurrentUsername_ContextCancelled(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = client.CurrentUsername(ctx)
+	if err == nil {
+		t.Error("CurrentUsername() expected error for canceled context, got nil")
+	}
+}
+
+// TestCurrentUsername_APIError verifies that [Client.CurrentUsername] returns
+// an error when the /user API endpoint responds with an error.
+func TestCurrentUsername_APIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/user" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// Still respond OK to version for client creation
+		if r.URL.Path == "/api/v4/version" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "abc"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	_, err = client.CurrentUsername(context.Background())
+	if err == nil {
+		t.Error("CurrentUsername() expected error for 401 response, got nil")
+	}
+}
+
+// TestPingDirect_EmptyVersion verifies that [Client.pingDirect] returns an
+// error when the /api/v4/version endpoint returns an empty version string.
+func TestPingDirect_EmptyVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"version":  "",
+			"revision": "abc123",
+		})
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	_, err = client.pingDirect(context.Background())
+	if err == nil {
+		t.Error("pingDirect() expected error for empty version, got nil")
+	}
+}
+
+// TestPingDirect_NonOKStatus verifies that [Client.pingDirect] returns an
+// error when the /api/v4/version endpoint returns a non-200 status code.
+func TestPingDirect_NonOKStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("service maintenance"))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	_, err = client.pingDirect(context.Background())
+	if err == nil {
+		t.Error("pingDirect() expected error for 503 response, got nil")
+	}
+}
+
+// TestPingDirect_MalformedJSON verifies that [Client.pingDirect] returns an
+// error when the version endpoint returns invalid JSON.
+func TestPingDirect_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("not-json"))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	_, err = client.pingDirect(context.Background())
+	if err == nil {
+		t.Error("pingDirect() expected error for malformed JSON, got nil")
+	}
+}
+
+// TestNewClient_EnterpriseConfig verifies that [NewClient] respects the
+// Enterprise flag from configuration.
+func TestNewClient_EnterpriseConfig(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	cfg := &config.Config{
+		GitLabURL:   srv.URL,
+		GitLabToken: testValidToken,
+		Enterprise:  true,
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if !client.IsEnterprise() {
+		t.Error("client should be enterprise when config.Enterprise=true")
+	}
+}

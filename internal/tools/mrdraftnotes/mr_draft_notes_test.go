@@ -1018,6 +1018,165 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestValidatePosition_FileNotInDiff verifies that validatePosition returns an
+// error when the target file path is not found in the merge request diff.
+func TestValidatePosition_FileNotInDiff(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"other.go","new_path":"other.go","diff":"@@ -1,3 +1,4 @@\n line1\n+line2\n line3\n line4\n"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+		NewPath: "missing_file.go",
+		NewLine: 1,
+	})
+	if err == nil {
+		t.Fatal("expected error for file not in diff, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in the merge request diff") {
+		t.Errorf("error = %q, want 'not in the merge request diff'", err.Error())
+	}
+}
+
+// TestValidatePosition_FileFoundInDiff verifies that validatePosition succeeds
+// when the target file and line are present in the merge request diff.
+func TestValidatePosition_FileFoundInDiff(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added line\n line3\n line4\n"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+		NewPath: "main.go",
+		NewLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestValidatePosition_DiffFetchError verifies that validatePosition silently
+// skips validation when the diff API returns an error (best-effort behavior).
+func TestValidatePosition_DiffFetchError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+		NewPath: "any.go",
+		NewLine: 1,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error for best-effort skip, got: %v", err)
+	}
+}
+
+// TestValidatePosition_FallbackToOldPath verifies that validatePosition uses
+// OldPath when NewPath is empty to find the file in the diff.
+func TestValidatePosition_FallbackToOldPath(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	// NewPath is empty, should fallback to OldPath
+	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+		OldPath: "old_name.go",
+		NewLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestUpdate_WithPositionValidation verifies that Update calls validatePosition
+// when a position is provided and the position is valid.
+func TestUpdate_WithPositionValidation(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+			return
+		}
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/draft_notes/") {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"updated","commit_id":"","discussion_id":"","resolve_discussion":false}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42",
+		MRIID:     1,
+		NoteID:    10,
+		Note:      "updated",
+		Position: &DiffPosition{
+			BaseSHA:  "aaa",
+			HeadSHA:  "bbb",
+			StartSHA: "ccc",
+			NewPath:  "main.go",
+			OldPath:  "main.go",
+			NewLine:  2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.ID != 10 {
+		t.Errorf("expected ID=10, got %d", out.ID)
+	}
+}
+
+// TestRegisterTools_GetNotFound verifies that the get tool returns a
+// non-error NotFound result when the API responds with 404.
+func TestRegisterTools_GetNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_mr_draft_note_get",
+		Arguments: map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 999},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected IsError=true for 404 response")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestRegisterTools_CallAllThroughMCP — full MCP roundtrip for all 7 tools
 // ---------------------------------------------------------------------------.

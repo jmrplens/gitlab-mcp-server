@@ -410,3 +410,63 @@ func TestRun_CLIMode(t *testing.T) {
 		t.Error("banner not shown for CLI mode")
 	}
 }
+
+// TestRunCLI_WithExistingConfig verifies the CLI shows "Existing configuration
+// detected" when loadExistingConfigFn returns a previously saved config.
+func TestRunCLI_WithExistingConfig(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+	stubLoadExistingConfigWith(t, ServerConfig{
+		GitLabURL:   "https://old.example.com",
+		GitLabToken: "glpat-existing-token",
+	})
+
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "bin")
+
+	input := strings.Join([]string{
+		installDir + string(os.PathSeparator) + DefaultBinaryName(),
+		"https://gitlab.example.com",
+		"glpat-xxxxxxxxxxxxxxxxxxxx",
+		"n",
+		"a",
+	}, "\n") + "\n"
+
+	r := strings.NewReader(input)
+	w := &bytes.Buffer{}
+
+	err := RunCLI("1.0.0-test", r, w)
+	if err != nil {
+		t.Logf("RunCLI returned error (expected): %v", err)
+	}
+
+	output := w.String()
+	if !strings.Contains(output, "Existing configuration detected") {
+		t.Error("expected 'Existing configuration detected' in output")
+	}
+}
+
+// TestApply_WriteEnvFileFails verifies Apply returns an error when writeEnvFileFn fails.
+func TestApply_WriteEnvFileFails(t *testing.T) {
+	useFakeClients(t)
+
+	orig := writeEnvFileFn
+	writeEnvFileFn = func(ServerConfig) (string, error) {
+		return "", fmt.Errorf("disk full")
+	}
+	t.Cleanup(func() { writeEnvFileFn = orig })
+
+	var w bytes.Buffer
+	result := &Result{
+		Config:          ServerConfig{GitLabURL: "https://gitlab.example.com"},
+		SelectedClients: []int{0},
+	}
+
+	err := Apply(&w, result)
+	if err == nil {
+		t.Fatal("expected error from Apply when writeEnvFile fails")
+	}
+	if !strings.Contains(err.Error(), "disk full") {
+		t.Errorf("error = %v, want to contain 'disk full'", err)
+	}
+}

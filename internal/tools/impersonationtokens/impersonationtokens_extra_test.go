@@ -196,7 +196,7 @@ func TestCreatePAT_MinimalInput(t *testing.T) {
 	const minimalPATJSON = `{
 		"id":20,"name":"bare-pat","active":true,"token":"glpat-min123",
 		"scopes":["read_user"],"revoked":false,"user_id":42,
-		"created_at":"2024-03-01T10:00:00Z"
+		"created_at":"2026-03-01T10:00:00Z"
 	}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
@@ -230,16 +230,16 @@ func TestToPATOutput_WithLastUsedAt(t *testing.T) {
 	const patWithLastUsed = `{
 		"id":30,"name":"used-pat","active":true,"token":"glpat-used",
 		"scopes":["api"],"revoked":false,"user_id":42,
-		"created_at":"2024-01-01T00:00:00Z",
-		"expires_at":"2025-06-01",
-		"last_used_at":"2024-12-01T15:30:00Z"
+		"created_at":"2026-01-01T00:00:00Z",
+		"expires_at":"2026-06-01",
+		"last_used_at":"2026-12-01T15:30:00Z"
 	}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, patWithLastUsed)
 	}))
 
 	out, err := CreatePAT(context.Background(), client, CreatePATInput{
-		UserID: 42, Name: "used-pat", Scopes: []string{"api"}, ExpiresAt: "2025-06-01",
+		UserID: 42, Name: "used-pat", Scopes: []string{"api"}, ExpiresAt: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatalf("CreatePAT() unexpected error: %v", err)
@@ -254,7 +254,7 @@ func TestToPATOutput_WithLastUsedAt(t *testing.T) {
 func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
-			{ID: 1, Name: "token-a", Active: true, Scopes: []string{"api", "read_user"}, ExpiresAt: "2025-12-31"},
+			{ID: 1, Name: "token-a", Active: true, Scopes: []string{"api", "read_user"}, ExpiresAt: "2026-12-31"},
 			{ID: 2, Name: "token-b", Active: false, Scopes: []string{"read_api"}, ExpiresAt: ""},
 		},
 	}
@@ -263,7 +263,7 @@ func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 	checks := []string{
 		"## Impersonation Tokens (2)",
 		"| ID | Name | Active | Scopes | Expires At |",
-		"| 1 | token-a | true | api, read_user | 2025-12-31 |",
+		"| 1 | token-a | true | api, read_user | 2026-12-31 |",
 		"| 2 | token-b | false | read_api | - |",
 	}
 	for _, want := range checks {
@@ -278,7 +278,7 @@ func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 	out := Output{
 		ID: 5, Name: "full-token", Active: true,
-		Scopes: []string{"api"}, ExpiresAt: "2025-06-15", Token: "glpat-secret",
+		Scopes: []string{"api"}, ExpiresAt: "2026-06-15", Token: "glpat-secret",
 	}
 	md := FormatMarkdownString(out)
 
@@ -287,7 +287,7 @@ func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 		"**Name**: full-token",
 		"**Active**: true",
 		"**Scopes**: api",
-		"**Expires At**: 2025-06-15",
+		"**Expires At**: 2026-06-15",
 		"**Token**: `glpat-secret`",
 	}
 	for _, want := range checks {
@@ -318,7 +318,7 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 		ID: 10, Name: "full-pat", Active: true,
 		Scopes: []string{"api"}, UserID: 42,
 		Description: "My important PAT",
-		ExpiresAt:   "2025-12-01",
+		ExpiresAt:   "2026-12-01",
 		Token:       "glpat-fullpat",
 	}
 	md := FormatPATMarkdownString(out)
@@ -328,7 +328,7 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 		"**Name**: full-pat",
 		"**Description**: My important PAT",
 		"**User ID**: 42",
-		"**Expires At**: 2025-12-01",
+		"**Expires At**: 2026-12-01",
 		"**Token**: `glpat-fullpat`",
 	}
 	for _, want := range checks {

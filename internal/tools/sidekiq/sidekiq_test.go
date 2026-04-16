@@ -31,7 +31,7 @@ const processMetricsJSON = `{
 			"hostname": "worker-01",
 			"pid": 1234,
 			"tag": "default",
-			"started_at": "2024-01-15T10:00:00Z",
+			"started_at": "2026-01-15T10:00:00Z",
 			"queues": ["default", "mailers"],
 			"labels": ["reliable"],
 			"concurrency": 25,
@@ -57,7 +57,7 @@ const compoundMetricsJSON = `{
 			"hostname": "worker-01",
 			"pid": 1234,
 			"tag": "default",
-			"started_at": "2024-01-15T10:00:00Z",
+			"started_at": "2026-01-15T10:00:00Z",
 			"queues": ["default"],
 			"labels": [],
 			"concurrency": 25,
@@ -375,7 +375,7 @@ func newSidekiqMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	handler.HandleFunc("GET /api/v4/sidekiq/process_metrics", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2024-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}]}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2026-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}]}`)
 	})
 
 	handler.HandleFunc("GET /api/v4/sidekiq/job_stats", func(w http.ResponseWriter, _ *http.Request) {
@@ -383,7 +383,7 @@ func newSidekiqMCPSession(t *testing.T) *mcp.ClientSession {
 	})
 
 	handler.HandleFunc("GET /api/v4/sidekiq/compound_metrics", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"queues":{"default":{"backlog":10,"latency":5}},"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2024-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}],"jobs":{"processed":100000,"failed":50,"enqueued":25}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"queues":{"default":{"backlog":10,"latency":5}},"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2026-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}],"jobs":{"processed":100000,"failed":50,"enqueued":25}}`)
 	})
 
 	client := testutil.NewTestClient(t, handler)

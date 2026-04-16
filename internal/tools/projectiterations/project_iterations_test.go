@@ -22,7 +22,7 @@ func TestList_Success(t *testing.T) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/iterations")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"iid":1,"sequence":1,"group_id":10,"title":"Sprint 1","description":"First sprint","state":3,"web_url":"https://gitlab.example.com/iterations/1","start_date":"2024-01-01","due_date":"2024-01-14","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-02T00:00:00Z"}
+			{"id":1,"iid":1,"sequence":1,"group_id":10,"title":"Sprint 1","description":"First sprint","state":3,"web_url":"https://gitlab.example.com/iterations/1","start_date":"2026-01-01","due_date":"2026-01-14","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -195,8 +195,8 @@ func TestList_WithDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
 			"id":5,"iid":2,"sequence":2,"group_id":10,"title":"Sprint 3","state":3,
-			"start_date":"2025-01-01","due_date":"2025-01-14",
-			"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-10T12:00:00Z"
+			"start_date":"2026-01-01","due_date":"2026-01-14",
+			"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-10T12:00:00Z"
 		}]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -233,9 +233,9 @@ func TestToOutput_NilInput(t *testing.T) {
 // TestToOutput_AllFields verifies toOutput maps all ProjectIteration fields
 // including dates to the Output struct.
 func TestToOutput_AllFields(t *testing.T) {
-	now := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
-	startDate := gl.ISOTime(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC))
-	dueDate := gl.ISOTime(time.Date(2025, 3, 14, 0, 0, 0, 0, time.UTC))
+	now := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
+	startDate := gl.ISOTime(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
+	dueDate := gl.ISOTime(time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC))
 
 	it := &gl.ProjectIteration{
 		ID:          42,
@@ -354,8 +354,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithIterations(t *testing.T) {
 	out := ListOutput{
 		Iterations: []Output{
-			{ID: 1, IID: 1, Title: "Sprint 1", State: 1, StartDate: "2025-01-01", DueDate: "2025-01-14", WebURL: "https://gitlab.example.com/it/1"},
-			{ID: 2, IID: 2, Title: "Sprint 2", State: 4, StartDate: "2025-01-15", DueDate: "2025-01-28", WebURL: ""},
+			{ID: 1, IID: 1, Title: "Sprint 1", State: 1, StartDate: "2026-01-01", DueDate: "2026-01-14", WebURL: "https://gitlab.example.com/it/1"},
+			{ID: 2, IID: 2, Title: "Sprint 2", State: 4, StartDate: "2026-01-15", DueDate: "2026-01-28", WebURL: ""},
 		},
 	}
 	got := FormatListMarkdown(out)
@@ -389,10 +389,10 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		Title:       "Sprint 7",
 		State:       3,
 		GroupID:     10,
-		StartDate:   "2025-03-01",
-		DueDate:     "2025-03-14",
+		StartDate:   "2026-03-01",
+		DueDate:     "2026-03-14",
 		WebURL:      "https://gitlab.example.com/iterations/42",
-		CreatedAt:   "2025-03-01T00:00:00Z",
+		CreatedAt:   "2026-03-01T00:00:00Z",
 		Description: "This is the iteration description.",
 	}
 	got := FormatOutputMarkdown(out)

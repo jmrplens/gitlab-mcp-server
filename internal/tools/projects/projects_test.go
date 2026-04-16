@@ -60,7 +60,7 @@ const (
 	testCommitRegex     = `^(feat|fix|docs):`
 	testAlice           = "Alice"
 	testBob             = "Bob"
-	testDate20250101    = "2025-01-01"
+	testDate20250101    = "2026-01-01"
 	testSuccess         = "success"
 	testPathNS          = "jmrplens/my-repo"
 
@@ -74,8 +74,8 @@ const (
 	fmtDeleteUnexpErr = "Delete() unexpected error: %v"
 	fmtLenGroupsWant1 = "len(Groups) = %d, want 1"
 
-	testDate20250410  = "2025-04-10"
-	testDate20250601  = "2025-06-01"
+	testDate20250410  = "2026-04-10"
+	testDate20250601  = "2026-06-01"
 	testImportURL     = "https://github.com/example/repo.git"
 	testSuggestionMsg = "Apply suggestion"
 	testHookURL2      = "https://example.com/hook2"
@@ -242,7 +242,7 @@ func TestProjectList_IncludePendingDelete(t *testing.T) {
 			}
 			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id":1,"name":"active-repo","path_with_namespace":"jmrplens/active-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/active-repo"},
-				{"id":2,"name":"pending-delete-repo","path_with_namespace":"jmrplens/pending-delete-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/pending-delete-repo","marked_for_deletion_on":"2025-04-10"}
+				{"id":2,"name":"pending-delete-repo","path_with_namespace":"jmrplens/pending-delete-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/pending-delete-repo","marked_for_deletion_on":"2026-04-10"}
 			]`)
 			return
 		}
@@ -273,7 +273,7 @@ func TestProjectList_IncludePendingDelete(t *testing.T) {
 func TestProjectGet_MarkedForDeletion(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"doomed-repo","path_with_namespace":"jmrplens/doomed-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/doomed-repo","marked_for_deletion_on":"2025-04-15"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"doomed-repo","path_with_namespace":"jmrplens/doomed-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/doomed-repo","marked_for_deletion_on":"2026-04-15"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -283,8 +283,8 @@ func TestProjectGet_MarkedForDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtGetUnexpErr, err)
 	}
-	if out.MarkedForDeletionOn != "2025-04-15" {
-		t.Errorf("Get() MarkedForDeletionOn = %q, want %q", out.MarkedForDeletionOn, "15 Apr 2025")
+	if out.MarkedForDeletionOn != "2026-04-15" {
+		t.Errorf("Get() MarkedForDeletionOn = %q, want %q", out.MarkedForDeletionOn, "15 Apr 2026")
 	}
 }
 
@@ -399,7 +399,7 @@ func TestProjectDelete_DelayedDeletion(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/my-repo","marked_for_deletion_on":"2025-04-10"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/my-repo","marked_for_deletion_on":"2026-04-10"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1190,7 +1190,7 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ListHooks
 // ---------------------------------------------------------------------------.
 
-var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"enable_ssl_verification":true,"created_at":"2024-01-01T00:00:00Z"}`
+var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"enable_ssl_verification":true,"created_at":"2026-01-01T00:00:00Z"}`
 
 // TestProjectListHooks_Success verifies the behavior of project list hooks success.
 func TestProjectListHooks_Success(t *testing.T) {
@@ -1596,7 +1596,7 @@ func TestProjectListStarrers_Success(t *testing.T) {
 			w.Header().Set(headerXTotalPages, "1")
 			w.Header().Set(headerXPage, "1")
 			w.Header().Set(headerXPerPage, "20")
-			testutil.RespondJSON(w, http.StatusOK, `[{"starred_since":"2024-01-15T10:00:00Z","user":{"id":10,"name":"Jane Doe","username":"jdoe","state":"active"}}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"starred_since":"2026-01-15T10:00:00Z","user":{"id":10,"name":"Jane Doe","username":"jdoe","state":"active"}}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1867,7 +1867,7 @@ const (
 		"commit_committer_name_check": false,
 		"reject_unsigned_commits": false,
 		"reject_non_dco_commits": false,
-		"created_at": "2025-01-01T00:00:00Z"
+		"created_at": "2026-01-01T00:00:00Z"
 	}`
 )
 
@@ -2176,13 +2176,13 @@ func TestFormatMarkdown(t *testing.T) {
 		StarCount:         10,
 		OpenIssuesCount:   3,
 		Topics:            []string{"go", "mcp"},
-		CreatedAt:         "2025-01-01T00:00:00Z",
+		CreatedAt:         "2026-01-01T00:00:00Z",
 		WebURL:            "https://gitlab.example.com/group/test-project",
 		HTTPURLToRepo:     "https://gitlab.example.com/group/test-project.git",
 		SSHURLToRepo:      "git@gitlab.example.com:group/test-project.git",
 	}
 	md := FormatMarkdown(out)
-	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2025", mdHTTPClone, mdSSHClone} {
+	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatMarkdown missing %q", want)
 		}
@@ -2391,7 +2391,7 @@ func TestFormatListStarrersMarkdown(t *testing.T) {
 			Pagination: toolutil.PaginationOutput{TotalItems: 1},
 		}
 		md := FormatListStarrersMarkdown(out)
-		if !strings.Contains(md, "jane") || !strings.Contains(md, "1 Jan 2025") {
+		if !strings.Contains(md, "jane") || !strings.Contains(md, "1 Jan 2026") {
 			t.Error("missing starrer data")
 		}
 	})
@@ -2568,7 +2568,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		StarCount:         10,
 		OpenIssuesCount:   3,
 		Topics:            []string{"go", "mcp"},
-		CreatedAt:         "2025-01-01T00:00:00Z",
+		CreatedAt:         "2026-01-01T00:00:00Z",
 		WebURL:            "https://gitlab.example.com/ns/my-project",
 		HTTPURLToRepo:     "https://gitlab.example.com/ns/my-project.git",
 		SSHURLToRepo:      "git@gitlab.example.com:ns/my-project.git",
@@ -2587,7 +2587,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		"Stars",
 		mdOpenIssues,
 		"go, mcp",
-		"1 Jan 2025",
+		"1 Jan 2026",
 		mdHTTPClone,
 		mdSSHClone,
 	} {
@@ -2917,11 +2917,11 @@ func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 	out := ListProjectStarrersOutput{
 		Starrers: []StarrerOutput{
 			{StarredSince: testDate20250101, User: ProjectUserOutput{ID: 1, Name: testAlice, Username: "alice"}},
-			{StarredSince: "2025-02-01", User: ProjectUserOutput{ID: 2, Name: testBob, Username: "bob"}},
+			{StarredSince: "2026-02-01", User: ProjectUserOutput{ID: 2, Name: testBob, Username: "bob"}},
 		},
 	}
 	md := FormatListStarrersMarkdown(out)
-	for _, want := range []string{"Project Starrers (2)", testAlice, "@alice", "1 Jan 2025", testBob, "@bob", "1 Feb 2025"} {
+	for _, want := range []string{"Project Starrers (2)", testAlice, "@alice", "1 Jan 2026", testBob, "@bob", "1 Feb 2026"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatListStarrersMarkdown missing %q", want)
 		}
@@ -3856,7 +3856,7 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		Simple:                   true,
 		MinAccessLevel:           30,
 		LastActivityAfter:        testDate20250101,
-		LastActivityBefore:       "2025-12-31",
+		LastActivityBefore:       "2026-12-31",
 		Starred:                  new(true),
 		Membership:               new(true),
 		WithIssuesEnabled:        new(true),
@@ -4200,7 +4200,7 @@ func TestListProjectUsers_APIError(t *testing.T) {
 // TestListProjectStarrers_WithFilters verifies the behavior of list project starrers with filters.
 func TestListProjectStarrers_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"starred_since":"2025-01-01T00:00:00Z","user":{"id":1,"username":"alice","name":"Alice","state":"active","web_url":"https://g/alice"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"starred_since":"2026-01-01T00:00:00Z","user":{"id":1,"username":"alice","name":"Alice","state":"active","web_url":"https://g/alice"}}]`)
 	}))
 	out, err := ListProjectStarrers(context.Background(), client, ListProjectStarrersInput{
 		ProjectID:       "10",
@@ -4330,7 +4330,7 @@ func TestListInvitedGroups_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 const projectJSON = `{"id":42,"name":"test","path_with_namespace":"g/test","visibility":"private","default_branch":"main","web_url":"https://example.com","description":"desc","merge_request_title_regex":"^(feat|fix):","merge_request_title_regex_description":"MR title must start with feat: or fix:"}`
-const hookJSON42 = `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"created_at":"2024-01-01T00:00:00Z"}`
+const hookJSON42 = `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"created_at":"2026-01-01T00:00:00Z"}`
 const pushRuleJSON42 = `{"id":1,"commit_message_regex":".*","branch_name_regex":".*","max_file_size":100}`
 
 // mockRoute holds a canned HTTP response for a test mock endpoint.
@@ -4350,6 +4350,33 @@ func mcpMockHandler() http.Handler {
 		"POST /api/v4/projects/42/push_rule":   {http.StatusCreated, pushRuleJSON42},
 		"PUT /api/v4/projects/42/push_rule":    {http.StatusOK, pushRuleJSON42},
 		"DELETE /api/v4/projects/42/push_rule": {http.StatusNoContent, ""},
+		// Webhook customization
+		"PUT /api/v4/projects/42/hooks/1/custom_headers/X-Test":    {http.StatusNoContent, ""},
+		"DELETE /api/v4/projects/42/hooks/1/custom_headers/X-Test": {http.StatusNoContent, ""},
+		"PUT /api/v4/projects/42/hooks/1/url_variables/myvar":      {http.StatusNoContent, ""},
+		"DELETE /api/v4/projects/42/hooks/1/url_variables/myvar":   {http.StatusNoContent, ""},
+		// Fork relations
+		"POST /api/v4/projects/42/fork/99":   {http.StatusCreated, `{"id":42}`},
+		"DELETE /api/v4/projects/42/fork":     {http.StatusNoContent, ""},
+		// Avatar
+		"PUT /api/v4/projects/42/avatar":      {http.StatusOK, projectJSON},
+		// Approval config
+		"GET /api/v4/projects/42/approvals":   {http.StatusOK, `{"approvals_before_merge":2}`},
+		"POST /api/v4/projects/42/approvals":  {http.StatusOK, `{"approvals_before_merge":3}`},
+		// Approval rules
+		"GET /api/v4/projects/42/approval_rules":     {http.StatusOK, `[{"id":1,"name":"rule","approvals_required":1}]`},
+		"GET /api/v4/projects/42/approval_rules/1":   {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
+		"POST /api/v4/projects/42/approval_rules":    {http.StatusCreated, `{"id":1,"name":"rule","approvals_required":1}`},
+		"PUT /api/v4/projects/42/approval_rules/1":   {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
+		"DELETE /api/v4/projects/42/approval_rules/1": {http.StatusNoContent, ""},
+		// Pull mirror
+		"GET /api/v4/projects/42/mirror/pull":  {http.StatusOK, `{"id":42,"enabled":true,"url":"https://example.com/repo.git"}`},
+		"PUT /api/v4/projects/42/mirror/pull":  {http.StatusOK, `{"id":42,"enabled":true,"url":"https://example.com/repo.git"}`},
+		"POST /api/v4/projects/42/mirror/pull": {http.StatusOK, projectJSON},
+		// Maintenance
+		"POST /api/v4/projects/42/housekeeping": {http.StatusCreated, `{}`},
+		// Admin
+		"POST /api/v4/projects/user/1":          {http.StatusCreated, projectJSON},
 		// Hooks
 		"GET /api/v4/projects/42/hooks":      {http.StatusOK, "[]"},
 		"GET /api/v4/projects/42/hooks/1":    {http.StatusOK, hookJSON42},
@@ -4378,6 +4405,8 @@ func mcpMockHandler() http.Handler {
 		"/api/v4/projects/42/users":            {http.StatusOK, "[]"},
 		"/api/v4/projects/42/groups":           {http.StatusOK, "[]"},
 		"/api/v4/projects/42/starrers":         {http.StatusOK, "[]"},
+		"/api/v4/projects/42/storage": {http.StatusOK, `{"repository_storage":"default"}`},
+		"/api/v4/projects/42/avatar":           {http.StatusOK, "AVATAR"},
 		pathProject42Forks:                     {http.StatusOK, "[]"},
 		"/api/v4/projects/42/languages":        {http.StatusOK, `{"Go":80.5,"Markdown":19.5}`},
 		"/api/v4/users/1/projects":             {http.StatusOK, "[]"},
@@ -4503,6 +4532,45 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		{"gitlab_project_add_push_rule", map[string]any{"project_id": "42"}},
 		{"gitlab_project_edit_push_rule", map[string]any{"project_id": "42"}},
 		{"gitlab_project_delete_push_rule", map[string]any{"project_id": "42"}},
+
+		// Webhook customization.
+		{"gitlab_project_hook_set_custom_header", map[string]any{"project_id": "42", "hook_id": float64(1), "key": "X-Test", "value": "v"}},
+		{"gitlab_project_hook_delete_custom_header", map[string]any{"project_id": "42", "hook_id": float64(1), "key": "X-Test"}},
+		{"gitlab_project_hook_set_url_variable", map[string]any{"project_id": "42", "hook_id": float64(1), "key": "myvar", "value": "v"}},
+		{"gitlab_project_hook_delete_url_variable", map[string]any{"project_id": "42", "hook_id": float64(1), "key": "myvar"}},
+
+		// Fork relations.
+		{"gitlab_project_create_fork_relation", map[string]any{"project_id": "42", "forked_from_id": float64(99)}},
+		{"gitlab_project_delete_fork_relation", map[string]any{"project_id": "42"}},
+
+		// Avatar.
+		{"gitlab_project_upload_avatar", map[string]any{"project_id": "42", "content_base64": "aWNv", "filename": "a.png"}},
+		{"gitlab_project_download_avatar", map[string]any{"project_id": "42"}},
+
+		// Approval config.
+		{"gitlab_project_approval_config_get", map[string]any{"project_id": "42"}},
+		{"gitlab_project_approval_config_change", map[string]any{"project_id": "42", "approvals_before_merge": float64(3)}},
+
+		// Approval rules.
+		{"gitlab_project_approval_rule_list", map[string]any{"project_id": "42"}},
+		{"gitlab_project_approval_rule_get", map[string]any{"project_id": "42", "rule_id": float64(1)}},
+		{"gitlab_project_approval_rule_create", map[string]any{"project_id": "42", "name": "rule", "approvals_required": float64(1)}},
+		{"gitlab_project_approval_rule_update", map[string]any{"project_id": "42", "rule_id": float64(1), "name": "rule2", "approvals_required": float64(2)}},
+		{"gitlab_project_approval_rule_delete", map[string]any{"project_id": "42", "rule_id": float64(1)}},
+
+		// Pull mirror.
+		{"gitlab_project_pull_mirror_get", map[string]any{"project_id": "42"}},
+		{"gitlab_project_pull_mirror_configure", map[string]any{"project_id": "42", "url": "https://example.com/repo.git"}},
+		{"gitlab_project_start_mirroring", map[string]any{"project_id": "42"}},
+
+		// Maintenance.
+		{"gitlab_project_start_housekeeping", map[string]any{"project_id": "42"}},
+
+		// Repository storage.
+		{"gitlab_project_repository_storage_get", map[string]any{"project_id": "42"}},
+
+		// Admin.
+		{"gitlab_project_create_for_user", map[string]any{"user_id": float64(1), "name": "test"}},
 	}
 
 	for _, tt := range tools {
@@ -4694,13 +4762,13 @@ const (
 	testValueHdr   = "header-value"
 	testValueVar   = "var-value"
 
-	forkRelationJSON = `{"id":1,"forked_to_project_id":42,"forked_from_project_id":99,"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}`
+	forkRelationJSON = `{"id":1,"forked_to_project_id":42,"forked_from_project_id":99,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
 
 	repoStorageJSON = `{
 		"project_id":42,
 		"disk_path":"@hashed/d4/73/d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
 		"repository_storage":"default",
-		"created_at":"2025-01-01T00:00:00Z"
+		"created_at":"2026-01-01T00:00:00Z"
 	}`
 
 	extProjectJSON = `{"id":42,"name":"my-repo","path":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/my-repo","description":"","topics":[]}`
@@ -5414,7 +5482,7 @@ func TestCreateForUser_ContextCancelled(t *testing.T) {
 func TestFormatForkRelationMarkdown_NonEmpty(t *testing.T) {
 	md := FormatForkRelationMarkdown(ForkRelationOutput{
 		ID: 1, ForkedToProjectID: 42, ForkedFromProjectID: 99,
-		CreatedAt: "2025-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 	})
 	if md == "" {
 		t.Fatal(errExpectedNonEmptyMD)

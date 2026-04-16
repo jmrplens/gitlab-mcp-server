@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // Sample GraphQL response payloads.
@@ -16,7 +17,7 @@ const sampleVulnNode = `{
   "severity": "CRITICAL",
   "state": "DETECTED",
   "reportType": "SAST",
-  "detectedAt": "2024-01-15T10:00:00Z",
+  "detectedAt": "2026-01-15T10:00:00Z",
   "dismissedAt": null,
   "resolvedAt": null,
   "confirmedAt": null,
@@ -45,7 +46,7 @@ const sampleVulnGetNode = `{
   "state": "DETECTED",
   "description": "User input is concatenated into SQL query without sanitization.",
   "reportType": "SAST",
-  "detectedAt": "2024-01-15T10:00:00Z",
+  "detectedAt": "2026-01-15T10:00:00Z",
   "dismissedAt": null,
   "resolvedAt": null,
   "confirmedAt": null,
@@ -60,7 +61,7 @@ const sampleVulnGetNode = `{
   },
   "identifiers": [
     {"name": "CWE-89", "externalType": "cwe", "externalId": "89", "url": "https://cwe.mitre.org/data/definitions/89.html"},
-    {"name": "CVE-2024-1234", "externalType": "cve", "externalId": "CVE-2024-1234", "url": ""}
+    {"name": "CVE-2026-1234", "externalType": "cve", "externalId": "CVE-2026-1234", "url": ""}
   ],
   "scanner": {
     "name": "semgrep",
@@ -87,8 +88,8 @@ const sampleMutationVuln = `{
   "severity": "CRITICAL",
   "state": "DISMISSED",
   "reportType": "SAST",
-  "detectedAt": "2024-01-15T10:00:00Z",
-  "dismissedAt": "2024-02-01T12:00:00Z",
+  "detectedAt": "2026-01-15T10:00:00Z",
+  "dismissedAt": "2026-02-01T12:00:00Z",
   "resolvedAt": null,
   "confirmedAt": null,
   "dismissalReason": "FALSE_POSITIVE",
@@ -173,8 +174,8 @@ func TestList_Success(t *testing.T) {
 	if v.ReportType != "SAST" {
 		t.Errorf("ReportType = %q, want %q", v.ReportType, "SAST")
 	}
-	if v.DetectedAt != "2024-01-15T10:00:00Z" {
-		t.Errorf("DetectedAt = %q, want %q", v.DetectedAt, "2024-01-15T10:00:00Z")
+	if v.DetectedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("DetectedAt = %q, want %q", v.DetectedAt, "2026-01-15T10:00:00Z")
 	}
 	if !out.Pagination.HasNextPage {
 		t.Error("expected HasNextPage=true")
@@ -346,8 +347,8 @@ func TestDismiss_Success(t *testing.T) {
 	if out.Vulnerability.Severity != "CRITICAL" {
 		t.Errorf("Severity = %q, want %q", out.Vulnerability.Severity, "CRITICAL")
 	}
-	if out.Vulnerability.DismissedAt != "2024-02-01T12:00:00Z" {
-		t.Errorf("DismissedAt = %q, want %q", out.Vulnerability.DismissedAt, "2024-02-01T12:00:00Z")
+	if out.Vulnerability.DismissedAt != "2026-02-01T12:00:00Z" {
+		t.Errorf("DismissedAt = %q, want %q", out.Vulnerability.DismissedAt, "2026-02-01T12:00:00Z")
 	}
 }
 
@@ -399,10 +400,10 @@ func TestConfirm_Success(t *testing.T) {
 						"severity": "CRITICAL",
 						"state": "CONFIRMED",
 						"reportType": "SAST",
-						"detectedAt": "2024-01-15T10:00:00Z",
+						"detectedAt": "2026-01-15T10:00:00Z",
 						"dismissedAt": null,
 						"resolvedAt": null,
-						"confirmedAt": "2024-02-01T14:00:00Z",
+						"confirmedAt": "2026-02-01T14:00:00Z",
 						"dismissalReason": null,
 						"primaryIdentifier": null,
 						"scanner": {"name": "semgrep", "vendor": "GitLab"}
@@ -429,8 +430,8 @@ func TestConfirm_Success(t *testing.T) {
 	if out.Vulnerability.Severity != "CRITICAL" {
 		t.Errorf("Severity = %q, want %q", out.Vulnerability.Severity, "CRITICAL")
 	}
-	if out.Vulnerability.ConfirmedAt != "2024-02-01T14:00:00Z" {
-		t.Errorf("ConfirmedAt = %q, want %q", out.Vulnerability.ConfirmedAt, "2024-02-01T14:00:00Z")
+	if out.Vulnerability.ConfirmedAt != "2026-02-01T14:00:00Z" {
+		t.Errorf("ConfirmedAt = %q, want %q", out.Vulnerability.ConfirmedAt, "2026-02-01T14:00:00Z")
 	}
 }
 
@@ -459,9 +460,9 @@ func TestResolve_Success(t *testing.T) {
 						"severity": "CRITICAL",
 						"state": "RESOLVED",
 						"reportType": "SAST",
-						"detectedAt": "2024-01-15T10:00:00Z",
+						"detectedAt": "2026-01-15T10:00:00Z",
 						"dismissedAt": null,
-						"resolvedAt": "2024-02-02T10:00:00Z",
+						"resolvedAt": "2026-02-02T10:00:00Z",
 						"confirmedAt": null,
 						"dismissalReason": null,
 						"primaryIdentifier": null,
@@ -489,8 +490,8 @@ func TestResolve_Success(t *testing.T) {
 	if out.Vulnerability.Severity != "CRITICAL" {
 		t.Errorf("Severity = %q, want %q", out.Vulnerability.Severity, "CRITICAL")
 	}
-	if out.Vulnerability.ResolvedAt != "2024-02-02T10:00:00Z" {
-		t.Errorf("ResolvedAt = %q, want %q", out.Vulnerability.ResolvedAt, "2024-02-02T10:00:00Z")
+	if out.Vulnerability.ResolvedAt != "2026-02-02T10:00:00Z" {
+		t.Errorf("ResolvedAt = %q, want %q", out.Vulnerability.ResolvedAt, "2026-02-02T10:00:00Z")
 	}
 }
 
@@ -519,7 +520,7 @@ func TestRevert_Success(t *testing.T) {
 						"severity": "CRITICAL",
 						"state": "DETECTED",
 						"reportType": "SAST",
-						"detectedAt": "2024-01-15T10:00:00Z",
+						"detectedAt": "2026-01-15T10:00:00Z",
 						"dismissedAt": null,
 						"resolvedAt": null,
 						"confirmedAt": null,
@@ -586,7 +587,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 				Severity:   "CRITICAL",
 				State:      "DETECTED",
 				ReportType: "SAST",
-				DetectedAt: "2024-01-15T10:00:00Z",
+				DetectedAt: "2026-01-15T10:00:00Z",
 				Scanner:    &ScannerItem{Name: "semgrep"},
 				PrimaryID:  &IdentifierItem{Name: "CWE-89"},
 			},
@@ -691,12 +692,307 @@ func TestSeverityBadge(t *testing.T) {
 	}
 }
 
-// contains reports whether the given slice includes the specified integer.
+// TestConfirm_GraphQLErrors verifies that Confirm returns an error when the
+// GraphQL mutation response includes a non-empty errors array.
+func TestConfirm_GraphQLErrors(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityConfirm": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerabilityConfirm": {
+					"vulnerability": null,
+					"errors": ["Vulnerability has already been confirmed"]
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Confirm(context.Background(), client, ConfirmInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected error from GraphQL errors array, got nil")
+	}
+}
+
+// TestConfirm_APIError verifies that Confirm returns an error when the
+// GraphQL API call itself fails (e.g. server error or network issue).
+func TestConfirm_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityConfirm": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Confirm(context.Background(), client, ConfirmInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestResolve_GraphQLErrors verifies that Resolve returns an error when the
+// GraphQL mutation response includes a non-empty errors array.
+func TestResolve_GraphQLErrors(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityResolve": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerabilityResolve": {
+					"vulnerability": null,
+					"errors": ["Cannot resolve a dismissed vulnerability"]
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Resolve(context.Background(), client, ResolveInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected error from GraphQL errors array, got nil")
+	}
+}
+
+// TestResolve_APIError verifies that Resolve returns an error when the
+// GraphQL API call itself fails.
+func TestResolve_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityResolve": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Resolve(context.Background(), client, ResolveInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestRevert_GraphQLErrors verifies that Revert returns an error when the
+// GraphQL mutation response includes a non-empty errors array.
+func TestRevert_GraphQLErrors(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityRevertToDetected": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerabilityRevertToDetected": {
+					"vulnerability": null,
+					"errors": ["Vulnerability is already in detected state"]
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Revert(context.Background(), client, RevertInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected error from GraphQL errors array, got nil")
+	}
+}
+
+// TestRevert_APIError verifies that Revert returns an error when the
+// GraphQL API call itself fails.
+func TestRevert_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityRevertToDetected": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Revert(context.Background(), client, RevertInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestList_APIError verifies that List returns an error when the GraphQL
+// API call fails.
+func TestList_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(context.Background(), client, ListInput{ProjectPath: "g/p"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestList_AllFilters verifies that all optional filter parameters (scanner,
+// has_issues, has_resolution, sort) are correctly forwarded to the GraphQL API.
+func TestList_AllFilters(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"vulnerabilities": {
+						"nodes": [],
+						"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}
+					}
+				}
+			}`)
+		},
+	})
+	hasIssues := true
+	hasResolution := false
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(context.Background(), client, ListInput{
+		ProjectPath:   "g/p",
+		Scanner:       []string{"semgrep"},
+		HasIssues:     &hasIssues,
+		HasResolution: &hasResolution,
+		Sort:          "severity_desc",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Vulnerabilities) != 0 {
+		t.Errorf("expected 0 vulnerabilities, got %d", len(out.Vulnerabilities))
+	}
+}
+
+// TestGet_APIError verifies that Get returns an error when the GraphQL
+// API call fails.
+func TestGet_APIError(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerability(id": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Get(context.Background(), client, GetInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestIdentifierToItem_Nil verifies that identifierToItem returns nil when
+// called with a nil pointer, covering the nil-guard branch.
+func TestIdentifierToItem_Nil(t *testing.T) {
+	result := identifierToItem(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil input, got %+v", result)
+	}
+}
+
+// TestNodeToItem_DastLocation verifies that nodeToItem correctly maps a DAST
+// vulnerability location (using Path field instead of File).
+func TestNodeToItem_DastLocation(t *testing.T) {
+	node := gqlVulnerabilityNode{
+		ID:       "gid://gitlab/Vulnerability/1",
+		Title:    "DAST finding",
+		Severity: "MEDIUM",
+		State:    "DETECTED",
+		Location: &gqlLocation{Path: "/api/v1/users"},
+	}
+	item := nodeToItem(node)
+	if item.Location == nil {
+		t.Fatal("expected non-nil location")
+	}
+	if item.Location.File != "/api/v1/users" {
+		t.Errorf("File = %q, want /api/v1/users (from Path)", item.Location.File)
+	}
+}
+
+// TestNodeToItem_ContainerLocation verifies that nodeToItem correctly maps a
+// container scanning location (using Image field when File and Path are empty).
+func TestNodeToItem_ContainerLocation(t *testing.T) {
+	node := gqlVulnerabilityNode{
+		ID:       "gid://gitlab/Vulnerability/2",
+		Title:    "Container finding",
+		Severity: "HIGH",
+		State:    "DETECTED",
+		Location: &gqlLocation{Image: "registry.example.com/app:latest"},
+	}
+	item := nodeToItem(node)
+	if item.Location == nil {
+		t.Fatal("expected non-nil location")
+	}
+	if item.Location.File != "registry.example.com/app:latest" {
+		t.Errorf("File = %q, want registry.example.com/app:latest (from Image)", item.Location.File)
+	}
+}
+
+// TestFormatGetMarkdown_AllOptionalFields verifies that FormatGetMarkdown renders
+// all conditional fields: DismissedAt, ConfirmedAt, ResolvedAt, DismissalReason,
+// and a Scanner without Vendor.
+func TestFormatGetMarkdown_AllOptionalFields(t *testing.T) {
+	out := GetOutput{
+		Vulnerability: Item{
+			ID:              "gid://gitlab/Vulnerability/99",
+			Title:           "Test Vuln",
+			Severity:        "LOW",
+			State:           "DISMISSED",
+			ReportType:      "DAST",
+			Scanner:         &ScannerItem{Name: "zap"},
+			PrimaryID:       &IdentifierItem{Name: "CWE-79"},
+			Location:        &LocationItem{File: "main.go", StartLine: 5},
+			DismissedAt:     "2026-03-01T10:00:00Z",
+			ConfirmedAt:     "2026-02-15T09:00:00Z",
+			ResolvedAt:      "2026-03-05T12:00:00Z",
+			DismissalReason: "ACCEPTABLE_RISK",
+			HasIssues:       true,
+			HasMR:           true,
+		},
+	}
+	md := FormatGetMarkdown(out)
+	if !contains(md, "Dismissed") {
+		t.Error("expected Dismissed field in markdown")
+	}
+	if !contains(md, "Confirmed") {
+		t.Error("expected Confirmed field in markdown")
+	}
+	if !contains(md, "Resolved") {
+		t.Error("expected Resolved field in markdown")
+	}
+	if !contains(md, "ACCEPTABLE_RISK") {
+		t.Error("expected DismissalReason in markdown")
+	}
+	if !contains(md, "main.go:5") {
+		t.Error("expected location with single line in markdown")
+	}
+}
+
+// TestFormatMutationMarkdown_WithPrimaryID verifies that FormatMutationMarkdown
+// renders the PrimaryID field when present on the vulnerability.
+func TestFormatMutationMarkdown_WithPrimaryID(t *testing.T) {
+	out := MutationOutput{
+		Vulnerability: Item{
+			ID:        "gid://gitlab/Vulnerability/42",
+			Title:     "Test Vuln",
+			Severity:  "HIGH",
+			State:     "CONFIRMED",
+			PrimaryID: &IdentifierItem{Name: "CWE-89"},
+		},
+	}
+	md := FormatMutationMarkdown(out, "confirmed")
+	if !contains(md, "CWE-89") {
+		t.Error("expected PrimaryID name in markdown")
+	}
+}
+
+// TestMarkdownRegistry_AllTypes verifies that all vulnerability output types
+// are registered in the toolutil Markdown registry via init().
+func TestMarkdownRegistry_AllTypes(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+	}{
+		{"ListOutput", ListOutput{Vulnerabilities: []Item{{ID: "1", Title: "t", Severity: "LOW", State: "DETECTED"}}}},
+		{"GetOutput", GetOutput{Vulnerability: Item{ID: "1", Title: "t", Severity: "LOW", State: "DETECTED"}}},
+		{"MutationOutput", MutationOutput{Vulnerability: Item{ID: "1", Title: "t", Severity: "LOW", State: "DISMISSED"}}},
+		{"SeverityCountOutput", SeverityCountOutput{Critical: 1, Total: 1}},
+		{"PipelineSecuritySummaryOutput", PipelineSecuritySummaryOutput{TotalVulnerabilities: 5}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := toolutil.MarkdownForResult(tt.input)
+			if result == nil {
+				t.Fatalf("MarkdownForResult returned nil for %s — type not registered in init()", tt.name)
+			}
+		})
+	}
+}
+
+// contains reports whether s includes the substring sub.
 func contains(s, sub string) bool {
 	return len(s) > 0 && len(sub) > 0 && (s == sub || len(s) >= len(sub) && containsStr(s, sub))
 }
 
-// containsStr reports whether the given slice includes the specified string.
 func containsStr(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {

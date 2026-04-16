@@ -43,7 +43,7 @@ func TestList_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"Hello","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z"}]}]`,
+			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"Hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -83,7 +83,7 @@ func TestGet_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test note","author":{"username":"bob"},"created_at":"2024-01-01T00:00:00Z"}]}`)
+			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test note","author":{"username":"bob"},"created_at":"2026-01-01T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -103,7 +103,7 @@ func TestGet_Success(t *testing.T) {
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new discussion","author":{"username":"carol"},"created_at":"2024-01-02T00:00:00Z"}]}`)
+			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new discussion","author":{"username":"carol"},"created_at":"2026-01-02T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -120,7 +120,7 @@ func TestCreate_Success(t *testing.T) {
 func TestCreate_WithPosition(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"d3","individual_note":false,"notes":[{"id":30,"body":"inline comment","author":{"username":"dave"},"created_at":"2024-01-03T00:00:00Z"}]}`)
+			`{"id":"d3","individual_note":false,"notes":[{"id":30,"body":"inline comment","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -149,7 +149,7 @@ func TestCreate_WithPosition(t *testing.T) {
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":40,"body":"reply","author":{"username":"eve"},"created_at":"2024-01-04T00:00:00Z"}`)
+			`{"id":40,"body":"reply","author":{"username":"eve"},"created_at":"2026-01-04T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -169,7 +169,7 @@ func TestAddNote_Success(t *testing.T) {
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":40,"body":"updated","author":{"username":"eve"},"created_at":"2024-01-04T00:00:00Z","updated_at":"2024-01-05T00:00:00Z"}`)
+			`{"id":40,"body":"updated","author":{"username":"eve"},"created_at":"2026-01-04T00:00:00Z","updated_at":"2026-01-05T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 

@@ -11,7 +11,7 @@ import (
 func TestGetUserActivities_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/activities" {
-			testutil.RespondJSON(w, http.StatusOK, `[{"username":"testuser","last_activity_on":"2024-06-01"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"username":"testuser","last_activity_on":"2026-06-01"}]`)
 			return
 		}
 		http.NotFound(w, r)

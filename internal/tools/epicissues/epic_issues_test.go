@@ -29,8 +29,8 @@ const (
 		"web_url": "https://gitlab.example.com/mygroup/myproject/-/issues/10",
 		"author": {"username": "alice"},
 		"labels": ["bug", "critical"],
-		"created_at": "2024-01-15T10:00:00Z",
-		"updated_at": "2024-01-16T10:00:00Z"
+		"created_at": "2026-01-15T10:00:00Z",
+		"updated_at": "2026-01-16T10:00:00Z"
 	}`
 
 	assignJSON = `{"id": 42, "epic": {"iid": 1}, "issue": {"id": 100}}`
@@ -538,8 +538,8 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders issues table with labels",
 			input: ListOutput{
 				Issues: []issues.Output{
-					{IID: 10, Title: "Fix login bug", State: "opened", Author: "alice", Labels: []string{"bug", "critical"}, CreatedAt: "2024-01-15T10:00:00Z"},
-					{IID: 20, Title: "Add feature", State: "closed", Author: "bob", Labels: nil, CreatedAt: "2024-02-01T12:00:00Z"},
+					{IID: 10, Title: "Fix login bug", State: "opened", Author: "alice", Labels: []string{"bug", "critical"}, CreatedAt: "2026-01-15T10:00:00Z"},
+					{IID: 20, Title: "Add feature", State: "closed", Author: "bob", Labels: nil, CreatedAt: "2026-02-01T12:00:00Z"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2},
 			},

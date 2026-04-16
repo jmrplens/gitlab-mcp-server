@@ -551,7 +551,7 @@ func TestList_APIError(t *testing.T) {
 func TestList_WithTimestampAndUploader(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`[{"id":1,"size":1024,"filename":"file.txt","created_at":"2024-01-01T00:00:00Z","uploaded_by":{"username":"admin"}}]`)
+			`[{"id":1,"size":1024,"filename":"file.txt","created_at":"2026-01-01T00:00:00Z","uploaded_by":{"username":"admin"}}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
 

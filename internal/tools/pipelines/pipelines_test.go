@@ -684,10 +684,10 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 		YamlErrors:    true,
 		OrderBy:       "updated_at",
 		Sort:          "desc",
-		CreatedAfter:  "2025-01-01T00:00:00Z",
-		CreatedBefore: "2025-12-31T23:59:59Z",
-		UpdatedAfter:  "2025-06-01T00:00:00Z",
-		UpdatedBefore: "2025-12-31T00:00:00Z",
+		CreatedAfter:  "2026-01-01T00:00:00Z",
+		CreatedBefore: "2026-12-31T23:59:59Z",
+		UpdatedAfter:  "2026-06-01T00:00:00Z",
+		UpdatedBefore: "2026-12-31T00:00:00Z",
 	}
 	input.Page = 2
 	input.PerPage = 50

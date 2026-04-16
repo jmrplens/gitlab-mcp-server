@@ -25,7 +25,7 @@ func TestList(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2024-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"}]`)
 	}))
 	out, err := List(t.Context(), client, ListInput{GroupID: "5"})
 	if err != nil {
@@ -205,9 +205,9 @@ func TestList_MultipleUploads(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"size":1024,"filename":"image.png","created_at":"2024-01-01T00:00:00Z"},
+				{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"size":2048,"filename":"doc.pdf"},
-				{"id":3,"size":512,"filename":"readme.md","created_at":"2024-06-15T10:30:00Z"}
+				{"id":3,"size":512,"filename":"readme.md","created_at":"2026-06-15T10:30:00Z"}
 			]`)
 			return
 		}
@@ -358,7 +358,7 @@ func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 func TestFormatList_WithPagination(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
-			{ID: 1, Size: 1024, Filename: "image.png", CreatedAt: "2024-01-01T00:00:00Z"},
+			{ID: 1, Size: 1024, Filename: "image.png", CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{
 			TotalItems: 10, Page: 1, PerPage: 20, TotalPages: 1,
@@ -380,7 +380,7 @@ func TestFormatList_WithPagination(t *testing.T) {
 func TestFormatList_SpecialCharacters(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
-			{ID: 5, Size: 256, Filename: "file|with|pipes.txt", CreatedAt: "2024-01-01"},
+			{ID: 5, Size: 256, Filename: "file|with|pipes.txt", CreatedAt: "2026-01-01"},
 		},
 	}
 	md := FormatList(out)
@@ -410,9 +410,9 @@ func TestFormatList_NilCreatedAt(t *testing.T) {
 func TestFormatList_MultipleRows(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
-			{ID: 1, Size: 100, Filename: "a.txt", CreatedAt: "2024-01-01"},
-			{ID: 2, Size: 200, Filename: "b.txt", CreatedAt: "2024-02-01"},
-			{ID: 3, Size: 300, Filename: "c.txt", CreatedAt: "2024-03-01"},
+			{ID: 1, Size: 100, Filename: "a.txt", CreatedAt: "2026-01-01"},
+			{ID: 2, Size: 200, Filename: "b.txt", CreatedAt: "2026-02-01"},
+			{ID: 3, Size: 300, Filename: "c.txt", CreatedAt: "2026-03-01"},
 		},
 	}
 	md := FormatList(out)
@@ -610,7 +610,7 @@ func newGroupMarkdownUploadsMCPSession(t *testing.T) *mcp.ClientSession {
 
 	// List group markdown uploads
 	handler.HandleFunc("GET /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2024-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"}]`)
 	})
 
 	// Delete by ID

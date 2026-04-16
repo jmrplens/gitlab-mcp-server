@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	sampleScopesJSON        = `{"instance_level_scopings":[{"created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}],"runner_level_scopings":[{"runner_id":42,"created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}]}`
-	sampleInstanceScopeJSON = `{"created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}`
-	sampleRunnerScopeJSON   = `{"runner_id":42,"created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}`
+	sampleScopesJSON        = `{"instance_level_scopings":[{"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}],"runner_level_scopings":[{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}]}`
+	sampleInstanceScopeJSON = `{"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
+	sampleRunnerScopeJSON   = `{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	errUnexpected           = "unexpected error: %v"
 	errExpValid             = "expected validation error, got nil"
 	errExpAPIErr            = "expected API error, got nil"
@@ -319,10 +319,10 @@ func TestFormatScopesMarkdown(t *testing.T) {
 	// Both instance and runner scopes
 	out := ScopesOutput{
 		InstanceLevelScopings: []InstanceScopeItem{
-			{CreatedAt: "2025-01-15T10:00:00Z", UpdatedAt: "2025-01-15T12:00:00Z"},
+			{CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
 		},
 		RunnerLevelScopings: []RunnerScopeItem{
-			{RunnerID: 42, CreatedAt: "2025-01-15T10:00:00Z", UpdatedAt: "2025-01-15T12:00:00Z"},
+			{RunnerID: 42, CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
 		},
 	}
 
@@ -342,7 +342,7 @@ func TestFormatScopesMarkdown(t *testing.T) {
 
 	// Empty runner scopes
 	out.RunnerLevelScopings = nil
-	out.InstanceLevelScopings = []InstanceScopeItem{{CreatedAt: "2025-01-15T10:00:00Z"}}
+	out.InstanceLevelScopings = []InstanceScopeItem{{CreatedAt: "2026-01-15T10:00:00Z"}}
 	md = FormatScopesMarkdown(out)
 	if !strings.Contains(md, "No runner-level scopes") {
 		t.Errorf("expected empty runner message: %s", md)
@@ -352,8 +352,8 @@ func TestFormatScopesMarkdown(t *testing.T) {
 // TestFormatInstanceScopeMarkdown verifies instance scope Markdown formatting.
 func TestFormatInstanceScopeMarkdown(t *testing.T) {
 	out := InstanceScopeOutput{
-		CreatedAt: "2025-01-15T10:00:00Z",
-		UpdatedAt: "2025-01-15T12:00:00Z",
+		CreatedAt: "2026-01-15T10:00:00Z",
+		UpdatedAt: "2026-01-15T12:00:00Z",
 	}
 
 	md := FormatInstanceScopeMarkdown(out)
@@ -372,8 +372,8 @@ func TestFormatInstanceScopeMarkdown(t *testing.T) {
 func TestFormatRunnerScopeMarkdown(t *testing.T) {
 	out := RunnerScopeOutput{
 		RunnerID:  42,
-		CreatedAt: "2025-01-15T10:00:00Z",
-		UpdatedAt: "2025-01-15T12:00:00Z",
+		CreatedAt: "2026-01-15T10:00:00Z",
+		UpdatedAt: "2026-01-15T12:00:00Z",
 	}
 
 	md := FormatRunnerScopeMarkdown(out)

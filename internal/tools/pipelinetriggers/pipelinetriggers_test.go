@@ -295,7 +295,7 @@ func TestRunTrigger_MissingToken(t *testing.T) {
 
 // TestFormatTriggerMarkdown verifies the behavior of format trigger markdown.
 func TestFormatTriggerMarkdown(t *testing.T) {
-	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", OwnerName: "Admin", CreatedAt: "2025-01-01T00:00:00Z"})
+	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", OwnerName: "Admin", CreatedAt: "2026-01-01T00:00:00Z"})
 	if md == "" {
 		t.Error("expected non-empty markdown")
 	}
@@ -610,9 +610,9 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		Token:       "abc123",
 		OwnerName:   "Admin",
 		OwnerID:     1,
-		CreatedAt:   "2025-01-01T00:00:00Z",
-		UpdatedAt:   "2025-06-01T00:00:00Z",
-		LastUsed:    "2025-12-01T00:00:00Z",
+		CreatedAt:   "2026-01-01T00:00:00Z",
+		UpdatedAt:   "2026-06-01T00:00:00Z",
+		LastUsed:    "2026-12-01T00:00:00Z",
 	})
 
 	for _, want := range []string{
@@ -621,8 +621,8 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		"deploy trigger",
 		"abc123",
 		"Admin",
-		"1 Jan 2025 00:00 UTC",
-		"2025-12-01T00:00:00Z",
+		"1 Jan 2026 00:00 UTC",
+		"2026-12-01T00:00:00Z",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
@@ -659,7 +659,7 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 	out := ListOutput{
 		Triggers: []Output{
-			{ID: 1, Description: "Trigger A", Token: "tokA", OwnerName: "admin", LastUsed: "2025-01-01T00:00:00Z"},
+			{ID: 1, Description: "Trigger A", Token: "tokA", OwnerName: "admin", LastUsed: "2026-01-01T00:00:00Z"},
 			{ID: 2, Description: "Trigger B", Token: "tokB", OwnerName: "user1", LastUsed: ""},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
@@ -720,7 +720,7 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 		Ref:        "main",
 		Status:     "created",
 		WebURL:     "https://gl/p/1/-/pipelines/99",
-		CreatedAt:  "2025-06-01T00:00:00Z",
+		CreatedAt:  "2026-06-01T00:00:00Z",
 	})
 	for _, want := range []string{
 		"## Pipeline Triggered",
@@ -810,8 +810,8 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func newTriggersMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	triggerJSON := `{"id":10,"description":"deploy","token":"abc123","owner":{"id":1,"name":"Admin"},"created_at":"2025-01-01T00:00:00Z"}`
-	pipelineJSON := `{"id":99,"sha":"abc","ref":"main","status":"created","web_url":"https://gl/p/1/-/pipelines/99","created_at":"2025-01-01T00:00:00Z"}`
+	triggerJSON := `{"id":10,"description":"deploy","token":"abc123","owner":{"id":1,"name":"Admin"},"created_at":"2026-01-01T00:00:00Z"}`
+	pipelineJSON := `{"id":99,"sha":"abc","ref":"main","status":"created","web_url":"https://gl/p/1/-/pipelines/99","created_at":"2026-01-01T00:00:00Z"}`
 
 	handler := http.NewServeMux()
 

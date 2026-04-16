@@ -31,7 +31,7 @@ func TestFormatMRReviewForAnalysis(t *testing.T) {
 			{
 				ID: "d1",
 				Notes: []mrdiscussions.NoteOutput{
-					{Author: "bob", Body: "Looks good", CreatedAt: "2024-01-15T10:00:00Z", Resolvable: true, Resolved: true},
+					{Author: "bob", Body: "Looks good", CreatedAt: "2026-01-15T10:00:00Z", Resolvable: true, Resolved: true},
 				},
 			},
 		},
@@ -149,7 +149,7 @@ func TestSummarizeMRReview_FullFlow(t *testing.T) {
 	mux.HandleFunc("/api/v4/projects/42/merge_requests/5/discussions", func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{
 			"id": "d1", "individual_note": false,
-			"notes": [{"id": 1, "body": "LGTM", "author": {"username": "bob"}, "system": false, "created_at": "2024-01-15T10:00:00Z"}]
+			"notes": [{"id": 1, "body": "LGTM", "author": {"username": "bob"}, "system": false, "created_at": "2026-01-15T10:00:00Z"}]
 		}]`)
 	})
 	mux.HandleFunc("/api/v4/projects/42/merge_requests/5/approval_state", func(w http.ResponseWriter, r *http.Request) {

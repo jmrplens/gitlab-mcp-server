@@ -15,7 +15,7 @@ const sampleEmojiNode = `{
 	"name": "party_parrot",
 	"url": "https://example.com/party_parrot.gif",
 	"external": false,
-	"createdAt": "2025-06-01T10:00:00Z"
+	"createdAt": "2026-06-01T10:00:00Z"
 }`
 
 const sampleEmojiNode2 = `{
@@ -23,7 +23,7 @@ const sampleEmojiNode2 = `{
 	"name": "shipit",
 	"url": "https://example.com/shipit.png",
 	"external": true,
-	"createdAt": "2025-06-15T14:30:00Z"
+	"createdAt": "2026-06-15T14:30:00Z"
 }`
 
 // graphqlMux returns an [http.Handler] that routes GraphQL requests to the
@@ -72,8 +72,8 @@ func TestList_Success(t *testing.T) {
 	if e.External {
 		t.Error("emoji[0].External = true, want false")
 	}
-	if e.CreatedAt != "2025-06-01T10:00:00Z" {
-		t.Errorf("emoji[0].CreatedAt = %q, want %q", e.CreatedAt, "2025-06-01T10:00:00Z")
+	if e.CreatedAt != "2026-06-01T10:00:00Z" {
+		t.Errorf("emoji[0].CreatedAt = %q, want %q", e.CreatedAt, "2026-06-01T10:00:00Z")
 	}
 
 	e2 := out.Emoji[1]
@@ -517,14 +517,14 @@ func TestFormatListMarkdown_WithEmoji(t *testing.T) {
 				Name:      "party_parrot",
 				URL:       "https://example.com/party_parrot.gif",
 				External:  false,
-				CreatedAt: "2025-06-01T10:00:00Z",
+				CreatedAt: "2026-06-01T10:00:00Z",
 			},
 			{
 				ID:        "gid://gitlab/CustomEmoji/2",
 				Name:      "shipit",
 				URL:       "https://example.com/shipit.png",
 				External:  true,
-				CreatedAt: "2025-06-15T14:30:00Z",
+				CreatedAt: "2026-06-15T14:30:00Z",
 			},
 		},
 		Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
@@ -540,7 +540,7 @@ func TestFormatListMarkdown_WithEmoji(t *testing.T) {
 	if !strings.Contains(md, "Yes") {
 		t.Error("should contain 'Yes' for external emoji")
 	}
-	if !strings.Contains(md, "2025-06-01") {
+	if !strings.Contains(md, "2026-06-01") {
 		t.Error("should contain created date")
 	}
 }
@@ -554,7 +554,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 			Name:      "party_parrot",
 			URL:       "https://example.com/party_parrot.gif",
 			External:  false,
-			CreatedAt: "2025-06-01T10:00:00Z",
+			CreatedAt: "2026-06-01T10:00:00Z",
 		},
 	}
 

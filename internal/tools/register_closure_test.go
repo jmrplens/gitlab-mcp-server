@@ -41,16 +41,16 @@ func newMockBodies() mockBodies {
 		branch:          `{"name":"dev","merged":false,"protected":false,"default":false,"web_url":"https://example.com","commit":{"id":"abc123","short_id":"abc1","title":"init","message":"init","author_name":"test"}}`,
 		protectedBranch: `{"id":1,"name":"main","push_access_levels":[{"access_level":40}],"merge_access_levels":[{"access_level":40}],"allow_force_push":false}`,
 		tag:             `{"name":"v1.0","message":"tag","target":"abc123","commit":{"id":"abc123","short_id":"abc1","title":"init","message":"init","author_name":"test"}}`,
-		release:         `{"tag_name":"v1.0","name":"v1.0","description":"notes","created_at":"2024-01-01T00:00:00Z","released_at":"2024-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}`,
+		release:         `{"tag_name":"v1.0","name":"v1.0","description":"notes","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","author":{"username":"test"},"commit":{"id":"abc123"},"assets":{"links":[]}}`,
 		releaseLink:     `{"id":1,"name":"bin","url":"https://example.com/bin","link_type":"package"}`,
 		mr:              `{"id":1,"iid":1,"title":"MR","state":"opened","source_branch":"dev","target_branch":"main","web_url":"https://example.com/mr/1","author":{"username":"test"},"description":"d","labels":[],"assignees":[],"reviewers":[],"detailed_merge_status":"mergeable","has_conflicts":false,"changes_count":"1"}`,
-		mrNote:          `{"id":1,"body":"note","author":{"username":"test"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","system":false,"resolvable":false}`,
-		discussion:      `{"id":"abc","individual_note":false,"notes":[{"id":1,"body":"disc","author":{"username":"test"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","system":false,"resolvable":true,"resolved":false}]}`,
+		mrNote:          `{"id":1,"body":"note","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","system":false,"resolvable":false}`,
+		discussion:      `{"id":"abc","individual_note":false,"notes":[{"id":1,"body":"disc","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","system":false,"resolvable":true,"resolved":false}]}`,
 		mrChanges:       `{"id":1,"iid":1,"title":"MR","state":"opened","changes":[{"old_path":"a.go","new_path":"a.go","diff":"@@ -1 +1 @@\\n-old\\n+new","new_file":false,"renamed_file":false,"deleted_file":false}]}`,
-		commit:          `{"id":"abc123","short_id":"abc1","title":"msg","message":"msg","author_name":"test","author_email":"t@e.com","created_at":"2024-01-01T00:00:00Z","web_url":"https://example.com/c/abc","stats":{"additions":1,"deletions":0,"total":1}}`,
+		commit:          `{"id":"abc123","short_id":"abc1","title":"msg","message":"msg","author_name":"test","author_email":"t@e.com","created_at":"2026-01-01T00:00:00Z","web_url":"https://example.com/c/abc","stats":{"additions":1,"deletions":0,"total":1}}`,
 		file:            `{"file_name":"README.md","file_path":"README.md","size":100,"encoding":"base64","content_sha256":"abc","ref":"main","blob_id":"def","commit_id":"abc123","last_commit_id":"abc123","content":"SGVsbG8="}`,
-		issue:           `{"id":1,"iid":10,"title":"Test issue","description":"desc","state":"opened","labels":["bug"],"assignees":[{"username":"alice"}],"milestone":{"title":"v1.0"},"author":{"username":"test"},"web_url":"https://example.com/issues/10","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}`,
-		issueNote:       `{"id":1,"body":"note","author":{"username":"test"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","system":false,"internal":false}`,
+		issue:           `{"id":1,"iid":10,"title":"Test issue","description":"desc","state":"opened","labels":["bug"],"assignees":[{"username":"alice"}],"milestone":{"title":"v1.0"},"author":{"username":"test"},"web_url":"https://example.com/issues/10","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`,
+		issueNote:       `{"id":1,"body":"note","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","system":false,"internal":false}`,
 	}
 }
 

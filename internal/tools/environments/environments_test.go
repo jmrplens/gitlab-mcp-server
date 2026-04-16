@@ -31,8 +31,8 @@ func TestEnvironmentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodGet {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2025-01-01T00:00:00Z"},
-				{"id":2,"name":"staging","slug":"staging","state":"available","tier":"staging","created_at":"2025-01-01T00:00:00Z"}
+				{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"name":"staging","slug":"staging","state":"available","tier":"staging","created_at":"2026-01-01T00:00:00Z"}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
@@ -114,7 +114,7 @@ func TestEnvironmentList_CancelledContext(t *testing.T) {
 func TestEnvironmentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodGet {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-06-01T00:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-06-01T00:00:00Z"}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -170,7 +170,7 @@ func TestEnvironmentGet_CancelledContext(t *testing.T) {
 func TestEnvironmentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"qa","slug":"qa","state":"available","tier":"testing","description":"QA environment","created_at":"2025-06-01T00:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"qa","slug":"qa","state":"available","tier":"testing","description":"QA environment","created_at":"2026-06-01T00:00:00Z"}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -542,7 +542,7 @@ func TestEnvironmentCreate_AllOptionalFields(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":10,"name":"review","slug":"review","state":"available",
 				"tier":"development","description":"Review env","external_url":"https://review.example.com",
-				"created_at":"2025-06-01T00:00:00Z"
+				"created_at":"2026-06-01T00:00:00Z"
 			}`)
 			return
 		}
@@ -712,9 +712,9 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 		Tier:        "production",
 		Description: "Main prod environment",
 		ExternalURL: "https://prod.example.com",
-		CreatedAt:   "2025-01-01T00:00:00Z",
-		UpdatedAt:   "2025-06-15T12:00:00Z",
-		AutoStopAt:  "2025-12-31T23:59:59Z",
+		CreatedAt:   "2026-01-01T00:00:00Z",
+		UpdatedAt:   "2026-06-15T12:00:00Z",
+		AutoStopAt:  "2026-12-31T23:59:59Z",
 	})
 
 	for _, want := range []string{
@@ -725,9 +725,9 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 		"| Tier | production |",
 		"| Description | Main prod environment |",
 		"| URL | https://prod.example.com |",
-		"| Created | 1 Jan 2025 00:00 UTC |",
-		"| Updated | 15 Jun 2025 12:00 UTC |",
-		"| Auto-Stop At | 31 Dec 2025 23:59 UTC |",
+		"| Created | 1 Jan 2026 00:00 UTC |",
+		"| Updated | 15 Jun 2026 12:00 UTC |",
+		"| Auto-Stop At | 31 Dec 2026 23:59 UTC |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
@@ -886,7 +886,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func newEnvironmentsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	envJSON := `{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2025-01-01T00:00:00Z"}`
+	envJSON := `{"id":1,"name":"production","slug":"production","state":"available","tier":"production","external_url":"https://prod.example.com","created_at":"2026-01-01T00:00:00Z"}`
 
 	handler := http.NewServeMux()
 

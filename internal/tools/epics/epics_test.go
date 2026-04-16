@@ -24,10 +24,10 @@ const (
 		"web_url": "https://gitlab.example.com/groups/mygroup/-/epics/1",
 		"author": {"username": "alice"},
 		"labels": ["planning", "q1"],
-		"start_date": "2024-01-01",
-		"due_date": "2024-03-31",
-		"created_at": "2024-01-01T00:00:00Z",
-		"updated_at": "2024-01-02T00:00:00Z",
+		"start_date": "2026-01-01",
+		"due_date": "2026-03-31",
+		"created_at": "2026-01-01T00:00:00Z",
+		"updated_at": "2026-01-02T00:00:00Z",
 		"upvotes": 3,
 		"downvotes": 0,
 		"user_notes_count": 5
@@ -103,8 +103,8 @@ func TestGet_Success(t *testing.T) {
 	if out.Author != "alice" {
 		t.Errorf("out.Author = %q, want %q", out.Author, "alice")
 	}
-	if out.StartDate != "2024-01-01" {
-		t.Errorf("out.StartDate = %q, want %q", out.StartDate, "2024-01-01")
+	if out.StartDate != "2026-01-01" {
+		t.Errorf("out.StartDate = %q, want %q", out.StartDate, "2026-01-01")
 	}
 }
 

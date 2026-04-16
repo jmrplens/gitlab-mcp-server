@@ -11,8 +11,8 @@ import (
 
 const projectSecurityJSON = `{
 	"project_id":42,
-	"created_at":"2024-01-01T00:00:00Z",
-	"updated_at":"2024-01-02T00:00:00Z",
+	"created_at":"2026-01-01T00:00:00Z",
+	"updated_at":"2026-01-02T00:00:00Z",
 	"auto_fix_container_scanning":true,
 	"auto_fix_dast":false,
 	"auto_fix_dependency_scanning":true,
@@ -323,8 +323,8 @@ func TestGetProject_SuccessAllFields(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10/security_settings" {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"project_id":10,
-				"created_at":"2024-06-01T10:00:00Z",
-				"updated_at":"2024-06-15T14:30:00Z",
+				"created_at":"2026-06-01T10:00:00Z",
+				"updated_at":"2026-06-15T14:30:00Z",
 				"auto_fix_container_scanning":false,
 				"auto_fix_dast":true,
 				"auto_fix_dependency_scanning":false,
@@ -347,11 +347,11 @@ func TestGetProject_SuccessAllFields(t *testing.T) {
 	if out.ProjectID != 10 {
 		t.Errorf("expected project_id 10, got %d", out.ProjectID)
 	}
-	if out.CreatedAt != "2024-06-01T10:00:00Z" {
-		t.Errorf("CreatedAt = %q, want %q", out.CreatedAt, "2024-06-01T10:00:00Z")
+	if out.CreatedAt != "2026-06-01T10:00:00Z" {
+		t.Errorf("CreatedAt = %q, want %q", out.CreatedAt, "2026-06-01T10:00:00Z")
 	}
-	if out.UpdatedAt != "2024-06-15T14:30:00Z" {
-		t.Errorf("UpdatedAt = %q, want %q", out.UpdatedAt, "2024-06-15T14:30:00Z")
+	if out.UpdatedAt != "2026-06-15T14:30:00Z" {
+		t.Errorf("UpdatedAt = %q, want %q", out.UpdatedAt, "2026-06-15T14:30:00Z")
 	}
 	if !out.AutoFixDAST {
 		t.Error("expected auto_fix_dast true")

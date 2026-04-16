@@ -11,7 +11,7 @@ import (
 func TestListSSHKeysForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/keys" {
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2024-01-15T10:00:00Z"}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2026-01-15T10:00:00Z"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -29,7 +29,7 @@ func TestListSSHKeysForUser_Success(t *testing.T) {
 func TestGetSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/keys/1" {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2024-01-15T10:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2026-01-15T10:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -47,7 +47,7 @@ func TestGetSSHKey_Success(t *testing.T) {
 func TestAddSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/user/keys" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2024-01-15T10:00:00Z"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"title":"my-key","key":"ssh-rsa AAA","created_at":"2026-01-15T10:00:00Z"}`)
 			return
 		}
 		http.NotFound(w, r)

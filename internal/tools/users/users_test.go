@@ -276,8 +276,8 @@ func TestListSSHKeys_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListSSHKeys {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"title":"Work Laptop","key":"ssh-ed25519 AAAA...","usage_type":"auth_and_signing","created_at":"2024-01-01T00:00:00Z"},
-				{"id":2,"title":"Personal","key":"ssh-rsa AAAA...","usage_type":"auth","created_at":"2024-06-01T00:00:00Z"}
+				{"id":1,"title":"Work Laptop","key":"ssh-ed25519 AAAA...","usage_type":"auth_and_signing","created_at":"2026-01-01T00:00:00Z"},
+				{"id":2,"title":"Personal","key":"ssh-rsa AAAA...","usage_type":"auth","created_at":"2026-06-01T00:00:00Z"}
 			]`)
 			return
 		}
@@ -315,7 +315,7 @@ func TestListEmails_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListEmails {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"email":"primary@example.com","confirmed_at":"2024-01-01T00:00:00Z"},
+				{"id":1,"email":"primary@example.com","confirmed_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"email":"secondary@example.com"}
 			]`)
 			return
@@ -357,8 +357,8 @@ func TestListContributionEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathContribEvents {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","target_title":"main","created_at":"2024-06-01T12:00:00Z"},
-				{"id":101,"project_id":10,"action_name":"commented","target_type":"Issue","target_title":"Fix bug","created_at":"2024-06-02T14:00:00Z"}
+				{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","target_title":"main","created_at":"2026-06-01T12:00:00Z"},
+				{"id":101,"project_id":10,"action_name":"commented","target_type":"Issue","target_title":"Fix bug","created_at":"2026-06-02T14:00:00Z"}
 			]`)
 			return
 		}
@@ -500,9 +500,9 @@ func TestCurrent_FullFields(t *testing.T) {
 				"using_license_seat":true,
 				"theme_id":2,
 				"color_scheme_id":3,
-				"created_at":"2024-01-01T00:00:00Z",
-				"last_activity_on":"2024-06-15",
-				"current_sign_in_at":"2024-06-15T10:00:00Z"
+				"created_at":"2026-01-01T00:00:00Z",
+				"last_activity_on":"2026-06-15",
+				"current_sign_in_at":"2026-06-15T10:00:00Z"
 			}`)
 			return
 		}
@@ -737,7 +737,7 @@ func TestGet_UserStatusWithClearAt(t *testing.T) {
 				"message":"On vacation",
 				"availability":"not_set",
 				"message_html":"<p>On vacation</p>",
-				"clear_status_at":"2024-12-31T23:59:59Z"
+				"clear_status_at":"2026-12-31T23:59:59Z"
 			}`)
 			return
 		}
@@ -783,7 +783,7 @@ func TestSetUserStatus_WithClearAfter(t *testing.T) {
 				"emoji":"coffee",
 				"message":"BRB",
 				"availability":"busy",
-				"clear_status_at":"2024-06-15T18:00:00Z"
+				"clear_status_at":"2026-06-15T18:00:00Z"
 			}`)
 			return
 		}
@@ -847,7 +847,7 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/keys" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"title":"Key1","key":"ssh-ed25519 AAAA...","usage_type":"auth","created_at":"2024-01-01T00:00:00Z","expires_at":"2025-01-01T00:00:00Z"}
+				{"id":1,"title":"Key1","key":"ssh-ed25519 AAAA...","usage_type":"auth","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-01-01T00:00:00Z"}
 			]`, testutil.PaginationHeaders{
 				Page: "1", PerPage: "20", Total: "5", TotalPages: "1",
 			})
@@ -952,7 +952,7 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":200,"project_id":5,"action_name":"created","target_type":"Issue","target_title":"New feature","target_id":10,"target_iid":1,"created_at":"2024-03-15T09:00:00Z"}
+				{"id":200,"project_id":5,"action_name":"created","target_type":"Issue","target_title":"New feature","target_id":10,"target_iid":1,"created_at":"2026-03-15T09:00:00Z"}
 			]`, testutil.PaginationHeaders{
 				Page: "1", PerPage: "20", Total: "1", TotalPages: "1",
 			})
@@ -965,8 +965,8 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 		UserID:     42,
 		Action:     "created",
 		TargetType: "Issue",
-		Before:     "2024-12-31",
-		After:      "2024-01-01",
+		Before:     "2026-12-31",
+		After:      "2026-01-01",
 		Sort:       "desc",
 		Page:       1,
 		PerPage:    20,
@@ -1167,7 +1167,7 @@ func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 		Emoji:         "coffee",
 		Message:       "Taking a break",
 		Availability:  "busy",
-		ClearStatusAt: "2024-12-31T23:59:59Z",
+		ClearStatusAt: "2026-12-31T23:59:59Z",
 	}
 	md := FormatStatusMarkdownString(out)
 
@@ -1176,7 +1176,7 @@ func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 		"**Emoji**: coffee",
 		"**Message**: Taking a break",
 		"**Availability**: busy",
-		"**Clear At**: 31 Dec 2024 23:59 UTC",
+		"**Clear At**: 31 Dec 2026 23:59 UTC",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
@@ -1224,8 +1224,8 @@ func TestFormatStatusMarkdown_ReturnsMCPResult(t *testing.T) {
 func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 	out := SSHKeyListOutput{
 		Keys: []SSHKeyOutput{
-			{ID: 1, Title: "Work Laptop", UsageType: "auth", CreatedAt: "2024-01-01T00:00:00Z", ExpiresAt: "2025-01-01T00:00:00Z"},
-			{ID: 2, Title: "Personal", UsageType: "auth_and_signing", CreatedAt: "2024-06-01T00:00:00Z"},
+			{ID: 1, Title: "Work Laptop", UsageType: "auth", CreatedAt: "2026-01-01T00:00:00Z", ExpiresAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, Title: "Personal", UsageType: "auth_and_signing", CreatedAt: "2026-06-01T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1271,7 +1271,7 @@ func TestFormatSSHKeyListMarkdown_ReturnsMCPResult(t *testing.T) {
 func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 	out := EmailListOutput{
 		Emails: []EmailOutput{
-			{ID: 1, Email: "primary@example.com", ConfirmedAt: "2024-01-01T00:00:00Z"},
+			{ID: 1, Email: "primary@example.com", ConfirmedAt: "2026-01-01T00:00:00Z"},
 			{ID: 2, Email: "alias@example.com"},
 		},
 	}
@@ -1316,8 +1316,8 @@ func TestFormatEmailListMarkdown_ReturnsMCPResult(t *testing.T) {
 func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 	out := ContributionEventsOutput{
 		Events: []ContributionEventOutput{
-			{ID: 100, ActionName: "pushed", TargetType: "Project", TargetTitle: "main", CreatedAt: "2024-06-01T12:00:00Z"},
-			{ID: 101, ActionName: "commented", TargetType: "Issue", TargetTitle: "Fix bug", CreatedAt: "2024-06-02T14:00:00Z"},
+			{ID: 100, ActionName: "pushed", TargetType: "Project", TargetTitle: "main", CreatedAt: "2026-06-01T12:00:00Z"},
+			{ID: 101, ActionName: "commented", TargetType: "Issue", TargetTitle: "Fix bug", CreatedAt: "2026-06-02T14:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1501,17 +1501,17 @@ func newUsersMCPSession(t *testing.T) *mcp.ClientSession {
 
 	// List SSH keys
 	handler.HandleFunc("GET /api/v4/user/keys", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"Work","key":"ssh-ed25519 AAAA...","usage_type":"auth","created_at":"2024-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"Work","key":"ssh-ed25519 AAAA...","usage_type":"auth","created_at":"2026-01-01T00:00:00Z"}]`)
 	})
 
 	// List emails
 	handler.HandleFunc("GET /api/v4/user/emails", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"email":"test@example.com","confirmed_at":"2024-01-01T00:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"email":"test@example.com","confirmed_at":"2026-01-01T00:00:00Z"}]`)
 	})
 
 	// List contribution events
 	handler.HandleFunc("GET /api/v4/users/42/events", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","created_at":"2024-06-01T12:00:00Z"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"project_id":10,"action_name":"pushed","target_type":"Project","created_at":"2026-06-01T12:00:00Z"}]`)
 	})
 
 	// Get associations count

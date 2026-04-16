@@ -15,7 +15,7 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"username":"alice","name":"Alice","email":"alice@example.com","state":"active","web_url":"https://gitlab.example.com/alice","two_factor_enabled":true,"created_at":"2024-01-01T00:00:00Z"},
+				{"id":1,"username":"alice","name":"Alice","email":"alice@example.com","state":"active","web_url":"https://gitlab.example.com/alice","two_factor_enabled":true,"created_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"username":"bob","name":"Bob","email":"bob@example.com","state":"blocked","web_url":"https://gitlab.example.com/bob","two_factor_enabled":false}
 			]`)
 			return
@@ -178,8 +178,8 @@ func TestList_ValidDateFilters(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		GroupID:       toolutil.StringOrInt("42"),
-		CreatedAfter:  "2024-01-01T00:00:00Z",
-		CreatedBefore: "2024-12-31T23:59:59Z",
+		CreatedAfter:  "2026-01-01T00:00:00Z",
+		CreatedBefore: "2026-12-31T23:59:59Z",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -231,7 +231,7 @@ func TestGet_Success(t *testing.T) {
 				"email":"alice@example.com","state":"active",
 				"web_url":"https://gitlab.example.com/alice",
 				"is_admin":false,"two_factor_enabled":true,
-				"created_at":"2024-01-01T00:00:00Z"
+				"created_at":"2026-01-01T00:00:00Z"
 			}`)
 			return
 		}

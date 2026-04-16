@@ -16,7 +16,7 @@ func TestListIssueIterationEvents_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}
+			{"id":1,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -56,7 +56,7 @@ func TestGetIssueIterationEvent_Success(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"action":"add","created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}`)
 	}))
 
 	out, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IssueIID: 1, IterationEventID: 1})
@@ -93,7 +93,7 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"created_at":"2024-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"state":"weight_changed","issue_id":1,"weight":5,"user":{"id":5,"username":"alice"}}
+			{"id":1,"created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"state":"weight_changed","issue_id":1,"weight":5,"user":{"id":5,"username":"alice"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 

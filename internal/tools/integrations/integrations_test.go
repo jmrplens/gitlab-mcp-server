@@ -285,7 +285,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 // TestFormatGetMarkdown verifies the behavior of format get markdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
-		Integration: IntegrationItem{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true, CreatedAt: "2024-01-01"},
+		Integration: IntegrationItem{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true, CreatedAt: "2026-01-01"},
 	})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
@@ -481,7 +481,7 @@ func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{
 			ID: 1, Title: "Jira", Slug: "jira", Active: true,
-			CreatedAt: "2024-01-01", UpdatedAt: "2024-06-01",
+			CreatedAt: "2026-01-01", UpdatedAt: "2026-06-01",
 		},
 	})
 	if result == nil {

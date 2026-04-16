@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	sampleControllerJSON = `{"id":1,"description":"ctrl-1","state":"enabled","created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}`
-	sampleDetailsJSON    = `{"id":1,"description":"ctrl-1","state":"enabled","connected":true,"created_at":"2025-01-15T10:00:00Z","updated_at":"2025-01-15T12:00:00Z"}`
+	sampleControllerJSON = `{"id":1,"description":"ctrl-1","state":"enabled","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
+	sampleDetailsJSON    = `{"id":1,"description":"ctrl-1","state":"enabled","connected":true,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	errUnexpected        = "unexpected error: %v"
 	errExpValidation     = "expected validation error, got nil"
 	errExpAPIErr         = "expected API error, got nil"
@@ -336,7 +336,7 @@ func TestDelete_ContextCancelled(t *testing.T) {
 // TestFormatOutputMarkdown verifies Markdown formatting with and without timestamps.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{ID: 1, Description: "ctrl-1", State: "enabled",
-		CreatedAt: "2025-01-15T10:00:00Z", UpdatedAt: "2025-01-15T12:00:00Z"}
+		CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"}
 
 	md := FormatOutputMarkdown(out)
 	for _, want := range []string{"ctrl-1", "enabled", "Created At", "Updated At"} {
@@ -357,7 +357,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // TestFormatDetailsMarkdown verifies detailed Markdown formatting.
 func TestFormatDetailsMarkdown(t *testing.T) {
 	out := DetailsOutput{
-		Output:    Output{ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2025-01-15T10:00:00Z", UpdatedAt: "2025-01-15T12:00:00Z"},
+		Output:    Output{ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
 		Connected: true,
 	}
 

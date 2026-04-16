@@ -252,7 +252,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 func TestList_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id":"aaa111","short_id":"aaa1","title":"Commit with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2025-06-15T10:30:00Z"}
+			{"id":"aaa111","short_id":"aaa1","title":"Commit with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2026-06-15T10:30:00Z"}
 		]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -290,7 +290,7 @@ func TestList_CancelledContext(t *testing.T) {
 func TestCreate_WithCreatedAt(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id":"bbb222","short_id":"bbb2","title":"Created with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2025-07-01T08:00:00Z"}
+			{"id":"bbb222","short_id":"bbb2","title":"Created with date","author_name":"Dev","author_email":"dev@test.com","created_at":"2026-07-01T08:00:00Z"}
 		]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -439,7 +439,7 @@ func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
 	const commitsJSON = `[
-		{"id":"abc123","short_id":"abc1","title":"Initial commit","author_name":"Dev","author_email":"dev@test.com","created_at":"2025-06-15T10:30:00Z"}
+		{"id":"abc123","short_id":"abc1","title":"Initial commit","author_name":"Dev","author_email":"dev@test.com","created_at":"2026-06-15T10:30:00Z"}
 	]`
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

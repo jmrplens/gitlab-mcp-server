@@ -22,17 +22,17 @@ const (
 		"token":"glpat-abc123",
 		"scopes":["api","read_user"],
 		"revoked":false,
-		"created_at":"2024-01-15T10:00:00Z",
-		"expires_at":"2025-01-15",
-		"last_used_at":"2024-06-01T08:00:00Z"
+		"created_at":"2026-01-15T10:00:00Z",
+		"expires_at":"2026-01-15",
+		"last_used_at":"2026-06-01T08:00:00Z"
 	}`
 
 	tokenListJSON = `[{
 		"id":1,"name":"token-1","active":true,"scopes":["api"],"revoked":false,
-		"created_at":"2024-01-15T10:00:00Z"
+		"created_at":"2026-01-15T10:00:00Z"
 	},{
 		"id":2,"name":"token-2","active":false,"scopes":["read_user"],"revoked":true,
-		"created_at":"2024-02-20T12:00:00Z"
+		"created_at":"2026-02-20T12:00:00Z"
 	}]`
 
 	patJSON = `{
@@ -44,8 +44,8 @@ const (
 		"revoked":false,
 		"description":"Test PAT",
 		"user_id":42,
-		"created_at":"2024-01-15T10:00:00Z",
-		"expires_at":"2025-01-15"
+		"created_at":"2026-01-15T10:00:00Z",
+		"expires_at":"2026-01-15"
 	}`
 )
 
@@ -155,7 +155,7 @@ func TestCreate_Success(t *testing.T) {
 	}))
 
 	out, err := Create(context.Background(), client, CreateInput{
-		UserID: 42, Name: "test-token", Scopes: []string{"api"}, ExpiresAt: "2025-01-15",
+		UserID: 42, Name: "test-token", Scopes: []string{"api"}, ExpiresAt: "2026-01-15",
 	})
 	if err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
@@ -238,7 +238,7 @@ func TestCreatePAT_Success(t *testing.T) {
 	}))
 
 	out, err := CreatePAT(context.Background(), client, CreatePATInput{
-		UserID: 42, Name: "my-pat", Scopes: []string{"api"}, Description: "Test PAT", ExpiresAt: "2025-01-15",
+		UserID: 42, Name: "my-pat", Scopes: []string{"api"}, Description: "Test PAT", ExpiresAt: "2026-01-15",
 	})
 	if err != nil {
 		t.Fatalf("CreatePAT() unexpected error: %v", err)

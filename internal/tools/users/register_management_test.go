@@ -86,7 +86,7 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 
 	uJSON := `{"id":42,"username":"testuser","email":"test@example.com","name":"Test User","state":"active","web_url":"https://gitlab.example.com/testuser"}`
 	statusJSON := `{"emoji":"coffee","message":"Working","availability":"busy"}`
-	sshKeyJSON := `{"id":1,"title":"key","key":"ssh-rsa AAA","created_at":"2024-01-01T00:00:00Z"}`
+	sshKeyJSON := `{"id":1,"title":"key","key":"ssh-rsa AAA","created_at":"2026-01-01T00:00:00Z"}`
 
 	handler := http.NewServeMux()
 
@@ -197,6 +197,7 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 	client := testutil.NewTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test-mgmt", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
+	RegisterEnterpriseTools(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

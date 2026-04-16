@@ -413,15 +413,15 @@ const covRepoJSON = `{
 	"id":100,"name":"cov-img","path":"group/project/cov-img",
 	"project_id":42,"location":"registry.example.com/group/project/cov-img",
 	"tags_count":3,"status":"delete_scheduled",
-	"created_at":"2025-01-15T10:00:00Z",
-	"cleanup_policy_started_at":"2025-01-16T12:00:00Z"
+	"created_at":"2026-01-15T10:00:00Z",
+	"cleanup_policy_started_at":"2026-01-16T12:00:00Z"
 }`
 
 const covTagJSON = `{
 	"name":"v1.0","path":"group/project/cov-img:v1.0",
 	"location":"registry.example.com/group/project/cov-img:v1.0",
 	"revision":"abc123","short_revision":"abc1","digest":"sha256:deadbeef",
-	"total_size":4096,"created_at":"2025-02-01T08:00:00Z"
+	"total_size":4096,"created_at":"2026-02-01T08:00:00Z"
 }`
 
 const covRuleJSON = `{
@@ -437,8 +437,8 @@ const covRuleJSON = `{
 
 // TestConvertRepository_AllFields verifies the behavior of cov convert repository all fields.
 func TestConvertRepository_AllFields(t *testing.T) {
-	now := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
-	cleanup := time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	cleanup := time.Date(2026, 1, 16, 12, 0, 0, 0, time.UTC)
 	status := gl.ContainerRegistryStatus("delete_scheduled")
 	r := &gl.RegistryRepository{
 		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
@@ -481,7 +481,7 @@ func TestConvertRepository_NilOptionalFields(t *testing.T) {
 
 // TestConvertTag_AllFields verifies the behavior of cov convert tag all fields.
 func TestConvertTag_AllFields(t *testing.T) {
-	now := time.Date(2025, 2, 1, 8, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC)
 	tag := &gl.RegistryRepositoryTag{
 		Name: "v1.0", Path: "p", Location: "loc",
 		Revision: "abc", ShortRevision: "a", Digest: "sha256:x",
@@ -511,10 +511,10 @@ func TestFormatRepositoryMarkdown_Full(t *testing.T) {
 	out := RepositoryOutput{
 		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
 		Location: "loc", TagsCount: 3,
-		Status: "delete_scheduled", CreatedAt: "2025-01-15T10:00:00Z",
+		Status: "delete_scheduled", CreatedAt: "2026-01-15T10:00:00Z",
 	}
 	md := FormatRepositoryMarkdown(out)
-	for _, want := range []string{"Registry Repository: " + testCovRepoPath, "img", testCovRepoPath, "loc", "3", "delete_scheduled", "15 Jan 2025"} {
+	for _, want := range []string{"Registry Repository: " + testCovRepoPath, "img", testCovRepoPath, "loc", "3", "delete_scheduled", "15 Jan 2026"} {
 		if !strings.Contains(md, want) {
 			t.Errorf(fmtExpectedInMarkdown, want, md)
 		}
@@ -586,10 +586,10 @@ func TestFormatTagMarkdown_Full(t *testing.T) {
 	out := TagOutput{
 		Name: "v1.0", Path: "p", Location: "loc",
 		Digest: "sha256:abc", Revision: "rev1",
-		TotalSize: 1024, CreatedAt: "2025-02-01T08:00:00Z",
+		TotalSize: 1024, CreatedAt: "2026-02-01T08:00:00Z",
 	}
 	md := FormatTagMarkdown(out)
-	for _, want := range []string{"v1.0", "sha256:abc", "rev1", "1024", "1 Feb 2025"} {
+	for _, want := range []string{"v1.0", "sha256:abc", "rev1", "1024", "1 Feb 2026"} {
 		if !strings.Contains(md, want) {
 			t.Errorf(fmtExpectedInMarkdown, want, md)
 		}

@@ -21,8 +21,8 @@ const (
 	targetIssue     = "issue"
 	titleBugReport  = "Bug Report"
 	fmtUnexpErr     = "unexpected error: %v"
-	testDateAfter   = "2024-06-01"
-	testDateCreated = "2024-01-14"
+	testDateAfter   = "2026-06-01"
+	testDateCreated = "2026-01-14"
 )
 
 // TestListProjectEvents_Success verifies the behavior of list project events success.
@@ -33,8 +33,8 @@ func TestListProjectEvents_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"project_id":42,"action_name":"pushed","author_id":10,"author_username":"alice","created_at":"2024-01-15","target_type":"","target_iid":0},
-			{"id":2,"project_id":42,"action_name":"commented","author_id":11,"author_username":"bob","created_at":"2024-01-14","target_type":"Note","target_iid":5,"target_title":"Fix bug"}
+			{"id":1,"project_id":42,"action_name":"pushed","author_id":10,"author_username":"alice","created_at":"2026-01-15","target_type":"","target_iid":0},
+			{"id":2,"project_id":42,"action_name":"commented","author_id":11,"author_username":"bob","created_at":"2026-01-14","target_type":"Note","target_iid":5,"target_title":"Fix bug"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
@@ -74,16 +74,16 @@ func TestListProjectEvents_WithFilters(t *testing.T) {
 			t.Errorf("expected target_type=issue, got %q", q.Get("target_type"))
 		}
 		if q.Get("before") != testDateAfter {
-			t.Errorf("expected before=2024-06-01, got %q", q.Get("before"))
+			t.Errorf("expected before=2026-06-01, got %q", q.Get("before"))
 		}
-		if q.Get("after") != "2024-01-01" {
-			t.Errorf("expected after=2024-01-01, got %q", q.Get("after"))
+		if q.Get("after") != "2026-01-01" {
+			t.Errorf("expected after=2026-01-01, got %q", q.Get("after"))
 		}
 		if q.Get("sort") != "asc" {
 			t.Errorf("expected sort=asc, got %q", q.Get("sort"))
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":10,"project_id":42,"action_name":"pushed","author_id":1,"author_username":"dev","created_at":"2024-03-01","target_type":"Issue","target_iid":7}
+			{"id":10,"project_id":42,"action_name":"pushed","author_id":1,"author_username":"dev","created_at":"2026-03-01","target_type":"Issue","target_iid":7}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -92,7 +92,7 @@ func TestListProjectEvents_WithFilters(t *testing.T) {
 		Action:     actionPushed,
 		TargetType: targetIssue,
 		Before:     testDateAfter,
-		After:      "2024-01-01",
+		After:      "2026-01-01",
 		Sort:       "asc",
 	})
 	if err != nil {
@@ -153,8 +153,8 @@ func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":100,"title":"Pushed to main","project_id":5,"action_name":"pushed","target_id":0,"target_iid":0,"target_type":"","author_id":1,"target_title":"","created_at":"2024-06-01T10:00:00Z","author_username":"dev"},
-			{"id":101,"title":"Opened issue","project_id":5,"action_name":"opened","target_id":42,"target_iid":7,"target_type":"Issue","author_id":1,"target_title":"Bug Report","created_at":"2024-06-02T11:30:00Z","author_username":"dev"}
+			{"id":100,"title":"Pushed to main","project_id":5,"action_name":"pushed","target_id":0,"target_iid":0,"target_type":"","author_id":1,"target_title":"","created_at":"2026-06-01T10:00:00Z","author_username":"dev"},
+			{"id":101,"title":"Opened issue","project_id":5,"action_name":"opened","target_id":42,"target_iid":7,"target_type":"Issue","author_id":1,"target_title":"Bug Report","created_at":"2026-06-02T11:30:00Z","author_username":"dev"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
@@ -197,7 +197,7 @@ func TestListCurrentUserContributionEvents_WithFilters(t *testing.T) {
 			t.Errorf("expected scope=all, got %q", q.Get("scope"))
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":200,"title":"Opened issue","project_id":9,"action_name":"pushed","target_id":1,"target_iid":3,"target_type":"Issue","author_id":1,"created_at":"2024-03-01T08:00:00Z","author_username":"dev"}
+			{"id":200,"title":"Opened issue","project_id":9,"action_name":"pushed","target_id":1,"target_iid":3,"target_type":"Issue","author_id":1,"created_at":"2026-03-01T08:00:00Z","author_username":"dev"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -230,8 +230,8 @@ func TestListCurrentUserContributionEvents_APIError_Forbidden(t *testing.T) {
 func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
-			{ID: 1, ActionName: actionPushed, AuthorUsername: "dev", CreatedAt: "2024-06-01T10:00:00Z", TargetType: "MergeRequest", TargetIID: 3},
-			{ID: 2, ActionName: "opened", AuthorUsername: "dev", CreatedAt: "2024-06-02T11:00:00Z"},
+			{ID: 1, ActionName: actionPushed, AuthorUsername: "dev", CreatedAt: "2026-06-01T10:00:00Z", TargetType: "MergeRequest", TargetIID: 3},
+			{ID: 2, ActionName: "opened", AuthorUsername: "dev", CreatedAt: "2026-06-02T11:00:00Z"},
 		},
 	}
 	md := FormatContributionListMarkdownString(out)
@@ -256,7 +256,7 @@ func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
 func TestFormatListMarkdownString_WithEvents(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
-			{ID: 1, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2024-01-15", TargetType: "MergeRequest", TargetIID: 3},
+			{ID: 1, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2026-01-15", TargetType: "MergeRequest", TargetIID: 3},
 			{ID: 2, ActionName: "commented", AuthorUsername: "bob", CreatedAt: testDateCreated},
 		},
 	}
@@ -350,7 +350,7 @@ func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
 func TestFormatListMarkdownString_NoEventID(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
-			{ID: 88, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2024-01-15"},
+			{ID: 88, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2026-01-15"},
 		},
 	}
 	md := FormatListMarkdownString(out)
@@ -424,7 +424,7 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 
 // TestCovtoContributionEventOutput_WithDate verifies the behavior of covto contribution event output with date.
 func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
-	ts := time.Date(2024, 3, 7, 12, 0, 0, 0, time.UTC)
+	ts := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 	e := &gl.ContributionEvent{
 		ID:             11,
 		Title:          "covTitle",
@@ -439,7 +439,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 		AuthorUsername: "covUser",
 	}
 	out := toContributionEventOutput(e)
-	if !strings.Contains(out.CreatedAt, "2024-03-07") {
+	if !strings.Contains(out.CreatedAt, "2026-03-07") {
 		t.Errorf("expected date in CreatedAt, got %q", out.CreatedAt)
 	}
 }
@@ -561,8 +561,8 @@ func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	out, err := ListCurrentUserContributionEvents(t.Context(), client, ListContributionEventsInput{
 		Action:     "pushed",
 		TargetType: "issue",
-		Before:     "2025-01-01",
-		After:      "2024-01-01",
+		Before:     "2026-01-01",
+		After:      "2026-01-01",
 		Sort:       "asc",
 		Scope:      "all",
 	})
@@ -619,8 +619,8 @@ func TestListProjectEvents_AllFilters(t *testing.T) {
 		ProjectID:  "proj",
 		Action:     "created",
 		TargetType: "merge_request",
-		Before:     "2025-01-01",
-		After:      "2024-01-01",
+		Before:     "2026-01-01",
+		After:      "2026-01-01",
 		Sort:       "desc",
 	})
 	if err != nil {

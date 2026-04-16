@@ -127,7 +127,7 @@ func individualComplianceCases() []responseComplianceCase {
 			arguments: map[string]any{"project_id": "42"},
 			routes: map[string]string{
 				"/api/v4/version":              `{"version":"17.0.0"}`,
-				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2024-01-01T00:00:00Z"}]`,
+				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2026-01-01T00:00:00Z"}]`,
 			},
 		},
 		{
@@ -202,7 +202,7 @@ func metaComplianceCases() []responseComplianceCase {
 			},
 			routes: map[string]string{
 				"/api/v4/version":              `{"version":"17.0.0"}`,
-				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2024-01-01T00:00:00Z"}]`,
+				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2026-01-01T00:00:00Z"}]`,
 			},
 		},
 	}
@@ -498,7 +498,7 @@ func TestResponseCompliance_MarkdownContentWellFormed(t *testing.T) {
 			arguments: map[string]any{"project_id": "42"},
 			routes: map[string]string{
 				"/api/v4/version":              `{"version":"17.0.0"}`,
-				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2024-01-01T00:00:00Z"}]`,
+				"/api/v4/projects/42/packages": `[{"id":1,"name":"app","version":"1.0.0","package_type":"generic","status":"default","created_at":"2026-01-01T00:00:00Z"}]`,
 			},
 		},
 	}

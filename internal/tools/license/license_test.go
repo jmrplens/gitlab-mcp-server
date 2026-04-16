@@ -21,9 +21,9 @@ const fmtUnexpErr = "unexpected error: %v"
 const licenseJSON = `{
 	"id": 1,
 	"plan": "premium",
-	"created_at": "2024-01-01T00:00:00Z",
-	"starts_at": "2024-01-01",
-	"expires_at": "2025-01-01",
+	"created_at": "2026-01-01T00:00:00Z",
+	"starts_at": "2026-01-01",
+	"expires_at": "2026-01-01",
 	"historical_max": 100,
 	"maximum_user_count": 50,
 	"expired": false,
@@ -180,9 +180,9 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	item := Item{
 		ID:               2,
 		Plan:             "ultimate",
-		StartsAt:         "2024-01-01",
-		ExpiresAt:        "2025-12-31",
-		CreatedAt:        "2024-01-01T00:00:00Z",
+		StartsAt:         "2026-01-01",
+		ExpiresAt:        "2026-12-31",
+		CreatedAt:        "2026-01-01T00:00:00Z",
 		ActiveUsers:      100,
 		UserLimit:        200,
 		MaximumUserCount: 150,
@@ -193,7 +193,7 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	}
 	result := FormatLicenseMarkdown(item)
 	text := result.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{"ultimate", "1 Jan 2024", "31 Dec 2025", "Jane", "Corp", "true"} {
+	for _, want := range []string{"ultimate", "1 Jan 2026", "31 Dec 2026", "Jane", "Corp", "true"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in markdown", want)
 		}
@@ -333,9 +333,9 @@ func TestToItem_NilDates(t *testing.T) {
 // TestToItem_WithDates verifies that toItem correctly formats non-nil date
 // pointers from the GitLab license struct.
 func TestToItem_WithDates(t *testing.T) {
-	now := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
-	isoStart := gl.ISOTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
-	isoEnd := gl.ISOTime(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC))
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	isoStart := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	isoEnd := gl.ISOTime(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
 
 	lic := &gl.License{
 		ID:        1,
@@ -353,8 +353,8 @@ func TestToItem_WithDates(t *testing.T) {
 	if item.CreatedAt == "" {
 		t.Error("expected non-empty CreatedAt")
 	}
-	if !strings.Contains(item.CreatedAt, "2024") {
-		t.Errorf("expected year 2024 in CreatedAt, got %q", item.CreatedAt)
+	if !strings.Contains(item.CreatedAt, "2026") {
+		t.Errorf("expected year 2026 in CreatedAt, got %q", item.CreatedAt)
 	}
 	if item.StartsAt == "" {
 		t.Error("expected non-empty StartsAt")

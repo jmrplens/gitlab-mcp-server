@@ -33,8 +33,8 @@ func TestStartMigration(t *testing.T) {
 			"status": "created",
 			"source_type": "gitlab",
 			"source_url": "https://source.gitlab.com",
-			"created_at": "2025-01-01T00:00:00Z",
-			"updated_at": "2025-01-01T00:00:00Z",
+			"created_at": "2026-01-01T00:00:00Z",
+			"updated_at": "2026-01-01T00:00:00Z",
 			"has_failures": false
 		}`)
 	})
@@ -88,8 +88,8 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 		Status:      "created",
 		SourceType:  "gitlab",
 		SourceURL:   "https://src.example.com",
-		CreatedAt:   "2025-01-01",
-		UpdatedAt:   "2025-01-01",
+		CreatedAt:   "2026-01-01",
+		UpdatedAt:   "2026-01-01",
 		HasFailures: false,
 	}
 	md := FormatStartMigrationMarkdown(out)
@@ -116,8 +116,8 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 				"status": "created",
 				"source_type": "gitlab",
 				"source_url": "https://source.gitlab.com",
-				"created_at": "2025-01-01T00:00:00Z",
-				"updated_at": "2025-01-01T00:00:00Z",
+				"created_at": "2026-01-01T00:00:00Z",
+				"updated_at": "2026-01-01T00:00:00Z",
 				"has_failures": false
 			}`)
 			return
@@ -161,8 +161,8 @@ func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 		Status:      "failed",
 		SourceType:  "gitlab",
 		SourceURL:   "https://src|pipe.example.com",
-		CreatedAt:   "2025-06-01",
-		UpdatedAt:   "2025-06-02",
+		CreatedAt:   "2026-06-01",
+		UpdatedAt:   "2026-06-02",
 		HasFailures: true,
 	}
 	md := FormatStartMigrationMarkdown(out)
@@ -198,8 +198,8 @@ func TestMCPRound_Trip(t *testing.T) {
 			"status": "created",
 			"source_type": "gitlab",
 			"source_url": "https://source.gitlab.com",
-			"created_at": "2025-01-01T00:00:00Z",
-			"updated_at": "2025-01-01T00:00:00Z",
+			"created_at": "2026-01-01T00:00:00Z",
+			"updated_at": "2026-01-01T00:00:00Z",
 			"has_failures": false
 		}`)
 	})

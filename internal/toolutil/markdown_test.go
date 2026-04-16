@@ -199,10 +199,10 @@ func TestParseOptionalTime(t *testing.T) {
 		input   string
 		wantNil bool
 	}{
-		{"valid RFC3339", "2024-01-15T10:30:00Z", false},
+		{"valid RFC3339", "2026-01-15T10:30:00Z", false},
 		{"empty string", "", true},
 		{"invalid format", "not-a-date", true},
-		{"partial date", "2024-01-15", true},
+		{"partial date", "2026-01-15", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -214,7 +214,7 @@ func TestParseOptionalTime(t *testing.T) {
 				if got == nil {
 					t.Fatalf("ParseOptionalTime(%q) = nil, want non-nil", tt.input)
 				}
-				expected := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+				expected := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
 				if !got.Equal(expected) {
 					t.Errorf("ParseOptionalTime(%q) = %v, want %v", tt.input, got, expected)
 				}

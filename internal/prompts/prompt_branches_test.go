@@ -29,8 +29,8 @@ func TestSummarizeOpenMRs_NilAuthorAndDescription(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathMRs {
 			respondJSON(w, http.StatusOK, `[
-				{"id":1,"iid":1,"title":"MR no author","state":"opened","source_branch":"a","target_branch":"main","author":null,"created_at":"2025-01-01T00:00:00Z","detailed_merge_status":"mergeable","description":"`+longDesc+`"},
-				{"id":2,"iid":2,"title":"MR short desc","state":"opened","source_branch":"b","target_branch":"main","author":{"username":"bob"},"created_at":"2025-01-01T00:00:00Z","detailed_merge_status":"mergeable","description":"short desc"}
+				{"id":1,"iid":1,"title":"MR no author","state":"opened","source_branch":"a","target_branch":"main","author":null,"created_at":"2026-01-01T00:00:00Z","detailed_merge_status":"mergeable","description":"`+longDesc+`"},
+				{"id":2,"iid":2,"title":"MR short desc","state":"opened","source_branch":"b","target_branch":"main","author":{"username":"bob"},"created_at":"2026-01-01T00:00:00Z","detailed_merge_status":"mergeable","description":"short desc"}
 			]`)
 			return
 		}
@@ -425,7 +425,7 @@ func TestProjectHealthCheckNilAuthorAnd_NilCommit(t *testing.T) {
 		case pathPipelinesLatest:
 			respondJSON(w, http.StatusOK, `{"id":100,"status":"success","ref":"main","sha":"abc","web_url":"https://x.com/p/100"}`)
 		case pathMRs:
-			respondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"title":"MR","state":"opened","author":null,"created_at":"2025-01-01T00:00:00Z"}]`)
+			respondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"title":"MR","state":"opened","author":null,"created_at":"2026-01-01T00:00:00Z"}]`)
 		case "/api/v4/projects/42/repository/branches":
 			respondJSON(w, http.StatusOK, `[{"name":"no-commit","protected":false,"merged":false,"default":false,"commit":null}]`)
 		default:

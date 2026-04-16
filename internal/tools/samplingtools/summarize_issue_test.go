@@ -30,8 +30,8 @@ func TestFormatIssueForSummary_Basic(t *testing.T) {
 		Title:       testLoginBug,
 		State:       "opened",
 		Author:      "alice",
-		CreatedAt:   "2024-01-15T10:00:00Z",
-		DueDate:     "2024-02-01",
+		CreatedAt:   "2026-01-15T10:00:00Z",
+		DueDate:     "2026-02-01",
 		Labels:      []string{"bug", "critical"},
 		Assignees:   []string{"bob", "charlie"},
 		Description: "Login fails on mobile",
@@ -42,7 +42,7 @@ func TestFormatIssueForSummary_Basic(t *testing.T) {
 				ID:        100,
 				Author:    "alice",
 				Body:      "Found a fix",
-				CreatedAt: "2024-01-16T10:00:00Z",
+				CreatedAt: "2026-01-16T10:00:00Z",
 			},
 		},
 	}
@@ -56,8 +56,8 @@ func TestFormatIssueForSummary_Basic(t *testing.T) {
 		{"title", "# Issue #10: Login bug"},
 		{"state", "**State**: opened"},
 		{"author", "**Author**: alice"},
-		{"created", "**Created**: 15 Jan 2024 10:00 UTC"},
-		{"due date", "**Due Date**: 1 Feb 2024"},
+		{"created", "**Created**: 15 Jan 2026 10:00 UTC"},
+		{"due date", "**Due Date**: 1 Feb 2026"},
 		{"labels", "**Labels**: bug, critical"},
 		{"assignees", "**Assignees**: bob, charlie"},
 		{"description", mdSectionDescription},
@@ -205,7 +205,7 @@ func TestSummarizeIssue_FullFlow(t *testing.T) {
 			"id": 200, "iid": 10, "title": "Login bug",
 			"description": "Login fails on mobile", "state": "opened",
 			"author": {"username": "alice"},
-			"created_at": "2024-01-15T10:00:00Z",
+			"created_at": "2026-01-15T10:00:00Z",
 			"web_url": "https://gitlab.example.com/issues/10"
 		}`)
 	})

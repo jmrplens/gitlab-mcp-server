@@ -30,7 +30,7 @@ func TestFormatListMarkdown(t *testing.T) {
 					{
 						TagName:    "v1.0.0",
 						Name:       "First Release",
-						ReleasedAt: "2024-06-01",
+						ReleasedAt: "2026-06-01",
 						Author:     "admin",
 					},
 				},
@@ -38,28 +38,28 @@ func TestFormatListMarkdown(t *testing.T) {
 			},
 			wantSub: []string{
 				"| Tag | Name | Released | Author |",
-				"| v1.0.0 | First Release | 2024-06-01 | admin |",
+				"| v1.0.0 | First Release | 2026-06-01 | admin |",
 			},
 		},
 		{
 			name: "multiple releases renders all rows",
 			input: ListOutput{
 				Releases: []Output{
-					{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2024-07-01", Author: "dev1"},
-					{TagName: "v1.0.0", Name: "First", ReleasedAt: "2024-06-01", Author: "dev2"},
+					{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2026-07-01", Author: "dev1"},
+					{TagName: "v1.0.0", Name: "First", ReleasedAt: "2026-06-01", Author: "dev2"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
 			},
 			wantSub: []string{
-				"| v2.0.0 | Second | 2024-07-01 | dev1 |",
-				"| v1.0.0 | First | 2024-06-01 | dev2 |",
+				"| v2.0.0 | Second | 2026-07-01 | dev1 |",
+				"| v1.0.0 | First | 2026-06-01 | dev2 |",
 			},
 		},
 		{
 			name: "special characters in tag and name are escaped",
 			input: ListOutput{
 				Releases: []Output{
-					{TagName: "v1|beta", Name: "Rel|ease", ReleasedAt: "2024-01-01", Author: "user"},
+					{TagName: "v1|beta", Name: "Rel|ease", ReleasedAt: "2026-01-01", Author: "user"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
 			},

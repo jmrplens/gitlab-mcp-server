@@ -23,7 +23,7 @@ func TestGetKeyWithUser_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2024-01-01T00:00:00Z","user":{"id":1,"username":"admin","name":"Admin"}}`)
+			`{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z","user":{"id":1,"username":"admin","name":"Admin"}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -132,7 +132,7 @@ func TestGetKeyByFingerprint_APIError(t *testing.T) {
 
 // TestToOutput_WithCreatedAt verifies the behavior of to output with created at.
 func TestToOutput_WithCreatedAt(t *testing.T) {
-	now := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	key := &gl.Key{
 		ID:        1,
 		Title:     "Test",
@@ -150,8 +150,8 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 	if out.CreatedAt == "" {
 		t.Fatal("expected non-empty CreatedAt")
 	}
-	if !strings.Contains(out.CreatedAt, "2024") {
-		t.Errorf("CreatedAt = %q, expected to contain 2024", out.CreatedAt)
+	if !strings.Contains(out.CreatedAt, "2026") {
+		t.Errorf("CreatedAt = %q, expected to contain 2026", out.CreatedAt)
 	}
 	if out.ID != 1 {
 		t.Errorf("ID = %d, want 1", out.ID)
@@ -194,7 +194,7 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 		ID:        1,
 		Title:     "My Key",
 		Key:       "ssh-rsa short",
-		CreatedAt: "2024-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 		User:      UserOutput{ID: 1, Username: "admin", Name: "Admin"},
 	}
 
@@ -203,7 +203,7 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	if !strings.Contains(md, "**Created**") {
 		t.Error("expected markdown to contain Created field")
 	}
-	if !strings.Contains(md, "1 Jan 2024 00:00 UTC") {
+	if !strings.Contains(md, "1 Jan 2026 00:00 UTC") {
 		t.Error("expected markdown to contain the date value")
 	}
 }
@@ -372,7 +372,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/v4/keys/"):
 			testutil.RespondJSON(w, http.StatusOK,
-				`{"id":42,"title":"MCP Key","key":"ssh-rsa AAAA...","created_at":"2024-06-01T12:00:00Z","user":{"id":1,"username":"admin","name":"Admin"}}`)
+				`{"id":42,"title":"MCP Key","key":"ssh-rsa AAAA...","created_at":"2026-06-01T12:00:00Z","user":{"id":1,"username":"admin","name":"Admin"}}`)
 		case r.URL.Path == "/api/v4/keys" && r.URL.Query().Get("fingerprint") != "":
 			testutil.RespondJSON(w, http.StatusOK,
 				`{"id":99,"title":"FP Key","key":"ssh-ed25519 BBBB...","user":{"id":2,"username":"deploy","name":"Deploy"}}`)

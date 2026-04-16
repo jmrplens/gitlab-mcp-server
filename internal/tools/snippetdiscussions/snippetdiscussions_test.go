@@ -25,7 +25,7 @@ func TestList_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"snippet note","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z"}]}]`,
+			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"snippet note","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -62,7 +62,7 @@ func TestGet_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test","author":{"username":"bob"},"created_at":"2024-01-01T00:00:00Z"}]}`)
+			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test","author":{"username":"bob"},"created_at":"2026-01-01T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -79,7 +79,7 @@ func TestGet_Success(t *testing.T) {
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new","author":{"username":"carol"},"created_at":"2024-01-02T00:00:00Z"}]}`)
+			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new","author":{"username":"carol"},"created_at":"2026-01-02T00:00:00Z"}]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -96,7 +96,7 @@ func TestCreate_Success(t *testing.T) {
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":30,"body":"reply","author":{"username":"dave"},"created_at":"2024-01-03T00:00:00Z"}`)
+			`{"id":30,"body":"reply","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -113,7 +113,7 @@ func TestAddNote_Success(t *testing.T) {
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":30,"body":"updated","author":{"username":"dave"},"created_at":"2024-01-03T00:00:00Z","updated_at":"2024-01-04T00:00:00Z"}`)
+			`{"id":30,"body":"updated","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z","updated_at":"2026-01-04T00:00:00Z"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -269,8 +269,8 @@ const errExpectedErr = "expected error"
 
 const errExpNonNilResult = "expected non-nil result"
 
-const covDiscussionJSON = `{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z"}]}`
-const covNoteJSON = `{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-02T00:00:00Z"}`
+const covDiscussionJSON = `{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}`
+const covNoteJSON = `{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}`
 
 // ---------------------------------------------------------------------------
 // API error paths (use 400 to avoid go-retryablehttp retries)
@@ -331,7 +331,7 @@ func TestNoteToOutput_NilUpdatedAt(t *testing.T) {
 		Body:      "test",
 		System:    true,
 		Author:    gl.NoteAuthor{Username: "bob"},
-		CreatedAt: new(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 		UpdatedAt: nil,
 	}
 	out := noteToOutput(n)
@@ -348,7 +348,7 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	n := &gl.Note{
 		ID:        1,
 		Body:      "test",
-		CreatedAt: new(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 	}
 	out := noteToOutput(n)
 	if out.Author != "" {
@@ -405,7 +405,7 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 			{
 				ID: "d1",
 				Notes: []NoteOutput{
-					{ID: 1, Author: "alice", CreatedAt: "2024-01-01T00:00:00Z", Body: "note body"},
+					{ID: 1, Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", Body: "note body"},
 				},
 			},
 		},
@@ -436,7 +436,7 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 	out := Output{
 		ID: "d1",
 		Notes: []NoteOutput{
-			{ID: 1, Author: "bob", CreatedAt: "2024-01-01T00:00:00Z", Body: "hello"},
+			{ID: 1, Author: "bob", CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
 		},
 	}
 	result := FormatMarkdown(out)
@@ -458,7 +458,7 @@ func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 		ID:        1,
 		Author:    "carol",
 		Body:      "test body",
-		CreatedAt: "2024-01-01T00:00:00Z",
+		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	result := FormatNoteMarkdown(out)
 	if result == nil {

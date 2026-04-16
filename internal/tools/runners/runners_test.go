@@ -123,7 +123,7 @@ func TestGet_Success(t *testing.T) {
 				"tag_list":["docker","linux"],"run_untagged":true,"locked":false,
 				"access_level":"not_protected","maximum_timeout":3600,
 				"projects":[{"id":1},{"id":2}],"groups":[{"id":5}],
-				"contacted_at":"2025-01-15T10:00:00Z",
+				"contacted_at":"2026-01-15T10:00:00Z",
 				"maintenance_note":"test note"
 			}`)
 			return

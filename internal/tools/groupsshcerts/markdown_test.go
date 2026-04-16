@@ -27,13 +27,13 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:        1,
 				Title:     "deploy-key",
 				Key:       "ssh-rsa AAAA1234",
-				CreatedAt: "2024-01-15T10:30:00Z",
+				CreatedAt: "2026-01-15T10:30:00Z",
 			},
 			wantParts: []string{
 				"## SSH Certificate #1",
 				"**Title**: deploy-key",
 				"**Key**: `ssh-rsa AAAA1234`",
-				"**Created**: 2024-01-15T10:30:00Z",
+				"**Created**: 2026-01-15T10:30:00Z",
 				"gitlab_delete_group_ssh_certificate",
 				"gitlab_list_group_ssh_certificates",
 			},
@@ -143,13 +143,13 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "single certificate renders table",
 			input: ListOutput{
 				Certificates: []Output{
-					{ID: 1, Title: "cert-one", CreatedAt: "2024-03-01T00:00:00Z"},
+					{ID: 1, Title: "cert-one", CreatedAt: "2026-03-01T00:00:00Z"},
 				},
 			},
 			wantParts: []string{
 				"## SSH Certificates (1)",
 				"| ID | Title | Created |",
-				"| 1 | cert-one | 2024-03-01T00:00:00Z |",
+				"| 1 | cert-one | 2026-03-01T00:00:00Z |",
 				"gitlab_create_group_ssh_certificate",
 			},
 		},
@@ -157,8 +157,8 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "multiple certificates renders all rows",
 			input: ListOutput{
 				Certificates: []Output{
-					{ID: 10, Title: "deploy-key", CreatedAt: "2024-01-01T00:00:00Z"},
-					{ID: 20, Title: "ci-bot", CreatedAt: "2024-06-15T12:00:00Z"},
+					{ID: 10, Title: "deploy-key", CreatedAt: "2026-01-01T00:00:00Z"},
+					{ID: 20, Title: "ci-bot", CreatedAt: "2026-06-15T12:00:00Z"},
 					{ID: 30, Title: "backup-key", CreatedAt: ""},
 				},
 			},
@@ -173,7 +173,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "title with pipe character is escaped",
 			input: ListOutput{
 				Certificates: []Output{
-					{ID: 5, Title: "key|with|pipes", CreatedAt: "2024-01-01T00:00:00Z"},
+					{ID: 5, Title: "key|with|pipes", CreatedAt: "2026-01-01T00:00:00Z"},
 				},
 			},
 			wantParts: []string{
