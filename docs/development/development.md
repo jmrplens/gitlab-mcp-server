@@ -260,6 +260,19 @@ GITLAB_SKIP_TLS_VERIFY=true
 | `test/e2e/suite/fixture_test.go`     | Self-contained GitLab resource builders                             |
 | `test/e2e/suite/*_test.go`           | 82 domain-specific test files (individual + meta)                   |
 
+## MCP Inspector
+
+The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) provides a web UI for interactively testing MCP tools, resources, and prompts against a running server.
+
+```bash
+make inspector       # Compile fresh binary to /tmp, launch Inspector via stdio
+make inspector-stop  # Stop Inspector processes and clean up temp binary
+```
+
+This compiles the server to a temporary binary (`/tmp/gitlab-mcp-server-inspector`), reads credentials from `.env`, and launches the Inspector at `http://127.0.0.1:6274/`. The temporary binary is automatically cleaned up on exit.
+
+**Prerequisites**: Node.js >= 22, `.env` file with `GITLAB_URL` and `GITLAB_TOKEN`.
+
 ## Linting & Formatting
 
 ```bash

@@ -211,6 +211,10 @@ golangci-lint run ./internal/tools/branches/   # lint on changed package
 npx markdownlint-cli2 docs/auto-update.md README.md  # lint specific .md files
 npx markdownlint-cli2 --fix docs/auto-update.md      # auto-fix specific .md files
 
+# MCP Inspector (interactive tool testing UI at http://127.0.0.1:6274)
+make inspector                             # compile + launch Inspector via stdio
+make inspector-stop                        # stop Inspector and clean up
+
 # Full project analysis (use sparingly — for pre-commit or CI)
 make analyze                               # all 9 tools, full project
 make analyze-fix                           # auto-fix what can be fixed

@@ -57,6 +57,12 @@ make coverage
 
 # Lint
 make lint
+
+# Launch MCP Inspector (interactive tool testing UI)
+make inspector
+
+# Stop MCP Inspector
+make inspector-stop
 ```
 
 ## Branch Naming

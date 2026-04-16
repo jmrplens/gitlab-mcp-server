@@ -694,6 +694,8 @@ make test-race     # Run with race detector
 make test-e2e      # Run E2E tests
 make coverage      # Generate coverage report
 make lint          # Run go vet + staticcheck
+make inspector     # Compile + launch MCP Inspector UI via stdio
+make inspector-stop # Stop Inspector and clean up temp binary
 ```
 
 ## Test Infrastructure
