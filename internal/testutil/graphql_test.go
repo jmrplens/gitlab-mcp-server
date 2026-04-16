@@ -171,3 +171,19 @@ func TestParseGraphQLVariables_InvalidJSON(t *testing.T) {
 		t.Fatal("expected error for invalid JSON body")
 	}
 }
+
+// TestGraphQLHandler_NonPostMethod verifies that GraphQLHandler rejects
+// non-POST requests with 405 Method Not Allowed.
+func TestGraphQLHandler_NonPostMethod(t *testing.T) {
+	handler := GraphQLHandler(map[string]http.HandlerFunc{
+		"someQuery": func(w http.ResponseWriter, _ *http.Request) {
+			RespondGraphQL(w, http.StatusOK, `{"data":{"ok":true}}`)
+		},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/graphql", nil)
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rec.Code)
+	}
+}

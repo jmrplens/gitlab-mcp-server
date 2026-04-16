@@ -563,11 +563,58 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helper: MCP session factory
-// ---------------------------------------------------------------------------.
+// TestRegisterTools_ErrorPaths verifies that API errors in RegisterTools
+// handlers are returned as IsError results via MCP. Uses 403 responses
+// to avoid GitLab client retry logic on 5xx.
+func TestRegisterTools_ErrorPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
 
-// newClusterAgentsMCPSession is an internal helper for the clusteragents package.
+	tools := []struct {
+		name string
+		tool string
+		args map[string]any
+	}{
+		{"list_agents", "gitlab_list_cluster_agents", map[string]any{"project_id": "1"}},
+		{"get_agent", "gitlab_get_cluster_agent", map[string]any{"project_id": "1", "agent_id": float64(5)}},
+		{"register_agent", "gitlab_register_cluster_agent", map[string]any{"project_id": "1", "name": "a"}},
+		{"delete_agent", "gitlab_delete_cluster_agent", map[string]any{"project_id": "1", "agent_id": float64(5)}},
+		{"list_tokens", "gitlab_list_cluster_agent_tokens", map[string]any{"project_id": "1", "agent_id": float64(5)}},
+		{"get_token", "gitlab_get_cluster_agent_token", map[string]any{"project_id": "1", "agent_id": float64(5), "token_id": float64(1)}},
+		{"create_token", "gitlab_create_cluster_agent_token", map[string]any{"project_id": "1", "agent_id": float64(5), "name": "t"}},
+		{"revoke_token", "gitlab_revoke_cluster_agent_token", map[string]any{"project_id": "1", "agent_id": float64(5), "token_id": float64(1)}},
+	}
+
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      tt.tool,
+				Arguments: tt.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			}
+			if !result.IsError {
+				t.Fatalf("CallTool(%s) expected IsError=true for 403", tt.tool)
+			}
+		})
+	}
+}
+
 func newClusterAgentsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 

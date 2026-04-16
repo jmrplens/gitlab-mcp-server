@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -471,5 +473,43 @@ func TestList_MultipleIterations(t *testing.T) {
 		if out.Iterations[i].Title != want {
 			t.Errorf("iteration[%d].Title = %q, want %q", i, out.Iterations[i].Title, want)
 		}
+	}
+}
+
+// TestRegisterTools_CallThroughMCP verifies that RegisterTools registers
+// the tool and it can be called through MCP in-memory transport.
+func TestRegisterTools_CallThroughMCP(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id":1,"iid":1,"title":"Sprint 1","state":1,"group_id":10}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
+		)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_list_group_iterations",
+		Arguments: map[string]any{"group_id": "10"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool returned tool error")
 	}
 }

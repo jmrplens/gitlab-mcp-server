@@ -3116,3 +3116,372 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 		t.Errorf(fmtIIDWant10, out.IID)
 	}
 }
+
+// TestList_AllFilterFields verifies that List forwards Milestone, Scope,
+// AssigneeUsername, AuthorUsername, OrderBy and Sort to the API.
+func TestList_AllFilterFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("milestone") != "v1.0" {
+			t.Errorf("milestone = %q, want v1.0", q.Get("milestone"))
+		}
+		if q.Get("scope") != "created_by_me" {
+			t.Errorf("scope = %q, want created_by_me", q.Get("scope"))
+		}
+		if q.Get("assignee_username") != "alice" {
+			t.Errorf("assignee_username = %q, want alice", q.Get("assignee_username"))
+		}
+		if q.Get("author_username") != "bob" {
+			t.Errorf("author_username = %q, want bob", q.Get("author_username"))
+		}
+		if q.Get("order_by") != "updated_at" {
+			t.Errorf("order_by = %q, want updated_at", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort = %q, want desc", q.Get("sort"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+issueJSONMinimal+`]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:        testProjectID,
+		Milestone:        "v1.0",
+		Scope:            "created_by_me",
+		AssigneeUsername: "alice",
+		AuthorUsername:   "bob",
+		OrderBy:          "updated_at",
+		Sort:             "desc",
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueListErr, err)
+	}
+	if len(out.Issues) != 1 {
+		t.Fatalf(fmtIssueCountWant1, len(out.Issues))
+	}
+}
+
+// TestMove_NotFound verifies the 404 hint path in Move.
+func TestMove_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	_, err := Move(context.Background(), client, MoveInput{
+		ProjectID: testProjectID, IssueIID: 10, ToProjectID: 999,
+	})
+	if err == nil {
+		t.Fatal("expected error for 404, got nil")
+	}
+	if !strings.Contains(err.Error(), "target project") {
+		t.Errorf("error = %q, want hint about target project", err.Error())
+	}
+}
+
+// TestMove_BadRequest verifies the 400 hint path in Move.
+func TestMove_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := Move(context.Background(), client, MoveInput{
+		ProjectID: testProjectID, IssueIID: 10, ToProjectID: 2,
+	})
+	if err == nil {
+		t.Fatal("expected error for 400, got nil")
+	}
+}
+
+// TestMove_GenericError verifies the generic error path in Move.
+func TestMove_GenericError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := Move(context.Background(), client, MoveInput{
+		ProjectID: testProjectID, IssueIID: 10, ToProjectID: 2,
+	})
+	if err == nil {
+		t.Fatal("expected error for 403, got nil")
+	}
+}
+
+// TestSubscribe_EOF verifies the EOF fallback in Subscribe (304 Not Modified).
+func TestSubscribe_EOF(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("POST /api/v4/projects/42/issues/10/subscribe", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	})
+	handler.HandleFunc("GET /api/v4/projects/42/issues/10", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Subscribe(context.Background(), client, SubscribeInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.IID != 10 {
+		t.Errorf("IID = %d, want 10", out.IID)
+	}
+}
+
+// TestSubscribe_APIError verifies the generic error path in Subscribe.
+func TestSubscribe_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := Subscribe(context.Background(), client, SubscribeInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error for 403, got nil")
+	}
+}
+
+// TestUnsubscribe_EOF verifies the EOF fallback in Unsubscribe.
+func TestUnsubscribe_EOF(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("POST /api/v4/projects/42/issues/10/unsubscribe", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	})
+	handler.HandleFunc("GET /api/v4/projects/42/issues/10", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Unsubscribe(context.Background(), client, UnsubscribeInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.IID != 10 {
+		t.Errorf("IID = %d, want 10", out.IID)
+	}
+}
+
+// TestUnsubscribe_APIError verifies the generic error path in Unsubscribe.
+func TestUnsubscribe_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := Unsubscribe(context.Background(), client, UnsubscribeInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error for 403, got nil")
+	}
+}
+
+// TestFormatGetMarkdown_EdgeCases covers References, IssueType, ClosedBy fields.
+func TestFormatGetMarkdown_EdgeCases(t *testing.T) {
+	out := Output{
+		IID: 1, Title: "Test", State: "closed",
+		References: "test/project#1", IssueType: "incident",
+		ClosedBy: "admin", ClosedAt: "2025-01-01T00:00:00Z",
+	}
+	md := FormatMarkdown(out)
+	if !strings.Contains(md, "test/project#1") {
+		t.Error("expected references in output")
+	}
+	if !strings.Contains(md, "incident") {
+		t.Error("expected issue type in output")
+	}
+	if !strings.Contains(md, "admin") {
+		t.Error("expected closed-by in output")
+	}
+}
+
+// TestCreateTodo_APIError verifies the error path in CreateTodo.
+func TestCreateTodo_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestSetTimeEstimate_APIError verifies the error path in SetTimeEstimate.
+func TestSetTimeEstimate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := SetTimeEstimate(context.Background(), client, SetTimeEstimateInput{
+		ProjectID: testProjectID, IssueIID: 10, Duration: "1h",
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestResetTimeEstimate_APIError verifies the error path.
+func TestResetTimeEstimate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ResetTimeEstimate(context.Background(), client, GetInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestAddSpentTime_APIError verifies the error path.
+func TestAddSpentTime_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{
+		ProjectID: testProjectID, IssueIID: 10, Duration: "2h",
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestResetSpentTime_APIError verifies the error path.
+func TestResetSpentTime_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ResetSpentTime(context.Background(), client, GetInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestGetTimeStats_APIError verifies the error path.
+func TestGetTimeStats_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := GetTimeStats(context.Background(), client, GetInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestGetByID_APIError verifies the error path.
+func TestGetByID_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := GetByID(context.Background(), client, GetByIDInput{IssueID: 1})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestReorder_APIError verifies the error path.
+func TestReorder_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := Reorder(context.Background(), client, ReorderInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestListAll_APIError verifies the error path.
+func TestListAll_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ListAll(context.Background(), client, ListAllInput{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestListGroup_APIError verifies the error path.
+func TestListGroup_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "g"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestGetParticipants_APIError verifies the error path.
+func TestGetParticipants_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := GetParticipants(context.Background(), client, GetInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestListMRsClosing_APIError verifies the error path.
+func TestListMRsClosing_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestListMRsRelated_APIError verifies the error path.
+func TestListMRsRelated_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestUpdate_ExtraBranches covers AddLabels, RemoveLabels, Confidential, IssueType,
+// Weight, EpicID, and DiscussionLocked branches in buildUpdateOpts.
+func TestUpdate_ExtraBranches(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+	}))
+	conf := true
+	locked := true
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		AddLabels: "new-label", RemoveLabels: "old-label",
+		Confidential: &conf, IssueType: "incident", Weight: 5,
+		EpicID: 42, DiscussionLocked: &locked,
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueUpdateErr, err)
+	}
+	if out.IID != 10 {
+		t.Errorf(fmtIIDWant10, out.IID)
+	}
+}
+
+// TestDelete_Forbidden verifies Delete error path.
+func TestDelete_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{
+		ProjectID: testProjectID, IssueIID: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

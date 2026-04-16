@@ -294,3 +294,146 @@ func TestExtractTwoParts_EmptySecondPart(t *testing.T) {
 		t.Errorf("expected empty strings, got %q and %q", a, b)
 	}
 }
+
+// Empty URI tests for remaining template resources — each covers the
+// "extracted ID is empty" guard that returns mcp.ResourceNotFoundError.
+
+func TestProjectMembersResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//members"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in members URI")
+	}
+}
+
+func TestProjectLabelsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//labels"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in labels URI")
+	}
+}
+
+func TestProjectMilestonesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//milestones"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in milestones URI")
+	}
+}
+
+func TestProjectBranchesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//branches"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in branches URI")
+	}
+}
+
+func TestGroupMembersResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty group ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//members"})
+	if err == nil {
+		t.Fatal("expected error for empty group ID in members URI")
+	}
+}
+
+func TestGroupProjectsResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty group ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//projects"})
+	if err == nil {
+		t.Fatal("expected error for empty group ID in projects URI")
+	}
+}
+
+func TestProjectIssuesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//issues"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in issues URI")
+	}
+}
+
+func TestIssueResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//issue/1"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in issue URI")
+	}
+}
+
+func TestProjectReleasesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//releases"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in releases URI")
+	}
+}
+
+func TestProjectTagsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//tags"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in tags URI")
+	}
+}
+
+func TestGroupResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestWorkflowGuides_ReadSuccess verifies that RegisterWorkflowGuides creates
+// resources that can be read back via MCP and return markdown content.
+func TestWorkflowGuides_ReadSuccess(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterWorkflowGuides(server)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "tc", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: "gitlab://guides/git-workflow"})
+	if err != nil {
+		t.Fatalf("unexpected error reading workflow guide: %v", err)
+	}
+	if len(result.Contents) == 0 {
+		t.Fatal("expected at least 1 content item")
+	}
+	if result.Contents[0].Text == "" {
+		t.Error("expected non-empty markdown content")
+	}
+}

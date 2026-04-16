@@ -146,11 +146,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_list_vulnerabilities", map[string]any{"project_path": "g/p"}},
-		{"gitlab_get_vulnerability", map[string]any{"vulnerability_id": "gid://gitlab/Vulnerability/42"}},
-		{"gitlab_dismiss_vulnerability", map[string]any{"vulnerability_id": "gid://gitlab/Vulnerability/42"}},
-		{"gitlab_confirm_vulnerability", map[string]any{"vulnerability_id": "gid://gitlab/Vulnerability/42"}},
-		{"gitlab_resolve_vulnerability", map[string]any{"vulnerability_id": "gid://gitlab/Vulnerability/42"}},
-		{"gitlab_revert_vulnerability", map[string]any{"vulnerability_id": "gid://gitlab/Vulnerability/42"}},
+		{"gitlab_get_vulnerability", map[string]any{"id": "gid://gitlab/Vulnerability/42"}},
+		{"gitlab_dismiss_vulnerability", map[string]any{"id": "gid://gitlab/Vulnerability/42"}},
+		{"gitlab_confirm_vulnerability", map[string]any{"id": "gid://gitlab/Vulnerability/42"}},
+		{"gitlab_resolve_vulnerability", map[string]any{"id": "gid://gitlab/Vulnerability/42"}},
+		{"gitlab_revert_vulnerability", map[string]any{"id": "gid://gitlab/Vulnerability/42"}},
 		{"gitlab_vulnerability_severity_count", map[string]any{"project_path": "g/p"}},
 		{"gitlab_pipeline_security_summary", map[string]any{"project_path": "g/p", "pipeline_iid": "1"}},
 	}

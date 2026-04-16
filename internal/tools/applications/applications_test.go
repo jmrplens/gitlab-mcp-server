@@ -305,6 +305,62 @@ func TestMCPRound_Trip(t *testing.T) {
 	}
 }
 
+// TestMCPRound_Trip_ErrorPaths verifies that API errors inside RegisterTools
+// handlers are returned as IsError results via MCP. Each subtest calls a tool
+// backed by a mock that returns 500, exercising the if err != nil branches.
+func TestMCPRound_Trip_ErrorPaths(t *testing.T) {
+	session := newErrorMCPSession(t)
+	ctx := context.Background()
+
+	tools := []struct {
+		name string
+		tool string
+		args map[string]any
+	}{
+		{"list_error", "gitlab_list_applications", map[string]any{}},
+		{"create_error", "gitlab_create_application", map[string]any{
+			"name": "X", "redirect_uri": "http://cb", "scopes": "api",
+		}},
+		{"delete_error", "gitlab_delete_application", map[string]any{"id": float64(99)}},
+	}
+
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      tt.tool,
+				Arguments: tt.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool(%s) transport error: %v", tt.tool, err)
+			}
+			if !result.IsError {
+				t.Fatalf("CallTool(%s) expected IsError=true", tt.tool)
+			}
+		})
+	}
+}
+
+func newErrorMCPSession(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
+}
+
 // newApplicationsMCPSession is an internal helper for the applications package.
 func newApplicationsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

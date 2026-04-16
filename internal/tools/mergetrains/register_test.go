@@ -32,11 +32,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/"):
-			testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/merge_trains"):
-			testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
-		case r.Method == http.MethodPost:
+			case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/merge_requests/"):
+				testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
+			case r.Method == http.MethodGet && strings.HasSuffix(path, "/merge_trains"):
+				testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
+			case r.Method == http.MethodPost && strings.Contains(path, "/merge_trains/merge_requests/"):
 			testutil.RespondJSON(w, http.StatusCreated, registerTrainsJSON)
 		default:
 			http.NotFound(w, r)
@@ -64,8 +64,8 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}{
 		{"gitlab_list_project_merge_trains", map[string]any{"project_id": "42"}},
 		{"gitlab_list_merge_request_in_merge_train", map[string]any{"project_id": "42", "target_branch": "main"}},
-		{"gitlab_get_merge_request_on_merge_train", map[string]any{"project_id": "42", "merge_request_id": 10}},
-		{"gitlab_add_merge_request_to_merge_train", map[string]any{"project_id": "42", "merge_request_id": 10}},
+		{"gitlab_get_merge_request_on_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
+		{"gitlab_add_merge_request_to_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

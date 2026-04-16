@@ -305,3 +305,50 @@ func TestFromRequest_WithTokenNoSession(t *testing.T) {
 	// Update should be a safe no-op
 	tracker.Update(context.Background(), 1, 3, "should not send")
 }
+// TestFromRequest_InitializedSessionNoToken verifies that FromRequest returns
+// an inactive tracker when the session is initialized but no progress token is
+// present in the request params. This covers the token==nil branch.
+func TestFromRequest_InitializedSessionNoToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+
+	var capturedTracker Tracker
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "no_token_tool",
+		Description: "tool for testing no progress token",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		capturedTracker = FromRequest(req)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+		}, nil, nil
+	})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "no_token_tool",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if capturedTracker.IsActive() {
+		t.Error("expected inactive tracker when no progress token is set")
+	}
+}
