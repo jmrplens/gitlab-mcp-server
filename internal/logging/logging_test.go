@@ -409,3 +409,72 @@ func TestFromToolRequest_ValidSession(t *testing.T) {
 		t.Fatal("FromToolRequest with valid session should return non-nil logger")
 	}
 }
+
+// TestSessionLogger_LogErrorPath verifies that the log method gracefully handles
+// a session.Log error (e.g. when the client has disconnected) by logging to
+// stderr instead of panicking.
+func TestSessionLogger_LogErrorPath(t *testing.T) {
+	// We capture the server session inside a tool handler, then close the
+	// client session to break the transport, then call Debug on the captured
+	// logger — session.Log should fail, exercising the error branch.
+	var capturedSession *mcp.ServerSession
+	done := make(chan struct{})
+
+	server := mcp.NewServer(&mcp.Implementation{
+		Name: "log-err-test", Version: "0.0.1",
+	}, &mcp.ServerOptions{
+		Capabilities: &mcp.ServerCapabilities{
+			Logging: &mcp.LoggingCapabilities{},
+		},
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "capture_session",
+		Description: "Captures server session for later use",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		capturedSession = req.Session
+		close(done)
+		return &mcp.CallToolResult{}, nil, nil
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{
+		Name: "log-err-client", Version: "0.0.1",
+	}, nil)
+
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+
+	// Call tool to capture the server session.
+	_, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "capture_session"})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	<-done
+
+	// Set log level so session.Log doesn't short-circuit.
+	if err := session.SetLoggingLevel(ctx, &mcp.SetLoggingLevelParams{Level: "debug"}); err != nil {
+		t.Fatalf("SetLoggingLevel: %v", err)
+	}
+
+	// Close the client session to break the transport.
+	session.Close()
+
+	// Small delay to ensure transport is fully torn down.
+	time.Sleep(100 * time.Millisecond)
+
+	// Now log via the captured session — session.Log should fail since
+	// the transport is closed and the log level is set (not empty).
+	logger := NewSessionLogger(capturedSession)
+
+	// This should not panic; the error is logged to stderr.
+	logger.Debug(ctx, "message after disconnect", nil)
+}

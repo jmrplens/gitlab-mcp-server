@@ -439,6 +439,104 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	}
 }
 
+// TestMCPRoundTrip_ConfirmDeclined covers the ConfirmAction early-return
+// branches in remove_instance and remove_runner when user declines.
+func TestMCPRoundTrip_ConfirmDeclined(t *testing.T) {
+	handler := http.NewServeMux()
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_runner_controller_scope_remove_instance", map[string]any{"controller_id": float64(1)}},
+		{"gitlab_runner_controller_scope_remove_runner", map[string]any{"controller_id": float64(1), "runner_id": float64(42)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result for declined confirmation")
+			}
+		})
+	}
+}
+
+// TestMCPRoundTrip_RemoveErrors covers the error paths in remove handlers
+// after ConfirmAction succeeds.
+func TestMCPRoundTrip_RemoveErrors(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_runner_controller_scope_remove_instance", map[string]any{"controller_id": float64(1)}},
+		{"gitlab_runner_controller_scope_remove_runner", map[string]any{"controller_id": float64(1), "runner_id": float64(42)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
+// TestRegisterMeta_NoPanic verifies RegisterMeta does not panic.
+func TestRegisterMeta_NoPanic(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterMeta(server, client)
+}
+
 // newScopesMCPSession creates an MCP session with runner controller scope tools.
 func newScopesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

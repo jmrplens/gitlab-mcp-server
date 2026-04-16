@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -1777,6 +1779,124 @@ func commitRouteHandler(routes map[string]commitMockResp) http.HandlerFunc {
 		} else {
 			w.WriteHeader(resp.status)
 		}
+	}
+}
+
+// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
+// gitlab_commit_get when the commit does not exist.
+func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_commit_get",
+		Arguments: map[string]any{"project_id": "42", "sha": "deadbeef"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected IsError result for 404")
+	}
+}
+
+// TestToOutput_DateFields covers the non-nil date and status branches
+// in ToOutput (CommittedDate, AuthoredDate, CreatedAt, Status).
+func TestToOutput_DateFields(t *testing.T) {
+	now := time.Now()
+	status := gl.BuildStateValue("success")
+	c := &gl.Commit{
+		ID:            "abc123",
+		ShortID:       "abc",
+		CommittedDate: &now,
+		AuthoredDate:  &now,
+		CreatedAt:     &now,
+		Status:        &status,
+	}
+	out := ToOutput(c)
+	if out.CommittedDate == "" {
+		t.Error("expected non-empty CommittedDate")
+	}
+	if out.AuthoredDate == "" {
+		t.Error("expected non-empty AuthoredDate")
+	}
+	if out.CreatedAt == "" {
+		t.Error("expected non-empty CreatedAt")
+	}
+	if out.Status != "success" {
+		t.Errorf("Status = %q, want %q", out.Status, "success")
+	}
+}
+
+// TestCommentToOutput_AuthorNameFallback covers the fallback to Author.Name
+// when Author.Username is empty.
+func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
+	c := &gl.CommitComment{
+		Note:   "test",
+		Author: gl.Author{Name: "John"},
+	}
+	out := commentToOutput(c)
+	if out.Author != "John" {
+		t.Errorf("Author = %q, want %q", out.Author, "John")
+	}
+}
+
+// TestCherryPick_400Error covers the 400 BadRequest error branch.
+func TestCherryPick_400Error(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+	_, err := CherryPick(context.Background(), client, CherryPickInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+}
+
+// TestCherryPick_409Conflict covers the 409 Conflict error branch.
+func TestCherryPick_409Conflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
+	}))
+	_, err := CherryPick(context.Background(), client, CherryPickInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 409")
+	}
+}
+
+// TestRevert_400Error covers the 400 BadRequest error branch.
+func TestRevert_400Error(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+	_, err := Revert(context.Background(), client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+}
+
+// TestRevert_409Conflict covers the 409 Conflict error branch.
+func TestRevert_409Conflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
+	}))
+	_, err := Revert(context.Background(), client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
+	if err == nil {
+		t.Fatal("expected error for 409")
 	}
 }
 

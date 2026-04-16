@@ -55,3 +55,60 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branches in both gitlab_deploy_token_delete_project and
+// gitlab_deploy_token_delete_group when the user declines.
+func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_deploy_token_delete_project", map[string]any{"project_id": "p", "deploy_token_id": float64(1)}},
+		{"gitlab_deploy_token_delete_group", map[string]any{"group_id": "g", "deploy_token_id": float64(1)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf("expected non-nil result for %s declined confirmation", tt.name)
+			}
+			found := false
+			for _, c := range result.Content {
+				if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("expected non-empty text content in %s cancellation result", tt.name)
+			}
+		})
+	}
+}

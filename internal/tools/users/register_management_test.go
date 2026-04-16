@@ -208,10 +208,48 @@ func newManagementMCPSession(t *testing.T) *mcp.ClientSession {
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	_ = mcpClient // used below
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
+}
+
+// TestRegisterTools_GetUser_NotFound covers the 404 branch in the
+// gitlab_get_user handler closure in register.go, which returns a
+// NotFoundResult instead of propagating the error.
+func TestRegisterTools_GetUser_NotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_get_user",
+		Arguments: map[string]any{"user_id": float64(99999)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Error("expected IsError=true for not-found user")
+	}
 }

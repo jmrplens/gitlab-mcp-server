@@ -591,3 +591,38 @@ func covNewSecureFilesMetaMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in the secure file delete handler when the user declines confirmation.
+func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+client := testutil.NewTestClient(t, http.NewServeMux())
+server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+RegisterTools(server, client)
+
+st, ct := mcp.NewInMemoryTransports()
+ctx := context.Background()
+if _, err := server.Connect(ctx, st, nil); err != nil {
+t.Fatalf("server connect: %v", err)
+}
+mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+return &mcp.ElicitResult{Action: "decline"}, nil
+},
+})
+session, err := mcpClient.Connect(ctx, ct, nil)
+if err != nil {
+t.Fatalf("client connect: %v", err)
+}
+t.Cleanup(func() { session.Close() })
+
+result, err := session.CallTool(ctx, &mcp.CallToolParams{
+Name:      "gitlab_remove_secure_file",
+Arguments: map[string]any{"project_id": "1", "file_id": 1},
+})
+if err != nil {
+t.Fatalf("CallTool error: %v", err)
+}
+if result == nil {
+t.Fatal("expected non-nil result for declined confirmation")
+}
+}

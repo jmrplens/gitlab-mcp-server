@@ -359,6 +359,49 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
+// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
+// handlers when the GitLab API returns an error.
+func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_list_ci_yml_templates", map[string]any{}},
+		{"gitlab_get_ci_yml_template", map[string]any{"key": "Go"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
 // newCIYAMLTemplatesMCPSession is an internal helper for the ciyamltemplates package.
 func newCIYAMLTemplatesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

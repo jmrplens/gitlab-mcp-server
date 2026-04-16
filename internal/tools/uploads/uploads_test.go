@@ -679,3 +679,100 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestMCPRound_Trip_Errors validates register.go error and confirm paths
+// via MCP round-trip against a 500 backend.
+func TestMCPRound_Trip_Errors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, callErr := mcpClient.Connect(ctx, ct, nil)
+	if callErr != nil {
+		t.Fatalf("connect: %v", callErr)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	t.Run("upload_error", func(t *testing.T) {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_project_upload",
+			Arguments: map[string]any{"project_id": "p", "content_base64": base64.StdEncoding.EncodeToString([]byte("data")), "filename": "f.txt"},
+		})
+		if err != nil {
+			t.Fatalf("CallTool: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true")
+		}
+	})
+
+	t.Run("list_error", func(t *testing.T) {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_project_upload_list",
+			Arguments: map[string]any{"project_id": "p"},
+		})
+		if err != nil {
+			t.Fatalf("CallTool: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true")
+		}
+	})
+
+	t.Run("delete_decline", func(t *testing.T) {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_project_upload_delete",
+			Arguments: map[string]any{"project_id": "p", "upload_id": 1},
+		})
+		if err != nil {
+			t.Fatalf("CallTool: %v", err)
+		}
+		if res == nil {
+			t.Fatal("nil result")
+		}
+	})
+}
+
+// TestUpload_Base64DecodeError validates that invalid base64 returns an error.
+func TestUpload_Base64DecodeError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := Upload(t.Context(), nil, client, UploadInput{
+		ProjectID:     "p",
+		ContentBase64: "not-valid-base64!!!",
+		Filename:      "f.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid base64")
+	}
+}
+
+// TestUpload_ContextCancelled validates context cancellation in Upload.
+func TestUpload_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := Upload(ctx, nil, client, UploadInput{
+		ProjectID:     "p",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("data")),
+		Filename:      "f.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}

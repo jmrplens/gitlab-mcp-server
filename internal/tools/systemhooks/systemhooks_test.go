@@ -381,6 +381,86 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // newSystemHooksMCPSession is an internal helper for the systemhooks package.
+// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
+// handlers when the GitLab API returns an error.
+func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_list_system_hooks", map[string]any{}},
+		{"gitlab_get_system_hook", map[string]any{"hook_id": float64(1)}},
+		{"gitlab_add_system_hook", map[string]any{"url": "https://example.com"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
+// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in delete_system_hook when user declines.
+func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+	handler := http.NewServeMux()
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_system_hook",
+		Arguments: map[string]any{"hook_id": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
 func newSystemHooksMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 

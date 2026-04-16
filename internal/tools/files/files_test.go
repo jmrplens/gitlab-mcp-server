@@ -1529,3 +1529,92 @@ func TestLangFromPath(t *testing.T) {
 		})
 	}
 }
+
+// TestFileGet_ServerError covers the generic (non-404) error path in Get.
+func TestFileGet_ServerError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ProjectID: "42", FilePath: "f.go"})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestFileCreate_BadRequest covers the 400 error hint in Create.
+func TestFileCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"file already exists"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "add", Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for 400, got nil")
+	}
+}
+
+// TestFileCreate_ServerError covers the generic (non-400) error path in Create.
+func TestFileCreate_ServerError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "add", Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestFileUpdate_BadRequest covers the 400 error hint in Update.
+func TestFileUpdate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad encoding"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "upd", Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for 400, got nil")
+	}
+}
+
+// TestFileUpdate_Conflict covers the 409 error hint in Update.
+func TestFileUpdate_Conflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"file modified"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "upd", Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for 409, got nil")
+	}
+}
+
+// TestFileUpdate_ServerError covers the generic error branch in Update.
+func TestFileUpdate_ServerError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "upd", Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestFileDelete_ServerError covers the generic (non-404) error path in Delete.
+func TestFileDelete_ServerError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{
+		ProjectID: "42", FilePath: "f.go", Branch: "main", CommitMessage: "del",
+	})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}

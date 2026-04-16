@@ -680,3 +680,52 @@ func TestNewClient_EnterpriseConfig(t *testing.T) {
 		t.Error("client should be enterprise when config.Enterprise=true")
 	}
 }
+
+// TestEnsureInitialized_DoubleCheckAfterLock verifies the double-check pattern
+// in EnsureInitialized: when two goroutines race with needsLazyInit=true, the
+// second goroutine sees initialized=true after acquiring the lock and returns
+// early without re-initializing.
+func TestEnsureInitialized_DoubleCheckAfterLock(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	client.EnableLazyInit()
+
+	// First call initializes successfully.
+	client.EnsureInitialized(context.Background())
+	if !client.IsInitialized() {
+		t.Fatal("client should be initialized after first EnsureInitialized")
+	}
+
+	// needsLazyInit was cleared, but we re-enable it to simulate a second
+	// goroutine that already passed the needsLazyInit check.
+	client.needsLazyInit.Store(true)
+
+	// Second call enters the lock, finds initialized=true (double-check), returns.
+	client.EnsureInitialized(context.Background())
+	if !client.IsInitialized() {
+		t.Error("client should still be initialized after double-check path")
+	}
+}
+
+// TestPingDirect_NilContext verifies that pingDirect returns an error when
+// called with a nil context, which causes http.NewRequestWithContext to fail.
+func TestPingDirect_NilContext(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	//nolint:staticcheck // intentionally passing nil context to trigger error path
+	_, pingErr := client.pingDirect(nil)
+	if pingErr == nil {
+		t.Fatal("expected error for nil context, got nil")
+	}
+}

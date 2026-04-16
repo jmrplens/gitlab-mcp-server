@@ -1708,3 +1708,262 @@ func newPipelinesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestPipelineCancel_403Hint verifies that Cancel returns a WrapErrWithHint
+// error when the API returns 403 Forbidden.
+func TestPipelineCancel_403Hint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "1", PipelineID: 1})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	if !strings.Contains(err.Error(), "pipeline may have already completed") {
+		t.Errorf("error should contain hint, got: %v", err)
+	}
+}
+
+// TestPipelineCancel_Non403Error verifies that Cancel returns a
+// WrapErrWithMessage for non-403 API errors.
+func TestPipelineCancel_Non403Error(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "1", PipelineID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+	if strings.Contains(err.Error(), "pipeline may have already completed") {
+		t.Error("non-403 error should not contain 403-specific hint")
+	}
+}
+
+// TestPipelineRetry_403Hint verifies that Retry returns a WrapErrWithHint
+// error when the API returns 403 Forbidden.
+func TestPipelineRetry_403Hint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Retry(context.Background(), client, ActionInput{ProjectID: "1", PipelineID: 1})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	if !strings.Contains(err.Error(), "pipeline may still be running") {
+		t.Errorf("error should contain hint, got: %v", err)
+	}
+}
+
+// TestPipelineRetry_Non403Error verifies that Retry returns a
+// WrapErrWithMessage for non-403 API errors.
+func TestPipelineRetry_Non403Error(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Retry(context.Background(), client, ActionInput{ProjectID: "1", PipelineID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+	if strings.Contains(err.Error(), "pipeline may still be running") {
+		t.Error("non-403 error should not contain 403-specific hint")
+	}
+}
+
+// TestPipelineCreate_400Hint verifies that Create returns a WrapErrWithHint
+// error when the API returns 400 Bad Request.
+func TestPipelineCreate_400Hint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", Ref: "main"})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+	if !strings.Contains(err.Error(), "gitlab-ci.yml") {
+		t.Errorf("error should contain hint, got: %v", err)
+	}
+}
+
+// TestGetLatest_NonForbiddenError verifies that GetLatest returns a wrapped
+// error (not the fallback path) for non-403 API errors.
+func TestGetLatest_NonForbiddenError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestGetLatest_FallbackListError verifies the fallback path when the
+// ListProjectPipelines call fails (e.g. connection refused).
+func TestGetLatest_FallbackListError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "latest") {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		// Force a connection-level error by hijacking and closing
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("response writer does not support hijacking")
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal("expected error from fallback list")
+	}
+}
+
+// TestGetLatest_FallbackEmptyList verifies the fallback path returns an error
+// when the list endpoint returns an empty array (no pipelines).
+func TestGetLatest_FallbackEmptyList(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "latest") {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal("expected error for empty fallback list")
+	}
+	if !strings.Contains(err.Error(), "no pipelines found") {
+		t.Errorf("error should mention no pipelines, got: %v", err)
+	}
+}
+
+// TestGetLatest_FallbackGetPipelineError verifies the fallback path returns an
+// error when the list succeeds but the subsequent GetPipeline call fails.
+func TestGetLatest_FallbackGetPipelineError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "latest") {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/pipelines") || strings.Contains(r.URL.RawQuery, "sort") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":99}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal("expected error from fallback GetPipeline")
+	}
+}
+
+// TestRegisterTools_Get404NotFound verifies the get handler returns a
+// NotFoundResult when the API returns 404.
+func TestRegisterTools_Get404NotFound(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_pipeline_get",
+		Arguments: map[string]any{"project_id": "1", "pipeline_id": 1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected IsError result for 404")
+	}
+}
+
+// TestRegisterTools_DeleteConfirmDeclined verifies the delete handler returns
+// early when the user declines the confirmation prompt.
+func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_pipeline_delete",
+		Arguments: map[string]any{"project_id": "1", "pipeline_id": 1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined delete")
+	}
+}
+
+// TestRegisterTools_DeleteAPIError verifies the delete handler returns
+// an error when the delete API call fails.
+func TestRegisterTools_DeleteAPIError(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_pipeline_delete",
+		Arguments: map[string]any{"project_id": "1", "pipeline_id": 1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result from delete API failure")
+	}
+}

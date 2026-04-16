@@ -248,6 +248,36 @@ func TestComplete_ResourceGroupID(t *testing.T) {
 	}
 }
 
+// TestComplete_PromptGroupID verifies that completing a prompt's group_id
+// argument returns matching groups, covering the group_id case in completePromptArg.
+func TestComplete_PromptGroupID(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups" {
+			respondJSON(w, http.StatusOK, `[{"id":5,"full_path":"platform/infra"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	h := NewHandler(client)
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "team_overview"},
+		Argument: mcp.CompleteParamsArgument{Name: "group_id", Value: "plat"},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 1 {
+		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
+	}
+	if result.Completion.Values[0] != "5: platform/infra" {
+		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
+	}
+}
+
 // TestComplete_APIErrorReturnsEmpty verifies that [Handler.Complete] returns
 // empty results instead of an error when the GitLab API call fails.
 func TestComplete_APIErrorReturnsEmpty(t *testing.T) {

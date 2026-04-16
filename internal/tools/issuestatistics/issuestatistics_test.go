@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -729,4 +730,62 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterMeta(server, client)
+}
+
+// TestMCPRoundTrip_Errors validates register.go error paths for the 3 statistics
+// tools via MCP round-trip against a 500 backend.
+func TestMCPRoundTrip_Errors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_get_issue_statistics", map[string]any{}},
+		{"gitlab_get_group_issue_statistics", map[string]any{"group_id": "42"}},
+		{"gitlab_get_project_issue_statistics", map[string]any{"project_id": "42"}},
+	}
+	for _, tc := range tools {
+		t.Run(tc.name, func(t *testing.T) {
+			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+				Name: tc.name, Arguments: tc.args,
+			})
+			if callErr != nil {
+				t.Fatalf("CallTool: %v", callErr)
+			}
+			if !res.IsError {
+				t.Error("expected IsError=true")
+			}
+		})
+	}
+}
+
+// TestMarkdownInit validates the init-registered markdown formatter is callable
+// via the toolutil registry.
+func TestMarkdownInit(t *testing.T) {
+	out := StatisticsOutput{All: 10, Opened: 7, Closed: 3}
+	res := toolutil.MarkdownForResult(out)
+	if res == nil {
+		t.Fatal("expected non-nil result from registered formatter")
+	}
 }

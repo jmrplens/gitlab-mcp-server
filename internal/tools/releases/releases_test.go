@@ -982,6 +982,111 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	}
 }
 
+// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in gitlab_release_delete when user declines.
+func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_release_delete",
+		Arguments: map[string]any{"project_id": "42", "tag_name": "v1.0.0"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
+// gitlab_release_get when the release does not exist.
+func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Release Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_release_get",
+		Arguments: map[string]any{"project_id": "42", "tag_name": "v99.0.0"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected IsError result for 404")
+	}
+}
+
+// TestUpdate_InvalidReleasedAt covers the released_at parse error branch.
+func TestUpdate_InvalidReleasedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:  "42",
+		TagName:    "v1.0.0",
+		ReleasedAt: "not-a-date",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid released_at format")
+	}
+	if !strings.Contains(err.Error(), "invalid released_at") {
+		t.Fatalf("error should mention released_at: %v", err)
+	}
+}
+
+// TestCreate_ConflictError covers the 409/422 error branch in Create.
+func TestCreate_ConflictError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"Release already exists"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", TagName: "v1.0.0"})
+	if err == nil {
+		t.Fatal("expected error for 409")
+	}
+}
+
+// TestCreate_ForbiddenError covers the 403 error branch in Create.
+func TestCreate_ForbiddenError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", TagName: "v1.0.0"})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.

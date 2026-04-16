@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -542,5 +544,89 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 				t.Fatalf("CallTool(%s) returned nil", tt.name)
 			}
 		})
+	}
+}
+
+// TestImportFromFile_FilePathReadError verifies that ImportFromFile returns
+// an error when the specified file path does not exist (os.ReadFile error).
+func TestImportFromFile_FilePathReadError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		FilePath: "/nonexistent/path/to/file.tar.gz",
+	})
+	if err == nil {
+		t.Fatal("expected error for unreadable file path")
+	}
+	if !strings.Contains(err.Error(), "reading file") {
+		t.Errorf("error = %v, want containing 'reading file'", err)
+	}
+}
+
+// TestImportFromFile_Base64DecodeError verifies that invalid base64 in
+// content_base64 returns an appropriate error.
+func TestImportFromFile_Base64DecodeError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		ContentBase64: "not-valid-base64!!!",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid base64")
+	}
+	if !strings.Contains(err.Error(), "invalid base64") {
+		t.Errorf("error = %v, want containing 'invalid base64'", err)
+	}
+}
+
+// TestImportStatusToOutput_NilCreatedAt verifies importStatusToOutput handles
+// nil CreateAt without panicking (the missed branch).
+func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
+	out := importStatusToOutput(&gl.ImportStatus{
+		ID:           42,
+		ImportStatus: "finished",
+		CreateAt:     nil,
+	})
+	if out.ID != 42 {
+		t.Errorf("ID = %d, want 42", out.ID)
+	}
+	if out.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want empty", out.CreatedAt)
+	}
+}
+
+// TestMCPRound_Trip_ImportFileError validates the register.go error path
+// for gitlab_import_project_from_file via MCP round-trip with a 500 backend.
+func TestMCPRound_Trip_ImportFileError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	go server.Connect(ctx, st, nil)
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, callErr := mcpClient.Connect(ctx, ct, nil)
+	if callErr != nil {
+		t.Fatalf("connect: %v", callErr)
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_import_project_from_file",
+		Arguments: map[string]any{"content_base64": base64.StdEncoding.EncodeToString([]byte("data"))},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true")
 	}
 }

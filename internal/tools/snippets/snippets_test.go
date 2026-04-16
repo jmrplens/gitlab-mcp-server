@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const snippetJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go","description":"A test","visibility":"private","author":{"id":1,"username":"admin","name":"Admin","email":"admin@example.com","state":"active"},"project_id":0,"web_url":"https://gitlab.example.com/snippets/42","raw_url":"https://gitlab.example.com/snippets/42/raw","files":[{"path":"test.go","raw_url":"https://gitlab.example.com/snippets/42/raw/main/test.go"}]}`
@@ -339,5 +341,61 @@ func TestFormatFileContentMarkdown(t *testing.T) {
 	md := FormatFileContentMarkdown(out)
 	if !strings.Contains(md, "test.go") || !strings.Contains(md, "package main") {
 		t.Errorf("unexpected markdown: %s", md)
+	}
+}
+
+// TestResolveProjectLabel_Fallback validates that resolveProjectLabel returns
+// the numeric project ID when extractProjectPath fails to parse the WebURL.
+func TestResolveProjectLabel_Fallback(t *testing.T) {
+	out := Output{ProjectID: 99, WebURL: "not-a-url"}
+	got := resolveProjectLabel(out)
+	if got != "99" {
+		t.Errorf("resolveProjectLabel = %q, want %q", got, "99")
+	}
+}
+
+// TestMCPRoundTrip_Get404 validates that the snippet get tool returns NotFound
+// for 404 responses (register.go 404 paths).
+func TestMCPRoundTrip_Get404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_snippet_get", map[string]any{"snippet_id": 1}},
+		{"gitlab_project_snippet_get", map[string]any{"project_id": "p", "snippet_id": 1}},
+	}
+	for _, tc := range tools {
+		t.Run(tc.name+"_404", func(t *testing.T) {
+			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			if callErr != nil {
+				t.Fatalf("CallTool: %v", callErr)
+			}
+			if !res.IsError {
+				t.Error("expected IsError=true for 404")
+			}
+		})
 	}
 }

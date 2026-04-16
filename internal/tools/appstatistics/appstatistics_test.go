@@ -148,3 +148,40 @@ func TestMCPRound_Trip_Coverage(t *testing.T) {
 		t.Fatal("nil result")
 	}
 }
+
+// TestMCPRoundTrip_Error validates the register.go error path for the
+// application statistics tool via MCP round-trip against a 500 backend.
+func TestMCPRoundTrip_Error(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_get_application_statistics",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true")
+	}
+}

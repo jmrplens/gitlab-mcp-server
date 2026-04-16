@@ -544,3 +544,196 @@ func TestList_CallThroughMCP(t *testing.T) {
 		t.Fatal("CallTool returned IsError=true")
 	}
 }
+
+// TestRead_GetFileError verifies that Read returns a wrapped error when the
+// final file fetch from the resolved submodule project fails (e.g. 404).
+func TestRead_GetFileError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/%2Egitmodules") || strings.Contains(r.URL.Path, "/repository/files/.gitmodules") {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules",
+				"file_path": ".gitmodules",
+				"size": 50,
+				"encoding": "text",
+				"content": %q,
+				"ref": "main"
+			}`, `[submodule "lib"]
+	path = lib
+	url = git@host:group/lib.git
+`))
+			return
+		}
+		if strings.Contains(r.URL.Path, "/repository/tree") {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "sha123", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}
+			]`)
+			return
+		}
+		// The final file fetch returns 404
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 File Not Found"}`)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "lib",
+		FilePath:      "missing.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for file not found, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing.txt") {
+		t.Errorf("expected file name in error, got: %v", err)
+	}
+}
+
+// TestRead_InvalidBase64FileContent verifies that Read returns an error when
+// the file content in the submodule has encoding "base64" but invalid base64 data.
+func TestRead_InvalidBase64FileContent(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/%2Egitmodules") || strings.Contains(r.URL.Path, "/repository/files/.gitmodules") {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules",
+				"file_path": ".gitmodules",
+				"size": 50,
+				"encoding": "text",
+				"content": %q,
+				"ref": "main"
+			}`, `[submodule "lib"]
+	path = lib
+	url = git@host:group/lib.git
+`))
+			return
+		}
+		if strings.Contains(r.URL.Path, "/repository/tree") {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "sha123", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}
+			]`)
+			return
+		}
+		// Return file with base64 encoding but corrupted content
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"file_name": "readme.txt",
+			"file_path": "readme.txt",
+			"size": 11,
+			"encoding": "base64",
+			"content": "!!!not-valid-base64!!!",
+			"ref": "sha123"
+		}`)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "lib",
+		FilePath:      "readme.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid base64 file content, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode base64 content") {
+		t.Errorf("expected 'decode base64 content' in error, got: %v", err)
+	}
+}
+
+// TestRead_InvalidBase64Gitmodules verifies that Read returns an error when
+// .gitmodules is returned with base64 encoding but has invalid base64 data.
+func TestRead_InvalidBase64Gitmodules(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/%2Egitmodules") || strings.Contains(r.URL.Path, "/repository/files/.gitmodules") {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"file_name": ".gitmodules",
+				"file_path": ".gitmodules",
+				"size": 50,
+				"encoding": "base64",
+				"content": "!!!corrupt-base64!!!",
+				"ref": "main"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "lib",
+		FilePath:      "readme.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid base64 .gitmodules, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode .gitmodules") {
+		t.Errorf("expected 'decode .gitmodules' in error, got: %v", err)
+	}
+}
+
+// TestRead_CallThroughMCP verifies the MCP round-trip for the
+// gitlab_read_repository_submodule_file tool handler.
+func TestRead_CallThroughMCP(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/%2Egitmodules") || strings.Contains(r.URL.Path, "/repository/files/.gitmodules") {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules",
+				"file_path": ".gitmodules",
+				"size": 50,
+				"encoding": "text",
+				"content": %q,
+				"ref": "main"
+			}`, `[submodule "lib"]
+	path = lib
+	url = git@host:group/lib.git
+`))
+			return
+		}
+		if strings.Contains(r.URL.Path, "/repository/tree") {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "sha1", "name": "lib", "type": "commit", "path": "lib", "mode": "160000"}
+			]`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"file_name": "f.txt",
+				"file_path": "f.txt",
+				"size": 5,
+				"encoding": "text",
+				"content": "hello",
+				"ref": "sha1"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer session.Close()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_read_repository_submodule_file",
+		Arguments: map[string]any{
+			"project_id":     "42",
+			"submodule_path": "lib",
+			"file_path":      "f.txt",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("CallTool returned IsError=true")
+	}
+}

@@ -363,3 +363,105 @@ func TestToItem_WithDates(t *testing.T) {
 		t.Error("expected non-empty ExpiresAt")
 	}
 }
+
+// TestMCPRoundTrip_Errors validates register.go error paths for get, add,
+// and delete license tools via MCP round-trip against a 500 backend.
+func TestMCPRoundTrip_Errors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	t.Run("get_error", func(t *testing.T) {
+		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "gitlab_get_license", Arguments: map[string]any{},
+		})
+		if callErr != nil {
+			t.Fatalf("CallTool: %v", callErr)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true")
+		}
+	})
+
+	t.Run("add_error", func(t *testing.T) {
+		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "gitlab_add_license", Arguments: map[string]any{"license": "abc"},
+		})
+		if callErr != nil {
+			t.Fatalf("CallTool: %v", callErr)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true")
+		}
+	})
+
+	t.Run("delete_decline", func(t *testing.T) {
+		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "gitlab_delete_license", Arguments: map[string]any{"id": 1},
+		})
+		if callErr != nil {
+			t.Fatalf("CallTool: %v", callErr)
+		}
+		if res == nil {
+			t.Fatal("nil result")
+		}
+	})
+}
+
+// TestMCPRoundTrip_DeleteError validates the register.go delete error path
+// (after ConfirmAction accept) via MCP round-trip.
+func TestMCPRoundTrip_DeleteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_delete_license", Arguments: map[string]any{"id": 1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true for delete API error")
+	}
+}

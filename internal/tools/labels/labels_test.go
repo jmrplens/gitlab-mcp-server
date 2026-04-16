@@ -870,3 +870,139 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestMCPRoundTrip_GetNotFound covers the 404 NotFoundResult path in
+// gitlab_label_get when the label does not exist.
+func TestMCPRoundTrip_GetNotFound(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Label Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_label_get",
+		Arguments: map[string]any{"project_id": "42", "label_id": "nonexist"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected IsError result for 404")
+	}
+}
+
+// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in gitlab_label_delete when user declines.
+func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_label_delete",
+		Arguments: map[string]any{"project_id": "42", "label_id": "bug"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestMCPRoundTrip_DeleteError covers the delete error path through register.go.
+func TestMCPRoundTrip_DeleteError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_label_delete",
+		Arguments: map[string]any{"project_id": "42", "label_id": "bug"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result for 500 backend")
+	}
+}
+
+// TestCreate_ConflictError covers the 409 Conflict branch in Create.
+func TestCreate_ConflictError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"Label already exists"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "bug", Color: "#f00"})
+	if err == nil {
+		t.Fatal("expected error for 409")
+	}
+}
+
+// TestCreate_BadRequestError covers the 400 BadRequest branch in Create.
+func TestCreate_BadRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "bug", Color: "invalid"})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+}
+
+// TestPromote_ForbiddenError covers the 403 Forbidden branch in Promote.
+func TestPromote_ForbiddenError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	err := Promote(context.Background(), client, PromoteInput{ProjectID: "42", LabelID: "1"})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+}

@@ -1293,13 +1293,16 @@ func TestMCPRound_Trip(t *testing.T) {
 
 	ctx := context.Background()
 	st, ct := mcp.NewInMemoryTransports()
-	go server.Connect(ctx, st, nil)
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
+	t.Cleanup(func() { session.Close() })
 
 	tests := []struct {
 		name string
@@ -1340,6 +1343,156 @@ func TestMCPRound_Trip(t *testing.T) {
 			}
 			if res == nil {
 				t.Fatalf("nil result for %s", tc.name)
+			}
+		})
+	}
+}
+
+// TestMCPRound_Trip_NotFound validates that get tools return NotFoundResult
+// when the GitLab API responds with 404, covering the register.go 404 paths.
+func TestMCPRound_Trip_NotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	getTools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "iid": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "award_id": 1}},
+	}
+	for _, tc := range getTools {
+		t.Run(tc.name+"_404", func(t *testing.T) {
+			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			if callErr != nil {
+				t.Fatalf("CallTool %s: %v", tc.name, callErr)
+			}
+			if res == nil {
+				t.Fatalf("nil result for %s", tc.name)
+			}
+			if !res.IsError {
+				t.Errorf("expected IsError=true for 404 on %s", tc.name)
+			}
+		})
+	}
+}
+
+// TestCreateAPIErrors covers the API error return paths in all five create
+// functions that lack API-error coverage.
+func TestCreateAPIErrors(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	client := testutil.NewTestClient(t, handler)
+	ctx := t.Context()
+
+	t.Run("CreateIssueNoteAwardEmoji", func(t *testing.T) {
+		_, err := CreateIssueNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("CreateMRAwardEmoji", func(t *testing.T) {
+		_, err := CreateMRAwardEmoji(ctx, client, CreateInput{ProjectID: "p", IID: 1, Name: "star"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("CreateMRNoteAwardEmoji", func(t *testing.T) {
+		_, err := CreateMRNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("CreateSnippetAwardEmoji", func(t *testing.T) {
+		_, err := CreateSnippetAwardEmoji(ctx, client, CreateInput{ProjectID: "p", IID: 1, Name: "star"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("CreateSnippetNoteAwardEmoji", func(t *testing.T) {
+		_, err := CreateSnippetNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+// TestMCPRound_Trip_CreateErrors validates the register.go create error paths
+// via MCP round-trip where the GitLab API returns 500.
+func TestMCPRound_Trip_CreateErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	createTools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "iid": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "iid": 1, "note_id": 1, "name": "thumbsup"}},
+	}
+	for _, tc := range createTools {
+		t.Run(tc.name, func(t *testing.T) {
+			res, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+			if callErr != nil {
+				t.Fatalf("CallTool %s: %v", tc.name, callErr)
+			}
+			if res == nil {
+				t.Fatalf("nil result for %s", tc.name)
+			}
+			if !res.IsError {
+				t.Errorf("expected IsError=true for create error on %s", tc.name)
 			}
 		})
 	}

@@ -838,3 +838,54 @@ func TestMCPRoundTrip_AllSnippetTools(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectCreate_SingleFileFallback validates the single-file fallback path
+// in ProjectCreate when len(input.Files)==0 but FileName/ContentBody are set.
+func TestProjectCreate_SingleFileFallback(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, snippetJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+		ProjectID:   "42",
+		Title:       "test",
+		FileName:    "main.go",
+		ContentBody: "package main",
+		Visibility:  "public",
+	})
+	if err != nil {
+		t.Fatalf("ProjectCreate: %v", err)
+	}
+	if out.ID == 0 {
+		t.Error("expected non-zero ID")
+	}
+}
+
+// TestProjectUpdate_SingleFileFallback validates the single-file fallback path
+// in ProjectUpdate when len(input.Files)==0 but FileName/ContentBody are set.
+func TestProjectUpdate_SingleFileFallback(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			testutil.RespondJSON(w, http.StatusOK, snippetJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{
+		ProjectID:   "42",
+		SnippetID:   1,
+		FileName:    "main.go",
+		ContentBody: "package main\nfunc main() {}",
+	})
+	if err != nil {
+		t.Fatalf("ProjectUpdate: %v", err)
+	}
+	if out.ID == 0 {
+		t.Error("expected non-zero ID")
+	}
+}

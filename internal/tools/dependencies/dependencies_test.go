@@ -468,6 +468,27 @@ func TestDownloadExport_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDownloadExport_ReadError covers the io.ReadAll error path in DownloadExport
+// by sending a chunked response that abruptly closes the connection mid-stream.
+func TestDownloadExport_ReadError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "999999")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if hj, ok := w.(http.Hijacker); ok {
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+		}
+	}))
+	_, err := DownloadExport(context.Background(), client, DownloadExportInput{ExportID: 1})
+	if err == nil {
+		t.Fatal("expected error from io.ReadAll on broken body, got nil")
+	}
+}
+
 // paginationInput is a helper that builds a toolutil.PaginationInput with page and perPage.
 func paginationInput(page, perPage int) toolutil.PaginationInput {
 	return toolutil.PaginationInput{Page: page, PerPage: perPage}

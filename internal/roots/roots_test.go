@@ -391,3 +391,21 @@ func TestManager_ConcurrentAccess(t *testing.T) {
 	}
 	<-done
 }
+
+// TestSetRootsForTest verifies that the exported [Manager.SetRootsForTest]
+// helper correctly delegates to the internal setRoots method.
+func TestSetRootsForTest(t *testing.T) {
+	m := NewManager()
+	testRoots := []*mcp.Root{
+		{URI: "file:///test/project", Name: "test"},
+	}
+	m.SetRootsForTest(testRoots)
+
+	got := m.GetRoots()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 root, got %d", len(got))
+	}
+	if got[0].URI != "file:///test/project" {
+		t.Errorf("root URI = %q, want %q", got[0].URI, "file:///test/project")
+	}
+}

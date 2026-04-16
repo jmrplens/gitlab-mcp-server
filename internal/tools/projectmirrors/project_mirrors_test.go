@@ -693,6 +693,150 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	}
 }
 
+// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction decline path
+// in gitlab_delete_project_mirror register handler.
+func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_project_mirror",
+		Arguments: map[string]any{"project_id": "myproject", "mirror_id": float64(42)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestMCPRoundTrip_ErrorPaths covers error return paths through register.go
+// for delete and force_push_mirror_update when the backend returns 500.
+func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_delete_project_mirror", map[string]any{"project_id": "myproject", "mirror_id": float64(42)}},
+		{"gitlab_force_push_mirror_update", map[string]any{"project_id": "myproject", "mirror_id": float64(42)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, toolErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if toolErr != nil {
+				t.Fatalf("unexpected transport error: %v", toolErr)
+			}
+			if result == nil || !result.IsError {
+				t.Fatal("expected error result for 500 backend")
+			}
+		})
+	}
+}
+
+// TestGet_APIError covers the API error path in Get.
+func TestGet_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ProjectID: "1", MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestGetPublicKey_APIError covers the API error path in GetPublicKey.
+func TestGetPublicKey_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	_, err := GetPublicKey(context.Background(), client, GetPublicKeyInput{ProjectID: "1", MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestAdd_APIError covers the API error path in Add.
+func TestAdd_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	_, err := Add(context.Background(), client, AddInput{ProjectID: "1", URL: "https://example.com/repo.git"})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestEdit_APIError covers the API error path in Edit.
+func TestEdit_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	_, err := Edit(context.Background(), client, EditInput{ProjectID: "1", MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestDelete_APIError covers the API error path in Delete.
+func TestDelete_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestForcePushUpdate_APIError covers the API error path in ForcePushUpdate.
+func TestForcePushUpdate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	err := ForcePushUpdate(context.Background(), client, ForcePushInput{ProjectID: "1", MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
 func newMirrorsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

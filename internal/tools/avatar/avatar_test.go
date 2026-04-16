@@ -135,3 +135,37 @@ func TestMCPRound_Trip_Coverage(t *testing.T) {
 		t.Fatal("nil result")
 	}
 }
+
+// TestMCPRoundTrip_ErrorPath covers the error return path in register.go
+// when the GitLab API returns an error.
+func TestMCPRoundTrip_ErrorPath(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, handler)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_get_avatar",
+		Arguments: map[string]any{"email": "a@b.c"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected transport error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result for 500 backend")
+	}
+}

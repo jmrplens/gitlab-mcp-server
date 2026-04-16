@@ -776,6 +776,122 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 	}
 }
 
+// TestMCPRoundTrip_NotFound validates 404 NotFound paths in register.go
+// for get_project_badge and get_group_badge handlers.
+func TestMCPRoundTrip_NotFound(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	})
+	session := newBadgesMCPSessionWithHandler(t, handler, nil)
+	ctx := context.Background()
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_get_project_badge", map[string]any{"project_id": "1", "badge_id": float64(999)}},
+		{"gitlab_get_group_badge", map[string]any{"group_id": "1", "badge_id": float64(999)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if !result.IsError {
+				t.Fatalf("expected IsError=true for 404 on %s", tt.name)
+			}
+		})
+	}
+}
+
+// TestMCPRoundTrip_ConfirmDeclined covers the ConfirmAction early-return
+// branches in delete_project_badge and delete_group_badge when user declines.
+func TestMCPRoundTrip_ConfirmDeclined(t *testing.T) {
+	handler := http.NewServeMux()
+	session := newBadgesMCPSessionWithHandler(t, handler, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	ctx := context.Background()
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_delete_project_badge", map[string]any{"project_id": "1", "badge_id": float64(1)}},
+		{"gitlab_delete_group_badge", map[string]any{"group_id": "1", "badge_id": float64(1)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+			}
+			if result == nil {
+				t.Fatalf(errExpNonNilResult)
+			}
+		})
+	}
+}
+
+// TestMCPRoundTrip_DeleteErrors covers the error paths in delete handlers
+// after ConfirmAction succeeds.
+func TestMCPRoundTrip_DeleteErrors(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	session := newBadgesMCPSessionWithHandler(t, handler, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	ctx := context.Background()
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_delete_project_badge", map[string]any{"project_id": "1", "badge_id": float64(1)}},
+		{"gitlab_delete_group_badge", map[string]any{"group_id": "1", "badge_id": float64(1)}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
+// newBadgesMCPSessionWithHandler creates an MCP session with a custom HTTP handler and client options.
+func newBadgesMCPSessionWithHandler(t *testing.T, handler http.Handler, clientOpts *mcp.ClientOptions) *mcp.ClientSession {
+	t.Helper()
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, clientOpts)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
+}
+
 // newBadgesMCPSession is an internal helper for the badges package.
 func newBadgesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

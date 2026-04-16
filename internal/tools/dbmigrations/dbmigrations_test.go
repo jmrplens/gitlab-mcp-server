@@ -134,3 +134,37 @@ func TestMCPRound_Trip_Coverage(t *testing.T) {
 		t.Fatal("nil result")
 	}
 }
+
+// TestMCPRoundTrip_MarkError validates the register.go error path for
+// gitlab_mark_migration when the GitLab API returns 500.
+func TestMCPRoundTrip_MarkError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	go server.Connect(ctx, st, nil)
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_mark_migration",
+		Arguments: map[string]any{"version": float64(99999)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true for API error")
+	}
+}

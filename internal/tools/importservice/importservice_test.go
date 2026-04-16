@@ -599,6 +599,50 @@ func importHandler() *http.ServeMux {
 	return handler
 }
 
+// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
+// handlers when the GitLab API returns an error.
+func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_import_from_github", map[string]any{"personal_access_token": "tok", "repo_id": float64(1), "target_namespace": "ns"}},
+		{"gitlab_cancel_github_import", map[string]any{"project_id": "1"}},
+		{"gitlab_import_github_gists", map[string]any{"personal_access_token": "tok"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
 // newImportMCPSession is an internal helper for the importservice package.
 func newImportMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()

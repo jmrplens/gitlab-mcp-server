@@ -467,6 +467,112 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError covers the API error path in Create.
+func TestCreate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", PackageNamePattern: "pkg-*", PackageType: "npm"})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestUpdate_APIError covers the API error path in Update.
+func TestUpdate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", RuleID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestDelete_APIError covers the API error path in Delete.
+func TestDelete_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", RuleID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestMCPRoundTrip_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in delete_package_protection_rule when user declines.
+func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_package_protection_rule",
+		Arguments: map[string]any{"project_id": "1", "rule_id": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestMCPRoundTrip_DeleteError covers the delete error path through register.go
+// when the backend returns a 500 after the user confirms the action.
+func TestMCPRoundTrip_DeleteError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_package_protection_rule",
+		Arguments: map[string]any{"project_id": "1", "rule_id": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result for 500 backend")
+	}
+}
+
 func newProtectedPackagesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

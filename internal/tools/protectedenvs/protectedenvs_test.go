@@ -177,6 +177,139 @@ func TestProtect_WithAccessLevels(t *testing.T) {
 	}
 }
 
+// TestProtect_WithAllOptionalFields validates the Protect function covers all
+// optional field branches: UserID, GroupID, GroupInheritanceType in both
+// DeployAccessLevels and ApprovalRules.
+func TestProtect_WithAllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
+			testutil.RespondJSON(w, http.StatusCreated, envJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	al := 30
+	uid := int64(5)
+	gid := int64(10)
+	git := int64(0)
+
+	_, err := Protect(context.Background(), client, ProtectInput{
+		ProjectID: "42",
+		Name:      "staging",
+		DeployAccessLevels: []DeployAccessLevelInput{
+			{UserID: &uid, GroupID: &gid, AccessLevel: &al, GroupInheritanceType: &git},
+		},
+		ApprovalRules: []ApprovalRuleInput{
+			{UserID: &uid, GroupID: &gid, AccessLevel: &al, RequiredApprovalCount: int64Ptr(2), GroupInheritanceType: &git},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Protect() unexpected error: %v", err)
+	}
+}
+
+// TestGet_CancelledContext validates that Get returns an error when the
+// context is cancelled before the API call.
+func TestGet_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, envJSON)
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := Get(ctx, client, GetInput{ProjectID: "42", Environment: "prod"})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+// TestProtect_CancelledContext validates that Protect returns an error when the
+// context is cancelled before the API call.
+func TestProtect_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, envJSON)
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := Protect(ctx, client, ProtectInput{ProjectID: "42", Name: "prod"})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+// TestUnprotect_CancelledContext validates that Unprotect returns an error when
+// the context is cancelled before the API call.
+func TestUnprotect_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", Environment: "prod"})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+// TestMCPRoundTrip_ErrorAndNotFound validates register.go error and NotFound
+// paths via MCP round-trip.
+func TestMCPRoundTrip_ErrorAndNotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	t.Run("get_404", func(t *testing.T) {
+		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_protected_environment_get",
+			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
+		})
+		if callErr != nil {
+			t.Fatalf("CallTool: %v", callErr)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true for get 404")
+		}
+	})
+
+	t.Run("unprotect_404", func(t *testing.T) {
+		res, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_protected_environment_unprotect",
+			Arguments: map[string]any{"project_id": "42", "environment": "prod"},
+		})
+		if callErr != nil {
+			t.Fatalf("CallTool: %v", callErr)
+		}
+		if !res.IsError {
+			t.Error("expected IsError=true for unprotect 404")
+		}
+	})
+}
+
 // TestProtect_MissingName verifies the behavior of protect missing name.
 func TestProtect_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

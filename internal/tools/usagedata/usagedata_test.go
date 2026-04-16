@@ -541,6 +541,69 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // newUsageDataMCPSession is an internal helper for the usagedata package.
+// TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
+// handlers when the GitLab API returns an error.
+func TestMCPRoundTrip_ErrorPaths(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_get_service_ping", map[string]any{}},
+		{"gitlab_get_non_sql_metrics", map[string]any{}},
+		{"gitlab_get_usage_queries", map[string]any{}},
+		{"gitlab_track_event", map[string]any{"event": "test_event"}},
+		{"gitlab_track_events", map[string]any{"events": []any{map[string]any{"event": "e1"}}}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("unexpected transport error: %v", err)
+			}
+			if result == nil || !result.IsError {
+				t.Fatalf("expected error result for %s with 500 backend", tt.name)
+			}
+		})
+	}
+}
+
+// TestGetMetricDefinitions_ReadError covers the io.ReadAll error path
+// when the response body cannot be read due to truncated Content-Length.
+func TestGetMetricDefinitions_ReadError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/usage_data/metric_definitions", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		// Write no data — mismatch with Content-Length triggers read error.
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, err := GetMetricDefinitions(ctx, client, GetMetricDefinitionsInput{})
+	if err == nil {
+		t.Fatal("expected error from truncated response body")
+	}
+}
+
 func newUsageDataMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 

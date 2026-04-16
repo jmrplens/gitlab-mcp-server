@@ -479,3 +479,76 @@ func newMRContextCommitsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestList_EmptyProjectID verifies that List returns an error when project_id
+// is empty, covering the missed validation branch.
+func TestList_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := List(t.Context(), client, ListInput{ProjectID: "", MergeRequest: 1})
+	if err == nil {
+		t.Fatal("expected error for empty project_id")
+	}
+}
+
+// TestCreate_EmptyProjectID verifies that Create returns an error when
+// project_id is empty.
+func TestCreate_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "", MergeRequest: 1, Commits: []string{"abc"}})
+	if err == nil {
+		t.Fatal("expected error for empty project_id")
+	}
+}
+
+// TestDelete_EmptyProjectID verifies that Delete returns an error when
+// project_id is empty.
+func TestDelete_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	err := Delete(t.Context(), client, DeleteInput{ProjectID: "", MergeRequest: 1, Commits: []string{"abc"}})
+	if err == nil {
+		t.Fatal("expected error for empty project_id")
+	}
+}
+
+// TestMCPRoundTrip_DeleteError validates the register.go error path for
+// the delete tool via MCP round-trip against a 403 backend.
+func TestMCPRoundTrip_DeleteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, mux)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_mr_context_commits",
+		Arguments: map[string]any{"project_id": "p", "mr_iid": 1, "commits": []any{"abc"}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true")
+	}
+}

@@ -661,3 +661,37 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 		t.Errorf("Hits(%d) + Misses(%d) = %d, want 50", s.Hits, s.Misses, total)
 	}
 }
+
+// TestGetOrCreate_InvalidGitLabURL verifies that GetOrCreate returns an error
+// when the GitLab URL is invalid and NewClientWithToken fails to create a client.
+func TestGetOrCreate_InvalidGitLabURL(t *testing.T) {
+	cfg := testConfig("://invalid")
+	pool := New(cfg, testFactory())
+
+	srv, err := pool.GetOrCreate("glpat-token1")
+	if err == nil {
+		t.Fatal("expected error for invalid GitLab URL, got nil")
+	}
+	if srv != nil {
+		t.Fatal("expected nil server when client creation fails")
+	}
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d, want 0 after failed creation", pool.Size())
+	}
+}
+
+// TestEvictLRU_EmptyList verifies that evictLRU handles the case where the
+// LRU list is empty without panicking (back == nil guard).
+func TestEvictLRU_EmptyList(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(5))
+
+	// Directly call evictLRU with an empty pool — should not panic.
+	pool.mu.Lock()
+	pool.evictLRU()
+	pool.mu.Unlock()
+
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d, want 0", pool.Size())
+	}
+}

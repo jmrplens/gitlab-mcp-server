@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -506,5 +508,47 @@ func TestFormatStatusChecksSummary(t *testing.T) {
 				t.Errorf("formatStatusChecksSummary() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestMCPRoundTrip_RegisterTools validates the RegisterTools wiring
+// via MCP round-trip with a mock GraphQL backend.
+func TestMCPRoundTrip_RegisterTools(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"branchRules": {
+						"nodes": [],
+						"pageInfo": {"hasNextPage": false, "endCursor": ""}
+					}
+				}
+			}`)
+		},
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	client := testutil.NewTestClient(t, handler)
+	RegisterTools(server, client)
+
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	go server.Connect(ctx, st, nil)
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_list_branch_rules",
+		Arguments: map[string]any{"project_id": "p"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res == nil {
+		t.Fatal("nil result")
 	}
 }
