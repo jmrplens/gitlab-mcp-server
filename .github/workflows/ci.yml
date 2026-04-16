@@ -52,7 +52,7 @@ jobs:
       - run: go mod download
       - run: go build -o /dev/null ./cmd/server
       - name: Verify E2E tests compile
-        run: go test -tags e2e -c -o /dev/null ./test/e2e/
+        run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
 
   goimports:
     name: goimports

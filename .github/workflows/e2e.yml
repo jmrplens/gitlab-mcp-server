@@ -73,7 +73,7 @@ jobs:
           gotestsum \
             --junitfile test-results/e2e-junit.xml \
             --format standard-verbose \
-            -- -v -tags e2e -timeout 600s -count=1 ./test/e2e/
+            -- -v -tags e2e -timeout 600s -count=1 ./test/e2e/suite/
         env:
           E2E_MODE: "docker"
 
