@@ -49,6 +49,50 @@ func TestListIssueIterationEvents_ValidationError(t *testing.T) {
 	}
 }
 
+// TestListIssueIterationEvents_MissingIssueIID verifies error when IssueIID is 0.
+func TestListIssueIterationEvents_MissingIssueIID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	}))
+	_, err := ListIssueIterationEvents(context.Background(), client, ListIssueIterationEventsInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected validation error for missing issue_iid, got nil")
+	}
+}
+
+// TestGetIssueIterationEvent_MissingProjectID verifies error when ProjectID is empty.
+func TestGetIssueIterationEvent_MissingProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	}))
+	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{IssueIID: 1, IterationEventID: 1})
+	if err == nil {
+		t.Fatal("expected validation error for missing project_id, got nil")
+	}
+}
+
+// TestGetIssueIterationEvent_MissingIssueIID verifies error when IssueIID is 0.
+func TestGetIssueIterationEvent_MissingIssueIID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	}))
+	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IterationEventID: 1})
+	if err == nil {
+		t.Fatal("expected validation error for missing issue_iid, got nil")
+	}
+}
+
+// TestListIssueWeightEvents_MissingIssueIID verifies error when IssueIID is 0.
+func TestListIssueWeightEvents_MissingIssueIID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	}))
+	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected validation error for missing issue_iid, got nil")
+	}
+}
+
 // TestGetIssueIterationEvent_Success verifies GetIssueIterationEvent returns correct fields.
 func TestGetIssueIterationEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,5 +164,86 @@ func TestListIssueWeightEvents_ValidationError(t *testing.T) {
 	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{IssueIID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
+	}
+}
+
+// TestListIssueIterationEvents_APIError verifies ListIssueIterationEvents wraps API errors.
+func TestListIssueIterationEvents_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := ListIssueIterationEvents(context.Background(), client, ListIssueIterationEventsInput{ProjectID: "42", IssueIID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestGetIssueIterationEvent_APIError verifies GetIssueIterationEvent wraps API errors.
+func TestGetIssueIterationEvent_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IssueIID: 1, IterationEventID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestListIssueWeightEvents_APIError verifies ListIssueWeightEvents wraps API errors.
+func TestListIssueWeightEvents_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{ProjectID: "42", IssueIID: 1})
+	if err == nil {
+		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestIterationEvent_WithStartDateAndDueDate verifies the converter handles
+// iteration StartDate and DueDate fields.
+func TestIterationEvent_WithStartDateAndDueDate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":1,"action":"add","created_at":"2026-01-15T10:00:00Z",
+			"resource_type":"Issue","resource_id":1,
+			"user":{"id":5,"username":"alice"},
+			"iteration":{
+				"id":10,"iid":1,"sequence":1,"group_id":5,
+				"title":"Sprint 1","state":3,
+				"start_date":"2026-01-01","due_date":"2026-01-14",
+				"web_url":"https://gitlab.example.com/iterations/10"
+			}
+		}`)
+	}))
+	out, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{
+		ProjectID: "42", IssueIID: 1, IterationEventID: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Iteration.StartDate == "" {
+		t.Error("expected Iteration.StartDate to be set")
+	}
+	if out.Iteration.DueDate == "" {
+		t.Error("expected Iteration.DueDate to be set")
+	}
+}
+
+// TestToIterationEventOutput_Nil verifies that a nil IterationEvent input
+// returns a zero-value IterationEventOutput without panicking.
+func TestToIterationEventOutput_Nil(t *testing.T) {
+	out := toIterationEventOutput(nil)
+	if out.ID != 0 {
+		t.Errorf("expected zero ID, got %d", out.ID)
+	}
+}
+
+// TestToWeightEventOutput_Nil verifies that a nil WeightEvent input
+// returns a zero-value WeightEventOutput without panicking.
+func TestToWeightEventOutput_Nil(t *testing.T) {
+	out := toWeightEventOutput(nil)
+	if out.ID != 0 {
+		t.Errorf("expected zero ID, got %d", out.ID)
 	}
 }

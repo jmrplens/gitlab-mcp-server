@@ -984,6 +984,51 @@ func TestToOutput_ZeroValue(t *testing.T) {
 	}
 }
 
+// TestCreateBatch_EmptyTagName verifies CreateBatch returns error when tag_name is empty.
+func TestCreateBatch_EmptyTagName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	}))
+	_, err := CreateBatch(context.Background(), client, CreateBatchInput{
+		ProjectID: "42",
+		TagName:   "",
+		Links:     []LinkEntry{{Name: "x", URL: "https://example.com"}},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty tag_name, got nil")
+	}
+}
+
+// TestCreateBatch_ContextCancelledMidLoop verifies CreateBatch respects context
+// cancellation between link iterations. The context is cancelled by the mock
+// handler after the first API call, so the second link triggers ctx.Err().
+func TestCreateBatch_ContextCancelledMidLoop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"a","url":"https://a.com"}`)
+		if calls >= 1 {
+			cancel()
+		}
+	}))
+	out, err := CreateBatch(ctx, client, CreateBatchInput{
+		ProjectID: "42",
+		TagName:   "v1.0.0",
+		Links: []LinkEntry{
+			{Name: "a", URL: "https://a.com"},
+			{Name: "b", URL: "https://b.com"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+	// First link may or may not succeed depending on timing; the important
+	// thing is the loop's ctx.Err() check between iterations triggers.
+	_ = out
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

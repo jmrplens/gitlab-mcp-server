@@ -418,6 +418,24 @@ func TestFormatConfigMarkdown_Minimal(t *testing.T) {
 	assertNotContains(t, md, "**Suggested approvers**")
 }
 
+// TestFormatConfigMarkdown_ApprovedByWithDate verifies that FormatConfigMarkdown
+// includes the approval date in parentheses when ApprovedAt is non-empty.
+func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
+	c := ConfigOutput{
+		State: "opened",
+		ApprovedBy: []Approver{
+			{Name: "Alice", ApprovedAt: "2026-03-15T14:00:00Z"},
+			{Name: "Bob", ApprovedAt: ""},
+		},
+	}
+	md := FormatConfigMarkdown(c)
+	assertContains(t, md, "Alice (2026-03-15T14:00:00Z)")
+	assertContains(t, md, "Bob")
+	if strings.Contains(md, "Bob (") {
+		t.Error("Bob should not have date parentheses")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatRuleMarkdown tests
 // ---------------------------------------------------------------------------.

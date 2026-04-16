@@ -733,6 +733,29 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
+// TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
+func TestGet_WithAllTimestamps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":10,"description":"deploy","token":"abc",
+			"owner":{"id":1,"name":"Admin"},
+			"created_at":"2026-01-15T10:00:00Z",
+			"updated_at":"2026-02-01T12:00:00Z",
+			"last_used":"2026-03-01T08:30:00Z"
+		}`)
+	}))
+	out, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 10})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.UpdatedAt == "" {
+		t.Error("expected UpdatedAt to be set")
+	}
+	if out.LastUsed == "" {
+		t.Error("expected LastUsed to be set")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

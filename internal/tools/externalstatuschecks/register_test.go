@@ -94,3 +94,59 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestRegisterTools_MutationErrors verifies that mutating tool closures in register.go
+// return error results when the GitLab API responds with 500, covering the if-err
+// branches after Set/Create/Update/Delete/Retry calls.
+func TestRegisterTools_MutationErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_set_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc", "external_status_check_id": 1, "status": "passed"}},
+		{"gitlab_create_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
+		{"gitlab_delete_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
+		{"gitlab_update_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
+		{"gitlab_retry_failed_status_check_for_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
+		{"gitlab_create_project_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
+		{"gitlab_delete_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
+		{"gitlab_update_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
+		{"gitlab_retry_failed_external_status_check_for_project_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
+		{"gitlab_set_project_mr_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc", "external_status_check_id": 1, "status": "passed"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool(%s) transport error: %v", tt.name, err)
+			}
+			if result == nil || !result.IsError {
+				t.Errorf("expected error result from %s with failing backend", tt.name)
+			}
+		})
+	}
+}

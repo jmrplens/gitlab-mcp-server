@@ -708,3 +708,61 @@ func TestMCPRound_Trip(t *testing.T) {
 		})
 	}
 }
+
+// TestFormatTarget_WithURLAndTitle verifies that formatTarget produces a clickable
+// link when targetURL is provided, and appends the title in quotes.
+func TestFormatTarget_WithURLAndTitle(t *testing.T) {
+	got := formatTarget("Issue", 42, "Bug title", "https://gitlab.example.com/issues/42")
+	if !strings.Contains(got, "[Issue #42](https://gitlab.example.com/issues/42)") {
+		t.Errorf("expected markdown link, got %q", got)
+	}
+	if !strings.Contains(got, `"Bug title"`) {
+		t.Errorf("expected title in quotes, got %q", got)
+	}
+}
+
+// TestFormatTarget_WithURLNoTitle verifies that formatTarget produces a clickable
+// link without title when targetTitle is empty.
+func TestFormatTarget_WithURLNoTitle(t *testing.T) {
+	got := formatTarget("MergeRequest", 10, "", "https://gitlab.example.com/mr/10")
+	if !strings.Contains(got, "[MergeRequest #10](https://gitlab.example.com/mr/10)") {
+		t.Errorf("expected markdown link, got %q", got)
+	}
+	if strings.Contains(got, `""`) {
+		t.Error("should not contain empty quoted title")
+	}
+}
+
+// TestResolveProjectWebURLs_SkipsZeroID verifies that resolveProjectWebURLs
+// skips project ID 0 without making an API call.
+func TestResolveProjectWebURLs_SkipsZeroID(t *testing.T) {
+	apiCalled := false
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		apiCalled = true
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"web_url":"https://example.com/p"}`)
+	}))
+	urls := resolveProjectWebURLs(t.Context(), client, []int64{0})
+	if apiCalled {
+		t.Error("API should not be called for project ID 0")
+	}
+	if len(urls) != 0 {
+		t.Errorf("expected empty map, got %v", urls)
+	}
+}
+
+// TestResolveProjectWebURLs_DeduplicatesIDs verifies that resolveProjectWebURLs
+// makes only one API call per unique project ID.
+func TestResolveProjectWebURLs_DeduplicatesIDs(t *testing.T) {
+	callCount := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		testutil.RespondJSON(w, http.StatusOK, `{"id":5,"web_url":"https://example.com/p/5"}`)
+	}))
+	urls := resolveProjectWebURLs(t.Context(), client, []int64{5, 5, 5})
+	if callCount != 1 {
+		t.Errorf("expected 1 API call, got %d", callCount)
+	}
+	if urls[5] != "https://example.com/p/5" {
+		t.Errorf("url = %q", urls[5])
+	}
+}

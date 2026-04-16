@@ -60,7 +60,7 @@ const (
 	testCommitRegex     = `^(feat|fix|docs):`
 	testAlice           = "Alice"
 	testBob             = "Bob"
-	testDate20250101    = "2026-01-01"
+	testDate20260101    = "2026-01-01"
 	testSuccess         = "success"
 	testPathNS          = "jmrplens/my-repo"
 
@@ -74,8 +74,8 @@ const (
 	fmtDeleteUnexpErr = "Delete() unexpected error: %v"
 	fmtLenGroupsWant1 = "len(Groups) = %d, want 1"
 
-	testDate20250410  = "2026-04-10"
-	testDate20250601  = "2026-06-01"
+	testDate20260410  = "2026-04-10"
+	testDate20260601  = "2026-06-01"
 	testImportURL     = "https://github.com/example/repo.git"
 	testSuggestionMsg = "Apply suggestion"
 	testHookURL2      = "https://example.com/hook2"
@@ -260,8 +260,8 @@ func TestProjectList_IncludePendingDelete(t *testing.T) {
 	if len(out.Projects) != 2 {
 		t.Errorf("len(out.Projects) = %d, want 2", len(out.Projects))
 	}
-	if out.Projects[1].MarkedForDeletionOn != testDate20250410 {
-		t.Errorf("out.Projects[1].MarkedForDeletionOn = %q, want %q", out.Projects[1].MarkedForDeletionOn, testDate20250410)
+	if out.Projects[1].MarkedForDeletionOn != testDate20260410 {
+		t.Errorf("out.Projects[1].MarkedForDeletionOn = %q, want %q", out.Projects[1].MarkedForDeletionOn, testDate20260410)
 	}
 	if out.Projects[0].MarkedForDeletionOn != "" {
 		t.Errorf("out.Projects[0].MarkedForDeletionOn = %q, want empty", out.Projects[0].MarkedForDeletionOn)
@@ -412,8 +412,8 @@ func TestProjectDelete_DelayedDeletion(t *testing.T) {
 	if out.Status != "scheduled" {
 		t.Errorf(fmtDeleteStatusWantQ, out.Status, "scheduled")
 	}
-	if out.MarkedForDeletionOn != testDate20250410 {
-		t.Errorf("Delete() marked_for_deletion_on = %q, want %q", out.MarkedForDeletionOn, testDate20250410)
+	if out.MarkedForDeletionOn != testDate20260410 {
+		t.Errorf("Delete() marked_for_deletion_on = %q, want %q", out.MarkedForDeletionOn, testDate20260410)
 	}
 	if out.PermanentlyRemoved {
 		t.Errorf("Delete() permanently_removed = true, want false")
@@ -2212,8 +2212,8 @@ func TestFormatDeleteMarkdown(t *testing.T) {
 		},
 		{
 			name: "scheduled_deletion",
-			out:  DeleteOutput{Status: testSuccess, Message: "scheduled", MarkedForDeletionOn: testDate20250601},
-			want: []string{testSuccess, "scheduled", testDate20250601},
+			out:  DeleteOutput{Status: testSuccess, Message: "scheduled", MarkedForDeletionOn: testDate20260601},
+			want: []string{testSuccess, "scheduled", testDate20260601},
 		},
 	}
 	for _, tt := range tests {
@@ -2386,7 +2386,7 @@ func TestFormatListStarrersMarkdown(t *testing.T) {
 	t.Run("with_starrers", func(t *testing.T) {
 		out := ListProjectStarrersOutput{
 			Starrers: []StarrerOutput{
-				{StarredSince: testDate20250101, User: ProjectUserOutput{ID: 1, Username: "jane", Name: "Jane Doe"}},
+				{StarredSince: testDate20260101, User: ProjectUserOutput{ID: 1, Username: "jane", Name: "Jane Doe"}},
 			},
 			Pagination: toolutil.PaginationOutput{TotalItems: 1},
 		}
@@ -2643,10 +2643,10 @@ func TestFormatDeleteMarkdown_MarkedForDeletion(t *testing.T) {
 	out := DeleteOutput{
 		Status:              "scheduled",
 		Message:             "marked for deletion",
-		MarkedForDeletionOn: testDate20250601,
+		MarkedForDeletionOn: testDate20260601,
 	}
 	md := FormatDeleteMarkdown(out)
-	if !strings.Contains(md, testDate20250601) {
+	if !strings.Contains(md, testDate20260601) {
 		t.Error("FormatDeleteMarkdown should contain deletion date")
 	}
 	if strings.Contains(md, testPermRemoved) {
@@ -2916,7 +2916,7 @@ func TestFormatListProjectGroupsMarkdown_Empty(t *testing.T) {
 func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 	out := ListProjectStarrersOutput{
 		Starrers: []StarrerOutput{
-			{StarredSince: testDate20250101, User: ProjectUserOutput{ID: 1, Name: testAlice, Username: "alice"}},
+			{StarredSince: testDate20260101, User: ProjectUserOutput{ID: 1, Name: testAlice, Username: "alice"}},
 			{StarredSince: "2026-02-01", User: ProjectUserOutput{ID: 2, Name: testBob, Username: "bob"}},
 		},
 	}
@@ -3855,7 +3855,7 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		Topic:                    "go",
 		Simple:                   true,
 		MinAccessLevel:           30,
-		LastActivityAfter:        testDate20250101,
+		LastActivityAfter:        testDate20260101,
 		LastActivityBefore:       "2026-12-31",
 		Starred:                  new(true),
 		Membership:               new(true),
@@ -4356,18 +4356,18 @@ func mcpMockHandler() http.Handler {
 		"PUT /api/v4/projects/42/hooks/1/url_variables/myvar":      {http.StatusNoContent, ""},
 		"DELETE /api/v4/projects/42/hooks/1/url_variables/myvar":   {http.StatusNoContent, ""},
 		// Fork relations
-		"POST /api/v4/projects/42/fork/99":   {http.StatusCreated, `{"id":42}`},
-		"DELETE /api/v4/projects/42/fork":     {http.StatusNoContent, ""},
+		"POST /api/v4/projects/42/fork/99": {http.StatusCreated, `{"id":42}`},
+		"DELETE /api/v4/projects/42/fork":  {http.StatusNoContent, ""},
 		// Avatar
-		"PUT /api/v4/projects/42/avatar":      {http.StatusOK, projectJSON},
+		"PUT /api/v4/projects/42/avatar": {http.StatusOK, projectJSON},
 		// Approval config
-		"GET /api/v4/projects/42/approvals":   {http.StatusOK, `{"approvals_before_merge":2}`},
-		"POST /api/v4/projects/42/approvals":  {http.StatusOK, `{"approvals_before_merge":3}`},
+		"GET /api/v4/projects/42/approvals":  {http.StatusOK, `{"approvals_before_merge":2}`},
+		"POST /api/v4/projects/42/approvals": {http.StatusOK, `{"approvals_before_merge":3}`},
 		// Approval rules
-		"GET /api/v4/projects/42/approval_rules":     {http.StatusOK, `[{"id":1,"name":"rule","approvals_required":1}]`},
-		"GET /api/v4/projects/42/approval_rules/1":   {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
-		"POST /api/v4/projects/42/approval_rules":    {http.StatusCreated, `{"id":1,"name":"rule","approvals_required":1}`},
-		"PUT /api/v4/projects/42/approval_rules/1":   {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
+		"GET /api/v4/projects/42/approval_rules":      {http.StatusOK, `[{"id":1,"name":"rule","approvals_required":1}]`},
+		"GET /api/v4/projects/42/approval_rules/1":    {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
+		"POST /api/v4/projects/42/approval_rules":     {http.StatusCreated, `{"id":1,"name":"rule","approvals_required":1}`},
+		"PUT /api/v4/projects/42/approval_rules/1":    {http.StatusOK, `{"id":1,"name":"rule","approvals_required":1}`},
 		"DELETE /api/v4/projects/42/approval_rules/1": {http.StatusNoContent, ""},
 		// Pull mirror
 		"GET /api/v4/projects/42/mirror/pull":  {http.StatusOK, `{"id":42,"enabled":true,"url":"https://example.com/repo.git"}`},
@@ -4376,7 +4376,7 @@ func mcpMockHandler() http.Handler {
 		// Maintenance
 		"POST /api/v4/projects/42/housekeeping": {http.StatusCreated, `{}`},
 		// Admin
-		"POST /api/v4/projects/user/1":          {http.StatusCreated, projectJSON},
+		"POST /api/v4/projects/user/1": {http.StatusCreated, projectJSON},
 		// Hooks
 		"GET /api/v4/projects/42/hooks":      {http.StatusOK, "[]"},
 		"GET /api/v4/projects/42/hooks/1":    {http.StatusOK, hookJSON42},
@@ -4405,7 +4405,7 @@ func mcpMockHandler() http.Handler {
 		"/api/v4/projects/42/users":            {http.StatusOK, "[]"},
 		"/api/v4/projects/42/groups":           {http.StatusOK, "[]"},
 		"/api/v4/projects/42/starrers":         {http.StatusOK, "[]"},
-		"/api/v4/projects/42/storage": {http.StatusOK, `{"repository_storage":"default"}`},
+		"/api/v4/projects/42/storage":          {http.StatusOK, `{"repository_storage":"default"}`},
 		"/api/v4/projects/42/avatar":           {http.StatusOK, "AVATAR"},
 		pathProject42Forks:                     {http.StatusOK, "[]"},
 		"/api/v4/projects/42/languages":        {http.StatusOK, `{"Go":80.5,"Markdown":19.5}`},

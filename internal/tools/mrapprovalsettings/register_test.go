@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const approvalSettingsJSON = `{
@@ -86,12 +87,24 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 // an empty scope string correctly, covering the init() function's registered formatter.
 func TestFormatOutputMarkdown_EmptyScope(t *testing.T) {
 	out := Output{
-		AllowAuthorApproval:             SettingOutput{Value: true, Locked: false},
-		AllowCommitterApproval:          SettingOutput{Value: false, Locked: true, InheritedFrom: "group"},
+		AllowAuthorApproval:              SettingOutput{Value: true, Locked: false},
+		AllowCommitterApproval:           SettingOutput{Value: false, Locked: true, InheritedFrom: "group"},
 		RequireReauthenticationToApprove: SettingOutput{Value: true, Locked: false},
 	}
 	md := FormatOutputMarkdown(out, "")
 	if md == "" {
 		t.Fatal("expected non-empty markdown output for empty scope")
+	}
+}
+
+// TestMarkdownRegistry_OutputType verifies that the init() registered formatter
+// is callable through MarkdownForResult, covering the closure in init().
+func TestMarkdownRegistry_OutputType(t *testing.T) {
+	out := Output{
+		AllowAuthorApproval: SettingOutput{Value: true, Locked: false},
+	}
+	result := toolutil.MarkdownForResult(out)
+	if result == nil {
+		t.Fatal("expected MarkdownForResult to return non-nil for Output type")
 	}
 }

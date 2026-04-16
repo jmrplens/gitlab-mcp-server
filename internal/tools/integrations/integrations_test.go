@@ -597,3 +597,44 @@ func newIntegrationsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestGet_WithTimestamps covers the CreatedAt/UpdatedAt != nil branches
+// in integrationToItem by including timestamps in the API response.
+func TestGet_WithTimestamps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"title":"Jira","slug":"jira","active":true,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-02-20T15:30:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{ProjectID: "1", Slug: testSlugJira})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Integration.CreatedAt == "" {
+		t.Error("expected non-empty CreatedAt")
+	}
+	if out.Integration.UpdatedAt == "" {
+		t.Error("expected non-empty UpdatedAt")
+	}
+}
+
+// TestGet_NilResult covers the result == nil guard in Get().
+func TestGet_NilResult(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("null"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Get(t.Context(), client, GetInput{ProjectID: "1", Slug: testSlugJira})
+	if err == nil {
+		t.Fatal("expected error for nil result")
+	}
+}

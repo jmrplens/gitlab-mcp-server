@@ -908,3 +908,34 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
 }
+
+// TestRegisterMeta_NoPanic verifies that RegisterMeta does not panic
+// and registers the gitlab_issue_discussion meta-tool.
+func TestRegisterMeta_NoPanic(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterMeta(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	_, _ = server.Connect(ctx, st, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_issue_discussion",
+		Arguments: map[string]any{"action": "list", "project_id": "1", "issue_iid": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}

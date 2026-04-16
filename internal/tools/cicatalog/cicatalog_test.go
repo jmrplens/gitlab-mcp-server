@@ -481,7 +481,7 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 				},
 			},
 			Versions: []VersionItem{
-				{Name: "2.1.0", ReleasedAt: "2026-06-15T10:30:00Z"},
+				{Name: "2.1.0", ReleasedAt: "2026-06-15T10:30:00Z", Components: []ComponentItem{{Name: "build"}}},
 			},
 		},
 	})

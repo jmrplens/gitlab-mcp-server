@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
@@ -1839,5 +1841,21 @@ func TestSearchCode_PaginationAdjusted(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 1 {
 		t.Errorf("TotalPages = %d, want 1", out.Pagination.TotalPages)
+	}
+}
+
+// TestWrapSearchErr_422 verifies that wrapSearchErr enriches 422 errors with
+// a query-syntax hint instead of using the generic WrapErrWithMessage fallback.
+func TestWrapSearchErr_422(t *testing.T) {
+	glErr := &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: 422},
+		Message:  "invalid query syntax",
+	}
+	err := wrapSearchErr("search_code", glErr)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "query format") {
+		t.Errorf("expected 422 hint about query format, got: %v", err)
 	}
 }

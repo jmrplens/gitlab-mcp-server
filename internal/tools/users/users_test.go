@@ -1539,3 +1539,95 @@ func newUsersMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestGetStatus_NilResponse verifies that GetStatus handles a null JSON body
+// from the GitLab API, covering the if-s==nil branch.
+func TestGetStatus_NilResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGetUserStatus {
+			testutil.RespondJSON(w, http.StatusOK, `null`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("expected no error for null, got: %v", err)
+	}
+	if out.Emoji != "" || out.Message != "" {
+		t.Errorf("expected empty status for null response, got emoji=%q message=%q", out.Emoji, out.Message)
+	}
+}
+
+// TestSetStatus_NilResponse verifies that SetStatus handles a null JSON body
+// from the GitLab API, covering the if-s==nil branch.
+func TestSetStatus_NilResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/status" {
+			testutil.RespondJSON(w, http.StatusOK, `null`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := SetStatus(context.Background(), client, SetStatusInput{Emoji: "coffee"})
+	if err != nil {
+		t.Fatalf("expected no error for null, got: %v", err)
+	}
+	if out.Emoji != "" || out.Message != "" {
+		t.Errorf("expected empty status for null response, got emoji=%q message=%q", out.Emoji, out.Message)
+	}
+}
+
+// TestResolveProjectWebURLs_Success verifies that resolveProjectWebURLs populates
+// the map with project WebURLs for valid IDs, covering the success branch.
+func TestResolveProjectWebURLs_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"web_url":"https://gitlab.example.com/group/project"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	urls := resolveProjectWebURLs(context.Background(), client, []int64{10})
+	if got := urls[10]; got != "https://gitlab.example.com/group/project" {
+		t.Errorf("urls[10] = %q, want %q", got, "https://gitlab.example.com/group/project")
+	}
+}
+
+// TestRegisterTools_GetUser404 verifies the get_user handler returns a
+// NotFoundResult when GitLab responds with 404, covering the register.go 404 branch.
+func TestRegisterTools_GetUser404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 User Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_get_user",
+		Arguments: map[string]any{"user_id": float64(999)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Error("expected IsError=true for 404 response")
+	}
+}

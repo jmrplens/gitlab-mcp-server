@@ -1015,6 +1015,31 @@ func TestFormatListMarkdown_EmptyReturnsCallToolResult(t *testing.T) {
 	}
 }
 
+// TestAdd_ConflictError verifies Add returns a hint when user is already a member (409).
+func TestAdd_ConflictError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"Member already exists"}`)
+	}))
+	_, err := Add(context.Background(), client, AddInput{ProjectID: "42", UserID: 10, AccessLevel: 30})
+	if err == nil {
+		t.Fatal("expected error for 409 conflict, got nil")
+	}
+	if !strings.Contains(err.Error(), "already a member") {
+		t.Errorf("expected hint about existing member, got: %v", err)
+	}
+}
+
+// TestAdd_NotFoundError verifies Add returns a hint when user does not exist (404).
+func TestAdd_NotFoundError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"error":"404 User Not Found"}`)
+	}))
+	_, err := Add(context.Background(), client, AddInput{ProjectID: "42", UserID: 999, AccessLevel: 30})
+	if err == nil {
+		t.Fatal("expected error for 404 not found, got nil")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

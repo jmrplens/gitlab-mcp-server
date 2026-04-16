@@ -802,6 +802,23 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 	}
 }
 
+// TestList_WithSortField verifies the Sort option is passed to the API.
+func TestList_WithSortField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %q", r.URL.Query().Get("sort"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"ref":"main","sha":"abc","status":"success","user":{"username":"admin"},"environment":{"name":"prod"},"created_at":"2026-01-01T00:00:00Z"}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", Sort: "desc"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Deployments) != 1 {
+		t.Fatalf("expected 1 deployment, got %d", len(out.Deployments))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

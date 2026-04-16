@@ -822,6 +822,25 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestGet_WithAutoStopAt verifies toOutput covers the AutoStopAt nil guard.
+func TestGet_WithAutoStopAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":1,"name":"review","slug":"review","state":"available",
+			"created_at":"2026-01-01T00:00:00Z",
+			"updated_at":"2026-01-02T00:00:00Z",
+			"auto_stop_at":"2026-02-01T00:00:00Z"
+		}`)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.AutoStopAt == "" {
+		t.Error("expected AutoStopAt to be set")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

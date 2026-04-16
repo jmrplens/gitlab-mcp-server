@@ -1355,6 +1355,146 @@ func TestParseISODate_Invalid(t *testing.T) {
 	}
 }
 
+// TestResolveGroupIID_NotFound verifies error when resolveGroupIID returns empty results.
+func TestResolveGroupIID_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, MilestoneIID: 999})
+	if err == nil {
+		t.Fatal("expected error for milestone IID not found, got nil")
+	}
+}
+
+// TestGet_APIErrorAfterResolve verifies Get wraps API errors after successful IID resolution.
+func TestGet_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/10/milestones/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
+// TestUpdate_BadStartDate verifies Update returns error for invalid start_date format.
+func TestUpdate_BadStartDate(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := Update(context.Background(), client, UpdateInput{
+		GroupID: testGroupID, MilestoneIID: 1, StartDate: "not-a-date",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid start_date, got nil")
+	}
+}
+
+// TestUpdate_BadDueDate verifies Update returns error for invalid due_date format.
+func TestUpdate_BadDueDate(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := Update(context.Background(), client, UpdateInput{
+		GroupID: testGroupID, MilestoneIID: 1, DueDate: "not-a-date",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid due_date, got nil")
+	}
+}
+
+// TestUpdate_APIErrorAfterResolve verifies Update wraps API errors when
+// resolveGroupIID succeeds but the UpdateGroupMilestone API call fails.
+func TestUpdate_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("PUT /api/v4/groups/10/milestones/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := Update(context.Background(), client, UpdateInput{
+		GroupID: testGroupID, MilestoneIID: 1, Title: "new title",
+	})
+	if err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestDelete_APIErrorAfterResolve verifies Delete wraps API errors after successful resolve.
+func TestDelete_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("DELETE /api/v4/groups/10/milestones/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	err := Delete(context.Background(), client, DeleteInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
+// TestGetIssues_APIErrorAfterResolve verifies GetIssues wraps API errors after resolve.
+func TestGetIssues_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/10/milestones/1/issues", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetIssues(context.Background(), client, GetIssuesInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
+// TestGetMergeRequests_APIErrorAfterResolve verifies GetMergeRequests wraps API errors after resolve.
+func TestGetMergeRequests_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/10/milestones/1/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
+// TestGetBurndownChartEvents_APIErrorAfterResolve verifies GetBurndownChartEvents wraps API errors after resolve.
+func TestGetBurndownChartEvents_APIErrorAfterResolve(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/10/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/10/milestones/1/burndown_events", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil {
+		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RegisterTools — no panic
 // ---------------------------------------------------------------------------.

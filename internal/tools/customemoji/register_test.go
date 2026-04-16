@@ -106,3 +106,40 @@ func TestFormatCreateMarkdown_ExternalEmoji(t *testing.T) {
 		t.Errorf("expected External=Yes in markdown, got:\n%s", md)
 	}
 }
+
+// TestRegisterTools_DeleteError covers the if-err branch after Delete()
+// in the gitlab_custom_emoji_delete closure in register.go.
+func TestRegisterTools_DeleteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "graphql") {
+			testutil.RespondJSON(w, http.StatusOK, `{"data":{"destroyCustomEmoji":{"errors":["server error"]}}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	_, _ = server.Connect(ctx, st, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_delete_custom_emoji",
+		Arguments: map[string]any{"id": "gid://gitlab/CustomEmoji/1"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Error("expected error result from gitlab_delete_custom_emoji")
+	}
+}

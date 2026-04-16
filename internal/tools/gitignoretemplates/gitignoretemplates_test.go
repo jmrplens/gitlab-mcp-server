@@ -72,6 +72,17 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
+// TestGet_EmptyKey verifies that Get returns an error when key is empty.
+func TestGet_EmptyKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	_, err := Get(t.Context(), client, GetInput{Key: ""})
+	if err == nil {
+		t.Fatal("expected error for empty key")
+	}
+}
+
 // TestFormatListMarkdown verifies the behavior of format list markdown.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateListItem{{Key: "Go", Name: "Go"}}})

@@ -1506,3 +1506,35 @@ func newSchedulesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestPipelineScheduleGet_WithTimestamps covers the NextRunAt/CreatedAt/UpdatedAt
+// != nil branches in toOutput by providing timestamps in the JSON response.
+func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *",
+				"cron_timezone":"UTC","active":true,"owner":{"username":"admin"},
+				"next_run_at":"2026-06-15T01:00:00Z",
+				"created_at":"2026-01-10T08:00:00Z",
+				"updated_at":"2026-03-20T12:00:00Z"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.NextRunAt == "" {
+		t.Error("expected non-empty NextRunAt")
+	}
+	if out.CreatedAt == "" {
+		t.Error("expected non-empty CreatedAt")
+	}
+	if out.UpdatedAt == "" {
+		t.Error("expected non-empty UpdatedAt")
+	}
+}
