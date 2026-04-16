@@ -1,8 +1,8 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*
-# Pipeline: E2E tests (Docker GitLab) → GoReleaser
-# If E2E tests fail, the release is NOT created.
+# Pipeline: E2E → GoReleaser → Docker → MCP Registry
+# If E2E tests fail, nothing is released.
 #
 name: Release
 
@@ -13,9 +13,13 @@ on:
 
 permissions:
   contents: write
+  packages: write
+  id-token: write
 
 env:
   GO_VERSION: "1.26.2"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jmrplens/gitlab-mcp-server
 
 jobs:
   e2e:
@@ -99,3 +103,54 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update server.json with SHA256 hashes
+        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}"
+
+      - name: Publish to MCP Registry
+        continue-on-error: true
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      - name: Commit updated server.json to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" -q '.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" \
+            -X PUT \
+            -f message="chore: update server.json SHA256 hashes for v${VERSION}" \
+            -f content="$(base64 -w0 server.json)" \
+            -f sha="$FILE_SHA" \
+            -f branch="main"
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract version
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

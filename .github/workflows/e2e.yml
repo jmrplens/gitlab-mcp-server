@@ -1,7 +1,9 @@
 # E2E test workflow for gitlab-mcp-server
 #
 # Runs against an ephemeral Docker-based GitLab CE instance.
-# Triggered: manually (workflow_dispatch) or weekly schedule.
+# Triggered: manually only (workflow_dispatch).
+# Use the "Use workflow from" dropdown to select a branch,
+# or provide a custom ref (e.g. a fork PR head SHA) in the input.
 # Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
 
 name: E2E Tests
@@ -9,20 +11,21 @@ name: E2E Tests
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Git ref to checkout (branch, tag, or PR merge SHA from a fork)"
+        default: ""
+        type: string
       gitlab_image:
         description: "GitLab CE Docker image"
         default: "gitlab/gitlab-ce:latest"
         type: string
-  schedule:
-    # Weekly: Sunday at 03:00 UTC.
-    - cron: "0 3 * * 0"
 
 permissions:
   contents: read
 
 env:
   GO_VERSION: "1.26.2"
-  GITLAB_IMAGE: ${{ github.event.inputs.gitlab_image || 'gitlab/gitlab-ce:latest' }}
+  GITLAB_IMAGE: ${{ inputs.gitlab_image || 'gitlab/gitlab-ce:latest' }}
 
 jobs:
   e2e:
@@ -32,6 +35,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-go@v6
         with:
