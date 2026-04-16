@@ -4,7 +4,9 @@
       "-tags=e2e"
     ],
     "ui.semanticTokens": true,
-    "ui.diagnostic.staticcheck": true,
+    // Delegate staticcheck to golangci-lint (on save) to avoid duplicate/inconsistent
+    // diagnostics — .golangci.yml excludes ST1000, ST1016, QF1008 that gopls would flag.
+    "ui.diagnostic.staticcheck": false,
     "analyses": {
       // SA4006: "this value of X is never used"
       // SA4017: "X doesn't have side effects and its return value is ignored"
@@ -14,7 +16,7 @@
       "SA4017": false
     }
   },
-  "go.lintOnSave": "workspace",
+  "go.lintOnSave": "package",
   "go.lintTool": "golangci-lint",
   "go.formatTool": "goimports",
   "go.testFlags": [
@@ -22,11 +24,33 @@
   ],
   "go.testTimeout": "300s",
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "golang.go",
   "[go]": {
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
-    }
+    "editor.defaultFormatter": "golang.go"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  // Astro Starlight site (site/) — Prettier for web file types.
+  "[astro]": {
+    "editor.defaultFormatter": "astro-build.astro-vscode"
+  },
+  "[mdx]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
@@ -38,9 +62,13 @@
     }
   },
   // Exclude build artifacts and generated files from search results.
+  // site/src/ content is kept searchable; only generated/dependency files excluded.
   "search.exclude": {
     "dist/**": true,
-    "NUL": true,
+    "site/dist/**": true,
+    "site/.astro/**": true,
+    "site/pnpm-lock.yaml": true,
+    "go.sum": true,
     "*-results.txt": true,
     "*-output.txt": true,
     "plan/**": true
@@ -48,7 +76,13 @@
   // Reduce file watcher overhead on directories that change during builds.
   "files.watcherExclude": {
     "dist/**": true,
+    "site/dist/**": true,
+    "site/.astro/**": true,
     "**/node_modules/**": true
+  },
+  // YAML schema associations for IntelliSense and validation.
+  "yaml.schemas": {
+    "https://golangci-lint.run/jsonschema/golangci.v2.jsonschema.json": ".golangci.yml"
   },
   // Auto-approve URLs for chat tools — project-relevant documentation sources.
   // Wildcard entries (https://*.domain) cover all subdomains of that domain.
@@ -138,13 +172,4 @@
       "level": "off"
     }
   },
-  "chat.mcp.serverSampling": {
-    "gitlab-mcp-server/.vscode/mcp.json: gitlab-dev": {
-      "allowedModels": [
-        "copilot/auto",
-        "copilotcli/claude-sonnet-4.6",
-        "claude-code/claude-opus-4.6"
-      ]
-    }
-  }
 }
