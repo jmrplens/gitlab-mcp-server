@@ -282,5 +282,4 @@ Yes. Create a handler in the `elicitationtools` package that uses the `elicitati
 
 - [MCP Specification — Elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
 - [MCP Go SDK — Elicit](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.Elicit)
-- [MCP Protocol Guide — Elicitation](../mcp-protocol/08-elicitation.md)
 - [Capability Tools Reference](../tools/capabilities.md) — tool parameter tables and annotations

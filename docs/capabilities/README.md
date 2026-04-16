@@ -69,4 +69,4 @@ All capability implementations in this project follow consistent patterns:
 
 - [MCP Specification — Capabilities](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/logging)
 - [MCP Go SDK — ServerCapabilities](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerCapabilities)
-- [MCP Protocol Guide](../mcp-protocol/) — comprehensive MCP learning resource
+- [MCP Specification](https://modelcontextprotocol.io/specification/) — official protocol documentation

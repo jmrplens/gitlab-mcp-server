@@ -44,7 +44,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 
 | Document | Description |
 | --- | --- |
-| [MCP Protocol Guide](mcp-protocol/) | Comprehensive guide to the Model Context Protocol — from beginner to advanced |
+| [MCP Specification](https://modelcontextprotocol.io/specification/) | Official Model Context Protocol specification and documentation |
 
 ## Quick Links
 

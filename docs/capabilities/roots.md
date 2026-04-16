@@ -173,4 +173,3 @@ The cache is refreshed when the client sends a `roots/list_changed` notification
 
 - [MCP Specification — Roots](https://modelcontextprotocol.io/specification/2025-11-25/client/roots)
 - [MCP Go SDK — ListRoots](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.ListRoots)
-- [MCP Protocol Guide — Roots](../mcp-protocol/09-roots.md)

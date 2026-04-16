@@ -533,7 +533,7 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 
 ## New Contributor Quick Start
 
-1. **Read [MCP Concepts](mcp-protocol/README.md)** — understand the protocol
+1. **Read [MCP Concepts](https://modelcontextprotocol.io/specification/)** — understand the protocol
 2. **Read `cmd/server/main.go`** — entry point shows how everything connects
 3. **Study one sub-package** (e.g., `internal/tools/branches/`) — understand the handler pattern
 4. **Look at `internal/tools/register_meta.go`** — see how handlers become meta-tools

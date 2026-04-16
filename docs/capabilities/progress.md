@@ -205,4 +205,3 @@ Yes. Call `progress.FromRequest(req)` at the start of your handler and use `trac
 
 - [MCP Specification — Progress](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/progress)
 - [MCP Go SDK — NotifyProgress](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.NotifyProgress)
-- [MCP Protocol Guide — Notifications & Progress](../mcp-protocol/13-notifications-and-progress.md)

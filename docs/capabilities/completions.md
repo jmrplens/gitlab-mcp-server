@@ -230,4 +230,3 @@ Yes. The server supports completions for resource URI template parameters (`proj
 
 - [MCP Specification — Completions](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/completion)
 - [MCP Go SDK — CompletionHandler](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions)
-- [MCP Protocol Guide — Completions](../mcp-protocol/14-completions.md)

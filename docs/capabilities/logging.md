@@ -210,4 +210,3 @@ It depends on your MCP client. VS Code shows them in an output channel. CLI tool
 
 - [MCP Specification — Logging](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/logging)
 - [MCP Go SDK — ServerSession.Log](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.Log)
-- [MCP Protocol Guide — Logging](../mcp-protocol/15-logging.md)

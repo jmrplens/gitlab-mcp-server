@@ -714,6 +714,5 @@ Only if your MCP client uses a local LLM. Sampling delegates to whatever model t
 
 - [MCP Specification — Sampling](https://modelcontextprotocol.io/specification/2025-11-25/client/sampling)
 - [MCP Go SDK — CreateMessage](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.CreateMessage)
-- [MCP Protocol Guide — Sampling](../mcp-protocol/07-sampling.md)
 - [Capability Tools Reference](../tools/capabilities.md) — tool parameter tables and annotations
 - [Generate Release Notes Skill](../examples/generate-release-notes-skill.md) — user-facing skill
