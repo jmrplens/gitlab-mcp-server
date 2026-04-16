@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -238,6 +239,9 @@ func ErrInvalidEnum(field, value string, validValues []string) error {
 // given HTTP status code. Useful for handling specific API responses like
 // 404 (feature not available on CE) or 403 (insufficient permissions).
 func IsHTTPStatus(err error, code int) bool {
+	if code == http.StatusNotFound && errors.Is(err, gl.ErrNotFound) {
+		return true
+	}
 	var glErr *gl.ErrorResponse
 	return errors.As(err, &glErr) && glErr.Response != nil && glErr.Response.StatusCode == code
 }
