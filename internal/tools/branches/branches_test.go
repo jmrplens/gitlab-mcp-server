@@ -1401,3 +1401,138 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestBranchProtect_Conflict409_FallbackGet verifies idempotent behavior
+// when the branch is already protected (409 Conflict): the handler falls
+// back to GET the existing protection rule.
+func TestBranchProtect_Conflict409_FallbackGet(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProtectedBranches, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusConflict, `{"message":"Protected branch 'main' already exists"}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc(pathProtectedBranches+"/main", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","push_access_levels":[{"access_level":40}],"merge_access_levels":[{"access_level":30}]}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+	if err != nil {
+		t.Fatalf("expected idempotent success, got error: %v", err)
+	}
+	if !out.AlreadyProtected {
+		t.Error("expected AlreadyProtected = true")
+	}
+	if out.Name != "main" {
+		t.Errorf("Name = %q, want %q", out.Name, "main")
+	}
+}
+
+// TestBranchProtect_Conflict409_GetFails verifies that when 409 occurs and
+// the fallback GET also fails, the original error is returned with a hint.
+func TestBranchProtect_Conflict409_GetFails(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProtectedBranches, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"already exists"}`)
+	})
+	mux.HandleFunc(pathProtectedBranches+"/main", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+	if err == nil {
+		t.Fatal("expected error when fallback GET fails")
+	}
+}
+
+// TestBranchDelete_ProtectedBranch verifies the hint when deleting a protected branch.
+func TestBranchDelete_ProtectedBranch(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"protected branch"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", BranchName: "main"})
+	if err == nil {
+		t.Fatal("expected error for protected branch")
+	}
+	if !strings.Contains(err.Error(), "gitlab_branch_unprotect") {
+		t.Errorf("expected unprotect hint, got: %v", err)
+	}
+}
+
+// TestBranchDelete_NotFound verifies the hint when deleting a nonexistent branch.
+func TestBranchDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", BranchName: "ghost"})
+	if err == nil {
+		t.Fatal("expected error for not-found branch")
+	}
+	if !strings.Contains(err.Error(), "gitlab_branch_list") {
+		t.Errorf("expected list hint, got: %v", err)
+	}
+}
+
+// TestBranchCreate_GenericAPIError verifies that Create wraps generic server errors.
+func TestBranchCreate_GenericAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", BranchName: "x", Ref: "main"})
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+}
+
+// TestBranchCreate_EmptyBranchName verifies validation for empty branch name.
+func TestBranchCreate_EmptyBranchName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"})
+	if err == nil {
+		t.Fatal("expected error for empty branch_name")
+	}
+}
+
+// TestBranchGet_EmptyBranchName verifies validation for empty branch name.
+func TestBranchGet_EmptyBranchName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for empty branch_name")
+	}
+}
+
+// TestBranchDelete_EmptyBranchName verifies validation for empty branch name.
+func TestBranchDelete_EmptyBranchName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for empty branch_name")
+	}
+}
+
+// TestBranchProtect_EmptyBranchName verifies validation for empty branch name.
+func TestBranchProtect_EmptyBranchName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for empty branch_name")
+	}
+}
+
+// TestBranchUnprotect_EmptyBranchName verifies validation for empty branch name.
+func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for empty branch_name")
+	}
+}

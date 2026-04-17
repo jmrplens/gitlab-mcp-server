@@ -1,13 +1,13 @@
 {
-  "servers": {
-    "gitlab-dev": {
-      "type": "stdio",
-      "command": "${workspaceFolder}/dist/gitlab-mcp-server-linux-amd64",
-      "envFile": "${workspaceFolder}/.env",
-      "env": {
-        "AUTO_UPDATE": "true",
-        "META_TOOLS": "true"
-      }
-    }
-  }
+  // "servers": {
+  //   "gitlab-dev": {
+  //     "type": "stdio",
+  //     "command": "${workspaceFolder}/dist/gitlab-mcp-server-linux-amd64",
+  //     "envFile": "${workspaceFolder}/.env",
+  //     "env": {
+  //       "AUTO_UPDATE": "true",
+  //       "META_TOOLS": "true"
+  //     }
+  //   }
+  // }
 }

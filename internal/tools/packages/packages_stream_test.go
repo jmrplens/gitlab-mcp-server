@@ -143,3 +143,25 @@ func TestComputeSHA256_ViaToolutil(t *testing.T) {
 		t.Errorf("SHA256 = %q, want %q", hash, expected)
 	}
 }
+
+// TestStreamDownload_UnwritablePath verifies that streamDownloadPackageFile
+// returns an error when the output file cannot be created (e.g. parent is a file).
+func TestStreamDownload_UnwritablePath(t *testing.T) {
+	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
+
+	// Create a file where a directory is expected, so os.Create fails.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	os.WriteFile(blocker, []byte("x"), 0644)
+	badPath := filepath.Join(blocker, "sub", testOutputBin)
+
+	_, err := Download(context.Background(), nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     badPath,
+	})
+	if err == nil {
+		t.Fatal("expected error for unwritable output path, got nil")
+	}
+}

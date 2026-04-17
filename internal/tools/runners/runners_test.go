@@ -1979,3 +1979,75 @@ func covNewRunnersMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestListManagers_Success verifies that ListManagers returns runner
+// managers when the API responds successfully.
+func TestListManagers_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/runners/1/managers" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":10,"system_id":"sys-01","version":"16.0","platform":"linux","architecture":"amd64","ip_address":"10.0.0.1","status":"online"},
+			{"id":11,"system_id":"sys-02","version":"16.0","platform":"darwin","architecture":"arm64","ip_address":"10.0.0.2","status":"offline"}
+		]`)
+	}))
+	out, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Managers) != 2 {
+		t.Fatalf("got %d managers, want 2", len(out.Managers))
+	}
+	if out.Managers[0].SystemID != "sys-01" {
+		t.Errorf("SystemID = %q, want %q", out.Managers[0].SystemID, "sys-01")
+	}
+}
+
+// TestListManagers_ZeroRunnerID verifies validation of zero runner ID.
+func TestListManagers_ZeroRunnerID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	_, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 0})
+	if err == nil {
+		t.Fatal("expected error for zero runner_id")
+	}
+}
+
+// TestListManagers_APIError verifies that ListManagers wraps API errors.
+func TestListManagers_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Runner Not Found"}`)
+	}))
+	_, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 999})
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+}
+
+// TestFormatManagerListMarkdown_WithManagers verifies markdown output for
+// a non-empty list of runner managers.
+func TestFormatManagerListMarkdown_WithManagers(t *testing.T) {
+	out := ManagerListOutput{
+		Managers: []ManagerOutput{
+			{ID: 10, SystemID: "sys-01", Version: "16.0", Platform: "linux", Architecture: "amd64", Status: "online", IPAddress: "10.0.0.1"},
+		},
+	}
+	md := FormatManagerListMarkdown(out)
+	if !strings.Contains(md, "sys-01") {
+		t.Error("expected sys-01 in markdown output")
+	}
+	if !strings.Contains(md, "Runner Managers") {
+		t.Error("expected header in markdown output")
+	}
+}
+
+// TestFormatManagerListMarkdown_Empty verifies markdown output for
+// an empty managers list.
+func TestFormatManagerListMarkdown_Empty(t *testing.T) {
+	md := FormatManagerListMarkdown(ManagerListOutput{})
+	if !strings.Contains(md, "No runner managers found") {
+		t.Error("expected empty message")
+	}
+}

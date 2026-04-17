@@ -559,3 +559,56 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 		t.Error("expected no error")
 	}
 }
+
+// TestGet_ArrayFallback verifies that Get handles the GitLab array response
+// fallback when the standard endpoint returns "cannot unmarshal array".
+func TestGet_ArrayFallback(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			// First call: return array (triggers unmarshal error in client-go).
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"root","path":"root","kind":"user","full_path":"root","web_url":"https://example.com/root"}]`)
+			return
+		}
+		// Second call via raw Do(): return the same array.
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"root","path":"root","kind":"user","full_path":"root","web_url":"https://example.com/root"}]`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ID: "root"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Name != "root" {
+		t.Errorf("Name = %q, want %q", out.Name, "root")
+	}
+}
+
+// TestGet_APIError verifies that Get wraps standard API errors.
+func TestGet_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Namespace Not Found"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ID: "nonexistent"})
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+}
+
+// TestGet_ArrayFallback_EmptyArray verifies that Get returns an error when
+// the array fallback returns an empty list.
+func TestGet_ArrayFallback_EmptyArray(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1},{"id":2}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ID: "missing"})
+	if err == nil {
+		t.Fatal("expected error for empty fallback array")
+	}
+}

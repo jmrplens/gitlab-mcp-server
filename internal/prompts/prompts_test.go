@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test endpoint paths and reusable format strings shared across prompt tests.
@@ -959,5 +961,130 @@ func TestPromptResult(t *testing.T) {
 	text := result.Messages[0].Content.(*mcp.TextContent).Text
 	if text != testHelloWorld {
 		t.Errorf("text = %q, want %q", text, testHelloWorld)
+	}
+}
+
+// TestFetchMergedMRsForRange_EmptyCommits verifies that passing no commits
+// returns nil without making any API call.
+func TestFetchMergedMRsForRange_EmptyCommits(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("should not call API with empty commits")
+		http.NotFound(w, nil)
+	}))
+	result := fetchMergedMRsForRange(context.Background(), client, "42", nil)
+	if result != nil {
+		t.Errorf("expected nil for empty commits, got %v", result)
+	}
+}
+
+// TestFetchMergedMRsForRange_NilCommittedDates verifies that commits with
+// nil committed dates are skipped, resulting in nil return.
+func TestFetchMergedMRsForRange_NilCommittedDates(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("should not call API when all dates are nil")
+		http.NotFound(w, nil)
+	}))
+	commits := []*gl.Commit{{ID: "abc123"}}
+	result := fetchMergedMRsForRange(context.Background(), client, "42", commits)
+	if result != nil {
+		t.Errorf("expected nil for nil committed dates, got %v", result)
+	}
+}
+
+// TestFetchMergedMRsForRange_APIError verifies that an API error returns nil
+// instead of propagating the error.
+func TestFetchMergedMRsForRange_APIError(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	now := time.Now()
+	commits := []*gl.Commit{{ID: "abc123", CommittedDate: &now}}
+	result := fetchMergedMRsForRange(context.Background(), client, "42", commits)
+	if result != nil {
+		t.Errorf("expected nil on API error, got %v", result)
+	}
+}
+
+// TestFetchMergedMRsForRange_Success verifies that MRs merged within the
+// commit range are returned and those outside are filtered out.
+func TestFetchMergedMRsForRange_Success(t *testing.T) {
+	t1 := time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	inRange := time.Date(2025, 3, 12, 0, 0, 0, 0, time.UTC)
+	outOfRange := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/merge_requests") {
+			respondJSON(w, http.StatusOK, `[
+				{"iid":1,"title":"In range MR","merged_at":"2025-03-12T00:00:00Z"},
+				{"iid":2,"title":"Out of range MR","merged_at":"2025-06-01T00:00:00Z"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	commits := []*gl.Commit{
+		{ID: "abc", CommittedDate: &t1},
+		{ID: "def", CommittedDate: &t2},
+	}
+	result := fetchMergedMRsForRange(context.Background(), client, "42", commits)
+
+	_ = inRange
+	_ = outOfRange
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 MR in range, got %d", len(result))
+	}
+	if result[0].IID != 1 {
+		t.Errorf("expected IID 1, got %d", result[0].IID)
+	}
+}
+
+// TestGenerateReleaseNotesPrompt_WithMRs verifies the full release notes prompt
+// including merged MR section when both compare and MR APIs respond.
+func TestGenerateReleaseNotesPrompt_WithMRs(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == pathRepoCompare:
+			respondJSON(w, http.StatusOK, `{
+				"commits":[
+					{"id":"abc12345","title":"feat: add login","author_name":"Alice","committed_date":"2025-03-10T00:00:00Z","author_email":"alice@test.com"},
+					{"id":"def67890","title":"fix: typo","author_name":"Bob","committed_date":"2025-03-15T00:00:00Z","author_email":"bob@test.com"}
+				],
+				"diffs":[{"new_path":"login.go","new_file":true}],
+				"compare_timeout":false,"compare_same_ref":false
+			}`)
+		case strings.Contains(r.URL.Path, "/merge_requests"):
+			respondJSON(w, http.StatusOK, `[
+				{"iid":10,"title":"Add login feature","merged_at":"2025-03-12T00:00:00Z","author":{"username":"alice"},"labels":["feature"],"description":"Implements login flow"}
+			]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "generate_release_notes",
+		Arguments: map[string]string{"project_id": "42", "from": "v1.0", "to": "v2.0"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "Merge Requests (1)") {
+		t.Errorf("expected MR section heading, got: %s", text[:200])
+	}
+	if !strings.Contains(text, "Add login feature") {
+		t.Errorf("expected MR title in output")
+	}
+	if !strings.Contains(text, "@alice") {
+		t.Errorf("expected author in output")
+	}
+	if !strings.Contains(text, "[feature]") {
+		t.Errorf("expected labels in output")
+	}
+	if !strings.Contains(text, "Contributors") {
+		t.Errorf("expected statistics section")
 	}
 }

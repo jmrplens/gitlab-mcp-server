@@ -68,3 +68,12 @@ func TestParseOptionalTime_Invalid(t *testing.T) {
 		t.Errorf("ParseOptionalTime(\"invalid\") = %v, want nil", got)
 	}
 }
+
+// TestFormatTime_DateOnly verifies that FormatTime handles YYYY-MM-DD format.
+func TestFormatTime_DateOnly(t *testing.T) {
+	got := FormatTime("2026-03-20")
+	want := "20 Mar 2026"
+	if got != want {
+		t.Errorf("FormatTime() = %q, want %q", got, want)
+	}
+}

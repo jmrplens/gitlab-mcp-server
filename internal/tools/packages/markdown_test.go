@@ -174,13 +174,22 @@ func newPackagesMCPSession(t *testing.T) *mcp.ClientSession {
 
 	handler := http.NewServeMux()
 
-	// Publish (PUT)
+	// Publish (PUT) — exact file route for single-file tests.
 	handler.HandleFunc(pathPutPkg1, func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"id": 1, "package_id": 10, "file_name": "app.tar.gz",
 			"size": 1024, "file_sha256": "abc", "file_md5": "md5",
 			"file_sha1": "sha1", "file_store": 1,
 			"created_at": "2026-01-01T00:00:00Z"
+		}`)
+	})
+
+	// Publish (PUT) — catch-all for publish_directory uploads.
+	handler.HandleFunc("PUT /api/v4/projects/1/packages/generic/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id": 2, "package_id": 10, "file_name": "test.bin",
+			"size": 4, "file_sha256": "def", "file_md5": "md5",
+			"file_sha1": "sha1", "file_store": 1
 		}`)
 	})
 
@@ -294,6 +303,22 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 			assertCallToolSuccess(t, result, err, tt.tool)
 		})
 	}
+
+	// publish_directory needs a temp dir with a file, handled separately.
+	t.Run("publish_directory", func(t *testing.T) {
+		pubDir := t.TempDir()
+		os.WriteFile(filepath.Join(pubDir, "test.bin"), []byte("data"), 0644)
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "gitlab_package_publish_directory",
+			Arguments: map[string]any{
+				"project_id":      "1",
+				"package_name":    testPackageName,
+				"package_version": "1.0.0",
+				"directory_path":  pubDir,
+			},
+		})
+		assertCallToolSuccess(t, result, err, "gitlab_package_publish_directory")
+	})
 }
 
 // ---------------------------------------------------------------------------

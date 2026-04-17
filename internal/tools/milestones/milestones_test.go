@@ -336,9 +336,11 @@ func TestMilestoneUpdate_MissingParams(t *testing.T) {
 
 // TestMilestoneUpdate_InvalidDate verifies the behavior of milestone update invalid date.
 func TestMilestoneUpdate_InvalidDate(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
+	})
+	client := testutil.NewTestClient(t, mux)
 
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, StartDate: "bad"})
 	if err == nil {
@@ -347,6 +349,96 @@ func TestMilestoneUpdate_InvalidDate(t *testing.T) {
 	_, err = Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, DueDate: "bad"})
 	if err == nil {
 		t.Fatal("expected error for invalid due_date")
+	}
+}
+
+// TestMilestoneUpdate_APIError verifies that Update wraps API errors.
+func TestMilestoneUpdate_APIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1}]`)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc(pathProjectMilestones+"/1", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 1, Title: "new"})
+	if err == nil {
+		t.Fatal("expected error for API failure")
+	}
+}
+
+// TestMilestoneUpdate_ResolveError verifies that Update handles resolveIID failure.
+func TestMilestoneUpdate_ResolveError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MilestoneIID: 99})
+	if err == nil {
+		t.Fatal("expected error when resolveIID fails")
+	}
+}
+
+// TestMilestoneCreate_BadRequest verifies that Create returns a hint on 400 errors.
+func TestMilestoneCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Title has already been taken"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Title: "v1.0"})
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+	if !strings.Contains(err.Error(), "check that the title is unique") {
+		t.Errorf("expected hint in error, got: %v", err)
+	}
+}
+
+// TestMilestoneGet_ResolveNotFound verifies Get returns an error when the milestone IID doesn't exist.
+func TestMilestoneGet_ResolveNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ProjectID: "42", MilestoneIID: 999})
+	if err == nil {
+		t.Fatal("expected error for not-found IID")
+	}
+}
+
+// TestMilestoneDelete_ResolveError verifies Delete returns error when resolve fails.
+func TestMilestoneDelete_ResolveError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", MilestoneIID: 999})
+	if err == nil {
+		t.Fatal("expected error for not-found IID")
+	}
+}
+
+// TestMilestoneGetIssues_ResolveError verifies GetIssues returns error when resolve fails.
+func TestMilestoneGetIssues_ResolveError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := GetIssues(context.Background(), client, GetIssuesInput{ProjectID: "42", MilestoneIID: 999})
+	if err == nil {
+		t.Fatal("expected error for not-found IID")
+	}
+}
+
+// TestMilestoneGetMergeRequests_ResolveError verifies GetMergeRequests returns error when resolve fails.
+func TestMilestoneGetMergeRequests_ResolveError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{ProjectID: "42", MilestoneIID: 999})
+	if err == nil {
+		t.Fatal("expected error for not-found IID")
 	}
 }
 

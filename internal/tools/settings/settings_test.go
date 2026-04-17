@@ -234,3 +234,41 @@ func TestMCPRound_Trip(t *testing.T) {
 		})
 	}
 }
+
+// TestGet_APIError verifies that Get returns a wrapped error when the API fails.
+func TestGet_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+}
+
+// TestGet_MarshalError verifies that Get handles the json.Marshal step.
+// Since gl.Settings always marshals fine, we test the unmarshal step
+// by returning a valid response and verifying the full round-trip.
+func TestGet_Success_FullRoundTrip(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":true,"default_project_visibility":"private"}`)
+	}))
+	out, err := Get(context.Background(), client, GetInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Settings == nil {
+		t.Fatal("expected non-nil Settings map")
+	}
+}
+
+// TestUpdate_APIError verifies that Update returns a wrapped error when the API fails.
+func TestUpdate_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+}

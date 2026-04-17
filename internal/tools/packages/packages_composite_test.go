@@ -537,3 +537,57 @@ func TestPackagePublishDirectory_SkipsSubdirectories(t *testing.T) {
 		t.Errorf("publishCount = %d, want 1", publishCount)
 	}
 }
+
+// TestPackagePublishDirectory_SkipsSymlinks verifies that symlinks are excluded
+// because shouldIncludeFile checks info.Mode().IsRegular().
+func TestPackagePublishDirectory_SkipsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a regular file.
+	regular := filepath.Join(dir, "real.bin")
+	os.WriteFile(regular, []byte("real"), 0644)
+
+	// Create a symlink to that file.
+	symlink := filepath.Join(dir, "link.bin")
+	if err := os.Symlink(regular, symlink); err != nil {
+		t.Skip("symlinks not supported on this filesystem:", err)
+	}
+
+	publishCount := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/packages/generic/") {
+			publishCount++
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id": 1, "package_id": 10, "file_name": "real.bin",
+				"size": 4, "file_sha256": "h", "file_md5": "m", "file_sha1": "s", "file_store": 1
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
+		ProjectID:      "42",
+		PackageName:    "my-pkg",
+		PackageVersion: "1.0.0",
+		DirectoryPath:  dir,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.TotalFiles != 1 {
+		t.Errorf("TotalFiles = %d, want 1 (symlink should be excluded)", out.TotalFiles)
+	}
+	if publishCount != 1 {
+		t.Errorf("publishCount = %d, want 1 (only real.bin)", publishCount)
+	}
+}
+
+// TestCollectMatchingFiles_NonexistentDir verifies that collectMatchingFiles
+// returns an error when the directory does not exist.
+func TestCollectMatchingFiles_NonexistentDir(t *testing.T) {
+	_, err := collectMatchingFiles("/nonexistent-path-42", "")
+	if err == nil {
+		t.Fatal("expected error for nonexistent directory, got nil")
+	}
+}
