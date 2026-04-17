@@ -5,6 +5,10 @@ set -euo pipefail
 # Requires: GitLab already healthy, test/e2e/.env.docker exists with root-level access.
 # Usage: ./test/e2e/scripts/register-runner.sh [GITLAB_URL]
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+E2E_DIR="$(dirname "$SCRIPT_DIR")"
+COMPOSE_FILE="${E2E_DIR}/docker-compose.yml"
+
 GITLAB_URL="${1:-http://localhost:8929}"
 # Runner needs GitLab's internal Docker hostname (not localhost)
 GITLAB_INTERNAL_URL="${2:-http://gitlab-e2e:80}"
@@ -52,7 +56,7 @@ fi
 
 # 3. Register in the runner container
 echo "  [3/3] Configuring runner container..."
-RUNNER_CONTAINER=$(docker compose ps -q gitlab-runner 2>/dev/null || true)
+RUNNER_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q gitlab-runner 2>/dev/null || true)
 
 if [ -z "$RUNNER_CONTAINER" ]; then
     echo "  WARN: gitlab-runner container not found. Skipping runner registration."
@@ -60,7 +64,7 @@ if [ -z "$RUNNER_CONTAINER" ]; then
 fi
 
 # Detect the Docker network created by compose (varies by directory name)
-COMPOSE_NETWORK=$(docker compose ps --format json 2>/dev/null | python3 -c "
+COMPOSE_NETWORK=$(docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null | python3 -c "
 import sys, json
 for line in sys.stdin:
     obj = json.loads(line)

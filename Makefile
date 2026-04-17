@@ -89,6 +89,9 @@ test-integration:
 
 ## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
 test-e2e:
+	@echo "WARNING: This will run E2E tests against the GitLab instance configured in .env (GITLAB_URL)."
+	@echo "         Tests create and delete projects, groups, users, and other resources."
+	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
 	go test -v -tags e2e -timeout 120s ./test/e2e/suite/
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
