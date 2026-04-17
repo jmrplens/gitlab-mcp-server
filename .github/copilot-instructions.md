@@ -185,7 +185,6 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_USER`            | GitLab username                   | `jmrplens`         |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
-| `ISSUE_REPORTS`          | Enable issue report generation on errors | `false` (default)  |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |

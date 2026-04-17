@@ -116,50 +116,6 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 	}
 }
 
-// TestLoad_IssueReportsDefault verifies that [Load] sets IssueReports
-// to false when the ISSUE_REPORTS environment variable is not set.
-func TestLoad_IssueReportsDefault(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if cfg.IssueReports {
-		t.Error("IssueReports should default to false")
-	}
-}
-
-// TestLoad_IssueReportsEnabled verifies that [Load] sets IssueReports
-// to true when ISSUE_REPORTS=true.
-func TestLoad_IssueReportsEnabled(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("ISSUE_REPORTS", "true")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if !cfg.IssueReports {
-		t.Error("IssueReports should be true when ISSUE_REPORTS=true")
-	}
-}
-
-// TestLoad_IssueReportsInvalid verifies that [Load] returns an error when
-// ISSUE_REPORTS contains a non-boolean string.
-func TestLoad_IssueReportsInvalid(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("ISSUE_REPORTS", "notabool")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() expected error for invalid ISSUE_REPORTS, got nil")
-	}
-}
-
 // Transport and HTTP addr are now CLI flags, not env vars.
 
 // TestLoad_UploadDefaults verifies upload config defaults when env vars are unset.

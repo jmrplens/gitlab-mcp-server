@@ -235,7 +235,6 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_USER`            | No       | GitLab username                                          |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
-| `ISSUE_REPORTS`          | No       | Enable issue report generation on errors (`false` by default) |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |

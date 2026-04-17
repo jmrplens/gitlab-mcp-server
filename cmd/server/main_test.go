@@ -820,23 +820,6 @@ func TestStartAutoUpdate_Success(t *testing.T) {
 	cancel()
 }
 
-// TestRunStdio_WithIssueReports verifies that runStdio enables issue
-// reports when ISSUE_REPORTS=true and still starts the server.
-func TestRunStdio_WithIssueReports(t *testing.T) {
-	srv := newMockGitLabServer(t)
-	t.Setenv("GITLAB_URL", srv.URL)
-	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("META_TOOLS", "false")
-	t.Setenv("ISSUE_REPORTS", "true")
-	t.Setenv("AUTO_UPDATE", "false")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately so stdio exits
-
-	err := runWithContext(ctx, nil)
-	_ = err // cancelled context — either nil or error is OK
-}
-
 // TestRunStdio_PingSucceeds verifies the success path for Ping in runStdio,
 // where the GitLab mock returns a valid version response.
 func TestRunStdio_PingSucceeds(t *testing.T) {

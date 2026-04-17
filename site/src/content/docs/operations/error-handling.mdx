@@ -166,11 +166,3 @@ Detail: 403 Forbidden
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
-
-## Automated issue reporting
-
-:::note
-Issue report generation is disabled by default. Set `ISSUE_REPORTS=true` to enable it.
-:::
-
-When enabled, unrecoverable errors generate a complete bug report that can be copied into a GitLab or GitHub issue. The report includes environment details (server version, OS, timestamp), sanitized input parameters, and reproduction steps. Sensitive values (tokens, passwords, keys) are automatically redacted.

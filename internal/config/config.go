@@ -46,7 +46,6 @@ type Config struct {
 	MetaTools     bool
 	Enterprise    bool
 	ReadOnly      bool
-	IssueReports  bool
 
 	UploadMaxFileSize int64
 
@@ -90,11 +89,6 @@ func Load() (*Config, error) {
 	enterprise, err := parseBool(os.Getenv("GITLAB_ENTERPRISE"), false)
 	if err != nil {
 		return nil, fmt.Errorf("invalid GITLAB_ENTERPRISE value: %w", err)
-	}
-
-	issueReports, err := parseBool(os.Getenv("ISSUE_REPORTS"), false)
-	if err != nil {
-		return nil, fmt.Errorf("invalid ISSUE_REPORTS value: %w", err)
 	}
 
 	readOnly, err := parseBool(os.Getenv("GITLAB_READ_ONLY"), false)
@@ -156,7 +150,6 @@ func Load() (*Config, error) {
 		MetaTools:          metaTools,
 		Enterprise:         enterprise,
 		ReadOnly:           readOnly,
-		IssueReports:       issueReports,
 		UploadMaxFileSize:  maxFileSize,
 		MaxHTTPClients:     maxHTTPClients,
 		SessionTimeout:     sessionTimeout,

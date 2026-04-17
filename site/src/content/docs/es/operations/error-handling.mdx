@@ -166,11 +166,3 @@ Detail: 403 Forbidden
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
-
-## Reportes automáticos de incidencias
-
-:::note
-La generación de reportes de incidencias está deshabilitada por defecto. Establece `ISSUE_REPORTS=true` para habilitarla.
-:::
-
-Cuando está habilitada, los errores irrecuperables generan un reporte de bug completo que puede copiarse en una incidencia de GitLab o GitHub. El reporte incluye detalles del entorno (versión del servidor, SO, marca de tiempo), parámetros de entrada sanitizados y pasos de reproducción. Los valores sensibles (tokens, contraseñas, claves) se redactan automáticamente.

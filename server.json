@@ -75,12 +75,6 @@
           "default": "false"
         },
         {
-          "name": "ISSUE_REPORTS",
-          "description": "Enable automatic issue report generation on tool failures (default: false)",
-          "isRequired": false,
-          "default": "false"
-        },
-        {
           "name": "UPLOAD_MAX_FILE_SIZE",
           "description": "Maximum attachment upload size in bytes (default: 2147483648 = 2 GB)",
           "isRequired": false,

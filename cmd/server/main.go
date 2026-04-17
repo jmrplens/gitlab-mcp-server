@@ -195,7 +195,6 @@ ENVIRONMENT VARIABLES (stdio mode)
   META_TOOLS                Enable meta-tools: true/false (default true)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
-  ISSUE_REPORTS             Enable issue reports on errors: true/false (default false)
   AUTO_UPDATE               Auto-update mode: true/check/false (default true)
   AUTO_UPDATE_REPO          GitLab project for updates (default %s)
   AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
@@ -320,11 +319,6 @@ func runStdio(ctx context.Context) error {
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
-
-	if cfg.IssueReports {
-		toolutil.EnableIssueReports(true)
-		slog.Info("issue reports enabled (ISSUE_REPORTS=true)")
-	}
 
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()
