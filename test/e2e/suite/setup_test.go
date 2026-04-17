@@ -371,6 +371,20 @@ func elicitTextValue(fieldName string) string {
 // MCP call helpers
 // ---------------------------------------------------------------------------.
 
+// isTransientNetworkError returns true if the error is a transient network
+// issue that can be retried (EOF, connection reset, broken pipe). These occur
+// when GitLab CE is under heavy parallel load and nginx/puma drops connections.
+func isTransientNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection refused")
+}
+
 // extractToolError reads the first text content block from a failed
 // [mcp.CallToolResult] and returns it as a formatted error.
 func extractToolError(name string, result *mcp.CallToolResult) error {

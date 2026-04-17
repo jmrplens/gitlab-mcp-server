@@ -93,8 +93,8 @@ func sanitizeTestName(name string) string {
 // ---------------------------------------------------------------------------
 
 // projectCreateRetries is the max number of attempts for project creation.
-// GitLab CE has a race condition when many projects are created concurrently
-// with initialize_with_readme, returning spurious "already been taken" errors.
+// GitLab CE has race conditions when many projects are created concurrently:
+// spurious "already been taken" errors and transient connection resets.
 const projectCreateRetries = 5
 
 // createProject creates a private project via individual MCP tools and
@@ -115,8 +115,9 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 		if err == nil {
 			break
 		}
-		if strings.Contains(err.Error(), "already been taken") && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed (name collision), retrying: %v", attempt+1, err)
+		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
+		if retryable && attempt < projectCreateRetries-1 {
+			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
 			time.Sleep(time.Duration(attempt+1) * time.Second)
 			continue
 		}
@@ -158,8 +159,9 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 		if err == nil {
 			break
 		}
-		if strings.Contains(err.Error(), "already been taken") && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed (name collision), retrying: %v", attempt+1, err)
+		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
+		if retryable && attempt < projectCreateRetries-1 {
+			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
 			time.Sleep(time.Duration(attempt+1) * time.Second)
 			continue
 		}
@@ -358,7 +360,7 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // waitForBranchOn polls the GitLab API until the named branch exists in the
 // given project or the context is canceled. Under parallel load (~60 projects)
 // branch creation can take well over 30s, so we allow up to 90s with
-// progressive backoff. Transient errors (429, 5xx) are retried silently.
+// progressive backoff. Transient errors (429, 5xx, network) are retried silently.
 func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
 	t.Helper()
 	drainSidekiq(ctx, t)
@@ -376,7 +378,10 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 		}
 
 		retryable := false
-		if resp != nil {
+		if resp == nil {
+			// Network-level error (EOF, connection reset) — always retryable.
+			retryable = true
+		} else {
 			switch {
 			case resp.StatusCode == http.StatusNotFound:
 				retryable = true
