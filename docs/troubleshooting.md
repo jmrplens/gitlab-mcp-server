@@ -30,7 +30,7 @@ Common issues and solutions for gitlab-mcp-server.
 
 | Symptom | Cause | Solution |
 | --- | --- | --- |
-| MCP client shows 1004 tools instead of 40 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 40 domain meta-tools instead of 1004 individual tools |
+| MCP client shows 1004 tools instead of 42 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 42 domain meta-tools instead of 1004 individual tools |
 | Tool not found in `tools/list` | Tool not registered, or meta-tools mode mismatch | Check if the tool exists in individual mode (`META_TOOLS=false`) or meta-tool mode (`META_TOOLS=true`) — they expose different tool names |
 | `unknown action` in meta-tool call | Invalid `action` parameter | List valid actions by calling the meta-tool with `action: "list"` or check [Meta-Tools Reference](meta-tools.md) |
 

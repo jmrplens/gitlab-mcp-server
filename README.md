@@ -5,7 +5,7 @@ A **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP 
 ## Highlights
 
 - **1004 MCP tools** — complete GitLab REST API v4 coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **40 meta-tools** (59 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 19 additional enterprise meta-tools available for Premium/Ultimate features
+- **42 meta-tools** (57 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
 - **11 sampling tools** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via MCP sampling capability
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **24 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, workspace roots, and 5 workflow best-practice guides
@@ -230,7 +230,7 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
-| **Meta-Tools** (default) | 40 base / 59 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Meta-Tools** (default) | 42 base / 57 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
 | **Individual** | 1004 | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:
@@ -261,7 +261,7 @@ Plus 11 sampling tools, 4 elicitation tools, and additional domain tools. See [M
 
 | MCP Capability | Support |
 |----------------|---------|
-| **Tools** | 1004 individual / 40–59 meta |
+| **Tools** | 1004 individual / 42–57 meta |
 | **Resources** | 24 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
@@ -284,7 +284,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
 | [Tools Reference](docs/tools/README.md) | All 1004 individual tools with input/output schemas |
-| [Meta-Tools](docs/meta-tools.md) | 40/59 domain meta-tools with action dispatching |
+| [Meta-Tools](docs/meta-tools.md) | 42/57 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 24 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
@@ -347,7 +347,7 @@ Yes. Set `GITLAB_READ_ONLY=true` to disable all mutating tools (create, update, 
 <details>
 <summary><strong>What GitLab editions are supported?</strong></summary>
 
-Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_ENTERPRISE=true` to enable 19 additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.).
+Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_ENTERPRISE=true` to enable 15 additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.).
 </details>
 
 <details>

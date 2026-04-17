@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1004 individual tools, **40 domain meta-tools** (59 with `GITLAB_ENTERPRISE=true`) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1004 individual tools, **42 domain meta-tools** (57 with `GITLAB_ENTERPRISE=true`) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`META_TOOLS=true`, default), the server registers **40 base tools**: 23 inline + 5 delegated + 11 sampling + 1 standalone. With `GITLAB_ENTERPRISE=true`, 19 additional enterprise inline meta-tools are registered for a total of **59 tools**.
+In meta-tool mode (`META_TOOLS=true`, default), the server registers **42 base tools**: 23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone. With `GITLAB_ENTERPRISE=true`, 15 additional enterprise inline meta-tools are registered for a total of **57 tools**.
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
@@ -37,7 +37,7 @@ META_TOOLS=false
 
 | Mode                       | Tool Count | Best For                                                         |
 | -------------------------- | ---------- | ---------------------------------------------------------------- |
-| Meta-tools (`true`)        | 40 base / 59 enterprise | LLMs with limited tool context windows                           |
+| Meta-tools (`true`)        | 42 base / 57 enterprise | LLMs with limited tool context windows                           |
 | Individual tools (`false`) | 1004       | Clients that benefit from granular tool discovery                |
 
 ---
@@ -77,37 +77,44 @@ META_TOOLS=false
 | 22 | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji |
 | 23 | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists    |
 
-### Delegated Meta-Tools (5)
+### Always-Registered Meta-Tools (4)
 
 | # | Tool Name               | Actions | Source                                    |
 |---|-------------------------|---------|-------------------------------------------|
-| 24 | `gitlab_search`        | 10      | Global, project, group search             |
-| 25 | `gitlab_runner`        | 19      | Runners, runner management                |
-| 26 | `gitlab_runner_controller` | 5   | Runner controller CRUD                    |
-| 27 | `gitlab_runner_controller_token` | 3 | Runner controller token management     |
-| 28 | `gitlab_runner_controller_scope` | 3 | Runner controller scope management     |
+| 24 | `gitlab_model_registry` | 1      | ML model registry package download        |
+| 25 | `gitlab_ci_catalog`    | 2       | CI/CD Catalog resource discovery (GraphQL) |
+| 26 | `gitlab_branch_rule`   | 1       | Branch rules aggregated view (GraphQL)    |
+| 27 | `gitlab_custom_emoji`  | 3       | Group-level custom emoji management (GraphQL) |
+
+### Delegated Meta-Tools (3)
+
+| # | Tool Name               | Actions | Source                                    |
+|---|-------------------------|---------|-------------------------------------------|
+| 28 | `gitlab_search`        | 10      | Global, project, group search             |
+| 29 | `gitlab_runner`        | 19      | Runners, runner management                |
+| 30 | `gitlab_runner_controller` | 15  | Runner controller CRUD, tokens, scopes   |
 
 ### Sampling Tools (11)
 
 | # | Tool Name               | Actions | Source                                    |
 |---|-------------------------|---------|-------------------------------------------|
-| 29 | `gitlab_summarize_issue` | 1     | LLM-powered issue summarization (sampling) |
-| 30 | `gitlab_analyze_mr_changes` | 1  | LLM-powered MR analysis (sampling)        |
-| 31 | `gitlab_generate_release_notes` | 1 | LLM-powered release notes generation (sampling) |
-| 32 | `gitlab_analyze_pipeline_failure` | 1 | LLM-powered pipeline failure analysis (sampling) |
-| 33 | `gitlab_summarize_mr_review` | 1 | LLM-powered MR review summarization (sampling) |
-| 34 | `gitlab_generate_milestone_report` | 1 | LLM-powered milestone report generation (sampling) |
-| 35 | `gitlab_analyze_ci_configuration` | 1 | LLM-powered CI configuration analysis (sampling) |
-| 36 | `gitlab_analyze_issue_scope` | 1 | LLM-powered issue scope analysis (sampling) |
-| 37 | `gitlab_review_mr_security`  | 1 | LLM-powered MR security review (sampling) |
-| 38 | `gitlab_find_technical_debt` | 1 | LLM-powered technical debt detection (sampling) |
-| 39 | `gitlab_analyze_deployment_history` | 1 | LLM-powered deployment history analysis (sampling) |
+| 31 | `gitlab_summarize_issue` | 1     | LLM-powered issue summarization (sampling) |
+| 32 | `gitlab_analyze_mr_changes` | 1  | LLM-powered MR analysis (sampling)        |
+| 33 | `gitlab_generate_release_notes` | 1 | LLM-powered release notes generation (sampling) |
+| 34 | `gitlab_analyze_pipeline_failure` | 1 | LLM-powered pipeline failure analysis (sampling) |
+| 35 | `gitlab_summarize_mr_review` | 1 | LLM-powered MR review summarization (sampling) |
+| 36 | `gitlab_generate_milestone_report` | 1 | LLM-powered milestone report generation (sampling) |
+| 37 | `gitlab_analyze_ci_configuration` | 1 | LLM-powered CI configuration analysis (sampling) |
+| 38 | `gitlab_analyze_issue_scope` | 1 | LLM-powered issue scope analysis (sampling) |
+| 39 | `gitlab_review_mr_security`  | 1 | LLM-powered MR security review (sampling) |
+| 40 | `gitlab_find_technical_debt` | 1 | LLM-powered technical debt detection (sampling) |
+| 41 | `gitlab_analyze_deployment_history` | 1 | LLM-powered deployment history analysis (sampling) |
 
 ### Standalone Tools (1)
 
 | # | Tool Name               | Actions | Source                                    |
 |---|-------------------------|---------|-------------------------------------------|
-| 40 | `gitlab_resolve_project_from_remote` | 1 | Git remote URL to GitLab project resolution |
+| 42 | `gitlab_resolve_project_from_remote` | 1 | Git remote URL to GitLab project resolution |
 
 ---
 
@@ -122,8 +129,9 @@ The meta-tool architecture evolved through ADR-0005:
 - **v2.1**: 40 meta-tools (+3 runner-controller delegated + 1 standalone project-discovery)
 - **v3.0**: 60 meta-tools (43 domain inline + 1 search + 1 runner + 3 runner-controller + 11 sampling + 1 standalone)
 - **v4.0**: 40 base / 59 enterprise (23 inline + 5 delegated + 11 sampling + 1 standalone + 19 enterprise inline); 6 former standalone meta-tools consolidated into existing meta-tools as enterprise-only routes
+- **v5.0**: 42 base / 57 enterprise (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone + 15 enterprise inline); 3 runner controller delegated meta-tools consolidated into 1; 4 free-tier always-registered meta-tools added (model registry, CI catalog, branch rules, custom emoji); enterprise count reduced from 19 to 15
 
-The base mode provides a 43% reduction from v3.0, with enterprise features gated behind `GITLAB_ENTERPRISE=true`.
+The base mode provides a 45% reduction from v3.0, with enterprise features gated behind `GITLAB_ENTERPRISE=true`.
 
 - Token usage in `tools/list` MCP responses
 - LLM selection confusion when choosing among similar tools

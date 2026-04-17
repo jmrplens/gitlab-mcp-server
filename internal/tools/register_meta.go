@@ -173,8 +173,8 @@ import (
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
-// Base: 40 meta-tools (23 inline + 5 delegated + 11 sampling + 1 standalone).
-// Enterprise: +19 inline = 59 meta-tools total.
+// Base: 42 meta-tools (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone).
+// Enterprise: +15 inline = 57 meta-tools total.
 // Each meta-tool dispatches to the underlying handler based on
 // the "action" parameter. This reduces token usage for LLMs while preserving full functionality.
 func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {

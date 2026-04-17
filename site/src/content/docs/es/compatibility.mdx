@@ -7,7 +7,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Compatibilidad con ediciones de GitLab
 
-GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). La variable de entorno `GITLAB_ENTERPRISE` desbloquea 19 meta-herramientas adicionales exclusivas de Enterprise.
+GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). La variable de entorno `GITLAB_ENTERPRISE` desbloquea 15 meta-herramientas adicionales exclusivas de Enterprise.
 
 | Funcionalidad                            | Community (CE) | Enterprise (EE) |
 | ---------------------------------------- | :------------: | :-------------: |
@@ -15,14 +15,14 @@ GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise 
 | Wikis, Etiquetas, Hitos, Releases        |       ✅       |       ✅        |
 | Usuarios, Grupos, Miembros, Búsqueda     |       ✅       |       ✅        |
 | Despliegues, Entornos, Paquetes          |       ✅       |       ✅        |
-| 40 meta-herramientas base                |       ✅       |       ✅        |
+| 42 meta-herramientas base                |       ✅       |       ✅        |
 | 24 recursos, 38 prompts                  |       ✅       |       ✅        |
 | Merge Trains                             |       ❌       |       ✅        |
 | Métricas DORA                            |       ❌       |       ✅        |
 | Gestión de vulnerabilidades              |       ❌       |       ✅        |
 | Eventos de auditoría                     |       ❌       |       ✅        |
 | Políticas de cumplimiento                |       ❌       |       ✅        |
-| +19 meta-herramientas enterprise         |       ❌       |       ✅        |
+| +15 meta-herramientas enterprise         |       ✖       |       ✅        |
 
 Para habilitar las funcionalidades enterprise, configura `GITLAB_ENTERPRISE=true`.
 
@@ -59,7 +59,7 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 
 | Capacidad   |              Soportada              |
 | ----------- | :---------------------------------: |
-| Tools       | ✅ (1004 individuales / 40–59 meta) |
+| Tools       | ✅ (1004 individuales / 42–57 meta) |
 | Resources   |               ✅ (24)               |
 | Prompts     |               ✅ (38)               |
 | Completions |     ✅ (17 tipos de argumento)      |

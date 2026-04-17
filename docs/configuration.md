@@ -25,7 +25,7 @@ These are the settings every user needs to get started.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools (40 base / 59 enterprise instead of 1004) |
+| `META_TOOLS` | `true` | Enable domain-level meta-tools (42 base / 57 enterprise instead of 1004) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
@@ -185,7 +185,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
-| **Meta-tools** (default) | `META_TOOLS=true` | 40 base / 59 enterprise | Most users — lower token usage |
+| **Meta-tools** (default) | `META_TOOLS=true` | 42 base / 57 enterprise | Most users — lower token usage |
 | **Individual tools** | `META_TOOLS=false` | 1004 separate tools | Clients that need granular tool selection |
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
@@ -201,7 +201,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--gitlab-url` | _(required)_ | GitLab instance URL |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools |
-| `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (19 additional) |
+| `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |
 | `--auto-update` | `true` | Enable automatic binary updates |

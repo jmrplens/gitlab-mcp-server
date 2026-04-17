@@ -3,7 +3,7 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 operations as tools for AI assistants.
 
 gitlab-mcp-server v1.8.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides 1004 individual MCP tools across 95 GitLab API domains, 40 meta-tools (59 with enterprise mode),
+It provides 1004 individual MCP tools across 95 GitLab API domains, 42 meta-tools (57 with enterprise mode),
 24 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
@@ -26,7 +26,7 @@ Access, Admin, Analyze CI Configuration, Analyze Deployment History, Analyze Iss
 
 ## Meta-Tools (default mode)
 
-When META_TOOLS=true (default), 40 domain meta-tools are registered instead of
+When META_TOOLS=true (default), 42 domain meta-tools are registered instead of
 1004 individual tools. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
 

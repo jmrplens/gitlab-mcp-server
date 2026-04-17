@@ -579,7 +579,7 @@ The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
 ### Meta-Tool Tests
 
-Meta-tool tests verify the action-dispatch layer that consolidates 1004 individual tools into 40 base / 59 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
+Meta-tool tests verify the action-dispatch layer that consolidates 1004 individual tools into 42 base / 57 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
 
 **What meta-tool tests cover:**
 

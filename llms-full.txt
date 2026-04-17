@@ -1,6 +1,6 @@
 # gitlab-mcp-server â€” Full Reference
 
-> Version 1.8.0 | 1004 tools | 40 meta-tools (59 enterprise) | 24 resources | 38 prompts
+> Version 1.8.0 | 1004 tools | 42 meta-tools (57 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -1341,7 +1341,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 19 tools require GITLAB_ENTERPRISE=true.
+These 15 tools require GITLAB_ENTERPRISE=true.
 
 ### gitlab_attestation
 
@@ -11407,7 +11407,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_merge
 
-Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them â€...
+Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them ï¿½...
 
 **Parameters:**
 
@@ -17893,4 +17893,3 @@ Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs,
 
 - `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
 - `days`: Number of days to look back (default: 7)
-

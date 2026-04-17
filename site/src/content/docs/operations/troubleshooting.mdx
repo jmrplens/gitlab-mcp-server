@@ -32,10 +32,10 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 
 | Symptom                                   | Cause                    | Solution                                                                                        |
 | ----------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
-| MCP client shows 1004 tools instead of 40 | Meta-tools disabled      | Set `META_TOOLS=true` (default) to consolidate into domain meta-tools                           |
+| MCP client shows 1004 tools instead of 42 | Meta-tools disabled      | Set `META_TOOLS=true` (default) to consolidate into domain meta-tools                           |
 | Tool not found in `tools/list`            | Meta-tool mode mismatch  | Individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create` |
 | `unknown action` in meta-tool call        | Invalid action parameter | Check valid actions in the [Tools Overview](/en/tools/overview)                                 |
-| Enterprise tools missing                  | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 19 additional enterprise meta-tools                      |
+| Enterprise tools missing                  | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 15 additional enterprise meta-tools                      |
 
 ## Auto-update
 
