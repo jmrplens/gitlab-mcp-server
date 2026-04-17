@@ -8,6 +8,7 @@ package suite
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
 	markdowntool "github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
@@ -45,12 +46,22 @@ func TestMeta_MarkdownRender(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Meta/Markdown/Render", func(t *testing.T) {
-		out, err := callToolOn[markdowntool.RenderOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
-			"action": "markdown_render",
-			"params": map[string]any{
-				"text": "**bold** text",
-			},
-		})
+		const maxRetries = 3
+		var out markdowntool.RenderOutput
+		var err error
+		for attempt := range maxRetries {
+			out, err = callToolOn[markdowntool.RenderOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+				"action": "markdown_render",
+				"params": map[string]any{
+					"text": "**bold** text",
+				},
+			})
+			if err == nil || !isTransientNetworkError(err) {
+				break
+			}
+			t.Logf("markdown render attempt %d failed, retrying: %v", attempt+1, err)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
 		requireNoError(t, err, "markdown render")
 		requireTrue(t, out.HTML != "", "expected non-empty HTML output")
 		t.Logf("Rendered markdown: %s", out.HTML)

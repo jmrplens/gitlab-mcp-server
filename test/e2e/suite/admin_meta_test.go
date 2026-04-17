@@ -365,11 +365,20 @@ func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 	defer cancel()
 
 	t.Run("PlanLimitsGet", func(t *testing.T) {
-		_, err := callToolOn[planlimits.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
-			"action": "plan_limits_get",
-			"params": map[string]any{"plan_name": "default"},
-		})
-		requireNoError(t, err, "plan_limits_get")
+		const maxRetries = 3
+		var lastErr error
+		for attempt := range maxRetries {
+			_, lastErr = callToolOn[planlimits.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+				"action": "plan_limits_get",
+				"params": map[string]any{"plan_name": "default"},
+			})
+			if lastErr == nil || !isTransientNetworkError(lastErr) {
+				break
+			}
+			t.Logf("plan_limits_get: transient error (attempt %d/%d): %v", attempt+1, maxRetries, lastErr)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+		requireNoError(t, lastErr, "plan_limits_get")
 	})
 
 	t.Run("MetadataGet", func(t *testing.T) {
