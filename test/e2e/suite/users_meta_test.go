@@ -692,10 +692,9 @@ func TestMeta_UserAdmin(t *testing.T) {
 	// Delete user is handled by defer above
 }
 
-// TestMeta_UserServiceAccounts exercises service account operations.
 // TestMeta_UserServiceAccounts exercises service account and current-user PAT
-// operations via the gitlab_user meta-tool. Enterprise-only tests list and
-// create service accounts; the PAT test runs on all tiers.
+// operations via the gitlab_user meta-tool. Service accounts are EE-only
+// (returns 404 on CE); the PAT test also runs on all tiers.
 func TestMeta_UserServiceAccounts(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

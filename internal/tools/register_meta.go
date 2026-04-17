@@ -373,6 +373,14 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"start_housekeeping":        wrapVoidAction(client, projects.StartHousekeeping),
 		"repository_storage_get":    wrapAction(client, projects.GetRepositoryStorage),
 		"create_for_user":           wrapAction(client, projects.CreateForUser),
+		// Remote mirrors (Free tier — verified via GitLab docs)
+		"mirror_list":            wrapAction(client, projectmirrors.List),
+		"mirror_get":             wrapAction(client, projectmirrors.Get),
+		"mirror_get_public_key":  wrapAction(client, projectmirrors.GetPublicKey),
+		"mirror_add":             wrapAction(client, projectmirrors.Add),
+		"mirror_edit":            wrapAction(client, projectmirrors.Edit),
+		"mirror_delete":          wrapVoidAction(client, projectmirrors.Delete),
+		"mirror_force_push":      wrapVoidAction(client, projectmirrors.ForcePushUpdate),
 	}
 
 	if enterprise {
@@ -380,13 +388,6 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		routes["push_rule_add"] = wrapAction(client, projects.AddPushRule)
 		routes["push_rule_edit"] = wrapAction(client, projects.EditPushRule)
 		routes["push_rule_delete"] = wrapVoidAction(client, projects.DeletePushRule)
-		routes["mirror_list"] = wrapAction(client, projectmirrors.List)
-		routes["mirror_get"] = wrapAction(client, projectmirrors.Get)
-		routes["mirror_get_public_key"] = wrapAction(client, projectmirrors.GetPublicKey)
-		routes["mirror_add"] = wrapAction(client, projectmirrors.Add)
-		routes["mirror_edit"] = wrapAction(client, projectmirrors.Edit)
-		routes["mirror_delete"] = wrapVoidAction(client, projectmirrors.Delete)
-		routes["mirror_force_push"] = wrapVoidAction(client, projectmirrors.ForcePushUpdate)
 		routes["security_settings_get"] = wrapAction(client, securitysettings.GetProject)
 		routes["security_settings_update"] = wrapAction(client, securitysettings.UpdateProject)
 	}
@@ -547,7 +548,7 @@ Push Rules (Premium+ — requires GITLAB_ENTERPRISE=true):
 - push_rule_edit: Edit push rules. Params: project_id (required), same fields as push_rule_add (all optional)
 - push_rule_delete: Delete push rules from a project. Params: project_id (required)
 
-Push Mirrors (Premium+ — requires GITLAB_ENTERPRISE=true):
+Push Mirrors (Free tier):
 - mirror_list: List all remote push mirrors. Params: project_id (required), page, per_page
 - mirror_get: Get a single remote mirror. Params: project_id (required), mirror_id (required)
 - mirror_get_public_key: Get SSH public key for a mirror. Params: project_id (required), mirror_id (required)
@@ -1025,9 +1026,19 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		"group_export_schedule":          wrapAction(client, groupimportexport.ScheduleExport),
 		"group_export_download":          wrapAction(client, groupimportexport.ExportDownload),
 		"group_import_file":              wrapAction(client, groupimportexport.ImportFile),
+		// Group releases (Free tier — verified via GitLab docs and E2E on CE)
+		"release_list": wrapAction(client, groupreleases.List),
 	}
 
 	if enterprise {
+		// Group service accounts (EE-only — returns 404 on CE)
+		routes["service_account_list"] = wrapAction(client, groupserviceaccounts.List)
+		routes["service_account_create"] = wrapAction(client, groupserviceaccounts.Create)
+		routes["service_account_update"] = wrapAction(client, groupserviceaccounts.Update)
+		routes["service_account_delete"] = wrapVoidAction(client, groupserviceaccounts.Delete)
+		routes["service_account_pat_list"] = wrapAction(client, groupserviceaccounts.ListPATs)
+		routes["service_account_pat_create"] = wrapAction(client, groupserviceaccounts.CreatePAT)
+		routes["service_account_pat_revoke"] = wrapVoidAction(client, groupserviceaccounts.RevokePAT)
 		routes["epic_discussion_list"] = wrapAction(client, epicdiscussions.List)
 		routes["epic_discussion_get"] = wrapAction(client, epicdiscussions.Get)
 		routes["epic_discussion_create"] = wrapAction(client, epicdiscussions.Create)
@@ -1066,7 +1077,6 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["protected_env_protect"] = wrapAction(client, groupprotectedenvs.Protect)
 		routes["protected_env_update"] = wrapAction(client, groupprotectedenvs.Update)
 		routes["protected_env_unprotect"] = wrapVoidAction(client, groupprotectedenvs.Unprotect)
-		routes["release_list"] = wrapAction(client, groupreleases.List)
 		routes["ldap_link_list"] = wrapAction(client, groupldap.List)
 		routes["ldap_link_add"] = wrapAction(client, groupldap.Add)
 		routes["ldap_link_delete"] = wrapVoidAction(client, groupldap.DeleteWithCNOrFilter)
@@ -1075,13 +1085,6 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["saml_link_get"] = wrapAction(client, groupsaml.Get)
 		routes["saml_link_add"] = wrapAction(client, groupsaml.Add)
 		routes["saml_link_delete"] = wrapVoidAction(client, groupsaml.Delete)
-		routes["service_account_list"] = wrapAction(client, groupserviceaccounts.List)
-		routes["service_account_create"] = wrapAction(client, groupserviceaccounts.Create)
-		routes["service_account_update"] = wrapAction(client, groupserviceaccounts.Update)
-		routes["service_account_delete"] = wrapVoidAction(client, groupserviceaccounts.Delete)
-		routes["service_account_pat_list"] = wrapAction(client, groupserviceaccounts.ListPATs)
-		routes["service_account_pat_create"] = wrapAction(client, groupserviceaccounts.CreatePAT)
-		routes["service_account_pat_revoke"] = wrapVoidAction(client, groupserviceaccounts.RevokePAT)
 		routes["analytics_issues_count"] = wrapAction(client, groupanalytics.GetIssuesCount)
 		routes["analytics_mr_count"] = wrapAction(client, groupanalytics.GetMRCount)
 		routes["analytics_members_count"] = wrapAction(client, groupanalytics.GetMembersCount)
@@ -1162,7 +1165,10 @@ Actions:
 - group_relations_list_status: List group relations export status. Params: group_id (required)
 - group_export_schedule: Schedule group export. Params: group_id (required)
 - group_export_download: Download group export archive. Params: group_id (required)
-- group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id`
+- group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id
+
+Group Releases (Free tier):
+- release_list: List releases across group projects. Params: group_id (required), simple (bool), page, per_page`
 
 	if enterprise {
 		desc += `
@@ -1212,9 +1218,6 @@ Group Protected Environments (Premium+ — requires GITLAB_ENTERPRISE=true):
 - protected_env_protect: Protect a group environment. Params: group_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
 - protected_env_update: Update a group protected environment. Params: group_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
 - protected_env_unprotect: Unprotect a group environment. Params: group_id (required), environment (required)
-
-Group Releases (Premium+ — requires GITLAB_ENTERPRISE=true):
-- release_list: List releases across group projects. Params: group_id (required), simple (bool), page, per_page
 
 LDAP Links (Premium+ — requires GITLAB_ENTERPRISE=true):
 - ldap_link_list: List group LDAP links. Params: group_id (required)
@@ -1608,13 +1611,13 @@ func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterpris
 		"create_current_user_pat": wrapAction(client, users.CreateCurrentUserPAT),
 	}
 
-	// Service accounts are enterprise-only (require Premium/Ultimate)
+	// Service accounts (EE-only — returns 404 on CE)
 	if enterprise {
 		routes["create_service_account"] = wrapAction(client, users.CreateServiceAccount)
 		routes["list_service_accounts"] = wrapAction(client, users.ListServiceAccounts)
 	}
 
-	addMetaTool(server, "gitlab_user", `GitLab user, SSH keys, GPG keys, emails, impersonation tokens, service accounts, to-do, namespace, and notification operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	desc := `GitLab user, SSH keys, GPG keys, emails, impersonation tokens, service accounts, to-do, namespace, and notification operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - current: Get information about the currently authenticated user. Params: (none required)
@@ -1670,8 +1673,6 @@ Actions:
 - create_impersonation_token: Create impersonation token (admin). Params: user_id (required, int), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
 - revoke_impersonation_token: Revoke impersonation token (admin). Params: user_id (required, int), token_id (required, int)
 - create_personal_access_token: Create PAT for a user (admin). Params: user_id (required, int), name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
-- create_service_account: (Enterprise) Create a service account. Params: name, username, email
-- list_service_accounts: (Enterprise) List service accounts. Params: order_by, sort, page, per_page
 - create_current_user_pat: Create PAT for current user. Params: name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
 - todo_list: List to-do items with optional filters. Params: action (assigned/mentioned/build_failed/marked/approval_required/directly_addressed), author_id (int), project_id (int), group_id (int), state (pending/done), type (Issue/MergeRequest/DesignManagement::Design/AlertManagement::Alert), page, per_page
 - todo_mark_done: Mark a single to-do item as done. Params: id (required, int)
@@ -1690,7 +1691,17 @@ Actions:
 - namespace_get: Get a namespace by ID or path. Params: namespace_id (required)
 - namespace_exists: Check if a namespace path exists. Params: namespace (required), parent_id
 - namespace_search: Search namespaces. Params: search (required)
-- avatar_get: Get an avatar URL by email. Params: email (required), size (int)`, routes, metaAnnotations, toolutil.IconUser)
+- avatar_get: Get an avatar URL by email. Params: email (required), size (int)`
+
+	if enterprise {
+		desc += `
+
+Service Accounts (Premium+ — requires GITLAB_ENTERPRISE=true):
+- create_service_account: Create a service account. Params: name, username, email
+- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page`
+	}
+
+	addMetaTool(server, "gitlab_user", desc, routes, metaAnnotations, toolutil.IconUser)
 }
 
 // registerWikiMeta registers the gitlab_wiki meta-tool with actions:

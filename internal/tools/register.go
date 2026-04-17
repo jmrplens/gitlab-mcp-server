@@ -307,10 +307,14 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 	projectstoragemoves.RegisterTools(server, client)
 	snippetstoragemoves.RegisterTools(server, client)
 
+	// Free-tier tools (previously enterprise-gated, verified Free via GitLab docs and E2E on CE)
+	projectmirrors.RegisterTools(server, client)
+	groupreleases.RegisterTools(server, client)
+
 	// Enterprise tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
 	if enterprise {
+		groupserviceaccounts.RegisterTools(server, client)
 		projects.RegisterPushRuleTools(server, client)
-		projectmirrors.RegisterTools(server, client)
 		mergetrains.RegisterTools(server, client)
 		auditevents.RegisterTools(server, client)
 		dorametrics.RegisterTools(server, client)
@@ -340,10 +344,8 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, enterprise boo
 		groupwikis.RegisterTools(server, client)
 		groupprotectedbranches.RegisterTools(server, client)
 		groupprotectedenvs.RegisterTools(server, client)
-		groupreleases.RegisterTools(server, client)
 		groupldap.RegisterTools(server, client)
 		groupsaml.RegisterTools(server, client)
-		groupserviceaccounts.RegisterTools(server, client)
 		users.RegisterEnterpriseTools(server, client)
 	}
 }
