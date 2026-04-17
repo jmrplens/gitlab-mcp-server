@@ -24,7 +24,7 @@ const errExpectedErrZeroID = "expected error for zero ID, got nil"
 
 const errAPINotCalledZeroID = "API should not be called when ID is 0"
 
-const hookJSON = `{"id":1,"url":"https://example.com/hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
+const hookJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook","description":"Test hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
 
 // TestList_Success verifies the behavior of list success.
 func TestList_Success(t *testing.T) {
@@ -44,6 +44,12 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Hooks[0].URL != testHookURL {
 		t.Errorf("expected %s, got %s", testHookURL, out.Hooks[0].URL)
+	}
+	if out.Hooks[0].Name != "My Hook" {
+		t.Errorf("expected name 'My Hook', got %s", out.Hooks[0].Name)
+	}
+	if out.Hooks[0].Description != "Test hook" {
+		t.Errorf("expected description 'Test hook', got %s", out.Hooks[0].Description)
 	}
 }
 
@@ -77,6 +83,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if !out.Hook.PushEvents {
 		t.Error("expected push_events true")
+	}
+	if out.Hook.Name != "My Hook" {
+		t.Errorf("expected name 'My Hook', got %s", out.Hook.Name)
 	}
 }
 
@@ -184,21 +193,30 @@ func TestDelete_ZeroID(t *testing.T) {
 func TestFormatListMarkdown(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Hooks: []HookItem{
-			{ID: 1, URL: testHookURL, PushEvents: true, EnableSSLVerification: true},
+			{ID: 1, URL: testHookURL, Name: "My Hook", PushEvents: true, EnableSSLVerification: true},
 		},
 	})
 	text := result.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(text, "example.com") {
 		t.Errorf("expected URL in output, got: %s", text)
 	}
+	if !strings.Contains(text, "My Hook") {
+		t.Errorf("expected name in output, got: %s", text)
+	}
 }
 
 // TestFormatHookMarkdown verifies the behavior of format hook markdown.
 func TestFormatHookMarkdown(t *testing.T) {
-	result := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL, PushEvents: true})
+	result := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL, Name: "My Hook", Description: "A test hook", PushEvents: true})
 	text := result.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(text, "System Hook #1") {
 		t.Errorf("expected hook header, got: %s", text)
+	}
+	if !strings.Contains(text, "My Hook") {
+		t.Errorf("expected name in output, got: %s", text)
+	}
+	if !strings.Contains(text, "A test hook") {
+		t.Errorf("expected description in output, got: %s", text)
 	}
 }
 
@@ -249,7 +267,7 @@ func TestAdd_APIError(t *testing.T) {
 func TestAdd_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"url":"https://example.com/hook2","created_at":"2026-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"url":"https://example.com/hook2","name":"Named Hook","description":"Hook desc","created_at":"2026-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -258,8 +276,12 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 	f, tr := false, true
 	out, err := Add(context.Background(), client, AddInput{
 		URL:                    "https://example.com/hook2",
+		Name:                   "Named Hook",
+		Description:            "Hook desc",
 		Token:                  "secret-token",
 		PushEvents:             &f,
+		PushEventsBranchFilter: "main",
+		BranchFilterStrategy:   "wildcard",
 		TagPushEvents:          &tr,
 		MergeRequestsEvents:    &tr,
 		RepositoryUpdateEvents: &tr,
@@ -273,6 +295,12 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 	}
 	if out.Hook.PushEvents {
 		t.Error("expected push_events false")
+	}
+	if out.Hook.Name != "Named Hook" {
+		t.Errorf("expected name 'Named Hook', got %s", out.Hook.Name)
+	}
+	if out.Hook.Description != "Hook desc" {
+		t.Errorf("expected description 'Hook desc', got %s", out.Hook.Description)
 	}
 }
 
@@ -464,7 +492,7 @@ func TestMCPRoundTrip_DeleteConfirmDeclined(t *testing.T) {
 func newSystemHooksMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	hookJSON := `{"id":1,"url":"https://example.com/hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
+	hookJSON := `{"id":1,"url":"https://example.com/hook","name":"My Hook","description":"Test hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true}`
 
 	handler := http.NewServeMux()
 

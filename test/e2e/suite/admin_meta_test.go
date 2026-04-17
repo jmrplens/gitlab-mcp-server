@@ -272,13 +272,14 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 		out, err := callToolOn[systemhooks.AddOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "system_hook_add",
 			"params": map[string]any{
-				"url": "https://e2e-test.example.com/hook",
+				"url":  "https://e2e-test.example.com/hook",
+				"name": "e2e-test-hook",
 			},
 		})
 		requireNoError(t, err, "system_hook_add")
 		requireTrue(t, out.Hook.ID > 0, "system_hook_add: expected ID > 0")
 		hookID = out.Hook.ID
-		t.Logf("Added system hook %d", hookID)
+		t.Logf("Added system hook %d (name=%s)", hookID, out.Hook.Name)
 	})
 	defer func() {
 		if hookID > 0 {

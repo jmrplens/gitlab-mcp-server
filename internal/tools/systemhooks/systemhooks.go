@@ -17,6 +17,8 @@ import (
 type HookItem struct {
 	ID                     int64  `json:"id"`
 	URL                    string `json:"url"`
+	Name                   string `json:"name,omitempty"`
+	Description            string `json:"description,omitempty"`
 	CreatedAt              string `json:"created_at,omitempty"`
 	PushEvents             bool   `json:"push_events"`
 	TagPushEvents          bool   `json:"tag_push_events"`
@@ -58,8 +60,12 @@ type GetOutput struct {
 // AddInput is the input for adding a system hook.
 type AddInput struct {
 	URL                    string `json:"url"                       jsonschema:"Hook URL to receive events,required"`
+	Name                   string `json:"name,omitempty"            jsonschema:"Descriptive name for the hook"`
+	Description            string `json:"description,omitempty"     jsonschema:"Description for the hook"`
 	Token                  string `json:"token,omitempty"           jsonschema:"Secret token for payload validation"`
 	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
+	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
+	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
 	TagPushEvents          *bool  `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
 	MergeRequestsEvents    *bool  `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
 	RepositoryUpdateEvents *bool  `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
@@ -99,6 +105,8 @@ func toItem(h *gl.Hook) HookItem {
 	return HookItem{
 		ID:                     h.ID,
 		URL:                    h.URL,
+		Name:                   h.Name,
+		Description:            h.Description,
 		CreatedAt:              createdAt,
 		PushEvents:             h.PushEvents,
 		TagPushEvents:          h.TagPushEvents,
@@ -140,11 +148,23 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	opts := &gl.AddHookOptions{
 		URL: new(input.URL),
 	}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
+	}
 	if input.Token != "" {
 		opts.Token = new(input.Token)
 	}
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
+	}
+	if input.PushEventsBranchFilter != "" {
+		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
+	}
+	if input.BranchFilterStrategy != "" {
+		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
 	}
 	if input.TagPushEvents != nil {
 		opts.TagPushEvents = input.TagPushEvents

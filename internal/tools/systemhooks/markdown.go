@@ -18,11 +18,12 @@ func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 	}
 	var sb strings.Builder
 	sb.WriteString("## System Hooks\n\n")
-	sb.WriteString("| ID | URL | Push | Tag Push | MR | Repo Update | SSL |\n")
-	sb.WriteString("|----|-----|------|----------|----|-------------|-----|\n")
+	sb.WriteString("| ID | Name | URL | Push | Tag Push | MR | Repo Update | SSL |\n")
+	sb.WriteString("|----|------|-----|------|----------|----|-------------|-----|\n")
 	for _, h := range output.Hooks {
-		fmt.Fprintf(&sb, "| %d | %s | %v | %v | %v | %v | %v |\n",
+		fmt.Fprintf(&sb, "| %d | %s | %s | %v | %v | %v | %v | %v |\n",
 			h.ID,
+			toolutil.EscapeMdTableCell(h.Name),
 			toolutil.EscapeMdTableCell(h.URL),
 			h.PushEvents,
 			h.TagPushEvents,
@@ -40,6 +41,12 @@ func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 	fmt.Fprintf(&sb, "## System Hook #%d\n\n", item.ID)
 	sb.WriteString("| Property | Value |\n")
 	sb.WriteString("|----------|-------|\n")
+	if item.Name != "" {
+		fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(item.Name))
+	}
+	if item.Description != "" {
+		fmt.Fprintf(&sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(item.Description))
+	}
 	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(item.URL))
 	fmt.Fprintf(&sb, "| Push Events | %v |\n", item.PushEvents)
 	fmt.Fprintf(&sb, "| Tag Push Events | %v |\n", item.TagPushEvents)

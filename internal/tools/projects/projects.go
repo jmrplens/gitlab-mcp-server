@@ -64,12 +64,13 @@ type CreateInput struct {
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
 
 	// Feature toggles
-	IssuesEnabled        *bool `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature"`
-	MergeRequestsEnabled *bool `json:"merge_requests_enabled,omitempty" jsonschema:"Enable merge requests feature"`
-	WikiEnabled          *bool `json:"wiki_enabled,omitempty" jsonschema:"Enable wiki feature"`
-	JobsEnabled          *bool `json:"jobs_enabled,omitempty" jsonschema:"Enable CI/CD jobs"`
-	LFSEnabled           *bool `json:"lfs_enabled,omitempty" jsonschema:"Enable Git LFS"`
-	PackagesEnabled      *bool `json:"packages_enabled,omitempty" jsonschema:"Enable packages feature"`
+	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature"`
+	MergeRequestsEnabled       *bool  `json:"merge_requests_enabled,omitempty" jsonschema:"Enable merge requests feature"`
+	WikiEnabled                *bool  `json:"wiki_enabled,omitempty" jsonschema:"Enable wiki feature"`
+	JobsEnabled                *bool  `json:"jobs_enabled,omitempty" jsonschema:"Enable CI/CD jobs"`
+	LFSEnabled                 *bool  `json:"lfs_enabled,omitempty" jsonschema:"Enable Git LFS"`
+	PackagesEnabled            *bool  `json:"packages_enabled,omitempty" jsonschema:"Enable packages feature (deprecated: use package_registry_access_level)"`
+	PackageRegistryAccessLevel string `json:"package_registry_access_level,omitempty" jsonschema:"Package registry access level (disabled, private, enabled)"`
 
 	// CI/CD settings
 	CIConfigPath               string `json:"ci_config_path,omitempty" jsonschema:"Custom CI/CD configuration file path"`
@@ -139,6 +140,7 @@ type Output struct {
 	PublicBuilds                              bool     `json:"public_builds,omitempty"`
 	SnippetsEnabled                           bool     `json:"snippets_enabled,omitempty"`
 	PackagesEnabled                           bool     `json:"packages_enabled,omitempty"`
+	PackageRegistryAccessLevel                string   `json:"package_registry_access_level,omitempty"`
 	BuildTimeout                              int64    `json:"build_timeout,omitempty"`
 	SuggestionCommitMessage                   string   `json:"suggestion_commit_message,omitempty"`
 	ComplianceFrameworks                      []string `json:"compliance_frameworks,omitempty"`
@@ -230,7 +232,8 @@ type UpdateInput struct {
 	RequestAccessEnabled                      *bool                `json:"request_access_enabled,omitempty"   jsonschema:"Allow users to request access"`
 	SharedRunnersEnabled                      *bool                `json:"shared_runners_enabled,omitempty"   jsonschema:"Enable shared runners"`
 	PublicBuilds                              *bool                `json:"public_builds,omitempty"            jsonschema:"Enable public access to pipelines"`
-	PackagesEnabled                           *bool                `json:"packages_enabled,omitempty"         jsonschema:"Enable packages feature"`
+	PackagesEnabled                           *bool                `json:"packages_enabled,omitempty"         jsonschema:"Enable packages feature (deprecated: use package_registry_access_level)"`
+	PackageRegistryAccessLevel                string               `json:"package_registry_access_level,omitempty" jsonschema:"Package registry access level (disabled, private, enabled)"`
 	PagesAccessLevel                          string               `json:"pages_access_level,omitempty"       jsonschema:"Pages access level (disabled, private, enabled, public)"`
 	ContainerRegistryAccessLevel              string               `json:"container_registry_access_level,omitempty" jsonschema:"Container registry access level (disabled, private, enabled)"`
 	SnippetsAccessLevel                       string               `json:"snippets_access_level,omitempty"    jsonschema:"Snippets access level (disabled, private, enabled)"`
@@ -298,6 +301,7 @@ func ToOutput(p *gl.Project) Output {
 		PublicBuilds:                      p.PublicJobs,
 		SnippetsEnabled:                   accessLevelEnabled(p.SnippetsAccessLevel),
 		PackagesEnabled:                   p.PackagesEnabled,
+		PackageRegistryAccessLevel:        string(p.PackageRegistryAccessLevel),
 		BuildTimeout:                      p.BuildTimeout,
 		SuggestionCommitMessage:           p.SuggestionCommitMessage,
 		ComplianceFrameworks:              p.ComplianceFrameworks,
@@ -427,6 +431,9 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	}
 	if input.PackagesEnabled != nil {
 		opts.PackagesEnabled = input.PackagesEnabled
+	}
+	if input.PackageRegistryAccessLevel != "" {
+		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
 	}
 	if input.SuggestionCommitMessage != "" {
 		opts.SuggestionCommitMessage = new(input.SuggestionCommitMessage)
@@ -800,6 +807,9 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.PackagesEnabled != nil {
 		opts.PackagesEnabled = input.PackagesEnabled
+	}
+	if input.PackageRegistryAccessLevel != "" {
+		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
 	}
 	if input.PagesAccessLevel != "" {
 		opts.PagesAccessLevel = new(gl.AccessControlValue(input.PagesAccessLevel))

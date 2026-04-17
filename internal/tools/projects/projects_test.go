@@ -711,6 +711,7 @@ func TestProjectCreate_EnrichedFeatureOpts(t *testing.T) {
 		SharedRunnersEnabled:         &sharedRunners,
 		PublicBuilds:                 &publicBuilds,
 		PackagesEnabled:              &packages,
+		PackageRegistryAccessLevel:   "enabled",
 		SuggestionCommitMessage:      testSuggestionMsg,
 		PagesAccessLevel:             testPrivate,
 		ContainerRegistryAccessLevel: "enabled",
@@ -750,6 +751,9 @@ func assertCreateFeatureBodyAccess(t *testing.T, body map[string]any) {
 	t.Helper()
 	if v, ok := body["packages_enabled"].(bool); !ok || !v {
 		t.Errorf("packages_enabled = %v, want true", body["packages_enabled"])
+	}
+	if v, ok := body["package_registry_access_level"].(string); !ok || v != "enabled" {
+		t.Errorf("package_registry_access_level = %v, want %q", body["package_registry_access_level"], "enabled")
 	}
 	if v, ok := body["suggestion_commit_message"].(string); !ok || v != testSuggestionMsg {
 		t.Errorf("suggestion_commit_message = %v, want %q", body["suggestion_commit_message"], testSuggestionMsg)
@@ -813,6 +817,7 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 		"snippets_enabled":true,
 		"snippets_access_level":"enabled",
 		"packages_enabled":true,
+		"package_registry_access_level":"enabled",
 		"build_timeout":7200,
 		"suggestion_commit_message":"Apply suggestion to %{file_path}",
 		"compliance_frameworks":["SOC2","HIPAA"],
@@ -844,6 +849,9 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 	}
 	if !out.PackagesEnabled {
 		t.Error("out.PackagesEnabled = false, want true")
+	}
+	if out.PackageRegistryAccessLevel != "enabled" {
+		t.Errorf("out.PackageRegistryAccessLevel = %q, want %q", out.PackageRegistryAccessLevel, "enabled")
 	}
 	if out.BuildTimeout != 7200 {
 		t.Errorf("out.BuildTimeout = %d, want 7200", out.BuildTimeout)
@@ -3124,6 +3132,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		SharedRunnersEnabled:           &wikiOn,
 		PublicBuilds:                   &jobsOn,
 		PackagesEnabled:                &pipelineSucceeds,
+		PackageRegistryAccessLevel:     "enabled",
 		PagesAccessLevel:               "enabled",
 		ContainerRegistryAccessLevel:   "disabled",
 		SnippetsAccessLevel:            "private",
@@ -3232,6 +3241,9 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	}
 	if opts.PackagesEnabled == nil {
 		t.Error("PackagesEnabled not set")
+	}
+	if opts.PackageRegistryAccessLevel == nil {
+		t.Error("PackageRegistryAccessLevel not set")
 	}
 	if opts.PagesAccessLevel == nil {
 		t.Error("PagesAccessLevel not set")
