@@ -54,6 +54,7 @@ func TestRegisterTools_DeleteErrors(t *testing.T) {
 		})
 	}
 }
+
 // TestRegisterTools_RemoveConfirmDeclined covers the ConfirmAction early-return
 // branches in the remove project and remove group allowlist handlers when the
 // user declines.

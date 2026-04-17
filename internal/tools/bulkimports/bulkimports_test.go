@@ -249,49 +249,49 @@ func TestMCPRound_Trip(t *testing.T) {
 // TestMCPRound_TripAPIError verifies the register handler returns an error
 // when the StartMigration API call fails.
 func TestMCPRound_TripAPIError(t *testing.T) {
-handler := http.NewServeMux()
-handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-})
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	})
 
-client := testutil.NewTestClient(t, handler)
-server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-RegisterTools(server, client)
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
 
-st, ct := mcp.NewInMemoryTransports()
-ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
 
-_, err := server.Connect(ctx, st, nil)
-if err != nil {
-t.Fatalf("server connect: %v", err)
-}
+	_, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
 
-mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-session, err := mcpClient.Connect(ctx, ct, nil)
-if err != nil {
-t.Fatalf("client connect: %v", err)
-}
-t.Cleanup(func() { session.Close() })
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
 
-result, err := session.CallTool(ctx, &mcp.CallToolParams{
-Name: "gitlab_start_bulk_import",
-Arguments: map[string]any{
-"url":          "https://source.gitlab.com",
-"access_token": "glpat-test",
-"entities": []any{
-map[string]any{
-"source_type":           "group_entity",
-"source_full_path":      "source-group",
-"destination_slug":      "dest-group",
-"destination_namespace": "dest-ns",
-},
-},
-},
-})
-if err != nil {
-t.Fatalf("CallTool error: %v", err)
-}
-if result == nil || !result.IsError {
-t.Fatal("expected error result from API failure")
-}
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_start_bulk_import",
+		Arguments: map[string]any{
+			"url":          "https://source.gitlab.com",
+			"access_token": "glpat-test",
+			"entities": []any{
+				map[string]any{
+					"source_type":           "group_entity",
+					"source_full_path":      "source-group",
+					"destination_slug":      "dest-group",
+					"destination_namespace": "dest-ns",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result from API failure")
+	}
 }

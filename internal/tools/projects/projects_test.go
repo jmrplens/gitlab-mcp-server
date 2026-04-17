@@ -5605,3 +5605,675 @@ func TestBoolToAccessLevel(t *testing.T) {
 		t.Errorf("false → %v, want DisabledAccessControl", got)
 	}
 }
+
+// TestCreateApprovalRule_AllOptionalFields exercises every optional branch
+// in CreateApprovalRule: rule_type, user_ids, group_ids, protected_branch_ids,
+// usernames, and applies_to_all_protected_branches.
+func TestCreateApprovalRule_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/approval_rules") {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"rule1","approvals_required":2,"rule_type":"regular"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	out, err := CreateApprovalRule(context.Background(), client, CreateApprovalRuleInput{
+		ProjectID:                     "42",
+		Name:                          "rule1",
+		ApprovalsRequired:             2,
+		RuleType:                      "regular",
+		UserIDs:                       []int64{1, 2},
+		GroupIDs:                      []int64{3},
+		ProtectedBranchIDs:            []int64{10},
+		Usernames:                     []string{"user1"},
+		AppliesToAllProtectedBranches: &bTrue,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 1 {
+		t.Errorf("ID = %d, want 1", out.ID)
+	}
+}
+
+// TestUpdateApprovalRule_AllOptionalFields exercises every optional branch
+// in UpdateApprovalRule.
+func TestUpdateApprovalRule_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/approval_rules/") {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"updated","approvals_required":3,"rule_type":"regular"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bFalse := false
+	approvals := int64(3)
+	out, err := UpdateApprovalRule(context.Background(), client, UpdateApprovalRuleInput{
+		ProjectID:                     "42",
+		RuleID:                        1,
+		Name:                          "updated",
+		ApprovalsRequired:             &approvals,
+		UserIDs:                       []int64{5},
+		GroupIDs:                      []int64{6},
+		ProtectedBranchIDs:            []int64{7},
+		Usernames:                     []string{"u1"},
+		AppliesToAllProtectedBranches: &bFalse,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Name != "updated" {
+		t.Errorf("Name = %q, want %q", out.Name, "updated")
+	}
+}
+
+// TestConfigurePullMirror_AllOptionalFields exercises every optional branch
+// in ConfigurePullMirror.
+func TestConfigurePullMirror_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/mirror/pull") {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"enabled":true,"url":"https://mirror.example.com","update_status":"finished"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	bFalse := false
+	out, err := ConfigurePullMirror(context.Background(), client, ConfigurePullMirrorInput{
+		ProjectID:                        "42",
+		Enabled:                          &bTrue,
+		URL:                              "https://mirror.example.com",
+		AuthUser:                         "user",
+		AuthPassword:                     "pass",
+		MirrorBranchRegex:                "^main$",
+		MirrorTriggerBuilds:              &bTrue,
+		OnlyMirrorProtectedBranches:      &bFalse,
+		MirrorOverwritesDivergedBranches: &bTrue,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Enabled {
+		t.Error("expected Enabled=true")
+	}
+}
+
+// TestPullMirrorToOutput_AllTimestamps exercises the timestamp branches in
+// pullMirrorToOutput by providing all three nullable time fields.
+func TestPullMirrorToOutput_AllTimestamps(t *testing.T) {
+	now := time.Now()
+	m := &gl.ProjectPullMirrorDetails{
+		ID:                          1,
+		Enabled:                     true,
+		URL:                         "https://mirror.example.com",
+		UpdateStatus:                "finished",
+		LastSuccessfulUpdateAt:      &now,
+		LastUpdateAt:                &now,
+		LastUpdateStartedAt:         &now,
+		MirrorBranchRegex:           "^main$",
+		MirrorTriggerBuilds:         true,
+		OnlyMirrorProtectedBranches: false,
+	}
+	out := pullMirrorToOutput(m)
+	if out.LastSuccessfulUpdateAt == "" {
+		t.Error("expected non-empty LastSuccessfulUpdateAt")
+	}
+	if out.LastUpdateAt == "" {
+		t.Error("expected non-empty LastUpdateAt")
+	}
+	if out.LastUpdateStartedAt == "" {
+		t.Error("expected non-empty LastUpdateStartedAt")
+	}
+}
+
+// TestDeleteTwoStep_Success exercises the deleteTwoStep function when
+// both API calls succeed.
+func TestDeleteTwoStep_Success(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42") {
+			calls++
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"ns/proj-deletion_scheduled-42"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := deleteTwoStep(context.Background(), client, DeleteInput{
+		ProjectID: "42",
+		FullPath:  "ns/proj",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.PermanentlyRemoved {
+		t.Error("expected PermanentlyRemoved=true")
+	}
+	if calls < 2 {
+		t.Errorf("expected at least 2 DELETE calls, got %d", calls)
+	}
+}
+
+// TestDeleteTwoStep_StepOneAlreadyMarked exercises the path where the first
+// DELETE returns an "already marked for deletion" error that is tolerated.
+func TestDeleteTwoStep_StepOneAlreadyMarked(t *testing.T) {
+	callCount := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			callCount++
+			if callCount == 1 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"message":"Project already been marked for deletion"}`))
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := deleteTwoStep(context.Background(), client, DeleteInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.PermanentlyRemoved {
+		t.Error("expected PermanentlyRemoved=true")
+	}
+}
+
+// TestDeleteTwoStep_StepOneFails exercises deleteTwoStep when the first
+// DELETE returns an unexpected error (not "already marked").
+func TestDeleteTwoStep_StepOneFails(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	_, err := deleteTwoStep(context.Background(), client, DeleteInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for forbidden step 1")
+	}
+}
+
+// TestDeleteTwoStep_StepTwoFails exercises deleteTwoStep when step 1 succeeds
+// but step 2 (permanent delete) fails.
+func TestDeleteTwoStep_StepTwoFails(t *testing.T) {
+	callCount := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			callCount++
+			if callCount == 1 {
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+			return
+		}
+		if r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"ns/proj"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := deleteTwoStep(context.Background(), client, DeleteInput{ProjectID: "42", FullPath: "ns/proj"})
+	if err == nil {
+		t.Fatal("expected error for failed step 2")
+	}
+}
+
+// TestCreate_ErrorBranches exercises Create 400 (bad request) and 409 (conflict) branches.
+func TestCreate_ErrorBranches(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"bad_request", http.StatusBadRequest, `{"message":"name is already taken"}`},
+		{"conflict", http.StatusConflict, `{"message":"project already exists"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			_, err := Create(context.Background(), client, CreateInput{})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+// TestUpdate_ErrorBranches exercises Update 400 and 403 branches.
+func TestUpdate_ErrorBranches(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"bad_request", http.StatusBadRequest, `{"message":"name is invalid"}`},
+		{"forbidden", http.StatusForbidden, `{"message":"forbidden"}`},
+		{"server_error", http.StatusInternalServerError, `{"error":"boom"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42"})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+// TestFork_AllOptionalFields exercises all optional branches in Fork.
+func TestFork_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/fork") {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"name":"my-fork","path_with_namespace":"user/my-fork"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	out, err := Fork(context.Background(), client, ForkInput{
+		ProjectID:                     "42",
+		Name:                          "my-fork",
+		Path:                          "my-fork",
+		NamespaceID:                   5,
+		NamespacePath:                 "user",
+		Description:                   "forked",
+		Visibility:                    "private",
+		Branches:                      "main",
+		MergeRequestDefaultTargetSelf: &bTrue,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 99 {
+		t.Errorf("ID = %d, want 99", out.ID)
+	}
+}
+
+// TestFork_ConflictError exercises the 409 conflict branch in Fork.
+func TestFork_ConflictError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"message":"fork already exists"}`))
+	}))
+	_, err := Fork(context.Background(), client, ForkInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestAddHook_AllOptionalFields exercises every optional field in AddHook.
+func TestAddHook_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/hooks") {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://hook.example.com","push_events":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	bFalse := false
+	out, err := AddHook(context.Background(), client, AddHookInput{
+		ProjectID:                 "42",
+		URL:                       "https://hook.example.com",
+		Name:                      "my-hook",
+		Description:               "desc",
+		Token:                     "secret",
+		PushEvents:                &bTrue,
+		PushEventsBranchFilter:    "main",
+		IssuesEvents:              &bTrue,
+		ConfidentialIssuesEvents:  &bFalse,
+		MergeRequestsEvents:       &bTrue,
+		TagPushEvents:             &bTrue,
+		NoteEvents:                &bTrue,
+		ConfidentialNoteEvents:    &bFalse,
+		JobEvents:                 &bTrue,
+		PipelineEvents:            &bTrue,
+		WikiPageEvents:            &bFalse,
+		DeploymentEvents:          &bTrue,
+		ReleasesEvents:            &bTrue,
+		EmojiEvents:               &bFalse,
+		ResourceAccessTokenEvents: &bTrue,
+		EnableSSLVerification:     &bTrue,
+		CustomWebhookTemplate:     `{"text":"hello"}`,
+		BranchFilterStrategy:      "wildcard",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 1 {
+		t.Errorf("ID = %d, want 1", out.ID)
+	}
+}
+
+// TestEditHook_AllOptionalFields exercises all optional fields in EditHook.
+func TestEditHook_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/hooks/") {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"url":"https://updated.example.com","push_events":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	bFalse := false
+	out, err := EditHook(context.Background(), client, EditHookInput{
+		ProjectID:                 "42",
+		HookID:                    1,
+		URL:                       "https://updated.example.com",
+		Name:                      "updated",
+		Description:               "new desc",
+		Token:                     "newsecret",
+		PushEvents:                &bTrue,
+		PushEventsBranchFilter:    "develop",
+		IssuesEvents:              &bFalse,
+		ConfidentialIssuesEvents:  &bTrue,
+		MergeRequestsEvents:       &bTrue,
+		TagPushEvents:             &bFalse,
+		NoteEvents:                &bTrue,
+		ConfidentialNoteEvents:    &bTrue,
+		JobEvents:                 &bFalse,
+		PipelineEvents:            &bTrue,
+		WikiPageEvents:            &bTrue,
+		DeploymentEvents:          &bFalse,
+		ReleasesEvents:            &bTrue,
+		EmojiEvents:               &bTrue,
+		ResourceAccessTokenEvents: &bFalse,
+		EnableSSLVerification:     &bFalse,
+		CustomWebhookTemplate:     `{"text":"updated"}`,
+		BranchFilterStrategy:      "regex",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 1 {
+		t.Errorf("ID = %d, want 1", out.ID)
+	}
+}
+
+// TestFormatApprovalRuleMarkdown_AllFields exercises all conditional branches
+// in FormatApprovalRuleMarkdown: RuleType, ReportType, Users, Groups, EligibleApprovers.
+func TestFormatApprovalRuleMarkdown_AllFields(t *testing.T) {
+	md := FormatApprovalRuleMarkdown(ApprovalRuleOutput{
+		ID:                            1,
+		Name:                          "Security",
+		ApprovalsRequired:             2,
+		RuleType:                      "regular",
+		ReportType:                    "code_coverage",
+		AppliesToAllProtectedBranches: true,
+		ContainsHiddenGroups:          false,
+		Users:                         []string{"alice", "bob"},
+		Groups:                        []string{"security-team"},
+		EligibleApprovers:             []string{"alice", "bob", "charlie"},
+	})
+	for _, want := range []string{"regular", "code_coverage", "alice, bob", "security-team", "alice, bob, charlie"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q", want)
+		}
+	}
+}
+
+// TestFormatListApprovalRulesMarkdown_AllFields exercises the table formatting
+// with RuleType, Users, and Groups columns populated.
+func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
+	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
+		Rules: []ApprovalRuleOutput{
+			{
+				ID: 1, Name: "Review", RuleType: "regular", Users: []string{"alice"},
+				Groups: []string{"devs"}, ApprovalsRequired: 1,
+			},
+			{
+				ID: 2, Name: "Empty", ApprovalsRequired: 0,
+			},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+	if !strings.Contains(md, "regular") {
+		t.Error("missing RuleType in table")
+	}
+	if !strings.Contains(md, "alice") {
+		t.Error("missing Users in table")
+	}
+	if !strings.Contains(md, "devs") {
+		t.Error("missing Groups in table")
+	}
+	if !strings.Contains(md, "—") {
+		t.Error("missing dash for empty RuleType/Users/Groups")
+	}
+}
+
+// TestFormatPullMirrorMarkdown_AllFields exercises all conditional branches
+// in FormatPullMirrorMarkdown.
+func TestFormatPullMirrorMarkdown_AllFields(t *testing.T) {
+	md := FormatPullMirrorMarkdown(PullMirrorOutput{
+		ID:                               1,
+		Enabled:                          true,
+		URL:                              "https://mirror.example.com",
+		UpdateStatus:                     "finished",
+		LastError:                        "timeout",
+		LastSuccessfulUpdateAt:           "2024-01-15T10:00:00Z",
+		LastUpdateAt:                     "2024-01-15T10:01:00Z",
+		MirrorTriggerBuilds:              true,
+		OnlyMirrorProtectedBranches:      false,
+		MirrorOverwritesDivergedBranches: true,
+		MirrorBranchRegex:                "^main$",
+	})
+	for _, want := range []string{"mirror.example.com", "finished", "timeout", "15 Jan 2024", "^main$"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q", want)
+		}
+	}
+}
+
+// TestToOutput_NilOptionalFields exercises ToOutput branches for nil
+// namespace and forked_from_project fields.
+func TestToOutput_NilOptionalFields(t *testing.T) {
+	p := &gl.Project{
+		ID:                42,
+		Name:              "test",
+		PathWithNamespace: "ns/test",
+		DefaultBranch:     "main",
+	}
+	out := ToOutput(p)
+	if out.Namespace != "" {
+		t.Errorf("Namespace = %q, want empty", out.Namespace)
+	}
+	if out.ForkedFromProject != "" {
+		t.Error("expected empty ForkedFromProject")
+	}
+}
+
+// TestAddHook_APIError exercises the error return branch in AddHook.
+func TestAddHook_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	_, err := AddHook(context.Background(), client, AddHookInput{ProjectID: "42", URL: "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestEditHook_APIError exercises the error return branch in EditHook.
+func TestEditHook_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	_, err := EditHook(context.Background(), client, EditHookInput{ProjectID: "42", HookID: 1})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestAddHook_ContextCancelled exercises ctx.Err() early return in AddHook.
+func TestAddHook_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := AddHook(ctx, client, AddHookInput{ProjectID: "42", URL: "https://example.com"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestEditHook_ContextCancelled exercises ctx.Err() early return in EditHook.
+func TestEditHook_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := EditHook(ctx, client, EditHookInput{ProjectID: "42", HookID: 1})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestGetPullMirror_ContextCancelled exercises ctx.Err() in GetPullMirror.
+func TestGetPullMirror_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := GetPullMirror(ctx, client, GetPullMirrorInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestStartMirroring_ContextCancelled exercises ctx.Err() in StartMirroring.
+func TestStartMirroring_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := StartMirroring(ctx, client, StartMirroringInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestRestore_ContextCancelled exercises ctx.Err() in Restore.
+func TestRestore_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Restore(ctx, client, RestoreInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestToOutput_WithAllOptionals exercises ToOutput with Namespace,
+// ForkedFromProject, MarkedForDeletionOn, and all timestamps populated.
+func TestToOutput_WithAllOptionals(t *testing.T) {
+	now := time.Now()
+	delDate := gl.ISOTime(now)
+	p := &gl.Project{
+		ID:                  42,
+		Name:                "test",
+		PathWithNamespace:   "ns/test",
+		Namespace:           &gl.ProjectNamespace{FullPath: "ns"},
+		ForkedFromProject:   &gl.ForkParent{PathWithNamespace: "upstream/test"},
+		MarkedForDeletionOn: &delDate,
+		CreatedAt:           &now,
+		UpdatedAt:           &now,
+		LastActivityAt:      &now,
+	}
+	out := ToOutput(p)
+	if out.Namespace != "ns" {
+		t.Errorf("Namespace = %q, want %q", out.Namespace, "ns")
+	}
+	if out.ForkedFromProject != "upstream/test" {
+		t.Errorf("ForkedFromProject = %q, want %q", out.ForkedFromProject, "upstream/test")
+	}
+	if out.MarkedForDeletionOn == "" {
+		t.Error("expected non-empty MarkedForDeletionOn")
+	}
+	if out.CreatedAt == "" {
+		t.Error("expected non-empty CreatedAt")
+	}
+}
+
+// TestFormatRepositoryStorageMarkdown_AllFields exercises FormatRepositoryStorageMarkdown
+// with all optional fields populated.
+func TestFormatRepositoryStorageMarkdown_AllFields(t *testing.T) {
+	md := FormatRepositoryStorageMarkdown(RepositoryStorageOutput{
+		ProjectID:         42,
+		DiskPath:          "/var/opt/gitlab/repo",
+		CreatedAt:         "2024-01-01T00:00:00Z",
+		RepositoryStorage: "default",
+	})
+	if !strings.Contains(md, "42") || !strings.Contains(md, "default") {
+		t.Error("missing expected fields in markdown")
+	}
+}
+
+// TestListApprovalRules_WithPagination exercises the Page/PerPage options
+// branches in ListApprovalRules.
+func TestListApprovalRules_WithPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") != "2" || r.URL.Query().Get("per_page") != "5" {
+			t.Errorf("expected page=2&per_page=5, got %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"r1","approvals_required":1}]`)
+	}))
+	out, err := ListApprovalRules(context.Background(), client, ListApprovalRulesInput{
+		ProjectID:       "42",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 {
+		t.Errorf("got %d rules, want 1", len(out.Rules))
+	}
+}
+
+// TestListApprovalRules_ContextCancelled exercises ctx.Err() in ListApprovalRules.
+func TestListApprovalRules_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := ListApprovalRules(ctx, client, ListApprovalRulesInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestChangeApprovalConfig_ContextCancelled exercises ctx.Err() in ChangeApprovalConfig.
+func TestChangeApprovalConfig_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := ChangeApprovalConfig(ctx, client, ChangeApprovalConfigInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}

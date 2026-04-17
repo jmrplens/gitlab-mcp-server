@@ -87,9 +87,9 @@ func TestRegisterTools_GetNotFound(t *testing.T) {
 func TestToOutput_ResolvedByAndTimestamps(t *testing.T) {
 	now := time.Now()
 	note := &gl.Note{
-		ID:   1,
-		Body: "test",
-		Author: gl.NoteAuthor{Username: "author"},
+		ID:         1,
+		Body:       "test",
+		Author:     gl.NoteAuthor{Username: "author"},
 		ResolvedBy: gl.NoteResolvedBy{Username: "resolver"},
 		ResolvedAt: &now,
 		CreatedAt:  &now,

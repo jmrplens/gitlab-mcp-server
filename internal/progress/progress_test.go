@@ -305,6 +305,7 @@ func TestFromRequest_WithTokenNoSession(t *testing.T) {
 	// Update should be a safe no-op
 	tracker.Update(context.Background(), 1, 3, "should not send")
 }
+
 // TestFromRequest_InitializedSessionNoToken verifies that FromRequest returns
 // an inactive tracker when the session is initialized but no progress token is
 // present in the request params. This covers the token==nil branch.

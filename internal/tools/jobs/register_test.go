@@ -65,12 +65,12 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 func TestToOutput_OptionalFields(t *testing.T) {
 	now := time.Now()
 	job := &gl.Job{
-		ID:       1,
-		Name:     "test-job",
-		Stage:    "test",
-		Status:   "success",
-		Ref:      "main",
-		Pipeline: gl.JobPipeline{ID: 10},
+		ID:                1,
+		Name:              "test-job",
+		Stage:             "test",
+		Status:            "success",
+		Ref:               "main",
+		Pipeline:          gl.JobPipeline{ID: 10},
 		ArtifactsExpireAt: &now,
 		User:              &gl.User{Username: "admin"},
 		Runner:            gl.JobRunner{ID: 5},
@@ -217,19 +217,19 @@ func TestReadSingleArtifactContent_ReadError(t *testing.T) {
 // branches in FormatOutputMarkdown (CommitSHA, Coverage, FailureReason, etc.).
 func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 	out := Output{
-		ID:            1,
-		Name:          "build",
-		Stage:         "build",
-		Status:        "failed",
-		Ref:           "main",
-		CommitSHA:     "abc123def456789",
-		Duration:      45.5,
+		ID:             1,
+		Name:           "build",
+		Stage:          "build",
+		Status:         "failed",
+		Ref:            "main",
+		CommitSHA:      "abc123def456789",
+		Duration:       45.5,
 		QueuedDuration: 2.5,
-		FailureReason: "script_failure",
-		Coverage:      85.5,
+		FailureReason:  "script_failure",
+		Coverage:       85.5,
 		UserUsername:   "admin",
-		CreatedAt:     "2024-01-01T00:00:00Z",
-		WebURL:        "https://gitlab.com/job/1",
+		CreatedAt:      "2024-01-01T00:00:00Z",
+		WebURL:         "https://gitlab.com/job/1",
 	}
 	md := FormatOutputMarkdown(out)
 

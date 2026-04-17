@@ -32,11 +32,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-			case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/merge_requests/"):
-				testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
-			case r.Method == http.MethodGet && strings.HasSuffix(path, "/merge_trains"):
-				testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
-			case r.Method == http.MethodPost && strings.Contains(path, "/merge_trains/merge_requests/"):
+		case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/merge_requests/"):
+			testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/merge_trains"):
+			testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
+		case r.Method == http.MethodPost && strings.Contains(path, "/merge_trains/merge_requests/"):
 			testutil.RespondJSON(w, http.StatusCreated, registerTrainsJSON)
 		default:
 			http.NotFound(w, r)

@@ -647,42 +647,42 @@ func newGroupMarkdownUploadsMCPSession(t *testing.T) *mcp.ClientSession {
 // TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
 // branches in the group markdown upload delete handlers when the user declines.
 func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-client := testutil.NewTestClient(t, http.NewServeMux())
-server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-RegisterTools(server, client)
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
 
-st, ct := mcp.NewInMemoryTransports()
-ctx := context.Background()
-if _, err := server.Connect(ctx, st, nil); err != nil {
-t.Fatalf("server connect: %v", err)
-}
-mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-return &mcp.ElicitResult{Action: "decline"}, nil
-},
-})
-session, err := mcpClient.Connect(ctx, ct, nil)
-if err != nil {
-t.Fatalf("client connect: %v", err)
-}
-t.Cleanup(func() { session.Close() })
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
 
-tools := []struct {
-name string
-args map[string]any
-}{
-{"gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "42", "upload_id": 1}},
-{"gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "42", "secret": "s", "filename": "f.png"}},
-}
-for _, tt := range tools {
-t.Run(tt.name, func(t *testing.T) {
-result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
-if err != nil {
-t.Fatalf("CallTool error: %v", err)
-}
-if result == nil {
-t.Fatal("expected non-nil result for declined confirmation")
-}
-})
-}
+	tools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "42", "upload_id": 1}},
+		{"gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "42", "secret": "s", "filename": "f.png"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result for declined confirmation")
+			}
+		})
+	}
 }

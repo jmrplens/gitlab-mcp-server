@@ -519,6 +519,7 @@ func TestSortedKeys(t *testing.T) {
 		}
 	}
 }
+
 // TestExtractIssueProjectPath_FromWebURL covers the WebURL fallback branch
 // when References is nil.
 func TestExtractIssueProjectPath_FromWebURL(t *testing.T) {
@@ -1075,8 +1076,8 @@ func TestWriteFullBranchSection(t *testing.T) {
 		var b strings.Builder
 		branches := []*gl.ProtectedBranch{
 			{
-				Name:            "main",
-				AllowForcePush:  false,
+				Name:             "main",
+				AllowForcePush:   false,
 				PushAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
 			},
 		}
@@ -1115,8 +1116,8 @@ func TestWriteBranchDetail(t *testing.T) {
 	t.Run("with_unprotect_access_levels", func(t *testing.T) {
 		var b strings.Builder
 		writeBranchDetail(&b, &gl.ProtectedBranch{
-			Name:                   "feature",
-			UnprotectAccessLevels:  []*gl.BranchAccessDescription{{AccessLevel: 40}},
+			Name:                  "feature",
+			UnprotectAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
 		}, "main")
 		out := b.String()
 		if !strings.Contains(out, "Unprotect access") {
