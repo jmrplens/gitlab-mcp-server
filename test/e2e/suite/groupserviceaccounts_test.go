@@ -29,7 +29,7 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 
 		// Create a test group.
 		grpName := uniqueName("grp-sa")
-		grpOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "create",
 			"params": map[string]any{
 				"name":       grpName,
@@ -37,7 +37,7 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				"visibility": "private",
 			},
 		})
-		requireNoError(t, err, "create group")
+		requireNoError(t, setupErr, "create group")
 		groupID := grpOut.ID
 		groupIDStr := strconv.FormatInt(groupID, 10)
 		t.Logf("Created group %d: %s", groupID, grpName)

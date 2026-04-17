@@ -294,13 +294,14 @@ func ToOutput(p *gl.Project) Output {
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
 		//lint:ignore SA1019 no replacement field on Project struct
-		ApprovalsBeforeMerge:              p.ApprovalsBeforeMerge, //nolint:staticcheck // SA1019: no replacement field
-		ResolveOutdatedDiffDiscussions:    p.ResolveOutdatedDiffDiscussions,
-		ContainerRegistryEnabled:          accessLevelEnabled(p.ContainerRegistryAccessLevel),
-		SharedRunnersEnabled:              p.SharedRunnersEnabled,
-		PublicBuilds:                      p.PublicJobs,
-		SnippetsEnabled:                   accessLevelEnabled(p.SnippetsAccessLevel),
-		PackagesEnabled:                   p.PackagesEnabled,
+		ApprovalsBeforeMerge:           p.ApprovalsBeforeMerge, //nolint:staticcheck // SA1019: no replacement field
+		ResolveOutdatedDiffDiscussions: p.ResolveOutdatedDiffDiscussions,
+		ContainerRegistryEnabled:       accessLevelEnabled(p.ContainerRegistryAccessLevel),
+		SharedRunnersEnabled:           p.SharedRunnersEnabled,
+		PublicBuilds:                   p.PublicJobs,
+		SnippetsEnabled:                accessLevelEnabled(p.SnippetsAccessLevel),
+		//lint:ignore SA1019 backward compat with PackagesEnabled field
+		PackagesEnabled:                   p.PackagesEnabled, //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
 		PackageRegistryAccessLevel:        string(p.PackageRegistryAccessLevel),
 		BuildTimeout:                      p.BuildTimeout,
 		SuggestionCommitMessage:           p.SuggestionCommitMessage,
@@ -430,7 +431,8 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.PublicBuilds = input.PublicBuilds //nolint:staticcheck // SA1019: no PublicJobs field
 	}
 	if input.PackagesEnabled != nil {
-		opts.PackagesEnabled = input.PackagesEnabled
+		//lint:ignore SA1019 backward compat with PackagesEnabled field
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
@@ -806,7 +808,8 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 		opts.PublicJobs = input.PublicBuilds
 	}
 	if input.PackagesEnabled != nil {
-		opts.PackagesEnabled = input.PackagesEnabled
+		//lint:ignore SA1019 backward compat with PackagesEnabled field
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))

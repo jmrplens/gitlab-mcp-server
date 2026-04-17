@@ -52,9 +52,9 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -101,9 +101,9 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 	ctx := context.Background()
 	_, _ = server.Connect(ctx, st, nil)
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -156,9 +156,9 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		},
 	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 

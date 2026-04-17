@@ -461,8 +461,8 @@ func TestSessionLogger_LogErrorPath(t *testing.T) {
 	<-done
 
 	// Set log level so session.Log doesn't short-circuit.
-	if err := session.SetLoggingLevel(ctx, &mcp.SetLoggingLevelParams{Level: "debug"}); err != nil {
-		t.Fatalf("SetLoggingLevel: %v", err)
+	if setErr := session.SetLoggingLevel(ctx, &mcp.SetLoggingLevelParams{Level: "debug"}); setErr != nil {
+		t.Fatalf("SetLoggingLevel: %v", setErr)
 	}
 
 	// Close the client session to break the transport.

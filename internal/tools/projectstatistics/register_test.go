@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // TestRegisterTools_ErrorPaths covers the error branch in the

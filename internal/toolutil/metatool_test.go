@@ -565,7 +565,7 @@ func TestEnrichWithHints_EmptyObject(t *testing.T) {
 }
 
 // TestWrapActionWithRequest_UnmarshalError verifies that WrapActionWithRequest
-// returns an error when params cannot be unmarshalled into the typed input.
+// returns an error when params cannot be unmarshaled into the typed input.
 func TestWrapActionWithRequest_UnmarshalError(t *testing.T) {
 	fn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, in testInput) (testOutput, error) {
 		return testOutput{Result: "should not reach"}, nil
@@ -578,7 +578,7 @@ func TestWrapActionWithRequest_UnmarshalError(t *testing.T) {
 }
 
 // TestDefaultFormatResult_Unmarshalable verifies that defaultFormatResult
-// falls back to fmt.Sprintf for types that cannot be JSON-marshalled.
+// falls back to fmt.Sprintf for types that cannot be JSON-marshaled.
 func TestDefaultFormatResult_Unmarshalable(t *testing.T) {
 	got := defaultFormatResult(func() {})
 	tc, ok := got.Content[0].(*mcp.TextContent)

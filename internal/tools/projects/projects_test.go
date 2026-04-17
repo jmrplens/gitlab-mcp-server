@@ -3239,7 +3239,8 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.PublicJobs == nil {
 		t.Error("PublicJobs not set")
 	}
-	if opts.PackagesEnabled == nil {
+	//lint:ignore SA1019 backward compat with PackagesEnabled field
+	if opts.PackagesEnabled == nil { //nolint:staticcheck // SA1019
 		t.Error("PackagesEnabled not set")
 	}
 	if opts.PackageRegistryAccessLevel == nil {

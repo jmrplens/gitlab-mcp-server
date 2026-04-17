@@ -504,15 +504,14 @@ func TestMCPRoundtripList_APIError(t *testing.T) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
+	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -539,15 +538,14 @@ func TestMCPRoundtripDeleteByID_APIError(t *testing.T) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
+	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -574,15 +572,14 @@ func TestMCPRoundtripDeleteBySecret_APIError(t *testing.T) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
+	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -630,15 +627,14 @@ func newGroupMarkdownUploadsMCPSession(t *testing.T) *mcp.ClientSession {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
+	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
@@ -661,9 +657,9 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		},
 	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 

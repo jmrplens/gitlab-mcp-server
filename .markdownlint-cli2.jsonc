@@ -32,7 +32,7 @@
   },
 
   // Directories and files to ignore
-  "ignores": ["plan/**", "node_modules/**", "dist/**", "vendor/**"],
+  "ignores": ["plan/**", "**/node_modules/**", "**/dist/**", "vendor/**"],
 
   // Output settings
   "noProgress": true,

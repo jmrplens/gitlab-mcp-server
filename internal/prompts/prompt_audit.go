@@ -111,7 +111,8 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "| Wiki | %s |\n", accessLevelIcon(project.WikiAccessLevel))
 	fmt.Fprintf(&b, "| Snippets | %s |\n", accessLevelIcon(project.SnippetsAccessLevel))
 	fmt.Fprintf(&b, "| Container Registry | %s |\n", accessLevelIcon(project.ContainerRegistryAccessLevel))
-	fmt.Fprintf(&b, "| Packages | %s |\n", toolutil.BoolEmoji(project.PackagesEnabled))
+	//lint:ignore SA1019 backward compat with PackagesEnabled field
+	fmt.Fprintf(&b, "| Packages | %s |\n", toolutil.BoolEmoji(project.PackagesEnabled)) //nolint:staticcheck // SA1019
 	b.WriteString("\n")
 
 	// Merge settings

@@ -29,7 +29,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 
 	// Create a test group.
 	grpName := uniqueName("grp-rel")
-	grpOut, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"name":       grpName,
@@ -37,7 +37,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"visibility": "private",
 		},
 	})
-	requireNoError(t, err, "create group")
+	requireNoError(t, setupErr, "create group")
 	groupID := grpOut.ID
 	groupIDStr := strconv.FormatInt(groupID, 10)
 	t.Logf("Created group %d: %s", groupID, grpName)
@@ -64,7 +64,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 
 	// Create a project inside the group, commit a file, create a tag & release.
 	projName := uniqueName("rel-proj")
-	projOut, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+	projOut, setupErr := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"name":                   projName,
@@ -74,7 +74,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"default_branch":         "main",
 		},
 	})
-	requireNoError(t, err, "create project in group")
+	requireNoError(t, setupErr, "create project in group")
 	projIDStr := strconv.FormatInt(projOut.ID, 10)
 	t.Logf("Created project %d in group %d", projOut.ID, groupID)
 
@@ -87,7 +87,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 
 	// Create a tag.
 	tagName := uniqueName("v-grp-rel")
-	_, err = callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
+	_, setupErr = callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": projIDStr,
@@ -95,10 +95,10 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"ref":        "main",
 		},
 	})
-	requireNoError(t, err, "create tag")
+	requireNoError(t, setupErr, "create tag")
 
 	// Create a release on that tag.
-	_, err = callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
+	_, setupErr = callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id":  projIDStr,
@@ -107,7 +107,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"description": "E2E test release for group releases",
 		},
 	})
-	requireNoError(t, err, "create release")
+	requireNoError(t, setupErr, "create release")
 
 	// List releases on the group — should now contain at least one.
 	t.Run("ReleaseList_WithRelease", func(t *testing.T) {

@@ -8,8 +8,9 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // TestRegisterTools_ConfirmDeclined covers the ConfirmAction early-return
@@ -29,9 +30,9 @@ func TestRegisterTools_ConfirmDeclined(t *testing.T) {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		},
 	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 

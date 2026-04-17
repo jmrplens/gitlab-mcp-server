@@ -1848,7 +1848,7 @@ func TestSearchCode_PaginationAdjusted(t *testing.T) {
 // a query-syntax hint instead of using the generic WrapErrWithMessage fallback.
 func TestWrapSearchErr_422(t *testing.T) {
 	glErr := &gl.ErrorResponse{
-		Response: &http.Response{StatusCode: 422},
+		Response: &http.Response{StatusCode: http.StatusUnprocessableEntity},
 		Message:  "invalid query syntax",
 	}
 	err := wrapSearchErr("search_code", glErr)

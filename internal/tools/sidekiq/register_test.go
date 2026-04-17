@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // TestRegisterTools_ErrorPaths covers the error branches in register.go handler
@@ -27,9 +28,9 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 

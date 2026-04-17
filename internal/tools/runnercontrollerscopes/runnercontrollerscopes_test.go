@@ -457,9 +457,9 @@ func TestMCPRoundTrip_ConfirmDeclined(t *testing.T) {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		},
 	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -504,9 +504,9 @@ func TestMCPRoundTrip_RemoveErrors(t *testing.T) {
 			return &mcp.ElicitResult{Action: "accept"}, nil
 		},
 	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 
@@ -568,9 +568,9 @@ func newScopesMCPSession(t *testing.T) *mcp.ClientSession {
 		t.Fatalf("server connect: %v", err)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+	session, connectErr := mcpClient.Connect(ctx, ct, nil)
+	if connectErr != nil {
+		t.Fatalf("client connect: %v", connectErr)
 	}
 	t.Cleanup(func() { session.Close() })
 	return session

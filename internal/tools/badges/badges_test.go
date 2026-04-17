@@ -831,7 +831,7 @@ func TestMCPRoundTrip_ConfirmDeclined(t *testing.T) {
 				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf(errExpNonNilResult)
+				t.Fatal(errExpNonNilResult)
 			}
 		})
 	}

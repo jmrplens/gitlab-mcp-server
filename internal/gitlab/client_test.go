@@ -724,7 +724,7 @@ func TestPingDirect_NilContext(t *testing.T) {
 	}
 
 	//nolint:staticcheck // intentionally passing nil context to trigger error path
-	_, pingErr := client.pingDirect(nil)
+	_, pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
 	}
