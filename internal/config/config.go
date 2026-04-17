@@ -41,7 +41,6 @@ const (
 type Config struct {
 	GitLabURL     string
 	GitLabToken   string
-	GitLabUser    string
 	SkipTLSVerify bool
 	MetaTools     bool
 	Enterprise    bool
@@ -145,7 +144,6 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		GitLabURL:          os.Getenv("GITLAB_URL"),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
-		GitLabUser:         os.Getenv("GITLAB_USER"),
 		SkipTLSVerify:      skipTLS,
 		MetaTools:          metaTools,
 		Enterprise:         enterprise,

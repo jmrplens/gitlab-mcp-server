@@ -27,7 +27,6 @@ const (
 func TestLoad_ValidConfig(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_USER", "testuser")
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "")
 
 	cfg, err := Load()
@@ -40,9 +39,6 @@ func TestLoad_ValidConfig(t *testing.T) {
 	}
 	if cfg.GitLabToken != testGitLabToken {
 		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, testGitLabToken)
-	}
-	if cfg.GitLabUser != "testuser" {
-		t.Errorf("GitLabUser = %q, want %q", cfg.GitLabUser, "testuser")
 	}
 	if cfg.SkipTLSVerify != false {
 		t.Errorf("SkipTLSVerify = %v, want false", cfg.SkipTLSVerify)
@@ -523,5 +519,125 @@ func TestValidate_AcceptableMaxValues(t *testing.T) {
 	err := cfg.validate()
 	if err != nil {
 		t.Errorf("validate() unexpected error for max values: %v", err)
+	}
+}
+
+// TestLoad_InvalidSkipTLS verifies that Load returns an error when
+// GITLAB_SKIP_TLS_VERIFY has an invalid boolean value.
+func TestLoad_InvalidSkipTLS(t *testing.T) {
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "notabool")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid GITLAB_SKIP_TLS_VERIFY")
+	}
+}
+
+// TestLoad_InvalidMetaTools verifies that Load returns an error when
+// META_TOOLS has an invalid boolean value.
+func TestLoad_InvalidMetaTools(t *testing.T) {
+	t.Setenv("META_TOOLS", "notabool")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid META_TOOLS")
+	}
+}
+
+// TestLoad_InvalidEnterprise verifies that Load returns an error when
+// GITLAB_ENTERPRISE has an invalid boolean value.
+func TestLoad_InvalidEnterprise(t *testing.T) {
+	t.Setenv("GITLAB_ENTERPRISE", "notabool")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid GITLAB_ENTERPRISE")
+	}
+}
+
+// TestLoad_InvalidReadOnly verifies that Load returns an error when
+// GITLAB_READ_ONLY has an invalid boolean value.
+func TestLoad_InvalidReadOnly(t *testing.T) {
+	t.Setenv("GITLAB_READ_ONLY", "notabool")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid GITLAB_READ_ONLY")
+	}
+}
+
+// TestLoad_InvalidUploadMaxFileSize verifies that Load returns an error
+// when UPLOAD_MAX_FILE_SIZE has an invalid value.
+func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
+	t.Setenv("UPLOAD_MAX_FILE_SIZE", "notanumber")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	t.Setenv("GITLAB_READ_ONLY", "false")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid UPLOAD_MAX_FILE_SIZE")
+	}
+}
+
+// TestLoad_InvalidMaxHTTPClients verifies that Load rejects non-integer MAX_HTTP_CLIENTS.
+func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
+	t.Setenv("MAX_HTTP_CLIENTS", "abc")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid MAX_HTTP_CLIENTS")
+	}
+}
+
+// TestLoad_InvalidSessionTimeout verifies that Load rejects invalid SESSION_TIMEOUT.
+func TestLoad_InvalidSessionTimeout(t *testing.T) {
+	t.Setenv("SESSION_TIMEOUT", "notaduration")
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
+	t.Setenv("MAX_HTTP_CLIENTS", "100")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid SESSION_TIMEOUT")
+	}
+}
+
+// TestParseSize_InvalidSuffix verifies parseSize rejects invalid numeric strings
+// that are not plain numbers or known suffixes.
+func TestParseSize_InvalidSuffix(t *testing.T) {
+	_, err := parseSize("50TB", 0)
+	if err == nil {
+		t.Fatal("expected error for unsupported suffix TB")
+	}
+}
+
+// TestParseSize_NegativeValue verifies parseSize rejects negative values.
+func TestParseSize_NegativeValue(t *testing.T) {
+	_, err := parseSize("-10MB", 0)
+	if err == nil {
+		t.Fatal("expected error for negative size")
 	}
 }

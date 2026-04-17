@@ -182,7 +182,6 @@ When creating a new release and uploading binaries to GitHub Releases:
 | ------------------------ | --------------------------------- | ------------------ |
 | `GITLAB_URL`             | GitLab instance URL               | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
-| `GITLAB_USER`            | GitLab username                   | `jmrplens`         |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |

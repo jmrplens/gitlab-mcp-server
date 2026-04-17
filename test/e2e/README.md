@@ -13,7 +13,6 @@ Requires a running GitLab instance with a Personal Access Token that has create/
 cat > .env <<EOF
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-...
-GITLAB_USER=your-username
 EOF
 
 # Run

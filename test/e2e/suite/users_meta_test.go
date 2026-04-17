@@ -8,7 +8,6 @@ package suite
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -213,10 +212,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	})
 
 	t.Run("NamespaceSearch", func(t *testing.T) {
-		username := os.Getenv("GITLAB_USER")
-		if username == "" {
-			t.Skip("GITLAB_USER not set")
-		}
+		username := sess.username
 		out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "namespace_search",
 			"params": map[string]any{"search": username},
@@ -226,10 +222,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	})
 
 	t.Run("NamespaceExists", func(t *testing.T) {
-		username := os.Getenv("GITLAB_USER")
-		if username == "" {
-			t.Skip("GITLAB_USER not set")
-		}
+		username := sess.username
 		out, err := callToolOn[namespaces.ExistsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "namespace_exists",
 			"params": map[string]any{"id": username},

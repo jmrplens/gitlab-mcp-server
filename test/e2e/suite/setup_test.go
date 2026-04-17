@@ -59,6 +59,7 @@ type sessions struct {
 	sampling    *mcp.ClientSession
 	elicitation *mcp.ClientSession
 	glClient    *gitlabclient.Client
+	username    string
 	enterprise  bool
 	snapshot    *resourceSnapshot
 }
@@ -123,6 +124,13 @@ func TestMain(m *testing.M) {
 	}
 
 	disableRateLimiting(glClient)
+
+	// Auto-detect authenticated username from token.
+	username, userErr := glClient.CurrentUsername(context.Background())
+	if userErr != nil {
+		log.Fatalf("e2e: auto-detect username: %v", userErr)
+	}
+	log.Printf("e2e: authenticated as %s", username)
 
 	// Create MCP server with all individual tools registered.
 	server := mcp.NewServer(&mcp.Implementation{
@@ -244,6 +252,7 @@ func TestMain(m *testing.M) {
 		sampling:    samplingSession,
 		elicitation: elicitSession,
 		glClient:    glClient,
+		username:    username,
 		enterprise:  enterprise,
 	}
 

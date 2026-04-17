@@ -251,7 +251,6 @@ For manual step-by-step execution, see [E2E Docker Mode](testing.md#docker-mode)
 ```env
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-your-token
-GITLAB_USER=your-username
 GITLAB_SKIP_TLS_VERIFY=true
 ```
 

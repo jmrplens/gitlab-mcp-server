@@ -9,7 +9,6 @@ package suite
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -264,7 +263,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 	t.Run("DeployKeyListUserProject", func(t *testing.T) {
 		out, err := callToolOn[deploykeys.ListOutput](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_list_user_project",
-			"params": map[string]any{"user_id": os.Getenv("GITLAB_USER")},
+			"params": map[string]any{"user_id": sess.username},
 		})
 		requireNoError(t, err, "deploy_key_list_user_project")
 		t.Logf("User project deploy keys: %d", len(out.DeployKeys))

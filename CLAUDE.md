@@ -232,7 +232,6 @@ make analyze-report                        # generate LLM-consumable report
 | ------------------------ | -------- | -------------------------------------------------------- |
 | `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`) |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
-| `GITLAB_USER`            | No       | GitLab username                                          |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |

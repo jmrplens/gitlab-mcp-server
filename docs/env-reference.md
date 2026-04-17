@@ -21,7 +21,6 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `GITLAB_USER` | _(auto-detected)_ | GitLab username; used by prompts and resources. Auto-detected from token if not set |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification (`true`/`false`). Use for self-signed certs |
 
 ---
@@ -100,7 +99,6 @@ GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Optional
-GITLAB_USER=myusername
 GITLAB_SKIP_TLS_VERIFY=true
 META_TOOLS=true
 LOG_LEVEL=info

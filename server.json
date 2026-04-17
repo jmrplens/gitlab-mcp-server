@@ -45,12 +45,6 @@
           "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
         },
         {
-          "name": "GITLAB_USER",
-          "description": "GitLab username (optional, used for user-specific operations)",
-          "isRequired": false,
-          "placeholder": "my-username"
-        },
-        {
           "name": "GITLAB_SKIP_TLS_VERIFY",
           "description": "Skip TLS certificate verification for self-signed certs (default: false)",
           "isRequired": false,

@@ -145,7 +145,6 @@ Loads settings from environment variables with optional `.env` file support (via
 | ------------------------ | -------- | ------- | ---------------------------------------------------- |
 | `GITLAB_URL`             | Stdio    | —       | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
-| `GITLAB_USER`            | No       | —       | GitLab username (logging context)                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
 | `META_TOOLS`             | No       | `true`  | Use meta-tools instead of individual tools            |
 | `ISSUE_REPORTS`          | No       | `false` | Auto-generate GitLab issues on tool errors            |

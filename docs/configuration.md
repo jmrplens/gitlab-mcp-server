@@ -24,7 +24,6 @@ These are the settings every user needs to get started.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `GITLAB_USER` | _(none)_ | GitLab username (used by some prompts and resources) |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools (40 base / 59 enterprise instead of 1004) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
@@ -36,7 +35,6 @@ These are the settings every user needs to get started.
 ```env
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-GITLAB_USER=myusername
 GITLAB_SKIP_TLS_VERIFY=true
 META_TOOLS=true
 GITLAB_READ_ONLY=false

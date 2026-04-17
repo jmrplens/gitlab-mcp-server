@@ -24,7 +24,6 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 
 | Variable                 | Predeterminado | Descripción                                                                                               |
 | ------------------------ | -------------- | --------------------------------------------------------------------------------------------------------- |
-| `GITLAB_USER`            | —              | Nombre de usuario de GitLab (informativo, usado en prompts)                                               |
 | `GITLAB_SKIP_TLS_VERIFY` | `false`        | Omitir verificación de certificados TLS para certificados autofirmados                                    |
 | `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (40 herramientas de dominio en lugar de 1000+ herramientas individuales) |
 | `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) para GitLab Premium/Ultimate  |
@@ -68,7 +67,6 @@ GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Opcionales
-GITLAB_USER=johndoe
 GITLAB_SKIP_TLS_VERIFY=false
 META_TOOLS=true
 GITLAB_ENTERPRISE=false

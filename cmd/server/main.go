@@ -190,7 +190,6 @@ FLAGS
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (e.g. https://gitlab.example.com)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
-  GITLAB_USER               GitLab username (optional)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
   META_TOOLS                Enable meta-tools: true/false (default true)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
@@ -338,15 +337,11 @@ func runStdio(ctx context.Context) error {
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
-		if cfg.GitLabUser == "" {
-			var username string
-			if username, err = client.CurrentUsername(ctx); err == nil {
-				cfg.GitLabUser = username
-			} else {
-				slog.Warn("could not auto-detect gitlab user", "error", err)
-			}
+		username, userErr := client.CurrentUsername(ctx)
+		if userErr != nil {
+			slog.Warn("could not auto-detect gitlab user", "error", userErr)
 		}
-		slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "user", cfg.GitLabUser, "version", gitlabVersion)
+		slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "user", username, "version", gitlabVersion)
 	}
 
 	updater := newUpdaterForTools(cfg)

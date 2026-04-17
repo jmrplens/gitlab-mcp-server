@@ -1,12 +1,11 @@
 //go:build e2e
 
 // userprojects_test.go tests user contributed and starred project listing
-// MCP tools against a live GitLab instance. Requires GITLAB_USER env var.
+// MCP tools against a live GitLab instance.
 package suite
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
@@ -17,10 +16,7 @@ import (
 func TestIndividual_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set")
-	}
+	user := sess.username
 
 	t.Run("Individual/User/ContributedProjects", func(t *testing.T) {
 		out, err := callToolOn[projects.ListOutput](ctx, sess.individual, "gitlab_project_list_user_contributed", projects.ListUserContributedProjectsInput{
@@ -43,10 +39,7 @@ func TestIndividual_UserProjects(t *testing.T) {
 func TestMeta_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	user := os.Getenv("GITLAB_USER")
-	if user == "" {
-		t.Skip("GITLAB_USER not set")
-	}
+	user := sess.username
 
 	t.Run("Meta/User/ContributedProjects", func(t *testing.T) {
 		out, err := callToolOn[projects.ListOutput](ctx, sess.meta, "gitlab_project", map[string]any{

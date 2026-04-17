@@ -7,7 +7,6 @@ package suite
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -72,13 +71,9 @@ func TestMeta_ProjectCore(t *testing.T) {
 	})
 
 	t.Run("ListUserProjects", func(t *testing.T) {
-		user := os.Getenv("GITLAB_USER")
-		if user == "" {
-			t.Skip("GITLAB_USER not set")
-		}
 		out, err := callToolOn[projects.ListOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "list_user_projects",
-			"params": map[string]any{"user_id": user},
+			"params": map[string]any{"user_id": sess.username},
 		})
 		requireNoError(t, err, "meta project list_user_projects")
 		requireTrue(t, len(out.Projects) >= 1, "expected at least 1 user project")

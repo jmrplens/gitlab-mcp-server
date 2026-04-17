@@ -87,7 +87,7 @@ test-pkg:
 test-integration:
 	go test -v -tags integration -coverprofile=coverage.out $(PKGS)
 
-## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN, GITLAB_USER from .env)
+## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
 test-e2e:
 	go test -v -tags e2e -timeout 120s ./test/e2e/suite/
 
