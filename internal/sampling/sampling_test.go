@@ -1423,3 +1423,189 @@ func TestExtractToolUseCalls_NoToolUse(t *testing.T) {
 		t.Errorf("extractToolUseCalls() len = %d, want 0", len(calls))
 	}
 }
+
+// cancellingExecutor cancels its context when ExecuteTool is called.
+// Used to test ctx.Err() checks between loop iterations.
+type cancellingExecutor struct {
+	cancel context.CancelFunc
+}
+
+func (e *cancellingExecutor) ExecuteTool(_ context.Context, _ string, _ map[string]any) (*mcp.CallToolResult, error) {
+	e.cancel()
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "done"}},
+	}, nil
+}
+
+// TestAnalyzeWithTools_SupportedCancelledContext covers sampling.go:271-273
+// (supported client with already-cancelled context returns ctx error).
+func TestAnalyzeWithTools_SupportedCancelledContext(t *testing.T) {
+	bg := context.Background()
+	server := mcp.NewServer(testImpl, nil)
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageWithToolsHandler: func(_ context.Context, _ *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
+			return &mcp.CreateMessageWithToolsResult{
+				Model:      testModelDefault,
+				Content:    []mcp.Content{&mcp.TextContent{Text: "ok"}},
+				StopReason: "endTurn",
+			}, nil
+		},
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(bg, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+
+	cs, err := client.Connect(bg, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
+
+	ctx, cancel := context.WithCancel(bg)
+	cancel()
+
+	samplingClient := Client{session: ss}
+	executor := &mockToolExecutor{}
+	_, err = samplingClient.AnalyzeWithTools(ctx, "prompt", "data", executor)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+}
+
+// TestAnalyzeWithTools_DataTruncation covers sampling.go:293-296
+// (data exceeding MaxInputLength is truncated).
+func TestAnalyzeWithTools_DataTruncation(t *testing.T) {
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
+
+	var receivedLen int
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageWithToolsHandler: func(_ context.Context, req *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
+			if len(req.Params.Messages) > 0 {
+				for _, c := range req.Params.Messages[0].Content {
+					if tc, ok := c.(*mcp.TextContent); ok {
+						receivedLen = len(tc.Text)
+					}
+				}
+			}
+			return &mcp.CreateMessageWithToolsResult{
+				Model:      testModelDefault,
+				Content:    []mcp.Content{&mcp.TextContent{Text: "result"}},
+				StopReason: "endTurn",
+			}, nil
+		},
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
+
+	samplingClient := Client{session: ss}
+	executor := &mockToolExecutor{}
+
+	longData := strings.Repeat("x", MaxInputLength+5000)
+	result, err := samplingClient.AnalyzeWithTools(ctx, "review", longData, executor)
+	if err != nil {
+		t.Fatalf("AnalyzeWithTools() unexpected error: %v", err)
+	}
+	if !result.Truncated {
+		t.Error("expected Truncated=true for data exceeding MaxInputLength")
+	}
+	if receivedLen > MaxInputLength+2000 {
+		t.Errorf("received message length %d exceeds expected truncation ceiling", receivedLen)
+	}
+}
+
+// TestAnalyzeWithTools_ContextExpiresBetweenIterations covers
+// sampling.go:310-312 (ctx.Err() fires at the top of a subsequent loop
+// iteration after the first iteration processes a toolUse response).
+func TestAnalyzeWithTools_ContextExpiresBetweenIterations(t *testing.T) {
+	bg := context.Background()
+	ctx, cancel := context.WithCancel(bg)
+	t.Cleanup(cancel)
+
+	server := mcp.NewServer(testImpl, nil)
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageWithToolsHandler: func(_ context.Context, _ *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
+			return &mcp.CreateMessageWithToolsResult{
+				Model: testModelDefault,
+				Content: []mcp.Content{&mcp.ToolUseContent{
+					ID:    "call-1",
+					Name:  "read_file",
+					Input: map[string]any{"path": "README.md"},
+				}},
+				StopReason: "toolUse",
+			}, nil
+		},
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(bg, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+
+	cs, err := client.Connect(bg, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
+
+	samplingClient := Client{session: ss}
+	executor := &cancellingExecutor{cancel: cancel}
+
+	_, err = samplingClient.AnalyzeWithTools(ctx, "prompt", "data", executor)
+	if err == nil {
+		t.Fatal("expected error when context is cancelled between iterations")
+	}
+}
+
+// TestAnalyzeWithTools_CreateMessageError covers sampling.go:335-338
+// (CreateMessageWithTools returns error → "create message with tools failed").
+func TestAnalyzeWithTools_CreateMessageError(t *testing.T) {
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageWithToolsHandler: func(_ context.Context, _ *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
+			return nil, errors.New("LLM unavailable")
+		},
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
+
+	samplingClient := Client{session: ss}
+	executor := &mockToolExecutor{}
+
+	_, err = samplingClient.AnalyzeWithTools(ctx, "prompt", "data", executor)
+	if err == nil {
+		t.Fatal("expected error when CreateMessageWithTools fails")
+	}
+	if !strings.Contains(err.Error(), "create message with tools failed") {
+		t.Errorf("error = %v, want 'create message with tools failed' context", err)
+	}
+}

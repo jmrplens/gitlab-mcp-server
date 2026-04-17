@@ -138,3 +138,59 @@ func TestReviewMRSecurity_FullFlow(t *testing.T) {
 		t.Error("Review is empty")
 	}
 }
+
+// TestReviewMRSecurity_LLMError covers review_mr_security.go:92-94.
+func TestReviewMRSecurity_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/diffs", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"iid":1,"title":"feat"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := ReviewMRSecurity(ctx, &mcp.CallToolRequest{Session: ss}, client, ReviewMRSecurityInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "LLM security review") {
+		t.Errorf("error = %v, want 'LLM security review' context", err)
+	}
+}
+
+// TestReviewMRSecurity_MRGetError covers review_mr_security.go:82-84.
+func TestReviewMRSecurity_MRGetError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}))
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := ReviewMRSecurity(ctx, &mcp.CallToolRequest{Session: ss}, client, ReviewMRSecurityInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "fetching MR") {
+		t.Errorf("error = %v, want 'fetching MR' context", err)
+	}
+}
+
+// TestReviewMRSecurity_ChangesGetError covers review_mr_security.go:82-84
+// (MR GET succeeds but mrchanges.Get returns error).
+func TestReviewMRSecurity_ChangesGetError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/5", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"iid":5,"title":"Fix","state":"opened"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/5/diffs", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := ReviewMRSecurity(ctx, &mcp.CallToolRequest{Session: ss}, client, ReviewMRSecurityInput{ProjectID: "42", MRIID: 5})
+	if err == nil || !strings.Contains(err.Error(), "fetching MR changes") {
+		t.Errorf("error = %v, want 'fetching MR changes' context", err)
+	}
+}

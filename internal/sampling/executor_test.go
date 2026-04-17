@@ -145,3 +145,24 @@ func TestServerToolExecutor_SessionAttached(t *testing.T) {
 		t.Error("handler did not receive the expected session")
 	}
 }
+
+// TestServerToolExecutor_UnmarshalableArgs covers executor.go:43-45
+// (json.Marshal error when args contain an unmarshalable type like a channel).
+func TestServerToolExecutor_UnmarshalableArgs(t *testing.T) {
+	handlers := map[string]mcp.ToolHandler{
+		"my_tool": func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{}, nil
+		},
+	}
+
+	executor := NewServerToolExecutor(nil, handlers)
+	_, err := executor.ExecuteTool(context.Background(), "my_tool", map[string]any{
+		"bad": make(chan int),
+	})
+	if err == nil {
+		t.Fatal("expected error for unmarshalable args")
+	}
+	if !strings.Contains(err.Error(), "marshal args") {
+		t.Errorf("error = %v, want 'marshal args' context", err)
+	}
+}

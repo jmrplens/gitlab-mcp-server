@@ -182,3 +182,53 @@ func TestGenerateMilestoneReport_FullFlow(t *testing.T) {
 		t.Error("Report is empty")
 	}
 }
+
+// TestGenerateMilestoneReport_LLMError covers generate_milestone_report.go:98-100.
+func TestGenerateMilestoneReport_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	// resolveIID: ListMilestones with iids[]=5 → returns milestone with global ID 999
+	mux.HandleFunc("/api/v4/projects/42/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":999,"iid":5,"title":"v1.0","state":"active"}]`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/milestones/999", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":999,"iid":5,"title":"v1.0","state":"active"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/milestones/999/issues", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/milestones/999/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := GenerateMilestoneReport(ctx, &mcp.CallToolRequest{Session: ss}, client, GenerateMilestoneReportInput{ProjectID: "42", MilestoneIID: 5})
+	if err == nil || !strings.Contains(err.Error(), "LLM report generation") {
+		t.Errorf("error = %v, want 'LLM report generation' context", err)
+	}
+}
+
+// TestFormatMilestoneForAnalysis_OpenMRs covers
+// generate_milestone_report.go:150-152 (open MR branch in the MR loop).
+func TestFormatMilestoneForAnalysis_OpenMRs(t *testing.T) {
+	ms := milestones.Output{Title: "v2.0", State: "active", Expired: true}
+	empty := milestones.MilestoneIssuesOutput{}
+	mrs := milestones.MilestoneMergeRequestsOutput{
+		MergeRequests: []milestones.MergeRequestItem{
+			{IID: 1, Title: "feat A", State: "opened", SourceBranch: "feat-a", TargetBranch: "main"},
+			{IID: 2, Title: "feat B", State: "merged", SourceBranch: "feat-b", TargetBranch: "main"},
+		},
+	}
+	result := FormatMilestoneForAnalysis(ms, empty, mrs)
+	if !strings.Contains(result, "1 open") {
+		t.Error("missing '1 open' count for MRs")
+	}
+	if !strings.Contains(result, "1 merged") {
+		t.Error("missing '1 merged' count for MRs")
+	}
+	if !strings.Contains(result, "Expired") {
+		t.Error("missing 'Expired' field")
+	}
+}

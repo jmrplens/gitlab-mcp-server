@@ -208,3 +208,36 @@ func TestAnalyzeIssueScope_FullFlow(t *testing.T) {
 		t.Error("Analysis is empty")
 	}
 }
+
+// TestAnalyzeIssueScope_LLMError covers analyze_issue_scope.go:121-123.
+func TestAnalyzeIssueScope_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	// GraphQL returns issue context successfully.
+	mux.HandleFunc("/api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, issueContextJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := AnalyzeIssueScope(ctx, &mcp.CallToolRequest{Session: ss}, client, AnalyzeIssueScopeInput{ProjectID: "42", IssueIID: 7})
+	if err == nil || !strings.Contains(err.Error(), "LLM analysis") {
+		t.Errorf("error = %v, want 'LLM analysis' context", err)
+	}
+}
+
+// TestAnalyzeIssueScope_RESTFallback_IssueError covers analyze_issue_scope.go:71-74.
+func TestAnalyzeIssueScope_RESTFallback_IssueError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"internal error"}`)
+	}))
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := AnalyzeIssueScope(ctx, &mcp.CallToolRequest{Session: ss}, client, AnalyzeIssueScopeInput{ProjectID: "42", IssueIID: 7})
+	if err == nil || !strings.Contains(err.Error(), "fetching issue") {
+		t.Errorf("error = %v, want 'fetching issue' context", err)
+	}
+}

@@ -142,3 +142,20 @@ func TestFindTechnicalDebt_FullFlow(t *testing.T) {
 		t.Error("Analysis is empty")
 	}
 }
+
+// TestFindTechnicalDebt_LLMError covers find_technical_debt.go:89-91.
+func TestFindTechnicalDebt_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/-/search", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"basename":"main","data":"// TODO: fix this","path":"main.go","filename":"main.go","ref":"main","startline":1,"project_id":42}]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := FindTechnicalDebt(ctx, &mcp.CallToolRequest{Session: ss}, client, FindTechnicalDebtInput{ProjectID: "42"})
+	if err == nil || !strings.Contains(err.Error(), "LLM analysis") {
+		t.Errorf("error = %v, want 'LLM analysis' context", err)
+	}
+}

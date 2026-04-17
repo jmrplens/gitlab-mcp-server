@@ -283,3 +283,20 @@ func TestGenerateReleaseNotes_DefaultTo(t *testing.T) {
 		t.Errorf("out.To = %q, want %q", out.To, "HEAD")
 	}
 }
+
+// TestGenerateReleaseNotes_LLMError covers generate_release_notes.go:100-102.
+func TestGenerateReleaseNotes_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/repository/compare", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"commits":[{"id":"abc","title":"feat: add","message":"feat: add something","author_name":"Alice"}],"diffs":[]}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := GenerateReleaseNotes(ctx, &mcp.CallToolRequest{Session: ss}, client, GenerateReleaseNotesInput{ProjectID: "42", From: "v1.0", To: "v2.0"})
+	if err == nil || !strings.Contains(err.Error(), "LLM release notes generation") {
+		t.Errorf("error = %v, want 'LLM release notes generation' context", err)
+	}
+}

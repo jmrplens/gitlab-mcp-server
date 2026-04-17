@@ -274,3 +274,45 @@ func TestFormatAnalyzeMRChangesMarkdown_Truncated(t *testing.T) {
 		t.Error("missing truncation warning")
 	}
 }
+
+// TestAnalyzeMRChanges_LLMError covers analyze_mr_changes.go:92-94.
+func TestAnalyzeMRChanges_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/diffs", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"iid":1,"title":"feat"}`)
+	})
+	mux.HandleFunc("/api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, mrContextJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := AnalyzeMRChanges(ctx, &mcp.CallToolRequest{Session: ss}, client, AnalyzeMRChangesInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "LLM analysis") {
+		t.Errorf("error = %v, want 'LLM analysis' context", err)
+	}
+}
+
+// TestAnalyzeMRChanges_RESTFallback_MRGetError covers analyze_mr_changes.go:82-84.
+func TestAnalyzeMRChanges_RESTFallback_MRGetError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/diffs", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	// No GraphQL handler → BuildMRContext fails.
+	// No MR GET handler → mergerequests.Get fails with 404.
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := AnalyzeMRChanges(ctx, &mcp.CallToolRequest{Session: ss}, client, AnalyzeMRChangesInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "fetching MR") {
+		t.Errorf("error = %v, want 'fetching MR' context", err)
+	}
+}

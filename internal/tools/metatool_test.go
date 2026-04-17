@@ -6,10 +6,14 @@ package tools
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -190,5 +194,80 @@ func TestValidActions_StringSorted(t *testing.T) {
 	expected := "create, delete, list"
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+// TestWrapUpdaterAction_UnmarshalError covers register_mcp_meta.go:58-60
+// (unmarshalParams returns error for invalid params).
+func TestWrapUpdaterAction_UnmarshalError(t *testing.T) {
+	type testInput struct {
+		Value string `json:"value"`
+	}
+	type testOutput struct {
+		Result string `json:"result"`
+	}
+
+	fn := func(_ context.Context, _ *autoupdate.Updater, _ testInput) (testOutput, error) {
+		t.Fatal("wrapped function should not be called on unmarshal error")
+		return testOutput{}, nil
+	}
+
+	action := wrapUpdaterAction(nil, fn)
+	// Pass type-incompatible params: array where string is expected.
+	_, err := action(context.Background(), map[string]any{"value": []int{1, 2, 3}})
+	if err == nil {
+		t.Fatal("expected error for params with type-incompatible value")
+	}
+	if !strings.Contains(err.Error(), "invalid params") {
+		t.Errorf("error = %v, want 'invalid params' context", err)
+	}
+}
+
+// TestPackageMeta_UnmarshalErrors covers register_meta.go:2200-2240
+// (unmarshalParams error branches in 6 inline package meta-tool action closures).
+func TestPackageMeta_UnmarshalErrors(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{}`)
+	}))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterAllMeta(server, client, false)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	// Each action receives type-incompatible params to trigger unmarshalParams error.
+	actions := []string{
+		"publish", "download", "delete", "file_delete",
+		"publish_and_link", "publish_directory",
+	}
+	for _, action := range actions {
+		t.Run(action, func(t *testing.T) {
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name: "gitlab_package",
+				Arguments: map[string]any{
+					"action": action,
+					"params": map[string]any{
+						"project_id": []int{1, 2, 3},
+					},
+				},
+			})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+			if !result.IsError {
+				t.Error("expected IsError=true for invalid params")
+			}
+		})
 	}
 }

@@ -254,3 +254,41 @@ func TestFormatSummarizeIssueMarkdown(t *testing.T) {
 		}
 	}
 }
+
+// TestSummarizeIssue_LLMError covers summarize_issue.go:99-101.
+func TestSummarizeIssue_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, issueContextJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := SummarizeIssue(ctx, &mcp.CallToolRequest{Session: ss}, client, SummarizeIssueInput{ProjectID: "42", IssueIID: 7})
+	if err == nil || !strings.Contains(err.Error(), "LLM summary") {
+		t.Errorf("error = %v, want 'LLM summary' context", err)
+	}
+}
+
+// TestSummarizeIssue_RESTFallback_NotesError covers summarize_issue.go:90-92.
+func TestSummarizeIssue_RESTFallback_NotesError(t *testing.T) {
+	mux := http.NewServeMux()
+	// No GraphQL → fallback to REST.
+	mux.HandleFunc("/api/v4/projects/42/issues/10", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":200,"iid":10,"title":"Bug"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/issues/10/notes", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := SummarizeIssue(ctx, &mcp.CallToolRequest{Session: ss}, client, SummarizeIssueInput{ProjectID: "42", IssueIID: 10})
+	if err == nil || !strings.Contains(err.Error(), "fetching issue notes") {
+		t.Errorf("error = %v, want 'fetching issue notes' context", err)
+	}
+}

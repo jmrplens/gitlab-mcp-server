@@ -181,3 +181,55 @@ func TestSummarizeMRReview_FullFlow(t *testing.T) {
 		t.Error("Summary is empty")
 	}
 }
+
+// TestSummarizeMRReview_LLMError covers summarize_mr_review.go:108-110.
+func TestSummarizeMRReview_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, mrContextJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := SummarizeMRReview(ctx, &mcp.CallToolRequest{Session: ss}, client, SummarizeMRReviewInput{ProjectID: "42", MRIID: 42})
+	if err == nil || !strings.Contains(err.Error(), "LLM summary") {
+		t.Errorf("error = %v, want 'LLM summary' context", err)
+	}
+}
+
+// TestSummarizeMRReview_RESTFallback_MRError covers summarize_mr_review.go:72-75.
+func TestSummarizeMRReview_RESTFallback_MRError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	}))
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := SummarizeMRReview(ctx, &mcp.CallToolRequest{Session: ss}, client, SummarizeMRReviewInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "fetching MR") {
+		t.Errorf("error = %v, want 'fetching MR' context", err)
+	}
+}
+
+// TestSummarizeMRReview_RESTFallback_DiscussionsError covers summarize_mr_review.go:94-96.
+func TestSummarizeMRReview_RESTFallback_DiscussionsError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"iid":1,"title":"feat"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := SummarizeMRReview(ctx, &mcp.CallToolRequest{Session: ss}, client, SummarizeMRReviewInput{ProjectID: "42", MRIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "fetching discussions") {
+		t.Errorf("error = %v, want 'fetching discussions' context", err)
+	}
+}

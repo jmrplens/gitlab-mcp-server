@@ -634,3 +634,20 @@ func TestFormatIssueScopeNote_EmptyTimestamp(t *testing.T) {
 		t.Error("empty CreatedAt should render as 'unknown'")
 	}
 }
+
+// TestAnalyzeCIConfig_LLMError covers analyze_ci_config.go:75-77.
+func TestAnalyzeCIConfig_LLMError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"x","includes":[]}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	ctx := context.Background()
+	_, ss, cleanup := setupFailingSamplingSession(t, ctx)
+	defer cleanup()
+
+	_, err := AnalyzeCIConfig(ctx, &mcp.CallToolRequest{Session: ss}, client, AnalyzeCIConfigInput{ProjectID: "42"})
+	if err == nil || !strings.Contains(err.Error(), "LLM analysis") {
+		t.Errorf("error = %v, want 'LLM analysis' context", err)
+	}
+}

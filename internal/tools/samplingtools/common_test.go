@@ -5,6 +5,7 @@ package samplingtools
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -75,4 +76,37 @@ func TestSamplingUnsupportedResult(t *testing.T) {
 	if !out.IsError {
 		t.Error("expected IsError = true")
 	}
+}
+
+// setupFailingSamplingSession creates a connected MCP server+client pair where
+// the client's CreateMessageHandler always returns an error, simulating an
+// unavailable LLM backend.
+func setupFailingSamplingSession(t *testing.T, ctx context.Context) (*mcp.Server, *mcp.ServerSession, func()) {
+	t.Helper()
+
+	impl := &mcp.Implementation{Name: "test-fail", Version: "1.0.0"}
+	server := mcp.NewServer(impl, nil)
+	client := mcp.NewClient(impl, &mcp.ClientOptions{
+		CreateMessageHandler: func(_ context.Context, _ *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+			return nil, errors.New("LLM unavailable")
+		},
+	})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		ss.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+
+	cleanup := func() {
+		cs.Close()
+		ss.Close()
+	}
+	return server, ss, cleanup
 }

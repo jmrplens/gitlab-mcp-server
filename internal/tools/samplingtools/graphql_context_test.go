@@ -362,3 +362,175 @@ func TestExtractLabels(t *testing.T) {
 		t.Errorf("extractLabels(empty) = %v, want nil", empty)
 	}
 }
+
+// TestFormatMRContext_PendingApproval covers graphql_context.go:98-101
+// (approved=false with approvedBy users → Pending status).
+func TestFormatMRContext_PendingApproval(t *testing.T) {
+	pendingJSON := `{
+  "project": {
+    "mergeRequest": {
+      "iid": "42", "title": "feat", "description": "d", "state": "opened",
+      "sourceBranch": "feature", "targetBranch": "main",
+      "mergeStatusEnum": "CAN_BE_MERGED",
+      "diffStatsSummary": {"additions": 10, "deletions": 5, "fileCount": 2},
+      "approvedBy": {"nodes": [{"username": "alice"}]},
+      "approved": false, "approvalsRequired": 2,
+      "headPipeline": null,
+      "discussions": {"nodes": []}
+    }
+  }
+}`
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"mergeRequest": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, pendingJSON)
+		},
+	}))
+
+	result, err := BuildMRContext(context.Background(), client, "g/p", 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result.Content, "Pending") {
+		t.Error("content missing 'Pending' approval status")
+	}
+}
+
+// TestWriteDiscussions_EmptyTimestamp covers graphql_context.go:121-123
+// (note with empty CreatedAt → "unknown") and graphql_context.go:135-137
+// (resolvable=true, resolved=false → [UNRESOLVED]).
+func TestWriteDiscussions_EdgeCases(t *testing.T) {
+	var b strings.Builder
+	discussions := []gqlDiscussion{
+		{
+			Notes: gqlNoteNodes{Nodes: []gqlNote{
+				{Author: gqlUsername{Username: "alice"}, Body: "looks wrong", System: false, Resolvable: true, Resolved: false, CreatedAt: ""},
+			}},
+		},
+	}
+	writeDiscussions(&b, discussions)
+	out := b.String()
+	if !strings.Contains(out, "unknown") {
+		t.Error("missing 'unknown' for empty CreatedAt")
+	}
+	if !strings.Contains(out, "[UNRESOLVED]") {
+		t.Error("missing '[UNRESOLVED]' for resolvable but not resolved note")
+	}
+}
+
+// TestFormatIssueContext_EmptyTimeTracking covers graphql_context.go:224-226
+// (empty HumanTimeEstimate → "not set") and graphql_context.go:229-231
+// (empty HumanTotalTimeSpent → "none recorded").
+func TestFormatIssueContext_EmptyTimeTracking(t *testing.T) {
+	noTimeJSON := `{
+  "project": {
+    "issue": {
+      "iid": "5", "title": "Test", "description": "desc", "state": "opened",
+      "author": {"username": "alice"}, "createdAt": "2026-01-01T00:00:00Z",
+      "dueDate": "", "weight": 0,
+      "labels": {"nodes": []}, "assignees": {"nodes": []},
+      "milestone": null,
+      "humanTimeEstimate": "", "humanTotalTimeSpent": "",
+      "participants": {"nodes": []},
+      "notes": {"nodes": []},
+      "relatedMergeRequests": {"nodes": []}
+    }
+  }
+}`
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"issue": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, noTimeJSON)
+		},
+	}))
+
+	result, err := BuildIssueContext(context.Background(), client, "g/p", 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result.Content, "not set") {
+		t.Error("missing 'not set' for empty HumanTimeEstimate")
+	}
+	if !strings.Contains(result.Content, "none recorded") {
+		t.Error("missing 'none recorded' for empty HumanTotalTimeSpent")
+	}
+}
+
+// TestWriteIssueNotes_EmptyTimestamp covers graphql_context.go:266-268
+// (no user notes → early return) and graphql_context.go:273-275
+// (note with empty CreatedAt → "unknown").
+func TestWriteIssueNotes_EdgeCases(t *testing.T) {
+	// Case 1: all system notes → early return.
+	var b1 strings.Builder
+	writeIssueNotes(&b1, []gqlNote{
+		{System: true, Body: "changed title"},
+	})
+	if b1.Len() > 0 {
+		t.Error("expected empty output for all-system notes")
+	}
+
+	// Case 2: user note with empty CreatedAt → "unknown".
+	var b2 strings.Builder
+	writeIssueNotes(&b2, []gqlNote{
+		{Author: gqlUsername{Username: "bob"}, Body: "hello", System: false, Internal: false, CreatedAt: ""},
+	})
+	out := b2.String()
+	if !strings.Contains(out, "unknown") {
+		t.Error("missing 'unknown' for empty CreatedAt")
+	}
+	if !strings.Contains(out, "bob") {
+		t.Error("missing author 'bob'")
+	}
+}
+
+// TestBuildPipelineContext_NilDuration covers graphql_context.go:336-338
+// (pipeline with nil Duration → skip Duration line).
+func TestBuildPipelineContext_NilDuration(t *testing.T) {
+	noDurationJSON := `{
+  "project": {
+    "pipeline": {
+      "iid": "10", "status": "SUCCESS", "ref": "main", "sha": "abc",
+      "source": "push", "yamlErrors": "",
+      "stages": {"nodes": []}
+    }
+  }
+}`
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"pipeline": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, noDurationJSON)
+		},
+	}))
+
+	result, err := BuildPipelineContext(context.Background(), client, "g/p", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(result.Content, "Duration") {
+		t.Error("Duration should be absent when nil")
+	}
+}
+
+// TestBuildPipelineContext_YamlErrors covers graphql_context.go:336-338
+// (pipeline with non-empty YamlErrors → adds YAML errors line).
+func TestBuildPipelineContext_YamlErrors(t *testing.T) {
+	yamlErrJSON := `{
+  "project": {
+    "pipeline": {
+      "iid": "10", "status": "FAILED", "ref": "main", "sha": "abc",
+      "duration": 120.0, "source": "push", "yamlErrors": "invalid YAML at line 50",
+      "stages": {"nodes": []}
+    }
+  }
+}`
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"pipeline": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, yamlErrJSON)
+		},
+	}))
+
+	result, err := BuildPipelineContext(context.Background(), client, "g/p", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result.Content, "YAML Errors") {
+		t.Error("content missing YAML Errors for non-empty yamlErrors field")
+	}
+}
