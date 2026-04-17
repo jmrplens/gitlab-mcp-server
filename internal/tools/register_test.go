@@ -114,7 +114,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 44 base, 59 with enterprise.
+// the expected number of meta-tools: 42 base, 57 with enterprise.
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -126,7 +126,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 44
+		const expectedTools = 42
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -141,7 +141,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 59
+		const expectedTools = 57
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -1242,8 +1242,6 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		"gitlab_review_mr_security":          true,
 		"gitlab_runner":                      true,
 		"gitlab_runner_controller":           true,
-		"gitlab_runner_controller_scope":     true,
-		"gitlab_runner_controller_token":     true,
 		"gitlab_search":                      true,
 		"gitlab_security_finding":            true,
 		"gitlab_snippet":                     true,

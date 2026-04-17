@@ -144,8 +144,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
@@ -236,8 +234,6 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	search.RegisterMeta(server, client)
 	runners.RegisterMeta(server, client)
 	runnercontrollers.RegisterMeta(server, client)
-	runnercontrollertokens.RegisterMeta(server, client)
-	runnercontrollerscopes.RegisterMeta(server, client)
 	samplingtools.RegisterTools(server, client)
 
 	// Standalone utility tools (not consolidated into meta-tools)
@@ -374,13 +370,13 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"repository_storage_get":    wrapAction(client, projects.GetRepositoryStorage),
 		"create_for_user":           wrapAction(client, projects.CreateForUser),
 		// Remote mirrors (Free tier — verified via GitLab docs)
-		"mirror_list":            wrapAction(client, projectmirrors.List),
-		"mirror_get":             wrapAction(client, projectmirrors.Get),
-		"mirror_get_public_key":  wrapAction(client, projectmirrors.GetPublicKey),
-		"mirror_add":             wrapAction(client, projectmirrors.Add),
-		"mirror_edit":            wrapAction(client, projectmirrors.Edit),
-		"mirror_delete":          wrapVoidAction(client, projectmirrors.Delete),
-		"mirror_force_push":      wrapVoidAction(client, projectmirrors.ForcePushUpdate),
+		"mirror_list":           wrapAction(client, projectmirrors.List),
+		"mirror_get":            wrapAction(client, projectmirrors.Get),
+		"mirror_get_public_key": wrapAction(client, projectmirrors.GetPublicKey),
+		"mirror_add":            wrapAction(client, projectmirrors.Add),
+		"mirror_edit":           wrapAction(client, projectmirrors.Edit),
+		"mirror_delete":         wrapVoidAction(client, projectmirrors.Delete),
+		"mirror_force_push":     wrapVoidAction(client, projectmirrors.ForcePushUpdate),
 	}
 
 	if enterprise {

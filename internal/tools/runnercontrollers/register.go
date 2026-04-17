@@ -10,6 +10,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -87,27 +89,55 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	})
 }
 
-// RegisterMeta registers the gitlab_runner_controller meta-tool.
+// RegisterMeta registers the gitlab_runner_controller meta-tool, consolidating
+// controller CRUD, scope management, and token management into a single tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := map[string]toolutil.ActionFunc{
+		// Controller CRUD
 		"list":   toolutil.WrapAction(client, List),
 		"get":    toolutil.WrapAction(client, Get),
 		"create": toolutil.WrapAction(client, Create),
 		"update": toolutil.WrapAction(client, Update),
 		"delete": toolutil.WrapVoidAction(client, Delete),
+		// Scope management
+		"scope_list":            toolutil.WrapAction(client, runnercontrollerscopes.List),
+		"scope_add_instance":    toolutil.WrapAction(client, runnercontrollerscopes.AddInstanceScope),
+		"scope_remove_instance": toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
+		"scope_add_runner":      toolutil.WrapAction(client, runnercontrollerscopes.AddRunnerScope),
+		"scope_remove_runner":   toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
+		// Token management
+		"token_list":   toolutil.WrapAction(client, runnercontrollertokens.List),
+		"token_get":    toolutil.WrapAction(client, runnercontrollertokens.Get),
+		"token_create": toolutil.WrapAction(client, runnercontrollertokens.Create),
+		"token_rotate": toolutil.WrapAction(client, runnercontrollertokens.Rotate),
+		"token_revoke": toolutil.WrapVoidAction(client, runnercontrollertokens.Revoke),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_runner_controller",
 		Title: toolutil.TitleFromName("gitlab_runner_controller"),
-		Description: `Manage GitLab runner controllers (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
+		Description: `Manage GitLab runner controllers, their scopes, and tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
+Actions (controller CRUD):
 - list: List all runner controllers. Params: page, per_page
 - get: Get runner controller details. Params: controller_id (required, int)
 - create: Register a new runner controller. Params: description, state (enabled/disabled/dry_run)
 - update: Update a runner controller. Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
-- delete: Delete a runner controller. Params: controller_id (required, int)`,
+- delete: Delete a runner controller. Params: controller_id (required, int)
+
+Actions (scope management):
+- scope_list: List all scopes for a controller. Params: controller_id (required, int)
+- scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
+- scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
+- scope_add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
+- scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
+
+Actions (token management):
+- token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
+- token_get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
+- token_create: Create a new token. Params: controller_id (required, int), description
+- token_rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
+- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)`,
 		Annotations: toolutil.MetaAnnotations,
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),
