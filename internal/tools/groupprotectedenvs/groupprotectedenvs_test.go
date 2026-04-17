@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
@@ -606,6 +608,69 @@ func TestFormatListMarkdown(t *testing.T) {
 				if !strings.Contains(got, want) {
 					t.Errorf("output missing %q\ngot:\n%s", want, got)
 				}
+			}
+		})
+	}
+}
+
+// TestRegisterTools_MCPRoundTrip verifies that all 5 group protected env
+// tools can be called successfully through the MCP transport.
+func TestRegisterTools_MCPRoundTrip(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("GET /api/v4/groups/mygroup/protected_environments", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+fullEnvJSON+`]`)
+	})
+	handler.HandleFunc("GET /api/v4/groups/mygroup/protected_environments/production", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, fullEnvJSON)
+	})
+	handler.HandleFunc("POST /api/v4/groups/mygroup/protected_environments", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, fullEnvJSON)
+	})
+	handler.HandleFunc("PUT /api/v4/groups/mygroup/protected_environments/production", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, fullEnvJSON)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/mygroup/protected_environments/production", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools := []struct {
+		name string
+		tool string
+		args map[string]any
+	}{
+		{"list", "gitlab_group_protected_environment_list", map[string]any{"group_id": "mygroup"}},
+		{"get", "gitlab_group_protected_environment_get", map[string]any{"group_id": "mygroup", "environment": "production"}},
+		{"protect", "gitlab_group_protected_environment_protect", map[string]any{"group_id": "mygroup", "name": "production", "deploy_access_levels": []any{map[string]any{"access_level": float64(40)}}}},
+		{"update", "gitlab_group_protected_environment_update", map[string]any{"group_id": "mygroup", "environment": "production"}},
+		{"unprotect", "gitlab_group_protected_environment_unprotect", map[string]any{"group_id": "mygroup", "environment": "production"}},
+	}
+	for _, tt := range tools {
+		t.Run(tt.name, func(t *testing.T) {
+			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      tt.tool,
+				Arguments: tt.args,
+			})
+			if callErr != nil {
+				t.Fatalf("CallTool(%s) error: %v", tt.tool, callErr)
+			}
+			if result.IsError {
+				t.Fatalf("CallTool(%s) returned IsError=true", tt.tool)
 			}
 		})
 	}

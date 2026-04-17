@@ -8,6 +8,7 @@ package elicitation
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -1335,6 +1336,88 @@ func TestSelectOneInt_NaN(t *testing.T) {
 	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for non-numeric selection")
+	}
+}
+
+// TestSelectOneInt_Inf verifies that SelectOneInt rejects math.Inf values.
+func TestSelectOneInt_Inf(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"selection": math.Inf(1)},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
+	if err == nil {
+		t.Error("expected error for Inf selection")
+	}
+}
+
+// TestSelectOne_FloatInsteadOfString verifies that SelectOne returns an error
+// when the response field is a float instead of a string.
+func TestSelectOne_FloatInsteadOfString(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"selection": 42.0},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.SelectOne(ctx, "Pick", []string{"a", "b"})
+	if err == nil {
+		t.Error("expected error for non-string selection")
+	}
+}
+
+// TestSelectMulti_StringInsteadOfArray verifies that SelectMulti returns an
+// error when the response field is a string instead of an array.
+func TestSelectMulti_StringInsteadOfArray(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"selections": "not-an-array"},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.SelectMulti(ctx, "Pick", []string{"a", "b"}, 0, 0)
+	if err == nil {
+		t.Error("expected error for non-array selections")
+	}
+}
+
+// TestConfirmAction_DeclineAction verifies that ConfirmAction returns a
+// non-nil result when the elicitation is declined.
+// Note: ConfirmAction uses FromRequest internally which requires a full
+// MCP server session with elicitation capability. Testing this function
+// at the unit level is not practical without heavy infrastructure.
+// Coverage for the Confirm/Decline paths is provided by TestConfirm_* tests.
+
+// TestPromptText_NonStringField verifies that PromptText returns an error
+// when the response field is not a string.
+func TestPromptText_NonStringField(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{
+			Action:  "accept",
+			Content: map[string]any{"value": 123.0},
+		}, nil
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	_, err := c.PromptText(ctx, "Enter text", "")
+	if err == nil {
+		t.Error("expected error for non-string response")
 	}
 }
 

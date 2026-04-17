@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -5513,5 +5514,94 @@ func TestFormatRepositoryStorageMarkdown_NonEmpty(t *testing.T) {
 	}
 	if !strings.Contains(md, "default") {
 		t.Error("markdown missing repository storage name")
+	}
+}
+
+// TestCreateForUser_AllOptionalFields verifies that every optional branch
+// in CreateForUser is exercised: path, namespace, description, visibility,
+// readme init, default branch, topics, and all four access-level toggles.
+func TestCreateForUser_AllOptionalFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjectForUser5 {
+			body, _ := io.ReadAll(r.Body)
+			s := string(body)
+			for _, want := range []string{
+				`"path":"custom-path"`,
+				`"description":"desc"`,
+				`"default_branch":"develop"`,
+			} {
+				if !strings.Contains(s, want) {
+					t.Errorf("request body missing %s, got %s", want, s)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusCreated, extProjectJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	bTrue := true
+	bFalse := false
+	out, err := CreateForUser(context.Background(), client, CreateForUserInput{
+		UserID:               5,
+		Name:                 testRepoName,
+		Path:                 "custom-path",
+		NamespaceID:          10,
+		Description:          "desc",
+		Visibility:           "public",
+		InitializeWithReadme: true,
+		DefaultBranch:        "develop",
+		Topics:               []string{"go", "mcp"},
+		IssuesEnabled:        &bTrue,
+		MergeRequestsEnabled: &bFalse,
+		WikiEnabled:          &bTrue,
+		JobsEnabled:          &bFalse,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 42 {
+		t.Errorf("ID = %d, want 42", out.ID)
+	}
+}
+
+// TestDownloadAvatar_ContextCancelled verifies error propagation on cancelled context.
+func TestDownloadAvatar_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := DownloadAvatar(ctx, client, DownloadAvatarInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestDeleteCustomHeader_ContextCancelled verifies error propagation on cancelled context.
+func TestDeleteCustomHeader_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := DeleteCustomHeader(ctx, client, DeleteCustomHeaderInput{ProjectID: "42", HookID: 1, Key: "X-Custom"})
+	if err == nil {
+		t.Fatal(errExpectedCtxErr)
+	}
+}
+
+// TestBoolToAccessLevel verifies that boolToAccessLevel correctly maps
+// nil, true, and false to the expected GitLab access control values.
+func TestBoolToAccessLevel(t *testing.T) {
+	if got := boolToAccessLevel(nil); got != nil {
+		t.Errorf("nil → %v, want nil", got)
+	}
+	bTrue := true
+	if got := boolToAccessLevel(&bTrue); got == nil || *got != gl.EnabledAccessControl {
+		t.Errorf("true → %v, want EnabledAccessControl", got)
+	}
+	bFalse := false
+	if got := boolToAccessLevel(&bFalse); got == nil || *got != gl.DisabledAccessControl {
+		t.Errorf("false → %v, want DisabledAccessControl", got)
 	}
 }

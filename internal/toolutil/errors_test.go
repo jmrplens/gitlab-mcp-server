@@ -688,3 +688,23 @@ func TestWrapErrWithHint_NoGitLabMessage(t *testing.T) {
 		t.Errorf("expected hint even without GitLab message, got: %s", msg)
 	}
 }
+
+// TestIsHTTPStatus_ErrNotFound verifies that IsHTTPStatus recognizes the
+// sentinel gl.ErrNotFound for code 404 without requiring a full ErrorResponse.
+func TestIsHTTPStatus_ErrNotFound(t *testing.T) {
+	if !IsHTTPStatus(gl.ErrNotFound, http.StatusNotFound) {
+		t.Error("expected true for gl.ErrNotFound with 404")
+	}
+	if IsHTTPStatus(gl.ErrNotFound, http.StatusForbidden) {
+		t.Error("expected false for gl.ErrNotFound with 403")
+	}
+}
+
+// TestIsHTTPStatus_WrappedErrNotFound verifies that a wrapped gl.ErrNotFound
+// is still recognized via errors.Is.
+func TestIsHTTPStatus_WrappedErrNotFound(t *testing.T) {
+	wrapped := fmt.Errorf("some context: %w", gl.ErrNotFound)
+	if !IsHTTPStatus(wrapped, http.StatusNotFound) {
+		t.Error("expected true for wrapped gl.ErrNotFound with 404")
+	}
+}

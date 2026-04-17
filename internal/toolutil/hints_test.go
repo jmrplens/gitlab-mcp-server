@@ -90,6 +90,26 @@ func TestExtractHints_EmptyString(t *testing.T) {
 	}
 }
 
+// TestExtractHints_EmptyLinesBetweenHints verifies that ExtractHints correctly
+// skips blank lines interspersed between hint lines.
+func TestExtractHints_EmptyLinesBetweenHints(t *testing.T) {
+	md := "## x\n---\n💡 **Next steps:**\n- hint1\n\n- hint2\n"
+	hints := ExtractHints(md)
+	if len(hints) != 2 {
+		t.Fatalf("expected 2 hints, got %d: %v", len(hints), hints)
+	}
+}
+
+// TestExtractHints_SectionWithNoItems verifies that ExtractHints returns nil
+// when the hints marker exists but no "- " lines follow.
+func TestExtractHints_SectionWithNoItems(t *testing.T) {
+	md := "---\n💡 **Next steps:**\nSome paragraph instead\n"
+	hints := ExtractHints(md)
+	if hints != nil {
+		t.Errorf("expected nil for section with no items, got %v", hints)
+	}
+}
+
 // TestExtractHints_RoundTrip verifies that hints written by WriteHints can
 // be extracted back by ExtractHints, forming a round-trip.
 func TestExtractHints_RoundTrip(t *testing.T) {
@@ -192,6 +212,22 @@ func TestPopulateHints_NoTextContent(t *testing.T) {
 
 	if out.NextSteps != nil {
 		t.Errorf("expected nil NextSteps, got %v", out.NextSteps)
+	}
+}
+
+// TestPopulateHints_MixedContent verifies that PopulateHints skips non-TextContent
+// items (e.g. ImageContent) and finds hints in the first TextContent.
+func TestPopulateHints_MixedContent(t *testing.T) {
+	result := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.ImageContent{Data: []byte("abc"), MIMEType: "image/png"},
+			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- act\n"},
+		},
+	}
+	out := &hintTestOutput{Name: "mixed"}
+	PopulateHints(result, out)
+	if len(out.NextSteps) != 1 || out.NextSteps[0] != "act" {
+		t.Errorf("expected [act], got %v", out.NextSteps)
 	}
 }
 

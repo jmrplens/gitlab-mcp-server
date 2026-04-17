@@ -521,3 +521,71 @@ func TestMakeMetaHandler_EnrichesStructuredContent(t *testing.T) {
 		t.Errorf("next_steps = %v", m["next_steps"])
 	}
 }
+
+// TestEnrichWithHints_NonObjectJSON verifies that enrichWithHints returns
+// the result unchanged when it serializes to a non-object JSON value
+// (e.g. a string or array).
+func TestEnrichWithHints_NonObjectJSON(t *testing.T) {
+	callResult := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- hint\n"},
+		},
+	}
+	original := "just a string"
+	enriched := enrichWithHints(original, callResult)
+	s, ok := enriched.(string)
+	if !ok || s != "just a string" {
+		t.Errorf("expected unchanged string, got %T: %v", enriched, enriched)
+	}
+}
+
+// TestEnrichWithHints_EmptyObject verifies that enrichWithHints correctly
+// handles an empty JSON object (only "{}") by producing valid JSON with
+// next_steps as the only field.
+func TestEnrichWithHints_EmptyObject(t *testing.T) {
+	callResult := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- do thing\n"},
+		},
+	}
+	type empty struct{}
+	enriched := enrichWithHints(empty{}, callResult)
+	raw, ok := enriched.(json.RawMessage)
+	if !ok {
+		t.Fatalf("expected json.RawMessage, got %T", enriched)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("invalid JSON: %v — raw: %s", err, string(raw))
+	}
+	stepsAny, ok := m["next_steps"].([]any)
+	if !ok || len(stepsAny) != 1 || stepsAny[0] != "do thing" {
+		t.Errorf("next_steps = %v", m["next_steps"])
+	}
+}
+
+// TestWrapActionWithRequest_UnmarshalError verifies that WrapActionWithRequest
+// returns an error when params cannot be unmarshalled into the typed input.
+func TestWrapActionWithRequest_UnmarshalError(t *testing.T) {
+	fn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, in testInput) (testOutput, error) {
+		return testOutput{Result: "should not reach"}, nil
+	}
+	action := WrapActionWithRequest(nil, fn)
+	_, err := action(context.Background(), map[string]any{"name": 12345})
+	if err == nil {
+		t.Fatal("expected error for invalid params, got nil")
+	}
+}
+
+// TestDefaultFormatResult_Unmarshalable verifies that defaultFormatResult
+// falls back to fmt.Sprintf for types that cannot be JSON-marshalled.
+func TestDefaultFormatResult_Unmarshalable(t *testing.T) {
+	got := defaultFormatResult(func() {})
+	tc, ok := got.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+	if tc.Text == "" {
+		t.Error("expected non-empty fallback text")
+	}
+}
