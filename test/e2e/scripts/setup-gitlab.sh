@@ -74,20 +74,29 @@ else
     echo "    User created (ID: ${USER_ID})"
 fi
 
-# 3. Create Personal Access Token for test user
+# 3. Create Personal Access Token for test user (with retry for timing issues)
 echo "  [3/4] Creating Personal Access Token..."
-TOKEN_RESPONSE=$(curl -sf "${GITLAB_URL}/api/v4/users/${USER_ID}/personal_access_tokens" \
-    -H "Authorization: Bearer ${ROOT_TOKEN}" \
-    -d "name=e2e-token" \
-    -d "scopes[]=api" \
-    -d "scopes[]=read_user" \
-    -d "scopes[]=read_repository" \
-    -d "scopes[]=write_repository")
+PAT=""
+for attempt in 1 2 3; do
+    TOKEN_RESPONSE=$(curl -sf "${GITLAB_URL}/api/v4/users/${USER_ID}/personal_access_tokens" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        -d "name=e2e-token" \
+        -d "scopes[]=api" \
+        -d "scopes[]=read_user" \
+        -d "scopes[]=read_repository" \
+        -d "scopes[]=write_repository" 2>/dev/null || true)
 
-PAT=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+    PAT=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)
+
+    if [ -n "$PAT" ]; then
+        break
+    fi
+    echo "    Attempt ${attempt}/3 failed, retrying in 3s..."
+    sleep 3
+done
 
 if [ -z "$PAT" ]; then
-    echo "ERROR: Failed to create Personal Access Token"
+    echo "ERROR: Failed to create Personal Access Token after 3 attempts"
     exit 1
 fi
 echo "    PAT created successfully"
