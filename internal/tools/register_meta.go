@@ -388,7 +388,9 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		routes["security_settings_update"] = wrapAction(client, securitysettings.UpdateProject)
 	}
 
-	desc := `Manage GitLab projects, members, labels, milestones, webhooks, badges, boards, integrations, and Pages. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	desc := `Create, list, get, update, delete, fork, star, archive, and transfer GitLab projects. Also manages project members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export.
+Valid actions: ` + validActionsString(routes) + `
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Project CRUD:
 - create: Create a new project. Params: name (required), namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics ([]string), merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), only_allow_merge_if_pipeline_succeeds, only_allow_merge_if_all_discussions_are_resolved, issues_enabled (bool), merge_requests_enabled (bool), wiki_enabled (bool), jobs_enabled (bool), lfs_enabled (bool), request_access_enabled (bool), ci_config_path, allow_merge_on_skipped_pipeline (bool), remove_source_branch_after_merge (bool), autoclose_referenced_issues (bool)
@@ -577,7 +579,9 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"update_protected": wrapAction(client, branches.ProtectedUpdate),
 	}
 
-	addMetaTool(server, "gitlab_branch", `Manage Git branches in GitLab projects. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_branch", `Create, list, get, delete, and protect Git branches in GitLab repositories.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a new branch from a ref. Params: project_id (required), branch_name (required), ref (required, branch/tag/SHA)
@@ -608,7 +612,9 @@ func registerTagMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"unprotect":      wrapVoidAction(client, tags.UnprotectTag),
 	}
 
-	addMetaTool(server, "gitlab_tag", `Manage Git tags and protected tags in GitLab projects. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_tag", `Create, list, get, delete, and protect Git tags in GitLab repositories. Verify tag GPG signatures.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a tag from a ref. Params: project_id (required), tag_name (required), ref (required, branch/tag/SHA), message (annotation)
@@ -641,7 +647,9 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"link_delete":       wrapAction(client, releaselinks.Delete),
 	}
 
-	addMetaTool(server, "gitlab_release", `Manage GitLab releases and their asset links. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_release", `Create, list, get, update, and delete GitLab releases and release asset links (binaries, downloads).
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a release for an existing tag. Params: project_id (required), tag_name (required), name, description (Markdown), released_at (ISO 8601)
@@ -725,7 +733,9 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"event_mr_state_get":               wrapAction(client, resourceevents.GetMRStateEvent),
 	}
 
-	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_merge_request", `Create, list, get, update, merge, approve, rebase, and delete GitLab merge requests. Also manages MR approvals, approval rules, approval settings, time tracking, subscriptions, context commits, award emoji, and resource events.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a merge request. Params: project_id (required), source_branch (required), target_branch (required — if not specified by the user, retrieve the project default branch via action 'get' on gitlab_project and use its default_branch value; do NOT assume 'main'), title (required), description, assignee_id (single user ID), assignee_ids (multiple user IDs), reviewer_ids, labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), allow_collaboration (bool), target_project_id (for fork MRs)
@@ -816,7 +826,9 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"diff_version_get":       wrapAction(client, mrchanges.GetDiffVersion),
 	}
 
-	addMetaTool(server, "gitlab_mr_review", `Review GitLab merge requests: notes, discussions, draft notes, file changes, and diff versions. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes (comments), threaded discussions, code changes/diffs, draft notes, and diff versions.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 IMPORTANT — Batch review workflow: When performing a code review with multiple comments, use draft_note_create (with position for inline comments, or in_reply_to_discussion_id for replies to existing threads) for EACH comment, then call draft_note_publish_all ONCE at the end. This batches all comments and replies into a single notification instead of spamming reviewers with one notification per comment. Only use discussion_create for standalone questions that need immediate visibility.
 
@@ -892,7 +904,9 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"file_history":                  wrapAction(client, commits.List),
 	}
 
-	addMetaTool(server, "gitlab_repository", `Interact with GitLab repository content: tree, compare, blobs, contributors, archives, changelogs, commits, and files. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - tree: List files and directories at a path and ref. Params: project_id (required), path, ref, recursive (bool), page, per_page
@@ -1094,7 +1108,9 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["security_settings_update"] = wrapAction(client, securitysettings.UpdateGroup)
 	}
 
-	desc := `Manage GitLab groups and their members. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	desc := `Create, list, get, update, delete, and manage GitLab groups and subgroups. Also manages group members, labels, milestones, webhooks, badges, boards, variables, access tokens, deploy tokens, hooks, notifications, push rules, and transfer projects.
+Valid actions: ` + validActionsString(routes) + `
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List accessible groups. Params: search, owned (bool), top_level_only (bool), page, per_page
@@ -1331,7 +1347,9 @@ func registerIssueMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["iteration_list_group"] = wrapAction(client, groupiterations.List)
 	}
 
-	desc := `Manage GitLab issues. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	desc := `Create, list, get, update, close, reopen, delete, and move GitLab issues. Also manages comments (notes), discussions, linked issues, time tracking, work items, award emoji, participants, statistics, and resource events.
+Valid actions: ` + validActionsString(routes) + `
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a new issue. Params: project_id (required), title (required), description, assignee_id (single user ID), assignee_ids ([]int, multiple user IDs), labels (comma-separated string), milestone_id (int), due_date (YYYY-MM-DD), confidential (bool), issue_type (issue/incident/test_case/task), weight (int), epic_id (int)
@@ -1434,7 +1452,9 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"resource_group_upcoming_jobs": wrapAction(client, resourcegroups.ListUpcomingJobs),
 	}
 
-	addMetaTool(server, "gitlab_pipeline", `Manage GitLab CI/CD pipelines. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, and delete GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List pipelines for a project. Params: project_id (required), status (success/failed/running/pending/canceled), scope (running/pending/finished/branches/tags), source (push/web/schedule/merge_request_event), ref, sha, username, page, per_page
@@ -1492,7 +1512,9 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"token_scope_remove_group":        wrapVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
-	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_job", `List, get, retry, cancel, erase, and play GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List jobs for a pipeline. Params: project_id (required), pipeline_id (required), scope, page, per_page
@@ -1613,7 +1635,9 @@ func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterpris
 		routes["list_service_accounts"] = wrapAction(client, users.ListServiceAccounts)
 	}
 
-	desc := `GitLab user, SSH keys, GPG keys, emails, impersonation tokens, service accounts, to-do, namespace, and notification operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	desc := `List, get, create, update, block, unblock, ban, deactivate, and delete GitLab users. Also manages SSH keys, GPG keys, personal access tokens, emails, impersonation tokens, activities, memberships, and user status.
+Valid actions: ` + validActionsString(routes) + `
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - current: Get information about the currently authenticated user. Params: (none required)
@@ -1712,7 +1736,9 @@ func registerWikiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"upload_attachment": wrapAction(client, wikis.UploadAttachment),
 	}
 
-	addMetaTool(server, "gitlab_wiki", `Manage GitLab project wiki pages. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_wiki", `Create, list, get, update, delete, and upload attachments to GitLab project wiki pages.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List all wiki pages in a project. Params: project_id (required), with_content (bool, include page content)
@@ -1745,7 +1771,9 @@ func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"freeze_delete":       wrapVoidAction(client, freezeperiods.Delete),
 	}
 
-	addMetaTool(server, "gitlab_environment", `Manage environments in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_environment", `Create, list, get, update, delete, and stop GitLab environments. Manage protected environments and deployment freeze periods.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List environments. Params: project_id (required), name, search, states, page, per_page
@@ -1779,7 +1807,9 @@ func registerDeploymentMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"merge_requests":    wrapAction(client, deploymentmergerequests.List),
 	}
 
-	addMetaTool(server, "gitlab_deployment", `Manage deployments in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_deployment", `List, get, create, update, approve/reject, and delete GitLab deployments. List merge requests associated with a deployment.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
@@ -1808,7 +1838,9 @@ func registerPipelineScheduleMeta(server *mcp.Server, client *gitlabclient.Clien
 		"list_triggered_pipelines": wrapAction(client, pipelineschedules.ListTriggeredPipelines),
 	}
 
-	addMetaTool(server, "gitlab_pipeline_schedule", `Manage pipeline schedules in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_pipeline_schedule", `Create, list, get, update, delete, and run GitLab pipeline schedules. Manage schedule variables and ownership.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
@@ -1845,7 +1877,9 @@ func registerCIVariableMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"instance_delete": wrapVoidAction(client, instancevariables.Delete),
 	}
 
-	addMetaTool(server, "gitlab_ci_variable", `Manage CI/CD variables in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Create, list, get, update, and delete variables at each level.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List variables. Params: project_id (required), page, per_page
@@ -1884,7 +1918,9 @@ func registerTemplateMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"project_template_get":  wrapAction(client, projecttemplates.Get),
 	}
 
-	addMetaTool(server, "gitlab_template", `GitLab CI/CD templates and configuration validation. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_template", `Browse and retrieve GitLab project templates: gitignores, CI/CD YAML, Dockerfiles, licenses, and project-specific issue/MR templates. Lint CI configuration.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - lint: Validate arbitrary YAML content in project namespace. Params: project_id (required), content (required), dry_run (bool), include_jobs (bool), ref
@@ -1990,7 +2026,9 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   wrapVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `GitLab admin and instance-level operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_admin", `GitLab instance administration: Sidekiq metrics/queues/jobs, instance settings, license, plan limits, OAuth applications, broadcast messages, system hooks, personal access tokens, appearance, system info, statistics, topics, metadata, linked Jira, alert metric images, and notification settings.
+Valid actions: `+validActionsString(routes)+`
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - topic_list: List project topics. Params: search, page, per_page
@@ -2142,8 +2180,8 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"invite_project":               wrapAction(client, invites.ProjectInvites),
 		"invite_group":                 wrapAction(client, invites.GroupInvites),
 	}
-	addMetaTool(server, "gitlab_access", `Manage GitLab access tokens, deploy tokens, deploy keys, access requests, and invitations.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: deploy keys (project and instance), deploy tokens (project and group), project access tokens, and group access tokens. CRUD, rotate, and approve/deny access requests.
+Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - token_project_list: List project access tokens. Params: project_id (required), page, per_page
@@ -2274,7 +2312,7 @@ func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"protection_rule_delete":   wrapVoidAction(client, protectedpackages.Delete),
 	}
 
-	addMetaTool(server, "gitlab_package", `Manage GitLab Generic Package Registry and Container Registry. Use 'action' to specify the operation and 'params' for action-specific parameters.
+	addMetaTool(server, "gitlab_package", `Manage GitLab package registry: list, get, and delete packages. Upload and download generic package files. Manage package protection rules.
 Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2347,8 +2385,8 @@ func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"emoji_snippet_note_create": wrapAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
 		"emoji_snippet_note_delete": wrapVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
 	}
-	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets (personal and project), snippet discussions, and snippet notes.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_snippet", `Create, list, get, update, and delete GitLab snippets (project and personal). Also manages raw content, user files, discussions, notes, and award emoji.
+Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - list: List current user's snippets. Params: page, per_page
@@ -2403,7 +2441,7 @@ func registerFeatureFlagsMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"ff_user_list_update": wrapAction(client, ffuserlists.UpdateUserList),
 		"ff_user_list_delete": wrapVoidAction(client, ffuserlists.DeleteUserList),
 	}
-	addMetaTool(server, "gitlab_feature_flags", `Manage GitLab feature flags and feature flag user lists.
+	addMetaTool(server, "gitlab_feature_flags", `Manage GitLab feature flags and feature flag user lists (named sets of user IDs).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2428,7 +2466,7 @@ func registerMergeTrainMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"get":          wrapAction(client, mergetrains.GetMergeRequestOnMergeTrain),
 		"add":          wrapAction(client, mergetrains.AddMergeRequestToMergeTrain),
 	}
-	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues for target branches).
+	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues). List, get, and add merge requests to merge trains.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2449,7 +2487,7 @@ func registerAuditEventMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list_project":  wrapAction(client, auditevents.ListProject),
 		"get_project":   wrapAction(client, auditevents.GetProject),
 	}
-	addMetaTool(server, "gitlab_audit_event", `Manage GitLab audit events (instance, group, and project level).
+	addMetaTool(server, "gitlab_audit_event", `List and get GitLab audit events at instance, group, and project levels. Track who did what and when for compliance.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2485,7 +2523,7 @@ func registerDependencyMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"export_get":      wrapAction(client, dependencies.GetExport),
 		"export_download": wrapAction(client, dependencies.DownloadExport),
 	}
-	addMetaTool(server, "gitlab_dependency", `Manage GitLab project dependencies and SBOM exports.
+	addMetaTool(server, "gitlab_dependency", `List GitLab project dependencies and create/download SBOM exports (CycloneDX).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2514,7 +2552,7 @@ func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Cl
 		"retry_project":          wrapVoidAction(client, externalstatuschecks.RetryFailedExternalStatusCheckForProjectMR),
 		"set_project_mr_status":  wrapVoidAction(client, externalstatuschecks.SetProjectMRExternalStatusCheckStatus),
 	}
-	addMetaTool(server, "gitlab_external_status_check", `Manage GitLab external status checks for merge requests and projects.
+	addMetaTool(server, "gitlab_external_status_check", `Manage GitLab external status checks for merge requests and projects. Create, list, update, delete checks and set/retry check status.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions (legacy):
@@ -2545,7 +2583,7 @@ func registerGroupSCIMMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"update": wrapVoidAction(client, groupscim.Update),
 		"delete": wrapVoidAction(client, groupscim.Delete),
 	}
-	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for a GitLab group.
+	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning (list, get, update, delete).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2566,7 +2604,7 @@ func registerMemberRoleMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create_group":    wrapAction(client, memberroles.CreateGroup),
 		"delete_group":    wrapVoidAction(client, memberroles.DeleteGroup),
 	}
-	addMetaTool(server, "gitlab_member_role", `Manage custom member roles in GitLab at instance or group level.
+	addMetaTool(server, "gitlab_member_role", `Manage custom member roles in GitLab at instance or group level. Define fine-grained permissions beyond standard access levels.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2587,7 +2625,7 @@ func registerEnterpriseUserMeta(server *mcp.Server, client *gitlabclient.Client)
 		"disable_2fa": wrapVoidAction(client, enterpriseusers.Disable2FA),
 		"delete":      wrapVoidAction(client, enterpriseusers.Delete),
 	}
-	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group.
+	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group: list, get, disable 2FA, and delete.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2604,7 +2642,7 @@ func registerAttestationMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list":     wrapAction(client, attestations.List),
 		"download": wrapAction(client, attestations.Download),
 	}
-	addMetaTool(server, "gitlab_attestation", `Manage build attestations for a GitLab project.
+	addMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for GitLab project artifacts.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2619,7 +2657,7 @@ func registerCompliancePolicyMeta(server *mcp.Server, client *gitlabclient.Clien
 		"get":    wrapAction(client, compliancepolicy.Get),
 		"update": wrapAction(client, compliancepolicy.Update),
 	}
-	addMetaTool(server, "gitlab_compliance_policy", `Manage admin compliance policy settings (CSP namespace).
+	addMetaTool(server, "gitlab_compliance_policy", `Get and update admin compliance policy settings (CSP namespace configuration).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2636,7 +2674,7 @@ func registerProjectAliasMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create": wrapAction(client, projectaliases.Create),
 		"delete": wrapVoidAction(client, projectaliases.Delete),
 	}
-	addMetaTool(server, "gitlab_project_alias", `Manage GitLab project aliases (admin, Premium/Ultimate).
+	addMetaTool(server, "gitlab_project_alias", `Manage GitLab project aliases: create short names that redirect to projects (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2659,7 +2697,7 @@ func registerGeoMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list_status": wrapAction(client, geo.ListStatus),
 		"get_status":  wrapAction(client, geo.GetStatus),
 	}
-	addMetaTool(server, "gitlab_geo", `Manage GitLab Geo replication sites (admin, Premium/Ultimate).
+	addMetaTool(server, "gitlab_geo", `Manage GitLab Geo replication sites: create, list, get, edit, delete, repair, and check status (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2679,7 +2717,7 @@ func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) 
 	routes := map[string]actionFunc{
 		"download": wrapAction(client, modelregistry.Download),
 	}
-	addMetaTool(server, "gitlab_model_registry", `Manage GitLab ML model registry (Premium/Ultimate).
+	addMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2750,7 +2788,7 @@ func registerVulnerabilityMeta(server *mcp.Server, client *gitlabclient.Client) 
 		"severity_count":            wrapAction(client, vulnerabilities.SeverityCount),
 		"pipeline_security_summary": wrapAction(client, vulnerabilities.PipelineSecuritySummary),
 	}
-	addMetaTool(server, "gitlab_vulnerability", `Manage project vulnerabilities via GraphQL API (Premium/Ultimate).
+	addMetaTool(server, "gitlab_vulnerability", `List, get, dismiss, confirm, resolve, and revert GitLab project vulnerabilities. Get severity counts and pipeline security summaries (Premium/Ultimate, GraphQL).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
@@ -2782,7 +2820,7 @@ func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list": wrapAction(client, cicatalog.List),
 		"get":  wrapAction(client, cicatalog.Get),
 	}
-	addMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources via GraphQL API (Premium/Ultimate).
+	addMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
