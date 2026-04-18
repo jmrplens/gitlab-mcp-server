@@ -147,19 +147,34 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return v.Version, nil
 }
 
-// CurrentUsername returns the username of the authenticated GitLab user.
-// It calls the /user API endpoint and returns the username field.
-// Callers should wrap ctx with context.WithTimeout to bound the network round-trip.
-func (c *Client) CurrentUsername(ctx context.Context) (string, error) {
+// CurrentUserInfo holds the identity of the authenticated GitLab user.
+type CurrentUserInfo struct {
+	UserID   int
+	Username string
+}
+
+// CurrentUser returns the identity of the authenticated GitLab user.
+// It calls the /user API endpoint and returns both the numeric ID and username.
+func (c *Client) CurrentUser(ctx context.Context) (*CurrentUserInfo, error) {
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	u, _, err := c.inner.Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {
-		return "", fmt.Errorf("fetching current user: %w", err)
+		return nil, fmt.Errorf("fetching current user: %w", err)
 	}
-	return u.Username, nil
+	return &CurrentUserInfo{UserID: int(u.ID), Username: u.Username}, nil
+}
+
+// CurrentUsername returns the username of the authenticated GitLab user.
+// Deprecated: Use [Client.CurrentUser] which returns both ID and username.
+func (c *Client) CurrentUsername(ctx context.Context) (string, error) {
+	info, err := c.CurrentUser(ctx)
+	if err != nil {
+		return "", err
+	}
+	return info.Username, nil
 }
 
 // GL returns the underlying gitlab client for use in tool handlers.

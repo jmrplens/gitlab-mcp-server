@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -337,11 +338,22 @@ func runStdio(ctx context.Context) error {
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
-		username, userErr := client.CurrentUsername(ctx)
+		userInfo, userErr := client.CurrentUser(ctx)
 		if userErr != nil {
-			slog.Warn("could not auto-detect gitlab user", "error", userErr)
+			slog.Warn("could not resolve user identity at startup", "error", userErr)
+			slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
+		} else {
+			ctx = toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
+				UserID:   strconv.Itoa(userInfo.UserID),
+				Username: userInfo.Username,
+			})
+			slog.Info("gitlab connection verified",
+				"url", cfg.GitLabURL,
+				"user", userInfo.Username,
+				"user_id", userInfo.UserID,
+				"version", gitlabVersion,
+			)
 		}
-		slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "user", username, "version", gitlabVersion)
 	}
 
 	updater := newUpdaterForTools(cfg)
