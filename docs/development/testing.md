@@ -14,10 +14,10 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,523   |
-| Unit test functions         | 8,290   |
+| Total test functions        | 8,564   |
+| Unit test functions         | 8,331   |
 | E2E test functions          | 186     |
-| cmd test functions          | 47      |
+| cmd test functions          | 81      |
 | Test files (internal/)      | 389     |
 | Tool sub-packages tested    | 162     |
 | Core packages tested        | 16      |
@@ -37,12 +37,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,194 |         73 | autoupdate, config, gitlab, oauth…   |
+| Core packages            |          1,254 |         73 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            207 |         15 | register, metatool, markdown, errors |
 | Tool sub-packages (162)  |          6,889 |        305 | Domain-specific tool handlers        |
 | E2E integration          |            186 |         82 | Full workflow against real GitLab    |
-| cmd/server               |             47 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,523** |    **476** |                                      |
+| cmd/server               |             81 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,564** |    **476** |                                      |
 
 ### Core Packages
 
@@ -50,7 +50,7 @@
 | -------------- | ----: | -------: | ------------------------------------ |
 | autoupdate     |   100 |   76.1%  | Self-update via GitLab releases      |
 | completions    |    83 |  100.0%  | Argument auto-completion             |
-| config         |    32 |   95.1%  | Configuration loading                |
+| config         |    36 |   95.7%  | Configuration loading                |
 | elicitation    |    77 |   92.1%  | MCP elicitation capability           |
 | gitlab         |    31 |  100.0%  | GitLab API client wrapper            |
 | logging        |    15 |  100.0%  | MCP logging capability               |
@@ -63,8 +63,8 @@
 | testutil       |    19 |   94.3%  | Shared test helpers                  |
 | toolutil       |   210 |   95.7%  | Shared tool utilities                |
 | wizard         |   196 |   83.0%  | Setup wizard (Web UI, TUI, CLI)      |
-| oauth          |    28 |   95.8%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,194**|        |                                      |
+| oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
+| **Subtotal**   |**1,254**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -274,7 +274,7 @@
 | -------------- | -------: |
 | autoupdate     |   76.1%  |
 | completions    |  100.0%  |
-| config         |   95.1%  |
+| config         |   95.7%  |
 | elicitation    |   92.1%  |
 | gitlab         |  100.0%  |
 | logging        |  100.0%  |

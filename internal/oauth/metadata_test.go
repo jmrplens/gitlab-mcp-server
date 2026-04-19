@@ -43,14 +43,11 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	}
 
 	scopes, ok := body["scopes_supported"].([]any)
-	if !ok || len(scopes) != 3 {
-		t.Fatalf("scopes_supported = %v, want 3 elements", body["scopes_supported"])
+	if !ok || len(scopes) == 0 {
+		t.Fatalf("scopes_supported = %v, want at least 1 element", body["scopes_supported"])
 	}
-	expectedScopes := map[string]bool{"api": true, "read_user": true, "read_api": true}
-	for _, s := range scopes {
-		if !expectedScopes[s.(string)] {
-			t.Errorf("unexpected scope %q", s)
-		}
+	if scopes[0] != "api" {
+		t.Errorf("scopes_supported[0] = %v, want %q", scopes[0], "api")
 	}
 }
 

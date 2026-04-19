@@ -641,3 +641,135 @@ func TestParseSize_NegativeValue(t *testing.T) {
 		t.Fatal("expected error for negative size")
 	}
 }
+
+// TestValidate_AuthMode verifies that validate accepts valid AUTH_MODE values
+// and rejects invalid ones.
+func TestValidate_AuthMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{name: "empty is valid", mode: "", wantErr: false},
+		{name: "legacy is valid", mode: "legacy", wantErr: false},
+		{name: "oauth is valid", mode: "oauth", wantErr: false},
+		{name: "invalid value", mode: "saml", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				GitLabURL:      "https://gitlab.example.com",
+				GitLabToken:    "test-token",
+				MaxHTTPClients: 1,
+				AuthMode:       tt.mode,
+			}
+			err := cfg.validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("validate() for AuthMode %q expected error, got nil", tt.mode)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validate() for AuthMode %q unexpected error: %v", tt.mode, err)
+			}
+		})
+	}
+}
+
+// TestValidate_OAuthCacheTTL verifies that validate enforces min/max bounds
+// on OAuthCacheTTL when it is non-zero.
+func TestValidate_OAuthCacheTTL(t *testing.T) {
+	tests := []struct {
+		name    string
+		ttl     time.Duration
+		wantErr bool
+	}{
+		{name: "zero is valid (disabled)", ttl: 0, wantErr: false},
+		{name: "at minimum", ttl: MinOAuthCacheTTL, wantErr: false},
+		{name: "at maximum", ttl: MaxOAuthCacheTTL, wantErr: false},
+		{name: "between bounds", ttl: 30 * time.Minute, wantErr: false},
+		{name: "below minimum", ttl: 30 * time.Second, wantErr: true},
+		{name: "above maximum", ttl: 3 * time.Hour, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				GitLabURL:      "https://gitlab.example.com",
+				GitLabToken:    "test-token",
+				MaxHTTPClients: 1,
+				OAuthCacheTTL:  tt.ttl,
+			}
+			err := cfg.validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("validate() for OAuthCacheTTL %v expected error, got nil", tt.ttl)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validate() for OAuthCacheTTL %v unexpected error: %v", tt.ttl, err)
+			}
+		})
+	}
+}
+
+// TestLoad_AuthMode verifies AUTH_MODE env var parsing and defaults.
+func TestLoad_AuthMode(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run("default is legacy", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AuthMode != "legacy" {
+			t.Errorf("AuthMode = %q, want %q", cfg.AuthMode, "legacy")
+		}
+	})
+
+	t.Run("explicit oauth", func(t *testing.T) {
+		t.Setenv("AUTH_MODE", "oauth")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AuthMode != "oauth" {
+			t.Errorf("AuthMode = %q, want %q", cfg.AuthMode, "oauth")
+		}
+	})
+}
+
+// TestLoad_OAuthCacheTTL verifies OAUTH_CACHE_TTL env var parsing.
+func TestLoad_OAuthCacheTTL(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run(subtestDefault, func(t *testing.T) {
+		t.Setenv("OAUTH_CACHE_TTL", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.OAuthCacheTTL != DefaultOAuthCacheTTL {
+			t.Errorf("OAuthCacheTTL = %v, want %v", cfg.OAuthCacheTTL, DefaultOAuthCacheTTL)
+		}
+	})
+
+	t.Run(subtestCustom, func(t *testing.T) {
+		t.Setenv("OAUTH_CACHE_TTL", "30m")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.OAuthCacheTTL != 30*time.Minute {
+			t.Errorf("OAuthCacheTTL = %v, want 30m", cfg.OAuthCacheTTL)
+		}
+	})
+
+	t.Run(subtestInvalid, func(t *testing.T) {
+		t.Setenv("OAUTH_CACHE_TTL", "not-a-duration")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for invalid OAUTH_CACHE_TTL")
+		}
+	})
+}

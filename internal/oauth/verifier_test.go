@@ -357,6 +357,87 @@ func TestNewGitLabVerifier_ServerErrorWithCache(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_Forbidden verifies that a 403 response returns an
+// error wrapping auth.ErrInvalidToken.
+func TestNewGitLabVerifier_Forbidden(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	_, err := verifier(context.Background(), "forbidden-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !isErrInvalidToken(err) {
+		t.Errorf("403 error should wrap auth.ErrInvalidToken, got: %v", err)
+	}
+}
+
+// TestNewGitLabVerifier_RateLimited verifies that a 429 response returns
+// an error wrapping auth.ErrInvalidToken with rate-limit context.
+func TestNewGitLabVerifier_RateLimited(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	_, err := verifier(context.Background(), "rate-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	if err == nil {
+		t.Fatal("expected error for 429 response")
+	}
+	if !isErrInvalidToken(err) {
+		t.Errorf("429 error should wrap auth.ErrInvalidToken, got: %v", err)
+	}
+}
+
+// TestNewGitLabVerifier_UserIDZero verifies that a valid HTTP 200 response
+// with user.ID == 0 returns an error wrapping auth.ErrInvalidToken.
+func TestNewGitLabVerifier_UserIDZero(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(gitlabUserResponse{ID: 0, Username: "ghost"})
+	}))
+	defer srv.Close()
+
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	_, err := verifier(context.Background(), "zero-id-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	if err == nil {
+		t.Fatal("expected error for user ID 0")
+	}
+	if !isErrInvalidToken(err) {
+		t.Errorf("user ID 0 error should wrap auth.ErrInvalidToken, got: %v", err)
+	}
+}
+
+// TestNewGitLabVerifier_UnexpectedStatusCode verifies that an unexpected HTTP
+// status code (e.g. 418) returns an error wrapping auth.ErrInvalidToken.
+func TestNewGitLabVerifier_UnexpectedStatusCode(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	defer srv.Close()
+
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	_, err := verifier(context.Background(), "teapot-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	if err == nil {
+		t.Fatal("expected error for 418 response")
+	}
+	if !isErrInvalidToken(err) {
+		t.Errorf("unexpected status error should wrap auth.ErrInvalidToken, got: %v", err)
+	}
+}
+
 // isErrInvalidToken checks if an error wraps auth.ErrInvalidToken.
 func isErrInvalidToken(err error) bool {
 	return errors.Is(err, auth.ErrInvalidToken)

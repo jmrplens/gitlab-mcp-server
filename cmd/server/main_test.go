@@ -1485,3 +1485,307 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		t.Fatal("shutdown timeout")
 	}
 }
+
+// TestRunHTTP_InvalidAuthMode verifies that runHTTP rejects an unsupported
+// auth-mode value.
+func TestRunHTTP_InvalidAuthMode(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "https://gitlab.example.com",
+		authMode:       "saml",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid auth-mode")
+	}
+	if !strings.Contains(err.Error(), "auth-mode") {
+		t.Errorf("error should mention auth-mode, got: %v", err)
+	}
+}
+
+// TestRunHTTP_OAuthCacheTTL_BelowMin verifies that runHTTP rejects an
+// oauth-cache-ttl below the minimum allowed value.
+func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "https://gitlab.example.com",
+		authMode:       "oauth",
+		oauthCacheTTL:  10 * time.Second,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("expected error for oauth-cache-ttl below minimum")
+	}
+	if !strings.Contains(err.Error(), "oauth-cache-ttl") {
+		t.Errorf("error should mention oauth-cache-ttl, got: %v", err)
+	}
+}
+
+// TestRunHTTP_OAuthCacheTTL_AboveMax verifies that runHTTP rejects an
+// oauth-cache-ttl above the maximum allowed value.
+func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "https://gitlab.example.com",
+		authMode:       "oauth",
+		oauthCacheTTL:  5 * time.Hour,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("expected error for oauth-cache-ttl above maximum")
+	}
+	if !strings.Contains(err.Error(), "oauth-cache-ttl") {
+		t.Errorf("error should mention oauth-cache-ttl, got: %v", err)
+	}
+}
+
+// TestRunHTTP_SessionTimeoutExceedsMax verifies that runHTTP rejects a
+// session-timeout that exceeds the maximum.
+func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "https://gitlab.example.com",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: 48 * time.Hour,
+	})
+	if err == nil {
+		t.Fatal("expected error for session-timeout exceeding max")
+	}
+	if !strings.Contains(err.Error(), "session-timeout") {
+		t.Errorf("error should mention session-timeout, got: %v", err)
+	}
+}
+
+// TestRunHTTP_RevalidateIntervalExceedsMax verifies that runHTTP rejects a
+// revalidate-interval that exceeds the maximum.
+func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:          "https://gitlab.example.com",
+		maxHTTPClients:     config.DefaultMaxHTTPClients,
+		sessionTimeout:     config.DefaultSessionTimeout,
+		revalidateInterval: 48 * time.Hour,
+	})
+	if err == nil {
+		t.Fatal("expected error for revalidate-interval exceeding max")
+	}
+	if !strings.Contains(err.Error(), "revalidate-interval") {
+		t.Errorf("error should mention revalidate-interval, got: %v", err)
+	}
+}
+
+// TestRunHTTP_MissingGitLabURL verifies that runHTTP returns an error when
+// --gitlab-url is empty.
+func TestRunHTTP_MissingGitLabURL(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("expected error for empty gitlab-url")
+	}
+}
+
+// TestRunHTTP_InvalidGitLabURL verifies that runHTTP rejects a non-HTTP(S) URL.
+func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:      "ftp://gitlab.example.com",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+	})
+	if err == nil {
+		t.Fatal("expected error for non-HTTP URL")
+	}
+	if !strings.Contains(err.Error(), "scheme") {
+		t.Errorf("error should mention scheme, got: %v", err)
+	}
+}
+
+// TestHostValidationMiddleware_BlockedHost verifies that the middleware
+// returns 403 when the Host header does not match any allowed value.
+func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
+	allowed := map[string]bool{"localhost": true, "127.0.0.1": true}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := hostValidationMiddleware(allowed, inner)
+
+	req := httptest.NewRequest(http.MethodGet, "http://evil.example.com/", nil)
+	req.Host = "evil.example.com"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for blocked host, got %d", rr.Code)
+	}
+}
+
+// TestHostValidationMiddleware_AllowedHost verifies that the middleware
+// passes through when the Host header matches.
+func TestHostValidationMiddleware_AllowedHost(t *testing.T) {
+	allowed := map[string]bool{"localhost": true}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := hostValidationMiddleware(allowed, inner)
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+	req.Host = "localhost"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 for allowed host, got %d", rr.Code)
+	}
+}
+
+// TestHostValidationMiddleware_HostWithPort verifies that the middleware
+// strips the port from the Host header before checking the allow list.
+func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
+	allowed := map[string]bool{"localhost": true}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := hostValidationMiddleware(allowed, inner)
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+	req.Host = "localhost:8080"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 for allowed host with port, got %d", rr.Code)
+	}
+}
+
+// TestAutoUpdateRedactHandler_WithAttrs verifies that WithAttrs returns
+// a new handler that preserves the redact strings configuration.
+func TestAutoUpdateRedactHandler_WithAttrs(t *testing.T) {
+	var buf strings.Builder
+	base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	h := &autoUpdateRedactHandler{
+		base:          base,
+		redactStrings: []string{"https://secret.example.com"},
+	}
+
+	derived := h.WithAttrs([]slog.Attr{slog.String("fixed", "value")})
+	logger := slog.New(derived)
+
+	buf.Reset()
+	logger.Info("autoupdate: checking", "url", "https://secret.example.com/api")
+	if strings.Contains(buf.String(), "secret.example.com") {
+		t.Errorf("WithAttrs handler should still redact, got: %s", buf.String())
+	}
+}
+
+// TestAutoUpdateRedactHandler_WithGroup verifies that WithGroup returns
+// a new handler that preserves the redact strings configuration.
+func TestAutoUpdateRedactHandler_WithGroup(t *testing.T) {
+	var buf strings.Builder
+	base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	h := &autoUpdateRedactHandler{
+		base:          base,
+		redactStrings: []string{"https://secret.example.com"},
+	}
+
+	derived := h.WithGroup("mygroup")
+	logger := slog.New(derived)
+
+	buf.Reset()
+	logger.Info("autoupdate: checking", "url", "https://secret.example.com/api")
+	if strings.Contains(buf.String(), "secret.example.com") {
+		t.Errorf("WithGroup handler should still redact, got: %s", buf.String())
+	}
+}
+
+// TestSetupAutoUpdateRedaction_WithURL verifies that setupAutoUpdateRedaction
+// installs a redacting handler when given a non-empty URL.
+func TestSetupAutoUpdateRedaction_WithURL(t *testing.T) {
+	// Save and restore the default logger to avoid affecting other tests.
+	orig := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	setupAutoUpdateRedaction("https://private-gitlab.example.com")
+
+	var buf strings.Builder
+	// The default logger was replaced by setupAutoUpdateRedaction.
+	// We can verify the handler type is wrapped.
+	handler := slog.Default().Handler()
+	if _, ok := handler.(*autoUpdateRedactHandler); !ok {
+		t.Error("expected default handler to be autoUpdateRedactHandler after setup")
+	}
+	_ = buf
+}
+
+// TestRemoveNonReadOnlyTools verifies that removeNonReadOnlyTools strips
+// tools that do not have ReadOnlyHint set to true.
+func TestRemoveNonReadOnlyTools(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "test-readonly",
+		Version: "0.1.0",
+	}, nil)
+
+	readOnlyAnnotations := &mcp.ToolAnnotations{ReadOnlyHint: true}
+	mutatingAnnotations := &mcp.ToolAnnotations{ReadOnlyHint: false}
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "readonly_tool",
+		Description: "A read-only tool",
+		Annotations: readOnlyAnnotations,
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{}, nil, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "mutating_tool",
+		Description: "A mutating tool",
+		Annotations: mutatingAnnotations,
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{}, nil, nil
+	})
+
+	removed := removeNonReadOnlyTools(server)
+	if removed != 1 {
+		t.Errorf("removeNonReadOnlyTools removed %d tools, want 1", removed)
+	}
+
+	count, err := countRegisteredTools(server)
+	if err != nil {
+		t.Fatalf("countRegisteredTools: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("after removal: %d tools, want 1", count)
+	}
+}
+
+// TestAllowedHosts_Localhost verifies that allowedHosts returns the expected
+// set for a localhost binding.
+func TestAllowedHosts_Localhost(t *testing.T) {
+	hosts := allowedHosts("127.0.0.1:8080")
+	if hosts == nil {
+		t.Fatal("expected non-nil hosts for localhost binding")
+	}
+	if !hosts["127.0.0.1"] {
+		t.Error("missing 127.0.0.1")
+	}
+	if !hosts["localhost"] {
+		t.Error("missing localhost")
+	}
+}
+
+// TestAllowedHosts_AllInterfaces verifies that allowedHosts returns nil
+// for 0.0.0.0 (bind to all interfaces), which skips host validation.
+func TestAllowedHosts_AllInterfaces(t *testing.T) {
+	hosts := allowedHosts("0.0.0.0:8080")
+	if hosts != nil {
+		t.Error("expected nil hosts for 0.0.0.0 (all interfaces)")
+	}
+}
+
+// TestAllowedHosts_EmptyHost verifies that allowedHosts returns nil
+// for an empty host, which means all interfaces.
+func TestAllowedHosts_EmptyHost(t *testing.T) {
+	hosts := allowedHosts(":8080")
+	if hosts != nil {
+		t.Error("expected nil hosts for empty host")
+	}
+}

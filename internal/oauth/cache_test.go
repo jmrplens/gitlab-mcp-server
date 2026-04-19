@@ -112,6 +112,47 @@ func TestTokenCache_SHA256Isolation(t *testing.T) {
 	}
 }
 
+// TestTokenCache_Delete verifies that the Delete alias delegates to Evict
+// and removes the cache entry for the given token.
+func TestTokenCache_Delete(t *testing.T) {
+	t.Parallel()
+
+	cache := NewTokenCache()
+	cache.Put("del-token", &auth.TokenInfo{UserID: "99"}, 5*time.Minute)
+
+	cache.Delete("del-token")
+
+	_, ok := cache.Get("del-token")
+	if ok {
+		t.Fatal("expected cache miss after Delete")
+	}
+}
+
+// TestTokenCache_Len_NonEmpty verifies that Len returns the correct count
+// when the cache contains entries (including potentially expired ones).
+func TestTokenCache_Len_NonEmpty(t *testing.T) {
+	t.Parallel()
+
+	cache := NewTokenCache()
+	cache.Put("a", &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
+	cache.Put("b", &auth.TokenInfo{UserID: "2"}, 5*time.Minute)
+	cache.Put("c", &auth.TokenInfo{UserID: "3"}, 0) // expired
+
+	if got := cache.Len(); got != 3 {
+		t.Errorf("Len() = %d, want 3 (includes expired)", got)
+	}
+}
+
+// TestTokenCache_Len_Empty verifies that Len returns 0 for a fresh cache.
+func TestTokenCache_Len_Empty(t *testing.T) {
+	t.Parallel()
+
+	cache := NewTokenCache()
+	if got := cache.Len(); got != 0 {
+		t.Errorf("Len() = %d, want 0", got)
+	}
+}
+
 func TestTokenCache_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
 
