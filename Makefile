@@ -10,6 +10,9 @@ BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
 
+# E2E test report directory (inside dist/, gitignored)
+E2E_REPORT_DIR=dist/e2e-reports
+
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
@@ -92,7 +95,12 @@ test-e2e:
 	@echo "WARNING: This will run E2E tests against the GitLab instance configured in .env (GITLAB_URL)."
 	@echo "         Tests create and delete projects, groups, users, and other resources."
 	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
-	go test -v -tags e2e -timeout 120s ./test/e2e/suite/
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	gotestsum \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
+	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
+	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
 test-e2e-docker:
@@ -105,9 +113,15 @@ test-e2e-docker:
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running E2E tests ==="
-	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/suite/ || true
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
+	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
+	  -- -tags e2e -timeout 600s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt || true
 	@echo "=== Tearing down ==="
 	docker compose -f test/e2e/docker-compose.yml down -v
+	@echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
@@ -330,6 +344,7 @@ install-tools:
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install golang.org/x/tools/cmd/goimports@latest
+	go install gotest.tools/gotestsum@latest
 	@echo All tools installed.
 
 # ─── Docker ──────────────────────────────────────────────────────────────────

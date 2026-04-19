@@ -14,9 +14,9 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,564   |
+| Total test functions        | 8,569   |
 | Unit test functions         | 8,331   |
-| E2E test functions          | 186     |
+| E2E test functions          | 191     |
 | cmd test functions          | 81      |
 | Test files (internal/)      | 389     |
 | Tool sub-packages tested    | 162     |
@@ -40,9 +40,9 @@
 | Core packages            |          1,254 |         73 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            207 |         15 | register, metatool, markdown, errors |
 | Tool sub-packages (162)  |          6,889 |        305 | Domain-specific tool handlers        |
-| E2E integration          |            186 |         82 | Full workflow against real GitLab    |
+| E2E integration          |            191 |         88 | Full workflow against real GitLab    |
 | cmd/server               |             81 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,564** |    **476** |                                      |
+| **Total**                |      **8,569** |    **482** |                                      |
 
 ### Core Packages
 
@@ -548,6 +548,20 @@ make test-e2e-docker
 
 Docker mode enables pipeline and job tests that require a CI runner.
 
+#### Test Reports
+
+Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.com/gotestyourself/gotestsum) to produce structured test reports in `dist/e2e-reports/`:
+
+| File                        | Format    | Purpose                                      |
+| --------------------------- | --------- | -------------------------------------------- |
+| `e2e-junit.xml`             | JUnit XML | CI/CD integration (GitHub Actions, SonarQube) |
+| `e2e-log.json`              | JSON      | Programmatic analysis, filtering              |
+| `e2e-output.txt`            | Plain     | Human-readable console output (`testdox`)     |
+
+Docker mode files use the `e2e-docker-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
+
+Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum@latest`.
+
 #### Test Architecture
 
 The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
@@ -563,7 +577,7 @@ The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
 | Workflow               | Subtests | Functions | Description                                         |
 | ---------------------- | -------: | --------: | --------------------------------------------------- |
-| TestFullWorkflow       |     ~174 |       186 | Individual tools through complete project lifecycle  |
+| TestFullWorkflow       |     ~174 |       191 | Individual tools through complete project lifecycle  |
 | TestMetaToolWorkflow   |     ~151 |       156 | Same operations via meta-tools (domain dispatch)     |
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
@@ -577,6 +591,15 @@ The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
 - Sampling tools (11 tests): summarize issue, analyze MR changes, generate release notes, etc.
 - Elicitation tools (1 test): confirm destructive action
+
+#### Fixture Cleanup
+
+Test fixtures (`fixture_test.go`) register `t.Cleanup` handlers that **permanently delete** projects created during tests. GitLab's Delayed Deletion feature requires a two-step process:
+
+1. Mark the project for deletion (`DELETE /projects/:id`)
+2. Permanently remove it (`DELETE /projects/:id?permanently_remove=true&full_path=...`)
+
+The `cleanupOrphanedProjects` function in `setup_test.go` runs at suite start to remove leftover projects from interrupted runs, including those already in pending-delete state (`IncludePendingDelete` option).
 
 ### Meta-Tool Tests
 
@@ -692,8 +715,8 @@ go test ./internal/... -cover -count=1
 ```bash
 make test          # Run all unit tests
 make test-race     # Run with race detector
-make test-e2e      # Run E2E tests (self-hosted GitLab)
-make test-e2e-docker # Run E2E tests with ephemeral GitLab CE container
+make test-e2e      # Run E2E tests (self-hosted GitLab) — generates JUnit + JSON reports
+make test-e2e-docker # Run E2E tests with ephemeral GitLab CE — generates JUnit + JSON reports
 make coverage      # Generate coverage report
 make lint          # Run go vet + staticcheck
 make inspector     # Compile + launch MCP Inspector UI via stdio
@@ -749,7 +772,7 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (82 test files)
+└── suite/                    # Go test package (88 test files)
     ├── setup_test.go         # MCP server setup, helpers, shared state
     ├── fixture_test.go       # Self-contained GitLab resource builders
     └── *_test.go             # Domain-specific test files

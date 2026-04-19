@@ -128,7 +128,9 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_ = callToolVoidOn(delCtx, session, "gitlab_project_delete", projects.DeleteInput{
-			ProjectID: toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
+			ProjectID:         toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
+			PermanentlyRemove: true,
+			FullPath:          out.PathWithNamespace,
 		})
 	})
 
@@ -174,7 +176,9 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 		_ = callToolVoidOn(delCtx, session, "gitlab_project", map[string]any{
 			"action": "delete",
 			"params": map[string]any{
-				"project_id": strconv.FormatInt(out.ID, 10),
+				"project_id":         strconv.FormatInt(out.ID, 10),
+				"permanently_remove": true,
+				"full_path":          out.PathWithNamespace,
 			},
 		})
 	})

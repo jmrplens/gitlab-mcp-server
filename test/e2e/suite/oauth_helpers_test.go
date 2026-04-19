@@ -129,11 +129,16 @@ func parseOAuthJSONRPC(t *testing.T, resp *http.Response) map[string]any {
 		t.Fatalf("read response: %v", err)
 	}
 
-	var result map[string]any
-	if err := json.Unmarshal(b, &result); err != nil {
+	var envelope map[string]any
+	if err := json.Unmarshal(b, &envelope); err != nil {
 		t.Fatalf("unmarshal JSON-RPC response: %v (body: %s)", err, string(b))
 	}
-	return result
+
+	inner, ok := envelope["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("JSON-RPC response missing 'result' field: %v", envelope)
+	}
+	return inner
 }
 
 // parseOAuthSSE extracts the last JSON-RPC response from an SSE event stream.
@@ -154,8 +159,10 @@ func parseOAuthSSE(t *testing.T, r io.Reader) map[string]any {
 		data := strings.TrimPrefix(line, "data: ")
 		var obj map[string]any
 		if err := json.Unmarshal([]byte(data), &obj); err == nil {
-			if _, hasResult := obj["result"]; hasResult {
-				lastJSON = obj
+			if inner, hasResult := obj["result"]; hasResult {
+				if m, ok := inner.(map[string]any); ok {
+					lastJSON = m
+				}
 			}
 		}
 	}

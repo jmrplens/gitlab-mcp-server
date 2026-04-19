@@ -663,11 +663,13 @@ func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot
 	return nil
 }
 
-// cleanupOrphanedProjects deletes any projects whose name starts with the
-// E2E prefix. This catches orphans from previous failed runs.
+// cleanupOrphanedProjects permanently deletes any projects whose name starts
+// with the E2E prefix. This catches orphans from previous failed runs,
+// including projects already marked for delayed deletion.
 func cleanupOrphanedProjects(client *gitlabclient.Client) {
 	opts := &gl.ListProjectsOptions{
-		Owned: new(true),
+		Owned:                new(true),
+		IncludePendingDelete: new(true),
 	}
 	opts.PerPage = 100
 	projects, _, err := client.GL().Projects.ListProjects(opts)
@@ -677,13 +679,41 @@ func cleanupOrphanedProjects(client *gitlabclient.Client) {
 	}
 	for _, p := range projects {
 		if strings.HasPrefix(p.Name, e2eProjectPrefix) {
-			_, err = client.GL().Projects.DeleteProject(p.ID, nil)
-			if err != nil {
-				log.Printf("e2e: cleanup: failed to delete orphan %q (ID=%d): %v", p.PathWithNamespace, p.ID, err)
-			} else {
-				log.Printf("e2e: cleanup: deleted orphan project %q (ID=%d)", p.PathWithNamespace, p.ID)
-			}
+			permanentlyDeleteProject(client, p)
 		}
+	}
+}
+
+// permanentlyDeleteProject performs a two-step permanent deletion for a single
+// project. Step 1 marks the project for deletion (no-op if already marked);
+// step 2 calls DeleteProject with PermanentlyRemove=true. This mirrors the
+// logic in internal/tools/projects for GitLab CE delayed-deletion instances.
+func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
+	// Step 1: mark for deletion (may already be marked → ignore 400 errors).
+	_, err := client.GL().Projects.DeleteProject(p.ID, nil)
+	if err != nil {
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "already being deleted") && !strings.Contains(errMsg, "marked for deletion") {
+			log.Printf("e2e: cleanup: failed to mark orphan %q (ID=%d) for deletion: %v", p.PathWithNamespace, p.ID, err)
+		}
+	}
+
+	// Step 2: permanent removal. Re-fetch the project to get the
+	// potentially updated path (GitLab appends "-deletion_scheduled-<ID>").
+	updated, _, getErr := client.GL().Projects.GetProject(p.ID, nil)
+	path := p.PathWithNamespace
+	if getErr == nil && updated != nil {
+		path = updated.PathWithNamespace
+	}
+
+	_, err = client.GL().Projects.DeleteProject(p.ID, &gl.DeleteProjectOptions{
+		PermanentlyRemove: new(true),
+		FullPath:          &path,
+	})
+	if err != nil {
+		log.Printf("e2e: cleanup: failed to permanently delete orphan %q (ID=%d): %v", p.PathWithNamespace, p.ID, err)
+	} else {
+		log.Printf("e2e: cleanup: permanently deleted orphan project %q (ID=%d)", p.PathWithNamespace, p.ID)
 	}
 }
 
