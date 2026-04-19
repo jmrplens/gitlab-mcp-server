@@ -45,6 +45,8 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                   |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                            |
 | `--auto-update-interval` | `1h`                         | Periodic update check interval                                  |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)             |
+| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                   |
 
 :::note
 `--gitlab-url` is the only required flag. All others have sensible defaults.
@@ -67,6 +69,74 @@ Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
 If both headers are present, `PRIVATE-TOKEN` takes precedence. Requests without a valid token are rejected.
+
+### OAuth mode
+
+OAuth mode (`--auth-mode=oauth`) enables RFC 9728–compliant OAuth 2.1 authentication. Instead of managing tokens manually, MCP clients discover the authorization server automatically and handle the OAuth flow:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth
+```
+
+**How it works:**
+
+1. The server exposes `/.well-known/oauth-protected-resource` with metadata pointing to your GitLab instance as the authorization server
+2. MCP clients (VS Code, Claude Code) discover this endpoint and initiate the OAuth 2.1 PKCE flow
+3. Users authorize in the browser — no token copying required
+4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes)
+
+**Client configuration in OAuth mode:**
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://your-server:8080/mcp",
+			"oauth": {
+				"clientId": "YOUR_GITLAB_APPLICATION_ID",
+				"scopes": ["api"]
+			}
+		}
+	}
+}
+```
+
+- **`clientId`**: The Application ID from your GitLab OAuth Application (see [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md))
+- **`scopes`**: Must include `api` for full tool functionality
+
+VS Code handles OAuth discovery and authorization automatically.
+
+:::caution
+Without `clientId`, VS Code falls back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail.
+:::
+
+</TabItem>
+<TabItem label="Claude Code">
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id YOUR_GITLAB_APPLICATION_ID \
+  --callback-port 8090 \
+  http://your-server:8080/mcp
+```
+
+Claude Code discovers the OAuth metadata and opens the browser for authorization.
+
+</TabItem>
+</Tabs>
+
+:::tip
+OAuth mode requires a GitLab OAuth Application. See the [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) guide for setup instructions.
+:::
+
+:::note
+The `PRIVATE-TOKEN` header still works in OAuth mode — the middleware normalizes it to a Bearer token. This enables backward compatibility with clients that don't support OAuth yet.
+:::
 
 ## Session management
 

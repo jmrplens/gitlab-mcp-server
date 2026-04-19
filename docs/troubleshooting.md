@@ -65,6 +65,21 @@ See [Auto-Update](auto-update.md) for full details on update modes and configura
 
 See [HTTP Server Mode](http-server-mode.md) for architecture and configuration details.
 
+## OAuth Mode (`--auth-mode=oauth`)
+
+| Symptom | Cause | Solution |
+| --- | --- | --- |
+| `401 Unauthorized` immediately on all requests | Token verification failed against GitLab API | Verify the token is valid: `curl -H "Authorization: Bearer $TOKEN" $GITLAB_URL/api/v4/user` |
+| `401` after working for a while | Token expired or revoked after cache entry | Token will be re-verified on next request after cache TTL expires. If persistent, generate a new token |
+| High latency on first request | OAuth cache miss — token verified against GitLab API | Expected on cold start. Subsequent requests within `--oauth-cache-ttl` (default 15m) use cache |
+| Frequent re-verifications despite cache | `--oauth-cache-ttl` set too low | Increase `--oauth-cache-ttl` (default 15m, max 2h). Check that the value was parsed correctly with `LOG_LEVEL=debug` |
+| `/.well-known/oauth-protected-resource` returns 404 | Server not running in OAuth mode | Start the server with `--auth-mode=oauth`. The metadata endpoint is only served in OAuth mode |
+| MCP client does not initiate OAuth flow | Client does not support RFC 9728 discovery, or OAuth app not configured | Configure a GitLab OAuth Application and set `clientId` in the MCP client config. See [OAuth App Setup](oauth-app-setup.md) |
+| Operations fail with insufficient `mcp` scope | DCR fallback assigned `mcp` scope instead of `api` | Configure `clientId` explicitly in the MCP client config so the correct OAuth Application (with `api` scope) is used. See [OAuth App Setup](oauth-app-setup.md) |
+| `PRIVATE-TOKEN` header rejected | Not rejected — it is auto-converted to `Authorization: Bearer` | This is expected behavior. The `NormalizeAuthHeader` middleware handles the conversion transparently |
+
+See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the full OAuth architecture and flow diagram.
+
 ## MCP Transport (Stdio)
 
 | Symptom | Cause | Solution |
@@ -119,11 +134,19 @@ curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GITLAB_URL/api/v4/version"
 # Run the server with debug logging
 LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 
-# Test in HTTP mode with curl
+# Test in HTTP mode with curl (legacy)
 ./gitlab-mcp-server --http --http-addr=localhost:8080 --gitlab-url=$GITLAB_URL
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
+# Test in OAuth mode
+./gitlab-mcp-server --http --http-addr=localhost:8080 --gitlab-url=$GITLAB_URL --auth-mode=oauth
+curl -s http://localhost:8080/.well-known/oauth-protected-resource | jq .
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GITLAB_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 

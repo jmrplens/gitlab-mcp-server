@@ -64,6 +64,8 @@ These variables configure the HTTP server pool when running in HTTP mode. In std
 | `MAX_HTTP_CLIENTS` | `100` | Maximum concurrent client sessions in the server pool. Upper bound: 10,000 |
 | `SESSION_TIMEOUT` | `30m` | Idle MCP session timeout. Upper bound: 24h |
 | `SESSION_REVALIDATE_INTERVAL` | `15m` | Token re-validation interval; `0` to disable. Upper bound: 24h |
+| `AUTH_MODE` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API) |
+| `OAUTH_CACHE_TTL` | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h |
 
 ---
 
@@ -123,6 +125,8 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |
 | `SESSION_TIMEOUT` | `--session-timeout` | |
 | `SESSION_REVALIDATE_INTERVAL` | `--revalidate-interval` | |
+| `AUTH_MODE` | `--auth-mode` | |
+| `OAUTH_CACHE_TTL` | `--oauth-cache-ttl` | |
 | `AUTO_UPDATE` | `--auto-update` | |
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |
 | `AUTO_UPDATE_INTERVAL` | `--auto-update-interval` | |
@@ -135,3 +139,5 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 - [Configuration](configuration.md) — Setup wizard, client config, secure token management
 - [Auto-Update](auto-update.md) — Update modes and release requirements
 - [Security](security.md) — Token management best practices
+- [HTTP Server Mode](http-server-mode.md) — OAuth mode architecture and deployment
+- [OAuth App Setup](oauth-app-setup.md) — Creating GitLab OAuth applications

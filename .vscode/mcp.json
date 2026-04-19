@@ -1,13 +1,14 @@
 {
-  // "servers": {
-  //   "gitlab-dev": {
-  //     "type": "stdio",
-  //     "command": "${workspaceFolder}/dist/gitlab-mcp-server-linux-amd64",
-  //     "envFile": "${workspaceFolder}/.env",
-  //     "env": {
-  //       "AUTO_UPDATE": "true",
-  //       "META_TOOLS": "true"
-  //     }
-  //   }
-  // }
+  "servers": {
+    "gitlab-mcp-server-oauth": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "oauth": {
+        "clientId": "0ea208d627fab1d18088968a1f747799ee1eba2f871eea9caf657a067833a7c8",
+        "scopes": [
+          "api"
+        ]
+      }
+    }
+  }
 }

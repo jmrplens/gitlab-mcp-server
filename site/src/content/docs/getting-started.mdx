@@ -275,7 +275,21 @@ For team deployments, you can run the server in HTTP mode where each user authen
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
 ```
 
-Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/en/guides/http-mode/) for details.
+Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/en/operations/http-server/) for details.
+
+### OAuth mode (recommended for production)
+
+For zero-config token management, use OAuth mode. Users authorize through the browser — no token copying or distribution required:
+
+```bash
+./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth
+```
+
+MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application.
+
+:::caution
+Clients must be configured with the `clientId` from the GitLab OAuth Application and `api` scope. Without `clientId`, clients fall back to Dynamic Client Registration (DCR) which assigns the `mcp` scope instead of `api`, causing most operations to fail. See [HTTP Server Mode](/en/operations/http-server/) for per-client examples.
+:::
 
 ## Verify the setup
 

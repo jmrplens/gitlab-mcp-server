@@ -61,6 +61,26 @@ When running with `--http`:
 - No built-in authentication on the HTTP endpoint
 - For production use, place behind a reverse proxy with proper TLS and auth
 
+### OAuth Mode (`--auth-mode=oauth`)
+
+When running with `--auth-mode=oauth`, the server validates every request's Bearer token against the GitLab `/api/v4/user` endpoint before processing:
+
+- **Token verification** — Each token is validated by calling GitLab's user API. Invalid or expired tokens receive HTTP 401
+- **Identity caching** — Verified token identities are cached in-memory using SHA-256 hashed keys (raw tokens are never stored). Cache TTL is configurable via `--oauth-cache-ttl` (default 15m, range 1m–2h)
+- **Header normalization** — `PRIVATE-TOKEN` headers are automatically converted to `Authorization: Bearer` for backward compatibility with existing clients
+- **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
+- **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
+- **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
+
+See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the full architecture and flow diagram, and [OAuth App Setup](oauth-app-setup.md) for creating GitLab OAuth applications.
+
+| Threat | Mitigation |
+| --- | --- |
+| Token replay | TTL-based expiration; tokens re-verified after cache expires |
+| Cache key leakage | SHA-256 hashing of raw tokens; original tokens never stored |
+| Brute force | GitLab API rate limiting applies to verification requests |
+| Memory dump | Only SHA-256 hashes and user metadata stored; no raw tokens in cache |
+
 ## Error Information Disclosure
 
 The error handling system is designed to be informative for LLMs while avoiding information leakage:
@@ -123,3 +143,19 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 | `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client |
 | `internal/autoupdate/autoupdate.go` | HTTPS enforcement, `Config.String()`/`GoString()` |
 | `cmd/server/main.go` | Update initialization |
+
+---
+
+## See Also
+
+### Internal
+
+- [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) — OAuth architecture and flow diagram
+- [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications
+- [Troubleshooting — OAuth Mode](troubleshooting.md#oauth-mode---auth-modeoauth) — OAuth-specific troubleshooting
+
+### External
+
+- [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728) — the specification behind `--auth-mode=oauth`
+- [OAuth 2.1 Authorization Framework (draft)](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-12) — mandates PKCE for all clients
+- [GitLab: Configure GitLab as an OAuth 2.0 provider](https://docs.gitlab.com/ee/integration/oauth_provider.html) — GitLab OAuth Application docs

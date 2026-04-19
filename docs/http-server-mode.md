@@ -49,6 +49,9 @@ gitlab-mcp-server --http \
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional domain tools) |
 | `--max-http-clients` | `100` | Maximum unique tokens in the server pool |
 | `--session-timeout` | `30m` | Idle MCP session timeout |
+| `--auth-mode` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API) |
+| `--oauth-cache-ttl` | `15m` | How long verified OAuth tokens are cached before re-validation (1m–2h) |
+| `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 
 > **Note**: `--gitlab-url` is the only required flag. All others have sensible defaults.
 
@@ -124,9 +127,100 @@ Requests without a valid token are rejected — the server returns no MCP sessio
 {"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
+## Authentication Modes
+
+HTTP mode supports two authentication modes controlled by `--auth-mode`:
+
+### Mode Comparison
+
+| Feature | Legacy (`--auth-mode=legacy`) | OAuth (`--auth-mode=oauth`) |
+| --- | --- | --- |
+| Token headers | `PRIVATE-TOKEN` or `Authorization: Bearer` | `Authorization: Bearer` (auto-converted from `PRIVATE-TOKEN`) |
+| Server-side validation | None — token passed directly to GitLab API | Verified via `GET /api/v4/user` before MCP handler |
+| Token caching | No caching — every API call uses the token directly | SHA-256 hashed cache with configurable TTL (default 15m) |
+| Invalid token handling | Errors appear at GitLab API call time | Rejected immediately with HTTP 401 |
+| RFC 9728 metadata | Not served | Served at `/.well-known/oauth-protected-resource` |
+| MCP client OAuth discovery | Not supported | Supported — clients can discover the GitLab authorization server |
+| Best for | Simple setups, internal networks | Production deployments, MCP clients with OAuth 2.1 support |
+
+### Legacy Mode (default)
+
+The default `--auth-mode=legacy` accepts tokens via `PRIVATE-TOKEN` or `Authorization: Bearer` headers without server-side verification. The token is passed directly to the GitLab API client. This mode is simple but the server trusts any token format — validation only happens when GitLab rejects an API call.
+
+### OAuth Mode
+
+`--auth-mode=oauth` enables server-side token verification using the go-sdk's `auth.RequireBearerToken` middleware. Every request is validated against GitLab's `/api/v4/user` endpoint before reaching the MCP handler.
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.example.com \
+  --auth-mode=oauth \
+  --oauth-cache-ttl=15m
+```
+
+**How it works:**
+
+```mermaid
+sequenceDiagram
+    participant Client as MCP Client
+    participant MW as NormalizeAuthHeader
+    participant Auth as RequireBearerToken
+    participant Cache as Token Cache
+    participant GL as GitLab API
+    participant MCP as MCP Handler
+
+    Client->>MW: POST /mcp<br/>PRIVATE-TOKEN: glpat-xxx
+    MW->>MW: Convert to Authorization: Bearer
+    MW->>Auth: Forward request
+    Auth->>Cache: Lookup SHA-256(token)
+
+    alt Cache hit (not expired)
+        Cache-->>Auth: TokenInfo (cached)
+    else Cache miss or expired
+        Auth->>GL: GET /api/v4/user<br/>Authorization: Bearer glpat-xxx
+        GL-->>Auth: 200 OK + user JSON
+        Auth->>Cache: Store TokenInfo (TTL)
+    end
+
+    Auth->>MCP: Authenticated request
+    MCP-->>Client: MCP response
+```
+
+1. Client sends a request with `Authorization: Bearer <token>` (or `PRIVATE-TOKEN`, which is auto-converted)
+2. The server calls `GET /api/v4/user` on GitLab with the token
+3. If GitLab returns a valid user, the token is cached for `--oauth-cache-ttl` (default 15 minutes)
+4. Subsequent requests with the same token skip the GitLab call until the cache expires
+5. Invalid or expired tokens return HTTP 401
+
+**Protected Resource Metadata ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)):**
+
+In OAuth mode, the server exposes `/.well-known/oauth-protected-resource` with metadata for MCP clients that implement OAuth discovery:
+
+```bash
+curl http://localhost:8080/.well-known/oauth-protected-resource
+```
+
+```json
+{
+  "resource": "http://localhost:8080",
+  "authorization_servers": ["https://gitlab.example.com"],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": ["api", "read_api"]
+}
+```
+
+**Token caching:**
+
+- Cache key: SHA-256 hash of the token (raw token never stored)
+- Default TTL: 15 minutes (configurable via `--oauth-cache-ttl`)
+- Bounds: minimum 1 minute, maximum 2 hours
+- Expired entries are evicted by a background goroutine every 5 minutes
+
 ## Client Configuration Examples
 
-### VS Code / GitHub Copilot
+### Legacy Mode
+
+#### VS Code / GitHub Copilot
 
 Add to `.vscode/mcp.json`:
 
@@ -144,7 +238,7 @@ Add to `.vscode/mcp.json`:
 }
 ```
 
-### OpenCode
+#### OpenCode
 
 Add to your OpenCode MCP configuration:
 
@@ -160,6 +254,35 @@ Add to your OpenCode MCP configuration:
   }
 }
 ```
+
+### OAuth Mode
+
+When the server runs with `--auth-mode=oauth`, MCP clients that support OAuth 2.1 can discover the GitLab authorization server automatically via the RFC 9728 metadata endpoint and handle token acquisition through the standard OAuth flow.
+
+#### VS Code / GitHub Copilot (OAuth)
+
+VS Code supports MCP servers with OAuth authentication natively. Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "http://your-internal-server:8080/mcp",
+      "oauth": {
+        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+VS Code discovers the GitLab authorization server via `/.well-known/oauth-protected-resource`, initiates the OAuth 2.1 PKCE flow, and sends the acquired token automatically as `Authorization: Bearer`.
+
+> **Important**: Without `clientId`, VS Code falls back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail. Always configure `clientId` with your GitLab OAuth Application ID.
+>
+> **Note**: For OAuth to work, a GitLab OAuth Application must be configured. See [OAuth App Setup](oauth-app-setup.md) for a step-by-step guide, and [IDE Configuration](ide-configuration.md) for per-client examples.
 
 ### curl (Testing)
 
@@ -317,3 +440,5 @@ curl -s -o /dev/null -w "%{http_code}" \
 - [Architecture](architecture.md) — system architecture with diagrams
 - [Resource Consumption](resource-consumption.md) — memory and CPU analysis at scale
 - [Security](security.md) — security model and best practices
+- [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications for MCP clients
+- [IDE Configuration](ide-configuration.md) — per-IDE MCP JSON configuration examples

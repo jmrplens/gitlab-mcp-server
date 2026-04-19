@@ -21,12 +21,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
@@ -69,6 +71,8 @@ type httpConfig struct {
 	autoUpdateRepo     string
 	autoUpdateInterval time.Duration
 	revalidateInterval time.Duration
+	authMode           string
+	oauthCacheTTL      time.Duration
 }
 
 // main is an internal helper for the main package.
@@ -99,6 +103,8 @@ func main() {
 	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
+	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
+	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.Parse()
 
 	if showHelp {
@@ -187,6 +193,8 @@ FLAGS
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitLab project path for updates (default "%s")
   -auto-update-interval dur How often to check for updates (default %s)
+  -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
+  -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
 
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (e.g. https://gitlab.example.com)
@@ -237,6 +245,7 @@ JSON CONFIGURATION EXAMPLES
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
+		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultAutoUpdateRepo)
 }
 
@@ -291,6 +300,23 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		AutoUpdate:         hcfg.autoUpdate,
 		AutoUpdateRepo:     hcfg.autoUpdateRepo,
 		AutoUpdateInterval: hcfg.autoUpdateInterval,
+		AuthMode:           hcfg.authMode,
+		OAuthCacheTTL:      hcfg.oauthCacheTTL,
+	}
+
+	if cfg.AuthMode == "" {
+		cfg.AuthMode = "legacy"
+	}
+	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
+		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
+	}
+	if cfg.AuthMode == "oauth" && cfg.OAuthCacheTTL > 0 {
+		if cfg.OAuthCacheTTL < config.MinOAuthCacheTTL {
+			return fmt.Errorf("--oauth-cache-ttl %s is below minimum of %s", cfg.OAuthCacheTTL, config.MinOAuthCacheTTL)
+		}
+		if cfg.OAuthCacheTTL > config.MaxOAuthCacheTTL {
+			return fmt.Errorf("--oauth-cache-ttl %s exceeds maximum of %s", cfg.OAuthCacheTTL, config.MaxOAuthCacheTTL)
+		}
 	}
 
 	if cfg.SessionTimeout > config.MaxSessionTimeout {
@@ -466,6 +492,7 @@ const httpShutdownTimeout = 5 * time.Second
 func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 	slog.Info("starting MCP server in HTTP mode",
 		"addr", httpAddr,
+		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
 		"session_timeout", cfg.SessionTimeout,
 		"version", version,
@@ -480,47 +507,100 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 
 	pool.StartRevalidation(ctx)
 
-	authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				authLimiter.Cleanup()
-			}
-		}
-	}()
-
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		ip := clientIP(r)
-		if authLimiter.IsBlocked(ip) {
-			slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
-			return nil
-		}
-
-		token := serverpool.ExtractToken(r)
-		if token == "" {
-			authLimiter.RecordFailure(ip)
-			slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
-			return nil
-		}
-		server, err := pool.GetOrCreate(token)
-		if err != nil {
-			authLimiter.RecordFailure(ip)
-			slog.Error("failed to create server for token", "error", err)
-			return nil
-		}
-		return server
-	}, &mcp.StreamableHTTPOptions{
-		SessionTimeout: cfg.SessionTimeout,
-	})
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
-	mux.Handle("/", handler)
+
+	if cfg.AuthMode == "oauth" {
+		// In OAuth mode, auth.RequireBearerToken middleware rejects invalid
+		// tokens (401) before reaching the server-selector, so authLimiter
+		// is unnecessary. The server-selector only needs to extract the
+		// pre-validated token for per-token server pool lookup.
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+			token := serverpool.ExtractToken(r)
+			if token == "" {
+				slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
+				return nil
+			}
+			server, err := pool.GetOrCreate(token)
+			if err != nil {
+				slog.Error("failed to create server for token", "error", err)
+				return nil
+			}
+			return server
+		}, &mcp.StreamableHTTPOptions{
+			SessionTimeout: cfg.SessionTimeout,
+		})
+
+		tokenCache := oauth.NewTokenCache()
+		verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
+		resourceMetadataURL := "http://" + httpAddr + "/.well-known/oauth-protected-resource"
+		authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
+			ResourceMetadataURL: resourceMetadataURL,
+			Scopes:              []string{"api"},
+		})
+
+		mux.Handle("GET /.well-known/oauth-protected-resource",
+			oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
+		mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(mcpHandler)))
+
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					tokenCache.Cleanup()
+				}
+			}
+		}()
+
+		slog.Info("oauth mode enabled",
+			"cache_ttl", cfg.OAuthCacheTTL,
+			"metadata_endpoint", "/.well-known/oauth-protected-resource",
+		)
+	} else {
+		authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					authLimiter.Cleanup()
+				}
+			}
+		}()
+
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+			ip := clientIP(r)
+			if authLimiter.IsBlocked(ip) {
+				slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+				return nil
+			}
+
+			token := serverpool.ExtractToken(r)
+			if token == "" {
+				authLimiter.RecordFailure(ip)
+				slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+				return nil
+			}
+			server, err := pool.GetOrCreate(token)
+			if err != nil {
+				authLimiter.RecordFailure(ip)
+				slog.Error("failed to create server for token", "error", err)
+				return nil
+			}
+			return server
+		}, &mcp.StreamableHTTPOptions{
+			SessionTimeout: cfg.SessionTimeout,
+		})
+
+		mux.Handle("/", mcpHandler)
+	}
 
 	var rootHandler http.Handler = mux
 	rootHandler = securityHeadersMiddleware(rootHandler)

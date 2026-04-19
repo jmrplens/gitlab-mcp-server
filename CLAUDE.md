@@ -49,6 +49,7 @@ gitlab-mcp-server/
 │   ├── autoupdate/              # Self-update: pre-start check, rename trick, syscall.Exec (Unix)
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
+│   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
@@ -112,7 +113,9 @@ gitlab-mcp-server/
 │   ├── adr/                     # Architectural Decision Records
 │   ├── tools/                   # Per-domain tool documentation
 │   ├── capabilities/            # MCP capability docs
-│   └── examples/                # Usage examples
+│   ├── examples/                # Usage examples
+│   ├── oauth-app-setup.md       # Creating GitLab OAuth applications for MCP clients
+│   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
 ├── test/e2e/                    # End-to-end integration tests
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
@@ -239,6 +242,8 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
 | `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate (`false` default) |
+| `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
+| `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
@@ -253,6 +258,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
 | `--http-addr`         | `:8080` | HTTP listen address                                      |
+| `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
+| `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |

@@ -54,6 +54,17 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | Pool eviction too frequent     | Too many unique tokens | Increase `--max-http-clients` (default: 100)                                      |
 | Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m)                                       |
 
+## OAuth mode (`--auth-mode=oauth`)
+
+| Symptom                                          | Cause                                        | Solution                                                                                                      |
+| ------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `401 Unauthorized` with valid OAuth token        | Token expired or GitLab rejected it          | Re-authorize through the OAuth flow; check that the GitLab OAuth app is still active                          |
+| High latency on first request after cache expiry | Token re-validation against GitLab API       | Expected behavior — increase `--oauth-cache-ttl` (default: 15m, max: 2h) to reduce validation frequency       |
+| `404` on `/.well-known/oauth-protected-resource` | OAuth mode not enabled                       | Start the server with `--auth-mode=oauth`                                                                     |
+| Client doesn't start OAuth flow                  | Client lacks OAuth 2.1 support               | Use `PRIVATE-TOKEN` header instead — it works in OAuth mode via automatic normalization                       |
+| `PRIVATE-TOKEN` header not working in OAuth mode | Should still work                            | The middleware normalizes `PRIVATE-TOKEN` to Bearer — check token validity                                    |
+| Operations fail with insufficient `mcp` scope    | DCR fallback assigned `mcp` instead of `api` | Configure `clientId` explicitly in the MCP client config. See [HTTP Server Mode](/en/operations/http-server/) |
+
 ## Pagination
 
 | Symptom                        | Cause                    | Solution                                                    |

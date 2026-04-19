@@ -44,6 +44,8 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-max-http-clients` | int | `100` | Maximum concurrent client sessions (upper bound: 10,000) |
 | `-session-timeout` | duration | `30m` | Idle MCP session timeout (upper bound: 24h) |
 | `-revalidate-interval` | duration | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
+| `-auth-mode` | string | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) |
+| `-oauth-cache-ttl` | duration | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth` |
 
 ### Auto-Update
 
@@ -81,6 +83,7 @@ The server listens on an HTTP endpoint. Each client provides its own GitLab toke
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=localhost:9090
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --max-http-clients=50 --session-timeout=1h
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth --oauth-cache-ttl=15m
 ```
 
 ### Setup Wizard

@@ -178,6 +178,8 @@ These settings are for operators deploying the server for a team or managing adv
 | `ISSUE_REPORTS` | `false` | Enable automatic issue report generation on unrecoverable errors |
 | `YOLO_MODE` | `false` | Skip destructive action confirmation prompts |
 | `AUTOPILOT` | `false` | Same as `YOLO_MODE` — skip confirmation prompts |
+| `AUTH_MODE` | `legacy` | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
+| `OAUTH_CACHE_TTL` | `15m` | TTL for verified OAuth token identity cache (min 1m, max 2h) |
 
 See [Auto-Update](auto-update.md) for detailed documentation on update modes, MCP tools, release requirements, and troubleshooting.
 
@@ -204,11 +206,33 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |
+| `--auth-mode` | `legacy` | Authentication mode: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
+| `--oauth-cache-ttl` | `15m` | TTL for verified OAuth token cache (1m–2h) |
 | `--auto-update` | `true` | Enable automatic binary updates |
 | `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Interval between periodic update checks |
 
 No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`.
+
+### OAuth Mode Configuration
+
+To enable server-side token verification, set `--auth-mode=oauth`:
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.example.com \
+  --auth-mode=oauth \
+  --oauth-cache-ttl=15m
+```
+
+With OAuth mode:
+
+- All tokens are verified against GitLab's `/api/v4/user` endpoint before reaching the MCP handler
+- Verified tokens are cached (SHA-256 hashed) for `--oauth-cache-ttl` duration (default 15m, range 1m–2h)
+- An RFC 9728 metadata endpoint is served at `/.well-known/oauth-protected-resource`, enabling MCP clients with OAuth 2.1 support to discover the GitLab authorization server automatically
+- `PRIVATE-TOKEN` headers are auto-converted to `Authorization: Bearer` for compatibility
+
+For a complete guide on creating GitLab OAuth applications for your MCP clients, see [OAuth App Setup](oauth-app-setup.md).
 
 See [HTTP Server Mode](http-server-mode.md) for architecture and deployment details.
 
@@ -236,4 +260,4 @@ Configuration is loaded by `internal/config/` in this order:
 
 > **Note**: `godotenv` does not overwrite existing variables, so values from step 1 take precedence over step 2, and explicit environment variables (step 3) override both.
 
-The `config.Load()` function validates that `GITLAB_URL` and `GITLAB_TOKEN` are set (used by stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers.
+The `config.Load()` function validates that `GITLAB_URL` and `GITLAB_TOKEN` are set (used by stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)).

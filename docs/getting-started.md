@@ -248,7 +248,43 @@ Each client provides its own token via HTTP header:
 }
 ```
 
-See [HTTP Server Mode](http-server-mode.md) for full details.
+### OAuth Mode (Recommended for Production)
+
+For production deployments, enable server-side token verification with OAuth mode:
+
+```bash
+gitlab-mcp-server --http \
+  --gitlab-url=https://gitlab.example.com \
+  --auth-mode=oauth \
+  --oauth-cache-ttl=15m
+```
+
+OAuth mode validates every Bearer token against GitLab's `/api/v4/user` endpoint and serves an RFC 9728 metadata endpoint that allows MCP clients with OAuth 2.1 support to discover the GitLab authorization server automatically.
+
+MCP clients that support OAuth can connect by providing the `clientId` from the GitLab OAuth Application:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "http://your-server:8080/mcp",
+      "oauth": {
+        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+The client discovers the GitLab authorization server via `/.well-known/oauth-protected-resource` and handles token acquisition through the standard OAuth 2.1 PKCE flow.
+
+> **Important**: Without `clientId`, clients fall back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail. Always configure `clientId` explicitly.
+>
+> **Prerequisite**: A GitLab OAuth Application must be created. See [OAuth App Setup](oauth-app-setup.md) for a step-by-step guide and [IDE Configuration](ide-configuration.md) for per-client examples.
+
+See [HTTP Server Mode](http-server-mode.md) for the full architecture and deployment details.
 
 ---
 

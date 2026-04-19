@@ -173,6 +173,17 @@ El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 - Restringe el acceso a redes de confianza
 - Monitoriza las métricas de sesiones para detectar patrones inusuales
 
+### Modo OAuth
+
+Para despliegues HTTP en producción, considera usar el modo OAuth (`--auth-mode=oauth`). Habilita autenticación OAuth 2.1 compatible con RFC 9728:
+
+- Los usuarios autorizan a través del navegador — no es necesario distribuir tokens manualmente
+- OAuth 2.1 con PKCE protege contra la interceptación del código de autorización
+- La identidad del token se cachea durante `--oauth-cache-ttl` (por defecto: 15 minutos, rango: 1m–2h)
+- La cabecera `PRIVATE-TOKEN` sigue siendo compatible para retrocompatibilidad
+
+Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida, y [Modo Servidor HTTP](/es/operations/http-server/) para los detalles completos de configuración.
+
 ## Lista de verificación de mejores prácticas
 
 ### Seguridad del token

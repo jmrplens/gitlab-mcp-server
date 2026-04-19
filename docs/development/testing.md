@@ -14,13 +14,13 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,489   |
-| Unit test functions         | 8,262   |
+| Total test functions        | 8,523   |
+| Unit test functions         | 8,290   |
 | E2E test functions          | 186     |
-| cmd test functions          | 41      |
+| cmd test functions          | 47      |
 | Test files (internal/)      | 389     |
 | Tool sub-packages tested    | 162     |
-| Core packages tested        | 15      |
+| Core packages tested        | 16      |
 | Average coverage            | ~98.1%  |
 
 ### Naming Convention Stats
@@ -37,12 +37,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,166 |         69 | autoupdate, config, gitlab, wizard…  |
+| Core packages            |          1,194 |         73 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            207 |         15 | register, metatool, markdown, errors |
 | Tool sub-packages (162)  |          6,889 |        305 | Domain-specific tool handlers        |
 | E2E integration          |            186 |         82 | Full workflow against real GitLab    |
-| cmd/server               |             41 |          1 | Main entry point tests               |
-| **Total**                |      **8,489** |    **472** |                                      |
+| cmd/server               |             47 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,523** |    **476** |                                      |
 
 ### Core Packages
 
@@ -63,7 +63,8 @@
 | testutil       |    19 |   94.3%  | Shared test helpers                  |
 | toolutil       |   210 |   95.7%  | Shared tool utilities                |
 | wizard         |   196 |   83.0%  | Setup wizard (Web UI, TUI, CLI)      |
-| **Subtotal**   |**1,166**|        |                                      |
+| oauth          |    28 |   95.8%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
+| **Subtotal**   |**1,194**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

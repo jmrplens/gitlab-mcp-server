@@ -30,6 +30,13 @@ const (
 	MaxRevalidateInterval     = 24 * time.Hour
 )
 
+// OAuth defaults.
+const (
+	DefaultOAuthCacheTTL = 15 * time.Minute
+	MinOAuthCacheTTL     = 1 * time.Minute
+	MaxOAuthCacheTTL     = 2 * time.Hour
+)
+
 // Auto-update defaults.
 const (
 	DefaultAutoUpdateRepo     = "jmrplens/gitlab-mcp-server"
@@ -56,6 +63,9 @@ type Config struct {
 	AutoUpdateRepo     string        // GitLab project path for update checks
 	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
 	AutoUpdateTimeout  time.Duration // Timeout for pre-start update check (stdio mode)
+
+	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
+	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
@@ -141,6 +151,16 @@ func Load() (*Config, error) {
 		autoUpdate = "true"
 	}
 
+	authMode := os.Getenv("AUTH_MODE")
+	if authMode == "" {
+		authMode = "legacy"
+	}
+
+	oauthCacheTTL, err := parseDuration(os.Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
+	}
+
 	cfg := &Config{
 		GitLabURL:          os.Getenv("GITLAB_URL"),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
@@ -156,6 +176,8 @@ func Load() (*Config, error) {
 		AutoUpdateRepo:     autoUpdateRepo,
 		AutoUpdateInterval: autoUpdateInterval,
 		AutoUpdateTimeout:  autoUpdateTimeout,
+		AuthMode:           authMode,
+		OAuthCacheTTL:      oauthCacheTTL,
 	}
 
 	if err = cfg.validate(); err != nil {
@@ -191,6 +213,17 @@ func (c *Config) validate() error {
 	}
 	if c.MaxHTTPClients > MaxHTTPClients {
 		return fmt.Errorf("MAX_HTTP_CLIENTS exceeds maximum of %d (got %d)", MaxHTTPClients, c.MaxHTTPClients)
+	}
+	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
+		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
+	}
+	if c.OAuthCacheTTL != 0 {
+		if c.OAuthCacheTTL < MinOAuthCacheTTL {
+			return fmt.Errorf("OAUTH_CACHE_TTL %s is below minimum of %s", c.OAuthCacheTTL, MinOAuthCacheTTL)
+		}
+		if c.OAuthCacheTTL > MaxOAuthCacheTTL {
+			return fmt.Errorf("OAUTH_CACHE_TTL %s exceeds maximum of %s", c.OAuthCacheTTL, MaxOAuthCacheTTL)
+		}
 	}
 	return nil
 }

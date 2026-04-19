@@ -173,6 +173,17 @@ The server maintains a **bounded LRU pool** of client sessions:
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
 
+### OAuth mode
+
+For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`). It enables RFC 9728–compliant OAuth 2.1 authentication:
+
+- Users authorize through the browser — no manual token distribution
+- OAuth 2.1 with PKCE protects against authorization code interception
+- Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h)
+- The `PRIVATE-TOKEN` header remains supported for backward compatibility
+
+See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/en/operations/http-server/) for full configuration details.
+
 ## Best practices checklist
 
 ### Token security

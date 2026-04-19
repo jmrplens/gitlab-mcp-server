@@ -1131,3 +1131,357 @@ func TestAutoUpdateRedactHandler_RedactsOnlyAutoUpdateLogs(t *testing.T) {
 func TestSetupAutoUpdateRedaction_NoOp(t *testing.T) {
 	setupAutoUpdateRedaction("")
 }
+
+// newMockGitLabServerWithUser creates a mock GitLab that handles both
+// /api/v4/version and /api/v4/user (required by the OAuth verifier).
+func newMockGitLabServerWithUser(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+		case "/api/v4/user":
+			token := r.Header.Get("PRIVATE-TOKEN")
+			if token == "" {
+				if after, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+					token = after
+				}
+			}
+			if token == testToken {
+				w.Header().Set(hdrContentType, mimeJSON)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":       42,
+					"username": "testuser",
+					"name":     "Test User",
+				})
+			} else {
+				http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// oauthAddr starts serveHTTP in OAuth mode and returns the listen address.
+// Caller must cancel the context and drain errCh when done.
+func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <-chan error) {
+	t.Helper()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+	time.Sleep(300 * time.Millisecond)
+	return addr, errCh
+}
+
+// TestServeHTTP_OAuthMode_MetadataEndpoint verifies that OAuth mode serves
+// the RFC 9728 Protected Resource Metadata at /.well-known/oauth-protected-resource.
+func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		AuthMode:       "oauth",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+		"http://"+addr+"/.well-known/oauth-protected-resource", nil)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("metadata request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	var meta map[string]any
+	if decErr := json.NewDecoder(resp.Body).Decode(&meta); decErr != nil {
+		t.Fatalf("failed to decode metadata JSON: %v", decErr)
+	}
+
+	servers, ok := meta["authorization_servers"].([]any)
+	if !ok || len(servers) == 0 {
+		t.Fatalf("missing authorization_servers in metadata: %v", meta)
+	}
+	if servers[0] != mockGL.URL {
+		t.Errorf("authorization_servers[0] = %q, want %q", servers[0], mockGL.URL)
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_RejectsUnauthenticated verifies that OAuth mode
+// rejects requests without a Bearer token with 401.
+func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		AuthMode:       "oauth",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_AcceptsValidBearer verifies that OAuth mode accepts
+// a valid Bearer token and returns a successful MCP initialize response.
+func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		AuthMode:       "oauth",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Authorization", "Bearer "+testToken)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	result := parseJSONRPCResponse(t, resp)
+	res, ok := result["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'result': %v", result)
+	}
+	serverInfo, ok := res["serverInfo"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'serverInfo': %v", res)
+	}
+	if name := serverInfo["name"]; name != serverName {
+		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_PrivateTokenConverted verifies that NormalizeAuthHeader
+// converts PRIVATE-TOKEN to Bearer, allowing the OAuth verifier to validate it.
+func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		AuthMode:       "oauth",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_OAuthMode_InvalidTokenReturns401 verifies that OAuth mode
+// returns 401 for an invalid Bearer token.
+func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
+	mockGL := newMockGitLabServerWithUser(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		AuthMode:       "oauth",
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Authorization", "Bearer invalid-token-xxx")
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for invalid token, got %d", resp.StatusCode)
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
+
+// TestServeHTTP_LegacyMode_NoMetadataEndpoint verifies that legacy mode
+// does NOT serve the /.well-known/oauth-protected-resource endpoint.
+func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr, errCh := oauthAddr(t, ctx, cfg)
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+		"http://"+addr+"/.well-known/oauth-protected-resource", nil)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("metadata request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Legacy mode has no metadata endpoint — the catch-all handler will respond
+	// but not with a valid OAuth metadata JSON.
+	if resp.StatusCode == http.StatusOK {
+		var meta map[string]any
+		if decErr := json.NewDecoder(resp.Body).Decode(&meta); decErr == nil {
+			if _, hasServers := meta["authorization_servers"]; hasServers {
+				t.Error("legacy mode should NOT serve OAuth metadata, but found authorization_servers")
+			}
+		}
+	}
+
+	cancel()
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			t.Fatalf("serveHTTP error: %v", srvErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown timeout")
+	}
+}
