@@ -176,4 +176,20 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		result := toolutil.ToolResultWithMarkdown(FormatDetailMarkdown(out))
 		return toolutil.WithHints(result, out, err)
 	})
-}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "gitlab_pipeline_wait",
+		Title:       toolutil.TitleFromName("gitlab_pipeline_wait"),
+		Description: "Wait for a pipeline to reach a terminal state (success, failed, canceled, skipped, manual). Polls the pipeline status at a configurable interval and sends progress notifications. Returns the final pipeline details when done or when the timeout is reached.\n\nReturns: pipeline details, waited_for duration, poll_count, final_status, timed_out flag. See also: gitlab_pipeline_get, gitlab_pipeline_create.",
+		Annotations: toolutil.ReadAnnotations,
+		Icons:       toolutil.IconPipeline,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input WaitInput) (*mcp.CallToolResult, WaitOutput, error) {
+		start := time.Now()
+		out, err := Wait(ctx, req, client, input)
+		toolutil.LogToolCallAll(ctx, req, "gitlab_pipeline_wait", start, err)
+		if out.TimedOut {
+			result := toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail)
+			result.IsError = true
+			return result, out, nil
+		}
+		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail), out, err)
+	})}

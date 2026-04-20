@@ -21,6 +21,8 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | Zed | ✅ | ✅ | — | [Zed MCP docs](https://zed.dev/docs/ai/mcp) |
 | Kiro | ✅ | ✅ | — | [Kiro MCP docs](https://kiro.dev/docs/mcp/) |
 | OpenCode | ✅ | ✅ | — | [OpenCode GitHub](https://github.com/anomalyco/opencode) |
+| Cline | ✅ | ✅ | — | [Cline MCP docs](https://docs.cline.bot/mcp-servers/overview) |
+| Roo Code | ✅ | ✅ | — | [Roo Code MCP docs](https://docs.roocode.com/features/mcp/using-mcp-in-roo) |
 
 > **Note**: "—" indicates the client does not support `clientId` configuration for OAuth. These clients rely on Dynamic Client Registration (DCR), which GitLab assigns the `mcp` scope instead of `api`, making most server operations non-functional. Use stdio or HTTP legacy with `PRIVATE-TOKEN` header for those clients.
 
@@ -425,6 +427,84 @@ Create or edit `.kiro/settings/mcp.json` in your project root (or `~/.kiro/setti
 ## OpenCode
 
 ### Stdio Mode
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+### HTTP Legacy Mode
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "http://your-server:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Cline
+
+### Stdio Mode
+
+Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Global MCP**, or edit the settings file directly:
+
+- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+### HTTP Legacy Mode
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "url": "http://your-server:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-your-token"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Roo Code
+
+### Stdio Mode
+
+Open the Roo Code sidebar in VS Code → click the MCP servers icon → **Edit Global MCP** (for global config) or **Edit Project MCP** (creates `.roo/mcp.json`):
 
 ```json
 {

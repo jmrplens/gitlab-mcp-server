@@ -1440,6 +1440,7 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"latest":                       wrapAction(client, pipelines.GetLatest),
 		"create":                       wrapAction(client, pipelines.Create),
 		"update_metadata":              wrapAction(client, pipelines.UpdateMetadata),
+		"wait":                         wrapActionWithRequest(client, pipelines.Wait),
 		"trigger_list":                 wrapAction(client, pipelinetriggers.ListTriggers),
 		"trigger_get":                  wrapAction(client, pipelinetriggers.GetTrigger),
 		"trigger_create":               wrapAction(client, pipelinetriggers.CreateTrigger),
@@ -1452,7 +1453,7 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"resource_group_upcoming_jobs": wrapAction(client, resourcegroups.ListUpcomingJobs),
 	}
 
-	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, and delete GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
+	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -1468,6 +1469,7 @@ Actions:
 - latest: Get latest pipeline. Params: project_id (required), ref (optional branch/tag)
 - create: Create a new pipeline. Params: project_id (required), ref (required), variables (optional array of {key, value, variable_type})
 - update_metadata: Update pipeline name. Params: project_id (required), pipeline_id (required), name (required)
+- wait: Wait for a pipeline to reach a terminal state (success/failed/canceled/skipped/manual). Polls at interval with progress notifications. Params: project_id (required), pipeline_id (required), interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
 - trigger_list: List pipeline triggers. Params: project_id (required), page, per_page
 - trigger_get: Get a pipeline trigger. Params: project_id (required), trigger_id (required)
 - trigger_create: Create a pipeline trigger. Params: project_id (required), description (required)
@@ -1481,7 +1483,7 @@ Actions:
 }
 
 // registerJobMeta registers the gitlab_job meta-tool with actions:
-// list, list_project, get, trace, cancel, retry, list_bridges, artifacts, download_artifacts,
+// list, list_project, get, trace, cancel, retry, wait, list_bridges, artifacts, download_artifacts,
 // download_single_artifact, download_single_artifact_by_ref, erase, keep_artifacts, play,
 // delete_artifacts, delete_project_artifacts.
 func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
@@ -1502,6 +1504,7 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"play":                            wrapAction(client, jobs.Play),
 		"delete_artifacts":                wrapVoidAction(client, jobs.DeleteArtifacts),
 		"delete_project_artifacts":        wrapVoidAction(client, jobs.DeleteProjectArtifacts),
+		"wait":                            wrapActionWithRequest(client, jobs.Wait),
 		"token_scope_get":                 wrapAction(client, jobtokenscope.GetAccessSettings),
 		"token_scope_patch":               wrapAction(client, jobtokenscope.PatchAccessSettings),
 		"token_scope_list_inbound":        wrapAction(client, jobtokenscope.ListInboundAllowlist),
@@ -1512,7 +1515,7 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"token_scope_remove_group":        wrapVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
-	addMetaTool(server, "gitlab_job", `List, get, retry, cancel, erase, and play GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
+	addMetaTool(server, "gitlab_job", `List, get, retry, cancel, erase, play, and wait for GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -1523,6 +1526,7 @@ Actions:
 - trace: Get job log output (truncated to 100KB). Params: project_id (required), job_id (required)
 - cancel: Cancel a running or pending job. Params: project_id (required), job_id (required)
 - retry: Retry a failed or canceled job. Params: project_id (required), job_id (required)
+- wait: Wait for a job to reach a terminal state. Polls at interval until done or timeout. Params: project_id (required), job_id (required), interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (bool, default true)
 - list_bridges: List bridge (trigger) jobs for a pipeline. Params: project_id (required), pipeline_id (required), scope, page, per_page
 - artifacts: Download artifacts archive for a job (base64, max 1MB). Params: project_id (required), job_id (required)
 - download_artifacts: Download artifacts archive by ref/job name (base64, max 1MB). Params: project_id (required), ref_name (required), job

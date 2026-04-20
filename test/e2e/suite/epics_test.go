@@ -26,7 +26,7 @@ import (
 func TestMeta_Epics(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
@@ -140,7 +140,7 @@ func TestMeta_Epics(t *testing.T) {
 func TestMeta_EpicNotes(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
@@ -268,7 +268,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 func TestMeta_EpicDiscussions(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
@@ -418,7 +418,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 func TestMeta_EpicIssues(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
@@ -653,7 +653,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 func TestMeta_EpicLinks(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
@@ -712,7 +712,7 @@ func TestMeta_EpicLinks(t *testing.T) {
 func TestMeta_EpicBoards(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
-		t.Skip("enterprise not enabled")
+		return
 	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")

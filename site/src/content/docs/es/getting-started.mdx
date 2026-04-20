@@ -254,6 +254,48 @@ Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
 ```
 
 </TabItem>
+<TabItem label="Cline">
+
+Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **Edit Global MCP**, o edita el archivo de configuración directamente:
+
+- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="Roo Code">
+
+Abre la barra lateral de Roo Code → haz clic en el icono de servidores MCP → **Edit Global MCP** (configuración global) o **Edit Project MCP** (crea `.roo/mcp.json`):
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
 </Tabs>
 
 ## Uso de un archivo .env

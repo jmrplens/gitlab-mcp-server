@@ -242,4 +242,22 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		return toolutil.DeleteResult("project artifacts")
 	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "gitlab_job_wait",
+		Title:       toolutil.TitleFromName("gitlab_job_wait"),
+		Description: "Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipped, manual). Polls the job status at a configurable interval and sends progress notifications. Returns the final job details when done or when the timeout is reached.\n\nReturns: job details, waited_for duration, poll_count, final_status, timed_out flag. See also: gitlab_job_get, gitlab_job_trace.",
+		Annotations: toolutil.ReadAnnotations,
+		Icons:       toolutil.IconJob,
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input WaitInput) (*mcp.CallToolResult, WaitOutput, error) {
+		start := time.Now()
+		out, err := Wait(ctx, req, client, input)
+		toolutil.LogToolCallAll(ctx, req, "gitlab_job_wait", start, err)
+		if out.TimedOut {
+			result := toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail)
+			result.IsError = true
+			return result, out, nil
+		}
+		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail), out, err)
+	})
 }

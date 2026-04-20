@@ -150,10 +150,40 @@ func FormatTestReportSummaryMarkdown(out TestReportSummaryOutput) string {
 	return b.String()
 }
 
+// FormatWaitMarkdown renders the wait result as a Markdown summary.
+func FormatWaitMarkdown(out WaitOutput) string {
+	var b strings.Builder
+	if out.TimedOut {
+		fmt.Fprintf(&b, "## ⏰ Pipeline #%d: Timed Out (current: %s)\n\n", out.Pipeline.ID, out.Pipeline.Status)
+	} else {
+		fmt.Fprintf(&b, "## %s Pipeline #%d: %s\n\n", toolutil.PipelineStatusEmoji(out.FinalStatus), out.Pipeline.ID, out.FinalStatus)
+	}
+	fmt.Fprintf(&b, "- **Waited**: %s (%d polls)\n", out.WaitedFor, out.PollCount)
+	fmt.Fprintf(&b, "- **Final Status**: %s\n", out.FinalStatus)
+	if out.TimedOut {
+		b.WriteString("- **Timed Out**: yes\n")
+	}
+	b.WriteString("\n### Pipeline Details\n\n")
+	b.WriteString(FormatDetailMarkdown(out.Pipeline))
+	if out.TimedOut {
+		toolutil.WriteHints(&b,
+			"Pipeline is still running — call gitlab_pipeline_wait again to continue waiting",
+			"Use gitlab_pipeline_cancel to abort the pipeline",
+		)
+	} else if out.FinalStatus == "failed" {
+		toolutil.WriteHints(&b,
+			"Use gitlab_job action 'list' with scope 'failed' to find failed jobs",
+			"Use gitlab_pipeline_retry to retry failed jobs",
+		)
+	}
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailMarkdown)
 	toolutil.RegisterMarkdown(FormatVariablesMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportMarkdown)
 	toolutil.RegisterMarkdown(FormatTestReportSummaryMarkdown)
+	toolutil.RegisterMarkdown(FormatWaitMarkdown)
 }

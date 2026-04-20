@@ -160,6 +160,41 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	return b.String()
 }
 
+// FormatWaitMarkdown renders the job wait result as a Markdown summary.
+func FormatWaitMarkdown(out WaitOutput) string {
+	var b strings.Builder
+	if out.TimedOut {
+		fmt.Fprintf(&b, "## ⏰ Job #%d: Timed Out (current: %s)\n\n", out.Job.ID, out.Job.Status)
+	} else {
+		emoji := "✅"
+		if out.FinalStatus == "failed" {
+			emoji = "❌"
+		} else if out.FinalStatus == "canceled" {
+			emoji = "🚫"
+		}
+		fmt.Fprintf(&b, "## %s Job #%d: %s\n\n", emoji, out.Job.ID, out.FinalStatus)
+	}
+	fmt.Fprintf(&b, "- **Waited**: %s (%d polls)\n", out.WaitedFor, out.PollCount)
+	fmt.Fprintf(&b, "- **Final Status**: %s\n", out.FinalStatus)
+	if out.TimedOut {
+		b.WriteString("- **Timed Out**: yes\n")
+	}
+	b.WriteString("\n### Job Details\n\n")
+	b.WriteString(FormatOutputMarkdown(out.Job))
+	if out.TimedOut {
+		toolutil.WriteHints(&b,
+			"Job is still running — call gitlab_job_wait again to continue waiting",
+			"Use gitlab_job_cancel to abort the job",
+		)
+	} else if out.FinalStatus == "failed" {
+		toolutil.WriteHints(&b,
+			"Use gitlab_job action 'trace' to see the job log for failure details",
+			"Use gitlab_job action 'retry' to retry the failed job",
+		)
+	}
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
@@ -167,4 +202,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatBridgeListMarkdown)
 	toolutil.RegisterMarkdown(FormatArtifactsMarkdown)
 	toolutil.RegisterMarkdown(FormatSingleArtifactMarkdown)
+	toolutil.RegisterMarkdown(FormatWaitMarkdown)
 }

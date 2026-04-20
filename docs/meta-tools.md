@@ -57,8 +57,8 @@ META_TOOLS=false
 | 7 | `gitlab_repository`     | ~40     | Repository tree/compare, commit discussions, files, submodules, markdown |
 | 8 | `gitlab_group`          | ~64     | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions |
 | 9 | `gitlab_issue`          | ~55     | Issues, notes, discussions, links, statistics, issue emoji, issue resource events |
-| 10 | `gitlab_pipeline`      | ~21     | Pipelines, pipeline triggers              |
-| 11 | `gitlab_job`           | ~24     | Jobs, job token scope                     |
+| 10 | `gitlab_pipeline`      | ~22     | Pipelines, pipeline triggers, wait        |
+| 11 | `gitlab_job`           | ~25     | Jobs, job token scope, wait               |
 | 12 | `gitlab_user`          | ~29     | Users, events, notifications, keys, namespaces, avatar |
 | 13 | `gitlab_wiki`          | 6       | Project/group wikis                       |
 | 14 | `gitlab_environment`   | ~16     | Environments, protected envs, freeze periods |

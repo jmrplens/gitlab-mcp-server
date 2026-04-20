@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Lint)
-> **Individual tools**: 57
+> **Individual tools**: 59
 > **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_pipeline_schedule`, `gitlab_pipeline_trigger`, `gitlab_instance_variable` (when `META_TOOLS=true`, default)
 > **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -134,6 +134,21 @@ Get the latest pipeline for a project, optionally filtered by branch/tag ref. Re
 | Annotation | **Read** |
 | ---------- | -------- |
 
+### `gitlab_pipeline_wait`
+
+Wait for a pipeline to reach a terminal state (success, failed, canceled, skipped, manual). Polls the pipeline status at a configurable interval and sends progress notifications. Returns the final pipeline details when done or when the timeout is reached.
+
+| Parameter           | Required | Default | Description                                    |
+| ------------------- | -------- | ------- | ---------------------------------------------- |
+| `project_id`        | Yes      | —       | Project ID or URL-encoded path                 |
+| `pipeline_id`       | Yes      | —       | Pipeline ID to wait for                        |
+| `interval_seconds`  | No       | 10      | Polling interval in seconds (5–60)             |
+| `timeout_seconds`   | No       | 300     | Maximum wait time in seconds (1–3600)          |
+| `fail_on_error`     | No       | true    | Return error if pipeline reaches a failed state |
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ---
 
 ## Jobs
@@ -255,6 +270,21 @@ Delete all artifacts across an entire project. This is a destructive operation.
 | ---------- | ---------- |
 
 > **Destructive**: Deletes all artifacts across the entire project.
+
+### `gitlab_job_wait`
+
+Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipped, manual). Polls the job status at a configurable interval and sends progress notifications. Returns the final job details when done or when the timeout is reached.
+
+| Parameter           | Required | Default | Description                                 |
+| ------------------- | -------- | ------- | ------------------------------------------- |
+| `project_id`        | Yes      | —       | Project ID or URL-encoded path              |
+| `job_id`            | Yes      | —       | Job ID to wait for                          |
+| `interval_seconds`  | No       | 10      | Polling interval in seconds (5–60)          |
+| `timeout_seconds`   | No       | 300     | Maximum wait time in seconds (1–3600)       |
+| `fail_on_error`     | No       | true    | Return error if job reaches a failed state  |
+
+| Annotation | **Read** |
+| ---------- | -------- |
 
 ---
 

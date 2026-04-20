@@ -79,13 +79,13 @@
 | search               |   106 |  100.0%  |    11 |
 | awardemoji           |   106 |   97.5%  |    25 |
 | packages             |   104 |   95.2%  |     9 |
-| jobs                 |   100 |   99.1%  |    16 |
+| jobs                 |   119 |   97.7%  |    17 |
 | resourceevents       |    99 |  100.0%  |    16 |
 | runners              |    97 |   96.8%  |    20 |
 | commits              |    96 |   97.1%  |    13 |
 | groupmilestones      |    87 |  100.0%  |     9 |
 | accesstokens         |    86 |  100.0%  |    19 |
-| pipelines            |    81 |   99.7%  |    11 |
+| pipelines            |   100 |   97.9%  |    12 |
 | pipelineschedules    |    80 |  100.0%  |    11 |
 | branches             |    79 |   97.4%  |    10 |
 | containerregistry    |    76 |  100.0%  |    14 |
@@ -187,7 +187,7 @@
 | issuenotes               |    38 |
 | issues                   |   195 |
 | issuestatistics          |    41 |
-| jobs                     |   100 |
+| jobs                     |   119 |
 | jobtokenscope            |    49 |
 | keys                     |    21 |
 | labels                   |    54 |
@@ -212,7 +212,7 @@
 | notifications            |    30 |
 | packages                 |   104 |
 | pages                    |    55 |
-| pipelines                |    81 |
+| pipelines                |   100 |
 | pipelineschedules        |    80 |
 | pipelinetriggers         |    49 |
 | planlimits               |    13 |
@@ -380,7 +380,7 @@
 | issuenotes               |  100.0%  |
 | issues                   |   98.6%  |
 | issuestatistics          |   95.8%  |
-| jobs                     |   99.1%  |
+| jobs                     |   97.7%  |
 | jobtokenscope            |  100.0%  |
 | keys                     |  100.0%  |
 | labels                   |   98.9%  |
@@ -405,7 +405,7 @@
 | notifications            |  100.0%  |
 | packages                 |   95.2%  |
 | pages                    |   99.1%  |
-| pipelines                |   99.7%  |
+| pipelines                |   97.9%  |
 | pipelineschedules        |  100.0%  |
 | pipelinetriggers         |  100.0%  |
 | planlimits               |  100.0%  |
