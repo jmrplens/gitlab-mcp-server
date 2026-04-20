@@ -15,6 +15,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [HTTP Server Mode](http-server-mode.md) | Multi-user HTTP transport with per-token server pool |
 | [OAuth App Setup](oauth-app-setup.md) | Creating GitLab OAuth applications for MCP clients |
 | [IDE Configuration](ide-configuration.md) | Per-IDE MCP JSON configuration (stdio, HTTP legacy, HTTP OAuth) |
+| [CI/CD Usage](ci-cd.md) | Using gitlab-mcp-server in CI/CD pipelines (with or without LLM) |
 | [Auto-Update](auto-update.md) | Self-update mechanism, modes, MCP tools, and release requirements |
 | [Resource Consumption](resource-consumption.md) | Memory footprint, scaling limits, and optimization strategies |
 | [Meta-Tools](meta-tools.md) | Domain-level meta-tool reference with action mappings |

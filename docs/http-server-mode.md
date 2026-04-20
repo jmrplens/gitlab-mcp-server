@@ -22,7 +22,7 @@ By default, gitlab-mcp-server runs in **stdio mode** — each AI client (VS Code
 | Single developer, local AI client | stdio |
 | Team sharing one server instance | **HTTP** |
 | Remote/headless server deployment | **HTTP** |
-| CI/CD integration with MCP | **HTTP** |
+| CI/CD integration with MCP | **HTTP** (see [CI/CD Usage](ci-cd.md)) |
 | Testing with curl or HTTP clients | **HTTP** |
 
 ## Starting the HTTP Server

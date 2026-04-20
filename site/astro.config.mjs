@@ -356,6 +356,11 @@ export default defineConfig({
 							translations: { es: "Errores y formato" },
 						},
 						{
+							slug: "operations/ci-cd",
+							label: "CI/CD Usage",
+							translations: { es: "Uso en CI/CD" },
+						},
+						{
 							slug: "operations/troubleshooting",
 							label: "Troubleshooting",
 							translations: { es: "Solución de problemas" },

@@ -15,6 +15,8 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 - A Personal Access Token with `api` scope ([how to create one](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html))
 - An MCP-compatible AI client (VS Code with GitHub Copilot, Claude Desktop, Cursor, etc.)
 
+> **Headless / CI usage?** See the [CI/CD Usage](ci-cd.md) guide for running in pipelines without an interactive client.
+
 ---
 
 ## Step 1: Download the Binary

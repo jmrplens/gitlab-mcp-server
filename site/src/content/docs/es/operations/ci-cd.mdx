@@ -1,0 +1,199 @@
+---
+title: Uso en CI/CD
+description: Usa gitlab-mcp-server en pipelines CI/CD con o sin un LLM
+---
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/ci-cd.md) en el repositorio.
+:::
+
+gitlab-mcp-server puede ejecutarse dentro de jobs CI/CD como cualquier otra herramienta CLI. Hay dos modos de uso disponibles:
+
+| Modo | LLM Necesario | Caso de uso | Determinismo |
+| --- | :---: | --- | :---: |
+| **Determinista** (JSON-RPC) | No | Operaciones scriptadas: listar issues, publicar comentarios, crear releases | ✅ Totalmente determinista |
+| **Con LLM** (cliente MCP headless) | Sí | Flujos inteligentes: revisión de código, triaje de issues, análisis de MRs | ❌ No determinista |
+
+Ambos modos se autentican con un **Personal Access Token** (PAT) o **Project Access Token**. El servidor soporta las 1004 herramientas completas al usar un token con scope `api`.
+
+## Requisitos previos
+
+1. **Descarga el binario** desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases):
+
+   ```bash
+   curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64" \
+     -o gitlab-mcp-server
+   chmod +x gitlab-mcp-server
+   ```
+
+2. **Crea un Project Access Token** con scope `api` (recomendado sobre PATs personales para CI).
+
+3. **Almacena el token** como variable CI/CD enmascarada llamada `MCP_PAT`.
+
+## Modo 1: Determinista (Sin LLM)
+
+Envía mensajes JSON-RPC directamente al servidor a través de stdio. Totalmente determinista — sin LLM ni API externa necesaria.
+
+### Cómo funciona
+
+El servidor se comunica a través del [protocolo MCP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#stdio) sobre stdin/stdout usando JSON-RPC 2.0. Cada interacción requiere un handshake `initialize`, una notificación `initialized`, y luego una o más solicitudes `tools/call`.
+
+### Ejemplo en GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+mcp-list-issues:
+  stage: test
+  image: alpine:latest
+  variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
+  before_script:
+    - apk add --no-cache curl jq
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+        -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+  script:
+    - |
+      RESULT=$({
+        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+        echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
+      } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
+    - echo "${RESULT}"
+```
+
+### Función auxiliar
+
+Para pipelines con muchas llamadas, envuelve el protocolo en una función reutilizable:
+
+```bash
+mcp_call() {
+  local tool="$1"
+  local args="$2"
+  {
+    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+    echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":2}'
+  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
+}
+
+# Uso
+ISSUES=$(mcp_call "gitlab_list_issues" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
+```
+
+## Modo 2: Con LLM (Cliente MCP headless)
+
+Usa un cliente MCP headless para que un LLM seleccione y orqueste las herramientas. Ideal para flujos inteligentes como revisión de código, triaje de issues y generación de notas de release.
+
+### Cliente recomendado: IBM mcp-cli
+
+[IBM mcp-cli](https://github.com/IBM/mcp-cli) soporta modo comando para flujos automatizados con LLM, con proveedores OpenAI, Anthropic, Azure, Gemini, Groq y Ollama local.
+
+### GitLab CI: revisión automática de MRs
+
+```yaml
+# .gitlab-ci.yml
+auto-review:
+  stage: review
+  image: python:3.12-slim
+  variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
+    OPENAI_API_KEY: ${OPENAI_KEY}
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+        -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+    - pip install --quiet mcp-cli
+  script:
+    - |
+      cat > server_config.json << 'EOF'
+      {
+        "mcpServers": {
+          "gitlab": {
+            "command": "./gitlab-mcp-server",
+            "env": {
+              "GITLAB_URL": "${GITLAB_URL}",
+              "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+            }
+          }
+        }
+      }
+      EOF
+    - |
+      mcp-cli cmd \
+        --config-file server_config.json \
+        --server gitlab \
+        --provider openai \
+        --model gpt-4o \
+        --prompt "Revisa el merge request !${CI_MERGE_REQUEST_IID} en el proyecto ${CI_PROJECT_ID}. Comprueba calidad de código, problemas de seguridad y tests faltantes. Publica tu revisión como nota en el MR." \
+        --raw
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+```
+
+### Usar un LLM local (Ollama)
+
+Para pipelines que no pueden usar APIs de LLM externas, ejecuta Ollama como servicio CI:
+
+```yaml
+local-llm-review:
+  stage: review
+  services:
+    - name: ollama/ollama:latest
+      alias: ollama
+  variables:
+    OLLAMA_HOST: http://ollama:11434
+  script:
+    - |
+      mcp-cli cmd \
+        --config-file server_config.json \
+        --server gitlab \
+        --provider ollama \
+        --model qwen2.5-coder:7b \
+        --prompt "Resume los últimos 5 merge requests del proyecto ${CI_PROJECT_ID}." \
+        --raw
+```
+
+## Transporte HTTP en CI
+
+Para pipelines con muchas llamadas a herramientas, el transporte HTTP evita la sobrecarga de inicio de proceso por llamada:
+
+```yaml
+http-mode-pipeline:
+  script:
+    # Iniciar servidor HTTP en segundo plano
+    - ./gitlab-mcp-server --http --gitlab-url="${CI_SERVER_URL}" --http-addr=127.0.0.1:8080 &
+    - sleep 2
+    # Llamar herramientas vía HTTP
+    - |
+      curl -s -X POST http://127.0.0.1:8080/mcp \
+        -H "Content-Type: application/json" \
+        -H "PRIVATE-TOKEN: ${MCP_PAT}" \
+        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}},"id":2}' \
+        | jq '.result.content[0].text'
+```
+
+Consulta [Servidor HTTP](/es/operations/http-server/) para detalles completos.
+
+## Mejores prácticas de seguridad
+
+| Práctica | Recomendación |
+| --- | --- |
+| Tipo de token | **Project Access Token** — limitado a un proyecto, auditable |
+| Scope | `api` para acceso completo, `read_api` para flujos de solo lectura |
+| Expiración | Máximo 90 días, rotar antes de que expire |
+| Almacenamiento | **Variable CI/CD enmascarada** — nunca commitear al repositorio |
+| Multi-proyecto | Usar **Group Access Tokens** para flujos entre proyectos |
+
+## Solución de problemas
+
+| Error | Solución |
+| --- | --- |
+| `not found` / permiso denegado | Verifica que el binario se descargó para la plataforma correcta, ejecuta `chmod +x` |
+| `401 Unauthorized` | Comprueba que la variable `MCP_PAT` está configurada y el token no ha expirado |
+| `x509: certificate signed by unknown authority` | Configura `GITLAB_SKIP_TLS_VERIFY=true` |
+| Timeout en respuestas grandes | Añade argumento `per_page` para limitar resultados |
+| Errores de proveedor en mcp-cli | Verifica las variables de API key, prueba `pip install --upgrade mcp-cli` |
