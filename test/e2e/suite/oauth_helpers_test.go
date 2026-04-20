@@ -26,7 +26,7 @@ type e2eOAuthConfig struct {
 var oauthHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // E2E test client for self-signed certs
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // E2E test client for self-signed certs
 	},
 }
 
@@ -130,8 +130,8 @@ func parseOAuthJSONRPC(t *testing.T, resp *http.Response) map[string]any {
 	}
 
 	var envelope map[string]any
-	if err := json.Unmarshal(b, &envelope); err != nil {
-		t.Fatalf("unmarshal JSON-RPC response: %v (body: %s)", err, string(b))
+	if unmarshalErr := json.Unmarshal(b, &envelope); unmarshalErr != nil {
+		t.Fatalf("unmarshal JSON-RPC response: %v (body: %s)", unmarshalErr, string(b))
 	}
 
 	inner, ok := envelope["result"].(map[string]any)
@@ -151,14 +151,14 @@ func parseOAuthSSE(t *testing.T, r io.Reader) map[string]any {
 	}
 
 	var lastJSON map[string]any
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		var obj map[string]any
-		if err := json.Unmarshal([]byte(data), &obj); err == nil {
+		if parseErr := json.Unmarshal([]byte(data), &obj); parseErr == nil {
 			if inner, hasResult := obj["result"]; hasResult {
 				if m, ok := inner.(map[string]any); ok {
 					lastJSON = m

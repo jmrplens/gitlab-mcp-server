@@ -41,10 +41,9 @@ func TestRegisterTools_DeleteNoteError(t *testing.T) {
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "gitlab_delete_epic_discussion_note",
 		Arguments: map[string]any{
-			"group_id":      "42",
-			"epic_id":       float64(1),
-			"discussion_id": "abc123",
-			"note_id":       float64(10),
+			"full_path": "42",
+			"iid":       float64(1),
+			"note_id":   float64(10),
 		},
 	})
 	if err != nil {

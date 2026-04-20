@@ -28,6 +28,7 @@ These must be set for the server to start in stdio mode:
 | `META_TOOLS`             | `true`  | Enable meta-tool mode (42 domain tools instead of 1000+ individual tools)                   |
 | `GITLAB_ENTERPRISE`      | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY`       | `false` | Disable all mutating tools (create, update, delete)                                         |
+| `GITLAB_SAFE_MODE`       | `false` | Return structured JSON preview instead of executing mutating tools (dry-run mode)           |
 | `LOG_LEVEL`              | `info`  | Log verbosity: `debug`, `info`, `warn`, `error`                                             |
 
 :::tip
@@ -71,6 +72,7 @@ GITLAB_SKIP_TLS_VERIFY=false
 META_TOOLS=true
 GITLAB_ENTERPRISE=false
 GITLAB_READ_ONLY=false
+GITLAB_SAFE_MODE=false
 LOG_LEVEL=info
 
 # Optional components
@@ -266,3 +268,15 @@ Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. A
 - Audit and compliance environments
 - Shared servers where users should only query data
 - Tokens with `read_api` scope
+
+## Safe mode
+
+Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structured JSON preview of what would be executed, without actually performing the operation. Read-only tools work normally. This is useful for:
+
+- Reviewing operations before execution (dry-run)
+- Training environments where you want to see tool behavior
+- Debugging tool parameters without side effects
+
+:::note
+If `GITLAB_READ_ONLY=true` is also set, it takes precedence — mutating tools are fully disabled rather than previewed.
+:::

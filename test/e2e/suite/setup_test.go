@@ -1,10 +1,10 @@
 //go:build e2e
 
 // setup_test.go is the main E2E test infrastructure file. It provides
-// [TestMain] for initializing the test environment, four in-process MCP
-// server/client pairs (individual, meta, sampling, elicitation), snapshot
-// guardrails for self-hosted mode, and shared helper functions used across
-// all domain test files.
+// [TestMain] for initializing the test environment, five in-process MCP
+// server/client pairs (individual, meta, sampling, elicitation, safe-mode),
+// snapshot guardrails for self-hosted mode, and shared helper functions used
+// across all domain test files.
 
 // Package suite contains end-to-end integration tests that exercise the
 // MCP server tools against a real GitLab instance via in-process MCP
@@ -59,6 +59,7 @@ type sessions struct {
 	meta        *mcp.ClientSession
 	sampling    *mcp.ClientSession
 	elicitation *mcp.ClientSession
+	safeMode    *mcp.ClientSession
 	glClient    *gitlabclient.Client
 	username    string
 	enterprise  bool
@@ -84,10 +85,11 @@ type resourceSnapshot struct {
 }
 
 // TestMain initializes the E2E test environment by loading configuration,
-// creating a GitLab client, verifying connectivity, and starting four
+// creating a GitLab client, verifying connectivity, and starting five
 // in-process MCP server/client pairs: individual tools, meta-tools,
-// sampling-enabled, and elicitation-enabled. It populates the global
-// [sess] struct and tears down servers after all tests complete.
+// sampling-enabled, elicitation-enabled, and safe-mode (mutating tools
+// return previews). It populates the global [sess] struct and tears down
+// servers after all tests complete.
 //
 // In self-hosted mode, it snapshots all pre-existing groups and projects
 // before running tests, and verifies they remain unchanged after tests
@@ -138,10 +140,11 @@ func TestMain(m *testing.M) {
 	}
 
 	// Auto-detect authenticated username from token.
-	username, userErr := glClient.CurrentUsername(context.Background())
+	userInfo, userErr := glClient.CurrentUser(context.Background())
 	if userErr != nil {
 		log.Fatalf("e2e: auto-detect username: %v", userErr)
 	}
+	username := userInfo.Username
 	log.Printf("e2e: authenticated as %s", username)
 
 	// Create MCP server with all individual tools registered.
@@ -258,11 +261,43 @@ func TestMain(m *testing.M) {
 		log.Fatalf("e2e: connect elicit MCP client: %v", err)
 	}
 
+	// Create a fifth MCP server with Safe Mode enabled (mutating tools return previews).
+	safeModeServer := mcp.NewServer(&mcp.Implementation{
+		Name:    "gitlab-mcp-server-e2e-safemode",
+		Version: "test",
+	}, nil)
+	tools.RegisterAll(safeModeServer, glClient, enterprise)
+	tools.WrapMutatingToolsForSafeMode(safeModeServer)
+
+	safeModeServerTransport, safeModeClientTransport := mcp.NewInMemoryTransports()
+
+	safeModeServerCtx, safeModeServerCancel := context.WithCancel(context.Background())
+	go func() {
+		if srvErr := safeModeServer.Run(safeModeServerCtx, safeModeServerTransport); srvErr != nil && safeModeServerCtx.Err() == nil {
+			log.Printf("e2e: safemode server stopped unexpectedly: %v", srvErr)
+		}
+	}()
+
+	safeModeClient := mcp.NewClient(&mcp.Implementation{
+		Name:    "e2e-test-safemode-client",
+		Version: "test",
+	}, nil)
+	safeModeSession, err := safeModeClient.Connect(context.Background(), safeModeClientTransport, nil)
+	if err != nil {
+		serverCancel()
+		metaServerCancel()
+		samplingServerCancel()
+		elicitServerCancel()
+		safeModeServerCancel()
+		log.Fatalf("e2e: connect safemode MCP client: %v", err)
+	}
+
 	sess = sessions{
 		individual:  session,
 		meta:        metaSession,
 		sampling:    samplingSession,
 		elicitation: elicitSession,
+		safeMode:    safeModeSession,
 		glClient:    glClient,
 		username:    username,
 		enterprise:  enterprise,
@@ -303,6 +338,8 @@ func TestMain(m *testing.M) {
 	samplingServerCancel()
 	_ = elicitSession.Close()
 	elicitServerCancel()
+	_ = safeModeSession.Close()
+	safeModeServerCancel()
 	os.Exit(code)
 }
 

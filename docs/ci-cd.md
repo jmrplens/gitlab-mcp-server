@@ -73,7 +73,7 @@ Send JSON-RPC messages directly to the server via stdio. This is fully determini
 
 ### How It Works
 
-The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires:
+The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires:
 
 1. An `initialize` handshake
 2. An `initialized` notification
@@ -91,7 +91,7 @@ export GITLAB_TOKEN="${MCP_PAT}"
 # Initialize MCP session + call a tool in a single pipeline
 {
   # 1. Initialize handshake
-  echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci-script","version":"1.0"}},"id":1}'
+  echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci-script","version":"1.0"}},"id":1}'
   # 2. Initialized notification
   echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
   # 3. Call a tool
@@ -119,7 +119,7 @@ mcp-list-issues:
   script:
     - |
       RESULT=$({
-        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
         echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
       } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
@@ -138,7 +138,7 @@ export GITLAB_URL="${CI_SERVER_URL}"
 export GITLAB_TOKEN="${MCP_PAT}"
 
 {
-  echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+  echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
   echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
   # List open MRs
@@ -166,7 +166,7 @@ mcp_call() {
   local id="${3:-2}"
 
   {
-    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":'"${id}"'}'
   } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
@@ -319,6 +319,7 @@ local-llm-review:
     GITLAB_TOKEN: ${MCP_PAT}
     OLLAMA_HOST: http://ollama:11434
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
         -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
@@ -326,6 +327,20 @@ local-llm-review:
     # Pull a model (once, cached in CI)
     - curl -s "${OLLAMA_HOST}/api/pull" -d '{"name":"qwen2.5-coder:7b"}'
   script:
+    - |
+      cat > server_config.json << 'EOF'
+      {
+        "mcpServers": {
+          "gitlab": {
+            "command": "./gitlab-mcp-server",
+            "env": {
+              "GITLAB_URL": "${GITLAB_URL}",
+              "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+            }
+          }
+        }
+      }
+      EOF
     - |
       mcp-cli cmd \
         --config-file server_config.json \
@@ -367,7 +382,7 @@ http-mode-pipeline:
       SESSION=$(curl -s -X POST http://127.0.0.1:8080/mcp \
         -H "Content-Type: application/json" \
         -H "PRIVATE-TOKEN: ${MCP_PAT}" \
-        -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}')
+        -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}')
 
     # Call tools via HTTP
     - |
@@ -408,7 +423,7 @@ jobs:
       - name: List open issues
         run: |
           RESULT=$({
-            echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+            echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
             echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
             echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"12345","state":"opened","per_page":5}},"id":2}'
           } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r)

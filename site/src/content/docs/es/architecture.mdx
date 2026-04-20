@@ -16,6 +16,7 @@ graph LR
     U[Usuario] -->|lenguaje natural| AI[Cliente IA]
     AI -->|llamadas de herramientas MCP| S[GitLab MCP Server]
     S -->|REST API v4| G[Instancia GitLab]
+    S -->|GraphQL API| G
     G -->|JSON| S
     S -->|resultado estructurado + markdown| AI
     AI -->|respuesta formateada| U
@@ -24,7 +25,7 @@ graph LR
 El servidor es un binario estático único que:
 
 1. **Recibe** llamadas de herramientas MCP desde el cliente de IA (p. ej., "listar merge requests abiertas")
-2. **Traduce** las llamadas en peticiones a la API REST v4 de GitLab con la autenticación adecuada
+2. **Traduce** las llamadas en peticiones a la API REST v4 o GraphQL de GitLab con la autenticación adecuada
 3. **Ejecuta** las llamadas a la API contra tu instancia de GitLab
 4. **Devuelve** los resultados en formato dual: JSON estructurado para que la IA razone sobre ellos, y Markdown formateado para mostrárselo al usuario
 

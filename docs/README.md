@@ -20,6 +20,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Resource Consumption](resource-consumption.md) | Memory footprint, scaling limits, and optimization strategies |
 | [Meta-Tools](meta-tools.md) | Domain-level meta-tool reference with action mappings |
 | [Output Format](output-format.md) | How tool responses are structured: Markdown + JSON, annotations, clickable links, next-step hints |
+| [GraphQL Integration](graphql.md) | When and how the server uses GitLab's GraphQL API |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions for connection, TLS, tools, and transport |
 
 ## Development

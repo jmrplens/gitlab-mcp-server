@@ -52,6 +52,7 @@ type Config struct {
 	MetaTools     bool
 	Enterprise    bool
 	ReadOnly      bool
+	SafeMode      bool
 
 	UploadMaxFileSize int64
 
@@ -103,6 +104,11 @@ func Load() (*Config, error) {
 	readOnly, err := parseBool(os.Getenv("GITLAB_READ_ONLY"), false)
 	if err != nil {
 		return nil, fmt.Errorf("invalid GITLAB_READ_ONLY value: %w", err)
+	}
+
+	safeMode, err := parseBool(os.Getenv("GITLAB_SAFE_MODE"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_SAFE_MODE value: %w", err)
 	}
 
 	maxFileSize, err := parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
@@ -168,6 +174,7 @@ func Load() (*Config, error) {
 		MetaTools:          metaTools,
 		Enterprise:         enterprise,
 		ReadOnly:           readOnly,
+		SafeMode:           safeMode,
 		UploadMaxFileSize:  maxFileSize,
 		MaxHTTPClients:     maxHTTPClients,
 		SessionTimeout:     sessionTimeout,

@@ -14,18 +14,36 @@ func FormatOutputMarkdown(e Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Epic &%d — %s\n\n", e.IID, toolutil.EscapeMdTableCell(e.Title))
 	fmt.Fprintf(&b, toolutil.FmtMdState, e.State)
+	if e.Status != "" {
+		fmt.Fprintf(&b, "- **Status**: %s\n", e.Status)
+	}
 	fmt.Fprintf(&b, toolutil.FmtMdAuthor, e.Author)
+	if len(e.Assignees) > 0 {
+		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(e.Assignees, ", "))
+	}
 	if e.Confidential {
 		b.WriteString("- **Confidential**: yes\n")
 	}
 	if len(e.Labels) > 0 {
 		fmt.Fprintf(&b, "- **Labels**: %s\n", strings.Join(e.Labels, ", "))
 	}
+	if e.HealthStatus != "" {
+		fmt.Fprintf(&b, "- **Health**: %s\n", e.HealthStatus)
+	}
+	if e.Weight != nil {
+		fmt.Fprintf(&b, "- **Weight**: %d\n", *e.Weight)
+	}
 	if e.StartDate != "" {
 		fmt.Fprintf(&b, "- **Start date**: %s\n", e.StartDate)
 	}
 	if e.DueDate != "" {
 		fmt.Fprintf(&b, "- **Due date**: %s\n", e.DueDate)
+	}
+	if e.Color != "" {
+		fmt.Fprintf(&b, "- **Color**: %s\n", e.Color)
+	}
+	if e.ParentIID > 0 {
+		fmt.Fprintf(&b, "- **Parent**: &%d (%s)\n", e.ParentIID, e.ParentPath)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(e.CreatedAt))
 	if e.ClosedAt != "" {
@@ -34,13 +52,21 @@ func FormatOutputMarkdown(e Output) string {
 	if e.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, e.WebURL)
 	}
+	if len(e.LinkedItems) > 0 {
+		b.WriteString("\n### Linked Items\n\n")
+		b.WriteString("| IID | Link Type | Path |\n")
+		b.WriteString("| --- | --- | --- |\n")
+		for _, li := range e.LinkedItems {
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", li.IID, li.LinkType, li.Path)
+		}
+	}
 	if e.Description != "" {
 		fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(e.Description))
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'update' with epic_iid to modify this epic",
-		"Use action 'epic_get_links' with epic_iid to see child epics",
+		"Use action 'update' with iid to modify this epic",
+		"Use action 'epic_get_links' with iid to see child epics",
 		"Use gitlab_epic_note_list to see comments on this epic",
 	)
 	return b.String()
@@ -49,8 +75,7 @@ func FormatOutputMarkdown(e Output) string {
 // FormatListMarkdown renders a list of epics as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Epics (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Epics), out.Pagination)
+	fmt.Fprintf(&b, "## Group Epics (%d)\n\n", len(out.Epics))
 	if len(out.Epics) == 0 {
 		b.WriteString("No epics found.\n")
 		return b.String()
@@ -71,10 +96,9 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.FormatTime(e.CreatedAt),
 		)
 	}
-	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with epic_iid to see full details",
+		"Use action 'get' with iid to see full details",
 		"Use action 'create' to add a new epic",
 	)
 	return b.String()
@@ -101,7 +125,7 @@ func FormatLinksMarkdown(out LinksOutput) string {
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with epic_iid to see child epic details",
+		"Use action 'get' with iid to see child epic details",
 	)
 	return b.String()
 }

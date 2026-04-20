@@ -238,6 +238,7 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
+| `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating tools and returns a JSON preview (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
@@ -255,6 +256,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--enterprise`        | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
 | `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
+| `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
 | `--http-addr`         | `:8080` | HTTP listen address                                      |
@@ -427,6 +429,7 @@ ADRs document key decisions in `docs/adr/`:
 | ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1004 tools)      |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (5 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
+| ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 
 ### Modular tools sub-packages (ADR-0004)
 

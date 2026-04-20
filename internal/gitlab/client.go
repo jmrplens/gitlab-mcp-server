@@ -168,6 +168,7 @@ func (c *Client) CurrentUser(ctx context.Context) (*CurrentUserInfo, error) {
 }
 
 // CurrentUsername returns the username of the authenticated GitLab user.
+//
 // Deprecated: Use [Client.CurrentUser] which returns both ID and username.
 func (c *Client) CurrentUsername(ctx context.Context) (string, error) {
 	info, err := c.CurrentUser(ctx)

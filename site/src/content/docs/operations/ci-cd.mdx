@@ -9,10 +9,10 @@ For the complete technical reference, see [`docs/ci-cd.md`](https://github.com/j
 
 gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two usage modes are available:
 
-| Mode | LLM Required | Use Case | Determinism |
-| --- | :---: | --- | :---: |
-| **Deterministic** (JSON-RPC) | No | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
-| **LLM-driven** (headless MCP client) | Yes | Intelligent workflows: code review, issue triage, MR analysis | ❌ Non-deterministic |
+| Mode                                 | LLM Required | Use Case                                                         |      Determinism       |
+| ------------------------------------ | :----------: | ---------------------------------------------------------------- | :--------------------: |
+| **Deterministic** (JSON-RPC)         |      No      | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
+| **LLM-driven** (headless MCP client) |     Yes      | Intelligent workflows: code review, issue triage, MR analysis    |  ❌ Non-deterministic  |
 
 Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full 1004-tool surface when using a token with `api` scope.
 
@@ -36,7 +36,7 @@ Send JSON-RPC messages directly to the server via stdio. Fully deterministic —
 
 ### How it works
 
-The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires an `initialize` handshake, an `initialized` notification, then one or more `tools/call` requests.
+The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires an `initialize` handshake, an `initialized` notification, then one or more `tools/call` requests.
 
 ### GitLab CI example
 
@@ -51,12 +51,12 @@ mcp-list-issues:
   before_script:
     - apk add --no-cache curl jq
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
-        -o gitlab-mcp-server
+      -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
   script:
     - |
       RESULT=$({
-        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
         echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
       } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
@@ -72,7 +72,7 @@ mcp_call() {
   local tool="$1"
   local args="$2"
   {
-    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":2}'
   } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
@@ -104,7 +104,7 @@ auto-review:
   before_script:
     - apt-get update && apt-get install -y curl
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
-        -o gitlab-mcp-server
+      -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
     - pip install --quiet mcp-cli
   script:
@@ -141,12 +141,36 @@ For pipelines that cannot use external LLM APIs, run Ollama as a CI service:
 ```yaml
 local-llm-review:
   stage: review
+  image: python:3.12-slim
   services:
     - name: ollama/ollama:latest
       alias: ollama
   variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
     OLLAMA_HOST: http://ollama:11434
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+      -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+    - pip install --quiet mcp-cli
+    - curl -s "${OLLAMA_HOST}/api/pull" -d '{"name":"qwen2.5-coder:7b"}'
   script:
+    - |
+      cat > server_config.json << 'EOF'
+      {
+        "mcpServers": {
+          "gitlab": {
+            "command": "./gitlab-mcp-server",
+            "env": {
+              "GITLAB_URL": "${GITLAB_URL}",
+              "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+            }
+          }
+        }
+      }
+      EOF
     - |
       mcp-cli cmd \
         --config-file server_config.json \
@@ -180,20 +204,20 @@ See [HTTP Server Mode](/operations/http-server/) for full details.
 
 ## Security best practices
 
-| Practice | Recommendation |
-| --- | --- |
-| Token type | **Project Access Token** — scoped to a single project, auditable |
-| Scope | `api` for full access, `read_api` for read-only workflows |
-| Expiration | 90 days maximum, rotate before expiry |
-| Storage | **Masked CI/CD variable** — never commit to repository |
-| Multi-project | Use **Group Access Tokens** for cross-project workflows |
+| Practice      | Recommendation                                                   |
+| ------------- | ---------------------------------------------------------------- |
+| Token type    | **Project Access Token** — scoped to a single project, auditable |
+| Scope         | `api` for full access, `read_api` for read-only workflows        |
+| Expiration    | 90 days maximum, rotate before expiry                            |
+| Storage       | **Masked CI/CD variable** — never commit to repository           |
+| Multi-project | Use **Group Access Tokens** for cross-project workflows          |
 
 ## Troubleshooting
 
-| Error | Solution |
-| --- | --- |
-| `not found` / permission denied | Verify binary downloaded for correct platform, run `chmod +x` |
-| `401 Unauthorized` | Check `MCP_PAT` variable is set and token not expired |
-| `x509: certificate signed by unknown authority` | Set `GITLAB_SKIP_TLS_VERIFY=true` |
-| Timeout on large responses | Add `per_page` argument to limit results |
-| mcp-cli provider errors | Verify API key variables, check `pip install --upgrade mcp-cli` |
+| Error                                           | Solution                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `not found` / permission denied                 | Verify binary downloaded for correct platform, run `chmod +x`   |
+| `401 Unauthorized`                              | Check `MCP_PAT` variable is set and token not expired           |
+| `x509: certificate signed by unknown authority` | Set `GITLAB_SKIP_TLS_VERIFY=true`                               |
+| Timeout on large responses                      | Add `per_page` argument to limit results                        |
+| mcp-cli provider errors                         | Verify API key variables, check `pip install --upgrade mcp-cli` |

@@ -3,7 +3,6 @@ package epicissues
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -12,12 +11,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const registerEpicIssueListJSON = `[{"id":42,"iid":1,"title":"Test Issue","state":"opened","epic_issue_id":10}]`
-const registerEpicIssueAssignJSON = `{"id":10,"epic":{"id":1},"issue":{"id":42}}`
-const registerEpicIssueUpdateJSON = `[{"id":42,"iid":1,"title":"Test Issue","state":"opened","epic_issue_id":10}]`
-
-// TestRegisterTools_NoPanic verifies that RegisterTools registers all epic-issue
-// tools without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -26,26 +19,26 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterTools_CallThroughMCP verifies all 4 epic-issue tools can be called
-// through MCP in-memory transport, covering every handler closure in register.go.
 func TestRegisterTools_CallThroughMCP(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/issues"):
-			testutil.RespondJSON(w, http.StatusOK, registerEpicIssueListJSON)
-		case r.Method == http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, registerEpicIssueAssignJSON)
-		case r.Method == http.MethodDelete:
-			testutil.RespondJSON(w, http.StatusOK, registerEpicIssueAssignJSON)
-		case r.Method == http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, registerEpicIssueUpdateJSON)
-		default:
-			http.NotFound(w, r)
-		}
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenData)
+		},
+		"workItem(iid": func(w http.ResponseWriter, r *http.Request) {
+			vars, _ := testutil.ParseGraphQLVariables(r)
+			fp, _ := vars["fullPath"].(string)
+			if fp == "child-group/child-project" {
+				testutil.RespondGraphQL(w, http.StatusOK, `{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/42"}}}`)
+			} else {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+			}
+		},
+		"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlAddChildData)
+		},
 	})
-	client := testutil.NewTestClient(t, mux)
+
+	client := testutil.NewTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
 
@@ -65,10 +58,10 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_epic_issue_list", map[string]any{"group_id": "mygroup", "epic_iid": 1}},
-		{"gitlab_epic_issue_assign", map[string]any{"group_id": "mygroup", "epic_iid": 1, "issue_id": 42}},
-		{"gitlab_epic_issue_remove", map[string]any{"group_id": "mygroup", "epic_iid": 1, "epic_issue_id": 10}},
-		{"gitlab_epic_issue_update", map[string]any{"group_id": "mygroup", "epic_iid": 1, "epic_issue_id": 10}},
+		{"gitlab_epic_issue_list", map[string]any{"full_path": testFullPath, "iid": 1}},
+		{"gitlab_epic_issue_assign", map[string]any{"full_path": testFullPath, "iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
+		{"gitlab_epic_issue_remove", map[string]any{"full_path": testFullPath, "iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
+		{"gitlab_epic_issue_update", map[string]any{"full_path": testFullPath, "iid": 1, "child_id": "gid://gitlab/WorkItem/10", "adjacent_id": "gid://gitlab/WorkItem/20", "relative_position": "BEFORE"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
@@ -77,13 +70,15 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("CallTool(%s) returned nil result", tt.name)
+			}
+			if result.IsError {
+				t.Fatalf("CallTool(%s) returned IsError=true", tt.name)
 			}
 		})
 	}
 }
 
-// TestMarkdownInit_Registry verifies the init() markdown formatters are registered.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListOutput{})
 	if out == nil {

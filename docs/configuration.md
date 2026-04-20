@@ -30,6 +30,7 @@ These are the settings every user needs to get started.
 | `META_TOOLS` | `true` | Enable domain-level meta-tools (42 base / 57 enterprise instead of 1004) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
+| `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 
 ### .env File Example
@@ -40,6 +41,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=true
 META_TOOLS=true
 GITLAB_READ_ONLY=false
+GITLAB_SAFE_MODE=false
 LOG_LEVEL=info
 ```
 

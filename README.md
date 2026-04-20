@@ -342,6 +342,8 @@ The server runs locally on your machine (stdio mode) or on your own infrastructu
 <summary><strong>Can I use it in read-only mode?</strong></summary>
 
 Yes. Set `GITLAB_READ_ONLY=true` to disable all mutating tools (create, update, delete). Only read operations will be available.
+
+Alternatively, set `GITLAB_SAFE_MODE=true` for a dry-run mode: mutating tools remain visible but return a structured JSON preview instead of executing. Useful for auditing, training, or reviewing what an AI assistant would do.
 </details>
 
 <details>

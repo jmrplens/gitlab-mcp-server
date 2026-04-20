@@ -145,6 +145,22 @@ Esto es útil para:
 - Entornos de demostración
 - Entornos donde el token tiene acceso de escritura pero deseas restringir el servidor
 
+## Modo seguro
+
+Habilita el modo seguro para previsualizar operaciones de escritura sin ejecutarlas:
+
+```bash
+GITLAB_SAFE_MODE=true
+```
+
+En modo seguro:
+
+- Las herramientas de escritura devuelven una **vista previa JSON estructurada** mostrando nombre de herramienta, parámetros y anotaciones
+- Las herramientas de solo lectura se ejecutan normalmente
+- Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia (las herramientas de escritura se desactivan completamente)
+
+Esto es útil para flujos de trabajo dry-run, entornos de formación y depuración de parámetros de herramientas.
+
 ## Seguridad en modo HTTP
 
 Al ejecutar en modo HTTP (`--http`), aplican consideraciones de seguridad adicionales:

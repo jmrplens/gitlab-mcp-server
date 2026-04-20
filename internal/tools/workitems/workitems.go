@@ -15,23 +15,49 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// LinkedItem represents a linked work item summary.
+type LinkedItem struct {
+	IID      int64  `json:"iid"`
+	LinkType string `json:"link_type"`
+	Path     string `json:"path,omitempty"`
+}
+
 // WorkItemItem is a summary of a work item.
 type WorkItemItem struct {
-	ID           int64    `json:"id"`
-	IID          int64    `json:"iid"`
-	Type         string   `json:"type"`
-	State        string   `json:"state"`
-	Status       string   `json:"status,omitempty"`
-	Title        string   `json:"title"`
-	Description  string   `json:"description,omitempty"`
-	WebURL       string   `json:"web_url,omitempty"`
-	Author       string   `json:"author,omitempty"`
-	Assignees    []string `json:"assignees,omitempty"`
-	Labels       []string `json:"labels,omitempty"`
-	Confidential bool     `json:"confidential,omitempty"`
-	CreatedAt    string   `json:"created_at,omitempty"`
-	UpdatedAt    string   `json:"updated_at,omitempty"`
-	ClosedAt     string   `json:"closed_at,omitempty"`
+	ID           int64        `json:"id"`
+	IID          int64        `json:"iid"`
+	Type         string       `json:"type"`
+	State        string       `json:"state"`
+	Status       string       `json:"status,omitempty"`
+	Title        string       `json:"title"`
+	Description  string       `json:"description,omitempty"`
+	WebURL       string       `json:"web_url,omitempty"`
+	Author       string       `json:"author,omitempty"`
+	Assignees    []string     `json:"assignees,omitempty"`
+	Labels       []string     `json:"labels,omitempty"`
+	LinkedItems  []LinkedItem `json:"linked_items,omitempty"`
+	Confidential bool         `json:"confidential,omitempty"`
+	CreatedAt    string       `json:"created_at,omitempty"`
+	UpdatedAt    string       `json:"updated_at,omitempty"`
+	ClosedAt     string       `json:"closed_at,omitempty"`
+}
+
+// mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID GID.
+func mapStatusToID(s string) gl.WorkItemStatusID {
+	switch s {
+	case "TODO":
+		return gl.WorkItemStatusToDo
+	case "IN_PROGRESS":
+		return gl.WorkItemStatusInProgress
+	case "DONE":
+		return gl.WorkItemStatusDone
+	case "WONT_DO":
+		return gl.WorkItemStatusWontDo
+	case "DUPLICATE":
+		return gl.WorkItemStatusDuplicate
+	default:
+		return gl.WorkItemStatusID(s)
+	}
 }
 
 // workItemToItem is an internal helper for the workitems package.
@@ -57,6 +83,13 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 	}
 	for _, l := range wi.Labels {
 		item.Labels = append(item.Labels, l.Name)
+	}
+	for _, li := range wi.LinkedItems {
+		item.LinkedItems = append(item.LinkedItems, LinkedItem{
+			IID:      li.IID,
+			LinkType: li.LinkType,
+			Path:     li.NamespacePath,
+		})
 	}
 	if wi.CreatedAt != nil {
 		item.CreatedAt = wi.CreatedAt.String()
@@ -172,19 +205,26 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // CreateInput is the input for creating a work item.
 type CreateInput struct {
-	FullPath       string  `json:"full_path" jsonschema:"Full path of the project or group,required"`
-	WorkItemTypeID string  `json:"work_item_type_id" jsonschema:"Global ID of work item type (e.g. gid://gitlab/WorkItems::Type/1 for Issue),required"`
-	Title          string  `json:"title" jsonschema:"Title of the work item,required"`
-	Description    string  `json:"description,omitempty" jsonschema:"Description of the work item"`
-	Confidential   *bool   `json:"confidential,omitempty" jsonschema:"Whether the work item is confidential"`
-	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
-	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone"`
-	LabelIDs       []int64 `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
-	Weight         *int64  `json:"weight,omitempty" jsonschema:"Weight of the work item"`
-	HealthStatus   string  `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
-	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
-	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	FullPath       string             `json:"full_path" jsonschema:"Full path of the project or group,required"`
+	WorkItemTypeID string             `json:"work_item_type_id" jsonschema:"Global ID of work item type (e.g. gid://gitlab/WorkItems::Type/1 for Issue),required"`
+	Title          string             `json:"title" jsonschema:"Title of the work item,required"`
+	Description    string             `json:"description,omitempty" jsonschema:"Description of the work item"`
+	Confidential   *bool              `json:"confidential,omitempty" jsonschema:"Whether the work item is confidential"`
+	AssigneeIDs    []int64            `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
+	MilestoneID    *int64             `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone"`
+	LabelIDs       []int64            `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
+	Weight         *int64             `json:"weight,omitempty" jsonschema:"Weight of the work item"`
+	HealthStatus   string             `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	Color          string             `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
+	DueDate        string             `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	StartDate      string             `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	LinkedItems    *CreateLinkedItems `json:"linked_items,omitempty" jsonschema:"Linked work items to add on creation"`
+}
+
+// CreateLinkedItems specifies work items to link during creation.
+type CreateLinkedItems struct {
+	WorkItemIDs []int64 `json:"work_item_ids" jsonschema:"Global IDs of work items to link,required"`
+	LinkType    string  `json:"link_type" jsonschema:"Link type: BLOCKS, BLOCKED_BY, or RELATED,required"`
 }
 
 // Create creates a new work item.
@@ -230,6 +270,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			opts.StartDate = &isoDate
 		}
 	}
+	if input.LinkedItems != nil && len(input.LinkedItems.WorkItemIDs) > 0 {
+		opts.LinkedItems = &gl.CreateWorkItemOptionsLinkedItems{
+			LinkType:    &input.LinkedItems.LinkType,
+			WorkItemIDs: input.LinkedItems.WorkItemIDs,
+		}
+	}
 
 	wi, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -259,6 +305,7 @@ type UpdateInput struct {
 	HealthStatus   string  `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
 	IterationID    *int64  `json:"iteration_id,omitempty" jsonschema:"Global ID of the iteration"`
 	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
+	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 }
 
 // Update modifies an existing work item.
@@ -321,6 +368,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Color != "" {
 		opts.Color = &input.Color
+	}
+	if input.Status != "" {
+		status := mapStatusToID(input.Status)
+		opts.Status = &status
 	}
 
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))

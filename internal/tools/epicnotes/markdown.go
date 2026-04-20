@@ -29,8 +29,7 @@ func FormatOutputMarkdown(n Output) string {
 // FormatListMarkdown renders a list of epic notes as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Epic Notes (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Notes), out.Pagination)
+	fmt.Fprintf(&b, "## Epic Notes (%d)\n\n", len(out.Notes))
 	if len(out.Notes) == 0 {
 		b.WriteString("No epic notes found.\n")
 		return b.String()
@@ -40,7 +39,9 @@ func FormatListMarkdown(out ListOutput) string {
 	for _, n := range out.Notes {
 		fmt.Fprintf(&b, "| %d | %s | %s | %v |\n", n.ID, toolutil.EscapeMdTableCell(n.Author), toolutil.FormatTime(n.CreatedAt), n.System)
 	}
-	toolutil.WritePagination(&b, out.Pagination)
+	b.WriteString("\n")
+	b.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Notes)))
+	b.WriteString("\n")
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'epic_note_get' with note_id to read a specific note",

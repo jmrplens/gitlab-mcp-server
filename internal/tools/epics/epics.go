@@ -1,12 +1,17 @@
-// Package epics implements GitLab group epic operations including list, get,
-// get links (child epics), create, update, and delete. Epics are high-level
-// planning items attached to groups (not projects).
+// Package epics implements GitLab group epic operations using the Work Items
+// GraphQL API. Epics are high-level planning items attached to groups.
+//
+// This package was migrated from the deprecated Epics REST API (deprecated
+// GitLab 17.0, removal planned 19.0) to the Work Items GraphQL API per
+// ADR-0009 (progressive GraphQL migration).
+//
+// The GetLinks handler remains on REST because client-go v2 does not yet
+// expose a GraphQL query for work item children.
 package epics
 
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -15,291 +20,396 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// ListInput defines parameters for listing group epics.
+// LinkedItem represents a linked work item summary.
+type LinkedItem struct {
+	IID      int64  `json:"iid"`
+	LinkType string `json:"link_type"`
+	Path     string `json:"path,omitempty"`
+}
+
+// ListInput defines parameters for listing group epics via Work Items API.
 type ListInput struct {
-	GroupID                 toolutil.StringOrInt `json:"group_id"                            jsonschema:"Group ID or URL-encoded path,required"`
-	AuthorID                *int64               `json:"author_id,omitempty"                 jsonschema:"Filter by author user ID"`
-	Labels                  string               `json:"labels,omitempty"                    jsonschema:"Comma-separated label names to filter by"`
-	OrderBy                 string               `json:"order_by,omitempty"                  jsonschema:"Order by field (created_at, updated_at)"`
-	Sort                    string               `json:"sort,omitempty"                      jsonschema:"Sort direction (asc, desc)"`
-	Search                  string               `json:"search,omitempty"                    jsonschema:"Search epics by title and description"`
-	State                   string               `json:"state,omitempty"                     jsonschema:"Filter by state (opened, closed)"`
-	IncludeAncestorGroups   *bool                `json:"include_ancestor_groups,omitempty"    jsonschema:"Include epics from ancestor groups"`
-	IncludeDescendantGroups *bool                `json:"include_descendant_groups,omitempty"  jsonschema:"Include epics from descendant groups"`
-	toolutil.PaginationInput
+	FullPath           string   `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
+	State              string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
+	Search             string   `json:"search,omitempty" jsonschema:"Search in title and description"`
+	AuthorUsername     string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
+	LabelName          []string `json:"label_name,omitempty" jsonschema:"Filter by label names"`
+	Confidential       *bool    `json:"confidential,omitempty" jsonschema:"Filter by confidentiality"`
+	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order"`
+	First              *int64   `json:"first,omitempty" jsonschema:"Number of items to return (cursor-based pagination)"`
+	After              string   `json:"after,omitempty" jsonschema:"Cursor for forward pagination"`
+	IncludeAncestors   *bool    `json:"include_ancestors,omitempty" jsonschema:"Include epics from ancestor groups"`
+	IncludeDescendants *bool    `json:"include_descendants,omitempty" jsonschema:"Include epics from descendant groups"`
 }
 
-// GetInput defines parameters for getting a single group epic.
+// GetInput defines parameters for getting a single epic.
 type GetInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	EpicIID int64                `json:"epic_iid" jsonschema:"Epic internal ID within the group,required"`
+	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
 }
 
-// GetLinksInput defines parameters for listing child epics.
+// GetLinksInput defines parameters for listing child epics (REST).
 type GetLinksInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	EpicIID int64                `json:"epic_iid" jsonschema:"Epic internal ID within the group,required"`
+	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
 }
 
 // CreateInput defines parameters for creating a new epic.
 type CreateInput struct {
-	GroupID      toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
-	Title        string               `json:"title"                       jsonschema:"Epic title,required"`
-	Description  string               `json:"description,omitempty"       jsonschema:"Epic description (Markdown supported)"`
-	Labels       string               `json:"labels,omitempty"            jsonschema:"Comma-separated label names"`
-	Confidential *bool                `json:"confidential,omitempty"      jsonschema:"Whether the epic is confidential"`
-	ParentID     *int64               `json:"parent_id,omitempty"         jsonschema:"ID of the parent epic"`
-	Color        string               `json:"color,omitempty"             jsonschema:"Epic color (hex format, e.g. #FF0000)"`
+	FullPath     string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	Title        string  `json:"title" jsonschema:"Epic title,required"`
+	Description  string  `json:"description,omitempty" jsonschema:"Epic description (Markdown supported)"`
+	Confidential *bool   `json:"confidential,omitempty" jsonschema:"Whether the epic is confidential"`
+	Color        string  `json:"color,omitempty" jsonschema:"Epic color (hex format, e.g. #FF0000)"`
+	StartDate    string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	DueDate      string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	AssigneeIDs  []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
+	LabelIDs     []int64 `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
+	Weight       *int64  `json:"weight,omitempty" jsonschema:"Weight of the epic"`
+	HealthStatus string  `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
 }
 
 // UpdateInput defines parameters for updating an existing epic.
 type UpdateInput struct {
-	GroupID      toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
-	EpicIID      int64                `json:"epic_iid"                    jsonschema:"Epic internal ID within the group,required"`
-	Title        string               `json:"title,omitempty"             jsonschema:"Updated epic title"`
-	Description  string               `json:"description,omitempty"       jsonschema:"Updated description (Markdown supported)"`
-	Labels       string               `json:"labels,omitempty"            jsonschema:"Comma-separated label names (replaces existing)"`
-	AddLabels    string               `json:"add_labels,omitempty"        jsonschema:"Comma-separated label names to add"`
-	RemoveLabels string               `json:"remove_labels,omitempty"     jsonschema:"Comma-separated label names to remove"`
-	StateEvent   string               `json:"state_event,omitempty"       jsonschema:"State event (close, reopen)"`
-	Confidential *bool                `json:"confidential,omitempty"      jsonschema:"Whether the epic is confidential"`
-	ParentID     *int64               `json:"parent_id,omitempty"         jsonschema:"ID of the parent epic"`
-	Color        string               `json:"color,omitempty"             jsonschema:"Epic color (hex format)"`
+	FullPath       string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID            int64   `json:"iid" jsonschema:"Epic IID within the group,required"`
+	Title          string  `json:"title,omitempty" jsonschema:"Updated epic title"`
+	Description    string  `json:"description,omitempty" jsonschema:"Updated description (Markdown supported)"`
+	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
+	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent epic work item"`
+	Color          string  `json:"color,omitempty" jsonschema:"Epic color (hex format)"`
+	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
+	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
+	AddLabelIDs    []int64 `json:"add_label_ids,omitempty" jsonschema:"Global IDs of labels to add"`
+	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
+	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees (empty array to remove all)"`
+	Weight         *int64  `json:"weight,omitempty" jsonschema:"Weight of the epic"`
+	HealthStatus   string  `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
 type DeleteInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	EpicIID int64                `json:"epic_iid" jsonschema:"Epic internal ID within the group,required"`
+	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
+	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
 }
 
-// Output represents a single group epic.
+// Output represents a single epic (backed by a Work Item of type Epic).
 type Output struct {
 	toolutil.HintableOutput
-	ID             int64    `json:"id"`
-	IID            int64    `json:"iid"`
-	GroupID        int64    `json:"group_id"`
-	ParentID       int64    `json:"parent_id,omitempty"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description,omitempty"`
-	State          string   `json:"state"`
-	Confidential   bool     `json:"confidential"`
-	WebURL         string   `json:"web_url"`
-	Author         string   `json:"author"`
-	Labels         []string `json:"labels,omitempty"`
-	StartDate      string   `json:"start_date,omitempty"`
-	DueDate        string   `json:"due_date,omitempty"`
-	CreatedAt      string   `json:"created_at"`
-	UpdatedAt      string   `json:"updated_at,omitempty"`
-	ClosedAt       string   `json:"closed_at,omitempty"`
-	Upvotes        int64    `json:"upvotes"`
-	Downvotes      int64    `json:"downvotes"`
-	UserNotesCount int64    `json:"user_notes_count"`
+	ID           int64        `json:"id"`
+	IID          int64        `json:"iid"`
+	Type         string       `json:"type"`
+	State        string       `json:"state"`
+	Status       string       `json:"status,omitempty"`
+	Title        string       `json:"title"`
+	Description  string       `json:"description,omitempty"`
+	WebURL       string       `json:"web_url,omitempty"`
+	Author       string       `json:"author,omitempty"`
+	Assignees    []string     `json:"assignees,omitempty"`
+	Labels       []string     `json:"labels,omitempty"`
+	LinkedItems  []LinkedItem `json:"linked_items,omitempty"`
+	Confidential bool         `json:"confidential,omitempty"`
+	Color        string       `json:"color,omitempty"`
+	StartDate    string       `json:"start_date,omitempty"`
+	DueDate      string       `json:"due_date,omitempty"`
+	HealthStatus string       `json:"health_status,omitempty"`
+	Weight       *int64       `json:"weight,omitempty"`
+	ParentIID    int64        `json:"parent_iid,omitempty"`
+	ParentPath   string       `json:"parent_path,omitempty"`
+	CreatedAt    string       `json:"created_at,omitempty"`
+	UpdatedAt    string       `json:"updated_at,omitempty"`
+	ClosedAt     string       `json:"closed_at,omitempty"`
 }
 
-// ListOutput holds a paginated list of group epics.
+// ListOutput holds a list of epics with cursor-based pagination info.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Epics      []Output                  `json:"epics"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Epics []Output `json:"epics"`
 }
 
-// LinksOutput holds child epics of a parent epic.
+// LinksOutput holds child epics of a parent epic (REST-backed).
 type LinksOutput struct {
 	toolutil.HintableOutput
-	ChildEpics []Output `json:"child_epics"`
+	ChildEpics []LinksItem `json:"child_epics"`
 }
 
-// toOutput converts a GitLab API Epic to the MCP tool output format.
-func toOutput(e *gl.Epic) Output {
+// LinksItem is a simplified epic output for the GetLinks REST endpoint.
+type LinksItem struct {
+	ID           int64    `json:"id"`
+	IID          int64    `json:"iid"`
+	Title        string   `json:"title"`
+	State        string   `json:"state"`
+	WebURL       string   `json:"web_url,omitempty"`
+	Author       string   `json:"author,omitempty"`
+	Labels       []string `json:"labels,omitempty"`
+	Confidential bool     `json:"confidential,omitempty"`
+	CreatedAt    string   `json:"created_at,omitempty"`
+}
+
+// toOutput converts a GitLab Work Item to the epic Output format.
+func toOutput(wi *gl.WorkItem) Output {
 	out := Output{
-		ID:             e.ID,
-		IID:            e.IID,
-		GroupID:        e.GroupID,
-		ParentID:       e.ParentID,
-		Title:          e.Title,
-		Description:    e.Description,
-		State:          e.State,
-		Confidential:   e.Confidential,
-		WebURL:         e.WebURL,
-		Labels:         e.Labels,
-		Upvotes:        e.Upvotes,
-		Downvotes:      e.Downvotes,
-		UserNotesCount: e.UserNotesCount,
+		ID:           wi.ID,
+		IID:          wi.IID,
+		Type:         wi.Type,
+		State:        wi.State,
+		Title:        wi.Title,
+		Description:  wi.Description,
+		WebURL:       wi.WebURL,
+		Confidential: wi.Confidential,
+		Weight:       wi.Weight,
 	}
-	if e.Author != nil {
-		out.Author = e.Author.Username
+	if wi.Status != nil {
+		out.Status = *wi.Status
 	}
-	if e.StartDate != nil {
-		out.StartDate = time.Time(*e.StartDate).Format(time.DateOnly)
+	if wi.Author != nil {
+		out.Author = wi.Author.Username
 	}
-	if e.DueDate != nil {
-		out.DueDate = time.Time(*e.DueDate).Format(time.DateOnly)
+	for _, a := range wi.Assignees {
+		out.Assignees = append(out.Assignees, a.Username)
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
+	for _, l := range wi.Labels {
+		out.Labels = append(out.Labels, l.Name)
 	}
-	if e.UpdatedAt != nil {
-		out.UpdatedAt = e.UpdatedAt.Format(time.RFC3339)
+	for _, li := range wi.LinkedItems {
+		out.LinkedItems = append(out.LinkedItems, LinkedItem{
+			IID:      li.IID,
+			LinkType: li.LinkType,
+			Path:     li.NamespacePath,
+		})
 	}
-	if e.ClosedAt != nil {
-		out.ClosedAt = e.ClosedAt.Format(time.RFC3339)
+	if wi.Color != nil {
+		out.Color = *wi.Color
+	}
+	if wi.HealthStatus != nil {
+		out.HealthStatus = *wi.HealthStatus
+	}
+	if wi.Parent != nil {
+		out.ParentIID = wi.Parent.IID
+		out.ParentPath = wi.Parent.NamespacePath
+	}
+	if wi.StartDate != nil {
+		out.StartDate = time.Time(*wi.StartDate).Format(time.DateOnly)
+	}
+	if wi.DueDate != nil {
+		out.DueDate = time.Time(*wi.DueDate).Format(time.DateOnly)
+	}
+	if wi.CreatedAt != nil {
+		out.CreatedAt = wi.CreatedAt.Format(time.RFC3339)
+	}
+	if wi.UpdatedAt != nil {
+		out.UpdatedAt = wi.UpdatedAt.Format(time.RFC3339)
+	}
+	if wi.ClosedAt != nil {
+		out.ClosedAt = wi.ClosedAt.Format(time.RFC3339)
 	}
 	return out
 }
 
-// splitLabels converts a comma-separated label string to a LabelOptions pointer.
-func splitLabels(s string) *gl.LabelOptions {
-	if s == "" {
-		return nil
+// toLinkItem converts a GitLab REST Epic to the LinksItem format.
+func toLinkItem(e *gl.Epic) LinksItem {
+	out := LinksItem{
+		ID:           e.ID,
+		IID:          e.IID,
+		Title:        e.Title,
+		State:        e.State,
+		WebURL:       e.WebURL,
+		Labels:       e.Labels,
+		Confidential: e.Confidential,
 	}
-	parts := strings.Split(s, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
+	if e.Author != nil {
+		out.Author = e.Author.Username
 	}
-	lo := gl.LabelOptions(parts)
-	return &lo
+	if e.CreatedAt != nil {
+		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
+	}
+	return out
 }
 
-// List retrieves a paginated list of epics for a group.
+// mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID.
+func mapStatusToID(s string) gl.WorkItemStatusID {
+	switch s {
+	case "TODO":
+		return gl.WorkItemStatusToDo
+	case "IN_PROGRESS":
+		return gl.WorkItemStatusInProgress
+	case "DONE":
+		return gl.WorkItemStatusDone
+	case "WONT_DO":
+		return gl.WorkItemStatusWontDo
+	case "DUPLICATE":
+		return gl.WorkItemStatusDuplicate
+	default:
+		return gl.WorkItemStatusID(s)
+	}
+}
+
+// List retrieves epics for a group using the Work Items API with type filter.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	if input.GroupID == "" {
-		return ListOutput{}, errors.New("epicList: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return ListOutput{}, errors.New("epicList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
-	opts := &gl.ListGroupEpicsOptions{}
-	if input.AuthorID != nil {
-		opts.AuthorID = input.AuthorID
-	}
-	if input.Labels != "" {
-		opts.Labels = splitLabels(input.Labels)
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = &input.OrderBy
-	}
-	if input.Sort != "" {
-		opts.Sort = &input.Sort
-	}
-	if input.Search != "" {
-		opts.Search = &input.Search
+	opts := &gl.ListWorkItemsOptions{
+		Types: []string{"Epic"},
 	}
 	if input.State != "" {
 		opts.State = &input.State
 	}
-	if input.IncludeAncestorGroups != nil {
-		opts.IncludeAncestorGroups = input.IncludeAncestorGroups
+	if input.Search != "" {
+		opts.Search = &input.Search
 	}
-	if input.IncludeDescendantGroups != nil {
-		opts.IncludeDescendantGroups = input.IncludeDescendantGroups
+	if input.AuthorUsername != "" {
+		opts.AuthorUsername = &input.AuthorUsername
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if len(input.LabelName) > 0 {
+		opts.LabelName = input.LabelName
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Confidential != nil {
+		opts.Confidential = input.Confidential
 	}
-	epics, resp, err := client.GL().Epics.ListGroupEpics(string(input.GroupID), opts, gl.WithContext(ctx))
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.First != nil {
+		opts.First = input.First
+	}
+	if input.After != "" {
+		opts.After = &input.After
+	}
+	if input.IncludeAncestors != nil {
+		opts.IncludeAncestors = input.IncludeAncestors
+	}
+	if input.IncludeDescendants != nil {
+		opts.IncludeDescendants = input.IncludeDescendants
+	}
+
+	items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("epicList", err)
 	}
-	out := make([]Output, len(epics))
-	for i, e := range epics {
-		out[i] = toOutput(e)
+	out := make([]Output, 0, len(items))
+	for _, wi := range items {
+		out = append(out, toOutput(wi))
 	}
-	return ListOutput{Epics: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Epics: out}, nil
 }
 
-// Get retrieves a single group epic by its IID.
+// Get retrieves a single epic by its IID using the Work Items API.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.GroupID == "" {
-		return Output{}, errors.New("epicGet: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return Output{}, errors.New("epicGet: full_path is required. Use gitlab_group_list to find the group path first")
 	}
-	if input.EpicIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicGet", "epic_iid")
+	if input.IID <= 0 {
+		return Output{}, toolutil.ErrRequiredInt64("epicGet", "iid")
 	}
-	e, _, err := client.GL().Epics.GetEpic(string(input.GroupID), input.EpicIID, gl.WithContext(ctx))
+	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("epicGet", err)
 	}
-	return toOutput(e), nil
+	return toOutput(wi), nil
 }
 
 // GetLinks retrieves all child epics of a parent epic.
+// This handler uses the REST API because client-go v2 does not yet expose
+// a GraphQL query for work item children.
 func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksInput) (LinksOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return LinksOutput{}, err
 	}
-	if input.GroupID == "" {
-		return LinksOutput{}, errors.New("epicGetLinks: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return LinksOutput{}, errors.New("epicGetLinks: full_path is required. Use gitlab_group_list to find the group path first")
 	}
-	if input.EpicIID <= 0 {
-		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "epic_iid")
+	if input.IID <= 0 {
+		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "iid")
 	}
-	epics, _, err := client.GL().Epics.GetEpicLinks(string(input.GroupID), input.EpicIID, gl.WithContext(ctx))
+	epics, _, err := client.GL().Epics.GetEpicLinks(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return LinksOutput{}, toolutil.WrapErrWithMessage("epicGetLinks", err)
 	}
-	out := make([]Output, len(epics))
+	out := make([]LinksItem, len(epics))
 	for i, e := range epics {
-		out[i] = toOutput(e)
+		out[i] = toLinkItem(e)
 	}
 	return LinksOutput{ChildEpics: out}, nil
 }
 
-// Create creates a new epic in a group.
+// Create creates a new epic using the Work Items API with the Epic type.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.GroupID == "" {
-		return Output{}, errors.New("epicCreate: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return Output{}, errors.New("epicCreate: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.Title == "" {
 		return Output{}, errors.New("epicCreate: title is required")
 	}
-	opts := &gl.CreateEpicOptions{
-		Title: &input.Title,
+	opts := &gl.CreateWorkItemOptions{
+		Title: input.Title,
 	}
 	if input.Description != "" {
 		desc := toolutil.NormalizeText(input.Description)
 		opts.Description = &desc
 	}
-	if input.Labels != "" {
-		opts.Labels = splitLabels(input.Labels)
-	}
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
 	}
-	if input.ParentID != nil {
-		opts.ParentID = input.ParentID
+	if len(input.AssigneeIDs) > 0 {
+		opts.AssigneeIDs = input.AssigneeIDs
+	}
+	if len(input.LabelIDs) > 0 {
+		opts.LabelIDs = input.LabelIDs
+	}
+	if input.Weight != nil {
+		opts.Weight = input.Weight
+	}
+	if input.HealthStatus != "" {
+		opts.HealthStatus = &input.HealthStatus
 	}
 	if input.Color != "" {
 		opts.Color = &input.Color
 	}
-	e, _, err := client.GL().Epics.CreateEpic(string(input.GroupID), opts, gl.WithContext(ctx))
+	if input.StartDate != "" {
+		d, err := time.Parse(time.DateOnly, input.StartDate)
+		if err == nil {
+			isoDate := gl.ISOTime(d)
+			opts.StartDate = &isoDate
+		}
+	}
+	if input.DueDate != "" {
+		d, err := time.Parse(time.DateOnly, input.DueDate)
+		if err == nil {
+			isoDate := gl.ISOTime(d)
+			opts.DueDate = &isoDate
+		}
+	}
+
+	wi, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeEpic, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("epicCreate", err)
 	}
-	return toOutput(e), nil
+	return toOutput(wi), nil
 }
 
-// Update modifies an existing group epic.
+// Update modifies an existing epic using the Work Items API.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.GroupID == "" {
-		return Output{}, errors.New("epicUpdate: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return Output{}, errors.New("epicUpdate: full_path is required. Use gitlab_group_list to find the group path first")
 	}
-	if input.EpicIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "epic_iid")
+	if input.IID <= 0 {
+		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "iid")
 	}
-	opts := &gl.UpdateEpicOptions{}
+	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
 		opts.Title = &input.Title
 	}
@@ -307,20 +417,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		desc := toolutil.NormalizeText(input.Description)
 		opts.Description = &desc
 	}
-	if input.Labels != "" {
-		opts.Labels = splitLabels(input.Labels)
-	}
-	if input.AddLabels != "" {
-		opts.AddLabels = splitLabels(input.AddLabels)
-	}
-	if input.RemoveLabels != "" {
-		opts.RemoveLabels = splitLabels(input.RemoveLabels)
-	}
 	if input.StateEvent != "" {
-		opts.StateEvent = &input.StateEvent
-	}
-	if input.Confidential != nil {
-		opts.Confidential = input.Confidential
+		ev := gl.WorkItemStateEvent(input.StateEvent)
+		opts.StateEvent = &ev
 	}
 	if input.ParentID != nil {
 		opts.ParentID = input.ParentID
@@ -328,25 +427,59 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Color != "" {
 		opts.Color = &input.Color
 	}
-	e, _, err := client.GL().Epics.UpdateEpic(string(input.GroupID), input.EpicIID, opts, gl.WithContext(ctx))
+	if len(input.AddLabelIDs) > 0 {
+		opts.AddLabelIDs = input.AddLabelIDs
+	}
+	if len(input.RemoveLabelIDs) > 0 {
+		opts.RemoveLabelIDs = input.RemoveLabelIDs
+	}
+	if input.AssigneeIDs != nil {
+		opts.AssigneeIDs = input.AssigneeIDs
+	}
+	if input.Weight != nil {
+		opts.Weight = input.Weight
+	}
+	if input.HealthStatus != "" {
+		opts.HealthStatus = &input.HealthStatus
+	}
+	if input.StartDate != "" {
+		d, err := time.Parse(time.DateOnly, input.StartDate)
+		if err == nil {
+			isoDate := gl.ISOTime(d)
+			opts.StartDate = &isoDate
+		}
+	}
+	if input.DueDate != "" {
+		d, err := time.Parse(time.DateOnly, input.DueDate)
+		if err == nil {
+			isoDate := gl.ISOTime(d)
+			opts.DueDate = &isoDate
+		}
+	}
+	if input.Status != "" {
+		status := mapStatusToID(input.Status)
+		opts.Status = &status
+	}
+
+	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("epicUpdate", err)
 	}
-	return toOutput(e), nil
+	return toOutput(wi), nil
 }
 
-// Delete removes an epic from a group.
+// Delete permanently removes an epic using the Work Items API.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if input.GroupID == "" {
-		return errors.New("epicDelete: group_id is required. Use gitlab_group_list to find the group ID first")
+	if input.FullPath == "" {
+		return errors.New("epicDelete: full_path is required. Use gitlab_group_list to find the group path first")
 	}
-	if input.EpicIID <= 0 {
-		return toolutil.ErrRequiredInt64("epicDelete", "epic_iid")
+	if input.IID <= 0 {
+		return toolutil.ErrRequiredInt64("epicDelete", "iid")
 	}
-	_, err := client.GL().Epics.DeleteEpic(string(input.GroupID), input.EpicIID, gl.WithContext(ctx))
+	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithMessage("epicDelete", err)
 	}

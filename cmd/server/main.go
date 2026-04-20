@@ -65,6 +65,7 @@ type httpConfig struct {
 	metaTools          bool
 	enterprise         bool
 	readOnly           bool
+	safeMode           bool
 	maxHTTPClients     int
 	sessionTimeout     time.Duration
 	autoUpdate         string
@@ -97,6 +98,7 @@ func main() {
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Enable Enterprise/Premium meta-tools")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
+	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum concurrent client sessions")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle session timeout")
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
@@ -293,6 +295,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		MetaTools:          hcfg.metaTools,
 		Enterprise:         hcfg.enterprise,
 		ReadOnly:           hcfg.readOnly,
+		SafeMode:           hcfg.safeMode,
 		MaxHTTPClients:     hcfg.maxHTTPClients,
 		SessionTimeout:     hcfg.sessionTimeout,
 		RevalidateInterval: hcfg.revalidateInterval,
@@ -462,6 +465,9 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	if cfg.ReadOnly {
 		removed := removeNonReadOnlyTools(server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
+	} else if cfg.SafeMode {
+		wrapped := tools.WrapMutatingToolsForSafeMode(server)
+		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
 	}
 
 	toolCount, err := countRegisteredTools(server)

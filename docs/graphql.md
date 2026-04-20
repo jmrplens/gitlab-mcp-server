@@ -28,6 +28,10 @@ This document explains when and how the GraphQL integration is used, the pattern
 
 | Domain | Package | Reason |
 | ------ | ------- | ------ |
+| Epics (6 tools) | `internal/tools/epics/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items GraphQL API via client-go `WorkItems` service |
+| Epic Notes (5 tools) | `internal/tools/epicnotes/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items notes widgets via client-go `WorkItems` service |
+| Epic Discussions (7 tools) | `internal/tools/epicdiscussions/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items discussions widgets via client-go `WorkItems` service |
+| Epic Issues (4 tools) | `internal/tools/epicissues/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items children/parent widgets via client-go `WorkItems` service |
 | Vulnerabilities | `internal/tools/vulnerabilities/` | GraphQL provides richer query/mutation capabilities than REST |
 | Security Findings | `internal/tools/securityfindings/` | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement |
 | CI/CD Catalog | `internal/tools/cicatalog/` | GraphQL-only feature — no REST API exists |
@@ -41,12 +45,14 @@ This document explains when and how the GraphQL integration is used, the pattern
 graph TD
     subgraph "MCP Tool Handlers"
         A[REST Tools<br/>~1020 tools]
-        B[GraphQL Tools<br/>~16 tools]
+        B[GraphQL Tools — Raw<br/>~16 tools]
+        G[GraphQL Tools — WorkItems<br/>~22 tools]
     end
 
     subgraph "client-go v2"
         C[Service Wrappers<br/>Projects, MRs, Issues...]
         D[GraphQL.Do<br/>Raw query execution]
+        H[WorkItems Service<br/>Typed GraphQL wrappers]
     end
 
     subgraph "GitLab Instance"
@@ -56,11 +62,13 @@ graph TD
 
     A --> C
     B --> D
+    G --> H
     C --> E
     D --> F
+    H --> F
 ```
 
-## The Two GraphQL Patterns
+## The Three GraphQL Patterns
 
 ### Pattern 1: Raw `GraphQL.Do()` for tool handlers
 
@@ -123,6 +131,38 @@ if err != nil {
     // Fall back to REST calls
 }
 ```
+
+### Pattern 3: client-go `WorkItems` service wrappers
+
+Used by the `epics`, `epicnotes`, `epicdiscussions`, and `epicissues` packages after migrating from the deprecated Epics REST API. The client-go `WorkItems` service provides typed Go methods that execute GraphQL queries internally, so tool handlers don't write raw GraphQL.
+
+```go
+// List epics — client-go builds and executes the GraphQL query internally
+items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, &gl.ListWorkItemsOptions{
+    Types: gl.Ptr([]string{"Epic"}),
+    State: gl.Ptr(input.State),
+}, gl.WithContext(ctx))
+
+// Get a single epic by IID
+item, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, nil, gl.WithContext(ctx))
+
+// Create an epic (WorkItemTypeEpic = "gid://gitlab/WorkItems::Type/8")
+item, _, err := client.GL().WorkItems.CreateWorkItem(&gl.CreateWorkItemOptions{
+    NamespacePath:  gl.Ptr(input.FullPath),
+    Title:          gl.Ptr(input.Title),
+    WorkItemTypeID: gl.Ptr(gl.WorkItemTypeEpic),
+}, gl.WithContext(ctx))
+
+// Update and Delete use a two-step pattern: resolve GID first, then mutate
+gidItem, _, err := client.GL().WorkItems.GetWorkItem(fullPath, iid, nil, gl.WithContext(ctx))
+item, _, err := client.GL().WorkItems.UpdateWorkItem(gidItem.ID, &gl.UpdateWorkItemOptions{
+    Title: gl.Ptr(newTitle),
+}, gl.WithContext(ctx))
+```
+
+**When to use this pattern**: When client-go provides typed service wrappers for the GraphQL domain (currently: WorkItems). This is preferred over raw `GraphQL.Do()` because it avoids hand-written query strings and response structs.
+
+**Two-step GID pattern**: `UpdateWorkItem` and `DeleteWorkItem` require a GitLab Global ID (GID) as the first argument, not a namespace path + IID. To obtain the GID, first call `GetWorkItem(fullPath, iid)` which returns the work item including its `.ID` field (a GID string like `"gid://gitlab/WorkItem/101"`), then pass that GID to the mutation method.
 
 ## Key Design Decisions
 

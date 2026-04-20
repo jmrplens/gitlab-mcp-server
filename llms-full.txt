@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.8.0 | 1004 tools | 42 meta-tools (57 enterprise) | 24 resources | 38 prompts
+> Version 1.0.0 | 1004 tools | 42 meta-tools (57 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -11,8 +11,8 @@ operations under a single tool with an `action` parameter.
 
 **Access**
 
-Manage GitLab access tokens, deploy tokens, deploy keys, access requests, and invitations.
-Use "action" to specify the operation. Valid actions: approve_group, approve_project, deny_group, deny_project, deploy_key_add, deploy_key_add_instance, deploy_key_delete, deploy_key_enable, deploy_key_get, deploy_key_list_all, deploy_key_list_project, deploy_key_list_user_project, deploy_key_update, deploy_token_create_group, deploy_token_create_project, deploy_token_delete_group, deploy_token_delete_project, deploy_token_get_group, deploy_token_get_project, deploy_token_list_all, deploy_token_list_group, deploy_token_list_project, invite_group, invite_list_group, invite_list_project, invite_project, request_group, request_list_group, request_list_project, request_project, token_group_create, token_group_get, token_group_list, token_group_revoke, token_group_rotate, token_group_rotate_self, token_personal_get, token_personal_list, token_personal_revoke, token_personal_revoke_self, token_personal_rotate, token_personal_rotate_self, token_project_create, token_project_get, token_project_list, token_project_revoke, token_project_rotate, token_project_rotate_self
+Manage GitLab access credentials: deploy keys (project and instance), deploy tokens (project and group), project access tokens, and group access tokens. CRUD, rotate, and approve/deny access requests.
+Valid actions: approve_group, approve_project, deny_group, deny_project, deploy_key_add, deploy_key_add_instance, deploy_key_delete, deploy_key_enable, deploy_key_get, deploy_key_list_all, deploy_key_list_project, deploy_key_list_user_project, deploy_key_update, deploy_token_create_group, deploy_token_create_project, deploy_token_delete_group, deploy_token_delete_project, deploy_token_get_group, deploy_token_get_project, deploy_token_list_all, deploy_token_list_group, deploy_token_list_project, invite_group, invite_list_group, invite_list_project, invite_project, request_group, request_list_group, request_list_project, request_project, token_group_create, token_group_get, token_group_list, token_group_revoke, token_group_rotate, token_group_rotate_self, token_personal_get, token_personal_list, token_personal_revoke, token_personal_revoke_self, token_personal_rotate, token_personal_rotate_self, token_project_create, token_project_get, token_project_list, token_project_revoke, token_project_rotate, token_project_rotate_self
 
 Actions:
 - token_project_list: List project access tokens. Params: project_id (required), page, per_page
@@ -70,7 +70,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Admin**
 
-GitLab admin and instance-level operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
+GitLab instance administration: Sidekiq metrics/queues/jobs, instance settings, license, plan limits, OAuth applications, broadcast messages, system hooks, personal access tokens, appearance, system info, statistics, topics, metadata, linked Jira, alert metric images, and notification settings.
+Valid actions: alert_metric_image_delete, alert_metric_image_list, alert_metric_image_update, alert_metric_image_upload, app_statistics_get, appearance_get, appearance_update, application_create, application_delete, application_list, broadcast_message_create, broadcast_message_delete, broadcast_message_get, broadcast_message_list, broadcast_message_update, bulk_import_start, cluster_agent_delete, cluster_agent_get, cluster_agent_list, cluster_agent_register, cluster_agent_token_create, cluster_agent_token_get, cluster_agent_token_list, cluster_agent_token_revoke, custom_attr_delete, custom_attr_get, custom_attr_list, custom_attr_set, db_migration_mark, dependency_proxy_delete, error_tracking_create, error_tracking_delete, error_tracking_get_settings, error_tracking_list, error_tracking_update_settings, feature_delete, feature_list, feature_list_definitions, feature_set, import_bitbucket, import_bitbucket_server, import_cancel_github, import_gists, import_github, license_add, license_delete, license_get, metadata_get, plan_limits_change, plan_limits_get, secure_file_create, secure_file_delete, secure_file_get, secure_file_list, settings_get, settings_update, sidekiq_compound_metrics, sidekiq_job_stats, sidekiq_process_metrics, sidekiq_queue_metrics, system_hook_add, system_hook_delete, system_hook_get, system_hook_list, system_hook_test, terraform_state_delete, terraform_state_get, terraform_state_list, terraform_state_lock, terraform_state_unlock, terraform_version_delete, topic_create, topic_delete, topic_get, topic_list, topic_update, usage_data_metric_definitions, usage_data_non_sql_metrics, usage_data_queries, usage_data_service_ping, usage_data_track_event, usage_data_track_events
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - topic_list: List project topics. Params: search, page, per_page
@@ -222,7 +224,9 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Branch**
 
-Manage Git branches in GitLab projects. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, delete, and protect Git branches in GitLab repositories.
+Valid actions: create, delete, delete_merged, get, get_protected, list, list_protected, protect, unprotect, update_protected
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a new branch from a ref. Params: project_id (required), branch_name (required), ref (required, branch/tag/SHA)
@@ -238,11 +242,38 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
+### gitlab_branch_rule
+
+**Branch Rule**
+
+Query branch rules for a project via GraphQL API (Premium/Ultimate). Provides an aggregated read-only view of branch protections, approval rules, and external status checks.
+Use "action" to specify the operation. Valid actions: list
+
+Actions:
+- list: List branch rules for a project. Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+### gitlab_ci_catalog
+
+**CI Catalog**
+
+Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
+Use "action" to specify the operation. Valid actions: get, list
+
+Actions:
+- list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
+- get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 ### gitlab_ci_variable
 
 **CI Variable**
 
-Manage CI/CD variables in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Manage GitLab CI/CD variables at instance, group, and project scope. Create, list, get, update, and delete variables at each level.
+Valid actions: create, delete, get, group_create, group_delete, group_get, group_list, group_update, instance_create, instance_delete, instance_get, instance_list, instance_update, list, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List variables. Params: project_id (required), page, per_page
@@ -263,11 +294,27 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
+### gitlab_custom_emoji
+
+**Custom Emoji**
+
+Manage group-level custom emoji via GraphQL API (Premium/Ultimate). Custom emoji are group-level assets with custom images, distinct from award emoji (reactions).
+Use "action" to specify the operation. Valid actions: create, delete, list
+
+Actions:
+- list: List custom emoji for a group. Params: group_path (required). Pagination: first, after
+- create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
+- delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
 ### gitlab_deployment
 
 **Deployment**
 
-Manage deployments in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+List, get, create, update, approve/reject, and delete GitLab deployments. List merge requests associated with a deployment.
+Valid actions: approve_or_reject, create, delete, get, list, merge_requests, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
@@ -284,7 +331,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Environment**
 
-Manage environments in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, delete, and stop GitLab environments. Manage protected environments and deployment freeze periods.
+Valid actions: create, delete, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List environments. Params: project_id (required), name, search, states, page, per_page
@@ -310,7 +359,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Feature Flags**
 
-Manage GitLab feature flags and feature flag user lists.
+Manage GitLab feature flags and feature flag user lists (named sets of user IDs).
 Use "action" to specify the operation. Valid actions: feature_flag_create, feature_flag_delete, feature_flag_get, feature_flag_list, feature_flag_update, ff_user_list_create, ff_user_list_delete, ff_user_list_get, ff_user_list_list, ff_user_list_update
 
 Actions:
@@ -367,7 +416,9 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Group**
 
-Manage GitLab groups and their members. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, delete, and manage GitLab groups and subgroups. Also manages group members, labels, milestones, webhooks, badges, boards, variables, access tokens, deploy tokens, hooks, notifications, push rules, and transfer projects.
+Valid actions: archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, create, delete, get, group_board_create, group_board_create_list, group_board_delete, group_board_delete_list, group_board_get, group_board_get_list, group_board_list, group_board_list_lists, group_board_update, group_board_update_list, group_export_download, group_export_schedule, group_import_file, group_label_create, group_label_delete, group_label_get, group_label_list, group_label_subscribe, group_label_unsubscribe, group_label_update, group_member_add, group_member_edit, group_member_get, group_member_get_inherited, group_member_remove, group_member_share, group_member_unshare, group_milestone_burndown, group_milestone_create, group_milestone_delete, group_milestone_get, group_milestone_issues, group_milestone_list, group_milestone_merge_requests, group_milestone_update, group_relations_list_status, group_relations_schedule, group_upload_delete_by_id, group_upload_delete_by_secret, group_upload_list, hook_add, hook_delete, hook_edit, hook_get, hook_list, issues, list, members, projects, release_list, restore, search, subgroups, transfer_project, unarchive, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List accessible groups. Params: search, owned (bool), top_level_only (bool), page, per_page
@@ -376,6 +427,8 @@ Actions:
 - update: Update a group. Params: group_id (required), name, path, description, visibility, request_access_enabled (bool), lfs_enabled (bool), default_branch
 - delete: Delete a group. Params: group_id (required), permanently_remove (bool), full_path (required when permanently_remove=true)
 - restore: Restore a group marked for deletion. Params: group_id (required)
+- archive: Archive a group. Requires Owner role or administrator. Params: group_id (required)
+- unarchive: Unarchive a previously archived group. Requires Owner role or administrator. Params: group_id (required)
 - search: Search groups by name. Params: query (required)
 - transfer_project: Transfer a project into a group namespace. Params: group_id (required), project_id (required)
 - projects: List projects belonging to a group. Set include_subgroups=true to include projects from descendant subgroups. Params: group_id (required), search, archived (bool), visibility, order_by, sort, simple (bool), owned (bool), starred (bool), include_subgroups (bool, recommended for hierarchical groups), with_shared (bool), page, per_page
@@ -433,60 +486,9 @@ Actions:
 - group_export_schedule: Schedule group export. Params: group_id (required)
 - group_export_download: Download group export archive. Params: group_id (required)
 - group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id
-- epic_discussion_list: List epic discussions. Params: group_id (required), epic_id (required), page, per_page
-- epic_discussion_get: Get an epic discussion. Params: group_id (required), epic_id (required), discussion_id (required)
-- epic_discussion_create: Create an epic discussion. Params: group_id (required), epic_id (required), body (required)
-- epic_discussion_add_note: Add note to epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), body (required)
-- epic_discussion_update_note: Update note in epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), note_id (required), body
-- epic_discussion_delete_note: Delete note from epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), note_id (required)
-- epic_list: List epics in a group. Params: group_id (required), author_id, labels, order_by, sort, search, state, include_ancestor_groups (bool), include_descendant_groups (bool), page, per_page
-- epic_get: Get a single epic. Params: group_id (required), epic_iid (required)
-- epic_get_links: Get linked epics. Params: group_id (required), epic_iid (required)
-- epic_create: Create an epic in a group. Params: group_id (required), title (required), description, labels, confidential (bool), parent_id, color, start_date_fixed, due_date_fixed
-- epic_update: Update an epic. Params: group_id (required), epic_iid (required), title, description, labels, confidential (bool), state_event, add_labels, remove_labels, color, start_date_fixed, due_date_fixed
-- epic_delete: Delete an epic. Params: group_id (required), epic_iid (required)
-- epic_issue_list: List issues assigned to an epic. Params: group_id (required), epic_iid (required), page, per_page
-- epic_issue_assign: Assign an issue to an epic. Params: group_id (required), epic_iid (required), issue_id (required)
-- epic_issue_remove: Remove an issue from an epic. Params: group_id (required), epic_iid (required), epic_issue_id (required)
-- epic_issue_update: Reorder an issue in an epic. Params: group_id (required), epic_iid (required), epic_issue_id (required), move_before_id, move_after_id
-- epic_note_list: List notes on an epic. Params: group_id (required), epic_iid (required), order_by, sort, page, per_page
-- epic_note_get: Get a single epic note. Params: group_id (required), epic_iid (required), note_id (required)
-- epic_note_create: Add a note to an epic. Params: group_id (required), epic_iid (required), body (required)
-- epic_note_update: Update an epic note. Params: group_id (required), epic_iid (required), note_id (required), body (required)
-- epic_note_delete: Delete an epic note. Params: group_id (required), epic_iid (required), note_id (required)
-- epic_board_list: List group epic boards. Params: group_id (required), page, per_page
-- epic_board_get: Get a group epic board. Params: group_id (required), board_id (required)
-- wiki_list: List group wiki pages. Params: group_id (required), with_content (bool)
-- wiki_get: Get a group wiki page. Params: group_id (required), slug (required), render_html (bool), version
-- wiki_create: Create a group wiki page. Params: group_id (required), title (required), content (required), format (markdown/rdoc/asciidoc/org)
-- wiki_edit: Edit a group wiki page. Params: group_id (required), slug (required), title, content, format
-- wiki_delete: Delete a group wiki page. Params: group_id (required), slug (required)
-- protected_branch_list: List group protected branches. Params: group_id (required), search, page, per_page
-- protected_branch_get: Get a group protected branch. Params: group_id (required), branch (required)
-- protected_branch_protect: Protect a group branch. Params: group_id (required), name (required), push_access_level, merge_access_level, unprotect_access_level, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
-- protected_branch_update: Update a group protected branch. Params: group_id (required), branch (required), name, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
-- protected_branch_unprotect: Unprotect a group branch. Params: group_id (required), branch (required)
-- protected_env_list: List group protected environments. Params: group_id (required), page, per_page
-- protected_env_get: Get a group protected environment. Params: group_id (required), environment (required)
-- protected_env_protect: Protect a group environment. Params: group_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
-- protected_env_update: Update a group protected environment. Params: group_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
-- protected_env_unprotect: Unprotect a group environment. Params: group_id (required), environment (required)
+
+Group Releases (Free tier):
 - release_list: List releases across group projects. Params: group_id (required), simple (bool), page, per_page
-- ldap_link_list: List group LDAP links. Params: group_id (required)
-- ldap_link_add: Add a group LDAP link. Params: group_id (required), cn (required), group_access (required, access level int), provider (required)
-- ldap_link_delete: Delete a group LDAP link by CN or filter. Params: group_id (required), cn, filter, provider
-- ldap_link_delete_for_provider: Delete a group LDAP link for a specific provider. Params: group_id (required), provider (required), cn (required)
-- saml_link_list: List group SAML links. Params: group_id (required)
-- saml_link_get: Get a group SAML link. Params: group_id (required), saml_group_name (required)
-- saml_link_add: Add a group SAML link. Params: group_id (required), saml_group_name (required), access_level (required, access level int)
-- saml_link_delete: Delete a group SAML link. Params: group_id (required), saml_group_name (required)
-- service_account_list: List group service accounts. Params: group_id (required), order_by, sort, page, per_page
-- service_account_create: Create a group service account. Params: group_id (required), name (required), username (required)
-- service_account_update: Update a group service account. Params: group_id (required), service_account_id (required), name, username
-- service_account_delete: Delete a group service account. Params: group_id (required), service_account_id (required), hard_delete (bool)
-- service_account_pat_list: List personal access tokens for a group service account. Params: group_id (required), service_account_id (required), page, per_page
-- service_account_pat_create: Create a personal access token for a group service account. Params: group_id (required), service_account_id (required), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
-- service_account_pat_revoke: Revoke a personal access token for a group service account. Params: group_id (required), service_account_id (required), token_id (required)
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -494,15 +496,17 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Issue**
 
-Manage GitLab issues. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, close, reopen, delete, and move GitLab issues. Also manages comments (notes), discussions, linked issues, time tracking, work items, award emoji, participants, statistics, and resource events.
+Valid actions: create, create_todo, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_issue_create, emoji_issue_delete, emoji_issue_get, emoji_issue_list, emoji_issue_note_create, emoji_issue_note_delete, emoji_issue_note_get, emoji_issue_note_list, event_issue_iteration_get, event_issue_iteration_list, event_issue_label_get, event_issue_label_list, event_issue_milestone_get, event_issue_milestone_list, event_issue_state_get, event_issue_state_list, event_issue_weight_list, get, get_by_id, link_create, link_delete, link_get, link_list, list, list_all, list_group, move, mrs_closing, mrs_related, note_create, note_delete, note_get, note_list, note_update, participants, reorder, spent_time_add, spent_time_reset, statistics_get, statistics_get_group, statistics_get_project, subscribe, time_estimate_reset, time_estimate_set, time_stats_get, unsubscribe, update, work_item_create, work_item_delete, work_item_get, work_item_list, work_item_update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
-- create: Create a new issue. Params: project_id (required), title (required), description, assignee_ids ([]int), labels (comma-separated string), milestone_id (int), due_date (YYYY-MM-DD), confidential (bool), issue_type (issue/incident/test_case/task), weight (int), epic_id (int)
+- create: Create a new issue. Params: project_id (required), title (required), description, assignee_id (single user ID), assignee_ids ([]int, multiple user IDs), labels (comma-separated string), milestone_id (int), due_date (YYYY-MM-DD), confidential (bool), issue_type (issue/incident/test_case/task), weight (int), epic_id (int)
 - get: Get issue details. Params: project_id (required), issue_iid (required)
 - get_by_id: Get issue by global ID. Params: issue_id (required)
 - list: List project issues. Params: project_id (required), state (opened/closed/all), labels (comma-separated), not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential (bool), created_after/created_before (ISO 8601), updated_after/updated_before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc), page, per_page
 - list_all: List all issues visible to authenticated user (global). Params: state, labels, milestone, scope, search, assignee_username, author_username, order_by, sort, created_after/created_before, updated_after/updated_before, confidential (bool), page, per_page
-- update: Update an issue. Note: time tracking (estimates/spent time) uses dedicated actions (time_estimate_set, spent_time_add, etc.) — do NOT pass time params here. Params: project_id (required), issue_iid (required), title, description, state_event (close/reopen), assignee_ids, labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, due_date, confidential (bool), issue_type, weight (int), epic_id (int), discussion_locked (bool)
+- update: Update an issue. Note: time tracking (estimates/spent time) uses dedicated actions (time_estimate_set, spent_time_add, etc.) — do NOT pass time params here. Params: project_id (required), issue_iid (required), title, description, state_event (close/reopen), assignee_id (single user ID), assignee_ids (multiple user IDs), labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, due_date, confidential (bool), issue_type, weight (int), epic_id (int), discussion_locked (bool)
 - delete: Delete an issue permanently. Params: project_id (required), issue_iid (required)
 - list_group: List issues for a group. Params: group_id (required), state, labels, milestone, scope, search, order_by, sort, page, per_page
 - reorder: Reorder an issue relative to others. Params: project_id (required), issue_iid (required), move_after_id (int), move_before_id (int)
@@ -528,9 +532,9 @@ Actions:
 - link_create: Create a link between issues. Params: project_id (required), issue_iid (required), target_project_id (required), target_issue_iid (required), link_type
 - link_delete: Delete an issue link. Params: project_id (required), issue_iid (required), issue_link_id (required)
 - work_item_get: Get a single work item by IID. Params: full_path (required), iid (required)
-- work_item_list: List work items for a project or group. Params: full_path (required), state, search, types, author_username, label_name, confidential, sort, first, after
-- work_item_create: Create a new work item. Params: full_path (required), work_item_type_id (required), title (required), description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date
-- work_item_update: Update an existing work item by IID. Params: full_path (required), iid (required), title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color
+- work_item_list: List work items for a project or group. Supports types=["Epic"] to filter epics (replaces deprecated epic_list). Params: full_path (required), state, search, types, author_username, label_name, confidential, sort, first, after
+- work_item_create: Create a new work item. Use work_item_type_id for Epic type to replace deprecated epic_create. Params: full_path (required), work_item_type_id (required), title (required), description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type: BLOCKS/BLOCKED_BY/RELATED}
+- work_item_update: Update an existing work item by IID. Params: full_path (required), iid (required), title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
 - work_item_delete: Permanently delete a work item by IID. Params: full_path (required), iid (required)
 - discussion_list: List issue discussions. Params: project_id (required), issue_iid (required), page, per_page
 - discussion_get: Get an issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required)
@@ -565,7 +569,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Job**
 
-Manage GitLab CI/CD jobs. Use 'action' to specify the operation and 'params' for action-specific parameters.
+List, get, retry, cancel, erase, and play GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
+Valid actions: artifacts, cancel, delete_artifacts, delete_project_artifacts, download_artifacts, download_single_artifact, download_single_artifact_by_ref, erase, get, keep_artifacts, list, list_bridges, list_project, play, retry, token_scope_add_group, token_scope_add_project, token_scope_get, token_scope_list_groups, token_scope_list_inbound, token_scope_patch, token_scope_remove_group, token_scope_remove_project, trace
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List jobs for a pipeline. Params: project_id (required), pipeline_id (required), scope, page, per_page
@@ -599,15 +605,17 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Request**
 
-Manage GitLab merge requests. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, merge, approve, rebase, and delete GitLab merge requests. Also manages MR approvals, approval rules, approval settings, time tracking, subscriptions, context commits, award emoji, and resource events.
+Valid actions: approval_config, approval_reset, approval_rule_create, approval_rule_delete, approval_rule_update, approval_rules, approval_settings_group_get, approval_settings_group_update, approval_settings_project_get, approval_settings_project_update, approval_state, approve, cancel_auto_merge, commits, context_commits_create, context_commits_delete, context_commits_list, create, create_pipeline, delete, emoji_mr_create, emoji_mr_delete, emoji_mr_get, emoji_mr_list, emoji_mr_note_create, emoji_mr_note_delete, emoji_mr_note_get, emoji_mr_note_list, event_mr_label_get, event_mr_label_list, event_mr_milestone_get, event_mr_milestone_list, event_mr_state_get, event_mr_state_list, get, issues_closed, list, list_global, list_group, merge, participants, pipelines, rebase, reviewers, spent_time_add, spent_time_reset, subscribe, time_estimate_reset, time_estimate_set, time_stats, unapprove, unsubscribe, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
-- create: Create a merge request. Params: project_id (required), source_branch (required), target_branch (required — if not specified by the user, retrieve the project default branch via action 'get' on gitlab_project and use its default_branch value; do NOT assume 'main'), title (required), description, assignee_ids, reviewer_ids, labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), allow_collaboration (bool), target_project_id (for fork MRs)
+- create: Create a merge request. Params: project_id (required), source_branch (required), target_branch (required — if not specified by the user, retrieve the project default branch via action 'get' on gitlab_project and use its default_branch value; do NOT assume 'main'), title (required), description, assignee_id (single user ID), assignee_ids (multiple user IDs), reviewer_ids, labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), allow_collaboration (bool), target_project_id (for fork MRs)
 - get: Get MR details by IID. Params: project_id (required), mr_iid (required)
 - list: List merge requests in a project. Params: project_id (required), state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft (bool), iids ([]int), created_after/created_before (ISO 8601), updated_after/updated_before (ISO 8601), order_by (created_at/updated_at/title), sort (asc/desc), page, per_page
 - list_global: List merge requests across all projects. Params: state, labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, reviewer_username, draft (bool), created_after/created_before, updated_after/updated_before, order_by, sort, page, per_page
 - list_group: List merge requests in a group. Params: group_id (required), state, labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, reviewer_username, draft (bool), created_after/created_before, updated_after/updated_before, order_by, sort, page, per_page
-- update: Update MR metadata. Params: project_id (required), mr_iid (required), title, description, target_branch, assignee_ids, reviewer_ids, labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), discussion_locked (bool), allow_collaboration (bool), state_event (close/reopen)
+- update: Update MR metadata. Params: project_id (required), mr_iid (required), title, description, target_branch, assignee_id (single user ID), assignee_ids (multiple user IDs), reviewer_ids, labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), discussion_locked (bool), allow_collaboration (bool), state_event (close/reopen)
 - merge: Merge an accepted MR. The server auto-detects enforced project settings (squash, source branch deletion) — do NOT set squash or should_remove_source_branch unless the user explicitly asks. Params: project_id (required), mr_iid (required), merge_commit_message, squash (bool, auto-detected), should_remove_source_branch (bool, auto-detected), auto_merge (bool), sha (safety check), squash_commit_message
 - approve: Approve a merge request. Params: project_id (required), mr_iid (required)
 - unapprove: Remove your approval. Params: project_id (required), mr_iid (required)
@@ -658,11 +666,25 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
+### gitlab_model_registry
+
+**Model Registry**
+
+Download ML model package files from GitLab Model Registry (Premium/Ultimate).
+Use "action" to specify the operation. Valid actions: download
+
+Actions:
+- download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 ### gitlab_mr_review
 
 **MR Review**
 
-Review GitLab merge requests: notes, discussions, draft notes, file changes, and diff versions. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Review and comment on GitLab merge requests: notes (comments), threaded discussions, code changes/diffs, draft notes, and diff versions.
+Valid actions: changes_get, diff_version_get, diff_versions_list, discussion_create, discussion_get, discussion_list, discussion_note_delete, discussion_note_update, discussion_reply, discussion_resolve, draft_note_create, draft_note_delete, draft_note_get, draft_note_list, draft_note_publish, draft_note_publish_all, draft_note_update, note_create, note_delete, note_get, note_list, note_update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 IMPORTANT — Batch review workflow: When performing a code review with multiple comments, use draft_note_create (with position for inline comments, or in_reply_to_discussion_id for replies to existing threads) for EACH comment, then call draft_note_publish_all ONCE at the end. This batches all comments and replies into a single notification instead of spamming reviewers with one notification per comment. Only use discussion_create for standalone questions that need immediate visibility.
 
@@ -696,7 +718,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Package**
 
-Manage GitLab Generic Package Registry and Container Registry. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Manage GitLab package registry: list, get, and delete packages. Upload and download generic package files. Manage package protection rules.
 Valid actions: delete, download, file_delete, file_list, list, protection_rule_create, protection_rule_delete, protection_rule_list, protection_rule_update, publish, publish_and_link, publish_directory, registry_delete, registry_get, registry_list_group, registry_list_project, registry_rule_create, registry_rule_delete, registry_rule_list, registry_rule_update, registry_tag_delete, registry_tag_delete_bulk, registry_tag_get, registry_tag_list
 
 Actions:
@@ -731,7 +753,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Pipeline**
 
-Manage GitLab CI/CD pipelines. Use 'action' to specify the operation and 'params' for action-specific parameters.
+List, get, create, retry, cancel, and delete GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
+Valid actions: cancel, create, delete, get, latest, list, resource_group_edit, resource_group_get, resource_group_list, resource_group_upcoming_jobs, retry, test_report, test_report_summary, trigger_create, trigger_delete, trigger_get, trigger_list, trigger_run, trigger_update, update_metadata, variables
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List pipelines for a project. Params: project_id (required), status (success/failed/running/pending/canceled), scope (running/pending/finished/branches/tags), source (push/web/schedule/merge_request_event), ref, sha, username, page, per_page
@@ -762,7 +786,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Pipeline Schedule**
 
-Manage pipeline schedules in a GitLab project. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, delete, and run GitLab pipeline schedules. Manage schedule variables and ownership.
+Valid actions: create, create_variable, delete, delete_variable, edit_variable, get, list, list_triggered_pipelines, run, take_ownership, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
@@ -783,7 +809,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Project**
 
-Manage GitLab projects, members, labels, milestones, webhooks, badges, boards, integrations, and Pages. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, delete, fork, star, archive, and transfer GitLab projects. Also manages project members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export.
+Valid actions: approval_config_change, approval_config_get, approval_rule_create, approval_rule_delete, approval_rule_get, approval_rule_list, approval_rule_update, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, board_create, board_delete, board_get, board_list, board_list_create, board_list_delete, board_list_get, board_list_list, board_list_update, board_update, create, create_for_user, create_fork_relation, delete, delete_fork_relation, delete_shared_group, download_avatar, export_download, export_schedule, export_status, fork, get, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_set_custom_header, hook_set_url_variable, hook_test, import_from_file, import_status, integration_delete, integration_get, integration_list, integration_set_jira, label_create, label_delete, label_get, label_list, label_promote, label_subscribe, label_unsubscribe, label_update, languages, list, list_forks, list_groups, list_invited_groups, list_starrers, list_user_contributed, list_user_projects, list_user_starred, list_users, member_add, member_delete, member_edit, member_get, member_inherited, members, milestone_create, milestone_delete, milestone_get, milestone_issues, milestone_list, milestone_merge_requests, milestone_update, mirror_add, mirror_delete, mirror_edit, mirror_force_push, mirror_get, mirror_get_public_key, mirror_list, pages_domain_create, pages_domain_delete, pages_domain_get, pages_domain_list, pages_domain_list_all, pages_domain_update, pages_get, pages_unpublish, pages_update, pull_mirror_configure, pull_mirror_get, repository_storage_get, restore, share_with_group, star, start_housekeeping, start_mirroring, statistics_get, transfer, unarchive, unstar, update, upload, upload_avatar, upload_delete, upload_list
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Project CRUD:
 - create: Create a new project. Params: name (required), namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics ([]string), merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), only_allow_merge_if_pipeline_succeeds, only_allow_merge_if_all_discussions_are_resolved, issues_enabled (bool), merge_requests_enabled (bool), wiki_enabled (bool), jobs_enabled (bool), lfs_enabled (bool), request_access_enabled (bool), ci_config_path, allow_merge_on_skipped_pipeline (bool), remove_source_branch_after_merge (bool), autoclose_referenced_issues (bool)
@@ -827,12 +855,6 @@ Users and groups:
 - list_invited_groups: List groups invited to a project. Params: project_id (required), search, min_access_level (int), page, per_page
 - list_user_contributed: List projects a user has contributed to. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
 - list_user_starred: List projects a user has starred. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
-
-Push rules:
-- push_rule_get: Get push rule configuration. Params: project_id (required)
-- push_rule_add: Add push rules. Params: project_id (required), commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size (int), deny_delete_tag (bool), member_check (bool), prevent_secrets (bool), commit_committer_check (bool), commit_committer_name_check (bool), reject_unsigned_commits (bool), reject_non_dco_commits (bool)
-- push_rule_edit: Edit push rules. Params: project_id (required), same fields as push_rule_add (all optional)
-- push_rule_delete: Delete push rules from a project. Params: project_id (required)
 
 Members:
 - members: List all project members (including inherited). Params: project_id (required), query (filter by name/username), page, per_page
@@ -942,7 +964,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Release**
 
-Manage GitLab releases and their asset links. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, and delete GitLab releases and release asset links (binaries, downloads).
+Valid actions: create, delete, get, get_latest, link_create, link_create_batch, link_delete, link_get, link_list, link_update, list, update
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a release for an existing tag. Params: project_id (required), tag_name (required), name, description (Markdown), released_at (ISO 8601)
@@ -964,7 +988,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Repository**
 
-Interact with GitLab repository content: tree, compare, blobs, contributors, archives, changelogs, commits, and files. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions.
+Valid actions: archive, blob, changelog_add, changelog_generate, commit_cherry_pick, commit_comment_create, commit_comments, commit_create, commit_diff, commit_discussion_add_note, commit_discussion_create, commit_discussion_delete_note, commit_discussion_get, commit_discussion_list, commit_discussion_update_note, commit_get, commit_list, commit_merge_requests, commit_refs, commit_revert, commit_signature, commit_status_set, commit_statuses, compare, contributors, file_blame, file_create, file_delete, file_get, file_history, file_metadata, file_raw, file_update, list_submodules, markdown_render, merge_base, raw_blob, read_submodule_file, tree, update_submodule
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - tree: List files and directories at a path and ref. Params: project_id (required), path, ref, recursive (bool), page, per_page
@@ -1067,44 +1093,28 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Runner Controller**
 
-Manage GitLab runner controllers (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
+Manage GitLab runner controllers, their scopes, and tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
+Actions (controller CRUD):
 - list: List all runner controllers. Params: page, per_page
 - get: Get runner controller details. Params: controller_id (required, int)
 - create: Register a new runner controller. Params: description, state (enabled/disabled/dry_run)
 - update: Update a runner controller. Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
 - delete: Delete a runner controller. Params: controller_id (required, int)
 
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+Actions (scope management):
+- scope_list: List all scopes for a controller. Params: controller_id (required, int)
+- scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
+- scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
+- scope_add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
+- scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
 
-### gitlab_runner_controller_scope
-
-**Runner Controller Scope**
-
-Manage GitLab runner controller scopes (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List all scopes for a controller. Params: controller_id (required, int)
-- add_instance: Add instance-level scope. Params: controller_id (required, int)
-- remove_instance: Remove instance-level scope. Params: controller_id (required, int)
-- add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
-- remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
-
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_runner_controller_token
-
-**Runner Controller Token**
-
-Manage GitLab runner controller tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
-- get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
-- create: Create a new token. Params: controller_id (required, int), description
-- rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
-- revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)
+Actions (token management):
+- token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
+- token_get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
+- token_create: Create a new token. Params: controller_id (required, int), description
+- token_rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
+- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1133,8 +1143,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Snippet**
 
-Manage GitLab snippets (personal and project), snippet discussions, and snippet notes.
-Use "action" to specify the operation. Valid actions: content, create, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_snippet_create, emoji_snippet_delete, emoji_snippet_get, emoji_snippet_list, emoji_snippet_note_create, emoji_snippet_note_delete, emoji_snippet_note_get, emoji_snippet_note_list, explore, file_content, get, list, list_all, note_create, note_delete, note_get, note_list, note_update, project_content, project_create, project_delete, project_get, project_list, project_update, update
+Create, list, get, update, and delete GitLab snippets (project and personal). Also manages raw content, user files, discussions, notes, and award emoji.
+Valid actions: content, create, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_snippet_create, emoji_snippet_delete, emoji_snippet_get, emoji_snippet_list, emoji_snippet_note_create, emoji_snippet_note_delete, emoji_snippet_note_get, emoji_snippet_note_list, explore, file_content, get, list, list_all, note_create, note_delete, note_get, note_list, note_update, project_content, project_create, project_delete, project_get, project_list, project_update, update
 
 Actions:
 - list: List current user's snippets. Params: page, per_page
@@ -1202,7 +1212,9 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Tag**
 
-Manage Git tags and protected tags in GitLab projects. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, delete, and protect Git tags in GitLab repositories. Verify tag GPG signatures.
+Valid actions: create, delete, get, get_protected, get_signature, list, list_protected, protect, unprotect
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - create: Create a tag from a ref. Params: project_id (required), tag_name (required), ref (required, branch/tag/SHA), message (annotation)
@@ -1221,7 +1233,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Template**
 
-GitLab CI/CD templates and configuration validation. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Browse and retrieve GitLab project templates: gitignores, CI/CD YAML, Dockerfiles, licenses, and project-specific issue/MR templates. Lint CI configuration.
+Valid actions: ci_yml_get, ci_yml_list, dockerfile_get, dockerfile_list, gitignore_get, gitignore_list, license_get, license_list, lint, lint_project, project_template_get, project_template_list
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - lint: Validate arbitrary YAML content in project namespace. Params: project_id (required), content (required), dry_run (bool), include_jobs (bool), ref
@@ -1243,7 +1257,9 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **User**
 
-GitLab user, SSH keys, GPG keys, emails, impersonation tokens, service accounts, to-do, namespace, and notification operations. Use 'action' to specify the operation and 'params' for action-specific parameters.
+List, get, create, update, block, unblock, ban, deactivate, and delete GitLab users. Also manages SSH keys, GPG keys, personal access tokens, emails, impersonation tokens, activities, memberships, and user status.
+Valid actions: activate, activities, add_email, add_email_for_user, add_gpg_key, add_gpg_key_for_user, add_ssh_key, add_ssh_key_for_user, approve, associations_count, avatar_get, ban, block, contribution_events, create, create_current_user_pat, create_impersonation_token, create_personal_access_token, create_runner, current, current_user_status, deactivate, delete, delete_email, delete_email_for_user, delete_gpg_key, delete_gpg_key_for_user, delete_identity, delete_ssh_key, delete_ssh_key_for_user, disable_two_factor, emails, emails_for_user, event_list_contributions, event_list_project, get, get_email, get_gpg_key, get_gpg_key_for_user, get_impersonation_token, get_ssh_key, get_ssh_key_for_user, get_status, gpg_keys, gpg_keys_for_user, key_get_by_fingerprint, key_get_with_user, list, list_impersonation_tokens, me, memberships, modify, namespace_exists, namespace_get, namespace_list, namespace_search, notification_global_get, notification_global_update, notification_group_get, notification_group_update, notification_project_get, notification_project_update, reject, revoke_impersonation_token, set_status, ssh_keys, ssh_keys_for_user, todo_list, todo_mark_all_done, todo_mark_done, unban, unblock
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - current: Get information about the currently authenticated user. Params: (none required)
@@ -1299,8 +1315,6 @@ Actions:
 - create_impersonation_token: Create impersonation token (admin). Params: user_id (required, int), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
 - revoke_impersonation_token: Revoke impersonation token (admin). Params: user_id (required, int), token_id (required, int)
 - create_personal_access_token: Create PAT for a user (admin). Params: user_id (required, int), name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
-- create_service_account: Create a service account. Params: name, username, email
-- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page
 - create_current_user_pat: Create PAT for current user. Params: name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
 - todo_list: List to-do items with optional filters. Params: action (assigned/mentioned/build_failed/marked/approval_required/directly_addressed), author_id (int), project_id (int), group_id (int), state (pending/done), type (Issue/MergeRequest/DesignManagement::Design/AlertManagement::Alert), page, per_page
 - todo_mark_done: Mark a single to-do item as done. Params: id (required, int)
@@ -1327,7 +1341,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Wiki**
 
-Manage GitLab project wiki pages. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Create, list, get, update, delete, and upload attachments to GitLab project wiki pages.
+Valid actions: create, delete, get, list, update, upload_attachment
+Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List all wiki pages in a project. Params: project_id (required), with_content (bool, include page content)
@@ -1347,7 +1363,7 @@ These 15 tools require GITLAB_ENTERPRISE=true.
 
 **Attestation**
 
-Manage build attestations for a GitLab project.
+List and download build attestations (SLSA provenance) for GitLab project artifacts.
 Use "action" to specify the operation. Valid actions: download, list
 
 Actions:
@@ -1360,7 +1376,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Audit Event**
 
-Manage GitLab audit events (instance, group, and project level).
+List and get GitLab audit events at instance, group, and project levels. Track who did what and when for compliance.
 Use "action" to specify the operation. Valid actions: get_group, get_instance, get_project, list_group, list_instance, list_project
 
 Actions:
@@ -1373,36 +1389,11 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
-### gitlab_branch_rule
-
-**Branch Rule**
-
-Query branch rules for a project via GraphQL API (Premium/Ultimate). Provides an aggregated read-only view of branch protections, approval rules, and external status checks.
-Use "action" to specify the operation. Valid actions: list
-
-Actions:
-- list: List branch rules for a project. Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_ci_catalog
-
-**CI Catalog**
-
-Discover and inspect CI/CD Catalog resources via GraphQL API (Premium/Ultimate).
-Use "action" to specify the operation. Valid actions: get, list
-
-Actions:
-- list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
-- get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
 ### gitlab_compliance_policy
 
 **Compliance Policy**
 
-Manage admin compliance policy settings (CSP namespace).
+Get and update admin compliance policy settings (CSP namespace configuration).
 Use "action" to specify the operation. Valid actions: get, update
 
 Actions:
@@ -1411,25 +1402,11 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
-### gitlab_custom_emoji
-
-**Custom Emoji**
-
-Manage group-level custom emoji via GraphQL API (Premium/Ultimate). Custom emoji are group-level assets with custom images, distinct from award emoji (reactions).
-Use "action" to specify the operation. Valid actions: create, delete, list
-
-Actions:
-- list: List custom emoji for a group. Params: group_path (required). Pagination: first, after
-- create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
-- delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
-
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
 ### gitlab_dependency
 
 **Dependency**
 
-Manage GitLab project dependencies and SBOM exports.
+List GitLab project dependencies and create/download SBOM exports (CycloneDX).
 Use "action" to specify the operation. Valid actions: export_create, export_download, export_get, list
 
 Actions:
@@ -1457,7 +1434,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Enterprise User**
 
-Manage enterprise users for a GitLab group.
+Manage enterprise users for a GitLab group: list, get, disable 2FA, and delete.
 Use "action" to specify the operation. Valid actions: delete, disable_2fa, get, list
 
 Actions:
@@ -1472,7 +1449,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **External Status Check**
 
-Manage GitLab external status checks for merge requests and projects.
+Manage GitLab external status checks for merge requests and projects. Create, list, update, delete checks and set/retry check status.
 Use "action" to specify the operation. Valid actions: create, create_project, delete, delete_project, list_mr_checks, list_project, list_project_checks, list_project_mr_checks, retry, retry_project, set_project_mr_status, set_status, update, update_project
 
 Actions (legacy):
@@ -1499,7 +1476,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Geo**
 
-Manage GitLab Geo replication sites (admin, Premium/Ultimate).
+Manage GitLab Geo replication sites: create, list, get, edit, delete, repair, and check status (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: create, delete, edit, get, get_status, list, list_status, repair
 
 Actions:
@@ -1518,7 +1495,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Group Scim**
 
-Manage SCIM identities for a GitLab group.
+Manage SCIM identities for GitLab group provisioning (list, get, update, delete).
 Use "action" to specify the operation. Valid actions: delete, get, list, update
 
 Actions:
@@ -1533,7 +1510,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Member Role**
 
-Manage custom member roles in GitLab at instance or group level.
+Manage custom member roles in GitLab at instance or group level. Define fine-grained permissions beyond standard access levels.
 Use "action" to specify the operation. Valid actions: create_group, create_instance, delete_group, delete_instance, list_group, list_instance
 
 Actions:
@@ -1550,7 +1527,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Merge Train**
 
-Manage GitLab merge trains (automated merge queues for target branches).
+Manage GitLab merge trains (automated merge queues). List, get, and add merge requests to merge trains.
 Use "action" to specify the operation. Valid actions: add, get, list_branch, list_project
 
 Actions:
@@ -1561,23 +1538,11 @@ Actions:
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
-### gitlab_model_registry
-
-**Model Registry**
-
-Manage GitLab ML model registry (Premium/Ultimate).
-Use "action" to specify the operation. Valid actions: download
-
-Actions:
-- download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
 ### gitlab_project_alias
 
 **Project Alias**
 
-Manage GitLab project aliases (admin, Premium/Ultimate).
+Manage GitLab project aliases: create short names that redirect to projects (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: create, delete, get, list
 
 Actions:
@@ -1637,7 +1602,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Vulnerability**
 
-Manage project vulnerabilities via GraphQL API (Premium/Ultimate).
+List, get, dismiss, confirm, resolve, and revert GitLab project vulnerabilities. Get severity counts and pipeline security summaries (Premium/Ultimate, GraphQL).
 Use "action" to specify the operation. Valid actions: confirm, dismiss, get, list, pipeline_security_summary, resolve, revert, severity_count
 
 Actions:
@@ -1849,7 +1814,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_epic_discussion_note
 
-Add a reply note to an existing epic discussion thread.
+Add a reply note to an existing epic discussion thread via the Work Items GraphQL API.
 
 Returns: JSON with created note including ID, body, and author.
 
@@ -1859,8 +1824,8 @@ See also: gitlab_get_epic_discussion, gitlab_update_epic_discussion_note
 
 - `body` (string) (required): Note body (Markdown supported),required
 - `discussion_id` (string) (required): Discussion ID to reply to,required
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -2014,6 +1979,7 @@ Returns: JSON with created mirror details. See also: gitlab_edit_project_mirror.
 
 - `auth_method` (string): Authentication method (password or ssh_public_key)
 - `enabled` (): Whether the mirror is enabled
+- `host_keys` (): SSH host keys for the remote mirror
 - `keep_divergent_refs` (): Keep divergent refs on the remote
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `only_protected_branches` (): Mirror only protected branches
@@ -2084,9 +2050,13 @@ See also: gitlab_list_system_hooks, gitlab_delete_system_hook
 
 **Parameters:**
 
+- `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `description` (string): Description for the hook
 - `enable_ssl_verification` (): Enable SSL verification for the hook URL
 - `merge_requests_events` (): Trigger on merge request events
+- `name` (string): Descriptive name for the hook
 - `push_events` (): Trigger on push events
+- `push_events_branch_filter` (string): Branch filter for push events (wildcard, regex, or branch name)
 - `repository_update_events` (): Trigger on repository update events
 - `tag_push_events` (): Trigger on tag push events
 - `token` (string): Secret token for payload validation
@@ -2960,7 +2930,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_epic_discussion
 
-Create a new discussion thread on a group epic.
+Create a new discussion thread on a group epic via the Work Items GraphQL API.
 
 Returns: JSON with created discussion thread including ID and initial note.
 
@@ -2969,8 +2939,8 @@ See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported),required
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -3244,7 +3214,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_secure_file
 
-Create a new CI/CD secure file.
+Create a new CI/CD secure file. Provide either file_path (absolute path to a local file) or content_base64 (base64-encoded content), not both.
 
 Returns: JSON with the created secure file details.
 
@@ -3252,7 +3222,8 @@ See also: gitlab_list_secure_files, gitlab_remove_secure_file
 
 **Parameters:**
 
-- `content` (string) (required): Base64-encoded file content,required
+- `content_base64` (string): Base64-encoded file content. Only one of file_path or content_base64 should be provided.
+- `file_path` (string): Absolute path to a local file on the MCP server filesystem. Alternative to content_base64. Only one of file_path or cont...
 - `name` (string) (required): Name for the secure file,required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
@@ -3360,11 +3331,11 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_work_item
 
-Create a new work item. Requires full_path, work_item_type_id, and title. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Create a new work item. Requires full_path, work_item_type_id, and title. Supports linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 Returns: JSON with the created work item details.
 
-See also: gitlab_list_work_items, gitlab_update_work_item
+See also: gitlab_list_work...
 
 **Parameters:**
 
@@ -3376,6 +3347,7 @@ See also: gitlab_list_work_items, gitlab_update_work_item
 - `full_path` (string) (required): Full path of the project or group,required
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
 - `label_ids` (): Global IDs of labels
+- `linked_items` (): Linked work items to add on creation
 - `milestone_id` (): Global ID of the milestone
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `title` (string) (required): Title of the work item,required
@@ -3561,7 +3533,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_epic_discussion_note
 
-Delete a note from an epic discussion thread.
+Delete a note from an epic discussion thread via the Work Items GraphQL API.
 
 Returns: JSON with deletion confirmation.
 
@@ -3569,9 +3541,8 @@ See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note
 
 **Parameters:**
 
-- `discussion_id` (string) (required): Discussion ID,required
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): Note ID to delete,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -4624,6 +4595,7 @@ Returns: JSON with updated mirror details. See also: gitlab_get_project_mirror.
 
 - `auth_method` (string): Authentication method (password or ssh_public_key)
 - `enabled` (): Whether the mirror is enabled
+- `host_keys` (): SSH host keys for the remote mirror
 - `keep_divergent_refs` (): Keep divergent refs on the remote
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `mirror_id` (integer) (required): Remote mirror ID,required
@@ -4756,235 +4728,249 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_create
 
-Create a new epic in a GitLab group. Supports title, description, labels, confidentiality, parent epic, and color.
+Create a new epic in a GitLab group (via Work Items GraphQL API). Supports title, description, confidentiality, color, dates, assignees, labels, weight, and health status.
 
 Returns: JSON with created epic details. See also: gitlab_epic_get.
 
 **Parameters:**
 
+- `assignee_ids` (): Global IDs of assignees
 - `color` (string): Epic color (hex format, e.g. #FF0000)
 - `confidential` (): Whether the epic is confidential
 - `description` (string): Epic description (Markdown supported)
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `labels` (string): Comma-separated label names
-- `parent_id` (): ID of the parent epic
+- `due_date` (string): Due date (YYYY-MM-DD)
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `health_status` (string): Health status (onTrack/needsAttention/atRisk)
+- `label_ids` (): Global IDs of labels
+- `start_date` (string): Start date (YYYY-MM-DD)
 - `title` (string) (required): Epic title,required
+- `weight` (): Weight of the epic
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_epic_delete
 
-Permanently delete an epic from a GitLab group.
+Permanently delete an epic from a GitLab group (via Work Items GraphQL API).
 
 Returns: JSON with deletion confirmation. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_epic_get
 
-Get a single group epic by its IID, including title, description, state, labels, dates, and author.
+Get a single group epic by its IID (via Work Items GraphQL API). Returns title, description, state, labels, dates, author, assignees, linked items, and health status.
 
 Returns: JSON with epic details. See also: gitlab_epic_list, gitlab_epic_get_links.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_get_links
 
-Get all child epics of a parent epic. Returns the list of sub-epics linked to the specified epic.
+Get all child epics of a parent epic (via REST API). Returns the list of sub-epics linked to the specified epic.
+
+Note: This tool uses the REST API because the Work Items GraphQL API does not yet support listing children.
 
 Returns: JSON with child_epics array. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_issue_assign
 
-Assign an existing issue to a GitLab group epic. The issue is identified by its global ID.
+Assign an existing issue to a GitLab group epic via the Work Items GraphQL API. The issue is identified by its project path and IID.
 
-Returns: JSON with the epic-issue association ID. See also: gitlab_epic_issue_list.
+Returns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `issue_id` (integer) (required): Global issue ID to assign to the epic,required
+- `child_iid` (integer) (required): IID of the issue to assign to the epic,required
+- `child_project_path` (string) (required): Full project path of the issue to assign (e.g. my-group/my-project),required
+- `full_path` (string) (required): Full path of the group that contains the epic,required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_epic_issue_list
 
-List all issues assigned to a GitLab group epic. Supports pagination.
+List all child issues of a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.
 
 Returns: JSON with issues array and pagination metadata. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `page` (integer): Page number (default 1)
-- `per_page` (integer): Items per page (default 20, max 100)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `first` (): Number of items to return (default 20, max 100)
+- `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group),required
+- `iid` (integer) (required): Epic IID within the group,required
+- `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_issue_remove
 
-Remove an issue from a GitLab group epic using the epic-issue association ID.
+Remove an issue from a GitLab group epic via the Work Items GraphQL API. Clears the child's parent reference.
 
-Returns: JSON with the removed association details. See also: gitlab_epic_issue_list.
+Returns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `epic_issue_id` (integer) (required): Epic-issue association ID to remove,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `child_iid` (integer) (required): IID of the issue to remove from the epic,required
+- `child_project_path` (string) (required): Full project path of the issue to remove,required
+- `full_path` (string) (required): Full path of the group that contains the epic,required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_epic_issue_update
 
-Reorder an issue within a GitLab group epic by moving it before or after another epic-issue.
+Reorder an issue within a GitLab group epic via the Work Items GraphQL API. Moves the issue before or after a reference issue.
 
 Returns: JSON with the updated issues list. See also: gitlab_epic_issue_list.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `epic_issue_id` (integer) (required): Epic-issue association ID to reorder,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `move_after_id` (): ID of the epic-issue to move this issue after
-- `move_before_id` (): ID of the epic-issue to move this issue before
+- `adjacent_id` (string): Work item GID of the reference issue to position relative to
+- `child_id` (string) (required): Work item GID of the issue to reorder (from list output id field),required
+- `full_path` (string) (required): Full path of the group that contains the epic,required
+- `iid` (integer) (required): Epic IID within the group,required
+- `relative_position` (string): Position relative to adjacent item: BEFORE or AFTER
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_list
 
-List epics for a GitLab group. Supports filtering by state, labels, author, search text, and pagination.
+List epics for a GitLab group (via Work Items GraphQL API with type=Epic). Supports filtering by state, labels, author, search text, and cursor-based pagination.
 
-Returns: JSON with epics array and pagination metadata. See also: gitlab_epic_get.
+Returns: JSON with epics array. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `author_id` (): Filter by author user ID
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `include_ancestor_groups` (): Include epics from ancestor groups
-- `include_descendant_groups` (): Include epics from descendant groups
-- `labels` (string): Comma-separated label names to filter by
-- `order_by` (string): Order by field (created_at, updated_at)
-- `page` (integer): Page number (default 1)
-- `per_page` (integer): Items per page (default 20, max 100)
-- `search` (string): Search epics by title and description
-- `sort` (string): Sort direction (asc, desc)
-- `state` (string): Filter by state (opened, closed)
+- `after` (string): Cursor for forward pagination
+- `author_username` (string): Filter by author username
+- `confidential` (): Filter by confidentiality
+- `first` (): Number of items to return (cursor-based pagination)
+- `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group),required
+- `include_ancestors` (): Include epics from ancestor groups
+- `include_descendants` (): Include epics from descendant groups
+- `label_name` (): Filter by label names
+- `search` (string): Search in title and description
+- `sort` (string): Sort order
+- `state` (string): Filter by state (opened/closed/all)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_create
 
-Add a comment (note) to a GitLab group epic. Supports Markdown formatting.
+Add a comment (note) to a GitLab group epic via the Work Items GraphQL API. Supports Markdown formatting.
 
 Returns: JSON with created note including ID, body, author, and timestamps. See also: gitlab_epic_get.
 
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported),required
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_epic_note_delete
 
-Permanently delete a comment from a GitLab group epic. Only the note author or a group maintainer can delete a note.
+Permanently delete a comment from a GitLab group epic via the Work Items GraphQL API. Only the note author or a group maintainer can delete a note.
 
 Returns: JSON with deletion confirmation. See also: gitlab_epic_note_get.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): ID of the note to delete,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_get
 
-Get a single comment (note) from a GitLab group epic by its note ID, including author, timestamps, body, and system flag.
+Get a single comment (note) from a GitLab group epic by its note ID via the Work Items GraphQL API, including author, timestamps, body, and system flag.
 
 Returns: JSON with note details including ID, body, author, and timestamps. See also: gitlab_epic_note_list.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): ID of the note to retrieve,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_list
 
-List all comments (notes) on a GitLab group epic. Supports ordering by created_at or updated_at, sort direction, and pagination.
+List all comments (notes) on a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.
 
 Returns: JSON with notes array including body, author, timestamps, and system flags. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `order_by` (string): Order by field (created_at, updated_at)
-- `page` (integer): Page number (default 1)
-- `per_page` (integer): Items per page (default 20, max 100)
-- `sort` (string): Sort direction (asc, desc)
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `first` (): Number of items to return (default 20, max 100)
+- `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group),required
+- `iid` (integer) (required): Epic IID within the group,required
+- `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_update
 
-Edit the body text of an existing comment on a GitLab group epic. Only the note author or a group maintainer can update a note.
+Edit the body text of an existing comment on a GitLab group epic via the Work Items GraphQL API. Only the note author or a group maintainer can update a note.
 
 Returns: JSON with updated note including ID, body, author, and timestamps. See also: gitlab_epic_note_get.
 
 **Parameters:**
 
 - `body` (string) (required): Updated note body (Markdown supported),required
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): ID of the note to update,required
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_update
 
-Update an existing group epic. Can modify title, description, labels, state (close/reopen), confidentiality, parent, and color.
+Update an existing group epic (via Work Items GraphQL API). Can modify title, description, labels, state (CLOSE/REOPEN), confidentiality, parent, color, dates, assignees, weight, health status, and status.
 
 Returns: JSON with updated epic details. See also: gitlab_epic_get.
 
 **Parameters:**
 
-- `add_labels` (string): Comma-separated label names to add
+- `add_label_ids` (): Global IDs of labels to add
+- `assignee_ids` (): Global IDs of assignees (empty array to remove all)
 - `color` (string): Epic color (hex format)
-- `confidential` (): Whether the epic is confidential
 - `description` (string): Updated description (Markdown supported)
-- `epic_iid` (integer) (required): Epic internal ID within the group,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `labels` (string): Comma-separated label names (replaces existing)
-- `parent_id` (): ID of the parent epic
-- `remove_labels` (string): Comma-separated label names to remove
-- `state_event` (string): State event (close, reopen)
+- `due_date` (string): Due date (YYYY-MM-DD)
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `health_status` (string): Health status (onTrack/needsAttention/atRisk)
+- `iid` (integer) (required): Epic IID within the group,required
+- `parent_id` (): Global ID of the parent epic work item
+- `remove_label_ids` (): Global IDs of labels to remove
+- `start_date` (string): Start date (YYYY-MM-DD)
+- `state_event` (string): State event: CLOSE or REOPEN
+- `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string): Updated epic title
+- `weight` (): Weight of the epic
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -5538,7 +5524,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_epic_discussion
 
-Get a single discussion thread on a group epic.
+Get a single discussion thread on a group epic via the Work Items GraphQL API.
 
 Returns: JSON with discussion thread details including all notes.
 
@@ -5547,8 +5533,8 @@ See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note
 **Parameters:**
 
 - `discussion_id` (string) (required): Discussion ID,required
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -6513,7 +6499,7 @@ See also: gitlab_list_work_items, gitlab_update_work_item
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### group (93 tools)
+### group (95 tools)
 
 #### gitlab_group_access_token_create
 
@@ -6608,6 +6594,18 @@ Returns: JSON with the rotated access token including the new token value.
 **Parameters:**
 
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
+- `group_id` (string) (required): Group ID or URL-encoded path,required
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_group_archive
+
+Archive a GitLab group. Requires Owner role or administrator.
+
+Returns: confirmation message. See also: gitlab_group_unarchive, gitlab_group_get.
+
+**Parameters:**
+
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -7794,6 +7792,18 @@ Returns: transferred project details with id, name, path, and namespace. See als
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_group_unarchive
+
+Unarchive a previously archived GitLab group. Requires Owner role or administrator.
+
+Returns: confirmation message. See also: gitlab_group_archive, gitlab_group_get.
+
+**Parameters:**
+
+- `group_id` (string) (required): Group ID or URL-encoded path,required
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_group_unshare
 
 Stop sharing a GitLab group with another group, removing the group-level access.
@@ -8218,6 +8228,7 @@ Create a new issue in a GitLab project. Supports title, description (Markdown), 
 
 **Parameters:**
 
+- `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (): User IDs to assign
 - `confidential` (): Mark issue as confidential
 - `created_at` (string): Creation date override (ISO 8601, requires admin permissions)
@@ -8937,6 +8948,7 @@ Returns: JSON with the updated issue details. See al...
 **Parameters:**
 
 - `add_labels` (string): Comma-separated labels to add without removing existing
+- `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (): New assignee user IDs
 - `confidential` (): Update confidential flag
 - `description` (string): New description (Markdown supported)
@@ -9587,7 +9599,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_epic_discussions
 
-List discussion threads on a group epic.
+List discussion threads on a group epic via the Work Items GraphQL API.
 
 Returns: JSON with discussion threads including notes and authors.
 
@@ -9595,10 +9607,12 @@ See also: gitlab_create_epic_discussion, gitlab_list_groups
 
 **Parameters:**
 
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
-- `page` (integer): Page number for pagination
-- `per_page` (integer): Number of items per page
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `first` (): Number of items to return (default 20, max 100)
+- `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group),required
+- `iid` (integer) (required): Epic IID within the group,required
+- `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10852,6 +10866,7 @@ Create a new merge request in a GitLab project. Requires source and target branc
 **Parameters:**
 
 - `allow_collaboration` (): Allow commits from upstream members who can merge to target branch
+- `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (): User IDs to assign
 - `description` (string): Merge request description (Markdown supported)
 - `labels` (string): Comma-separated labels to apply
@@ -11407,7 +11422,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_merge
 
-Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them �...
+Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them �...
 
 **Parameters:**
 
@@ -11814,6 +11829,7 @@ Update a GitLab merge request's title, description, target branch, assignees, re
 
 - `add_labels` (string): Comma-separated label names to add without removing existing
 - `allow_collaboration` (): Allow commits from upstream members who can merge to target branch
+- `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (): User IDs to assign as merge request assignees
 - `description` (string): New description
 - `discussion_locked` (): Lock discussions on the merge request
@@ -13011,7 +13027,7 @@ See also: gitlab_project_approval_config_get.
 - `merge_requests_author_approval` (): Allow MR author to approve their own MR
 - `merge_requests_disable_committers_approval` (): Prevent MR committers from approving
 - `project_id` (string) (required): Project ID or URL-encoded path,required
-- `require_password_to_approve` (): Require password re-entry to approve
+- `require_reauthentication_to_approve` (): Require reauthentication to approve
 - `reset_approvals_on_push` (): Reset approvals when new commits are pushed
 - `selective_code_owner_removals` (): Only remove code owner approvals when relevant files change
 
@@ -13158,7 +13174,8 @@ Create a new GitLab project (repository). Supports setting namespace, visibility
 - `namespace_id` (integer): Namespace ID (defaults to personal namespace)
 - `only_allow_merge_if_all_discussions_are_resolved` (boolean): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_pipeline_succeeds` (boolean): Only allow merge when pipeline succeeds
-- `packages_enabled` (): Enable packages feature
+- `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
+- `packages_enabled` (): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
 - `path` (string): Project path slug (defaults from name)
 - `public_builds` (): Enable public access to pipelines
@@ -14154,12 +14171,15 @@ Update GitLab project settings such as name, description, visibility, default br
 - `merge_commit_template` (string): Template for merge commit messages
 - `merge_method` (string): Merge method (merge, rebase_merge, ff)
 - `merge_pipelines_enabled` (): Enable merged results pipelines
+- `merge_request_title_regex` (string): Regex that MR titles must match
+- `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
 - `merge_requests_enabled` (): Enable merge requests feature
 - `merge_trains_enabled` (): Enable merge trains
 - `name` (string): New project name
 - `only_allow_merge_if_all_discussions_are_resolved` (): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_pipeline_succeeds` (): Only allow merge when pipeline succeeds
-- `packages_enabled` (): Enable packages feature
+- `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
+- `packages_enabled` (): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `public_builds` (): Enable public access to pipelines
@@ -14191,15 +14211,16 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_upload_avatar
 
-Upload or replace the avatar image for a project. Accepts base64-encoded image content.
+Upload or replace the avatar image for a project. Provide either file_path (absolute path to a local image file) or content_base64 (base64-encoded image content), not both.
 
 Returns: JSON with updated project details including avatar_url.
 
-See also: gitlab_project_get, gitlab_project_download_avatar.
+See also: gitlab_project_get, gitlab_project_download_avatar...
 
 **Parameters:**
 
-- `content_base64` (string) (required): Base64-encoded image content,required
+- `content_base64` (string): Base64-encoded image content. Only one of file_path or content_base64 should be provided.
+- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to b...
 - `filename` (string) (required): Avatar filename (e.g. avatar.png),required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
@@ -16982,7 +17003,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_epic_discussion_note
 
-Update an existing note in an epic discussion thread.
+Update an existing note in an epic discussion thread via the Work Items GraphQL API.
 
 Returns: JSON with updated note including ID, body, and author.
 
@@ -16991,9 +17012,8 @@ See also: gitlab_get_epic_discussion, gitlab_delete_epic_discussion_note
 **Parameters:**
 
 - `body` (string) (required): Updated note body,required
-- `discussion_id` (string) (required): Discussion ID,required
-- `epic_id` (integer) (required): Epic ID,required
-- `group_id` (string) (required): Group ID or URL-encoded path,required
+- `full_path` (string) (required): Full path of the group (e.g. my-group),required
+- `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): Note ID to update,required
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -17229,9 +17249,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_work_item
 
-Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color. Experimental: the Work Items API may introduce breaking changes between minor versions.
-
-Returns: JSON with the ...
+Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). Experimental: the Work Items API may introduce breaking ch...
 
 **Parameters:**
 
@@ -17250,6 +17268,7 @@ Returns: JSON with the ...
 - `remove_label_ids` (): Global IDs of labels to remove
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `state_event` (string): State event: CLOSE or REOPEN
+- `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string): New title
 - `weight` (): Weight of the work item
 
@@ -17259,7 +17278,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_upload_alert_metric_image
 
-Upload a metric image for a GitLab alert.
+Upload a metric image for a GitLab alert. Provide either file_path (absolute path to a local image file) or content_base64 (base64-encoded content), not both.
 
 Returns: JSON with the uploaded metric image details.
 
@@ -17268,7 +17287,8 @@ See also: gitlab_list_alert_metric_images, gitlab_update_alert_metric_image
 **Parameters:**
 
 - `alert_iid` (integer) (required): Alert IID,required
-- `content` (string) (required): Base64-encoded image content,required
+- `content_base64` (string): Base64-encoded image content. Only one of file_path or content_base64 should be provided.
+- `file_path` (string): Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64. Only one of file_path o...
 - `filename` (string) (required): Image filename,required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `url` () (required): URL to link the metric image to
@@ -17893,3 +17913,4 @@ Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs,
 
 - `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
 - `days`: Number of days to look back (default: 7)
+

@@ -187,6 +187,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
+| `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |

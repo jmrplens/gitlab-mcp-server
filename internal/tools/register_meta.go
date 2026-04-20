@@ -1185,30 +1185,30 @@ Group Releases (Free tier):
 	if enterprise {
 		desc += `
 
-Epics (Premium+ — requires GITLAB_ENTERPRISE=true):
-- epic_discussion_list: List epic discussions. Params: group_id (required), epic_id (required), page, per_page
-- epic_discussion_get: Get an epic discussion. Params: group_id (required), epic_id (required), discussion_id (required)
-- epic_discussion_create: Create an epic discussion. Params: group_id (required), epic_id (required), body (required)
-- epic_discussion_add_note: Add note to epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), body (required)
-- epic_discussion_update_note: Update note in epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), note_id (required), body
-- epic_discussion_delete_note: Delete note from epic discussion. Params: group_id (required), epic_id (required), discussion_id (required), note_id (required)
-- epic_list: List epics in a group. Params: group_id (required), author_id, labels, order_by, sort, search, state, include_ancestor_groups (bool), include_descendant_groups (bool), page, per_page
-- epic_get: Get a single epic. Params: group_id (required), epic_iid (required)
-- epic_get_links: Get linked epics. Params: group_id (required), epic_iid (required)
-- epic_create: Create an epic in a group. Params: group_id (required), title (required), description, labels, confidential (bool), parent_id, color, start_date_fixed, due_date_fixed
-- epic_update: Update an epic. Params: group_id (required), epic_iid (required), title, description, labels, confidential (bool), state_event, add_labels, remove_labels, color, start_date_fixed, due_date_fixed
-- epic_delete: Delete an epic. Params: group_id (required), epic_iid (required)
-- epic_issue_list: List issues assigned to an epic. Params: group_id (required), epic_iid (required), page, per_page
-- epic_issue_assign: Assign an issue to an epic. Params: group_id (required), epic_iid (required), issue_id (required)
-- epic_issue_remove: Remove an issue from an epic. Params: group_id (required), epic_iid (required), epic_issue_id (required)
-- epic_issue_update: Reorder an issue in an epic. Params: group_id (required), epic_iid (required), epic_issue_id (required), move_before_id, move_after_id
-- epic_note_list: List notes on an epic. Params: group_id (required), epic_iid (required), order_by, sort, page, per_page
-- epic_note_get: Get a single epic note. Params: group_id (required), epic_iid (required), note_id (required)
-- epic_note_create: Add a note to an epic. Params: group_id (required), epic_iid (required), body (required)
-- epic_note_update: Update an epic note. Params: group_id (required), epic_iid (required), note_id (required), body (required)
-- epic_note_delete: Delete an epic note. Params: group_id (required), epic_iid (required), note_id (required)
-- epic_board_list: List group epic boards. Params: group_id (required), page, per_page
-- epic_board_get: Get a group epic board. Params: group_id (required), board_id (required)
+Epics (Premium+ — requires GITLAB_ENTERPRISE=true — Epic CRUD, notes, discussions, and issues use the Work Items GraphQL API. Only epic_get_links and epic boards remain on the REST API):
+- epic_discussion_list: List epic discussions via GraphQL. Params: full_path (required), iid (required), first, after, last, before
+- epic_discussion_get: Get an epic discussion via GraphQL. Params: full_path (required), iid (required), discussion_id (required)
+- epic_discussion_create: Create an epic discussion via GraphQL. Params: full_path (required), iid (required), body (required)
+- epic_discussion_add_note: Add note to epic discussion via GraphQL. Params: full_path (required), iid (required), discussion_id (required), body (required)
+- epic_discussion_update_note: Update note in epic discussion via GraphQL. Params: full_path (required), iid (required), note_id (required), body (required)
+- epic_discussion_delete_note: Delete note from epic discussion via GraphQL. Params: full_path (required), iid (required), note_id (required)
+- epic_list: List epics in a group via Work Items API. Params: full_path (required), state, search, author_username, label_name, confidential (bool), sort, first, after, include_ancestors (bool), include_descendants (bool)
+- epic_get: Get a single epic via Work Items API. Params: full_path (required), iid (required)
+- epic_get_links: [REST] Get linked epics. Params: full_path (required), iid (required)
+- epic_create: Create an epic via Work Items API. Params: full_path (required), title (required), description, confidential (bool), color, start_date, due_date, assignee_ids, label_ids, weight, health_status
+- epic_update: Update an epic via Work Items API. Params: full_path (required), iid (required), title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
+- epic_delete: Delete an epic via Work Items API. Params: full_path (required), iid (required)
+- epic_issue_list: List child issues of an epic via GraphQL. Params: full_path (required), iid (required), first, after, last, before
+- epic_issue_assign: Assign an issue to an epic via GraphQL. Params: full_path (required), iid (required), child_project_path (required), child_iid (required)
+- epic_issue_remove: Remove an issue from an epic via GraphQL. Params: full_path (required), iid (required), child_project_path (required), child_iid (required)
+- epic_issue_update: Reorder an issue in an epic via GraphQL. Params: full_path (required), iid (required), child_id (required), adjacent_id (required), relative_position (required, BEFORE/AFTER)
+- epic_note_list: List notes on an epic via GraphQL. Params: full_path (required), iid (required), first, after, last, before
+- epic_note_get: Get a single epic note via GraphQL. Params: full_path (required), iid (required), note_id (required)
+- epic_note_create: Add a note to an epic via GraphQL. Params: full_path (required), iid (required), body (required)
+- epic_note_update: Update an epic note via GraphQL. Params: full_path (required), iid (required), note_id (required), body (required)
+- epic_note_delete: Delete an epic note via GraphQL. Params: full_path (required), iid (required), note_id (required)
+- epic_board_list: [Deprecated] List group epic boards. Params: group_id (required), page, per_page
+- epic_board_get: [Deprecated] Get a group epic board. Params: group_id (required), board_id (required)
 
 Group Wikis (Premium+ — requires GITLAB_ENTERPRISE=true):
 - wiki_list: List group wiki pages. Params: group_id (required), with_content (bool)
@@ -1383,9 +1383,9 @@ Actions:
 - link_create: Create a link between issues. Params: project_id (required), issue_iid (required), target_project_id (required), target_issue_iid (required), link_type
 - link_delete: Delete an issue link. Params: project_id (required), issue_iid (required), issue_link_id (required)
 - work_item_get: Get a single work item by IID. Params: full_path (required), iid (required)
-- work_item_list: List work items for a project or group. Params: full_path (required), state, search, types, author_username, label_name, confidential, sort, first, after
-- work_item_create: Create a new work item. Params: full_path (required), work_item_type_id (required), title (required), description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date
-- work_item_update: Update an existing work item by IID. Params: full_path (required), iid (required), title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color
+- work_item_list: List work items for a project or group. Supports types=["Epic"] to filter epics (replaces deprecated epic_list). Params: full_path (required), state, search, types, author_username, label_name, confidential, sort, first, after
+- work_item_create: Create a new work item. Use work_item_type_id for Epic type to replace deprecated epic_create. Params: full_path (required), work_item_type_id (required), title (required), description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type: BLOCKS/BLOCKED_BY/RELATED}
+- work_item_update: Update an existing work item by IID. Params: full_path (required), iid (required), title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
 - work_item_delete: Permanently delete a work item by IID. Params: full_path (required), iid (required)
 - discussion_list: List issue discussions. Params: project_id (required), issue_iid (required), page, per_page
 - discussion_get: Get an issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required)

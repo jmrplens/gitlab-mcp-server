@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Issues
-> **Individual tools**: 42
+> **Individual tools**: 44
 > **Meta-tools**: `gitlab_issue` (when `META_TOOLS=true`, default), `gitlab_issue_discussion`, `gitlab_issue_statistics`
 > **GitLab API**: [Issues API](https://docs.gitlab.com/ee/api/issues.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -370,10 +370,26 @@ List work items for a project or group. Supports filtering by state, type, label
 
 ### `gitlab_create_work_item`
 
-Create a new work item. Requires full_path, work_item_type_id, and title. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Create a new work item. Requires full_path, work_item_type_id, and title. Supports linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
+
+### `gitlab_update_work_item`
+
+Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). Experimental: the Work Items API may introduce breaking changes between minor versions.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_delete_work_item`
+
+Permanently delete a work item by IID. This action cannot be undone. Experimental: the Work Items API may introduce breaking changes between minor versions.
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt.
 
 ---
 
@@ -423,6 +439,8 @@ Create a new work item. Requires full_path, work_item_type_id, and title. Experi
 | 40 | `gitlab_get_work_item` | Work Items | Read |
 | 41 | `gitlab_list_work_items` | Work Items | Read |
 | 42 | `gitlab_create_work_item` | Work Items | Create |
+| 43 | `gitlab_update_work_item` | Work Items | Update |
+| 44 | `gitlab_delete_work_item` | Work Items | Delete |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -432,6 +450,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_issue_note_delete` — permanently deletes an issue comment
 - `gitlab_issue_link_delete` — removes the link between two issues
 - `gitlab_delete_issue_discussion_note` — deletes a note from a discussion thread
+- `gitlab_delete_work_item` — permanently deletes a work item
 
 ---
 

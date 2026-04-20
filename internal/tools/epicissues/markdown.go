@@ -9,15 +9,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// FormatListMarkdown renders a list of epic issues as a Markdown table.
+// FormatListMarkdown renders a list of child issues as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Epic Issues (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
 	if len(out.Issues) == 0 {
-		b.WriteString("No issues found in this epic.\n")
+		b.WriteString("## Epic Issues\n\nNo issues found in this epic.\n")
 		return b.String()
 	}
+	fmt.Fprintf(&b, "## Epic Issues (%d)\n\n", len(out.Issues))
 	b.WriteString("| IID | Title | State | Author | Labels | Created |\n")
 	b.WriteString(toolutil.TblSep6Col)
 	for _, issue := range out.Issues {
@@ -34,7 +33,10 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.FormatTime(issue.CreatedAt),
 		)
 	}
-	toolutil.WritePagination(&b, out.Pagination)
+	pag := toolutil.FormatGraphQLPagination(out.Pagination, len(out.Issues))
+	if pag != "" {
+		b.WriteString("\n" + pag)
+	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'epic_issue_assign' to add an issue to this epic",
@@ -43,20 +45,19 @@ func FormatListMarkdown(out ListOutput) string {
 	return b.String()
 }
 
-// FormatAssignMarkdown renders an epic-issue assignment result.
+// FormatAssignMarkdown renders an epic-issue assignment or removal result.
 func FormatAssignMarkdown(out AssignOutput, action string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Epic Issue %s\n\n", action)
-	fmt.Fprintf(&b, "- **Association ID**: %d\n", out.ID)
-	if out.EpicIID > 0 {
-		fmt.Fprintf(&b, "- **Epic IID**: &%d\n", out.EpicIID)
+	if out.EpicGID != "" {
+		fmt.Fprintf(&b, "- **Epic**: %s\n", out.EpicGID)
 	}
-	if out.IssueID > 0 {
-		fmt.Fprintf(&b, "- **Issue ID**: %d\n", out.IssueID)
+	if out.ChildGID != "" {
+		fmt.Fprintf(&b, "- **Issue**: %s\n", out.ChildGID)
 	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_epic_issue_list` to view all issues in the epic",
-		"Use `gitlab_epic_issue_remove` to unlink this issue from the epic",
+		"Use `gitlab_epic_issue_remove` to unlink an issue from the epic",
 	)
 	return b.String()
 }

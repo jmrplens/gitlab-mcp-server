@@ -125,8 +125,8 @@ func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 	}
 
 	var meta map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
-		t.Fatalf("decode metadata: %v", err)
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&meta); decodeErr != nil {
+		t.Fatalf("decode metadata: %v", decodeErr)
 	}
 
 	if resource, ok := meta["resource"].(string); !ok || resource != "https://mcp.example.com" {

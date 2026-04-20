@@ -1,5 +1,5 @@
 // epicdiscussions_test.go contains unit tests for the epic discussion MCP tool handlers.
-// Tests use httptest to mock GitLab API responses and verify success, error,
+// Tests use httptest to mock GitLab GraphQL API responses and verify success, error,
 // and edge-case paths.
 package epicdiscussions
 
@@ -10,422 +10,802 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const fmtUnexpErr = "unexpected error: %v"
+const testFullPath = "my-group"
 
-// TestList_Success verifies the behavior of list success.
-func TestList_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/1/epics/5/discussions" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK,
-			`[{"id":"d1","individual_note":false,"notes":[{"id":1,"body":"epic note","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`,
-			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-	})
-	client := testutil.NewTestClient(t, handler)
+// GraphQL response fixtures.
+const gqlDiscussionsData = `{
+  "namespace": {
+    "workItem": {
+      "id": "gid://gitlab/WorkItem/1",
+      "widgets": [{
+        "discussions": {
+          "pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "abc", "startCursor": "xyz"},
+          "nodes": [{
+            "id": "gid://gitlab/Discussion/d1hex",
+            "notes": {
+              "nodes": [
+                {"id": "gid://gitlab/Note/100", "body": "first note", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z"},
+                {"id": "gid://gitlab/Note/101", "body": "reply note", "author": {"username": "bob"}, "system": false, "createdAt": "2026-01-02T00:00:00Z", "updatedAt": null}
+              ]
+            }
+          }]
+        }
+      }]
+    }
+  }
+}`
 
-	out, err := List(t.Context(), client, ListInput{GroupID: "1", EpicID: 5})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Discussions) != 1 {
-		t.Fatalf("got %d discussions, want 1", len(out.Discussions))
-	}
-	if out.Discussions[0].ID != "d1" {
-		t.Errorf("got ID=%q, want d1", out.Discussions[0].ID)
-	}
+const gqlDiscussionsEmpty = `{
+  "namespace": {
+    "workItem": {
+      "id": "gid://gitlab/WorkItem/1",
+      "widgets": [{
+        "discussions": {
+          "pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""},
+          "nodes": []
+        }
+      }]
+    }
+  }
+}`
+
+const gqlNamespaceNull = `{"namespace": null}`
+
+const gqlCreateNoteData = `{
+  "createNote": {
+    "note": {
+      "id": "gid://gitlab/Note/200",
+      "body": "new thread",
+      "author": {"username": "carol"},
+      "system": false,
+      "createdAt": "2026-01-03T00:00:00Z",
+      "updatedAt": null,
+      "discussion": {"id": "gid://gitlab/Discussion/d2hex"}
+    },
+    "errors": []
+  }
+}`
+
+const gqlCreateNoteReplyData = `{
+  "createNote": {
+    "note": {
+      "id": "gid://gitlab/Note/201",
+      "body": "reply body",
+      "author": {"username": "dave"},
+      "system": false,
+      "createdAt": "2026-01-04T00:00:00Z",
+      "updatedAt": null
+    },
+    "errors": []
+  }
+}`
+
+const gqlUpdateNoteData = `{
+  "updateNote": {
+    "note": {
+      "id": "gid://gitlab/Note/100",
+      "body": "updated body",
+      "author": {"username": "alice"},
+      "system": false,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-05T00:00:00Z"
+    },
+    "errors": []
+  }
+}`
+
+const gqlDestroyNoteData = `{
+  "destroyNote": {
+    "note": {"id": "gid://gitlab/Note/100"},
+    "errors": []
+  }
+}`
+
+const gqlWorkItemGIDData = `{
+  "namespace": {
+    "workItem": {"id": "gid://gitlab/WorkItem/1"}
+  }
+}`
+
+// graphqlMux creates an http.Handler that routes GraphQL requests by query content.
+func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
+	return testutil.GraphQLHandler(handlers)
 }
 
-// TestList_APIError verifies the behavior of list a p i error.
-func TestList_APIError(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-	client := testutil.NewTestClient(t, handler)
+// --------------------------------------------------------------------------
+// List
+// --------------------------------------------------------------------------
 
-	_, err := List(t.Context(), client, ListInput{GroupID: "1", EpicID: 5})
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-// TestGet_Success verifies the behavior of get success.
-func TestGet_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/1/epics/5/discussions/d1" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":"d1","individual_note":true,"notes":[{"id":10,"body":"test","author":{"username":"bob"},"created_at":"2026-01-01T00:00:00Z"}]}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	out, err := Get(t.Context(), client, GetInput{GroupID: "1", EpicID: 5, DiscussionID: "d1"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ID != "d1" {
-		t.Errorf("got ID=%q, want d1", out.ID)
-	}
-}
-
-// TestCreate_Success verifies the behavior of create success.
-func TestCreate_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"d2","individual_note":false,"notes":[{"id":20,"body":"new epic thread","author":{"username":"carol"},"created_at":"2026-01-02T00:00:00Z"}]}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	out, err := Create(t.Context(), client, CreateInput{GroupID: "1", EpicID: 5, Body: "new epic thread"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ID != "d2" {
-		t.Errorf("got ID=%q, want d2", out.ID)
-	}
-}
-
-// TestAddNote_Success verifies the behavior of add note success.
-func TestAddNote_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":30,"body":"reply","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	out, err := AddNote(t.Context(), client, AddNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", Body: "reply"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ID != 30 {
-		t.Errorf("got ID=%d, want 30", out.ID)
-	}
-}
-
-// TestUpdateNote_Success verifies the behavior of update note success.
-func TestUpdateNote_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":30,"body":"updated","author":{"username":"dave"},"created_at":"2026-01-03T00:00:00Z","updated_at":"2026-01-04T00:00:00Z"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	out, err := UpdateNote(t.Context(), client, UpdateNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", NoteID: 30, Body: "updated"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.Body != "updated" {
-		t.Errorf("got body=%q, want updated", out.Body)
-	}
-}
-
-// TestDeleteNote_Success verifies the behavior of delete note success.
-func TestDeleteNote_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	err := DeleteNote(t.Context(), client, DeleteNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", NoteID: 30})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-}
-
-// TestDeleteNote_APIError verifies the behavior of delete note a p i error.
-func TestDeleteNote_APIError(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	err := DeleteNote(t.Context(), client, DeleteNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", NoteID: 30})
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-// assertContains is an internal helper for the epicdiscussions package.
-func assertContains(t *testing.T, err error, substr string) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("expected error containing %q, got nil", substr)
-	}
-	if !strings.Contains(err.Error(), substr) {
-		t.Errorf("error %q does not contain %q", err.Error(), substr)
-	}
-}
-
-// TestEpicIDRequired_Validation ensures all handlers reject zero/negative epic_id.
-func TestEpicIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when epic_id is invalid")
-	}))
-	ctx := context.Background()
-	const gid = "my/group"
-
+func TestList(t *testing.T) {
 	tests := []struct {
-		name string
-		fn   func() error
+		name    string
+		input   ListInput
+		handler http.Handler
+		wantErr string
+		check   func(t *testing.T, out ListOutput)
 	}{
-		{"List", func() error { _, e := List(ctx, client, ListInput{GroupID: gid, EpicID: 0}); return e }},
-		{"Get", func() error {
-			_, e := Get(ctx, client, GetInput{GroupID: gid, EpicID: 0, DiscussionID: "abc"})
-			return e
-		}},
-		{"Create", func() error { _, e := Create(ctx, client, CreateInput{GroupID: gid, EpicID: 0, Body: "x"}); return e }},
-		{"AddNote", func() error {
-			_, e := AddNote(ctx, client, AddNoteInput{GroupID: gid, EpicID: 0, DiscussionID: "abc", Body: "x"})
-			return e
-		}},
-		{"UpdateNote", func() error {
-			_, e := UpdateNote(ctx, client, UpdateNoteInput{GroupID: gid, EpicID: 0, DiscussionID: "abc", NoteID: 1, Body: "x"})
-			return e
-		}},
-		{"DeleteNote", func() error {
-			return DeleteNote(ctx, client, DeleteNoteInput{GroupID: gid, EpicID: 0, DiscussionID: "abc", NoteID: 1})
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "epic_id")
-		})
-	}
-}
-
-// TestNoteIDRequired_Validation ensures UpdateNote and DeleteNote reject zero/negative note_id.
-func TestNoteIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when note_id is invalid")
-	}))
-	ctx := context.Background()
-	const gid = "my/group"
-
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"UpdateNote", func() error {
-			_, e := UpdateNote(ctx, client, UpdateNoteInput{GroupID: gid, EpicID: 10, DiscussionID: "abc", NoteID: 0, Body: "x"})
-			return e
-		}},
-		{"DeleteNote", func() error {
-			return DeleteNote(ctx, client, DeleteNoteInput{GroupID: gid, EpicID: 10, DiscussionID: "abc", NoteID: -1})
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "note_id")
-		})
-	}
-}
-
-// TestGroupIDRequired_Validation ensures all handlers reject empty group_id.
-func TestGroupIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when group_id is empty")
-	}))
-	ctx := context.Background()
-
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"List", func() error { _, e := List(ctx, client, ListInput{EpicID: 10}); return e }},
-		{"Get", func() error { _, e := Get(ctx, client, GetInput{EpicID: 10, DiscussionID: "abc"}); return e }},
-		{"Create", func() error { _, e := Create(ctx, client, CreateInput{EpicID: 10, Body: "x"}); return e }},
-		{"AddNote", func() error {
-			_, e := AddNote(ctx, client, AddNoteInput{EpicID: 10, DiscussionID: "abc", Body: "x"})
-			return e
-		}},
-		{"UpdateNote", func() error {
-			_, e := UpdateNote(ctx, client, UpdateNoteInput{EpicID: 10, DiscussionID: "abc", NoteID: 1, Body: "x"})
-			return e
-		}},
-		{"DeleteNote", func() error {
-			return DeleteNote(ctx, client, DeleteNoteInput{EpicID: 10, DiscussionID: "abc", NoteID: 1})
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "group_id")
-		})
-	}
-}
-
-// ---------- Tests consolidated from coverage_test.go ----------.
-
-const errExpNonNilResult = "expected non-nil result"
-
-const errExpectedNil = "expected error, got nil"
-
-// ---------------------------------------------------------------------------
-// List — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestList_APIError400 verifies the behavior of list a p i error400.
-func TestList_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := List(t.Context(), client, ListInput{GroupID: "1", EpicID: 5})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Get — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestGet_APIError400 verifies the behavior of get a p i error400.
-func TestGet_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := Get(t.Context(), client, GetInput{GroupID: "1", EpicID: 5, DiscussionID: "d1"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Create — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestCreate_APIError400 verifies the behavior of create a p i error400.
-func TestCreate_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := Create(t.Context(), client, CreateInput{GroupID: "1", EpicID: 5, Body: "test"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// AddNote — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestAddNote_APIError400 verifies the behavior of add note a p i error400.
-func TestAddNote_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := AddNote(t.Context(), client, AddNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", Body: "test"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// UpdateNote — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestUpdateNote_APIError400 verifies the behavior of update note a p i error400.
-func TestUpdateNote_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", NoteID: 1, Body: "test"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// DeleteNote — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestDeleteNote_APIError400 verifies the behavior of delete note a p i error400.
-func TestDeleteNote_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	err := DeleteNote(t.Context(), client, DeleteNoteInput{GroupID: "1", EpicID: 5, DiscussionID: "d1", NoteID: 1})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Formatters — empty + non-empty
-// ---------------------------------------------------------------------------.
-
-// TestFormatListMarkdown_Empty verifies the behavior of format list markdown empty.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No epic discussions") {
-		t.Errorf("expected 'No epic discussions' message, got %q", text)
-	}
-}
-
-// TestFormatListMarkdown_WithData verifies the behavior of format list markdown with data.
-func TestFormatListMarkdown_WithData(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{
-		Discussions: []Output{
-			{
-				ID:             "d1",
-				IndividualNote: false,
-				Notes: []NoteOutput{
-					{ID: 1, Body: "Hello", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
-				},
+		{
+			name:  "returns discussions with correct fields",
+			input: ListInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+			}}),
+			check: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Discussions) != 1 {
+					t.Fatalf("got %d discussions, want 1", len(out.Discussions))
+				}
+				d := out.Discussions[0]
+				if d.ID != "d1hex" {
+					t.Errorf("got ID=%q, want d1hex", d.ID)
+				}
+				if len(d.Notes) != 2 {
+					t.Fatalf("got %d notes, want 2", len(d.Notes))
+				}
+				if d.Notes[0].ID != 100 {
+					t.Errorf("note[0] ID=%d, want 100", d.Notes[0].ID)
+				}
+				if d.Notes[0].Author != "alice" {
+					t.Errorf("note[0] Author=%q, want alice", d.Notes[0].Author)
+				}
 			},
 		},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "d1") {
-		t.Errorf("expected discussion ID in output, got %q", text)
-	}
-}
-
-// TestFormatMarkdown_Empty verifies the behavior of format markdown empty.
-func TestFormatMarkdown_Empty(t *testing.T) {
-	result := FormatMarkdown(Output{ID: "d1"})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "d1") {
-		t.Errorf("expected discussion ID in output, got %q", text)
-	}
-}
-
-// TestFormatMarkdown_WithNotes verifies the behavior of format markdown with notes.
-func TestFormatMarkdown_WithNotes(t *testing.T) {
-	result := FormatMarkdown(Output{
-		ID: "d1",
-		Notes: []NoteOutput{
-			{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2026-01-01T00:00:00Z"},
+		{
+			name:  "returns empty list when no discussions exist",
+			input: ListInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsEmpty)
+			}}),
+			check: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Discussions) != 0 {
+					t.Fatalf("got %d discussions, want 0", len(out.Discussions))
+				}
+			},
 		},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
+		{
+			name:  "returns error when epic not found",
+			input: ListInput{FullPath: testFullPath, IID: 999},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "epic not found",
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   ListInput{IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   ListInput{FullPath: testFullPath, IID: 0},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when iid is negative",
+			input:   ListInput{FullPath: testFullPath, IID: -1},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:  "returns error on API server error",
+			input: ListInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "server error", http.StatusInternalServerError)
+			}}),
+			wantErr: "epicDiscussionList",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   ListInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
 	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "bob") {
-		t.Errorf("expected author name in output, got %q", text)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			out, err := List(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.check != nil {
+				tt.check(t, out)
+			}
+		})
 	}
 }
 
-// TestFormatNoteMarkdown verifies the behavior of format note markdown.
+// --------------------------------------------------------------------------
+// Get
+// --------------------------------------------------------------------------
+
+func TestGet(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   GetInput
+		handler http.Handler
+		wantErr string
+		check   func(t *testing.T, out Output)
+	}{
+		{
+			name:  "returns discussion with all notes",
+			input: GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+			}}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				if out.ID != "d1hex" {
+					t.Errorf("got ID=%q, want d1hex", out.ID)
+				}
+				if len(out.Notes) != 2 {
+					t.Fatalf("got %d notes, want 2", len(out.Notes))
+				}
+			},
+		},
+		{
+			name:  "returns error when discussion not found",
+			input: GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "nonexistent"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+			}}),
+			wantErr: "discussion",
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   GetInput{IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   GetInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when discussion_id is empty",
+			input:   GetInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "discussion_id is required",
+		},
+		{
+			name:  "returns error when epic not found",
+			input: GetInput{FullPath: testFullPath, IID: 999, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "epic not found",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			out, err := Get(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.check != nil {
+				tt.check(t, out)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// Create
+// --------------------------------------------------------------------------
+
+func TestCreate(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   CreateInput
+		handler http.Handler
+		wantErr string
+		check   func(t *testing.T, out Output)
+	}{
+		{
+			name:  "creates discussion and returns output",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "new thread"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteData)
+				},
+			}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				if out.ID != "d2hex" {
+					t.Errorf("got ID=%q, want d2hex", out.ID)
+				}
+				if len(out.Notes) != 1 {
+					t.Fatalf("got %d notes, want 1", len(out.Notes))
+				}
+				if out.Notes[0].ID != 200 {
+					t.Errorf("note ID=%d, want 200", out.Notes[0].ID)
+				}
+			},
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   CreateInput{IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   CreateInput{FullPath: testFullPath, IID: 0, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when body is empty",
+			input:   CreateInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "body is required",
+		},
+		{
+			name:  "returns error on GraphQL mutation errors",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":["permission denied"]}}`)
+				},
+			}),
+			wantErr: "permission denied",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   CreateInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			out, err := Create(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.check != nil {
+				tt.check(t, out)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// AddNote
+// --------------------------------------------------------------------------
+
+func TestAddNote(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   AddNoteInput
+		handler http.Handler
+		wantErr string
+		check   func(t *testing.T, out NoteOutput)
+	}{
+		{
+			name:  "adds note and returns output",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "reply body"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteReplyData)
+				},
+			}),
+			check: func(t *testing.T, out NoteOutput) {
+				t.Helper()
+				if out.ID != 201 {
+					t.Errorf("got ID=%d, want 201", out.ID)
+				}
+				if out.Author != "dave" {
+					t.Errorf("got Author=%q, want dave", out.Author)
+				}
+			},
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   AddNoteInput{IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   AddNoteInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when discussion_id is empty",
+			input:   AddNoteInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "discussion_id is required",
+		},
+		{
+			name:    "returns error when body is empty",
+			input:   AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "body is required",
+		},
+		{
+			name:  "returns error on GraphQL mutation errors",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":["forbidden"]}}`)
+				},
+			}),
+			wantErr: "forbidden",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			out, err := AddNote(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.check != nil {
+				tt.check(t, out)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// UpdateNote
+// --------------------------------------------------------------------------
+
+func TestUpdateNote(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   UpdateNoteInput
+		handler http.Handler
+		wantErr string
+		check   func(t *testing.T, out NoteOutput)
+	}{
+		{
+			name:  "updates note and returns output",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "updated body"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteData)
+			}}),
+			check: func(t *testing.T, out NoteOutput) {
+				t.Helper()
+				if out.Body != "updated body" {
+					t.Errorf("got Body=%q, want 'updated body'", out.Body)
+				}
+				if out.UpdatedAt == "" {
+					t.Error("expected UpdatedAt to be set")
+				}
+			},
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   UpdateNoteInput{IID: 5, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   UpdateNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when note_id is zero",
+			input:   UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "note_id",
+		},
+		{
+			name:    "returns error when body is empty",
+			input:   UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "body is required",
+		},
+		{
+			name:  "returns error on GraphQL mutation errors",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{"note":null,"errors":["not found"]}}`)
+			}}),
+			wantErr: "not found",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			out, err := UpdateNote(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.check != nil {
+				tt.check(t, out)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// DeleteNote
+// --------------------------------------------------------------------------
+
+func TestDeleteNote(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   DeleteNoteInput
+		handler http.Handler
+		wantErr string
+	}{
+		{
+			name:  "deletes note successfully",
+			input: DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
+			}}),
+		},
+		{
+			name:    "returns error when full_path is empty",
+			input:   DeleteNoteInput{IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "full_path is required",
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   DeleteNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "iid",
+		},
+		{
+			name:    "returns error when note_id is zero",
+			input:   DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "note_id",
+		},
+		{
+			name:  "returns error on GraphQL mutation errors",
+			input: DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, `{"destroyNote":{"errors":["forbidden"]}}`)
+			}}),
+			wantErr: "forbidden",
+		},
+		{
+			name:    "returns error on cancelled context",
+			input:   DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{}),
+			wantErr: "context canceled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			ctx := t.Context()
+			if tt.name == "returns error on cancelled context" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := DeleteNote(ctx, client, tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
+// Formatters
+// --------------------------------------------------------------------------
+
+func TestFormatListMarkdown(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   ListOutput
+		wantSub string
+	}{
+		{
+			name: "renders table with discussions",
+			input: ListOutput{
+				Discussions: []Output{
+					{
+						ID: "d1hex",
+						Notes: []NoteOutput{
+							{ID: 100, Body: "Hello", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
+						},
+					},
+				},
+				Pagination: toolutil.GraphQLPaginationOutput{},
+			},
+			wantSub: "d1hex",
+		},
+		{
+			name:    "renders empty state when no discussions",
+			input:   ListOutput{},
+			wantSub: "No epic discussions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatListMarkdown(tt.input)
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			text := result.Content[0].(*mcp.TextContent).Text
+			if !strings.Contains(text, tt.wantSub) {
+				t.Errorf("output %q does not contain %q", text, tt.wantSub)
+			}
+		})
+	}
+}
+
+func TestFormatMarkdown(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   Output
+		wantSub string
+	}{
+		{
+			name:    "renders discussion with notes",
+			input:   Output{ID: "d1hex", Notes: []NoteOutput{{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2026-01-01T00:00:00Z"}}},
+			wantSub: "bob",
+		},
+		{
+			name:    "renders empty discussion",
+			input:   Output{ID: "d1hex"},
+			wantSub: "d1hex",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatMarkdown(tt.input)
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			text := result.Content[0].(*mcp.TextContent).Text
+			if !strings.Contains(text, tt.wantSub) {
+				t.Errorf("output %q does not contain %q", text, tt.wantSub)
+			}
+		})
+	}
+}
+
 func TestFormatNoteMarkdown(t *testing.T) {
 	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
 	if result == nil {
-		t.Fatal(errExpNonNilResult)
+		t.Fatal("expected non-nil result")
 	}
 	text := result.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(text, "carol") {
@@ -433,23 +813,10 @@ func TestFormatNoteMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdown_NoCreatedAt verifies the behavior of format note markdown no created at.
-func TestFormatNoteMarkdown_NoCreatedAt(t *testing.T) {
-	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test", Author: "dave"})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if strings.Contains(text, "Created") {
-		t.Error("should not contain Created when no created_at")
-	}
-}
-
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // RegisterTools + RegisterMeta — no panic
-// ---------------------------------------------------------------------------.
+// --------------------------------------------------------------------------
 
-// TestRegisterTools_NoPanic verifies the behavior of register tools no panic.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -458,7 +825,6 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic verifies the behavior of register meta no panic.
 func TestRegisterMeta_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -467,11 +833,10 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 	RegisterMeta(server, client)
 }
 
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // MCP round-trip — all tools
-// ---------------------------------------------------------------------------.
+// --------------------------------------------------------------------------
 
-// TestMCPRoundTrip_AllTools validates m c p round trip all tools across multiple scenarios using table-driven subtests.
 func TestMCPRoundTrip_AllTools(t *testing.T) {
 	session := newEpicDiscussionsMCPSession(t)
 	ctx := context.Background()
@@ -481,12 +846,12 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
-		{"list", "gitlab_list_epic_discussions", map[string]any{"group_id": "1", "epic_id": float64(5)}},
-		{"get", "gitlab_get_epic_discussion", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1"}},
-		{"create", "gitlab_create_epic_discussion", map[string]any{"group_id": "1", "epic_id": float64(5), "body": "new thread"}},
-		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "body": "reply"}},
-		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "note_id": float64(30), "body": "updated"}},
-		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "note_id": float64(30)}},
+		{"list", "gitlab_list_epic_discussions", map[string]any{"full_path": testFullPath, "iid": float64(5)}},
+		{"get", "gitlab_get_epic_discussion", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex"}},
+		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "iid": float64(5), "body": "new thread"}},
+		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
+		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100), "body": "updated"}},
+		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100)}},
 	}
 
 	for _, tt := range tools {
@@ -510,12 +875,11 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // MCP round-trip — meta tool
-// ---------------------------------------------------------------------------.
+// --------------------------------------------------------------------------
 
-// TestMCPRound_TripMetaTool validates m c p round trip meta tool across multiple scenarios using table-driven subtests.
-func TestMCPRound_TripMetaTool(t *testing.T) {
+func TestMCPRoundTrip_MetaTool(t *testing.T) {
 	session := newEpicDiscussionsMetaMCPSession(t)
 	ctx := context.Background()
 
@@ -524,12 +888,12 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 		action string
 		params map[string]any
 	}{
-		{"list", "list", map[string]any{"group_id": "1", "epic_id": float64(5)}},
-		{"get", "get", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1"}},
-		{"create", "create", map[string]any{"group_id": "1", "epic_id": float64(5), "body": "new thread"}},
-		{"add_note", "add_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "body": "reply"}},
-		{"update_note", "update_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "note_id": float64(30), "body": "updated"}},
-		{"delete_note", "delete_note", map[string]any{"group_id": "1", "epic_id": float64(5), "discussion_id": "d1", "note_id": float64(30)}},
+		{"list", "list", map[string]any{"full_path": testFullPath, "iid": float64(5)}},
+		{"get", "get", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex"}},
+		{"create", "create", map[string]any{"full_path": testFullPath, "iid": float64(5), "body": "new thread"}},
+		{"add_note", "add_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
+		{"update_note", "update_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100), "body": "updated"}},
+		{"delete_note", "delete_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100)}},
 	}
 
 	for _, tt := range actions {
@@ -556,44 +920,35 @@ func TestMCPRound_TripMetaTool(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // Helpers: MCP session factories
-// ---------------------------------------------------------------------------.
+// --------------------------------------------------------------------------
 
-// epicDiscussionsHandler is an internal helper for the epicdiscussions package.
-func epicDiscussionsHandler() *http.ServeMux {
-	handler := http.NewServeMux()
-
-	noteJSON := `{"id":30,"body":"test","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}`
-	discussionJSON := `{"id":"d1","individual_note":false,"notes":[` + noteJSON + `]}`
-
-	handler.HandleFunc("GET /api/v4/groups/1/epics/5/discussions", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+discussionJSON+`]`)
+// graphqlSessionMux creates a GraphQL handler for MCP round-trip tests.
+func graphqlSessionMux() http.Handler {
+	return graphqlMux(map[string]http.HandlerFunc{
+		"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+		},
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"createNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteData)
+		},
+		"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteData)
+		},
+		"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
+		},
 	})
-	handler.HandleFunc("GET /api/v4/groups/1/epics/5/discussions/d1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, discussionJSON)
-	})
-	handler.HandleFunc("POST /api/v4/groups/1/epics/5/discussions", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, discussionJSON)
-	})
-	handler.HandleFunc("POST /api/v4/groups/1/epics/5/discussions/d1/notes", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, noteJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/groups/1/epics/5/discussions/d1/notes/30", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"body":"updated","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}`)
-	})
-	handler.HandleFunc("DELETE /api/v4/groups/1/epics/5/discussions/d1/notes/30", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	return handler
 }
 
-// newEpicDiscussionsMCPSession is an internal helper for the epicdiscussions package.
 func newEpicDiscussionsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	client := testutil.NewTestClient(t, epicDiscussionsHandler())
+	client := testutil.NewTestClient(t, graphqlSessionMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
 
@@ -614,11 +969,10 @@ func newEpicDiscussionsMCPSession(t *testing.T) *mcp.ClientSession {
 	return session
 }
 
-// newEpicDiscussionsMetaMCPSession is an internal helper for the epicdiscussions package.
 func newEpicDiscussionsMetaMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 
-	client := testutil.NewTestClient(t, epicDiscussionsHandler())
+	client := testutil.NewTestClient(t, graphqlSessionMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterMeta(server, client)
 

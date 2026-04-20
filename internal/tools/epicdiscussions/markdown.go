@@ -23,7 +23,6 @@ func FormatListMarkdownString(out ListOutput) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Epic Discussions (%d)\n\n", len(out.Discussions))
-	toolutil.WriteListSummary(&b, len(out.Discussions), out.Pagination)
 	for _, d := range out.Discussions {
 		fmt.Fprintf(&b, "### Discussion %s\n", d.ID)
 		for _, n := range d.Notes {
@@ -31,7 +30,8 @@ func FormatListMarkdownString(out ListOutput) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	b.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Discussions)))
+	b.WriteString("\n")
 	toolutil.WriteHints(&b, "Use `gitlab_get_epic_discussion` to view full discussion details")
 	return b.String()
 }

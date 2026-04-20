@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_epic_discussions",
 		Title:       toolutil.TitleFromName("gitlab_list_epic_discussions"),
-		Description: "List discussion threads on a group epic.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_list_groups",
+		Description: "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_list_groups",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -30,7 +30,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_epic_discussion",
 		Title:       toolutil.TitleFromName("gitlab_get_epic_discussion"),
-		Description: "Get a single discussion thread on a group epic.\n\nReturns: JSON with discussion thread details including all notes.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+		Description: "Get a single discussion thread on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion thread details including all notes.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
@@ -43,7 +43,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_epic_discussion",
 		Title:       toolutil.TitleFromName("gitlab_create_epic_discussion"),
-		Description: "Create a new discussion thread on a group epic.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+		Description: "Create a new discussion thread on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
@@ -56,7 +56,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_add_epic_discussion_note",
 		Title:       toolutil.TitleFromName("gitlab_add_epic_discussion_note"),
-		Description: "Add a reply note to an existing epic discussion thread.\n\nReturns: JSON with created note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_update_epic_discussion_note",
+		Description: "Add a reply note to an existing epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with created note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_update_epic_discussion_note",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AddNoteInput) (*mcp.CallToolResult, NoteOutput, error) {
@@ -69,7 +69,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_update_epic_discussion_note",
 		Title:       toolutil.TitleFromName("gitlab_update_epic_discussion_note"),
-		Description: "Update an existing note in an epic discussion thread.\n\nReturns: JSON with updated note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_delete_epic_discussion_note",
+		Description: "Update an existing note in an epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with updated note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_delete_epic_discussion_note",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateNoteInput) (*mcp.CallToolResult, NoteOutput, error) {
@@ -82,7 +82,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_delete_epic_discussion_note",
 		Title:       toolutil.TitleFromName("gitlab_delete_epic_discussion_note"),
-		Description: "Delete a note from an epic discussion thread.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+		Description: "Delete a note from an epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -111,15 +111,15 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_epic_discussion",
 		Title: toolutil.TitleFromName("gitlab_epic_discussion"),
-		Description: `Manage GitLab epic discussion threads. Use 'action' to specify the operation.
+		Description: `Manage GitLab epic discussion threads via the Work Items GraphQL API. Use 'action' to specify the operation.
 
 Actions:
-- list: List discussion threads on an epic. Params: group_id, epic_id (required), page, per_page
-- get: Get a single discussion. Params: group_id, epic_id, discussion_id (required)
-- create: Create a new discussion thread. Params: group_id, epic_id, body (required)
-- add_note: Reply to an existing discussion. Params: group_id, epic_id, discussion_id, body (required)
-- update_note: Update a discussion note. Params: group_id, epic_id, discussion_id, note_id, body (required)
-- delete_note: Delete a discussion note. Params: group_id, epic_id, discussion_id, note_id (required)`,
+- list: List discussion threads on an epic. Params: full_path, iid (required), first, after
+- get: Get a single discussion. Params: full_path, iid, discussion_id (required)
+- create: Create a new discussion thread. Params: full_path, iid, body (required)
+- add_note: Reply to an existing discussion. Params: full_path, iid, discussion_id, body (required)
+- update_note: Update a discussion note. Params: full_path, iid, note_id, body (required)
+- delete_note: Delete a discussion note. Params: full_path, iid, note_id (required)`,
 		Annotations: toolutil.MetaAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, toolutil.MakeMetaHandler("gitlab_epic_discussion", routes, nil))

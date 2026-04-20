@@ -16,6 +16,7 @@ graph LR
     U[User] -->|natural language| AI[AI Client]
     AI -->|MCP tool calls| S[GitLab MCP Server]
     S -->|REST API v4| G[GitLab Instance]
+    S -->|GraphQL API| G
     G -->|JSON| S
     S -->|structured result + markdown| AI
     AI -->|formatted answer| U
@@ -24,7 +25,7 @@ graph LR
 The server is a single static binary that:
 
 1. **Receives** MCP tool calls from the AI client (e.g., "list open merge requests")
-2. **Translates** them into GitLab REST API v4 requests with proper authentication
+2. **Translates** them into GitLab REST API v4 or GraphQL requests with proper authentication
 3. **Executes** the API calls against your GitLab instance
 4. **Returns** results in dual format: structured JSON for the AI to reason about, and formatted Markdown for display to the user
 

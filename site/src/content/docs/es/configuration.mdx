@@ -28,6 +28,7 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 | `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (42 herramientas de dominio en lugar de 1000+ herramientas individuales) |
 | `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) para GitLab Premium/Ultimate  |
 | `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                              |
+| `GITLAB_SAFE_MODE`       | `false`        | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)     |
 | `LOG_LEVEL`              | `info`         | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                             |
 
 :::tip
@@ -71,6 +72,7 @@ GITLAB_SKIP_TLS_VERIFY=false
 META_TOOLS=true
 GITLAB_ENTERPRISE=false
 GITLAB_READ_ONLY=false
+GITLAB_SAFE_MODE=false
 LOG_LEVEL=info
 
 # Componentes opcionales
@@ -266,3 +268,15 @@ Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de so
 - Entornos de auditoría y cumplimiento
 - Servidores compartidos donde los usuarios solo deben consultar datos
 - Tokens con scope `read_api`
+
+## Modo seguro
+
+Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura y devolver una vista previa JSON estructurada de lo que se ejecutaría, sin realizar la operación. Las herramientas de solo lectura funcionan normalmente. Esto es útil para:
+
+- Revisar operaciones antes de ejecutarlas (dry-run)
+- Entornos de formación donde se quiere ver el comportamiento de las herramientas
+- Depurar parámetros de herramientas sin efectos secundarios
+
+:::note
+Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
+:::

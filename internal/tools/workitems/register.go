@@ -45,7 +45,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_work_item",
 		Title:       toolutil.TitleFromName("gitlab_create_work_item"),
-		Description: "Create a new work item. Requires full_path, work_item_type_id, and title. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the created work item details.\n\nSee also: gitlab_list_work_items, gitlab_update_work_item",
+		Description: "Create a new work item. Requires full_path, work_item_type_id, and title. Supports linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the created work item details.\n\nSee also: gitlab_list_work_items, gitlab_update_work_item",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, GetOutput, error) {
@@ -59,7 +59,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_update_work_item",
 		Title:       toolutil.TitleFromName("gitlab_update_work_item"),
-		Description: "Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the updated work item details.\n\nSee also: gitlab_get_work_item, gitlab_delete_work_item",
+		Description: "Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the updated work item details.\n\nSee also: gitlab_get_work_item, gitlab_delete_work_item",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, GetOutput, error) {

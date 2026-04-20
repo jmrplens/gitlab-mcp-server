@@ -41,6 +41,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools (42 base / 57 enterprise instead of 1004) |
 | `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
+| `-safe-mode` | bool | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence |
 | `-max-http-clients` | int | `100` | Maximum concurrent client sessions (upper bound: 10,000) |
 | `-session-timeout` | duration | `30m` | Idle MCP session timeout (upper bound: 24h) |
 | `-revalidate-interval` | duration | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |

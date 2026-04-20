@@ -1,11 +1,10 @@
-// Package epics register_test exercises all RegisterTools closures
-// via MCP in-memory transport, covering every handler wired in register.go.
 package epics
 
 import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -13,10 +12,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-const registerEpicJSON = `{"id":1,"iid":1,"title":"Epic","description":"desc","state":"opened","web_url":"https://gl.example.com/groups/g/-/epics/1","author":{"id":1,"username":"user"}}`
-const registerEpicsJSON = `[{"id":1,"iid":1,"title":"Epic","description":"desc","state":"opened","web_url":"https://gl.example.com/groups/g/-/epics/1","author":{"id":1,"username":"user"}}]`
+const registerWorkItemJSON = `{"data":{"namespace":{"workItem":` + workItemEpicJSON + `}}}`
+const registerListJSON = `{"data":{"namespace":{"workItems":{"nodes":[` + workItemEpicJSON + `],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`
+const registerCreateJSON = `{"data":{"workItemCreate":{"workItem":` + workItemEpicJSON + `}}}`
+const registerGIDJSON = `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/101"}}}}`
+const registerUpdateJSON = `{"data":{"workItemUpdate":{"workItem":` + workItemEpicJSON + `}}}`
+const registerDeleteJSON = `{"data":{"workItemDelete":{"errors":[]}}}`
+const registerEpicLinksJSON = `[` + epicLinkJSON + `]`
 
-// TestRegisterTools_NoPanic verifies RegisterTools registers all tools without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -25,28 +28,45 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterTools_CallThroughMCP verifies all 6 epic tools can
-// be called through MCP in-memory transport.
 func TestRegisterTools_CallThroughMCP(t *testing.T) {
+	var graphQLCalls atomic.Int32
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && strings.Contains(path, "/epic_links"):
-			testutil.RespondJSON(w, http.StatusOK, registerEpicsJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/epics"):
-			testutil.RespondJSON(w, http.StatusOK, registerEpicsJSON)
-		case r.Method == http.MethodGet && strings.Contains(path, "/epics/"):
-			testutil.RespondJSON(w, http.StatusOK, registerEpicJSON)
-		case r.Method == http.MethodPost:
-			testutil.RespondJSON(w, http.StatusCreated, registerEpicJSON)
-		case r.Method == http.MethodPut:
-			testutil.RespondJSON(w, http.StatusOK, registerEpicJSON)
-		case r.Method == http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
+		// GetLinks is REST (GET /groups/.../epics/.../epics)
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/epics/") {
+			testutil.RespondJSON(w, http.StatusOK, registerEpicLinksJSON)
+			return
 		}
+		// All other handlers use GraphQL (POST)
+		if r.Method == http.MethodPost {
+			n := graphQLCalls.Add(1)
+			switch {
+			case n <= 1:
+				// List
+				testutil.RespondJSON(w, http.StatusOK, registerListJSON)
+			case n <= 2:
+				// Get
+				testutil.RespondJSON(w, http.StatusOK, registerWorkItemJSON)
+			case n <= 3:
+				// Create
+				testutil.RespondJSON(w, http.StatusOK, registerCreateJSON)
+			case n <= 4:
+				// Update: GID resolution
+				testutil.RespondJSON(w, http.StatusOK, registerGIDJSON)
+			case n <= 5:
+				// Update: mutation
+				testutil.RespondJSON(w, http.StatusOK, registerUpdateJSON)
+			case n <= 6:
+				// Delete: GID resolution
+				testutil.RespondJSON(w, http.StatusOK, registerGIDJSON)
+			default:
+				// Delete: mutation
+				testutil.RespondJSON(w, http.StatusOK, registerDeleteJSON)
+			}
+			return
+		}
+		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, mux)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
@@ -68,36 +88,33 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_epic_list", map[string]any{"group_id": "42"}},
-		{"gitlab_epic_get", map[string]any{"group_id": "42", "epic_iid": 1}},
-		{"gitlab_epic_get_links", map[string]any{"group_id": "42", "epic_iid": 1}},
-		{"gitlab_epic_create", map[string]any{"group_id": "42", "title": "New Epic"}},
-		{"gitlab_epic_update", map[string]any{"group_id": "42", "epic_iid": 1, "title": "Updated"}},
-		{"gitlab_epic_delete", map[string]any{"group_id": "42", "epic_iid": 1}},
+		{"gitlab_epic_list", map[string]any{"full_path": "my-group"}},
+		{"gitlab_epic_get", map[string]any{"full_path": "my-group", "iid": float64(1)}},
+		{"gitlab_epic_get_links", map[string]any{"full_path": "my-group", "iid": float64(1)}},
+		{"gitlab_epic_create", map[string]any{"full_path": "my-group", "title": "New Epic"}},
+		{"gitlab_epic_update", map[string]any{"full_path": "my-group", "iid": float64(1), "title": "Updated"}},
+		{"gitlab_epic_delete", map[string]any{"full_path": "my-group", "iid": float64(1)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
 			if err != nil {
-				t.Fatalf("CallTool(%s) error: %v", tt.name, err)
+				t.Fatalf("CallTool(%s) transport error: %v", tt.name, err)
 			}
 			if result == nil {
-				t.Fatalf("CallTool(%s) returned nil", tt.name)
+				t.Fatalf("CallTool(%s) returned nil result", tt.name)
+			}
+			if result.IsError {
+				t.Errorf("CallTool(%s) returned error result: %v", tt.name, result.Content)
 			}
 		})
 	}
 }
 
-// TestRegisterTools_DeleteError verifies the delete handler returns an error
-// result when the GitLab API responds with a server error.
 func TestRegisterTools_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
 	})
 	client := testutil.NewTestClient(t, mux)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
@@ -116,11 +133,8 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 	t.Cleanup(func() { session.Close() })
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_epic_delete",
-		Arguments: map[string]any{
-			"group_id": "42",
-			"epic_iid": float64(1),
-		},
+		Name:      "gitlab_epic_delete",
+		Arguments: map[string]any{"full_path": "my-group", "iid": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool returned transport error: %v", err)
@@ -130,14 +144,10 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
-// branch in the gitlab_epic_delete handler when the user declines.
 func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	client := testutil.NewTestClient(t, mux)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API when confirm is declined")
+	}))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterTools(server, client)
 
@@ -146,11 +156,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
 	session, connectErr := mcpClient.Connect(ctx, ct, nil)
 	if connectErr != nil {
 		t.Fatalf("client connect: %v", connectErr)
@@ -159,21 +165,15 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_epic_delete",
-		Arguments: map[string]any{"group_id": "42", "epic_iid": float64(1)},
+		Arguments: map[string]any{"full_path": "my-group", "iid": float64(1), "_confirm": "no"},
 	})
 	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
+		t.Fatalf("CallTool returned transport error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
+	if result == nil || !result.IsError {
+		t.Error("expected error result when confirmation is declined")
 	}
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			if tc.Text == "" {
-				t.Error("expected non-empty cancellation message")
-			}
-			return
-		}
-	}
-	t.Error("expected text content in cancellation result")
 }
+
+// Package epics register_test exercises all RegisterTools closures
+// via MCP in-memory transport, covering every handler wired in register.go.

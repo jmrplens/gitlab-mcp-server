@@ -33,6 +33,7 @@
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features. Gates 35 individual tool sub-packages and 15 dedicated meta-tools (plus enterprise routes in 3 base meta-tools) |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |
+| `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a structured JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence (`true`/`false`) |
 
 ---
 

@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_epic_issue_list",
 		Title:       toolutil.TitleFromName("gitlab_epic_issue_list"),
-		Description: "List all issues assigned to a GitLab group epic. Supports pagination.\n\nReturns: JSON with issues array and pagination metadata. See also: gitlab_epic_get.",
+		Description: "List all child issues of a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.\n\nReturns: JSON with issues array and pagination metadata. See also: gitlab_epic_get.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEpic,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -30,7 +30,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_epic_issue_assign",
 		Title:       toolutil.TitleFromName("gitlab_epic_issue_assign"),
-		Description: "Assign an existing issue to a GitLab group epic. The issue is identified by its global ID.\n\nReturns: JSON with the epic-issue association ID. See also: gitlab_epic_issue_list.",
+		Description: "Assign an existing issue to a GitLab group epic via the Work Items GraphQL API. The issue is identified by its project path and IID.\n\nReturns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconEpic,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AssignInput) (*mcp.CallToolResult, AssignOutput, error) {
@@ -43,7 +43,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_epic_issue_remove",
 		Title:       toolutil.TitleFromName("gitlab_epic_issue_remove"),
-		Description: "Remove an issue from a GitLab group epic using the epic-issue association ID.\n\nReturns: JSON with the removed association details. See also: gitlab_epic_issue_list.",
+		Description: "Remove an issue from a GitLab group epic via the Work Items GraphQL API. Clears the child's parent reference.\n\nReturns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconEpic,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RemoveInput) (*mcp.CallToolResult, AssignOutput, error) {
@@ -56,7 +56,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_epic_issue_update",
 		Title:       toolutil.TitleFromName("gitlab_epic_issue_update"),
-		Description: "Reorder an issue within a GitLab group epic by moving it before or after another epic-issue.\n\nReturns: JSON with the updated issues list. See also: gitlab_epic_issue_list.",
+		Description: "Reorder an issue within a GitLab group epic via the Work Items GraphQL API. Moves the issue before or after a reference issue.\n\nReturns: JSON with the updated issues list. See also: gitlab_epic_issue_list.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconEpic,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, ListOutput, error) {

@@ -145,6 +145,22 @@ This is useful for:
 - Demo environments
 - Environments where the token has write access but you want to restrict the server
 
+## Safe mode
+
+Enable safe mode to preview mutating operations without executing them:
+
+```bash
+GITLAB_SAFE_MODE=true
+```
+
+In safe mode:
+
+- Mutating tools return a **structured JSON preview** showing tool name, parameters, and annotations
+- Read-only tools execute normally
+- If `GITLAB_READ_ONLY=true` is also set, it takes precedence (mutating tools are fully disabled)
+
+This is useful for dry-run workflows, training environments, and debugging tool parameters.
+
 ## HTTP mode security
 
 When running in HTTP mode (`--http`), additional security considerations apply:

@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-07-10.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-20.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,11 +14,11 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,569   |
-| Unit test functions         | 8,331   |
+| Total test functions        | 8,573   |
+| Unit test functions         | 8,335   |
 | E2E test functions          | 191     |
 | cmd test functions          | 81      |
-| Test files (internal/)      | 389     |
+| Test files (internal/)      | 391     |
 | Tool sub-packages tested    | 162     |
 | Core packages tested        | 16      |
 | Average coverage            | ~98.1%  |
@@ -38,11 +38,11 @@
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
 | Core packages            |          1,254 |         73 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            207 |         15 | register, metatool, markdown, errors |
+| Tools orchestration      |            211 |         15 | register, metatool, markdown, safemode, errors |
 | Tool sub-packages (162)  |          6,889 |        305 | Domain-specific tool handlers        |
 | E2E integration          |            191 |         88 | Full workflow against real GitLab    |
 | cmd/server               |             81 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,569** |    **482** |                                      |
+| **Total**                |      **8,573** |    **482** |                                      |
 
 ### Core Packages
 
@@ -292,7 +292,7 @@
 
 | Package                  | Coverage |
 | ------------------------ | -------: |
-| tools (orch.)            |   98.6%  |
+| tools (orch.)            |   97.2%  |
 | accessrequests           |  100.0%  |
 | accesstokens             |  100.0%  |
 | alertmanagement          |   98.2%  |

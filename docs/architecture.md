@@ -46,6 +46,7 @@ graph LR
 
     subgraph "GitLab"
         API[GitLab REST API v4]
+        GQL[GitLab GraphQL API]
     end
 
     VS <-->|stdio| MCP
@@ -53,9 +54,10 @@ graph LR
     CU <-->|stdio| MCP
     WEB <-->|HTTP / SSE| MCP
     MCP -->|HTTPS| API
+    MCP -->|HTTPS| GQL
 ```
 
-AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab REST API calls and returns structured responses.
+AI clients communicate with gitlab-mcp-server using the MCP protocol over stdio or HTTP. The server translates MCP requests into GitLab API calls (REST for ~155 domains, GraphQL for 7 domains) and returns structured responses. See [GraphQL Integration](graphql.md) for details on which domains use GraphQL and why.
 
 ## Container View
 
@@ -570,6 +572,8 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 - [MCP Go SDK (pkg.go.dev)](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk) — SDK API reference
 - [MCP Go SDK Repository](https://github.com/modelcontextprotocol/go-sdk) — source and examples
 - [GitLab REST API v4](https://docs.gitlab.com/ee/api/rest/) — API documentation
+- [GitLab GraphQL API](https://docs.gitlab.com/ee/api/graphql/) — GraphQL API documentation
+- [GraphQL Integration](graphql.md) — project GraphQL patterns and utilities
 - [GitLab Go Client (pkg.go.dev)](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) — client API reference
 - [GitLab Go Client Repository](https://gitlab.com/gitlab-org/api/client-go) — source
 - [C4 Model](https://c4model.com/) — architecture documentation model

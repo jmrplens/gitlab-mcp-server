@@ -289,9 +289,12 @@ func TestWorkItemToItem_FullData(t *testing.T) {
 		Author:       &gl.BasicUser{Username: testAuthorAlice},
 		Assignees:    []*gl.BasicUser{{Username: testAuthorBob}, {Username: testAuthorCarol}},
 		Labels:       []gl.LabelDetails{{Name: testLabelBug}, {Name: testLabelUrgent}},
-		CreatedAt:    &now,
-		UpdatedAt:    &later,
-		ClosedAt:     &closed,
+		LinkedItems: []gl.LinkedWorkItem{
+			{WorkItemIID: gl.WorkItemIID{NamespacePath: "my-group/other", IID: 7}, LinkType: "blocks"},
+		},
+		CreatedAt: &now,
+		UpdatedAt: &later,
+		ClosedAt:  &closed,
 	}
 
 	item := workItemToItem(wi)
@@ -330,6 +333,18 @@ func assertFullItemCore(t *testing.T, item WorkItemItem) {
 	}
 	if !item.Confidential {
 		t.Error("expected Confidential=true")
+	}
+	if len(item.LinkedItems) != 1 {
+		t.Fatalf("LinkedItems = %d, want 1", len(item.LinkedItems))
+	}
+	if item.LinkedItems[0].IID != 7 {
+		t.Errorf("LinkedItems[0].IID = %d, want 7", item.LinkedItems[0].IID)
+	}
+	if item.LinkedItems[0].LinkType != "blocks" {
+		t.Errorf("LinkedItems[0].LinkType = %q, want blocks", item.LinkedItems[0].LinkType)
+	}
+	if item.LinkedItems[0].Path != "my-group/other" {
+		t.Errorf("LinkedItems[0].Path = %q, want my-group/other", item.LinkedItems[0].Path)
 	}
 }
 
@@ -606,10 +621,10 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	if !strings.Contains(text, "## Work Items (3)") {
 		t.Errorf("missing header with count: %s", text)
 	}
-	if !strings.Contains(text, "| 1 | Issue | OPEN | First | dev1 |") {
+	if !strings.Contains(text, "| 1 | Issue | OPEN |  | First | dev1 |") {
 		t.Errorf("missing row 1: %s", text)
 	}
-	if !strings.Contains(text, "| 2 | Task | CLOSED | Second | dev2 |") {
+	if !strings.Contains(text, "| 2 | Task | CLOSED |  | Second | dev2 |") {
 		t.Errorf("missing row 2: %s", text)
 	}
 }
@@ -1134,10 +1149,270 @@ func TestUpdate_EmptyAssigneesRemovesAll(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Update — Status field
+// ---------------------------------------------------------------------------
+
+// TestUpdate_WithStatus verifies that setting a status maps correctly to
+// WorkItemStatusID and the API call succeeds.
+func TestUpdate_WithStatus(t *testing.T) {
+	statuses := []string{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"}
+	for _, s := range statuses {
+		t.Run(s, func(t *testing.T) {
+			call := 0
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				call++
+				switch call {
+				case 1:
+					testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1"}}}}`)
+				default:
+					testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Status test","author":{"username":"dev"},"widgets":[{"type":"STATUS","status":{"name":"%s"}}]}}}}`, s))
+				}
+			})
+			client := testutil.NewTestClient(t, handler)
+
+			_, err := Update(t.Context(), client, UpdateInput{
+				FullPath: testFullPath,
+				IID:      1,
+				Status:   s,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestUpdate_StatusNotSet verifies that omitting status does not set it on opts.
+func TestUpdate_StatusNotSet(t *testing.T) {
+	call := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		call++
+		switch call {
+		case 1:
+			testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1"}}}}`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"No status","author":{"username":"dev"},"widgets":[]}}}}`)
+		}
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Update(t.Context(), client, UpdateInput{
+		FullPath: testFullPath,
+		IID:      1,
+		Title:    "No status",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "No status" {
+		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+}
+
+// TestMapStatusToID verifies all known status strings and a fallback.
+func TestMapStatusToID(t *testing.T) {
+	tests := []struct {
+		input string
+		want  gl.WorkItemStatusID
+	}{
+		{"TODO", gl.WorkItemStatusToDo},
+		{"IN_PROGRESS", gl.WorkItemStatusInProgress},
+		{"DONE", gl.WorkItemStatusDone},
+		{"WONT_DO", gl.WorkItemStatusWontDo},
+		{"DUPLICATE", gl.WorkItemStatusDuplicate},
+		{"custom-gid", gl.WorkItemStatusID("custom-gid")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := mapStatusToID(tt.input)
+			if got != tt.want {
+				t.Errorf("mapStatusToID(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Create — LinkedItems field
+// ---------------------------------------------------------------------------
+
+// TestCreate_WithLinkedItems verifies that linked items are passed to the API.
+func TestCreate_WithLinkedItems(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf(fmtUnexpMethod, r.Method)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/55","iid":"55","workItemType":{"name":"Issue"},"state":"OPEN","title":"Linked","author":{"username":"dev"},"widgets":[]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testFullPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "Linked",
+		LinkedItems: &CreateLinkedItems{
+			WorkItemIDs: []int64{10, 20},
+			LinkType:    "BLOCKS",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "Linked" {
+		t.Errorf("Title = %q, want 'Linked'", out.WorkItem.Title)
+	}
+}
+
+// TestCreate_LinkedItemsNil verifies that nil linked items is handled.
+func TestCreate_LinkedItemsNil(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"No links","author":{"username":"dev"},"widgets":[]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testProjectPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "No links",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "No links" {
+		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+}
+
+// TestCreate_LinkedItemsEmptyIDs verifies that linked items with empty IDs is ignored.
+func TestCreate_LinkedItemsEmptyIDs(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Empty links","author":{"username":"dev"},"widgets":[]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testProjectPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "Empty links",
+		LinkedItems: &CreateLinkedItems{
+			WorkItemIDs: []int64{},
+			LinkType:    "RELATED",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "Empty links" {
+		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// workItemToItem — LinkedItems mapping
+// ---------------------------------------------------------------------------
+
+// TestWorkItemToItem_WithLinkedItems verifies linked items are mapped correctly.
+func TestWorkItemToItem_WithLinkedItems(t *testing.T) {
+	wi := &gl.WorkItem{
+		ID:    10,
+		IID:   10,
+		Type:  testTypeIssue,
+		State: testStateOpen,
+		Title: "With links",
+		LinkedItems: []gl.LinkedWorkItem{
+			{WorkItemIID: gl.WorkItemIID{NamespacePath: "group/proj", IID: 5}, LinkType: "relates_to"},
+			{WorkItemIID: gl.WorkItemIID{NamespacePath: "group/other", IID: 8}, LinkType: "blocks"},
+		},
+	}
+	item := workItemToItem(wi)
+	if len(item.LinkedItems) != 2 {
+		t.Fatalf("LinkedItems = %d, want 2", len(item.LinkedItems))
+	}
+	if item.LinkedItems[0].IID != 5 || item.LinkedItems[0].LinkType != "relates_to" || item.LinkedItems[0].Path != "group/proj" {
+		t.Errorf("LinkedItems[0] = %+v", item.LinkedItems[0])
+	}
+	if item.LinkedItems[1].IID != 8 || item.LinkedItems[1].LinkType != "blocks" || item.LinkedItems[1].Path != "group/other" {
+		t.Errorf("LinkedItems[1] = %+v", item.LinkedItems[1])
+	}
+}
+
+// TestWorkItemToItem_NoLinkedItems verifies empty linked items stays nil.
+func TestWorkItemToItem_NoLinkedItems(t *testing.T) {
+	wi := &gl.WorkItem{
+		ID:    1,
+		IID:   1,
+		Type:  testTypeIssue,
+		State: testStateOpen,
+		Title: "No links",
+	}
+	item := workItemToItem(wi)
+	if len(item.LinkedItems) != 0 {
+		t.Errorf("LinkedItems = %d, want 0", len(item.LinkedItems))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FormatGetMarkdown — Status and LinkedItems rendering
+// ---------------------------------------------------------------------------
+
+// TestFormatGetMarkdown_WithStatus verifies Status is rendered in markdown.
+func TestFormatGetMarkdown_WithStatus(t *testing.T) {
+	out := GetOutput{WorkItem: WorkItemItem{
+		IID:    1,
+		Title:  "Status item",
+		Type:   testTypeIssue,
+		State:  testStateOpen,
+		Status: "IN_PROGRESS",
+	}}
+	result := FormatGetMarkdown(out)
+	text := extractText(t, result)
+	if !strings.Contains(text, "**Status**: IN_PROGRESS") {
+		t.Errorf("missing status in output: %s", text)
+	}
+}
+
+// TestFormatGetMarkdown_WithLinkedItems verifies linked items table is rendered.
+func TestFormatGetMarkdown_WithLinkedItems(t *testing.T) {
+	out := GetOutput{WorkItem: WorkItemItem{
+		IID:   1,
+		Title: "Linked item",
+		Type:  testTypeIssue,
+		State: testStateOpen,
+		LinkedItems: []LinkedItem{
+			{IID: 5, LinkType: "blocks", Path: "group/proj"},
+		},
+	}}
+	result := FormatGetMarkdown(out)
+	text := extractText(t, result)
+	if !strings.Contains(text, "### Linked Items") {
+		t.Errorf("missing Linked Items heading: %s", text)
+	}
+	if !strings.Contains(text, "| 5 | blocks | group/proj |") {
+		t.Errorf("missing linked item row: %s", text)
+	}
+}
+
+// TestFormatGetMarkdown_NoStatusNoLinkedItems verifies optional sections are omitted.
+func TestFormatGetMarkdown_NoStatusNoLinkedItems(t *testing.T) {
+	out := GetOutput{WorkItem: WorkItemItem{
+		IID:   1,
+		Title: "Plain",
+		Type:  testTypeIssue,
+		State: testStateOpen,
+	}}
+	result := FormatGetMarkdown(out)
+	text := extractText(t, result)
+	if strings.Contains(text, "**Status**") {
+		t.Error("unexpected Status in output")
+	}
+	if strings.Contains(text, "### Linked Items") {
+		t.Error("unexpected Linked Items in output")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Get — rich response with labels, assignees, status, dates
 // ---------------------------------------------------------------------------.
-
-// TestGet_RichResponse verifies the behavior of get rich response.
 func TestGet_RichResponse(t *testing.T) {
 	richJSON := `{"data":{"namespace":{"workItem":{
 		"id":"gid://gitlab/WorkItem/42","iid":"42",

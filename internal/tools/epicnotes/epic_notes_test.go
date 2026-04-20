@@ -1,8 +1,8 @@
 // Package epicnotes tests validate all epic note MCP tool handlers:
-// List, Get, Create, Update, and Delete. Tests cover success paths, input
-// validation (missing group_id, epic_iid, note_id, body), API error responses
-// (403, 404, 500), cancelled contexts, pagination options, empty results,
-// and markdown formatting for both single output and list output.
+// List, Get, Create, Update, and Delete using the Work Items GraphQL API.
+// Tests cover success paths, input validation (missing full_path, iid,
+// note_id, body), API error responses, cancelled contexts, pagination,
+// empty results, and markdown formatting for both single and list output.
 package epicnotes
 
 import (
@@ -16,53 +16,106 @@ import (
 )
 
 const (
-	pathEpicNotes   = "/api/v4/groups/mygroup/epics/1/notes"
-	pathEpicNote100 = "/api/v4/groups/mygroup/epics/1/notes/100"
+	testFullPath = "my-group"
 
-	noteJSON = `{
-		"id": 100,
-		"body": "This looks good",
-		"author": {"username": "alice"},
-		"system": false,
-		"noteable_type": "Epic",
-		"noteable_id": 1,
-		"created_at": "2026-01-15T10:00:00Z",
-		"updated_at": "2026-01-15T10:00:00Z"
+	// GraphQL response for a notes widget with two notes across one discussion.
+	gqlNotesData = `{
+		"namespace": {
+			"workItem": {
+				"id": "gid://gitlab/WorkItem/1",
+				"widgets": [{
+					"discussions": {
+						"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null},
+						"nodes": [{
+							"notes": {
+								"nodes": [
+									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z"},
+									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z"}
+								]
+							}
+						}]
+					}
+				}]
+			}
+		}
 	}`
 
-	noteSystemJSON = `{
-		"id": 101,
-		"body": "changed the description",
-		"author": {"username": "admin"},
-		"system": true,
-		"noteable_type": "Epic",
-		"noteable_id": 1,
-		"created_at": "2026-01-15T12:00:00Z",
-		"updated_at": "2026-01-15T12:00:00Z"
+	// GraphQL response with no notes.
+	gqlNotesEmptyData = `{
+		"namespace": {
+			"workItem": {
+				"id": "gid://gitlab/WorkItem/1",
+				"widgets": [{
+					"discussions": {
+						"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": null, "startCursor": null},
+						"nodes": []
+					}
+				}]
+			}
+		}
 	}`
 
-	testGroupID = "mygroup"
+	// GraphQL response for namespace not found.
+	gqlNamespaceNull = `{"namespace": null}`
+
+	// GraphQL response for createNote mutation.
+	gqlCreateNoteData = `{
+		"createNote": {
+			"note": {"id": "gid://gitlab/Note/200", "body": "New comment", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-16T10:00:00Z", "updatedAt": "2026-01-16T10:00:00Z"},
+			"errors": []
+		}
+	}`
+
+	// GraphQL response for updateNote mutation.
+	gqlUpdateNoteData = `{
+		"updateNote": {
+			"note": {"id": "gid://gitlab/Note/100", "body": "Updated comment", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-16T11:00:00Z"},
+			"errors": []
+		}
+	}`
+
+	// GraphQL response for destroyNote mutation.
+	gqlDestroyNoteData = `{
+		"destroyNote": {
+			"note": {"id": "gid://gitlab/Note/100"},
+			"errors": []
+		}
+	}`
+
+	// GraphQL response for resolveWorkItemGID.
+	gqlWorkItemGIDData = `{
+		"namespace": {
+			"workItem": {
+				"id": "gid://gitlab/WorkItem/1"
+			}
+		}
+	}`
 )
 
+// graphqlMux creates a handler that routes GraphQL requests by query content.
+func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
+	return testutil.GraphQLHandler(handlers)
+}
+
 // TestList validates List handler across success, validation, API error,
-// pagination, empty results, and context cancellation scenarios.
+// empty results, and context cancellation scenarios.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    ListInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		cancelFn bool
 		wantErr  bool
 		validate func(t *testing.T, out ListOutput)
 	}{
 		{
 			name:  "returns notes with correct fields",
-			input: ListInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, pathEpicNotes)
-				testutil.RespondJSON(w, http.StatusOK, "["+noteJSON+","+noteSystemJSON+"]")
-			},
+			input: ListInput{FullPath: testFullPath, IID: 1},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
+				},
+			}),
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if len(out.Notes) != 2 {
@@ -86,43 +139,13 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
-			name: "passes pagination and ordering query params",
-			input: ListInput{
-				GroupID: testGroupID,
-				EpicIID: 1,
-				OrderBy: "updated_at",
-				Sort:    "desc",
-				PaginationInput: toolutil.PaginationInput{
-					Page:    2,
-					PerPage: 10,
-				},
-			},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertQueryParam(t, r, "order_by", "updated_at")
-				testutil.AssertQueryParam(t, r, "sort", "desc")
-				testutil.AssertQueryParam(t, r, "page", "2")
-				testutil.AssertQueryParam(t, r, "per_page", "10")
-				testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSON+"]", testutil.PaginationHeaders{
-					Page: "2", PerPage: "10", Total: "15", TotalPages: "2",
-				})
-			},
-			validate: func(t *testing.T, out ListOutput) {
-				t.Helper()
-				if len(out.Notes) != 1 {
-					t.Fatalf("len(Notes) = %d, want 1", len(out.Notes))
-				}
-				if out.Pagination.TotalItems != 15 {
-					t.Errorf("TotalItems = %d, want 15", out.Pagination.TotalItems)
-				}
-			},
-		},
-		{
 			name:  "returns empty list when no notes exist",
-			input: ListInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, "[]")
-			},
+			input: ListInput{FullPath: testFullPath, IID: 1},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNotesEmptyData)
+				},
+			}),
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if len(out.Notes) != 0 {
@@ -131,35 +154,47 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
-			name:    "returns error when group_id is empty",
-			input:   ListInput{EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:  "returns error when epic not found",
+			input: ListInput{FullPath: testFullPath, IID: 999},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+				},
+			}),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is zero",
-			input:   ListInput{GroupID: testGroupID},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when full_path is empty",
+			input:   ListInput{IID: 1},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is negative",
-			input:   ListInput{GroupID: testGroupID, EpicIID: -1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when iid is zero",
+			input:   ListInput{FullPath: testFullPath},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:  "returns error on API 500",
-			input: ListInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
-			},
+			name:    "returns error when iid is negative",
+			input:   ListInput{FullPath: testFullPath, IID: -1},
+			handler: http.NotFoundHandler(),
+			wantErr: true,
+		},
+		{
+			name:  "returns error on API server error",
+			input: ListInput{FullPath: testFullPath, IID: 1},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+				},
+			}),
 			wantErr: true,
 		},
 		{
 			name:     "returns error on cancelled context",
-			input:    ListInput{GroupID: testGroupID, EpicIID: 1},
-			handler:  func(w http.ResponseWriter, _ *http.Request) {},
+			input:    ListInput{FullPath: testFullPath, IID: 1},
+			handler:  http.NotFoundHandler(),
 			cancelFn: true,
 			wantErr:  true,
 		},
@@ -191,19 +226,19 @@ func TestGet(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    GetInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		cancelFn bool
 		wantErr  bool
 		validate func(t *testing.T, out Output)
 	}{
 		{
 			name:  "returns note with all fields populated",
-			input: GetInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, pathEpicNote100)
-				testutil.RespondJSON(w, http.StatusOK, noteJSON)
-			},
+			input: GetInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
+				},
+			}),
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
 				if out.ID != 100 {
@@ -215,47 +250,53 @@ func TestGet(t *testing.T) {
 				if out.Body != "This looks good" {
 					t.Errorf("Body = %q, want %q", out.Body, "This looks good")
 				}
-				if out.NoteableType != "Epic" {
-					t.Errorf("NoteableType = %q, want %q", out.NoteableType, "Epic")
-				}
-				if out.NoteableID != 1 {
-					t.Errorf("NoteableID = %d, want 1", out.NoteableID)
-				}
 				if out.CreatedAt == "" {
 					t.Error("CreatedAt is empty, want non-empty")
 				}
 			},
 		},
 		{
-			name:    "returns error when group_id is empty",
-			input:   GetInput{EpicIID: 1, NoteID: 100},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:  "returns error when note not found",
+			input: GetInput{FullPath: testFullPath, IID: 1, NoteID: 999},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
+				},
+			}),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is zero",
-			input:   GetInput{GroupID: testGroupID, NoteID: 100},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when full_path is empty",
+			input:   GetInput{IID: 1, NoteID: 100},
+			handler: http.NotFoundHandler(),
+			wantErr: true,
+		},
+		{
+			name:    "returns error when iid is zero",
+			input:   GetInput{FullPath: testFullPath, NoteID: 100},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
 			name:    "returns error when note_id is zero",
-			input:   GetInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			input:   GetInput{FullPath: testFullPath, IID: 1},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:  "returns error on API 404",
-			input: GetInput{GroupID: testGroupID, EpicIID: 1, NoteID: 999},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-			},
+			name:  "returns error when epic not found",
+			input: GetInput{FullPath: testFullPath, IID: 999, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+				},
+			}),
 			wantErr: true,
 		},
 		{
 			name:     "returns error on cancelled context",
-			input:    GetInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100},
-			handler:  func(w http.ResponseWriter, _ *http.Request) {},
+			input:    GetInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler:  http.NotFoundHandler(),
 			cancelFn: true,
 			wantErr:  true,
 		},
@@ -287,59 +328,67 @@ func TestCreate(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    CreateInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		cancelFn bool
 		wantErr  bool
 		validate func(t *testing.T, out Output)
 	}{
 		{
 			name:  "creates note and returns output",
-			input: CreateInput{GroupID: testGroupID, EpicIID: 1, Body: "This looks good"},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodPost)
-				testutil.AssertRequestPath(t, r, pathEpicNotes)
-				testutil.RespondJSON(w, http.StatusCreated, noteJSON)
-			},
+			input: CreateInput{FullPath: testFullPath, IID: 1, Body: "New comment"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteData)
+				},
+			}),
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
-				if out.ID != 100 {
-					t.Errorf("ID = %d, want 100", out.ID)
+				if out.ID != 200 {
+					t.Errorf("ID = %d, want 200", out.ID)
 				}
-				if out.Body != "This looks good" {
-					t.Errorf("Body = %q, want %q", out.Body, "This looks good")
+				if out.Body != "New comment" {
+					t.Errorf("Body = %q, want %q", out.Body, "New comment")
 				}
 			},
 		},
 		{
-			name:    "returns error when group_id is empty",
-			input:   CreateInput{EpicIID: 1, Body: "note"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when full_path is empty",
+			input:   CreateInput{IID: 1, Body: "note"},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is zero",
-			input:   CreateInput{GroupID: testGroupID, Body: "note"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when iid is zero",
+			input:   CreateInput{FullPath: testFullPath, Body: "note"},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
 			name:    "returns error when body is empty",
-			input:   CreateInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			input:   CreateInput{FullPath: testFullPath, IID: 1},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:  "returns error on API 403",
-			input: CreateInput{GroupID: testGroupID, EpicIID: 1, Body: "note"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			},
+			name:  "returns error on GraphQL mutation errors",
+			input: CreateInput{FullPath: testFullPath, IID: 1, Body: "note"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote": {"note": null, "errors": ["Body is too short"]}}`)
+				},
+			}),
 			wantErr: true,
 		},
 		{
 			name:     "returns error on cancelled context",
-			input:    CreateInput{GroupID: testGroupID, EpicIID: 1, Body: "note"},
-			handler:  func(w http.ResponseWriter, _ *http.Request) {},
+			input:    CreateInput{FullPath: testFullPath, IID: 1, Body: "note"},
+			handler:  http.NotFoundHandler(),
 			cancelFn: true,
 			wantErr:  true,
 		},
@@ -371,56 +420,67 @@ func TestUpdate(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    UpdateInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		cancelFn bool
 		wantErr  bool
 		validate func(t *testing.T, out Output)
 	}{
 		{
 			name:  "updates note and returns output",
-			input: UpdateInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100, Body: "Updated"},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodPut)
-				testutil.AssertRequestPath(t, r, pathEpicNote100)
-				testutil.RespondJSON(w, http.StatusOK, noteJSON)
-			},
+			input: UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "Updated"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteData)
+				},
+			}),
 			validate: func(t *testing.T, out Output) {
 				t.Helper()
 				if out.ID != 100 {
 					t.Errorf("ID = %d, want 100", out.ID)
 				}
+				if out.Body != "Updated comment" {
+					t.Errorf("Body = %q, want %q", out.Body, "Updated comment")
+				}
 			},
 		},
 		{
-			name:    "returns error when group_id is empty",
-			input:   UpdateInput{EpicIID: 1, NoteID: 100, Body: "x"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when full_path is empty",
+			input:   UpdateInput{IID: 1, NoteID: 100, Body: "x"},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is zero",
-			input:   UpdateInput{GroupID: testGroupID, NoteID: 100, Body: "x"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when iid is zero",
+			input:   UpdateInput{FullPath: testFullPath, NoteID: 100, Body: "x"},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
 			name:    "returns error when note_id is zero",
-			input:   UpdateInput{GroupID: testGroupID, EpicIID: 1, Body: "x"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			input:   UpdateInput{FullPath: testFullPath, IID: 1, Body: "x"},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:  "returns error on API 500",
-			input: UpdateInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100, Body: "x"},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
-			},
+			name:    "returns error when body is empty",
+			input:   UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler: http.NotFoundHandler(),
+			wantErr: true,
+		},
+		{
+			name:  "returns error on GraphQL mutation errors",
+			input: UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "x"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote": {"note": null, "errors": ["Permission denied"]}}`)
+				},
+			}),
 			wantErr: true,
 		},
 		{
 			name:     "returns error on cancelled context",
-			input:    UpdateInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100, Body: "x"},
-			handler:  func(w http.ResponseWriter, _ *http.Request) {},
+			input:    UpdateInput{FullPath: testFullPath, IID: 1, NoteID: 100, Body: "x"},
+			handler:  http.NotFoundHandler(),
 			cancelFn: true,
 			wantErr:  true,
 		},
@@ -452,49 +512,51 @@ func TestDelete(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    DeleteInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		cancelFn bool
 		wantErr  bool
 	}{
 		{
 			name:  "deletes note successfully",
-			input: DeleteInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100},
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodDelete)
-				testutil.AssertRequestPath(t, r, pathEpicNote100)
-				w.WriteHeader(http.StatusNoContent)
-			},
+			input: DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
+				},
+			}),
 		},
 		{
-			name:    "returns error when group_id is empty",
-			input:   DeleteInput{EpicIID: 1, NoteID: 100},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when full_path is empty",
+			input:   DeleteInput{IID: 1, NoteID: 100},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:    "returns error when epic_iid is zero",
-			input:   DeleteInput{GroupID: testGroupID, NoteID: 100},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			name:    "returns error when iid is zero",
+			input:   DeleteInput{FullPath: testFullPath, NoteID: 100},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
 			name:    "returns error when note_id is zero",
-			input:   DeleteInput{GroupID: testGroupID, EpicIID: 1},
-			handler: func(w http.ResponseWriter, _ *http.Request) {},
+			input:   DeleteInput{FullPath: testFullPath, IID: 1},
+			handler: http.NotFoundHandler(),
 			wantErr: true,
 		},
 		{
-			name:  "returns error on API 403",
-			input: DeleteInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			},
+			name:  "returns error on GraphQL mutation errors",
+			input: DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"destroyNote": {"errors": ["Permission denied"]}}`)
+				},
+			}),
 			wantErr: true,
 		},
 		{
 			name:     "returns error on cancelled context",
-			input:    DeleteInput{GroupID: testGroupID, EpicIID: 1, NoteID: 100},
-			handler:  func(w http.ResponseWriter, _ *http.Request) {},
+			input:    DeleteInput{FullPath: testFullPath, IID: 1, NoteID: 100},
+			handler:  http.NotFoundHandler(),
 			cancelFn: true,
 			wantErr:  true,
 		},
@@ -586,7 +648,7 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 100, Author: "alice", CreatedAt: "2026-01-15T10:00:00Z", System: false},
 					{ID: 101, Author: "admin", CreatedAt: "2026-01-15T12:00:00Z", System: true},
 				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
+				Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
 			},
 			contains: []string{
 				"## Epic Notes (2)",
@@ -603,7 +665,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders empty state when no notes",
 			input: ListOutput{
 				Notes:      []Output{},
-				Pagination: toolutil.PaginationOutput{TotalItems: 0, Page: 1, PerPage: 20, TotalPages: 0},
+				Pagination: toolutil.GraphQLPaginationOutput{},
 			},
 			contains: []string{
 				"## Epic Notes (0)",

@@ -19,6 +19,8 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0005](adr-0005-meta-tool-consolidation.md) | Meta-tool consolidation from 70 to 27 domain tools | Accepted | 2026-03-06 |
 | [ADR-0006](adr-0006-raw-graphql-for-uncovered-domains.md) | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted | 2026-03-23 |
 | [ADR-0007](adr-0007-rich-error-semantics.md) | Rich error semantics for LLM-actionable diagnostics | Accepted | 2026-04-06 |
+| [ADR-0008](adr-0008-universal-identity.md) | Universal identity system | Accepted | 2026-04-13 |
+| [ADR-0009](adr-0009-progressive-graphql-migration.md) | Progressive GraphQL migration strategy | Accepted | 2026-04-20 |
 
 ## About Missing ADRs
 
