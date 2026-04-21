@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="GitLab MCP Server" src="site/src/assets/banner-dark.svg" width="840">
+</p>
+
 # GitLab MCP Server
 
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
