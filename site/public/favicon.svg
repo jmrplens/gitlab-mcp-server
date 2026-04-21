@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <linearGradient id="core-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d1b69"/>
+      <stop offset="100%" stop-color="#1a1145"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Dark background -->
+  <rect width="64" height="64" rx="14" fill="#0B0618"/>
+  <!-- AI aura -->
+  <circle cx="32" cy="32" r="28" fill="url(#aura)"/>
+  <!-- Protocol ring -->
+  <circle cx="32" cy="32" r="27" stroke="#2d1b69" stroke-width="0.8" fill="none"/>
+  <!-- Data lines (cardinal only) -->
+  <g stroke="#A78BFA" stroke-width="0.6" stroke-dasharray="1.5 2" opacity="0.4">
+    <line x1="32" y1="20" x2="32" y2="5"/>
+    <line x1="32" y1="44" x2="32" y2="59"/>
+    <line x1="20" y1="32" x2="5" y2="32"/>
+    <line x1="44" y1="32" x2="59" y2="32"/>
+  </g>
+  <!-- Network nodes -->
+  <g fill="#A78BFA" opacity="0.6" filter="url(#glow)">
+    <circle cx="5" cy="32" r="1.8"/>
+    <circle cx="59" cy="32" r="1.8"/>
+    <circle cx="32" cy="5" r="1.8"/>
+    <circle cx="32" cy="59" r="1.8"/>
+  </g>
+  <!-- MCP Core -->
+  <rect x="18" y="18" width="28" height="28" rx="7" fill="url(#core-grad)" stroke="#A78BFA" stroke-width="0.7" filter="url(#glow)"/>
+  <!-- GitLab tanuki -->
+  <svg x="21" y="21" width="22" height="22" viewBox="0 0 380 360">
+    <polygon fill="#FCA326" points="190,1 240,131 140,131"/>
+    <polygon fill="#FC6D26" points="190,1 140,131 12,131"/>
+    <polygon fill="#FCA326" points="12,131 140,131 90,261"/>
+    <polygon fill="#E24329" points="12,131 90,261 0,191"/>
+    <polygon fill="#FC6D26" points="190,1 240,131 368,131"/>
+    <polygon fill="#FCA326" points="368,131 240,131 290,261"/>
+    <polygon fill="#E24329" points="368,131 290,261 380,191"/>
+    <polygon fill="#E24329" points="90,261 190,360 290,261 240,131 140,131"/>
+  </svg>
+</svg>

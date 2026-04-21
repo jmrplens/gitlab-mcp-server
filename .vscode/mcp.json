@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "gitlab-mcp-server": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/dist/gitlab-mcp-server",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}

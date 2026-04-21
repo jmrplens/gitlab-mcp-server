@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jmrplens.github.io/gitlab-mcp-server/sitemap-index.xml

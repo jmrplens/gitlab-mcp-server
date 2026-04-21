@@ -1,0 +1,18 @@
+{
+  "name": "GitLab MCP Server",
+  "short_name": "GitLab MCP",
+  "description": "A Model Context Protocol (MCP) server exposing 1000+ GitLab operations as AI-accessible tools. Written in Go.",
+  "start_url": "/gitlab-mcp-server/",
+  "scope": "/gitlab-mcp-server/",
+  "display": "standalone",
+  "background_color": "#0B0618",
+  "theme_color": "#A78BFA",
+  "icons": [
+    {
+      "src": "/gitlab-mcp-server/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "categories": ["developer tools", "utilities"]
+}

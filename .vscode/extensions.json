@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    // Go development (gopls, debugging, testing, linting)
+    "golang.go",
+    // Markdown linting (auto-fix on save via settings.json)
+    "davidanson.vscode-markdownlint",
+    // Code quality — SonarQube integration
+    "sonarsource.sonarlint-vscode",
+    // AI assistance
+    "github.copilot-chat",
+    // YAML support (.golangci.yml schema validation + formatting)
+    "redhat.vscode-yaml",
+    // EditorConfig for cross-IDE consistency
+    "editorconfig.editorconfig",
+    // Prettier — formats Astro, MDX, TypeScript, CSS in site/
+    "esbenp.prettier-vscode",
+    // Astro language support — syntax highlighting, formatting, IntelliSense
+    "astro-build.astro-vscode"
+  ]
+}
