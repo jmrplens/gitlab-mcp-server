@@ -1,0 +1,39 @@
+{
+  // markdownlint-cli2 configuration
+  // https://github.com/DavidAnson/markdownlint-cli2
+  // Run:  npx markdownlint-cli2 "**/*.md" "#plan"
+  // Fix:  npx markdownlint-cli2 --fix "**/*.md" "#plan"
+
+  // Lint rules (replaces old .markdownlint.json)
+  "config": {
+    "default": true,
+
+    // MD013 - Line length: disabled (many tables and code blocks exceed 80 chars)
+    "MD013": false,
+
+    // MD024 - Multiple headings with same content: allowed (common in changelogs, tool docs)
+    "MD024": false,
+
+    // MD025 - Single top-level heading: disabled (some docs have multiple H1 by design)
+    "MD025": false,
+
+    // MD033 - Inline HTML: allowed (Mermaid diagrams, badges, details/summary)
+    "MD033": false,
+
+    // MD041 - First line should be a top-level heading: disabled (files with front matter)
+    "MD041": false,
+
+    // MD046 - Code block style: disabled (MkDocs tab/admonition syntax uses indented
+    // fenced blocks that the linter misidentifies as "indented code blocks")
+    "MD046": false,
+
+    // MD060 - Native syntax should be used instead of HTML: disabled
+    "MD060": false,
+  },
+
+  // Directories and files to ignore
+  "ignores": ["plan/**", "**/node_modules/**", "**/dist/**", "vendor/**"],
+
+  // Output settings
+  "noProgress": true,
+}

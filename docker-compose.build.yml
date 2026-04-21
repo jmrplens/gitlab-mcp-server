@@ -1,0 +1,10 @@
+# docker-compose.build.yml — Override for local development (build from source).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+services:
+  gitlab-mcp-server:
+    build:
+      context: .
+      args:
+        VERSION: "${VERSION:-dev}"
+        COMMIT: "${COMMIT:-}"
+    image: gitlab-mcp-server:local

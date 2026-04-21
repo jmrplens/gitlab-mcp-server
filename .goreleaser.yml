@@ -1,0 +1,65 @@
+# GoReleaser configuration for gitlab-mcp-server.
+# Docs: https://goreleaser.com
+version: 2
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: gitlab-mcp-server
+    main: ./cmd/server
+    binary: gitlab-mcp-server
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -buildmode=pie
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+
+archives:
+  - id: binaries
+    formats: [binary]
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.bundle"
+    output: true
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+
+sboms:
+  - artifacts: archive
+    cmd: syft
+    args:
+      - scan
+      - ${artifact}
+      - --output
+      - spdx-json=${document}
+
+release:
+  github:
+    owner: jmrplens
+    name: gitlab-mcp-server
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"

@@ -1,0 +1,63 @@
+name: Security Issue
+description: Report a security vulnerability
+labels: ["bug", "security", "high-priority", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **WARNING**: If this is a critical security vulnerability, do NOT create a public issue.
+        > Use [GitHub Security Advisories](../../security/advisories/new) or contact the maintainer directly.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Brief description of the security issue
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: vuln-type
+    attributes:
+      label: Vulnerability Type
+      options:
+        - label: Authentication / Authorization bypass
+        - label: Injection (SQL, command, etc.)
+        - label: Sensitive data exposure (secrets, tokens, PII)
+        - label: Insecure configuration
+        - label: Dependency vulnerability
+        - label: "Other (describe in summary)"
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What could an attacker do? What data is at risk?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      value: |
+        1.
+        2.
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected Components
+      description: Which files, packages, or tools are affected?
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested Fix
+      description: If you know how to fix it, describe the approach
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: CVE numbers, OWASP references, security advisories, etc.

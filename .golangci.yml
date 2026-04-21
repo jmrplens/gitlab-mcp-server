@@ -1,0 +1,213 @@
+# golangci-lint v2 configuration for gitlab-mcp-server
+# Run: golangci-lint run ./...
+# Docs: https://golangci-lint.run/usage/configuration/
+# Based on: https://github.com/maratori/golangci-lint-config
+
+version: "2"
+
+issues:
+  # Avoid truncating repeated issues (default: 3 is too low for initial lint runs).
+  max-same-issues: 50
+
+run:
+  go: "1.26"
+  timeout: 10m
+  tests: true
+  build-tags:
+    - e2e
+
+linters:
+  default: none
+  enable:
+    # --- Bug Detection ---
+    - govet             # Official Go vet checks
+    - staticcheck       # Comprehensive static analysis (SA*, S*, ST*, QF*)
+    - errcheck          # Unchecked error return values
+    - ineffassign       # Detects ineffectual assignments
+    - bodyclose         # HTTP response body not closed (critical for GitLab API client)
+    - noctx             # HTTP requests without context.Context
+    - durationcheck     # Multiplying two time.Duration values
+    - nilerr            # Returns nil when err is not nil
+    - nilnesserr        # Checks err != nil but returns a different nil error
+    - nilnil            # Returns nil,nil without reason
+    - errname           # Sentinel error naming conventions (ErrFoo)
+    - errorlint         # Finds code that breaks error wrapping (errors.Is/As)
+    - fatcontext        # Detects nested contexts in loops
+    - reassign          # Detects package variable reassignment
+
+    # --- Security ---
+    - gosec             # OWASP-oriented security scanner (G1xx-G7xx)
+
+    # --- Code Quality ---
+    - revive            # Configurable Go linter (golint replacement)
+    - gocritic          # ~100 diagnostics: bugs, performance, style
+    - unconvert         # Unnecessary type conversions
+    - unparam           # Unused function parameters
+    - unused            # Unused code (variables, functions, types)
+    - wastedassign      # Finds wasted assignment statements
+    - predeclared       # Detects shadowing of Go predeclared identifiers
+    - recvcheck         # Checks receiver type consistency (pointer vs value)
+    - asciicheck        # Checks for non-ASCII identifiers
+    - nolintlint        # Reports ill-formed or insufficient nolint directives
+    - whitespace        # Detects leading/trailing whitespace in functions
+
+    # --- Style & Formatting ---
+    - misspell          # Spelling mistakes in comments and strings
+    - usestdlibvars     # Use stdlib constants instead of magic values
+    - intrange          # for i := 0; i < n; i++ → for i := range n (Go 1.22+)
+    - modernize         # Suggests simplifications using modern Go features
+    - usetesting        # Reports functions that should use testing.T helpers
+
+    # --- Performance ---
+    - perfsprint        # fmt.Sprintf → strconv when possible
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # Too noisy for this project
+      settings:
+        shadow:
+          strict: true
+
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"       # Package comments (handled by revive)
+        - "-ST1016"       # Consistent receiver names (handled by revive)
+        - "-QF1008"       # Omit embedded fields from selector (too noisy)
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    gosec:
+      excludes:
+        - G104            # Unhandled errors (covered by errcheck)
+        - G304            # File path from variable (many legitimate uses in tools)
+      config:
+        global:
+          audit: "false"
+
+    revive:
+      severity: warning
+      enable-all-rules: false
+      enable-default-rules: true
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          arguments:
+            - "checkPublicInterface"
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: var-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: struct-tag
+        - name: unused-parameter
+        - name: unnecessary-stmt
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam          # Too strict for tool input/output structs
+        - rangeValCopy       # Often false positives with simple structs
+        - ifElseChain        # Sometimes clearer than switch
+        - sloppyReassign     # Conflicts with govet shadow strict mode
+
+    misspell:
+      locale: US
+      extra-words:
+        # GitLab API returns both "canceled" (US) and "cancelled" (UK) in status fields.
+        # Switch cases intentionally handle both spellings.
+        - typo: "cancelled"
+          correction: "cancelled"
+        # GitLab API JSON uses "noteable_type", "noteable_id", "noteable_iid" (with 'e').
+        - typo: "noteable"
+          correction: "noteable"
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    usetesting:
+      os-temp-dir: true
+
+    perfsprint:
+      int-conversion: true
+      err-error: true
+      errorf: true
+      sprintf1: true
+      strconcat: false
+
+  exclusions:
+    # Log a warning if an exclusion rule is unused.
+    warn-unused: true
+    # Default exclusion presets
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+
+    # Custom exclusions
+    rules:
+      # Test files: relax some rules
+      - path: "_test\\.go"
+        linters:
+          - errcheck
+          - gosec
+          - bodyclose
+          - gocritic
+          - revive
+          - unparam
+          - perfsprint
+          - noctx
+          - wastedassign
+          - fatcontext
+
+      # Main entry point: allow os.Exit
+      - path: "cmd/server/main\\.go"
+        linters:
+          - gosec
+        text: "G114"
+
+      # Test utilities
+      - path: "internal/testutil/"
+        linters:
+          - errcheck
+          - gosec
+
+output:
+  formats:
+    text:
+      path: stdout
+  sort-order:
+    - linter
+    - severity
+    - file
+  show-stats: true
+
+formatters:
+  enable:
+    - goimports         # Import grouping and ordering
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/jmrplens/gitlab-mcp-server

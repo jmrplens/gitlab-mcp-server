@@ -1,0 +1,152 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.jmrplens/gitlab-mcp-server",
+  "title": "GitLab MCP Server",
+  "description": "MCP server exposing 1006 GitLab REST API operations as tools for AI assistants.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/jmrplens/gitlab-mcp-server",
+    "source": "github",
+    "id": "1208139072"
+  },
+  "websiteUrl": "https://jmrplens.github.io/gitlab-mcp-server/",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/logo-light.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"],
+      "theme": "light"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/logo-dark.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"],
+      "theme": "dark"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64",
+      "fileSha256": "",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "GITLAB_URL",
+          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
+          "isRequired": true,
+          "placeholder": "https://gitlab.example.com"
+        },
+        {
+          "name": "GITLAB_TOKEN",
+          "description": "GitLab Personal Access Token (glpat-...)",
+          "isRequired": true,
+          "isSecret": true,
+          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
+        },
+        {
+          "name": "GITLAB_SKIP_TLS_VERIFY",
+          "description": "Skip TLS certificate verification for self-signed certs (default: false)",
+          "isRequired": false,
+          "default": "false"
+        },
+        {
+          "name": "META_TOOLS",
+          "description": "Enable meta-tools that group actions per domain for reduced tool count (default: true)",
+          "isRequired": false,
+          "default": "true"
+        },
+        {
+          "name": "GITLAB_ENTERPRISE",
+          "description": "Enable GitLab Premium/Ultimate tools (default: false)",
+          "isRequired": false,
+          "default": "false"
+        },
+        {
+          "name": "GITLAB_READ_ONLY",
+          "description": "Read-only mode: disables all mutating tools (default: false)",
+          "isRequired": false,
+          "default": "false"
+        },
+        {
+          "name": "UPLOAD_MAX_FILE_SIZE",
+          "description": "Maximum attachment upload size in bytes (default: 2147483648 = 2 GB)",
+          "isRequired": false,
+          "default": "2147483648"
+        },
+        {
+          "name": "AUTO_UPDATE",
+          "description": "Auto-update mode: true (auto-apply), check (log-only), false (disabled) (default: true)",
+          "isRequired": false,
+          "default": "true"
+        },
+        {
+          "name": "AUTO_UPDATE_REPO",
+          "description": "GitHub repository slug for release assets (default: jmrplens/gitlab-mcp-server)",
+          "isRequired": false,
+          "default": "jmrplens/gitlab-mcp-server"
+        },
+        {
+          "name": "AUTO_UPDATE_INTERVAL",
+          "description": "Periodic update check interval in HTTP mode (default: 1h)",
+          "isRequired": false,
+          "default": "1h"
+        }
+      ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-arm64",
+      "fileSha256": "",
+      "transport": { "type": "stdio" }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin-amd64",
+      "fileSha256": "",
+      "transport": { "type": "stdio" }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-darwin-arm64",
+      "fileSha256": "",
+      "transport": { "type": "stdio" }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows-amd64.exe",
+      "fileSha256": "",
+      "transport": { "type": "stdio" }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-windows-arm64.exe",
+      "fileSha256": "",
+      "transport": { "type": "stdio" }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{host}:{port}/mcp",
+      "headers": [
+        {
+          "name": "X-Gitlab-Token",
+          "description": "GitLab Personal Access Token for authentication",
+          "isSecret": true
+        }
+      ],
+      "variables": {
+        "host": {
+          "description": "Hostname of the GitLab MCP Server HTTP instance",
+          "placeholder": "localhost"
+        },
+        "port": {
+          "description": "Port of the GitLab MCP Server HTTP instance",
+          "default": "8080",
+          "placeholder": "8080"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+# Git Attributes — gitlab-mcp-server
+# Enforce LF line endings for all text files (cross-platform consistency).
+
+# Auto-detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Go source files
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# JavaScript / TypeScript
+*.js text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+
+# Web / Astro
+*.astro text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.mdx text eol=lf
+*.svg text eol=lf
+
+# Scripts
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Config / Data
+*.json text eol=lf
+*.jsonc text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.properties text eol=lf
+*.editorconfig text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+
+# Dotfiles and extensionless text files
+.dockerignore text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.htmlhintrc text eol=lf
+.prettierignore text eol=lf
+.prettierrc text eol=lf
+CODEOWNERS text eol=lf
+Dockerfile text eol=lf
+LICENSE text eol=lf
+Makefile text eol=lf
+VERSION text eol=lf
+
+# Cryptographic keys
+*.asc text eol=lf
+*.pub text eol=lf
+
+# Binary files — no conversion
+*.exe binary
+*.dll binary
+*.gif binary
+*.ico binary
+*.jpg binary
+*.png binary
+*.tar.gz binary
+*.zip binary

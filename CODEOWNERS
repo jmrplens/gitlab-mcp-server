@@ -1,0 +1,41 @@
+# CODEOWNERS — gitlab-mcp-server
+#
+# GitHub uses this file to automatically request reviews from code owners.
+# Each line maps a file pattern to one or more owners. The last matching
+# pattern takes precedence.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @jmrplens
+
+# Go source code
+*.go @jmrplens
+go.mod @jmrplens
+go.sum @jmrplens
+
+# Build
+Makefile @jmrplens
+scripts/ @jmrplens
+
+# Documentation
+docs/ @jmrplens
+README.md @jmrplens
+CONTRIBUTING.md @jmrplens
+
+# MCP tool implementations
+internal/tools/ @jmrplens
+internal/resources/ @jmrplens
+internal/prompts/ @jmrplens
+
+# MCP capabilities
+internal/logging/ @jmrplens
+internal/completions/ @jmrplens
+internal/roots/ @jmrplens
+internal/progress/ @jmrplens
+internal/sampling/ @jmrplens
+internal/elicitation/ @jmrplens
+
+# Configuration and GitLab client
+internal/config/ @jmrplens
+internal/gitlab/ @jmrplens

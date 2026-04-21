@@ -1,0 +1,34 @@
+services:
+  gitlab-mcp-server:
+    # Pin VERSION to a specific release (e.g., 1.7.7) in production; avoid :latest
+    image: ${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}
+    ports:
+      - "8080:8080"
+    environment:
+      - GITLAB_URL=${GITLAB_URL:?Set GITLAB_URL in .env}
+      - GITLAB_SKIP_TLS_VERIFY=${GITLAB_SKIP_TLS_VERIFY:-false}
+      - META_TOOLS=${META_TOOLS:-true}
+      - GITLAB_ENTERPRISE=${GITLAB_ENTERPRISE:-false}
+      - GITLAB_READ_ONLY=${GITLAB_READ_ONLY:-false}
+    command:
+      - "--http"
+      - "--http-addr=0.0.0.0:8080"
+      - "--gitlab-url=${GITLAB_URL}"
+      - "--meta-tools=${META_TOOLS:-true}"
+      - "--enterprise=${GITLAB_ENTERPRISE:-false}"
+      - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"
+      - "--read-only=${GITLAB_READ_ONLY:-false}"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
