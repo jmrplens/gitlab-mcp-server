@@ -762,7 +762,10 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[{"id":1,"access_level":30,"access_level_description":"Developers + Maintainers","user_id":5}]}`)
 			return

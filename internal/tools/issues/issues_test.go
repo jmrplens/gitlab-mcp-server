@@ -2012,13 +2012,6 @@ func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 // Context cancellation tests for ALL 21 handlers
 // ---------------------------------------------------------------------------.
 
-// cancelledCtx is an internal helper for the issues package.
-func cancelledCtx() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	return ctx
-}
-
 // nopClient is an internal helper for the issues package.
 func nopClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
@@ -2029,119 +2022,119 @@ func nopClient(t *testing.T) *gitlabclient.Client {
 
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
-	if _, err := Get(cancelledCtx(), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := Get(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Get: expected error for canceled context")
 	}
 }
 
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
-	if _, err := List(cancelledCtx(), nopClient(t), ListInput{ProjectID: testProjectID}); err == nil {
+	if _, err := List(testutil.CancelledCtx(t), nopClient(t), ListInput{ProjectID: testProjectID}); err == nil {
 		t.Fatal("List: expected error for canceled context")
 	}
 }
 
 // TestUpdate_CancelledContext verifies the behavior of update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
-	if _, err := Update(cancelledCtx(), nopClient(t), UpdateInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := Update(testutil.CancelledCtx(t), nopClient(t), UpdateInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Update: expected error for canceled context")
 	}
 }
 
 // TestGetByID_CancelledContext verifies the behavior of get by i d cancelled context.
 func TestGetByID_CancelledContext(t *testing.T) {
-	if _, err := GetByID(cancelledCtx(), nopClient(t), GetByIDInput{IssueID: 10}); err == nil {
+	if _, err := GetByID(testutil.CancelledCtx(t), nopClient(t), GetByIDInput{IssueID: 10}); err == nil {
 		t.Fatal("GetByID: expected error for canceled context")
 	}
 }
 
 // TestReorder_CancelledContext verifies the behavior of reorder cancelled context.
 func TestReorder_CancelledContext(t *testing.T) {
-	if _, err := Reorder(cancelledCtx(), nopClient(t), ReorderInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := Reorder(testutil.CancelledCtx(t), nopClient(t), ReorderInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Reorder: expected error for canceled context")
 	}
 }
 
 // TestMove_CancelledContext verifies the behavior of move cancelled context.
 func TestMove_CancelledContext(t *testing.T) {
-	if _, err := Move(cancelledCtx(), nopClient(t), MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99}); err == nil {
+	if _, err := Move(testutil.CancelledCtx(t), nopClient(t), MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99}); err == nil {
 		t.Fatal("Move: expected error for canceled context")
 	}
 }
 
 // TestSubscribe_CancelledContext verifies the behavior of subscribe cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
-	if _, err := Subscribe(cancelledCtx(), nopClient(t), SubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := Subscribe(testutil.CancelledCtx(t), nopClient(t), SubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Subscribe: expected error for canceled context")
 	}
 }
 
 // TestUnsubscribe_CancelledContext verifies the behavior of unsubscribe cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
-	if _, err := Unsubscribe(cancelledCtx(), nopClient(t), UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := Unsubscribe(testutil.CancelledCtx(t), nopClient(t), UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("Unsubscribe: expected error for canceled context")
 	}
 }
 
 // TestCreateTodo_CancelledContext verifies the behavior of create todo cancelled context.
 func TestCreateTodo_CancelledContext(t *testing.T) {
-	if _, err := CreateTodo(cancelledCtx(), nopClient(t), CreateTodoInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := CreateTodo(testutil.CancelledCtx(t), nopClient(t), CreateTodoInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("CreateTodo: expected error for canceled context")
 	}
 }
 
 // TestSetTimeEstimate_CancelledContext verifies the behavior of set time estimate cancelled context.
 func TestSetTimeEstimate_CancelledContext(t *testing.T) {
-	if _, err := SetTimeEstimate(cancelledCtx(), nopClient(t), SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "3h"}); err == nil {
+	if _, err := SetTimeEstimate(testutil.CancelledCtx(t), nopClient(t), SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "3h"}); err == nil {
 		t.Fatal("SetTimeEstimate: expected error for canceled context")
 	}
 }
 
 // TestResetTimeEstimate_CancelledContext verifies the behavior of reset time estimate cancelled context.
 func TestResetTimeEstimate_CancelledContext(t *testing.T) {
-	if _, err := ResetTimeEstimate(cancelledCtx(), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := ResetTimeEstimate(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ResetTimeEstimate: expected error for canceled context")
 	}
 }
 
 // TestAddSpentTime_CancelledContext verifies the behavior of add spent time cancelled context.
 func TestAddSpentTime_CancelledContext(t *testing.T) {
-	if _, err := AddSpentTime(cancelledCtx(), nopClient(t), AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h"}); err == nil {
+	if _, err := AddSpentTime(testutil.CancelledCtx(t), nopClient(t), AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h"}); err == nil {
 		t.Fatal("AddSpentTime: expected error for canceled context")
 	}
 }
 
 // TestResetSpentTime_CancelledContext verifies the behavior of reset spent time cancelled context.
 func TestResetSpentTime_CancelledContext(t *testing.T) {
-	if _, err := ResetSpentTime(cancelledCtx(), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := ResetSpentTime(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ResetSpentTime: expected error for canceled context")
 	}
 }
 
 // TestGetTimeStats_CancelledContext verifies the behavior of get time stats cancelled context.
 func TestGetTimeStats_CancelledContext(t *testing.T) {
-	if _, err := GetTimeStats(cancelledCtx(), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := GetTimeStats(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("GetTimeStats: expected error for canceled context")
 	}
 }
 
 // TestGetParticipants_CancelledContext verifies the behavior of get participants cancelled context.
 func TestGetParticipants_CancelledContext(t *testing.T) {
-	if _, err := GetParticipants(cancelledCtx(), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := GetParticipants(testutil.CancelledCtx(t), nopClient(t), GetInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("GetParticipants: expected error for canceled context")
 	}
 }
 
 // TestListMRsClosing_CancelledContext verifies the behavior of list m rs closing cancelled context.
 func TestListMRsClosing_CancelledContext(t *testing.T) {
-	if _, err := ListMRsClosing(cancelledCtx(), nopClient(t), ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := ListMRsClosing(testutil.CancelledCtx(t), nopClient(t), ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ListMRsClosing: expected error for canceled context")
 	}
 }
 
 // TestListMRsRelated_CancelledContext verifies the behavior of list m rs related cancelled context.
 func TestListMRsRelated_CancelledContext(t *testing.T) {
-	if _, err := ListMRsRelated(cancelledCtx(), nopClient(t), ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+	if _, err := ListMRsRelated(testutil.CancelledCtx(t), nopClient(t), ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
 		t.Fatal("ListMRsRelated: expected error for canceled context")
 	}
 }

@@ -336,7 +336,10 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"message":"Full test","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"serif","active":true,"target_access_levels":[30],"target_path":"/dashboard","broadcast_type":"notification","dismissable":true,"theme":"blue"}`)
 			return

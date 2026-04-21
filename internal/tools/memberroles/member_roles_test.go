@@ -462,7 +462,10 @@ func TestCreateInstance_WithAllPermissions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.AssertRequestPath(t, r, "/api/v4/member_roles")
-		body, _ := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"id":10,"name":"full-perms","description":"All permissions",

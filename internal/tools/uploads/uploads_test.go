@@ -762,8 +762,7 @@ func TestUpload_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called")
 	}))
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Upload(ctx, nil, client, UploadInput{
 		ProjectID:     "p",
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte("data")),

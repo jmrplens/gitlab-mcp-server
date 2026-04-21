@@ -2420,7 +2420,10 @@ func TestFork_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Fork {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":100,"name":"my-fork","path_with_namespace":"user/my-fork","visibility":"private","web_url":"https://gitlab.example.com/user/my-fork"}`)
 			return
@@ -2483,7 +2486,10 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Hooks {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"emoji_events":true,"resource_access_token_events":true}`)
 			return
@@ -2534,7 +2540,10 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42Hook1 {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"url":"https://example.com/hook-updated","project_id":42,"push_events":true}`)
 			return
@@ -5552,7 +5561,10 @@ func TestFormatRepositoryStorageMarkdown_NonEmpty(t *testing.T) {
 func TestCreateForUser_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectForUser5 {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			s := string(body)
 			for _, want := range []string{
 				`"path":"custom-path"`,

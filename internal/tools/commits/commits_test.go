@@ -1093,7 +1093,10 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathRepoCommits {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":"opt1","short_id":"opt1","title":"t"}`)
 			return
@@ -1295,7 +1298,10 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/statuses/abc" {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":3,"sha":"abc","ref":"main","status":"success","name":"deploy",

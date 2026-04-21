@@ -422,7 +422,10 @@ func TestExplore_APIError(t *testing.T) {
 func TestCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, covSnippetJSON)
 	}))
@@ -451,7 +454,10 @@ func TestCreate_WithAllOptions(t *testing.T) {
 func TestUpdate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, covSnippetJSON)
 	}))

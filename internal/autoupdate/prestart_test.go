@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/creativeprojects/go-selfupdate"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 

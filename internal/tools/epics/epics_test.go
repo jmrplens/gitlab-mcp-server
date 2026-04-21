@@ -650,7 +650,7 @@ func TestCreate_WithAllOptions(t *testing.T) {
 			t.Fatal("GraphQL variables missing 'input' object")
 		}
 		for _, key := range []string{"title", "confidential", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "assigneesWidget", "labelsWidget", "weightWidget", "healthStatusWidget"} {
-			if _, ok := input[key]; !ok {
+			if _, exists := input[key]; !exists {
 				t.Errorf("GraphQL input missing %q", key)
 			}
 		}
@@ -713,7 +713,7 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 				t.Fatal("GraphQL variables missing 'input' object")
 			}
 			for _, key := range []string{"title", "stateEvent", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "labelsWidget", "assigneesWidget", "weightWidget", "healthStatusWidget", "statusWidget"} {
-				if _, ok := input[key]; !ok {
+				if _, exists := input[key]; !exists {
 					t.Errorf("GraphQL input missing %q", key)
 				}
 			}

@@ -3078,7 +3078,10 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 func TestCreate_AssigneeIDSingular(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMRs {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
 				t.Errorf("request body missing assignee_id: %s", bodyStr)
@@ -3109,7 +3112,10 @@ func TestCreate_AssigneeIDSingular(t *testing.T) {
 func TestUpdate_AssigneeIDSingular(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMR1 {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
 				t.Errorf("request body missing assignee_id: %s", bodyStr)
@@ -3417,7 +3423,10 @@ func TestMerge_AutoDetectsSquashOnMerge(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithSquashOnMerge)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3452,7 +3461,10 @@ func TestMerge_AutoDetectsForceRemoveSourceBranch(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithForceRemove)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3487,7 +3499,10 @@ func TestMerge_EnforcedSquashOverridesExplicitFalse(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithSquashOnMerge)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3525,7 +3540,10 @@ func TestMerge_ExplicitSquashRespectedWhenNotEnforced(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrNoSquash)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
