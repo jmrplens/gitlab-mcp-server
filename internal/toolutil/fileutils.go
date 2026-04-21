@@ -124,8 +124,7 @@ func ProgressReportInterval(total int64) int64 {
 // tracker as bytes are read. Safe to use with a zero-value/inactive tracker.
 type ProgressReader struct {
 	inner      io.Reader
-	ctx        context.Context
-	tracker    progress.Tracker
+	onProgress func(read, total int64)
 	read       int64
 	total      int64
 	lastReport int64
@@ -136,9 +135,11 @@ type ProgressReader struct {
 // If the tracker is inactive, the wrapper still works but skips notifications.
 func NewProgressReader(ctx context.Context, r io.Reader, total int64, tracker progress.Tracker) *ProgressReader {
 	return &ProgressReader{
-		inner:    r,
-		ctx:      ctx,
-		tracker:  tracker,
+		inner: r,
+		onProgress: func(read, total int64) {
+			tracker.Update(ctx, float64(read), float64(total),
+				fmt.Sprintf("Uploaded %d / %d bytes", read, total))
+		},
 		total:    total,
 		interval: ProgressReportInterval(total),
 	}
@@ -154,8 +155,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	pr.read += int64(n)
 
 	if pr.read-pr.lastReport >= pr.interval || err == io.EOF {
-		pr.tracker.Update(pr.ctx, float64(pr.read), float64(pr.total),
-			fmt.Sprintf("Uploaded %d / %d bytes", pr.read, pr.total))
+		pr.onProgress(pr.read, pr.total)
 		pr.lastReport = pr.read
 	}
 
@@ -166,8 +166,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 // tracker as bytes are written (used for downloads to disk).
 type ProgressWriter struct {
 	inner      io.Writer
-	ctx        context.Context
-	tracker    progress.Tracker
+	onProgress func(written, total int64)
 	written    int64
 	total      int64
 	lastReport int64
@@ -177,9 +176,11 @@ type ProgressWriter struct {
 // NewProgressWriter creates a ProgressWriter that reports download progress.
 func NewProgressWriter(ctx context.Context, w io.Writer, total int64, tracker progress.Tracker) *ProgressWriter {
 	return &ProgressWriter{
-		inner:    w,
-		ctx:      ctx,
-		tracker:  tracker,
+		inner: w,
+		onProgress: func(written, total int64) {
+			tracker.Update(ctx, float64(written), float64(total),
+				fmt.Sprintf("Downloaded %d / %d bytes", written, total))
+		},
 		total:    total,
 		interval: ProgressReportInterval(total),
 	}
@@ -195,8 +196,7 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 	pw.written += int64(n)
 
 	if pw.written-pw.lastReport >= pw.interval || err != nil {
-		pw.tracker.Update(pw.ctx, float64(pw.written), float64(pw.total),
-			fmt.Sprintf("Downloaded %d / %d bytes", pw.written, pw.total))
+		pw.onProgress(pw.written, pw.total)
 		pw.lastReport = pw.written
 	}
 

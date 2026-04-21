@@ -45,7 +45,7 @@ func writeToFile(path string, r io.Reader) error {
 		return err
 	}
 	if runtime.GOOS != "windows" {
-		_ = os.Chmod(path, 0o755) //#nosec G302 -- executable binary needs 0755
+		_ = os.Chmod(path, 0o700) //#nosec G302 -- executable binary needs owner-only permissions
 	}
 	return nil
 }
