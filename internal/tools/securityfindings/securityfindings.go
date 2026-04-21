@@ -167,19 +167,19 @@ type gqlVulnerabilityRef struct {
 }
 
 type gqlFindingNode struct {
-	UUID          string          `json:"uuid"`
-	Name          string          `json:"name"`
-	Title         string          `json:"title"`
-	Severity      string          `json:"severity"`
-	Confidence    string          `json:"confidence"`
-	ReportType    string          `json:"reportType"`
-	Scanner       *gqlScanner     `json:"scanner"`
-	Description   string          `json:"description"`
-	Solution      string          `json:"solution"`
-	Identifiers   []gqlIdentifier `json:"identifiers"`
-	Location      *gqlLocation    `json:"location"`
-	State         string          `json:"state"`
-	Evidence      string          `json:"evidence"`
+	UUID          string               `json:"uuid"`
+	Name          string               `json:"name"`
+	Title         string               `json:"title"`
+	Severity      string               `json:"severity"`
+	Confidence    string               `json:"confidence"`
+	ReportType    string               `json:"reportType"`
+	Scanner       *gqlScanner          `json:"scanner"`
+	Description   string               `json:"description"`
+	Solution      string               `json:"solution"`
+	Identifiers   []gqlIdentifier      `json:"identifiers"`
+	Location      *gqlLocation         `json:"location"`
+	State         string               `json:"state"`
+	Evidence      string               `json:"evidence"`
 	Vulnerability *gqlVulnerabilityRef `json:"vulnerability"`
 }
 

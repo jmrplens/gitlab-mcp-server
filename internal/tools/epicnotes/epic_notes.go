@@ -110,12 +110,12 @@ mutation($id: NoteID!) {
 
 // gqlNoteNode represents a note from the GitLab GraphQL API.
 type gqlNoteNode struct {
-	ID        string         `json:"id"`
-	Body      string         `json:"body"`
-	Author    gqlNoteAuthor  `json:"author"`
-	System    bool           `json:"system"`
-	CreatedAt *string        `json:"createdAt"`
-	UpdatedAt *string        `json:"updatedAt"`
+	ID        string        `json:"id"`
+	Body      string        `json:"body"`
+	Author    gqlNoteAuthor `json:"author"`
+	System    bool          `json:"system"`
+	CreatedAt *string       `json:"createdAt"`
+	UpdatedAt *string       `json:"updatedAt"`
 }
 
 // gqlNoteAuthor represents the author of a note.
@@ -146,7 +146,7 @@ type gqlDiscussionsWidget struct {
 
 // gqlNotesWorkItem represents a work item with discussions widgets.
 type gqlNotesWorkItem struct {
-	ID      string                `json:"id"`
+	ID      string                 `json:"id"`
 	Widgets []gqlDiscussionsWidget `json:"widgets"`
 }
 

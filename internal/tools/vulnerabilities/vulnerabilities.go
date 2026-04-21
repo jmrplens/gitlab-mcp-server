@@ -249,24 +249,24 @@ type gqlMergeRequestRef struct {
 }
 
 type gqlVulnerabilityNode struct {
-	ID                string          `json:"id"`
-	Title             string          `json:"title"`
-	Severity          string          `json:"severity"`
-	State             string          `json:"state"`
-	Description       string          `json:"description"`
-	ReportType        string          `json:"reportType"`
-	DetectedAt        string          `json:"detectedAt"`
-	DismissedAt       string          `json:"dismissedAt"`
-	ResolvedAt        string          `json:"resolvedAt"`
-	ConfirmedAt       string          `json:"confirmedAt"`
-	Solution          string          `json:"solution"`
-	HasSolutions      bool            `json:"hasSolutions"`
-	DismissalReason   string          `json:"dismissalReason"`
-	PrimaryIdentifier *gqlIdentifier  `json:"primaryIdentifier"`
-	Identifiers       []gqlIdentifier `json:"identifiers"`
-	Scanner           *gqlScanner     `json:"scanner"`
-	Location          *gqlLocation    `json:"location"`
-	Project           *gqlProject     `json:"project"`
+	ID                string                   `json:"id"`
+	Title             string                   `json:"title"`
+	Severity          string                   `json:"severity"`
+	State             string                   `json:"state"`
+	Description       string                   `json:"description"`
+	ReportType        string                   `json:"reportType"`
+	DetectedAt        string                   `json:"detectedAt"`
+	DismissedAt       string                   `json:"dismissedAt"`
+	ResolvedAt        string                   `json:"resolvedAt"`
+	ConfirmedAt       string                   `json:"confirmedAt"`
+	Solution          string                   `json:"solution"`
+	HasSolutions      bool                     `json:"hasSolutions"`
+	DismissalReason   string                   `json:"dismissalReason"`
+	PrimaryIdentifier *gqlIdentifier           `json:"primaryIdentifier"`
+	Identifiers       []gqlIdentifier          `json:"identifiers"`
+	Scanner           *gqlScanner              `json:"scanner"`
+	Location          *gqlLocation             `json:"location"`
+	Project           *gqlProject              `json:"project"`
 	IssueLinks        *gqlIssueLinksConnection `json:"issueLinks"`
 	MergeRequest      *gqlMergeRequestRef      `json:"mergeRequest"`
 }

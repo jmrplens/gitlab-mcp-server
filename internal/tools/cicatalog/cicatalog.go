@@ -176,20 +176,20 @@ type gqlVersion struct {
 }
 
 type gqlResourceNode struct {
-	ID                     string      `json:"id"`
-	Name                   string      `json:"name"`
-	Description            *string     `json:"description"`
-	Icon                   *string     `json:"icon"`
-	FullPath               string      `json:"fullPath"`
-	WebURL                 string      `json:"webUrl"`
-	StarCount              int         `json:"starCount"`
-	ForksCount             int         `json:"forksCount"`
-	OpenIssuesCount        int         `json:"openIssuesCount"`
-	OpenMergeRequestsCount int         `json:"openMergeRequestsCount"`
-	LatestReleasedAt       *string     `json:"latestReleasedAt"`
-	ReadmeHTML             *string     `json:"readmeHtml"`
-	LatestVersion          *gqlVersion         `json:"latestVersion"`
-	Versions               *gqlVersionNodes    `json:"versions"`
+	ID                     string           `json:"id"`
+	Name                   string           `json:"name"`
+	Description            *string          `json:"description"`
+	Icon                   *string          `json:"icon"`
+	FullPath               string           `json:"fullPath"`
+	WebURL                 string           `json:"webUrl"`
+	StarCount              int              `json:"starCount"`
+	ForksCount             int              `json:"forksCount"`
+	OpenIssuesCount        int              `json:"openIssuesCount"`
+	OpenMergeRequestsCount int              `json:"openMergeRequestsCount"`
+	LatestReleasedAt       *string          `json:"latestReleasedAt"`
+	ReadmeHTML             *string          `json:"readmeHtml"`
+	LatestVersion          *gqlVersion      `json:"latestVersion"`
+	Versions               *gqlVersionNodes `json:"versions"`
 }
 
 // gqlVersionNodes holds a list of version nodes.

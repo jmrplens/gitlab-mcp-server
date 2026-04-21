@@ -138,14 +138,14 @@ mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: Wo
 
 // gqlChildNode represents a child work item from the GraphQL hierarchy widget.
 type gqlChildNode struct {
-	ID        string        `json:"id"`
-	IID       string        `json:"iid"`
-	Title     string        `json:"title"`
-	State     string        `json:"state"`
-	WebURL    string        `json:"webUrl"`
-	CreatedAt string        `json:"createdAt"`
-	UpdatedAt string        `json:"updatedAt"`
-	Author    gqlAuthor     `json:"author"`
+	ID        string           `json:"id"`
+	IID       string           `json:"iid"`
+	Title     string           `json:"title"`
+	State     string           `json:"state"`
+	WebURL    string           `json:"webUrl"`
+	CreatedAt string           `json:"createdAt"`
+	UpdatedAt string           `json:"updatedAt"`
+	Author    gqlAuthor        `json:"author"`
 	Widgets   []gqlLabelWidget `json:"widgets"`
 }
 
