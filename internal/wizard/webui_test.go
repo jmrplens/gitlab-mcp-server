@@ -39,6 +39,7 @@ func TestServeIndex(t *testing.T) {
 // JSON structure with version, install path, gitlab URL, and all clients.
 func TestHandleDefaults(t *testing.T) {
 	stubLoadExistingConfig(t)
+	stubGetInstalledVersion(t, "")
 	handler := handleDefaults("2.0.0-test")
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/api/defaults", nil)
@@ -625,6 +626,7 @@ func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 		GitLabToken:   "glpat-existing-token",
 		SkipTLSVerify: true,
 	})
+	stubGetInstalledVersion(t, "")
 	handler := handleDefaults("2.0.0-test")
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/api/defaults", nil)
@@ -658,6 +660,7 @@ func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 // at least one display-only and one auto-config client.
 func TestHandleDefaults_ClientsStructure(t *testing.T) {
 	stubLoadExistingConfig(t)
+	stubGetInstalledVersion(t, "")
 	handler := handleDefaults("test-version")
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/api/defaults", nil)
@@ -687,5 +690,63 @@ func TestHandleDefaults_ClientsStructure(t *testing.T) {
 	}
 	if !hasAutoConfig {
 		t.Error("expected at least one auto-config client")
+	}
+}
+
+// TestHandleDefaults_InstalledVersion verifies the endpoint returns the
+// installed binary version when one exists, and omits it when empty.
+func TestHandleDefaults_InstalledVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		installedVersion string
+		wantVersion      string
+		wantPresent      bool
+	}{
+		{
+			name:             "returns installed version when binary exists",
+			installedVersion: "1.0.1",
+			wantVersion:      "1.0.1",
+			wantPresent:      true,
+		},
+		{
+			name:             "omits installed version when binary not found",
+			installedVersion: "",
+			wantVersion:      "",
+			wantPresent:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubLoadExistingConfig(t)
+			stubGetInstalledVersion(t, tt.installedVersion)
+			handler := handleDefaults("2.0.0")
+
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/api/defaults", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			body := rec.Body.String()
+
+			var resp defaultsResponse
+			if err = json.NewDecoder(strings.NewReader(body)).Decode(&resp); err != nil {
+				t.Fatalf("decoding: %v", err)
+			}
+
+			if resp.InstalledVersion != tt.wantVersion {
+				t.Errorf("InstalledVersion = %q, want %q", resp.InstalledVersion, tt.wantVersion)
+			}
+
+			// Verify omitempty: field absent when empty
+			if tt.wantPresent && !strings.Contains(body, "installed_version") {
+				t.Error("expected installed_version in JSON body")
+			}
+			if !tt.wantPresent && strings.Contains(body, "installed_version") {
+				t.Error("expected installed_version to be omitted from JSON body")
+			}
+		})
 	}
 }

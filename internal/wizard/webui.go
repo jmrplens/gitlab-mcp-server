@@ -86,13 +86,14 @@ func serveIndex(rw http.ResponseWriter, _ *http.Request) {
 }
 
 type defaultsResponse struct {
-	Version       string           `json:"version"`
-	InstallPath   string           `json:"install_path"`
-	GitLabURL     string           `json:"gitlab_url"`
-	HasExisting   bool             `json:"has_existing"`
-	MaskedToken   string           `json:"masked_token,omitempty"`
-	SkipTLSVerify bool             `json:"skip_tls_verify"`
-	Clients       []clientResponse `json:"clients"`
+	Version          string           `json:"version"`
+	InstalledVersion string           `json:"installed_version,omitempty"`
+	InstallPath      string           `json:"install_path"`
+	GitLabURL        string           `json:"gitlab_url"`
+	HasExisting      bool             `json:"has_existing"`
+	MaskedToken      string           `json:"masked_token,omitempty"`
+	SkipTLSVerify    bool             `json:"skip_tls_verify"`
+	Clients          []clientResponse `json:"clients"`
 }
 
 type clientResponse struct {
@@ -122,13 +123,14 @@ func handleDefaults(version string) http.HandlerFunc {
 
 		clients := allClientsFn()
 		resp := defaultsResponse{
-			Version:       version,
-			InstallPath:   filepath.Join(DefaultInstallDir(), DefaultBinaryName()),
-			GitLabURL:     gitlabURL,
-			HasExisting:   hasExisting,
-			MaskedToken:   maskedToken,
-			SkipTLSVerify: skipTLS,
-			Clients:       make([]clientResponse, len(clients)),
+			Version:          version,
+			InstalledVersion: getInstalledVersionFn(),
+			InstallPath:      filepath.Join(DefaultInstallDir(), DefaultBinaryName()),
+			GitLabURL:        gitlabURL,
+			HasExisting:      hasExisting,
+			MaskedToken:      maskedToken,
+			SkipTLSVerify:    skipTLS,
+			Clients:          make([]clientResponse, len(clients)),
 		}
 		for i, c := range clients {
 			resp.Clients[i] = clientResponse{

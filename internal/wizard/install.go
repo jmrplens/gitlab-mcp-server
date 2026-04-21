@@ -1,17 +1,25 @@
 package wizard
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 )
 
 // installBinaryFn is the function used to install the binary. Defaults to
 // installBinaryImpl. Tests override it via stubInstallBinary to avoid
 // writing to the real install directory.
 var installBinaryFn = installBinaryImpl
+
+// getInstalledVersionFn returns the version of an already-installed binary.
+// Tests override it to avoid executing real binaries.
+var getInstalledVersionFn = getInstalledVersionImpl
 
 // InstallBinary copies the currently running binary to destDir.
 // Returns the full path of the installed binary. Skips copy if
@@ -74,4 +82,30 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// getInstalledVersionImpl runs the binary at the default install path with
+// -version and parses the output ("gitlab-mcp-server X.Y.Z (commit: ...)").
+// Returns empty string if the binary does not exist or cannot be executed.
+func getInstalledVersionImpl() string {
+	binPath := filepath.Join(DefaultInstallDir(), DefaultBinaryName())
+	if _, err := os.Stat(binPath); err != nil {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, binPath, "-version").Output() // #nosec G204 -- binPath is the well-known install directory, not user input
+	if err != nil {
+		return ""
+	}
+
+	// Expected format: "gitlab-mcp-server X.Y.Z (commit: abc1234)"
+	line := strings.TrimSpace(string(out))
+	parts := strings.Fields(line)
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	return ""
 }
