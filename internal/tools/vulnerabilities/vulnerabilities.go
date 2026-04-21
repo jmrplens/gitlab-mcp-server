@@ -233,6 +233,21 @@ type gqlProject struct {
 	FullPath string `json:"fullPath"`
 }
 
+// gqlIssueLinkNode holds a single issue link ID.
+type gqlIssueLinkNode struct {
+	ID string `json:"id"`
+}
+
+// gqlIssueLinksConnection holds a list of issue link nodes.
+type gqlIssueLinksConnection struct {
+	Nodes []gqlIssueLinkNode `json:"nodes"`
+}
+
+// gqlMergeRequestRef holds a merge request reference.
+type gqlMergeRequestRef struct {
+	IID string `json:"iid"`
+}
+
 type gqlVulnerabilityNode struct {
 	ID                string          `json:"id"`
 	Title             string          `json:"title"`
@@ -252,14 +267,19 @@ type gqlVulnerabilityNode struct {
 	Scanner           *gqlScanner     `json:"scanner"`
 	Location          *gqlLocation    `json:"location"`
 	Project           *gqlProject     `json:"project"`
-	IssueLinks        *struct {
-		Nodes []struct {
-			ID string `json:"id"`
-		} `json:"nodes"`
-	} `json:"issueLinks"`
-	MergeRequest *struct {
-		IID string `json:"iid"`
-	} `json:"mergeRequest"`
+	IssueLinks        *gqlIssueLinksConnection `json:"issueLinks"`
+	MergeRequest      *gqlMergeRequestRef      `json:"mergeRequest"`
+}
+
+// gqlVulnerabilitiesConnection holds the paginated list of vulnerability nodes.
+type gqlVulnerabilitiesConnection struct {
+	Nodes    []gqlVulnerabilityNode      `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+}
+
+// gqlProjectVulnerabilities wraps the vulnerabilities connection inside a project.
+type gqlProjectVulnerabilities struct {
+	Vulnerabilities gqlVulnerabilitiesConnection `json:"vulnerabilities"`
 }
 
 // nodeToItem converts a raw GraphQL vulnerability node into an [Item] output
@@ -386,12 +406,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				Vulnerabilities struct {
-					Nodes    []gqlVulnerabilityNode      `json:"nodes"`
-					PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-				} `json:"vulnerabilities"`
-			} `json:"project"`
+			Project gqlProjectVulnerabilities `json:"project"`
 		} `json:"data"`
 	}
 

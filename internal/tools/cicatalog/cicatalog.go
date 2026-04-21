@@ -188,10 +188,19 @@ type gqlResourceNode struct {
 	OpenMergeRequestsCount int         `json:"openMergeRequestsCount"`
 	LatestReleasedAt       *string     `json:"latestReleasedAt"`
 	ReadmeHTML             *string     `json:"readmeHtml"`
-	LatestVersion          *gqlVersion `json:"latestVersion"`
-	Versions               *struct {
-		Nodes []gqlVersion `json:"nodes"`
-	} `json:"versions"`
+	LatestVersion          *gqlVersion         `json:"latestVersion"`
+	Versions               *gqlVersionNodes    `json:"versions"`
+}
+
+// gqlVersionNodes holds a list of version nodes.
+type gqlVersionNodes struct {
+	Nodes []gqlVersion `json:"nodes"`
+}
+
+// gqlCatalogConnection holds the paginated list of CI catalog resource nodes.
+type gqlCatalogConnection struct {
+	Nodes    []gqlResourceNode           `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
 }
 
 // nodeToResourceItem converts a raw GraphQL CI catalog resource node into a
@@ -311,10 +320,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			CiCatalogResources struct {
-				Nodes    []gqlResourceNode           `json:"nodes"`
-				PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-			} `json:"ciCatalogResources"`
+			CiCatalogResources gqlCatalogConnection `json:"ciCatalogResources"`
 		} `json:"data"`
 	}
 

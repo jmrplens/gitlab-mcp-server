@@ -369,7 +369,7 @@ func TestPreStartUpdate_ExecSelfFails_Integration(t *testing.T) {
 	}
 
 	// Now exec should fail (stubbed).
-	if execErr := execSelf(); execErr == nil {
+	if execSelf() == nil {
 		t.Fatal("expected error from stubbed execSelf")
 	}
 

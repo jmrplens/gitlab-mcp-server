@@ -109,6 +109,21 @@ type gqlSecurityReportSummary struct {
 	ClusterImageScanning *gqlScannerSummary `json:"clusterImageScanning"`
 }
 
+// gqlSeverityCountProject wraps the severity count inside a project.
+type gqlSeverityCountProject struct {
+	VulnerabilitySeveritiesCount gqlSeverityCount `json:"vulnerabilitySeveritiesCount"`
+}
+
+// gqlSecurityPipeline wraps the security report summary inside a pipeline.
+type gqlSecurityPipeline struct {
+	SecurityReportSummary *gqlSecurityReportSummary `json:"securityReportSummary"`
+}
+
+// gqlSecurityProject wraps the pipeline inside a project for security summary.
+type gqlSecurityProject struct {
+	Pipeline *gqlSecurityPipeline `json:"pipeline"`
+}
+
 // Severity count types.
 
 // SeverityCountInput is the input for retrieving vulnerability severity counts.
@@ -136,9 +151,7 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				VulnerabilitySeveritiesCount gqlSeverityCount `json:"vulnerabilitySeveritiesCount"`
-			} `json:"project"`
+			Project gqlSeverityCountProject `json:"project"`
 		} `json:"data"`
 	}
 
@@ -202,11 +215,7 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				Pipeline *struct {
-					SecurityReportSummary *gqlSecurityReportSummary `json:"securityReportSummary"`
-				} `json:"pipeline"`
-			} `json:"project"`
+			Project gqlSecurityProject `json:"project"`
 		} `json:"data"`
 	}
 

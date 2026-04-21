@@ -138,56 +138,92 @@ mutation($id: WorkItemID!, $childrenIds: [WorkItemID!]!, $adjacentWorkItemId: Wo
 
 // gqlChildNode represents a child work item from the GraphQL hierarchy widget.
 type gqlChildNode struct {
-	ID        string `json:"id"`
-	IID       string `json:"iid"`
-	Title     string `json:"title"`
-	State     string `json:"state"`
-	WebURL    string `json:"webUrl"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Author    struct {
-		Username string `json:"username"`
-	} `json:"author"`
-	Widgets []struct {
-		Labels *struct {
-			Nodes []struct {
-				Title string `json:"title"`
-			} `json:"nodes"`
-		} `json:"labels"`
-	} `json:"widgets"`
+	ID        string        `json:"id"`
+	IID       string        `json:"iid"`
+	Title     string        `json:"title"`
+	State     string        `json:"state"`
+	WebURL    string        `json:"webUrl"`
+	CreatedAt string        `json:"createdAt"`
+	UpdatedAt string        `json:"updatedAt"`
+	Author    gqlAuthor     `json:"author"`
+	Widgets   []gqlLabelWidget `json:"widgets"`
+}
+
+// gqlAuthor represents a user author in GraphQL responses.
+type gqlAuthor struct {
+	Username string `json:"username"`
+}
+
+// gqlLabelTitle represents a single label title.
+type gqlLabelTitle struct {
+	Title string `json:"title"`
+}
+
+// gqlLabelsConnection holds a list of label titles.
+type gqlLabelsConnection struct {
+	Nodes []gqlLabelTitle `json:"nodes"`
+}
+
+// gqlLabelWidget is a work item widget containing label data.
+type gqlLabelWidget struct {
+	Labels *gqlLabelsConnection `json:"labels"`
+}
+
+// gqlChildrenConnection holds a paginated list of child nodes.
+type gqlChildrenConnection struct {
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+	Nodes    []gqlChildNode              `json:"nodes"`
+}
+
+// gqlChildrenWidget is a work item widget containing children data.
+type gqlChildrenWidget struct {
+	Children *gqlChildrenConnection `json:"children"`
+}
+
+// gqlListWorkItem represents a work item with children widgets for listing.
+type gqlListWorkItem struct {
+	ID      string              `json:"id"`
+	Widgets []gqlChildrenWidget `json:"widgets"`
+}
+
+// gqlNamespaceWorkItem wraps a work item inside a namespace.
+type gqlNamespaceWorkItem struct {
+	WorkItem *gqlListWorkItem `json:"workItem"`
 }
 
 // gqlChildrenResponse is the response for the list children query.
 type gqlChildrenResponse struct {
 	Data struct {
-		Namespace *struct {
-			WorkItem *struct {
-				ID      string `json:"id"`
-				Widgets []struct {
-					Children *struct {
-						PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-						Nodes    []gqlChildNode              `json:"nodes"`
-					} `json:"children"`
-				} `json:"widgets"`
-			} `json:"workItem"`
-		} `json:"namespace"`
+		Namespace *gqlNamespaceWorkItem `json:"namespace"`
 	} `json:"data"`
+}
+
+// gqlMutationChildrenNodes holds a non-paginated list of child nodes.
+type gqlMutationChildrenNodes struct {
+	Nodes []gqlChildNode `json:"nodes"`
+}
+
+// gqlMutationWidget is a work item widget for mutation responses.
+type gqlMutationWidget struct {
+	Children *gqlMutationChildrenNodes `json:"children"`
+}
+
+// gqlMutationWorkItem represents a work item in mutation responses.
+type gqlMutationWorkItem struct {
+	ID      string              `json:"id"`
+	Widgets []gqlMutationWidget `json:"widgets"`
+}
+
+// gqlWorkItemUpdatePayload is the response payload for workItemUpdate mutations.
+type gqlWorkItemUpdatePayload struct {
+	WorkItem *gqlMutationWorkItem `json:"workItem"`
+	Errors   []string             `json:"errors"`
 }
 
 // gqlMutationResponse is the response for workItemUpdate mutations.
 type gqlMutationResponse struct {
 	Data struct {
-		WorkItemUpdate struct {
-			WorkItem *struct {
-				ID      string `json:"id"`
-				Widgets []struct {
-					Children *struct {
-						Nodes []gqlChildNode `json:"nodes"`
-					} `json:"children"`
-				} `json:"widgets"`
-			} `json:"workItem"`
-			Errors []string `json:"errors"`
-		} `json:"workItemUpdate"`
+		WorkItemUpdate gqlWorkItemUpdatePayload `json:"workItemUpdate"`
 	} `json:"data"`
 }
 
@@ -228,15 +264,21 @@ func nodeToChildOutput(n gqlChildNode) ChildOutput {
 	return out
 }
 
+// gqlWorkItemID holds a resolved work item GID.
+type gqlWorkItemID struct {
+	ID string `json:"id"`
+}
+
+// gqlNamespaceWorkItemID wraps a work item ID inside a namespace.
+type gqlNamespaceWorkItemID struct {
+	WorkItem *gqlWorkItemID `json:"workItem"`
+}
+
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
 func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPath string, iid int64) (string, error) {
 	var resp struct {
 		Data struct {
-			Namespace *struct {
-				WorkItem *struct {
-					ID string `json:"id"`
-				} `json:"workItem"`
-			} `json:"namespace"`
+			Namespace *gqlNamespaceWorkItemID `json:"namespace"`
 		} `json:"data"`
 	}
 

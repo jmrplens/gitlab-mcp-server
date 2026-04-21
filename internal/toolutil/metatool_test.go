@@ -257,7 +257,7 @@ func TestWrapActionWithRequest_NilContext(t *testing.T) {
 // TestRequestFromContext_Absent verifies that RequestFromContext returns nil
 // when no request is stored in the context.
 func TestRequestFromContext_Absent(t *testing.T) {
-	if req := RequestFromContext(context.Background()); req != nil {
+	if RequestFromContext(context.Background()) != nil {
 		t.Error("expected nil from empty context")
 	}
 }

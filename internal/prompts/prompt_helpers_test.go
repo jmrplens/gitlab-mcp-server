@@ -646,13 +646,13 @@ func TestFormatBranchAccessLevel(t *testing.T) {
 
 // TestAccessLevelIcon covers both branches.
 func TestAccessLevelIcon(t *testing.T) {
-	if got := accessLevelIcon(gl.EnabledAccessControl); got == "" {
+	if accessLevelIcon(gl.EnabledAccessControl) == "" {
 		t.Error("expected non-empty icon for enabled")
 	}
-	if got := accessLevelIcon(gl.DisabledAccessControl); got == "" {
+	if accessLevelIcon(gl.DisabledAccessControl) == "" {
 		t.Error("expected non-empty icon for disabled")
 	}
-	if got := accessLevelIcon(""); got == "" {
+	if accessLevelIcon("") == "" {
 		t.Error("expected non-empty icon for empty")
 	}
 }

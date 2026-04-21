@@ -110,35 +110,73 @@ mutation($id: NoteID!) {
 
 // gqlNoteNode represents a note from the GitLab GraphQL API.
 type gqlNoteNode struct {
-	ID     string `json:"id"`
-	Body   string `json:"body"`
-	Author struct {
-		Username string `json:"username"`
-	} `json:"author"`
-	System    bool    `json:"system"`
-	CreatedAt *string `json:"createdAt"`
-	UpdatedAt *string `json:"updatedAt"`
+	ID        string         `json:"id"`
+	Body      string         `json:"body"`
+	Author    gqlNoteAuthor  `json:"author"`
+	System    bool           `json:"system"`
+	CreatedAt *string        `json:"createdAt"`
+	UpdatedAt *string        `json:"updatedAt"`
+}
+
+// gqlNoteAuthor represents the author of a note.
+type gqlNoteAuthor struct {
+	Username string `json:"username"`
+}
+
+// gqlNoteNodes holds a list of note nodes.
+type gqlNoteNodes struct {
+	Nodes []gqlNoteNode `json:"nodes"`
+}
+
+// gqlDiscussionNoteNodes holds the notes within a discussion.
+type gqlDiscussionNoteNodes struct {
+	Notes gqlNoteNodes `json:"notes"`
+}
+
+// gqlDiscussionsConnection holds a paginated list of discussion nodes.
+type gqlDiscussionsConnection struct {
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+	Nodes    []gqlDiscussionNoteNodes    `json:"nodes"`
+}
+
+// gqlDiscussionsWidget is a work item widget containing discussions.
+type gqlDiscussionsWidget struct {
+	Discussions *gqlDiscussionsConnection `json:"discussions"`
+}
+
+// gqlNotesWorkItem represents a work item with discussions widgets.
+type gqlNotesWorkItem struct {
+	ID      string                `json:"id"`
+	Widgets []gqlDiscussionsWidget `json:"widgets"`
+}
+
+// gqlNamespaceNotesWorkItem wraps a work item inside a namespace for notes queries.
+type gqlNamespaceNotesWorkItem struct {
+	WorkItem *gqlNotesWorkItem `json:"workItem"`
 }
 
 // gqlNotesResponse is the common response struct for work item notes queries.
 type gqlNotesResponse struct {
 	Data struct {
-		Namespace *struct {
-			WorkItem *struct {
-				ID      string `json:"id"`
-				Widgets []struct {
-					Discussions *struct {
-						PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-						Nodes    []struct {
-							Notes struct {
-								Nodes []gqlNoteNode `json:"nodes"`
-							} `json:"notes"`
-						} `json:"nodes"`
-					} `json:"discussions"`
-				} `json:"widgets"`
-			} `json:"workItem"`
-		} `json:"namespace"`
+		Namespace *gqlNamespaceNotesWorkItem `json:"namespace"`
 	} `json:"data"`
+}
+
+// gqlCreateNotePayload is the response payload for creating a note.
+type gqlCreateNotePayload struct {
+	Note   *gqlNoteNode `json:"note"`
+	Errors []string     `json:"errors"`
+}
+
+// gqlUpdateNotePayload is the response payload for updating a note.
+type gqlUpdateNotePayload struct {
+	Note   *gqlNoteNode `json:"note"`
+	Errors []string     `json:"errors"`
+}
+
+// gqlDestroyNotePayload is the response payload for deleting a note.
+type gqlDestroyNotePayload struct {
+	Errors []string `json:"errors"`
 }
 
 // nodeToOutput converts a GraphQL note node to the MCP output format.
@@ -160,15 +198,21 @@ func nodeToOutput(n gqlNoteNode) Output {
 	return out
 }
 
+// gqlResolveWorkItemID holds a resolved work item GID.
+type gqlResolveWorkItemID struct {
+	ID string `json:"id"`
+}
+
+// gqlResolveNamespace wraps a work item ID inside a namespace.
+type gqlResolveNamespace struct {
+	WorkItem *gqlResolveWorkItemID `json:"workItem"`
+}
+
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
 func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPath string, iid int64) (string, error) {
 	var resp struct {
 		Data struct {
-			Namespace *struct {
-				WorkItem *struct {
-					ID string `json:"id"`
-				} `json:"workItem"`
-			} `json:"namespace"`
+			Namespace *gqlResolveNamespace `json:"namespace"`
 		} `json:"data"`
 	}
 
@@ -368,10 +412,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	body := toolutil.NormalizeText(input.Body)
 	var resp struct {
 		Data struct {
-			CreateNote struct {
-				Note   *gqlNoteNode `json:"note"`
-				Errors []string     `json:"errors"`
-			} `json:"createNote"`
+			CreateNote gqlCreateNotePayload `json:"createNote"`
 		} `json:"data"`
 	}
 
@@ -420,10 +461,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	var resp struct {
 		Data struct {
-			UpdateNote struct {
-				Note   *gqlNoteNode `json:"note"`
-				Errors []string     `json:"errors"`
-			} `json:"updateNote"`
+			UpdateNote gqlUpdateNotePayload `json:"updateNote"`
 		} `json:"data"`
 	}
 
@@ -467,9 +505,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	var resp struct {
 		Data struct {
-			DestroyNote struct {
-				Errors []string `json:"errors"`
-			} `json:"destroyNote"`
+			DestroyNote gqlDestroyNotePayload `json:"destroyNote"`
 		} `json:"data"`
 	}
 

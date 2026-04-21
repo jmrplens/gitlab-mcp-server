@@ -286,7 +286,8 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 	if skipTLSVerify {
 		return &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, //#nosec G402 -- intentional for self-signed certificates, controlled by GITLAB_SKIP_TLS_VERIFY
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_SKIP_TLS_VERIFY
 			},
 		}
 	}
