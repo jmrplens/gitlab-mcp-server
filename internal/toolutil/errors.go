@@ -246,6 +246,19 @@ func IsHTTPStatus(err error, code int) bool {
 	return errors.As(err, &glErr) && glErr.Response != nil && glErr.Response.StatusCode == code
 }
 
+// IsNotFound reports whether err represents a 404 Not Found, either via a
+// structured GitLab ErrorResponse status code or via a plain-text error
+// message from client-go (which may contain "404 Not Found" as text).
+func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if IsHTTPStatus(err, http.StatusNotFound) {
+		return true
+	}
+	return ContainsAny(err, "404 Not Found")
+}
+
 // ExtractGitLabMessage extracts the specific error message from a GitLab
 // ErrorResponse in the error chain. Returns empty string if not found or if
 // the message only repeats the HTTP status text (e.g., "405 Method Not Allowed").

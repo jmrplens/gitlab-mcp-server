@@ -225,7 +225,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 	}
 	state, _, err := client.GL().MergeRequestApprovals.GetApprovalState(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 404) || toolutil.ContainsAny(err, "404") {
+		if toolutil.IsNotFound(err) {
 			return StateOutput{}, fmt.Errorf("mrApprovalState: merge request approval features require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return StateOutput{}, toolutil.WrapErrWithMessage("mrApprovalState", err)
@@ -252,7 +252,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 	}
 	rules, _, err := client.GL().MergeRequestApprovals.GetApprovalRules(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 404) || toolutil.ContainsAny(err, "404") {
+		if toolutil.IsNotFound(err) {
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return RulesOutput{}, toolutil.WrapErrWithMessage("mrApprovalRules", err)
@@ -278,7 +278,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 	}
 	cfg, _, err := client.GL().MergeRequestApprovals.GetConfiguration(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, 404) || toolutil.ContainsAny(err, "404") {
+		if toolutil.IsNotFound(err) {
 			return ConfigOutput{}, fmt.Errorf("mrApprovalConfig: merge request approval configuration requires GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return ConfigOutput{}, toolutil.WrapErrWithMessage("mrApprovalConfig", err)
