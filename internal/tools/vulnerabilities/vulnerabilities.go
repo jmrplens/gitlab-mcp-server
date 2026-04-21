@@ -406,7 +406,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Project gqlProjectVulnerabilities `json:"project"`
+			Project *gqlProjectVulnerabilities `json:"project"`
 		} `json:"data"`
 	}
 
@@ -416,6 +416,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("list_vulnerabilities", err)
+	}
+
+	if resp.Data.Project == nil {
+		return ListOutput{}, fmt.Errorf("list_vulnerabilities: project %q not found", input.ProjectPath)
 	}
 
 	items := make([]Item, 0, len(resp.Data.Project.Vulnerabilities.Nodes))

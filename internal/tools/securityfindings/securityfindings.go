@@ -5,6 +5,7 @@ package securityfindings
 
 import (
 	"context"
+	"fmt"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -297,7 +298,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Project gqlProjectPipeline `json:"project"`
+			Project *gqlProjectPipeline `json:"project"`
 		} `json:"data"`
 	}
 
@@ -307,6 +308,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("list_security_findings", err)
+	}
+
+	if resp.Data.Project == nil {
+		return ListOutput{}, fmt.Errorf("list_security_findings: project %q not found", input.ProjectPath)
 	}
 
 	nodes := resp.Data.Project.Pipeline.SecurityReportFindings.Nodes

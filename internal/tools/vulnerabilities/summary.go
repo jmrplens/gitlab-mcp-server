@@ -151,7 +151,7 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 
 	var resp struct {
 		Data struct {
-			Project gqlSeverityCountProject `json:"project"`
+			Project *gqlSeverityCountProject `json:"project"`
 		} `json:"data"`
 	}
 
@@ -161,6 +161,10 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return SeverityCountOutput{}, toolutil.WrapErrWithMessage("vulnerability_severity_count", err)
+	}
+
+	if resp.Data.Project == nil {
+		return SeverityCountOutput{}, fmt.Errorf("vulnerability_severity_count: project %q not found", input.ProjectPath)
 	}
 
 	c := resp.Data.Project.VulnerabilitySeveritiesCount
@@ -215,7 +219,7 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 
 	var resp struct {
 		Data struct {
-			Project gqlSecurityProject `json:"project"`
+			Project *gqlSecurityProject `json:"project"`
 		} `json:"data"`
 	}
 
@@ -228,6 +232,10 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return PipelineSecuritySummaryOutput{}, toolutil.WrapErrWithMessage("pipeline_security_summary", err)
+	}
+
+	if resp.Data.Project == nil {
+		return PipelineSecuritySummaryOutput{}, fmt.Errorf("pipeline_security_summary: project %q not found", input.ProjectPath)
 	}
 
 	if resp.Data.Project.Pipeline == nil {
