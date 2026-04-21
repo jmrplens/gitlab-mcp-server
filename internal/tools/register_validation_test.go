@@ -1,0 +1,301 @@
+// register_validation_test.go contains tests that verify structural integrity
+// of tool and formatter registrations. These tests prevent silent failures when
+// a new sub-package is added but not wired into RegisterAll or RegisterAllMeta,
+// or when a sub-package with Markdown formatters forgets to register them.
+package tools
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// knownExceptions lists sub-packages that are NOT registered via RegisterAll
+// in register.go because they have a different constructor signature.
+// Each entry must document WHY it is an exception.
+var knownExceptions = map[string]string{
+	// serverupdate takes *autoupdate.Updater instead of *gitlabclient.Client;
+	// it is registered in cmd/server/main.go.
+	"serverupdate": "registered in cmd/server/main.go with *autoupdate.Updater",
+}
+
+// TestAllSubPackagesRegistered verifies that every sub-directory under
+// internal/tools/ has a corresponding RegisterTools call in register.go.
+// Sub-packages listed in knownExceptions are allowed to be absent from
+// register.go if they are registered elsewhere.
+func TestAllSubPackagesRegistered(t *testing.T) {
+	// 1. Discover all sub-directories (= sub-packages).
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	var subDirs []string
+	for _, e := range entries {
+		if e.IsDir() {
+			subDirs = append(subDirs, e.Name())
+		}
+	}
+	if len(subDirs) == 0 {
+		t.Fatal("no sub-directories found — test may be running from wrong directory")
+	}
+
+	// 2. Parse register.go to extract all {pkg}.RegisterTools( calls.
+	src, err := os.ReadFile("register.go")
+	if err != nil {
+		t.Fatalf("ReadFile register.go: %v", err)
+	}
+	re := regexp.MustCompile(`\b(\w+)\.RegisterTools\(`)
+	matches := re.FindAllStringSubmatch(string(src), -1)
+
+	registered := make(map[string]bool)
+	for _, m := range matches {
+		registered[m[1]] = true
+	}
+
+	// 3. Check that every sub-directory is registered or is a known exception.
+	var missing []string
+	for _, dir := range subDirs {
+		if registered[dir] {
+			continue
+		}
+		if _, ok := knownExceptions[dir]; ok {
+			continue
+		}
+		missing = append(missing, dir)
+	}
+
+	if len(missing) > 0 {
+		t.Errorf("sub-packages not registered in register.go (and not in knownExceptions):\n  %s",
+			strings.Join(missing, "\n  "))
+		t.Log("If a sub-package has a different constructor, add it to knownExceptions with a reason.")
+	}
+
+	// 4. Verify known exceptions actually exist as directories.
+	for pkg, reason := range knownExceptions {
+		if _, statErr := os.Stat(pkg); os.IsNotExist(statErr) {
+			t.Errorf("knownExceptions entry %q (%s) does not exist as a sub-directory — remove it", pkg, reason)
+		}
+	}
+
+	t.Logf("verified %d sub-packages: %d in register.go, %d known exceptions",
+		len(subDirs), len(registered), len(knownExceptions))
+}
+
+// TestAllMarkdownFormattersRegistered verifies that every sub-package with a
+// markdown.go containing init() + RegisterMarkdown has at least one type
+// registered in the toolutil Markdown registry.
+func TestAllMarkdownFormattersRegistered(t *testing.T) {
+	// 1. Get all registered type names from the registry.
+	typeNames := toolutil.RegisteredMarkdownTypeNames()
+	if len(typeNames) == 0 {
+		t.Fatal("no Markdown formatters registered — registry may not be initialized")
+	}
+
+	// Build a set of package prefixes that have registered formatters.
+	registeredPkgs := make(map[string]bool)
+	for _, name := range typeNames {
+		// Type names are like "branches.Output", "toolutil.DeleteOutput".
+		pkg, _, ok := strings.Cut(name, ".")
+		if ok {
+			registeredPkgs[pkg] = true
+		}
+	}
+
+	// 2. Find sub-packages whose markdown.go files contain init() registrations.
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	reRegister := regexp.MustCompile(`toolutil\.Register(?:Markdown|MarkdownResult)\b`)
+	var missing []string
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		mdPath := filepath.Join(e.Name(), "markdown.go")
+		src, readErr := os.ReadFile(mdPath)
+		if readErr != nil {
+			continue // no markdown.go — that's fine
+		}
+
+		if !reRegister.Match(src) {
+			continue // markdown.go exists but has no registry calls
+		}
+
+		// This sub-package registers formatters — check if they appear in the registry.
+		if !registeredPkgs[e.Name()] {
+			missing = append(missing, e.Name())
+		}
+	}
+
+	if len(missing) > 0 {
+		t.Errorf("sub-packages with RegisterMarkdown calls in markdown.go but no types in registry:\n  %s",
+			strings.Join(missing, "\n  "))
+	}
+
+	// 3. Check the toolutil.DeleteOutput formatter is registered.
+	if !registeredPkgs["toolutil"] {
+		t.Error("toolutil.DeleteOutput formatter not registered in registry")
+	}
+
+	t.Logf("verified %d registered formatter types across %d packages",
+		len(typeNames), len(registeredPkgs))
+}
+
+// TestAllHintReferencesValid validates that tool names and meta-tool action
+// names referenced in WriteHints calls actually exist. This catches stale
+// references after tool renaming or meta-tool action restructuring.
+//
+// Two validations:
+//   - Backtick-quoted `gitlab_*` tool references must match a registered tool name
+//   - `action 'xxx'` references must match a meta-tool action key
+func TestAllHintReferencesValid(t *testing.T) {
+	// 1. Build set of all registered individual tool names from sub-package register.go files.
+	validTools := make(map[string]bool)
+	reToolName := regexp.MustCompile(`Name:\s+"(gitlab_\w+)"`)
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		for _, m := range reToolName.FindAllStringSubmatch(string(src), -1) {
+			validTools[m[1]] = true
+		}
+	}
+
+	// Also add meta-tool names from register_meta.go.
+	metaSrc, err := os.ReadFile("register_meta.go")
+	if err != nil {
+		t.Fatalf("ReadFile register_meta.go: %v", err)
+	}
+	reMetaTool := regexp.MustCompile(`addMetaTool\(server,\s+"(gitlab_\w+)"`)
+	for _, m := range reMetaTool.FindAllStringSubmatch(string(metaSrc), -1) {
+		validTools[m[1]] = true
+	}
+
+	// Also add meta-tools from sub-package RegisterMeta (via mcp.AddTool Name).
+	// These are already captured by reToolName above if they use Name: "gitlab_*".
+
+	if len(validTools) == 0 {
+		t.Fatal("no tool names found — parsing may be broken")
+	}
+
+	// 2. Build set of all meta-tool action keys from route maps.
+	validActions := make(map[string]bool)
+	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
+	reInlineAction := regexp.MustCompile(`"(\w+)":\s+wrap(?:Action|VoidAction|DelegateAction)\b`)
+	for _, m := range reInlineAction.FindAllStringSubmatch(string(metaSrc), -1) {
+		validActions[m[1]] = true
+	}
+	// Pattern for register_meta.go: routes["key"] = wrapAction(...) (enterprise assignment)
+	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*wrap(?:Action|VoidAction|DelegateAction)\b`)
+	for _, m := range reRouteAssign.FindAllStringSubmatch(string(metaSrc), -1) {
+		validActions[m[1]] = true
+	}
+	// Also match custom action variables (e.g., "publish": publishAction).
+	reCustomAction := regexp.MustCompile(`"(\w+)":\s+\w+Action\b`)
+	for _, m := range reCustomAction.FindAllStringSubmatch(string(metaSrc), -1) {
+		validActions[m[1]] = true
+	}
+
+	// Pattern for sub-package register.go: "key": toolutil.WrapAction/WrapVoidAction
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.Wrap(?:Action|VoidAction)\b`)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		for _, m := range reDelegatedAction.FindAllStringSubmatch(string(src), -1) {
+			validActions[m[1]] = true
+		}
+	}
+
+	if len(validActions) == 0 {
+		t.Fatal("no action keys found — parsing may be broken")
+	}
+
+	// 3. Validate hints in all markdown.go files.
+	reToolRef := regexp.MustCompile("`(gitlab_\\w+)`")
+	reActionRef := regexp.MustCompile(`action '(\w+)'`)
+
+	var toolErrors, actionErrors int
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		mdPath := filepath.Join(e.Name(), "markdown.go")
+		src, readErr := os.ReadFile(mdPath)
+		if readErr != nil {
+			continue
+		}
+
+		// Extract lines that belong to WriteHints calls.
+		hintLines := extractWriteHintLines(string(src))
+		for _, line := range hintLines {
+			// Check backtick-quoted tool references.
+			for _, m := range reToolRef.FindAllStringSubmatch(line, -1) {
+				toolName := m[1]
+				if !validTools[toolName] {
+					t.Errorf("%s: hint references non-existent tool %q", e.Name(), toolName)
+					toolErrors++
+				}
+			}
+			// Check action name references.
+			for _, m := range reActionRef.FindAllStringSubmatch(line, -1) {
+				actionName := m[1]
+				if !validActions[actionName] {
+					t.Errorf("%s: hint references non-existent action %q", e.Name(), actionName)
+					actionErrors++
+				}
+			}
+		}
+	}
+
+	t.Logf("validated hints across all packages: %d valid tools, %d valid actions, %d tool errors, %d action errors",
+		len(validTools), len(validActions), toolErrors, actionErrors)
+}
+
+// extractWriteHintLines finds string literal lines inside WriteHints() calls.
+// It uses a simple state machine: when a line contains "WriteHints(", subsequent
+// lines containing string literals are collected until the closing ")".
+func extractWriteHintLines(src string) []string {
+	lines := strings.Split(src, "\n")
+	var result []string
+	inHints := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "WriteHints(") {
+			inHints = true
+			continue
+		}
+		if inHints {
+			if strings.HasPrefix(trimmed, `"`) {
+				result = append(result, trimmed)
+			} else if trimmed == ")" || strings.HasPrefix(trimmed, ")") {
+				inHints = false
+			}
+		}
+	}
+	return result
+}
