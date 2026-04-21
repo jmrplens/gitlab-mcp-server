@@ -563,14 +563,14 @@ func TestToOutput_FullFields(t *testing.T) {
 	if out.DueDate != "2026-03-31" {
 		t.Errorf("DueDate = %q, want 2026-03-31", out.DueDate)
 	}
-	if out.CreatedAt == "" {
-		t.Error("CreatedAt should not be empty")
+	if out.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want 2026-01-01T00:00:00Z", out.CreatedAt)
 	}
-	if out.UpdatedAt == "" {
-		t.Error("UpdatedAt should not be empty")
+	if out.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("UpdatedAt = %q, want 2026-01-02T00:00:00Z", out.UpdatedAt)
 	}
-	if out.ClosedAt == "" {
-		t.Error("ClosedAt should not be empty")
+	if out.ClosedAt != "2026-03-01T00:00:00Z" {
+		t.Errorf("ClosedAt = %q, want 2026-03-01T00:00:00Z", out.ClosedAt)
 	}
 	if !out.Confidential {
 		t.Error("Confidential should be true")
