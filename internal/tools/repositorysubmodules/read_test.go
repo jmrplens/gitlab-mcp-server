@@ -169,8 +169,7 @@ func TestRead_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Read(ctx, client, ReadInput{ProjectID: "42", SubmodulePath: "lib", FilePath: "f.txt"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")

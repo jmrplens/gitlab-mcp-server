@@ -54,8 +54,7 @@ func TestConfig_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Config(ctx, client, ConfigInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -84,8 +83,7 @@ func TestReset_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Reset(ctx, client, ResetInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -114,8 +112,7 @@ func TestCreateRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateRule(ctx, client, CreateRuleInput{ProjectID: "42", MRIID: 1, Name: "R"})
 	if err == nil {
@@ -176,8 +173,7 @@ func TestUpdateRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := UpdateRule(ctx, client, UpdateRuleInput{ProjectID: "42", MRIID: 1, ApprovalRuleID: 5})
 	if err == nil {
@@ -250,8 +246,7 @@ func TestDeleteRule_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteRule(ctx, client, DeleteRuleInput{ProjectID: "42", MRIID: 1, ApprovalRuleID: 5})
 	if err == nil {

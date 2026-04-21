@@ -98,8 +98,7 @@ func TestListPATs_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListPATs(ctx, client, ListPATsInput{GroupID: toolutil.StringOrInt("mygroup")})
 	if err == nil {
@@ -166,8 +165,7 @@ func TestListSSHKeys_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListSSHKeys(ctx, client, ListSSHKeysInput{GroupID: toolutil.StringOrInt("mygroup")})
 	if err == nil {
@@ -239,8 +237,7 @@ func TestRevokePAT_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := RevokePAT(ctx, client, RevokePATInput{
 		GroupID: toolutil.StringOrInt("mygroup"),
@@ -320,8 +317,7 @@ func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteSSHKey(ctx, client, DeleteSSHKeyInput{
 		GroupID: toolutil.StringOrInt("mygroup"),

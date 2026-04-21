@@ -241,8 +241,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -253,8 +252,7 @@ func TestListForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListForUser(ctx, client, ListForUserInput{UserID: 42})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -265,8 +263,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, gpgKeyJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{KeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -277,8 +274,7 @@ func TestGetForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, gpgKeyJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetForUser(ctx, client, GetForUserInput{UserID: 42, KeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -289,8 +285,7 @@ func TestAdd_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Add(ctx, client, AddInput{Key: "-----BEGIN PGP PUBLIC KEY BLOCK-----"})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -301,8 +296,7 @@ func TestAddForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddForUser(ctx, client, AddForUserInput{UserID: 42, Key: "-----BEGIN PGP PUBLIC KEY BLOCK-----"})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -313,8 +307,7 @@ func TestDelete_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Delete(ctx, client, DeleteInput{KeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)
@@ -325,8 +318,7 @@ func TestDeleteForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DeleteForUser(ctx, client, DeleteForUserInput{UserID: 42, KeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCtxCancel)

@@ -360,8 +360,7 @@ func TestListAll_APIError(t *testing.T) {
 // TestListAll_CancelledContext verifies the behavior of list all cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListAll(ctx, client, ListAllInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -400,8 +399,7 @@ func TestListProject_APIError(t *testing.T) {
 // TestListProject_CancelledContext verifies the behavior of list project cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProject(ctx, client, ListProjectInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -469,8 +467,7 @@ func TestListGroup_APIError(t *testing.T) {
 // TestListGroup_CancelledContext verifies the behavior of list group cancelled context.
 func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -547,8 +544,7 @@ func TestGetProject_MissingProjectID(t *testing.T) {
 // TestGetProject_CancelledContext verifies the behavior of get project cancelled context.
 func TestGetProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "1", DeployTokenID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -582,8 +578,7 @@ func TestGetGroup_MissingGroupID(t *testing.T) {
 // TestGetGroup_CancelledContext verifies the behavior of get group cancelled context.
 func TestGetGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "1", DeployTokenID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -671,8 +666,7 @@ func TestCreateProject_InvalidExpiresAt(t *testing.T) {
 // TestCreateProject_CancelledContext verifies the behavior of create project cancelled context.
 func TestCreateProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateProject(ctx, client, CreateProjectInput{
 		ProjectID: "1", Name: "tok", Scopes: []string{"read_repository"},
 	})
@@ -770,8 +764,7 @@ func TestCreateGroup_InvalidExpiresAt(t *testing.T) {
 // TestCreateGroup_CancelledContext verifies the behavior of create group cancelled context.
 func TestCreateGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateGroup(ctx, client, CreateGroupInput{
 		GroupID: "1", Name: "tok", Scopes: []string{"read_repository"},
 	})
@@ -807,8 +800,7 @@ func TestDeleteProject_MissingProjectID(t *testing.T) {
 // TestDeleteProject_CancelledContext verifies the behavior of delete project cancelled context.
 func TestDeleteProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteProject(ctx, client, DeleteProjectInput{ProjectID: "1", DeployTokenID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -842,8 +834,7 @@ func TestDeleteGroup_MissingGroupID(t *testing.T) {
 // TestDeleteGroup_CancelledContext verifies the behavior of delete group cancelled context.
 func TestDeleteGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteGroup(ctx, client, DeleteGroupInput{GroupID: "1", DeployTokenID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

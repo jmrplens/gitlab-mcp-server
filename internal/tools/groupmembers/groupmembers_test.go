@@ -307,8 +307,7 @@ func TestGetMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetMember(ctx, client, GetInput{GroupID: "5", UserID: 10})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -353,8 +352,7 @@ func TestGetInheritedMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetInheritedMember(ctx, client, GetInput{GroupID: "5", UserID: 10})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -390,8 +388,7 @@ func TestAddMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":1}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddMember(ctx, client, AddInput{GroupID: "5", UserID: 1, AccessLevel: 30})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -470,8 +467,7 @@ func TestEditMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := EditMember(ctx, client, EditInput{GroupID: "5", UserID: 10, AccessLevel: 40})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -528,8 +524,7 @@ func TestRemoveMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := RemoveMember(ctx, client, RemoveInput{GroupID: "5", UserID: 10})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -584,8 +579,7 @@ func TestShareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":5}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ShareGroup(ctx, client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")
@@ -646,8 +640,7 @@ func TestUnshareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := UnshareGroup(ctx, client, UnshareInput{GroupID: "5", ShareGroupID: 10})
 	if err == nil {
 		t.Fatal("expected canceled context error, got nil")

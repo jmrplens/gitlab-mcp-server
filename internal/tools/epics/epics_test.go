@@ -158,8 +158,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("List() expected context error, got nil")
@@ -600,7 +599,16 @@ func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 // TestList_WithAllFilters verifies that List passes all filter parameters to
 // the GraphQL API without errors when every optional field is populated.
 func TestList_WithAllFilters(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars, err := testutil.ParseGraphQLVariables(r)
+		if err != nil {
+			t.Fatalf("ParseGraphQLVariables: %v", err)
+		}
+		for _, key := range []string{"fullPath", "state", "search", "authorUsername", "labelName", "confidential", "sort", "first", "after", "includeAncestors", "includeDescendants"} {
+			if _, ok := vars[key]; !ok {
+				t.Errorf("GraphQL variables missing %q", key)
+			}
+		}
 		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
 	}))
 	boolTrue := true
@@ -632,7 +640,20 @@ func TestList_WithAllFilters(t *testing.T) {
 // (description, confidential, color, dates, assignees, labels, weight, health)
 // without errors.
 func TestCreate_WithAllOptions(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars, err := testutil.ParseGraphQLVariables(r)
+		if err != nil {
+			t.Fatalf("ParseGraphQLVariables: %v", err)
+		}
+		input, ok := vars["input"].(map[string]any)
+		if !ok {
+			t.Fatal("GraphQL variables missing 'input' object")
+		}
+		for _, key := range []string{"title", "confidential", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "assigneesWidget", "labelsWidget", "weightWidget", "healthStatusWidget"} {
+			if _, exists := input[key]; !exists {
+				t.Errorf("GraphQL input missing %q", key)
+			}
+		}
 		testutil.RespondJSON(w, http.StatusOK, createResponseJSON)
 	}))
 	boolTrue := true
@@ -663,8 +684,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{FullPath: testFullPath, Title: "X"})
 	if err == nil {
 		t.Fatal("expected context error, got nil")
@@ -678,12 +698,25 @@ func TestCreate_CancelledContext(t *testing.T) {
 // weight, health, status) without errors.
 func TestUpdate_WithAllOptions(t *testing.T) {
 	call := 0
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		call++
 		switch call {
 		case 1:
 			testutil.RespondJSON(w, http.StatusOK, deleteGIDResponseJSON)
 		default:
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Fatalf("ParseGraphQLVariables: %v", err)
+			}
+			input, ok := vars["input"].(map[string]any)
+			if !ok {
+				t.Fatal("GraphQL variables missing 'input' object")
+			}
+			for _, key := range []string{"title", "stateEvent", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "labelsWidget", "assigneesWidget", "weightWidget", "healthStatusWidget", "statusWidget"} {
+				if _, exists := input[key]; !exists {
+					t.Errorf("GraphQL input missing %q", key)
+				}
+			}
 			testutil.RespondJSON(w, http.StatusOK, updateResponseJSON)
 		}
 	}))
@@ -719,8 +752,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{FullPath: testFullPath, IID: 1, Title: "X"})
 	if err == nil {
 		t.Fatal("expected context error, got nil")
@@ -734,8 +766,7 @@ func TestGetLinks_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetLinks(ctx, client, GetLinksInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
 		t.Fatal("expected context error, got nil")
@@ -758,8 +789,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
 		t.Fatal("expected context error, got nil")
@@ -771,8 +801,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
 		t.Fatal("expected context error, got nil")

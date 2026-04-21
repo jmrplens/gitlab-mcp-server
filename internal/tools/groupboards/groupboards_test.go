@@ -498,8 +498,7 @@ func TestListGroupBoards_APIError(t *testing.T) {
 // TestListGroupBoards_CancelledContext verifies the behavior of list group boards cancelled context.
 func TestListGroupBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGroupBoards(ctx, client, ListGroupBoardsInput{GroupID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -524,8 +523,7 @@ func TestGetGroupBoard_APIError(t *testing.T) {
 // TestGetGroupBoard_CancelledContext verifies the behavior of get group board cancelled context.
 func TestGetGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGroupBoard(ctx, client, GetGroupBoardInput{GroupID: "42", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -550,8 +548,7 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 // TestCreateGroupBoard_CancelledContext verifies the behavior of create group board cancelled context.
 func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateGroupBoard(ctx, client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -576,8 +573,7 @@ func TestUpdateGroupBoard_APIError(t *testing.T) {
 // TestUpdateGroupBoard_CancelledContext verifies the behavior of update group board cancelled context.
 func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -602,8 +598,7 @@ func TestDeleteGroupBoard_APIError(t *testing.T) {
 // TestDeleteGroupBoard_CancelledContext verifies the behavior of delete group board cancelled context.
 func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteGroupBoard(ctx, client, DeleteGroupBoardInput{GroupID: "42", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -628,8 +623,7 @@ func TestListGroupBoardLists_APIError(t *testing.T) {
 // TestListGroupBoardLists_CancelledContext verifies the behavior of list group board lists cancelled context.
 func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGroupBoardLists(ctx, client, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -654,8 +648,7 @@ func TestGetGroupBoardList_APIError(t *testing.T) {
 // TestGetGroupBoardList_CancelledContext verifies the behavior of get group board list cancelled context.
 func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGroupBoardList(ctx, client, GetGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -680,8 +673,7 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 // TestCreateGroupBoardList_CancelledContext verifies the behavior of create group board list cancelled context.
 func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateGroupBoardList(ctx, client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -706,8 +698,7 @@ func TestUpdateGroupBoardList_APIError(t *testing.T) {
 // TestUpdateGroupBoardList_CancelledContext verifies the behavior of update group board list cancelled context.
 func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10, Position: 2})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -773,8 +764,7 @@ func TestDeleteGroupBoardList_APIError(t *testing.T) {
 // TestDeleteGroupBoardList_CancelledContext verifies the behavior of delete group board list cancelled context.
 func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteGroupBoardList(ctx, client, DeleteGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

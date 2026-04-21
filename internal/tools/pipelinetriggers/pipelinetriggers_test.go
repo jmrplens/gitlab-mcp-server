@@ -369,8 +369,7 @@ func TestListTriggers_APIError(t *testing.T) {
 // TestListTriggers_CancelledContext verifies the behavior of list triggers cancelled context.
 func TestListTriggers_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListTriggers(ctx, client, ListInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -422,8 +421,7 @@ func TestGetTrigger_APIError(t *testing.T) {
 // TestGetTrigger_CancelledContext verifies the behavior of get trigger cancelled context.
 func TestGetTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetTrigger(ctx, client, GetInput{ProjectID: "1", TriggerID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -459,8 +457,7 @@ func TestCreateTrigger_MissingProjectID(t *testing.T) {
 // TestCreateTrigger_CancelledContext verifies the behavior of create trigger cancelled context.
 func TestCreateTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateTrigger(ctx, client, CreateInput{ProjectID: "1", Description: "test"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -496,8 +493,7 @@ func TestUpdateTrigger_MissingProjectID(t *testing.T) {
 // TestUpdateTrigger_CancelledContext verifies the behavior of update trigger cancelled context.
 func TestUpdateTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateTrigger(ctx, client, UpdateInput{ProjectID: "1", TriggerID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -551,8 +547,7 @@ func TestDeleteTrigger_MissingTriggerID(t *testing.T) {
 // TestDeleteTrigger_CancelledContext verifies the behavior of delete trigger cancelled context.
 func TestDeleteTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteTrigger(ctx, client, DeleteInput{ProjectID: "1", TriggerID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -588,8 +583,7 @@ func TestRunTrigger_MissingProjectID(t *testing.T) {
 // TestRunTrigger_CancelledContext verifies the behavior of run trigger cancelled context.
 func TestRunTrigger_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := RunTrigger(ctx, client, RunInput{
 		ProjectID: "1", Ref: "main", Token: "tok",
 	})

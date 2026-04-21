@@ -90,8 +90,7 @@ func TestGetApprovalConfig_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetApprovalConfig(ctx, client, GetApprovalConfigInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -299,8 +298,7 @@ func TestCreateApprovalRule_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateApprovalRule(ctx, client, CreateApprovalRuleInput{
 		ProjectID: "42", Name: "rule", ApprovalsRequired: 1,
 	})

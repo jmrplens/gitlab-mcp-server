@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // Shared test assertion messages and subtest names for search tests.
@@ -353,8 +355,7 @@ func TestSearchTags_APIError(t *testing.T) {
 // context.
 func TestSearch_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.NotFoundHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	tests := []struct {
 		name string
@@ -632,8 +633,7 @@ func TestSearchJobs_APIError(t *testing.T) {
 // the new search functions return a context cancellation error.
 func TestSearchNew_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.NotFoundHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	tests := []struct {
 		name string

@@ -599,8 +599,7 @@ func TestListBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListBoards(ctx, client, ListBoardsInput{ProjectID: "10"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -644,8 +643,7 @@ func TestGetBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetBoard(ctx, client, GetBoardInput{ProjectID: "10", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -668,8 +666,7 @@ func TestCreateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateBoard(ctx, client, CreateBoardInput{ProjectID: "10", Name: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -718,8 +715,7 @@ func TestUpdateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateBoard(ctx, client, UpdateBoardInput{ProjectID: "10", BoardID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -742,8 +738,7 @@ func TestDeleteBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteBoard(ctx, client, DeleteBoardInput{ProjectID: "10", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -770,8 +765,7 @@ func TestListBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListBoardLists(ctx, client, ListBoardListsInput{ProjectID: "10", BoardID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -794,8 +788,7 @@ func TestGetBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetBoardList(ctx, client, GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -838,8 +831,7 @@ func TestCreateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateBoardList(ctx, client, CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -862,8 +854,7 @@ func TestUpdateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateBoardList(ctx, client, UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 2})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -886,8 +877,7 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteBoardList(ctx, client, DeleteBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

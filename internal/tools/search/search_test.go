@@ -198,8 +198,7 @@ func TestSearchCode_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Code(ctx, client, CodeInput{ProjectID: "42", Query: "test"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -282,8 +281,7 @@ func TestSearchIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Issues(ctx, client, IssuesInput{Query: "bug"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -361,8 +359,7 @@ func TestSearchCommits_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Commits(ctx, client, CommitsInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -718,8 +715,7 @@ func TestSearchWiki_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Wiki(ctx, client, WikiInput{Query: "test"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -977,8 +973,7 @@ func TestSearchMergeRequests_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := MergeRequests(ctx, client, MergeRequestsInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)
@@ -990,8 +985,7 @@ func TestSearchMilestones_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Milestones(ctx, client, MilestonesInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)
@@ -1003,8 +997,7 @@ func TestSearchNotes_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Notes(ctx, client, NotesInput{ProjectID: "42", Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)
@@ -1016,8 +1009,7 @@ func TestSearchProjects_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Projects(ctx, client, ProjectsInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)
@@ -1029,8 +1021,7 @@ func TestSearchSnippets_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Snippets(ctx, client, SnippetsInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)
@@ -1042,8 +1033,7 @@ func TestSearchUsers_CancelledCtx(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Users(ctx, client, UsersInput{Query: "x"})
 	if err == nil {
 		t.Fatal(errExpected)

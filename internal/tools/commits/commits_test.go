@@ -5,6 +5,7 @@ package commits
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -279,8 +280,7 @@ func TestCommitList_CancelledContext(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -820,8 +820,7 @@ func TestCommitCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Branch: "main", CommitMessage: "t", Actions: []Action{{Action: actionCreate, FilePath: "f"}}})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -833,8 +832,7 @@ func TestCommitGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -846,8 +844,7 @@ func TestCommitDiff_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Diff(ctx, client, DiffInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -859,8 +856,7 @@ func TestGetRefs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetRefs(ctx, client, RefsInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -872,8 +868,7 @@ func TestGetComments_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetComments(ctx, client, CommentsInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -885,8 +880,7 @@ func TestPostComment_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := PostComment(ctx, client, PostCommentInput{ProjectID: "42", SHA: "abc", Note: "t"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -898,8 +892,7 @@ func TestGetStatuses_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetStatuses(ctx, client, StatusesInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -911,8 +904,7 @@ func TestSetStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := SetStatus(ctx, client, SetStatusInput{ProjectID: "42", SHA: "abc", State: "success"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -924,8 +916,7 @@ func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListMRsByCommit(ctx, client, MRsByCommitInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -937,8 +928,7 @@ func TestCherryPick_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CherryPick(ctx, client, CherryPickInput{ProjectID: "42", SHA: "abc", Branch: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -950,8 +940,7 @@ func TestRevert_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Revert(ctx, client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -963,8 +952,7 @@ func TestGetGPGSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGPGSignature(ctx, client, GPGSignatureInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1102,8 +1090,14 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 
 // TestCommitCreate_WithAllOptions verifies the behavior of commit create with all options.
 func TestCommitCreate_WithAllOptions(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathRepoCommits {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":"opt1","short_id":"opt1","title":"t"}`)
 			return
 		}
@@ -1127,6 +1121,11 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	}
 	if out.ShortID != "opt1" {
 		t.Errorf(fmtOutShortIDWant, out.ShortID, "opt1")
+	}
+	for _, want := range []string{"start_sha", "author_email", "author_name", "force", "actions"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -1296,8 +1295,14 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 
 // TestSetStatus_WithAllOptions verifies the behavior of set status with all options.
 func TestSetStatus_WithAllOptions(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/statuses/abc" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":3,"sha":"abc","ref":"main","status":"success","name":"deploy",
 				"target_url":"https://ci.example.com","description":"OK","coverage":95.5,
@@ -1333,6 +1338,11 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	}
 	if out.CreatedAt == "" {
 		t.Error("CreatedAt is empty")
+	}
+	for _, want := range []string{"ref", "name", "context", "target_url", "description", "coverage", "pipeline_id"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

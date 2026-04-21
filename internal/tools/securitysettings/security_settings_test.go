@@ -64,8 +64,7 @@ func TestGetProject_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetProject(ctx, client, GetProjectInput{ProjectID: toolutil.StringOrInt("42")})
 	if err == nil {
@@ -129,8 +128,7 @@ func TestUpdateProject_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := UpdateProject(ctx, client, UpdateProjectInput{
 		ProjectID:                   toolutil.StringOrInt("42"),
@@ -220,8 +218,7 @@ func TestUpdateGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := UpdateGroup(ctx, client, UpdateGroupInput{
 		GroupID:                     toolutil.StringOrInt("mygroup"),

@@ -77,8 +77,7 @@ func TestList_APIError(t *testing.T) {
 // TestList_ContextCancelled verifies that List respects context cancellation.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ControllerID: 1})
 	if err == nil {
@@ -129,8 +128,7 @@ func TestAddInstanceScope_APIError(t *testing.T) {
 // TestAddInstanceScope_ContextCancelled verifies context cancellation.
 func TestAddInstanceScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := AddInstanceScope(ctx, client, AddInstanceScopeInput{ControllerID: 1})
 	if err == nil {
@@ -178,8 +176,7 @@ func TestRemoveInstanceScope_APIError(t *testing.T) {
 // TestRemoveInstanceScope_ContextCancelled verifies context cancellation.
 func TestRemoveInstanceScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := RemoveInstanceScope(ctx, client, RemoveInstanceScopeInput{ControllerID: 1})
 	if err == nil {
@@ -243,8 +240,7 @@ func TestAddRunnerScope_APIError(t *testing.T) {
 // TestAddRunnerScope_ContextCancelled verifies context cancellation.
 func TestAddRunnerScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := AddRunnerScope(ctx, client, AddRunnerScopeInput{ControllerID: 1, RunnerID: 42})
 	if err == nil {
@@ -305,8 +301,7 @@ func TestRemoveRunnerScope_APIError(t *testing.T) {
 // TestRemoveRunnerScope_ContextCancelled verifies context cancellation.
 func TestRemoveRunnerScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := RemoveRunnerScope(ctx, client, RemoveRunnerScopeInput{ControllerID: 1, RunnerID: 42})
 	if err == nil {

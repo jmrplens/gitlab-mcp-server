@@ -270,8 +270,7 @@ func TestList_WithCreatedAt(t *testing.T) {
 
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -312,8 +311,7 @@ func TestCreate_WithCreatedAt(t *testing.T) {
 
 // TestCreate_CancelledContext verifies the behavior of create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -334,8 +332,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 
 // TestDelete_CancelledContext verifies the behavior of delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

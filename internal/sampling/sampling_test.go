@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 const (
@@ -79,8 +81,7 @@ func TestAnalyze_UnsupportedClient(t *testing.T) {
 func TestAnalyze_CancelledContext(t *testing.T) {
 	// Even with a session, canceled context should return immediately.
 	// We can only test the unsupported path cleanly without a real session.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	var c Client
 	_, err := c.Analyze(ctx, "prompt", "data")
@@ -932,8 +933,7 @@ func TestAnalyzeWithTools_UnsupportedClient(t *testing.T) {
 // returns a context error when the context is already cancelled and the client
 // is supported.
 func TestAnalyzeWithTools_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	var c Client
 	executor := &mockToolExecutor{}

@@ -66,8 +66,7 @@ func TestCurrentUserStatus_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CurrentUserStatus(ctx, client, CurrentInput{})
 	if err == nil {
@@ -174,8 +173,7 @@ func TestCreateUserRunner_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateUserRunner(ctx, client, CreateUserRunnerInput{RunnerType: "instance_type"})
 	if err == nil {
@@ -225,8 +223,7 @@ func TestDeleteUserIdentity_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := DeleteUserIdentity(ctx, client, DeleteUserIdentityInput{UserID: 42, Provider: "ldap"})
 	if err == nil {
@@ -274,8 +271,7 @@ func TestGetUserActivities_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetUserActivities(ctx, client, GetUserActivitiesInput{})
 	if err == nil {
@@ -323,8 +319,7 @@ func TestGetUserMemberships_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetUserMemberships(ctx, client, GetUserMembershipsInput{UserID: 42})
 	if err == nil {

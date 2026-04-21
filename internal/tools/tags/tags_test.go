@@ -5,6 +5,7 @@ package tags
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -553,8 +554,7 @@ func TestTagCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", TagName: "v0", Ref: "main"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -566,8 +566,7 @@ func TestTagDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -579,8 +578,7 @@ func TestTagList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -592,8 +590,7 @@ func TestTagGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -605,8 +602,7 @@ func TestTagGetSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetSignature(ctx, client, SignatureInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -618,8 +614,7 @@ func TestTagListProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProtectedTags(ctx, client, ListProtectedTagsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -631,8 +626,7 @@ func TestTagGetProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetProtectedTag(ctx, client, GetProtectedTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -644,8 +638,7 @@ func TestTagProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ProtectTag(ctx, client, ProtectTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -657,8 +650,7 @@ func TestTagUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := UnprotectTag(ctx, client, UnprotectTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -767,8 +759,14 @@ func TestTagUnprotect_APIError(t *testing.T) {
 
 // TestTagProtect_WithAllowedToCreate verifies the behavior of tag protect with allowed to create.
 func TestTagProtect_WithAllowedToCreate(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[{"id":1,"access_level":30,"access_level_description":"Developers + Maintainers","user_id":5}]}`)
 			return
 		}
@@ -789,6 +787,11 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 	}
 	if out.Name != "v*" {
 		t.Errorf(fmtNameWant, out.Name, "v*")
+	}
+	for _, want := range []string{"allowed_to_create", "user_id", "group_id", "deploy_key_id"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

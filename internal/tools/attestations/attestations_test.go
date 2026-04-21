@@ -371,8 +371,7 @@ func TestList_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{
 		ProjectID:     toolutil.StringOrInt("10"),
@@ -485,8 +484,7 @@ func TestDownload_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Download(ctx, client, DownloadInput{
 		ProjectID:      toolutil.StringOrInt("10"),

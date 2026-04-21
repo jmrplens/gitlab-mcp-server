@@ -5,6 +5,7 @@ package protectedenvs
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -181,8 +182,14 @@ func TestProtect_WithAccessLevels(t *testing.T) {
 // optional field branches: UserID, GroupID, GroupInheritanceType in both
 // DeployAccessLevels and ApprovalRules.
 func TestProtect_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, envJSON)
 			return
 		}
@@ -207,6 +214,11 @@ func TestProtect_WithAllOptionalFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Protect() unexpected error: %v", err)
 	}
+	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
+	}
 }
 
 // TestGet_CancelledContext validates that Get returns an error when the
@@ -216,8 +228,7 @@ func TestGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, envJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", Environment: "prod"})
 	if err == nil {
@@ -232,8 +243,7 @@ func TestProtect_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, envJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Protect(ctx, client, ProtectInput{ProjectID: "42", Name: "prod"})
 	if err == nil {
@@ -248,8 +258,7 @@ func TestUnprotect_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", Environment: "prod"})
 	if err == nil {
@@ -492,8 +501,14 @@ func boolPtr(v bool) *bool { return new(v) }
 // TestUpdate_WithAllFields verifies Update maps all optional fields including
 // DeployAccessLevels and ApprovalRules with all sub-fields populated.
 func TestUpdate_WithAllFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProtectedEnv1 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, envJSON)
 			return
 		}
@@ -534,6 +549,11 @@ func TestUpdate_WithAllFields(t *testing.T) {
 	if out.Name != "production" {
 		t.Errorf("Name = %q, want %q", out.Name, "production")
 	}
+	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals", "_destroy"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
+	}
 }
 
 // TestUpdate_APIError verifies Update returns error on API failure.
@@ -555,8 +575,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, envJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{
 		ProjectID:   "42",
 		Environment: "production",
@@ -582,8 +601,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")

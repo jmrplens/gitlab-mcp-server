@@ -163,8 +163,7 @@ const fmtUnexpErr = "unexpected error: %v"
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: "5"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -277,8 +276,7 @@ func TestList_APIErrorInternalServer(t *testing.T) {
 // TestDeleteByID_CancelledContext verifies the behavior of delete by i d cancelled context.
 func TestDeleteByID_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteByID(ctx, client, DeleteByIDInput{GroupID: "5", UploadID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -314,8 +312,7 @@ func TestDeleteByID_InternalServerError(t *testing.T) {
 // TestDeleteBySecretAndFilename_CancelledContext verifies the behavior of delete by secret and filename cancelled context.
 func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteBySecretAndFilename(ctx, client, DeleteBySecretAndFilenameInput{
 		GroupID: "5", Secret: "abc", Filename: "image.png",
 	})

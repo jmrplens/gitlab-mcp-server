@@ -142,8 +142,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: testGroupID})
 	if err == nil {
 		t.Fatal("List() expected context error, got nil")
@@ -309,8 +308,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{GroupID: testGroupID, BoardID: 1})
 	if err == nil {
 		t.Fatal("Get() expected context error, got nil")

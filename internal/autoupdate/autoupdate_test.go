@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/creativeprojects/go-selfupdate"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // Mock types for selfupdate.Source, SourceRelease, SourceAsset.
@@ -279,8 +281,7 @@ func TestCheckForUpdate_CancelledContext(t *testing.T) {
 		CurrentVersion: "1.0.0",
 	}, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, _, err := u.CheckForUpdate(ctx)
 	if err == nil {
@@ -295,8 +296,7 @@ func TestApplyUpdate_CancelledContext(t *testing.T) {
 		CurrentVersion: "1.0.0",
 	}, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := u.ApplyUpdate(ctx)
 	if err == nil {

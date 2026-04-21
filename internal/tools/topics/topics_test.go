@@ -5,6 +5,7 @@ package topics
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -324,8 +325,14 @@ func TestCreate_APIError400(t *testing.T) {
 
 // TestCreate_WithAllOptionalFields verifies the behavior of create with all optional fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, topicJSON)
 			return
 		}
@@ -339,6 +346,11 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 	}
 	if out.Topic.Name != "go" {
 		t.Errorf("expected name 'go', got %q", out.Topic.Name)
+	}
+	for _, want := range []string{"title", "description"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -359,8 +371,14 @@ func TestUpdate_APIError400(t *testing.T) {
 
 // TestUpdate_WithAllOptionalFields verifies the behavior of update with all optional fields.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, topicJSON)
 			return
 		}
@@ -374,6 +392,11 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	}
 	if out.Topic.ID != 1 {
 		t.Errorf("expected topic ID 1, got %d", out.Topic.ID)
+	}
+	for _, want := range []string{"title", "description"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

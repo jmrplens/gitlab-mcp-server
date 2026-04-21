@@ -124,8 +124,7 @@ func TestIssueLinkList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID, IssueIID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -211,8 +210,7 @@ func TestIssueLinkGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -340,8 +338,7 @@ func TestIssueLinkCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, IssueIID: 5, TargetProjectID: "20", TargetIssueIID: "12"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -415,8 +412,7 @@ func TestIssueLinkDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

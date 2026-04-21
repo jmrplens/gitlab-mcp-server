@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
@@ -42,8 +43,7 @@ func TestBranchProtect_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := branches.Protect(ctx, client, branches.ProtectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -87,8 +87,7 @@ func TestBranchUnprotect_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := branches.Unprotect(ctx, client, branches.UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -101,8 +100,7 @@ func TestBranchCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := branches.Create(ctx, client, branches.CreateInput{ProjectID: "42", BranchName: "dev", Ref: "main"})
 	if err == nil {
@@ -115,8 +113,7 @@ func TestBranchList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := branches.List(ctx, client, branches.ListInput{ProjectID: "42"})
 	if err == nil {
@@ -129,8 +126,7 @@ func TestProtectedBranchesList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := branches.ProtectedList(ctx, client, branches.ProtectedListInput{ProjectID: "42"})
 	if err == nil {
@@ -169,8 +165,7 @@ func TestTagCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := tags.Create(ctx, client, tags.CreateInput{ProjectID: "42", TagName: "v1.0", Ref: "main"})
 	if err == nil {
@@ -183,8 +178,7 @@ func TestTagDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := tags.Delete(ctx, client, tags.DeleteInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -197,8 +191,7 @@ func TestTagList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := tags.List(ctx, client, tags.ListInput{ProjectID: "42"})
 	if err == nil {
@@ -225,8 +218,7 @@ func TestReleaseCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releases.Create(ctx, client, releases.CreateInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -239,8 +231,7 @@ func TestReleaseGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releases.Get(ctx, client, releases.GetInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -253,8 +244,7 @@ func TestReleaseUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releases.Update(ctx, client, releases.UpdateInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -267,8 +257,7 @@ func TestReleaseDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releases.Delete(ctx, client, releases.DeleteInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -281,8 +270,7 @@ func TestReleaseList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releases.List(ctx, client, releases.ListInput{ProjectID: "42"})
 	if err == nil {
@@ -345,8 +333,7 @@ func TestReleaseLinkCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releaselinks.Create(ctx, client, releaselinks.CreateInput{ProjectID: "42", TagName: "v1.0", Name: "bin", URL: "https://example.com"})
 	if err == nil {
@@ -359,8 +346,7 @@ func TestReleaseLinkDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releaselinks.Delete(ctx, client, releaselinks.DeleteInput{ProjectID: "42", TagName: "v1.0", LinkID: 1})
 	if err == nil {
@@ -373,8 +359,7 @@ func TestReleaseLinkList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := releaselinks.List(ctx, client, releaselinks.ListInput{ProjectID: "42", TagName: "v1.0"})
 	if err == nil {
@@ -413,8 +398,7 @@ func TestMRCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.Create(ctx, client, mergerequests.CreateInput{ProjectID: "42", SourceBranch: "dev", TargetBranch: "main", Title: "test"})
 	if err == nil {
@@ -427,8 +411,7 @@ func TestMRGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.Get(ctx, client, mergerequests.GetInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -441,8 +424,7 @@ func TestMRList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.List(ctx, client, mergerequests.ListInput{ProjectID: "42"})
 	if err == nil {
@@ -455,8 +437,7 @@ func TestMRUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.Update(ctx, client, mergerequests.UpdateInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -469,8 +450,7 @@ func TestMRMerge_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.Merge(ctx, client, mergerequests.MergeInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -483,8 +463,7 @@ func TestMRApprove_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mergerequests.Approve(ctx, client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -497,8 +476,7 @@ func TestMRUnapprove_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := mergerequests.Unapprove(ctx, client, mergerequests.ApproveInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -573,8 +551,7 @@ func TestMRNoteCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrnotes.Create(ctx, client, mrnotes.CreateInput{ProjectID: "42", MRIID: 1, Body: "test"})
 	if err == nil {
@@ -587,8 +564,7 @@ func TestMRNotesList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrnotes.List(ctx, client, mrnotes.ListInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -601,8 +577,7 @@ func TestMRNoteUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrnotes.Update(ctx, client, mrnotes.UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 1, Body: "new"})
 	if err == nil {
@@ -615,8 +590,7 @@ func TestMRNoteDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := mrnotes.Delete(ctx, client, mrnotes.DeleteInput{ProjectID: "42", MRIID: 1, NoteID: 1})
 	if err == nil {
@@ -667,8 +641,7 @@ func TestMRDiscussionCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrdiscussions.Create(ctx, client, mrdiscussions.CreateInput{ProjectID: "42", MRIID: 1, Body: "test"})
 	if err == nil {
@@ -681,8 +654,7 @@ func TestMRDiscussionResolve_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrdiscussions.Resolve(ctx, client, mrdiscussions.ResolveInput{ProjectID: "42", MRIID: 1, DiscussionID: "abc", Resolved: true})
 	if err == nil {
@@ -695,8 +667,7 @@ func TestMRDiscussionReply_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrdiscussions.Reply(ctx, client, mrdiscussions.ReplyInput{ProjectID: "42", MRIID: 1, DiscussionID: "abc", Body: "test"})
 	if err == nil {
@@ -709,8 +680,7 @@ func TestMRDiscussionList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrdiscussions.List(ctx, client, mrdiscussions.ListInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -773,8 +743,7 @@ func TestMRChangesGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := mrchanges.Get(ctx, client, mrchanges.GetInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -789,8 +758,7 @@ func TestCommitCreate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := commits.Create(ctx, client, commits.CreateInput{ProjectID: "42", Branch: "main", CommitMessage: "test", Actions: []commits.Action{{Action: "create", FilePath: "f.txt", Content: "x"}}})
 	if err == nil {
@@ -805,8 +773,7 @@ func TestFileGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := files.Get(ctx, client, files.GetInput{ProjectID: "42", FilePath: "README.md", Ref: "main"})
 	if err == nil {
@@ -821,8 +788,7 @@ func TestProjectGet_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := projects.Get(ctx, client, projects.GetInput{ProjectID: "42"})
 	if err == nil {
@@ -835,8 +801,7 @@ func TestProjectList_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := projects.List(ctx, client, projects.ListInput{})
 	if err == nil {
@@ -849,8 +814,7 @@ func TestProjectDelete_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := projects.Delete(ctx, client, projects.DeleteInput{ProjectID: "42"})
 	if err == nil {
@@ -863,8 +827,7 @@ func TestProjectUpdate_ContextCancelled(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := projects.Update(ctx, client, projects.UpdateInput{ProjectID: "42"})
 	if err == nil {

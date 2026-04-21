@@ -222,8 +222,7 @@ func TestPackagePublishAndLink_ContextCancelled(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := PublishAndLink(ctx, nil, client, PublishAndLinkInput{
 		ProjectID:      "42",
@@ -487,8 +486,7 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := PublishDirectory(ctx, nil, client, PublishDirInput{
 		ProjectID:      "42",

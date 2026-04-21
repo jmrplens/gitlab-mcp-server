@@ -2,7 +2,9 @@ package memberroles
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -40,8 +42,7 @@ func TestListInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListInstance(ctx, client, ListInstanceInput{})
 	if err == nil {
@@ -100,8 +101,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: toolutil.StringOrInt("mygroup")})
 	if err == nil {
@@ -182,8 +182,7 @@ func TestCreateInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateInstance(ctx, client, CreateInstanceInput{
 		Name:            "custom-dev",
@@ -281,8 +280,7 @@ func TestCreateGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateGroup(ctx, client, CreateGroupInput{
 		GroupID:         toolutil.StringOrInt("mygroup"),
@@ -344,8 +342,7 @@ func TestDeleteInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteInstance(ctx, client, DeleteInstanceInput{MemberRoleID: 1})
 	if err == nil {
@@ -415,8 +412,7 @@ func TestDeleteGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteGroup(ctx, client, DeleteGroupInput{
 		GroupID:      toolutil.StringOrInt("mygroup"),
@@ -461,10 +457,16 @@ func TestToOutput_Nil(t *testing.T) {
 // forwards all permission flags to the GitLab API. This exercises every branch
 // in buildCreateOpts that handles optional permission fields.
 func TestCreateInstance_WithAllPermissions(t *testing.T) {
+	var capturedBody string
 	trueVal := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.AssertRequestPath(t, r, "/api/v4/member_roles")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"id":10,"name":"full-perms","description":"All permissions",
 			"base_access_level":30,
@@ -521,6 +523,11 @@ func TestCreateInstance_WithAllPermissions(t *testing.T) {
 	}
 	if out.RemoveProject == nil || !*out.RemoveProject {
 		t.Error("expected RemoveProject to be true")
+	}
+	for _, want := range []string{"admin_cicd_variables", "admin_merge_request", "read_code", "remove_project", "manage_deploy_tokens", "admin_vulnerability"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

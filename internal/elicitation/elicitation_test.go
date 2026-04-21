@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // testImpl is a shared MCP implementation descriptor used across tests.
@@ -114,8 +116,7 @@ func TestSelectOne_EmptyOptions(t *testing.T) {
 // TestElicit_ContextCancelled verifies that the internal elicit method
 // returns [context.Canceled] when the context is already canceled.
 func TestElicit_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	c := Client{session: &mcp.ServerSession{}}
 	_, err := c.elicit(ctx, "test", map[string]any{"type": "object"})

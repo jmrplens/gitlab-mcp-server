@@ -586,8 +586,7 @@ func TestProjectCreate_ContextCancelled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{Name: "ignored"})
 	if err == nil {
@@ -2418,8 +2417,14 @@ func TestFormatListStarrersMarkdown(t *testing.T) {
 
 // TestFork_WithAllOptions verifies the behavior of fork with all options.
 func TestFork_WithAllOptions(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Fork {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":100,"name":"my-fork","path_with_namespace":"user/my-fork","visibility":"private","web_url":"https://gitlab.example.com/user/my-fork"}`)
 			return
 		}
@@ -2442,6 +2447,11 @@ func TestFork_WithAllOptions(t *testing.T) {
 	}
 	if out.Name != testMyFork {
 		t.Errorf(fmtNameWantQ, out.Name, testMyFork)
+	}
+	for _, want := range []string{"name", "path", "namespace_id", "namespace_path", "description", "visibility", "branches", "mr_default_target_self"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -2473,8 +2483,14 @@ func TestListForks_WithFilters(t *testing.T) {
 
 // TestAddHook_WithAllEvents verifies the behavior of add hook with all events.
 func TestAddHook_WithAllEvents(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Hooks {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"emoji_events":true,"resource_access_token_events":true}`)
 			return
 		}
@@ -2512,12 +2528,23 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
+	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_access_token_events"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
+	}
 }
 
 // TestEditHook_WithAllEvents verifies the behavior of edit hook with all events.
 func TestEditHook_WithAllEvents(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42Hook1 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"url":"https://example.com/hook-updated","project_id":42,"push_events":true}`)
 			return
 		}
@@ -2555,6 +2582,11 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	}
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
+	}
+	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -4853,8 +4885,7 @@ func TestSetCustomHeader_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := SetCustomHeader(ctx, client, SetCustomHeaderInput{
 		ProjectID: "42", HookID: 1, Key: testKeyXCustom, Value: testValueHdr,
 	})
@@ -5021,8 +5052,7 @@ func TestDeleteWebhookURLVariable_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteWebhookURLVariable(ctx, client, DeleteWebhookURLVariableInput{
 		ProjectID: "42", HookID: 1, Key: testKeyMyVar,
 	})
@@ -5126,8 +5156,7 @@ func TestDeleteForkRelation_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteForkRelation(ctx, client, DeleteForkRelationInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -5266,8 +5295,7 @@ func TestUploadAvatar_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	content := base64.StdEncoding.EncodeToString([]byte("data"))
 	_, err := UploadAvatar(ctx, client, UploadAvatarInput{
 		ProjectID: "42", Filename: "a.png", ContentBase64: content,
@@ -5359,8 +5387,7 @@ func TestStartHousekeeping_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := StartHousekeeping(ctx, client, StartHousekeepingInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -5417,8 +5444,7 @@ func TestGetRepositoryStorage_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetRepositoryStorage(ctx, client, GetRepositoryStorageInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -5483,8 +5509,7 @@ func TestCreateForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateForUser(ctx, client, CreateForUserInput{
 		UserID: 5, Name: "repo",
 	})
@@ -5536,7 +5561,10 @@ func TestFormatRepositoryStorageMarkdown_NonEmpty(t *testing.T) {
 func TestCreateForUser_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectForUser5 {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			s := string(body)
 			for _, want := range []string{
 				`"path":"custom-path"`,
@@ -5582,8 +5610,7 @@ func TestDownloadAvatar_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadAvatar(ctx, client, DownloadAvatarInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -5595,8 +5622,7 @@ func TestDeleteCustomHeader_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteCustomHeader(ctx, client, DeleteCustomHeaderInput{ProjectID: "42", HookID: 1, Key: "X-Custom"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6139,8 +6165,7 @@ func TestAddHook_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddHook(ctx, client, AddHookInput{ProjectID: "42", URL: "https://example.com"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6152,8 +6177,7 @@ func TestEditHook_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := EditHook(ctx, client, EditHookInput{ProjectID: "42", HookID: 1})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6165,8 +6189,7 @@ func TestGetPullMirror_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetPullMirror(ctx, client, GetPullMirrorInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6178,8 +6201,7 @@ func TestStartMirroring_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := StartMirroring(ctx, client, StartMirroringInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6191,8 +6213,7 @@ func TestRestore_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Restore(ctx, client, RestoreInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6270,8 +6291,7 @@ func TestListApprovalRules_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListApprovalRules(ctx, client, ListApprovalRulesInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6283,8 +6303,7 @@ func TestChangeApprovalConfig_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ChangeApprovalConfig(ctx, client, ChangeApprovalConfigInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)

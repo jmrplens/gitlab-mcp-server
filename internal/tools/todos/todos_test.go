@@ -137,8 +137,7 @@ func TestTodoList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -201,8 +200,7 @@ func TestTodoMarkDone_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := MarkDone(ctx, client, MarkDoneInput{ID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -250,8 +248,7 @@ func TestTodoMarkAllDone_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := MarkAllDone(ctx, client, MarkAllDoneInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

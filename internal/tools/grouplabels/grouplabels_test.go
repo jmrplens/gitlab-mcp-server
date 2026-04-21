@@ -357,8 +357,7 @@ func TestList_APIError(t *testing.T) {
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -413,8 +412,7 @@ func TestGet_APIError(t *testing.T) {
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{GroupID: "10", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -441,8 +439,7 @@ func TestCreate_APIError(t *testing.T) {
 // TestCreate_CancelledContext verifies the behavior of create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{
 		GroupID: "10", Name: "bug", Color: "#d9534f",
 	})
@@ -498,8 +495,7 @@ func TestUpdate_APIError(t *testing.T) {
 // TestUpdate_CancelledContext verifies the behavior of update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{GroupID: "10", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -554,8 +550,7 @@ func TestDelete_APIError(t *testing.T) {
 // TestDelete_CancelledContext verifies the behavior of delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{GroupID: "10", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -580,8 +575,7 @@ func TestSubscribe_APIError(t *testing.T) {
 // TestSubscribe_CancelledContext verifies the behavior of subscribe cancelled context.
 func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Subscribe(ctx, client, SubscribeInput{GroupID: "10", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -606,8 +600,7 @@ func TestUnsubscribe_APIError(t *testing.T) {
 // TestUnsubscribe_CancelledContext verifies the behavior of unsubscribe cancelled context.
 func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Unsubscribe(ctx, client, SubscribeInput{GroupID: "10", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

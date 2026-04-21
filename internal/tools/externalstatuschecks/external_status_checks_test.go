@@ -5,7 +5,9 @@ package externalstatuschecks
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -540,8 +542,14 @@ func TestUpdateProjectExternalStatusCheck_Success(t *testing.T) {
 
 // TestUpdateProjectExternalStatusCheck_WithAllFields verifies update with all optional fields.
 func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
+	var capturedBody string
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, projectStatusCheckJSON)
 	})
 	client := testutil.NewTestClient(t, mux)
@@ -559,6 +567,11 @@ func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 	}
 	if out.Name != "Security Scan" {
 		t.Errorf("expected name 'Security Scan', got %q", out.Name)
+	}
+	for _, want := range []string{"name", "external_url", "shared_secret", "protected_branch_ids"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -724,8 +737,7 @@ func TestToProjectStatusCheckOutput_NoBranches(t *testing.T) {
 // returns an error before making an API call.
 func TestListMergeStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListMergeStatusChecks(ctx, client, ListMergeStatusChecksInput{ProjectID: "1", MRIID: 10})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -774,8 +786,7 @@ func TestListMergeStatusChecks_WithPagination(t *testing.T) {
 // context returns an error before making an API call.
 func TestSetExternalStatusCheckStatus_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := SetExternalStatusCheckStatus(ctx, client, SetStatusInput{
 		ProjectID: "1", MRIID: 10, SHA: "abc", ExternalStatusCheckID: 1, Status: "passed",
 	})
@@ -803,8 +814,7 @@ func TestSetExternalStatusCheckStatus_APIError(t *testing.T) {
 // returns an error for ListProjectStatusChecks.
 func TestListProjectStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProjectStatusChecks(ctx, client, ListProjectStatusChecksInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -852,8 +862,7 @@ func TestListProjectStatusChecks_WithPagination(t *testing.T) {
 // context returns an error for legacy create.
 func TestCreateExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := CreateExternalStatusCheck(ctx, client, CreateLegacyInput{
 		ProjectID: "1", Name: "x", ExternalURL: "https://x.com",
 	})
@@ -900,8 +909,7 @@ func TestCreateExternalStatusCheck_WithProtectedBranches(t *testing.T) {
 // context returns an error for legacy delete.
 func TestDeleteExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteExternalStatusCheck(ctx, client, DeleteLegacyInput{ProjectID: "1", CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -925,8 +933,7 @@ func TestDeleteExternalStatusCheck_APIError(t *testing.T) {
 // context returns an error for legacy update.
 func TestUpdateExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := UpdateExternalStatusCheck(ctx, client, UpdateLegacyInput{ProjectID: "1", CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -970,8 +977,7 @@ func TestUpdateExternalStatusCheck_AllOptionalFields(t *testing.T) {
 // context returns an error for legacy retry.
 func TestRetryFailedStatusCheckForMR_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := RetryFailedStatusCheckForMR(ctx, client, RetryLegacyInput{ProjectID: "1", MRIID: 10, CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -995,8 +1001,7 @@ func TestRetryFailedStatusCheckForMR_APIError(t *testing.T) {
 // cancelled context returns an error.
 func TestListProjectMRExternalStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProjectMRExternalStatusChecks(ctx, client, ListProjectMRInput{ProjectID: "1", MRIID: 10})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -1045,8 +1050,7 @@ func TestListProjectMRExternalStatusChecks_WithPagination(t *testing.T) {
 // cancelled context returns an error.
 func TestListProjectExternalStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProjectExternalStatusChecks(ctx, client, ListProjectInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -1094,8 +1098,7 @@ func TestListProjectExternalStatusChecks_WithPagination(t *testing.T) {
 // cancelled context returns an error.
 func TestCreateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateProjectExternalStatusCheck(ctx, client, CreateProjectInput{
 		ProjectID: "1", Name: "x", ExternalURL: "https://x.com",
 	})
@@ -1123,8 +1126,7 @@ func TestCreateProjectExternalStatusCheck_APIError(t *testing.T) {
 // cancelled context returns an error.
 func TestDeleteProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteProjectExternalStatusCheck(ctx, client, DeleteProjectInput{ProjectID: "1", CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -1148,8 +1150,7 @@ func TestDeleteProjectExternalStatusCheck_APIError(t *testing.T) {
 // cancelled context returns an error.
 func TestUpdateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateProjectExternalStatusCheck(ctx, client, UpdateProjectInput{ProjectID: "1", CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -1173,8 +1174,7 @@ func TestUpdateProjectExternalStatusCheck_APIError(t *testing.T) {
 // that a cancelled context returns an error.
 func TestRetryFailedExternalStatusCheckForProjectMR_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := RetryFailedExternalStatusCheckForProjectMR(ctx, client, RetryProjectInput{ProjectID: "1", MRIID: 10, CheckID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -1199,8 +1199,7 @@ func TestRetryFailedExternalStatusCheckForProjectMR_APIError(t *testing.T) {
 // cancelled context returns an error.
 func TestSetProjectMRExternalStatusCheckStatus_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := SetProjectMRExternalStatusCheckStatus(ctx, client, SetProjectStatusInput{
 		ProjectID: "1", MRIID: 10, SHA: "abc", ExternalStatusCheckID: 1, Status: "passed",
 	})

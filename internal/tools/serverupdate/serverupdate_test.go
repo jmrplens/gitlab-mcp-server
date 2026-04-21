@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // TestFormatCheckMarkdownString_UpdateAvailable verifies Markdown output
@@ -306,8 +307,7 @@ func TestCheck_NoUpdate(t *testing.T) {
 // TestCheck_CancelledContext verifies Check respects context cancellation.
 func TestCheck_CancelledContext(t *testing.T) {
 	updater := newTestUpdater(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Check(ctx, updater, CheckInput{})
 	if err == nil {
@@ -318,8 +318,7 @@ func TestCheck_CancelledContext(t *testing.T) {
 // TestApply_CancelledContext verifies Apply respects context cancellation.
 func TestApply_CancelledContext(t *testing.T) {
 	updater := newTestUpdater(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Apply(ctx, updater, ApplyInput{})
 	if err == nil {

@@ -202,8 +202,7 @@ func TestGetProjectMetrics_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetProjectMetrics(ctx, client, ProjectInput{ProjectID: "42", Metric: "deployment_frequency"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -353,8 +352,7 @@ func TestGetGroupMetrics_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGroupMetrics(ctx, client, GroupInput{GroupID: "5", Metric: "deployment_frequency"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")

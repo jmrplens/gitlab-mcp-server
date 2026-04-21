@@ -172,8 +172,7 @@ func TestListDeps_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListDeps(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -270,8 +269,7 @@ func TestCreateExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateExport(ctx, client, CreateExportInput{PipelineID: 100})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -367,8 +365,7 @@ func TestGetExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetExport(ctx, client, GetExportInput{ExportID: 1})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -460,8 +457,7 @@ func TestDownloadExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadExport(ctx, client, DownloadExportInput{ExportID: 1})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")

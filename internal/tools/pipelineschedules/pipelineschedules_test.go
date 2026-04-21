@@ -94,8 +94,7 @@ func TestPipelineScheduleList_MissingProjectID(t *testing.T) {
 // TestPipelineScheduleList_CancelledContext verifies the behavior of pipeline schedule list cancelled context.
 func TestPipelineScheduleList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -147,8 +146,7 @@ func TestPipelineSchedule_GetZeroID(t *testing.T) {
 // TestPipelineScheduleGet_CancelledContext verifies the behavior of pipeline schedule get cancelled context.
 func TestPipelineScheduleGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "1", ScheduleID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -210,8 +208,7 @@ func TestPipelineScheduleCreate_MissingFields(t *testing.T) {
 // TestPipelineScheduleCreate_CancelledContext verifies the behavior of pipeline schedule create cancelled context.
 func TestPipelineScheduleCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{
 		ProjectID: "1", Description: "d", Ref: "r", Cron: "c",
 	})
@@ -263,8 +260,7 @@ func TestPipelineSchedule_UpdateZeroID(t *testing.T) {
 // TestPipelineScheduleUpdate_CancelledContext verifies the behavior of pipeline schedule update cancelled context.
 func TestPipelineScheduleUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{
 		ProjectID: "1", ScheduleID: 1,
 	})
@@ -309,8 +305,7 @@ func TestPipelineSchedule_DeleteZeroID(t *testing.T) {
 // TestPipelineScheduleDelete_CancelledContext verifies the behavior of pipeline schedule delete cancelled context.
 func TestPipelineScheduleDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{
 		ProjectID: "1", ScheduleID: 1,
 	})
@@ -363,8 +358,7 @@ func TestPipelineSchedule_RunZeroID(t *testing.T) {
 // TestPipelineScheduleRun_CancelledContext verifies the behavior of pipeline schedule run cancelled context.
 func TestPipelineScheduleRun_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Run(ctx, client, RunInput{
 		ProjectID: "1", ScheduleID: 1,
 	})
@@ -908,8 +902,7 @@ func TestTakeOwnership_APIError(t *testing.T) {
 // TestTakeOwnership_CancelledContext verifies the behavior of take ownership cancelled context.
 func TestTakeOwnership_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := TakeOwnership(ctx, client, TakeOwnershipInput{ProjectID: "1", ScheduleID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -958,8 +951,7 @@ func TestCreateVariable_ZeroScheduleID(t *testing.T) {
 // TestCreateVariable_CancelledContext verifies the behavior of create variable cancelled context.
 func TestCreateVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateVariable(ctx, client, CreateVariableInput{
 		ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V",
 	})
@@ -1041,8 +1033,7 @@ func TestEditVariable_MissingValue(t *testing.T) {
 // TestEditVariable_CancelledContext verifies the behavior of edit variable cancelled context.
 func TestEditVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := EditVariable(ctx, client, EditVariableInput{
 		ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V",
 	})
@@ -1100,8 +1091,7 @@ func TestDeleteVariable_ZeroScheduleID(t *testing.T) {
 // TestDeleteVariable_CancelledContext verifies the behavior of delete variable cancelled context.
 func TestDeleteVariable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteVariable(ctx, client, DeleteVariableInput{
 		ProjectID: "1", ScheduleID: 1, Key: "K",
 	})
@@ -1130,8 +1120,7 @@ func TestListTriggeredPipelines_APIError(t *testing.T) {
 // TestListTriggeredPipelines_CancelledContext verifies the behavior of list triggered pipelines cancelled context.
 func TestListTriggeredPipelines_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListTriggeredPipelines(ctx, client, ListTriggeredPipelinesInput{
 		ProjectID: "1", ScheduleID: 1,
 	})

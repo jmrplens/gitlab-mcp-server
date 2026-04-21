@@ -276,8 +276,7 @@ func TestResolve_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, testProjectJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Resolve(ctx, client, ResolveInput{
 		RemoteURL: "https://gitlab.example.com/group/project.git",

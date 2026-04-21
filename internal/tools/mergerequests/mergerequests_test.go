@@ -1913,8 +1913,7 @@ func TestRelatedIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := RelatedIssues(ctx, client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("RelatedIssues() expected error for canceled context, got nil")
@@ -1996,8 +1995,7 @@ func TestCreateTodo_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateTodo(ctx, client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("CreateTodo() expected error for canceled context, got nil")
@@ -2077,8 +2075,7 @@ func TestCreateDependency_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreateDependency(ctx, client, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100})
 	if err == nil {
 		t.Fatal("CreateDependency() expected error for canceled context, got nil")
@@ -2134,8 +2131,7 @@ func TestDeleteDependency_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteDependency(ctx, client, DeleteDependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100})
 	if err == nil {
 		t.Fatal("DeleteDependency() expected error for canceled context, got nil")
@@ -2210,8 +2206,7 @@ func TestGetDependencies_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetDependencies(ctx, client, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("GetDependencies() expected error for canceled context, got nil")
@@ -2238,8 +2233,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, SourceBranch: "a", TargetBranch: "b", Title: "t"})
 	if err == nil {
 		t.Fatal("Create() expected error for canceled context, got nil")
@@ -2251,8 +2245,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Get() expected error for canceled context, got nil")
@@ -2264,8 +2257,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID})
 	if err == nil {
 		t.Fatal("List() expected error for canceled context, got nil")
@@ -2277,8 +2269,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Update() expected error for canceled context, got nil")
@@ -2290,8 +2281,7 @@ func TestMerge_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Merge(ctx, client, MergeInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Merge() expected error for canceled context, got nil")
@@ -2303,8 +2293,7 @@ func TestApprove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Approve(ctx, client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Approve() expected error for canceled context, got nil")
@@ -2316,8 +2305,7 @@ func TestUnapprove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Unapprove(ctx, client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Unapprove() expected error for canceled context, got nil")
@@ -2329,8 +2317,7 @@ func TestCommits_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Commits(ctx, client, CommitsInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Commits() expected error for canceled context, got nil")
@@ -2342,8 +2329,7 @@ func TestPipelines_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Pipelines(ctx, client, PipelinesInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Pipelines() expected error for canceled context, got nil")
@@ -2355,8 +2341,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Delete() expected error for canceled context, got nil")
@@ -2368,8 +2353,7 @@ func TestRebase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Rebase(ctx, client, RebaseInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Rebase() expected error for canceled context, got nil")
@@ -2381,8 +2365,7 @@ func TestListGlobal_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGlobal(ctx, client, ListGlobalInput{})
 	if err == nil {
 		t.Fatal("ListGlobal() expected error for canceled context, got nil")
@@ -2394,8 +2377,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal("ListGroup() expected error for canceled context, got nil")
@@ -2407,8 +2389,7 @@ func TestParticipants_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Participants(ctx, client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Participants() expected error for canceled context, got nil")
@@ -2420,8 +2401,7 @@ func TestReviewers_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Reviewers(ctx, client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Reviewers() expected error for canceled context, got nil")
@@ -2433,8 +2413,7 @@ func TestCreatePipeline_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CreatePipeline(ctx, client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("CreatePipeline() expected error for canceled context, got nil")
@@ -2446,8 +2425,7 @@ func TestIssuesClosed_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := IssuesClosed(ctx, client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("IssuesClosed() expected error for canceled context, got nil")
@@ -2459,8 +2437,7 @@ func TestCancelAutoMerge_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CancelAutoMerge(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("CancelAutoMerge() expected error for canceled context, got nil")
@@ -2472,8 +2449,7 @@ func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Subscribe(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Subscribe() expected error for canceled context, got nil")
@@ -2485,8 +2461,7 @@ func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Unsubscribe(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("Unsubscribe() expected error for canceled context, got nil")
@@ -2498,8 +2473,7 @@ func TestSetTimeEstimate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := SetTimeEstimate(ctx, client, SetTimeEstimateInput{ProjectID: testProjectID, MRIID: 1, Duration: "3h"})
 	if err == nil {
 		t.Fatal("SetTimeEstimate() expected error for canceled context, got nil")
@@ -2511,8 +2485,7 @@ func TestResetTimeEstimate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ResetTimeEstimate(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("ResetTimeEstimate() expected error for canceled context, got nil")
@@ -2524,8 +2497,7 @@ func TestAddSpentTime_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddSpentTime(ctx, client, AddSpentTimeInput{ProjectID: testProjectID, MRIID: 1, Duration: "1h"})
 	if err == nil {
 		t.Fatal("AddSpentTime() expected error for canceled context, got nil")
@@ -2537,8 +2509,7 @@ func TestResetSpentTime_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ResetSpentTime(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("ResetSpentTime() expected error for canceled context, got nil")
@@ -2550,8 +2521,7 @@ func TestGetTimeStats_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetTimeStats(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("GetTimeStats() expected error for canceled context, got nil")
@@ -3108,7 +3078,10 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 func TestCreate_AssigneeIDSingular(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMRs {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
 				t.Errorf("request body missing assignee_id: %s", bodyStr)
@@ -3139,7 +3112,10 @@ func TestCreate_AssigneeIDSingular(t *testing.T) {
 func TestUpdate_AssigneeIDSingular(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMR1 {
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
 				t.Errorf("request body missing assignee_id: %s", bodyStr)
@@ -3447,7 +3423,10 @@ func TestMerge_AutoDetectsSquashOnMerge(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithSquashOnMerge)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3482,7 +3461,10 @@ func TestMerge_AutoDetectsForceRemoveSourceBranch(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithForceRemove)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3517,7 +3499,10 @@ func TestMerge_EnforcedSquashOverridesExplicitFalse(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrWithSquashOnMerge)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:
@@ -3555,7 +3540,10 @@ func TestMerge_ExplicitSquashRespectedWhenNotEnforced(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
 			testutil.RespondJSON(w, http.StatusOK, mrNoSquash)
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
 		default:

@@ -560,8 +560,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -680,8 +679,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -708,8 +706,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{GroupID: "10", Title: "v2.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -769,8 +766,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -849,8 +845,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -888,8 +883,7 @@ func TestGetIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetIssues(ctx, client, GetIssuesInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -961,8 +955,7 @@ func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetMergeRequests(ctx, client, GetMergeRequestsInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -1034,8 +1027,7 @@ func TestGetBurndownChartEvents_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetBurndownChartEvents(ctx, client, GetBurndownChartEventsInput{GroupID: "10", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

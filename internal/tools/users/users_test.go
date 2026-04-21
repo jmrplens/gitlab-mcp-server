@@ -88,8 +88,7 @@ func TestCurrent_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Current(ctx, client, CurrentInput{})
 	if err == nil {
@@ -576,8 +575,7 @@ func TestList_UsersCancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
@@ -688,8 +686,7 @@ func TestGet_UserCancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{UserID: 42})
 	if err == nil {
@@ -719,8 +716,7 @@ func TestGet_UserStatusCancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetStatus(ctx, client, GetStatusInput{UserID: 42})
 	if err == nil {
@@ -766,8 +762,7 @@ func TestSetUserStatus_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := SetStatus(ctx, client, SetStatusInput{Emoji: "coffee"})
 	if err == nil {
@@ -833,8 +828,7 @@ func TestListSSHKeys_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListSSHKeys(ctx, client, ListSSHKeysInput{})
 	if err == nil {
@@ -900,8 +894,7 @@ func TestListEmails_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListEmails(ctx, client, ListEmailsInput{})
 	if err == nil {
@@ -938,8 +931,7 @@ func TestListContributionEvents_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListContributionEvents(ctx, client, ListContributionEventsInput{UserID: 42})
 	if err == nil {
@@ -1040,8 +1032,7 @@ func TestGetAssociationsCount_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetAssociationsCount(ctx, client, GetAssociationsCountInput{UserID: 42})
 	if err == nil {

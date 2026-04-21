@@ -156,8 +156,7 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveAll(ctx, client, ListInput{})
 	if err == nil {
@@ -247,8 +246,7 @@ func TestRetrieveForProject_ContextCanceled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveForProject(ctx, client, ListForProjectInput{ProjectID: 42})
 	if err == nil {
@@ -351,8 +349,7 @@ func TestGet_ContextCanceled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, storageMoveJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -434,8 +431,7 @@ func TestGetForProject_ContextCanceled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, storageMoveJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetForProject(ctx, client, ProjectMoveInput{ProjectID: 42, ID: 1})
 	if err == nil {
@@ -530,8 +526,7 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, storageMoveJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Schedule(ctx, client, ScheduleInput{ProjectID: 42})
 	if err == nil {
@@ -621,8 +616,7 @@ func TestScheduleAll_ContextCanceled(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ScheduleAll(ctx, client, ScheduleAllInput{})
 	if err == nil {

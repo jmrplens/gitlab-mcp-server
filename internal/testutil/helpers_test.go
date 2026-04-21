@@ -4,10 +4,35 @@
 package testutil
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+// TestCancelledCtx verifies that CancelledCtx returns a context that is
+// already cancelled with context.Canceled error.
+func TestCancelledCtx(t *testing.T) {
+	ctx := CancelledCtx(t)
+	if ctx.Err() != context.Canceled {
+		t.Errorf("ctx.Err() = %v, want %v", ctx.Err(), context.Canceled)
+	}
+}
+
+// TestCaptureSlog verifies that CaptureSlog captures slog output into a
+// buffer and that the output contains the expected JSON fields.
+func TestCaptureSlog(t *testing.T) {
+	buf := CaptureSlog(t)
+	slog.Info("test message", "key", "val")
+	out := buf.String()
+	for _, want := range []string{`"msg":"test message"`, `"key":"val"`, `"level":"INFO"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("slog output missing %q, got: %s", want, out)
+		}
+	}
+}
 
 // TestAssertRequestMethod verifies AssertRequestMethod does not fail the test
 // when the expected method matches.

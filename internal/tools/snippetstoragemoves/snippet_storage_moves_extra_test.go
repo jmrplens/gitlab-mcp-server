@@ -48,8 +48,7 @@ func TestRetrieveForSnippet_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveForSnippet(ctx, client, ListForSnippetInput{SnippetID: 55})
 	if err == nil {
@@ -145,8 +144,7 @@ func TestGet_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -177,8 +175,7 @@ func TestGetForSnippet_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetForSnippet(ctx, client, SnippetMoveInput{SnippetID: 55, ID: 1})
 	if err == nil {
@@ -209,8 +206,7 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Schedule(ctx, client, ScheduleInput{SnippetID: 55})
 	if err == nil {
@@ -247,8 +243,7 @@ func TestScheduleAll_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ScheduleAll(ctx, client, ScheduleAllInput{})
 	if err == nil {

@@ -82,8 +82,7 @@ func TestGetSSHKeyForUser_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetSSHKeyForUser(ctx, client, GetSSHKeyForUserInput{UserID: 42, KeyID: 1})
 	if err == nil {
@@ -172,8 +171,7 @@ func TestAddSSHKeyForUser_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := AddSSHKeyForUser(ctx, client, AddSSHKeyForUserInput{
 		UserID: 42, Title: "k", Key: "ssh-rsa X",
@@ -247,8 +245,7 @@ func TestDeleteSSHKeyForUser_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := DeleteSSHKeyForUser(ctx, client, DeleteSSHKeyForUserInput{UserID: 42, KeyID: 1})
 	if err == nil {
@@ -286,8 +283,7 @@ func TestListSSHKeysForUser_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListSSHKeysForUser(ctx, client, ListSSHKeysForUserInput{UserID: 42})
 	if err == nil {
@@ -325,8 +321,7 @@ func TestGetSSHKey_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetSSHKey(ctx, client, GetSSHKeyInput{KeyID: 1})
 	if err == nil {
@@ -391,8 +386,7 @@ func TestAddSSHKey_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := AddSSHKey(ctx, client, AddSSHKeyInput{Title: "k", Key: "ssh-rsa X"})
 	if err == nil {
@@ -430,8 +424,7 @@ func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := DeleteSSHKey(ctx, client, DeleteSSHKeyInput{KeyID: 1})
 	if err == nil {

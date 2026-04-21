@@ -87,8 +87,7 @@ func TestList_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{GroupID: toolutil.StringOrInt("42")})
 	if err == nil {
@@ -286,8 +285,7 @@ func TestGet_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{GroupID: toolutil.StringOrInt("42"), UserID: 10})
 	if err == nil {
@@ -360,8 +358,7 @@ func TestDisable2FA_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Disable2FA(ctx, client, Disable2FAInput{
 		GroupID: toolutil.StringOrInt("42"),
@@ -458,8 +455,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{
 		GroupID: toolutil.StringOrInt("42"),

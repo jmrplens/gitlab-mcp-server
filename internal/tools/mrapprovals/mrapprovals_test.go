@@ -144,8 +144,7 @@ func TestMRApprovalState_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := State(ctx, client, StateInput{
 		ProjectID: "42",
@@ -310,8 +309,7 @@ func TestMRApprovalRules_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Rules(ctx, client, RulesInput{
 		ProjectID: "42",

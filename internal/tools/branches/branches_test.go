@@ -523,8 +523,7 @@ func TestProtectedBranchGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ProtectedGet(ctx, client, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -599,8 +598,7 @@ func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ProtectedUpdate(ctx, client, ProtectedUpdateInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -658,8 +656,7 @@ func TestDeleteMerged_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteMerged(ctx, client, DeleteMergedInput{ProjectID: "42"})
 	if err == nil {
@@ -676,8 +673,7 @@ func TestBranchCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", BranchName: "x", Ref: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -689,8 +685,7 @@ func TestBranchList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -702,8 +697,7 @@ func TestBranchGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -715,8 +709,7 @@ func TestBranchDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", BranchName: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -728,8 +721,7 @@ func TestBranchProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Protect(ctx, client, ProtectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -741,8 +733,7 @@ func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -754,8 +745,7 @@ func TestProtectedList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ProtectedList(ctx, client, ProtectedListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

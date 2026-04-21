@@ -4,13 +4,45 @@
 package testutil
 
 import (
+	"bytes"
+	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
+
+// captureSlogMu serializes CaptureSlog calls to prevent concurrent tests
+// from overwriting each other's global slog default.
+var captureSlogMu sync.Mutex
+
+// CancelledCtx returns a pre-cancelled context for testing cancellation handling.
+func CancelledCtx(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}
+
+// CaptureSlog redirects slog output to a buffer for the duration of the test.
+// The original default logger is restored via t.Cleanup.
+// NOT safe for t.Parallel — acquires captureSlogMu for the test lifetime.
+func CaptureSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	captureSlogMu.Lock()
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(original)
+		captureSlogMu.Unlock()
+	})
+	return &buf
+}
 
 // MsgErrEmptyProjectID is the shared assertion message for tests that expect
 // an error when project_id is empty.

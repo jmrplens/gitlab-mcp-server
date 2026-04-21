@@ -210,8 +210,7 @@ func TestPackagePublish_MissingProjectID(t *testing.T) {
 
 // TestPackagePublish_ContextCancelled verifies the behavior of package publish context cancelled.
 func TestPackagePublish_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -294,8 +293,7 @@ func TestPackageDownload_MissingOutputPath(t *testing.T) {
 
 // TestPackageDownload_ContextCancelled verifies the behavior of package download context cancelled.
 func TestPackageDownload_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)

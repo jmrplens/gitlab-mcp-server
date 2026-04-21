@@ -637,8 +637,7 @@ func TestToListOutput_EmptyList(t *testing.T) {
 
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -651,8 +650,7 @@ func TestList_CancelledContext(t *testing.T) {
 
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -665,8 +663,7 @@ func TestGet_CancelledContext(t *testing.T) {
 
 // TestCreate_CancelledContext verifies the behavior of create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -679,8 +676,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 
 // TestAddNote_CancelledContext verifies the behavior of add note cancelled context.
 func TestAddNote_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -693,8 +689,7 @@ func TestAddNote_CancelledContext(t *testing.T) {
 
 // TestUpdateNote_CancelledContext verifies the behavior of update note cancelled context.
 func TestUpdateNote_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -707,8 +702,7 @@ func TestUpdateNote_CancelledContext(t *testing.T) {
 
 // TestDeleteNote_CancelledContext verifies the behavior of delete note cancelled context.
 func TestDeleteNote_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

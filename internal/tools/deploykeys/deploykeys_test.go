@@ -399,8 +399,7 @@ func TestListProject_APIError(t *testing.T) {
 // TestListProject_CancelledContext verifies the behavior of list project cancelled context.
 func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProject(ctx, client, ListProjectInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -434,8 +433,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "1", DeployKeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -504,8 +502,7 @@ func TestAdd_WithInvalidExpiresAt(t *testing.T) {
 // TestAdd_CancelledContext verifies the behavior of add cancelled context.
 func TestAdd_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Add(ctx, client, AddInput{ProjectID: "1", Title: "k", Key: "ssh-rsa AAAA"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -539,8 +536,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 // TestUpdate_CancelledContext verifies the behavior of update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "1", DeployKeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -594,8 +590,7 @@ func TestDelete_MissingDeployKeyID(t *testing.T) {
 // TestDelete_CancelledContext verifies the behavior of delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "1", DeployKeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -629,8 +624,7 @@ func TestEnable_MissingProjectID(t *testing.T) {
 // TestEnable_CancelledContext verifies the behavior of enable cancelled context.
 func TestEnable_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Enable(ctx, client, EnableInput{ProjectID: "1", DeployKeyID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -680,8 +674,7 @@ func TestListAll_WithPublicFilter(t *testing.T) {
 // TestListAll_CancelledContext verifies the behavior of list all cancelled context.
 func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListAll(ctx, client, ListAllInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -738,8 +731,7 @@ func TestAddInstance_WithInvalidExpiresAt(t *testing.T) {
 // TestAddInstance_CancelledContext verifies the behavior of add instance cancelled context.
 func TestAddInstance_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddInstance(ctx, client, AddInstanceInput{Title: "k", Key: "ssh-rsa AAAA"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -764,8 +756,7 @@ func TestListUserProject_APIError(t *testing.T) {
 // TestListUserProject_CancelledContext verifies the behavior of list user project cancelled context.
 func TestListUserProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListUserProject(ctx, client, ListUserProjectInput{UserID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
