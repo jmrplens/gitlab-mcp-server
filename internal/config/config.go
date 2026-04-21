@@ -1,0 +1,312 @@
+// Package config loads and validates server configuration from environment variables.
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/joho/godotenv"
+)
+
+// Upload size defaults.
+const (
+	DefaultMaxFileSize = 2 * 1024 * 1024 * 1024    // 2 GB
+	MaxFileSize        = 1024 * 1024 * 1024 * 1024 // 1 TB upper bound
+)
+
+// HTTP pool defaults.
+const (
+	DefaultMaxHTTPClients     = 100
+	DefaultSessionTimeout     = 30 * time.Minute
+	DefaultRevalidateInterval = 15 * time.Minute
+	MaxHTTPClients            = 10000
+	MaxSessionTimeout         = 24 * time.Hour
+	MaxRevalidateInterval     = 24 * time.Hour
+)
+
+// OAuth defaults.
+const (
+	DefaultOAuthCacheTTL = 15 * time.Minute
+	MinOAuthCacheTTL     = 1 * time.Minute
+	MaxOAuthCacheTTL     = 2 * time.Hour
+)
+
+// Auto-update defaults.
+const (
+	DefaultAutoUpdateRepo     = "jmrplens/gitlab-mcp-server"
+	DefaultAutoUpdateInterval = 1 * time.Hour
+	DefaultAutoUpdateTimeout  = 15 * time.Second
+)
+
+// Config holds all configuration values for the MCP server.
+type Config struct {
+	GitLabURL     string
+	GitLabToken   string
+	SkipTLSVerify bool
+	MetaTools     bool
+	Enterprise    bool
+	ReadOnly      bool
+	SafeMode      bool
+
+	UploadMaxFileSize int64
+
+	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
+	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
+	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
+
+	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
+	AutoUpdateRepo     string        // GitLab project path for update checks
+	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
+	AutoUpdateTimeout  time.Duration // Timeout for pre-start update check (stdio mode)
+
+	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
+	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
+}
+
+// EnvFileName is the name of the env file where the setup wizard stores secrets.
+const EnvFileName = ".gitlab-mcp-server.env"
+
+// Load reads configuration from environment variables.
+// It attempts to load a .env file from the current directory first, then
+// falls back to ~/.gitlab-mcp-server.env (written by the setup wizard) for
+// secrets not provided via the environment or CWD .env.
+func Load() (*Config, error) {
+	_ = godotenv.Load()
+
+	// Fallback: load secrets from the wizard-generated env file in $HOME.
+	// godotenv does not overwrite variables already set, so explicit env
+	// vars and CWD .env values take precedence.
+	if home, err := os.UserHomeDir(); err == nil {
+		_ = godotenv.Load(filepath.Join(home, EnvFileName))
+	}
+
+	skipTLS, err := parseBool(os.Getenv("GITLAB_SKIP_TLS_VERIFY"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY value: %w", err)
+	}
+
+	metaTools, err := parseBool(os.Getenv("META_TOOLS"), true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid META_TOOLS value: %w", err)
+	}
+
+	enterprise, err := parseBool(os.Getenv("GITLAB_ENTERPRISE"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_ENTERPRISE value: %w", err)
+	}
+
+	readOnly, err := parseBool(os.Getenv("GITLAB_READ_ONLY"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_READ_ONLY value: %w", err)
+	}
+
+	safeMode, err := parseBool(os.Getenv("GITLAB_SAFE_MODE"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_SAFE_MODE value: %w", err)
+	}
+
+	maxFileSize, err := parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
+	}
+
+	maxHTTPClients, err := parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients)
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
+	}
+
+	sessionTimeout, err := parseDuration(os.Getenv("SESSION_TIMEOUT"), DefaultSessionTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SESSION_TIMEOUT value: %w", err)
+	}
+	if sessionTimeout > MaxSessionTimeout {
+		return nil, fmt.Errorf("SESSION_TIMEOUT %s exceeds maximum of %s", sessionTimeout, MaxSessionTimeout)
+	}
+
+	revalidateInterval, err := parseDuration(os.Getenv("SESSION_REVALIDATE_INTERVAL"), DefaultRevalidateInterval)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SESSION_REVALIDATE_INTERVAL value: %w", err)
+	}
+	if revalidateInterval > MaxRevalidateInterval {
+		return nil, fmt.Errorf("SESSION_REVALIDATE_INTERVAL %s exceeds maximum of %s", revalidateInterval, MaxRevalidateInterval)
+	}
+
+	autoUpdateRepo := os.Getenv("AUTO_UPDATE_REPO")
+	if autoUpdateRepo == "" {
+		autoUpdateRepo = DefaultAutoUpdateRepo
+	}
+
+	autoUpdateInterval, err := parseDuration(os.Getenv("AUTO_UPDATE_INTERVAL"), DefaultAutoUpdateInterval)
+	if err != nil {
+		return nil, fmt.Errorf("invalid AUTO_UPDATE_INTERVAL value: %w", err)
+	}
+
+	autoUpdateTimeout, err := parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
+	}
+
+	autoUpdate := os.Getenv("AUTO_UPDATE")
+	if autoUpdate == "" {
+		autoUpdate = "true"
+	}
+
+	authMode := os.Getenv("AUTH_MODE")
+	if authMode == "" {
+		authMode = "legacy"
+	}
+
+	oauthCacheTTL, err := parseDuration(os.Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
+	}
+
+	cfg := &Config{
+		GitLabURL:          os.Getenv("GITLAB_URL"),
+		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
+		SkipTLSVerify:      skipTLS,
+		MetaTools:          metaTools,
+		Enterprise:         enterprise,
+		ReadOnly:           readOnly,
+		SafeMode:           safeMode,
+		UploadMaxFileSize:  maxFileSize,
+		MaxHTTPClients:     maxHTTPClients,
+		SessionTimeout:     sessionTimeout,
+		RevalidateInterval: revalidateInterval,
+		AutoUpdate:         autoUpdate,
+		AutoUpdateRepo:     autoUpdateRepo,
+		AutoUpdateInterval: autoUpdateInterval,
+		AutoUpdateTimeout:  autoUpdateTimeout,
+		AuthMode:           authMode,
+		OAuthCacheTTL:      oauthCacheTTL,
+	}
+
+	if err = cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// validate checks that all required configuration fields are present and valid.
+func (c *Config) validate() error {
+	if c.GitLabURL == "" {
+		return errors.New("GITLAB_URL is required")
+	}
+	u, err := url.Parse(c.GitLabURL)
+	if err != nil {
+		return fmt.Errorf("GITLAB_URL is not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("GITLAB_URL must use http:// or https:// scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return errors.New("GITLAB_URL must include a host")
+	}
+	if c.GitLabToken == "" {
+		return errors.New("GITLAB_TOKEN is required")
+	}
+	if c.UploadMaxFileSize > MaxFileSize {
+		return fmt.Errorf("UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got %d bytes)", c.UploadMaxFileSize)
+	}
+	if c.MaxHTTPClients <= 0 {
+		return fmt.Errorf("MAX_HTTP_CLIENTS must be positive (got %d)", c.MaxHTTPClients)
+	}
+	if c.MaxHTTPClients > MaxHTTPClients {
+		return fmt.Errorf("MAX_HTTP_CLIENTS exceeds maximum of %d (got %d)", MaxHTTPClients, c.MaxHTTPClients)
+	}
+	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
+		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
+	}
+	if c.OAuthCacheTTL != 0 {
+		if c.OAuthCacheTTL < MinOAuthCacheTTL {
+			return fmt.Errorf("OAUTH_CACHE_TTL %s is below minimum of %s", c.OAuthCacheTTL, MinOAuthCacheTTL)
+		}
+		if c.OAuthCacheTTL > MaxOAuthCacheTTL {
+			return fmt.Errorf("OAUTH_CACHE_TTL %s exceeds maximum of %s", c.OAuthCacheTTL, MaxOAuthCacheTTL)
+		}
+	}
+	return nil
+}
+
+// parseBool parses a string as a boolean, returning defaultValue when s is empty.
+// Returns an error if s is non-empty and not a valid boolean representation.
+func parseBool(s string, defaultValue bool) (bool, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	return strconv.ParseBool(s)
+}
+
+// parseSize parses a human-friendly size string (e.g. "50MB", "10mb", "2GB",
+// "1024") into bytes. Supported suffixes: KB, MB, GB (case-insensitive).
+// Returns defaultValue when s is empty.
+func parseSize(s string, defaultValue int64) (int64, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+
+	upper := strings.TrimSpace(strings.ToUpper(s))
+
+	multiplier := int64(1)
+	numStr := upper
+
+	switch {
+	case strings.HasSuffix(upper, "GB"):
+		multiplier = 1024 * 1024 * 1024
+		numStr = strings.TrimSuffix(upper, "GB")
+	case strings.HasSuffix(upper, "MB"):
+		multiplier = 1024 * 1024
+		numStr = strings.TrimSuffix(upper, "MB")
+	case strings.HasSuffix(upper, "KB"):
+		multiplier = 1024
+		numStr = strings.TrimSuffix(upper, "KB")
+	}
+
+	numStr = strings.TrimSpace(numStr)
+	n, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size %q: %w", s, err)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("size must be positive, got %q", s)
+	}
+
+	return n * multiplier, nil
+}
+
+// parseInt parses a string as an integer, returning defaultValue when s is empty.
+func parseInt(s string, defaultValue int) (int, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer %q: %w", s, err)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("value must be positive, got %d", n)
+	}
+	return n, nil
+}
+
+// parseDuration parses a string as a [time.Duration], returning defaultValue when s is empty.
+func parseDuration(s string, defaultValue time.Duration) (time.Duration, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("duration must be positive, got %s", d)
+	}
+	return d, nil
+}
