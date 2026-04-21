@@ -708,3 +708,66 @@ func TestIsHTTPStatus_WrappedErrNotFound(t *testing.T) {
 		t.Error("expected true for wrapped gl.ErrNotFound with 404")
 	}
 }
+
+// TestIsNotFound verifies that IsNotFound detects 404 via structured ErrorResponse,
+// plain-text error messages, and rejects non-404 errors including port numbers
+// that happen to contain "404".
+func TestIsNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "structured 404 ErrorResponse",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusNotFound},
+			},
+			want: true,
+		},
+		{
+			name: "sentinel gl.ErrNotFound",
+			err:  gl.ErrNotFound,
+			want: true,
+		},
+		{
+			name: "plain text 404 Not Found",
+			err:  fmt.Errorf("404 Not Found"),
+			want: true,
+		},
+		{
+			name: "wrapped plain text 404 Not Found",
+			err:  fmt.Errorf("GET http://example.com/api: 404 Not Found"),
+			want: true,
+		},
+		{
+			name: "403 error should not match",
+			err:  fmt.Errorf("GET http://example.com/api: 403 Forbidden"),
+			want: false,
+		},
+		{
+			name: "port containing 404 should not match",
+			err:  fmt.Errorf("GET http://127.0.0.1:40456/api/v4/projects: 403 Forbidden"),
+			want: false,
+		},
+		{
+			name: "port 40400 should not match",
+			err:  fmt.Errorf("GET http://127.0.0.1:40400/api/v4/projects: 500 Internal Server Error"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsNotFound(tt.err)
+			if got != tt.want {
+				t.Errorf("IsNotFound() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

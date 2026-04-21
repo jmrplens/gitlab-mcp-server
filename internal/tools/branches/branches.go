@@ -175,8 +175,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	_, err := client.GL().ProtectedBranches.UnprotectRepositoryBranches(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		// 404 means the branch is not protected — idempotent success.
-		// client-go may return *ErrorResponse (with status code) or plain error "404 Not Found".
-		if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.ContainsAny(err, "404") {
+		if toolutil.IsNotFound(err) {
 			return UnprotectOutput{
 				Status:  "already_unprotected",
 				Message: fmt.Sprintf("Branch %q in project %s is not protected — no action needed.", input.BranchName, input.ProjectID),
