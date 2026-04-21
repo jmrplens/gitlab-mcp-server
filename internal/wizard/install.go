@@ -49,7 +49,7 @@ func installBinaryImpl(destDir string) (string, error) {
 	}
 
 	if runtime.GOOS != "windows" {
-		if err = os.Chmod(destPath, 0o755); err != nil { // #nosec G302 -- binary needs execute permission
+		if err = os.Chmod(destPath, 0o700); err != nil { // #nosec G302 -- binary needs owner-only execute permission
 			return "", fmt.Errorf("setting permissions: %w", err)
 		}
 	}

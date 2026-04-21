@@ -18,24 +18,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-const (
-	minInterval     = 5
-	maxInterval     = 60
-	defaultInterval = 10
-	minTimeout      = 1
-	maxTimeout      = 3600
-	defaultTimeout  = 300
-)
-
-// terminalStatuses contains pipeline statuses that indicate the pipeline has finished.
-var terminalStatuses = map[string]bool{
-	"success":  true,
-	"failed":   true,
-	"canceled": true,
-	"skipped":  true,
-	"manual":   true,
-}
-
 // WaitInput defines parameters for waiting on a pipeline to complete.
 type WaitInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
@@ -55,26 +37,6 @@ type WaitOutput struct {
 	TimedOut    bool         `json:"timed_out"`
 }
 
-func clampInterval(v int) int {
-	if v < minInterval {
-		return defaultInterval
-	}
-	if v > maxInterval {
-		return maxInterval
-	}
-	return v
-}
-
-func clampTimeout(v int) int {
-	if v < minTimeout {
-		return defaultTimeout
-	}
-	if v > maxTimeout {
-		return maxTimeout
-	}
-	return v
-}
-
 // Wait polls a pipeline until it reaches a terminal state or the timeout is reached.
 // It sends MCP progress notifications to keep the client informed during polling.
 func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input WaitInput) (WaitOutput, error) {
@@ -88,8 +50,8 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		return WaitOutput{}, toolutil.ErrRequiredInt64("pipelineWait", "pipeline_id")
 	}
 
-	interval := clampInterval(input.IntervalSeconds)
-	timeout := clampTimeout(input.TimeoutSeconds)
+	interval := toolutil.ClampPollInterval(input.IntervalSeconds)
+	timeout := toolutil.ClampPollTimeout(input.TimeoutSeconds)
 	failOnError := true
 	if input.FailOnError != nil {
 		failOnError = *input.FailOnError
@@ -113,7 +75,7 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		}
 
 		detail := DetailToOutput(p)
-		if terminalStatuses[detail.Status] {
+		if toolutil.IsTerminalStatus(detail.Status) {
 			elapsed := time.Since(startTime).Round(time.Second)
 			out := WaitOutput{
 				Pipeline:    detail,
