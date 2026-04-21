@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gitlab-mcp-server Setup Wizard</title>
+<style>
+  :root {
+    --bg: #0f111a;
+    --bg-gradient: linear-gradient(135deg, #0f111a 0%, #131729 50%, #0f111a 100%);
+    --surface: rgba(22, 27, 45, 0.8);
+    --surface-hover: rgba(30, 36, 58, 0.9);
+    --border: rgba(99, 110, 150, 0.15);
+    --border-focus: rgba(99, 148, 255, 0.4);
+    --text: #e2e8f0;
+    --text-muted: #8892b0;
+    --text-dim: #5a6480;
+    --accent: #6394ff;
+    --accent-hover: #7eaaff;
+    --accent-glow: rgba(99, 148, 255, 0.15);
+    --success: #34d399;
+    --success-bg: rgba(52, 211, 153, 0.1);
+    --error: #f47272;
+    --error-bg: rgba(244, 114, 114, 0.1);
+    --input-bg: rgba(15, 17, 26, 0.6);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-gradient); color: var(--text);
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; padding: 2.5rem 1rem;
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 660px; width: 100%;
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header {
+    text-align: center; margin-bottom: 2rem; padding: 2rem 1.5rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); backdrop-filter: blur(12px);
+    box-shadow: var(--shadow);
+  }
+  .header-icon {
+    width: 48px; height: 48px; margin: 0 auto 0.75rem;
+    background: var(--accent-glow); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .header-icon svg { width: 24px; height: 24px; fill: var(--accent); }
+  .header h1 {
+    font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem;
+    letter-spacing: -0.02em;
+  }
+  .header .subtitle {
+    color: var(--text-muted); font-size: 0.875rem; font-weight: 400;
+  }
+  .header .version {
+    display: inline-block; margin-top: 0.5rem;
+    color: var(--accent); font-size: 0.75rem; font-weight: 600;
+    padding: 0.15rem 0.6rem; border-radius: 999px;
+    background: var(--accent-glow); letter-spacing: 0.02em;
+  }
+
+  .step-indicator {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .step-number {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent-glow); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+  }
+  .step-title {
+    font-size: 0.9rem; font-weight: 600; color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.5rem;
+    margin-bottom: 0.75rem; backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.2s;
+  }
+  .section:hover { border-color: rgba(99, 110, 150, 0.25); }
+
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-size: 0.8rem; color: var(--text-muted);
+    margin-bottom: 0.35rem; font-weight: 500; letter-spacing: 0.01em;
+  }
+  .field input[type="text"], .field input[type="url"],
+  .field input[type="password"], .field select {
+    width: 100%; padding: 0.65rem 0.85rem; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--input-bg); color: var(--text);
+    font-size: 0.9rem; outline: none; transition: all 0.2s;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .field .hint {
+    font-size: 0.72rem; color: var(--text-dim); margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+  .field .hint a { color: var(--accent); text-decoration: none; }
+  .field .hint a:hover { text-decoration: underline; }
+  .field .hint strong { color: var(--text-muted); }
+
+  .checkbox-group { display: flex; flex-direction: column; gap: 0.15rem; }
+  .checkbox-group label {
+    display: flex; align-items: center; gap: 0.6rem; cursor: pointer;
+    font-size: 0.9rem; color: var(--text); padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-sm); transition: background 0.15s;
+  }
+  .checkbox-group label:hover { background: rgba(99, 148, 255, 0.05); }
+  .checkbox-group input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent);
+    border-radius: 4px;
+  }
+
+  .toggle-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row > label:first-child { color: var(--text); font-size: 0.85rem; }
+  .toggle {
+    position: relative; width: 42px; height: 24px; flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: rgba(99, 110, 150, 0.25); border-radius: 24px;
+    transition: 0.25s ease;
+  }
+  .toggle .slider::before {
+    content: ''; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: var(--text-muted);
+    border-radius: 50%; transition: 0.25s ease;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before {
+    transform: translateX(18px); background: #fff;
+  }
+
+  .btn {
+    padding: 0.7rem 1.5rem; border-radius: var(--radius-sm); border: none;
+    font-size: 0.9rem; cursor: pointer; font-weight: 600;
+    transition: all 0.2s; font-family: inherit; letter-spacing: -0.01em;
+  }
+  .btn-primary {
+    background: var(--accent); color: #fff; width: 100%;
+    box-shadow: 0 2px 12px rgba(99, 148, 255, 0.25);
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 20px rgba(99, 148, 255, 0.35);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+  .input-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+  .input-row input { flex: 1; }
+  .btn-browse {
+    padding: 0.65rem 0.85rem; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--accent); cursor: pointer; font-size: 0.8rem;
+    white-space: nowrap; transition: all 0.2s; font-family: inherit;
+    font-weight: 500;
+  }
+  .btn-browse:hover {
+    background: var(--surface-hover); border-color: var(--border-focus);
+  }
+
+  .error-msg {
+    color: var(--error); font-size: 0.8rem; margin-top: 0.3rem;
+    display: none; padding: 0.3rem 0.5rem; border-radius: 4px;
+    background: var(--error-bg);
+  }
+  .error-msg.show { display: block; }
+
+  .result {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2rem 1.5rem;
+    display: none; text-align: center; backdrop-filter: blur(12px);
+    box-shadow: var(--shadow);
+    animation: fadeIn 0.4s ease-out;
+  }
+  .result.show { display: block; }
+  .result-icon {
+    width: 56px; height: 56px; margin: 0 auto 1rem;
+    background: var(--success-bg); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .result-icon svg { width: 28px; height: 28px; stroke: var(--success); fill: none; }
+  .result h2 {
+    color: var(--success); margin-bottom: 0.5rem;
+    font-size: 1.3rem; font-weight: 700;
+  }
+  .result > p { color: var(--text-muted); font-size: 0.875rem; }
+  .result .clients-list {
+    text-align: left; margin: 1.25rem 0; padding: 0;
+  }
+  .result .clients-list li {
+    list-style: none; padding: 0.45rem 0.75rem; color: var(--text);
+    font-size: 0.875rem; border-radius: var(--radius-sm);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .result .clients-list li::before {
+    content: ''; display: inline-block; width: 18px; height: 18px; flex-shrink: 0;
+    background: var(--success-bg); border-radius: 50%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2334d399' stroke-width='3'%3E%3Cpath d='M5 13l4 4L19 7'/%3E%3C/svg%3E");
+    background-size: 12px; background-repeat: no-repeat; background-position: center;
+  }
+
+  .jetbrains-json {
+    background: var(--input-bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 1rem; margin-top: 0.75rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.75rem;
+    white-space: pre-wrap; word-break: break-all; color: var(--text-muted);
+    max-height: 200px; overflow-y: auto; display: none;
+    text-align: left;
+  }
+  .jetbrains-json.show { display: block; }
+
+  .result .reconfigure {
+    margin-top: 1.25rem; color: var(--text-dim); font-size: 0.8rem;
+  }
+  .result .reconfigure code {
+    color: var(--text-muted); background: var(--input-bg);
+    padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.75rem;
+  }
+
+  details.section { cursor: default; }
+  details.section summary {
+    cursor: pointer; font-size: 0.9rem; font-weight: 600;
+    list-style: none; display: flex; align-items: center; gap: 0.5rem;
+    color: var(--text-muted); transition: color 0.2s;
+  }
+  details.section summary:hover { color: var(--text); }
+  details.section summary::-webkit-details-marker { display: none; }
+  details.section summary::before {
+    content: ''; display: inline-block; width: 20px; height: 20px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238892b0' stroke-width='2'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+    background-size: contain; flex-shrink: 0; opacity: 0.7;
+  }
+  details[open].section summary::before { opacity: 1; }
+  details.section > div { margin-top: 1rem; }
+
+  .select-all-btn {
+    font-size: 0.75rem; color: var(--accent); cursor: pointer;
+    font-weight: 500; border: none; background: none;
+    padding: 0.2rem 0.4rem; border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .select-all-btn:hover { background: var(--accent-glow); }
+
+  .token-hint-existing {
+    display: none; color: var(--accent); font-size: 0.75rem;
+    margin-top: 0.3rem; padding: 0.3rem 0.5rem;
+    background: var(--accent-glow); border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24"><path d="M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51L23 13.45a.84.84 0 0 1-.35.94z"/></svg>
+    </div>
+    <h1>Setup Wizard</h1>
+    <div class="subtitle">gitlab-mcp-server</div>
+    <div class="version" id="version">loading...</div>
+  </div>
+
+  <div id="formPanel">
+    <div class="section">
+      <div class="step-indicator"><span class="step-number">1</span><span class="step-title">Binary Installation</span></div>
+      <div class="field">
+        <label for="installPath">Install path</label>
+        <div class="input-row">
+          <input type="text" id="installPath" placeholder="Loading defaults...">
+          <button class="btn-browse" id="browseBtnutton>
+        </div>
+        <div class="hint">Full path where the binary will be installed</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="step-indicator"><span class="step-number">2</span><span class="step-title">GitLab Configuration</span></div>
+      <div class="field">
+        <label for="gitlabUrl">GitLab URL</label>
+        <input type="url" id="gitlabUrl" placeholder="https://gitlab.example.com">
+        <div class="error-msg" id="urlError">Please enter a valid URL</div>
+      </div>
+      <div class="field">
+        <label for="gitlabToken">Personal Access Token</label>
+        <input type="password" id="gitlabToken" placeholder="glpat-...">
+        <div class="token-hint-existing" id="tokenExistingHint">An existing token is configured. Leave empty to keep it.</div>
+        <div class="hint">
+          Need a token? <a id="tokenLink" href="#" target="_blank">Create one on your GitLab instance</a>
+        </div>
+        <div class="hint">Required scope: <strong>api</strong> (full access to the GitLab API)</div>
+        <div class="hint">Token stored securely in <code style="color:var(--text-muted);background:var(--input-bg);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">~/.gitlab-mcp-server.env</code></div>
+        <div class="error-msg" id="tokenError">Token is required</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="step-indicator"><span class="step-number">3</span><span class="step-title">MCP Clients</span></div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <span style="margin-bottom:0;font-size:0.8rem;color:var(--text-muted);font-weight:500;letter-spacing:0.01em;">Select clients to configure</span>
+          <button class="select-all-btn" id="selectAllBtnlect all</button>
+        </div>
+        <div class="checkbox-group" id="clientList"></div>
+      </div>
+    </div>
+
+    <details class="section">
+      <summary>Advanced Options</summary>
+      <div>
+        <div class="toggle-row">
+          <label for="optSkipTLS">Skip TLS verification</label>
+          <label class="toggle" aria-label="Skip TLS verification"><input type="checkbox" id="optSkipTLS"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label for="optMetaTools">Enable meta-tools</label>
+          <label class="toggle" aria-label="Enable meta-tools"><input type="checkbox" id="optMetaTools" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label for="optAutoUpdate">Enable auto-update</label>
+          <label class="toggle" aria-label="Enable auto-update"><input type="checkbox" id="optAutoUpdate" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label for="optYoloMode">Enable YOLO mode</label>
+          <label class="toggle" aria-label="Enable YOLO mode" aria-label="Enable YOLO mode"><input type="checkbox" id="optYoloMode"><span class="slider"></span></label>
+        </div>
+        <div class="field" style="margin-top:0.8rem;">
+          <label for="optLogLevel">Log level</label>
+          <select id="optLogLevel">
+            <option value="debug">debug</option>
+            <option value="info" selected>info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <button class="btn btn-primary" id="configureBtn" em;">Configure</button>
+  </div>
+
+  <div class="result" id="resultPanel">
+    <div class="result-icon">
+      <svg viewBox="0 0 24 24" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+    </div>
+    <h2>Setup Complete!</h2>
+    <p>The following clients have been configured:</p>
+    <ul class="clients-list" id="resultList"></ul>
+    <div class="jetbrains-json" id="jetbrainsJson"></div>
+    <p class="reconfigure">
+      To reconfigure later, run: <code>gitlab-mcp-server --setup</code>
+    </p>
+    <div style="text-align:center;margin-top:1.25rem;">
+      <button class="btn btn-primary" id="closeBtn" style="width:auto;padding:0.6rem 2rem;tton>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+let defaults = {};
+
+function updateTokenLink(gitlabUrl) {
+  const link = document.getElementById('tokenLink');
+  if (gitlabUrl) {
+    let base = gitlabUrl;
+    while (base.endsWith('/')) base = base.slice(0, -1);
+    link.href = base + '/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api';
+    link.textContent = 'Create one on your GitLab instance';
+  } else {
+    link.href = '#';
+    link.textContent = 'Enter GitLab URL first';
+  }
+}
+
+try {
+  const resp = await fetch('/api/defaults');
+  defaults = await resp.json();
+  document.getElementById('version').textContent = 'v' + (defaults.version || 'dev');
+  document.getElementById('installPath').value = defaults.install_path || '';
+  if (defaults.gitlab_url) {
+    document.getElementById('gitlabUrl').value = defaults.gitlab_url;
+    updateTokenLink(defaults.gitlab_url);
+  }
+  if (defaults.has_existing && defaults.masked_token) {
+    document.getElementById('gitlabToken').placeholder = defaults.masked_token + ' (leave empty to keep)';
+    document.getElementById('tokenExistingHint').style.display = 'block';
+  }
+  if (typeof defaults.skip_tls_verify === 'boolean') {
+    document.getElementById('optSkipTLS').checked = defaults.skip_tls_verify;
+  }
+  document.getElementById('gitlabUrl').addEventListener('input', function() {
+    updateTokenLink(this.value.trim());
+  });
+
+  const clientList = document.getElementById('clientList');
+  (defaults.clients || []).forEach(function(c, i) {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!c.default_selected;
+    cb.dataset.index = i;
+    cb.className = 'client-cb';
+    const span = document.createElement('span');
+    span.textContent = c.name + (c.display_only ? ' (prints JSON)' : '');
+    label.appendChild(cb);
+    label.appendChild(span);
+    clientList.appendChild(label);
+  });
+} catch(e) {
+  console.error('Failed to load defaults:', e);
+}
+
+document.getElementById('browseBtn').addEventListener('click', pickDirectory);
+document.getElementById('selectAllBtn').addEventListener('click', toggleAll);
+document.getElementById('configureBtn').addEventListener('click', configure);
+document.getElementById('closeBtn').addEventListener('click', function() { window.close(); });
+
+function toggleAll() {
+  const cbs = document.querySelectorAll('.client-cb');
+  const allChecked = Array.from(cbs).every(function(cb) { return cb.checked; });
+  cbs.forEach(function(cb) { cb.checked = !allChecked; });
+}
+
+async function pickDirectory() {
+  const btn = document.querySelector('.btn-browse');
+  const origText = btn.textContent;
+  btn.textContent = 'Opening...';
+  btn.disabled = true;
+  try {
+    const startDir = document.getElementById('installPath').value.trim();
+    const resp = await fetch('/api/pick-directory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_dir: startDir }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.path) document.getElementById('installPath').value = data.path;
+    }
+  } catch(e) {
+    console.error('Pick directory failed:', e);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
+async function configure() {
+  const url = document.getElementById('gitlabUrl').value.trim();
+  const token = document.getElementById('gitlabToken').value.trim();
+  let valid = true;
+  const urlError = document.getElementById('urlError');
+  const tokenError = document.getElementById('tokenError');
+  urlError.classList.remove('show');
+  tokenError.classList.remove('show');
+  try { new URL(url); } catch { urlError.classList.add('show'); valid = false; }
+  if (!token && !defaults.has_existing) { tokenError.classList.add('show'); valid = false; }
+  if (!valid) return;
+
+  const btn = document.getElementById('configureBtn');
+  btn.disabled = true;
+  btn.textContent = 'Configuring...';
+
+  const selectedIndices = [];
+  document.querySelectorAll('.client-cb').forEach(function(cb) {
+    if (cb.checked) selectedIndices.push(Number.parseInt(cb.dataset.index, 10));
+  });
+
+  const body = {
+    install_path: document.getElementById('installPath').value.trim(),
+    gitlab_url: url,
+    gitlab_token: token,
+    skip_tls_verify: document.getElementById('optSkipTLS').checked,
+    meta_tools: document.getElementById('optMetaTools').checked,
+    auto_update: document.getElementById('optAutoUpdate').checked,
+    yolo_mode: document.getElementById('optYoloMode').checked,
+    log_level: document.getElementById('optLogLevel').value,
+    selected_clients: selectedIndices,
+  };
+
+  try {
+    const resp = await fetch('/api/configure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await resp.json();
+
+    document.getElementById('formPanel').style.display = 'none';
+
+    const resultPanel = document.getElementById('resultPanel');
+    const resultList = document.getElementById('resultList');
+    resultList.innerHTML = '';
+    (result.configured || []).forEach(function(name) {
+      const li = document.createElement('li');
+      li.textContent = name;
+      resultList.appendChild(li);
+    });
+
+    if (result.jetbrains_json) {
+      const jb = document.getElementById('jetbrainsJson');
+      jb.textContent = result.jetbrains_json;
+      jb.classList.add('show');
+    }
+
+    resultPanel.classList.add('show');
+  } catch(e) {
+    alert('Configuration failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Configure';
+  }
+}
+</script>
+</body>
+</html>
