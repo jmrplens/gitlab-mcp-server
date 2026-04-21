@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="GitLab MCP Server" src="site/src/assets/banner-dark.svg" width="840">
+  <img alt="" src="site/src/assets/banner-dark.svg" width="840">
 </p>
 
 # GitLab MCP Server
@@ -15,6 +15,7 @@
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=security_rating)](https://sonarcloud.io/project/security_hotspots?id=jmrplens_gitlab-mcp-server)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=sqale_rating)](https://sonarcloud.io/project/issues?id=jmrplens_gitlab-mcp-server&resolved=false&types=CODE_SMELL)
 
+<!-- Metric badges: update counts when tools/resources/prompts change (see cmd/audit_metrics) -->
 ![MCP Tools: 1006](https://img.shields.io/badge/MCP_Tools-1006-6F42C1?style=flat&logo=puzzle-piece&logoColor=white)
 ![Domains: 162](https://img.shields.io/badge/Domains-162-blue?style=flat)
 ![Meta‑tools: 42](https://img.shields.io/badge/Meta--tools-42-teal?style=flat)
@@ -24,7 +25,7 @@
 
 A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as MCP tools, resources, and prompts for AI assistants. Single static binary — zero dependencies.
 
-> **Security first**: A-rated on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) — zero vulnerabilities, zero hotspots. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
+> **Security first**: Continuously monitored on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) with quality gates, coverage, and security scanning. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
 
 ## Highlights
 
