@@ -233,33 +233,53 @@ type gqlProject struct {
 	FullPath string `json:"fullPath"`
 }
 
+// gqlIssueLinkNode holds a single issue link ID.
+type gqlIssueLinkNode struct {
+	ID string `json:"id"`
+}
+
+// gqlIssueLinksConnection holds a list of issue link nodes.
+type gqlIssueLinksConnection struct {
+	Nodes []gqlIssueLinkNode `json:"nodes"`
+}
+
+// gqlMergeRequestRef holds a merge request reference.
+type gqlMergeRequestRef struct {
+	IID string `json:"iid"`
+}
+
 type gqlVulnerabilityNode struct {
-	ID                string          `json:"id"`
-	Title             string          `json:"title"`
-	Severity          string          `json:"severity"`
-	State             string          `json:"state"`
-	Description       string          `json:"description"`
-	ReportType        string          `json:"reportType"`
-	DetectedAt        string          `json:"detectedAt"`
-	DismissedAt       string          `json:"dismissedAt"`
-	ResolvedAt        string          `json:"resolvedAt"`
-	ConfirmedAt       string          `json:"confirmedAt"`
-	Solution          string          `json:"solution"`
-	HasSolutions      bool            `json:"hasSolutions"`
-	DismissalReason   string          `json:"dismissalReason"`
-	PrimaryIdentifier *gqlIdentifier  `json:"primaryIdentifier"`
-	Identifiers       []gqlIdentifier `json:"identifiers"`
-	Scanner           *gqlScanner     `json:"scanner"`
-	Location          *gqlLocation    `json:"location"`
-	Project           *gqlProject     `json:"project"`
-	IssueLinks        *struct {
-		Nodes []struct {
-			ID string `json:"id"`
-		} `json:"nodes"`
-	} `json:"issueLinks"`
-	MergeRequest *struct {
-		IID string `json:"iid"`
-	} `json:"mergeRequest"`
+	ID                string                   `json:"id"`
+	Title             string                   `json:"title"`
+	Severity          string                   `json:"severity"`
+	State             string                   `json:"state"`
+	Description       string                   `json:"description"`
+	ReportType        string                   `json:"reportType"`
+	DetectedAt        string                   `json:"detectedAt"`
+	DismissedAt       string                   `json:"dismissedAt"`
+	ResolvedAt        string                   `json:"resolvedAt"`
+	ConfirmedAt       string                   `json:"confirmedAt"`
+	Solution          string                   `json:"solution"`
+	HasSolutions      bool                     `json:"hasSolutions"`
+	DismissalReason   string                   `json:"dismissalReason"`
+	PrimaryIdentifier *gqlIdentifier           `json:"primaryIdentifier"`
+	Identifiers       []gqlIdentifier          `json:"identifiers"`
+	Scanner           *gqlScanner              `json:"scanner"`
+	Location          *gqlLocation             `json:"location"`
+	Project           *gqlProject              `json:"project"`
+	IssueLinks        *gqlIssueLinksConnection `json:"issueLinks"`
+	MergeRequest      *gqlMergeRequestRef      `json:"mergeRequest"`
+}
+
+// gqlVulnerabilitiesConnection holds the paginated list of vulnerability nodes.
+type gqlVulnerabilitiesConnection struct {
+	Nodes    []gqlVulnerabilityNode      `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+}
+
+// gqlProjectVulnerabilities wraps the vulnerabilities connection inside a project.
+type gqlProjectVulnerabilities struct {
+	Vulnerabilities gqlVulnerabilitiesConnection `json:"vulnerabilities"`
 }
 
 // nodeToItem converts a raw GraphQL vulnerability node into an [Item] output
@@ -386,12 +406,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				Vulnerabilities struct {
-					Nodes    []gqlVulnerabilityNode      `json:"nodes"`
-					PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-				} `json:"vulnerabilities"`
-			} `json:"project"`
+			Project *gqlProjectVulnerabilities `json:"project"`
 		} `json:"data"`
 	}
 
@@ -401,6 +416,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("list_vulnerabilities", err)
+	}
+
+	if resp.Data.Project == nil {
+		return ListOutput{}, fmt.Errorf("list_vulnerabilities: project %q not found", input.ProjectPath)
 	}
 
 	items := make([]Item, 0, len(resp.Data.Project.Vulnerabilities.Nodes))

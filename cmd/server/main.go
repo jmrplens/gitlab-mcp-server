@@ -634,7 +634,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 	select {
 	case <-ctx.Done():
 		slog.Info("HTTP server shutdown requested")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpShutdownTimeout)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("http server shutdown: %w", err)

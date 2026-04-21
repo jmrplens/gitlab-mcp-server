@@ -5,6 +5,7 @@ package securityfindings
 
 import (
 	"context"
+	"fmt"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -160,24 +161,43 @@ type gqlLocation struct {
 	BlobPath  string `json:"blobPath"`
 }
 
+// gqlVulnerabilityRef holds a reference to a vulnerability.
+type gqlVulnerabilityRef struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+}
+
 type gqlFindingNode struct {
-	UUID          string          `json:"uuid"`
-	Name          string          `json:"name"`
-	Title         string          `json:"title"`
-	Severity      string          `json:"severity"`
-	Confidence    string          `json:"confidence"`
-	ReportType    string          `json:"reportType"`
-	Scanner       *gqlScanner     `json:"scanner"`
-	Description   string          `json:"description"`
-	Solution      string          `json:"solution"`
-	Identifiers   []gqlIdentifier `json:"identifiers"`
-	Location      *gqlLocation    `json:"location"`
-	State         string          `json:"state"`
-	Evidence      string          `json:"evidence"`
-	Vulnerability *struct {
-		ID    string `json:"id"`
-		State string `json:"state"`
-	} `json:"vulnerability"`
+	UUID          string               `json:"uuid"`
+	Name          string               `json:"name"`
+	Title         string               `json:"title"`
+	Severity      string               `json:"severity"`
+	Confidence    string               `json:"confidence"`
+	ReportType    string               `json:"reportType"`
+	Scanner       *gqlScanner          `json:"scanner"`
+	Description   string               `json:"description"`
+	Solution      string               `json:"solution"`
+	Identifiers   []gqlIdentifier      `json:"identifiers"`
+	Location      *gqlLocation         `json:"location"`
+	State         string               `json:"state"`
+	Evidence      string               `json:"evidence"`
+	Vulnerability *gqlVulnerabilityRef `json:"vulnerability"`
+}
+
+// gqlFindingsConnection holds the paginated list of security finding nodes.
+type gqlFindingsConnection struct {
+	Nodes    []gqlFindingNode            `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+}
+
+// gqlPipelineFindings wraps the security report findings inside a pipeline.
+type gqlPipelineFindings struct {
+	SecurityReportFindings gqlFindingsConnection `json:"securityReportFindings"`
+}
+
+// gqlProjectPipeline wraps the pipeline inside a project.
+type gqlProjectPipeline struct {
+	Pipeline gqlPipelineFindings `json:"pipeline"`
 }
 
 // nodeToItem converts a raw GraphQL security finding node into a [FindingItem]
@@ -278,14 +298,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				Pipeline struct {
-					SecurityReportFindings struct {
-						Nodes    []gqlFindingNode            `json:"nodes"`
-						PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-					} `json:"securityReportFindings"`
-				} `json:"pipeline"`
-			} `json:"project"`
+			Project *gqlProjectPipeline `json:"project"`
 		} `json:"data"`
 	}
 
@@ -295,6 +308,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("list_security_findings", err)
+	}
+
+	if resp.Data.Project == nil {
+		return ListOutput{}, fmt.Errorf("list_security_findings: project %q not found", input.ProjectPath)
 	}
 
 	nodes := resp.Data.Project.Pipeline.SecurityReportFindings.Nodes

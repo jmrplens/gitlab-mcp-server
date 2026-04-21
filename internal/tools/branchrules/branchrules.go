@@ -228,19 +228,28 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return doGraphQLList(ctx, client, query, vars, input.ProjectPath)
 }
 
+// gqlBranchRulesConnection holds the paginated list of branch rule nodes.
+type gqlBranchRulesConnection struct {
+	Nodes    []gqlBranchRuleNode         `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+}
+
+// gqlProjectBranchRules wraps the branch rules connection inside a project.
+type gqlProjectBranchRules struct {
+	BranchRules gqlBranchRulesConnection `json:"branchRules"`
+}
+
+// gqlErrorEntry represents a single error entry in a GraphQL response.
+type gqlErrorEntry struct {
+	Message string `json:"message"`
+}
+
 // gqlResponse is the generic GraphQL response envelope for branch rules.
 type gqlResponse struct {
 	Data struct {
-		Project *struct {
-			BranchRules struct {
-				Nodes    []gqlBranchRuleNode         `json:"nodes"`
-				PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-			} `json:"branchRules"`
-		} `json:"project"`
+		Project *gqlProjectBranchRules `json:"project"`
 	} `json:"data"`
-	Errors []struct {
-		Message string `json:"message"`
-	} `json:"errors"`
+	Errors []gqlErrorEntry `json:"errors"`
 }
 
 // doGraphQLList executes a branch rules GraphQL query and returns the output.

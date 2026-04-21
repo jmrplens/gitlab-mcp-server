@@ -64,7 +64,7 @@ func UnmarshalParams[T any](params map[string]any) (T, error) {
 		if marshalErr != nil {
 			return input, fmt.Errorf("invalid params for this action: %w", err)
 		}
-		if unmarshalErr := json.Unmarshal(data2, &input); unmarshalErr != nil {
+		if json.Unmarshal(data2, &input) != nil {
 			// Return the original error for a clearer message.
 			return input, fmt.Errorf("invalid params for this action: %w", err)
 		}

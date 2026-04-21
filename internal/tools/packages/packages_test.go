@@ -576,7 +576,7 @@ func TestPackageDelete403_Maintainer(t *testing.T) {
 
 // TestPtrString verifies the behavior of ptr string.
 func TestPtrString(t *testing.T) {
-	if p := ptrString(""); p != nil {
+	if ptrString("") != nil {
 		t.Error("ptrString empty should return nil")
 	}
 	if p := ptrString("hello"); p == nil || *p != "hello" {

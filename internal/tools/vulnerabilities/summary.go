@@ -109,6 +109,21 @@ type gqlSecurityReportSummary struct {
 	ClusterImageScanning *gqlScannerSummary `json:"clusterImageScanning"`
 }
 
+// gqlSeverityCountProject wraps the severity count inside a project.
+type gqlSeverityCountProject struct {
+	VulnerabilitySeveritiesCount gqlSeverityCount `json:"vulnerabilitySeveritiesCount"`
+}
+
+// gqlSecurityPipeline wraps the security report summary inside a pipeline.
+type gqlSecurityPipeline struct {
+	SecurityReportSummary *gqlSecurityReportSummary `json:"securityReportSummary"`
+}
+
+// gqlSecurityProject wraps the pipeline inside a project for security summary.
+type gqlSecurityProject struct {
+	Pipeline *gqlSecurityPipeline `json:"pipeline"`
+}
+
 // Severity count types.
 
 // SeverityCountInput is the input for retrieving vulnerability severity counts.
@@ -136,9 +151,7 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				VulnerabilitySeveritiesCount gqlSeverityCount `json:"vulnerabilitySeveritiesCount"`
-			} `json:"project"`
+			Project *gqlSeverityCountProject `json:"project"`
 		} `json:"data"`
 	}
 
@@ -148,6 +161,10 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return SeverityCountOutput{}, toolutil.WrapErrWithMessage("vulnerability_severity_count", err)
+	}
+
+	if resp.Data.Project == nil {
+		return SeverityCountOutput{}, fmt.Errorf("vulnerability_severity_count: project %q not found", input.ProjectPath)
 	}
 
 	c := resp.Data.Project.VulnerabilitySeveritiesCount
@@ -202,11 +219,7 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 
 	var resp struct {
 		Data struct {
-			Project struct {
-				Pipeline *struct {
-					SecurityReportSummary *gqlSecurityReportSummary `json:"securityReportSummary"`
-				} `json:"pipeline"`
-			} `json:"project"`
+			Project *gqlSecurityProject `json:"project"`
 		} `json:"data"`
 	}
 
@@ -219,6 +232,10 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return PipelineSecuritySummaryOutput{}, toolutil.WrapErrWithMessage("pipeline_security_summary", err)
+	}
+
+	if resp.Data.Project == nil {
+		return PipelineSecuritySummaryOutput{}, fmt.Errorf("pipeline_security_summary: project %q not found", input.ProjectPath)
 	}
 
 	if resp.Data.Project.Pipeline == nil {

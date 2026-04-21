@@ -99,6 +99,28 @@ func nodeToItem(n gqlCustomEmojiNode) Item {
 	return item
 }
 
+// gqlCustomEmojiConnection holds the paginated list of custom emoji nodes.
+type gqlCustomEmojiConnection struct {
+	Nodes    []gqlCustomEmojiNode        `json:"nodes"`
+	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+}
+
+// gqlGroupCustomEmoji wraps the custom emoji connection inside a group.
+type gqlGroupCustomEmoji struct {
+	CustomEmoji gqlCustomEmojiConnection `json:"customEmoji"`
+}
+
+// gqlCreateCustomEmojiPayload is the response payload for creating a custom emoji.
+type gqlCreateCustomEmojiPayload struct {
+	CustomEmoji *gqlCustomEmojiNode `json:"customEmoji"`
+	Errors      []string            `json:"errors"`
+}
+
+// gqlDestroyCustomEmojiPayload is the response payload for deleting a custom emoji.
+type gqlDestroyCustomEmojiPayload struct {
+	Errors []string `json:"errors"`
+}
+
 // List.
 
 // ListInput is the input for listing custom emoji.
@@ -125,12 +147,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	var resp struct {
 		Data struct {
-			Group *struct {
-				CustomEmoji struct {
-					Nodes    []gqlCustomEmojiNode        `json:"nodes"`
-					PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-				} `json:"customEmoji"`
-			} `json:"group"`
+			Group *gqlGroupCustomEmoji `json:"group"`
 		} `json:"data"`
 	}
 
@@ -192,10 +209,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	var resp struct {
 		Data struct {
-			CreateCustomEmoji struct {
-				CustomEmoji *gqlCustomEmojiNode `json:"customEmoji"`
-				Errors      []string            `json:"errors"`
-			} `json:"createCustomEmoji"`
+			CreateCustomEmoji gqlCreateCustomEmojiPayload `json:"createCustomEmoji"`
 		} `json:"data"`
 	}
 
@@ -239,9 +253,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	var resp struct {
 		Data struct {
-			DestroyCustomEmoji struct {
-				Errors []string `json:"errors"`
-			} `json:"destroyCustomEmoji"`
+			DestroyCustomEmoji gqlDestroyCustomEmojiPayload `json:"destroyCustomEmoji"`
 		} `json:"data"`
 	}
 
