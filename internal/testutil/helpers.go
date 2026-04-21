@@ -4,7 +4,9 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,6 +21,17 @@ func CancelledCtx(t *testing.T) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
+}
+
+// CaptureSlog redirects slog output to a buffer for the duration of the test.
+// The original default logger is restored via t.Cleanup.
+func CaptureSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
 }
 
 // MsgErrEmptyProjectID is the shared assertion message for tests that expect
