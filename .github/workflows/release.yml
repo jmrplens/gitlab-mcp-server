@@ -1,0 +1,164 @@
+# Release pipeline for gitlab-mcp-server
+#
+# Triggers: tag push matching v*
+# Pipeline: E2E → GoReleaser → Docker → MCP Registry
+# If E2E tests fail, nothing is released.
+#
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+env:
+  GO_VERSION: "1.26.2"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jmrplens/gitlab-mcp-server
+
+jobs:
+  e2e:
+    name: E2E Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
+      - name: Pull GitLab image
+        run: docker pull gitlab/gitlab-ce:latest
+
+      - name: Start GitLab via Docker Compose
+        working-directory: test/e2e
+        run: |
+          docker compose up -d
+          echo "GitLab container started — waiting for readiness..."
+
+      - name: Wait for GitLab readiness
+        run: bash test/e2e/scripts/wait-for-gitlab.sh
+        timeout-minutes: 10
+
+      - name: Setup GitLab user and token
+        run: bash test/e2e/scripts/setup-gitlab.sh
+
+      - name: Register GitLab Runner
+        run: bash test/e2e/scripts/register-runner.sh
+
+      - name: Load environment
+        run: cat test/e2e/.env.docker >> "$GITHUB_ENV"
+
+      - name: Run E2E tests
+        run: |
+          gotestsum \
+            --junitfile test-results/e2e-junit.xml \
+            --format standard-verbose \
+            -- -v -tags e2e -timeout 600s -count=1 ./test/e2e/suite/
+        env:
+          E2E_MODE: "docker"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-results
+          path: test-results/
+          retention-days: 14
+
+      - name: Tear down GitLab
+        if: always()
+        working-directory: test/e2e
+        run: docker compose down -v --remove-orphans
+
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: sigstore/cosign-installer@v4.1.1
+
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update server.json with SHA256 hashes
+        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}"
+
+      - name: Publish to MCP Registry
+        continue-on-error: true
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      - name: Commit updated server.json to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" -q '.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" \
+            -X PUT \
+            -f message="chore: update server.json SHA256 hashes for v${VERSION}" \
+            -f content="$(base64 -w0 server.json)" \
+            -f sha="$FILE_SHA" \
+            -f branch="main"
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract version
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: sigstore/cosign-installer@v4.1.1
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        id: docker-push
+        with:
+          context: .
+          push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Sign Docker image
+        run: |
+          cosign sign --yes \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}

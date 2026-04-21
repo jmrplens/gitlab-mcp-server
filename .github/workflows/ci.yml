@@ -1,0 +1,199 @@
+# CI pipeline for gitlab-mcp-server
+#
+# Runs on: pull requests to main, pushes to main
+# Jobs: test, build, 8 Go analyzers (parallel), markdown, docker (PR+paths)
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26.2"
+  COVERAGE_MIN: "80"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - name: Run tests with coverage
+        run: |
+          go test -count=1 -coverprofile=coverage.out ./cmd/... ./internal/...
+          go tool cover -func=coverage.out
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if awk "BEGIN {exit !(${COVERAGE} + 0 < ${COVERAGE_MIN} + 0)}"; then
+            echo "FAIL: coverage ${COVERAGE}% is below minimum ${COVERAGE_MIN}%"
+            exit 1
+          fi
+          echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go build -o /dev/null ./cmd/server
+      - name: Verify E2E tests compile
+        run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
+
+  goimports:
+    name: goimports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Check formatting
+        run: |
+          ISSUES=$(goimports -l .)
+          if [ -n "$ISSUES" ]; then
+            echo "Files needing goimports:"
+            echo "$ISSUES"
+            exit 1
+          fi
+
+  gofmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Check formatting
+        run: |
+          ISSUES=$(gofmt -l -s .)
+          if [ -n "$ISSUES" ]; then
+            echo "Files needing gofmt:"
+            echo "$ISSUES"
+            exit 1
+          fi
+
+  vet:
+    name: go vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go vet ./cmd/... ./internal/...
+
+  modernize:
+    name: modernize
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest
+      - run: modernize ./...
+
+  golangci-lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - run: golangci-lint run ./...
+
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - run: gosec -severity medium -confidence medium -exclude-generated ./...
+
+  staticcheck:
+    name: staticcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - run: staticcheck ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod download
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+  analyze-md:
+    name: Analyze Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - run: npx --yes markdownlint-cli2 "**/*.md" "#plan" "#node_modules"
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for Docker changes
+        id: filter
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} -- Dockerfile docker-compose*.yml .dockerignore)
+          if [ -n "$CHANGED" ]; then
+            echo "docker=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docker=false" >> "$GITHUB_OUTPUT"
+            echo "No Docker-related files changed — skipping build"
+          fi
+      - name: Build Docker image
+        if: steps.filter.outputs.docker == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
