@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -19,6 +20,43 @@ var testMinimalWorkItem = gl.WorkItem{
 	State: "OPEN",
 	Title: "Minimal Epic",
 }
+
+// testFullWorkItem exercises every optional field path in toOutput.
+var testFullWorkItem = func() gl.WorkItem {
+	status := "IN_PROGRESS"
+	color := "#FF0000"
+	health := "onTrack"
+	weight := int64(5)
+	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	due := gl.ISOTime(time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC))
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	closed := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	return gl.WorkItem{
+		ID:           101,
+		IID:          1,
+		Type:         "Epic",
+		State:        "CLOSED",
+		Status:       &status,
+		Title:        "Q1 Planning",
+		Description:  "Full description",
+		WebURL:       "https://gitlab.example.com/groups/g/-/epics/1",
+		Confidential: true,
+		Author:       &gl.BasicUser{Username: "alice"},
+		Assignees:    []*gl.BasicUser{{Username: "bob"}, {Username: "carol"}},
+		Labels:       []gl.LabelDetails{{Name: "planning"}, {Name: "priority"}},
+		LinkedItems:  []gl.LinkedWorkItem{{WorkItemIID: gl.WorkItemIID{IID: 5, NamespacePath: "g/sub"}, LinkType: "blocks"}},
+		Color:        &color,
+		HealthStatus: &health,
+		Weight:       &weight,
+		Parent:       &gl.WorkItemIID{IID: 10, NamespacePath: "g"},
+		StartDate:    &start,
+		DueDate:      &due,
+		CreatedAt:    &created,
+		UpdatedAt:    &updated,
+		ClosedAt:     &closed,
+	}
+}()
 
 const (
 	testFullPath   = "my-group"
@@ -478,5 +516,320 @@ func TestFormatLinksMarkdown(t *testing.T) {
 	result := FormatLinksMarkdown(out)
 	if result == "" {
 		t.Fatal("expected non-empty result")
+	}
+}
+
+// --- toOutput full coverage ---
+
+// TestToOutput_FullFields verifies that toOutput correctly maps every optional
+// field on a WorkItem (status, color, health, dates, parent, linked items,
+// assignees, labels, closed) to the Output struct.
+func TestToOutput_FullFields(t *testing.T) {
+	out := toOutput(&testFullWorkItem)
+
+	if out.ID != 101 {
+		t.Errorf("ID = %d, want 101", out.ID)
+	}
+	if out.Status != "IN_PROGRESS" {
+		t.Errorf("Status = %q, want IN_PROGRESS", out.Status)
+	}
+	if out.Author != "alice" {
+		t.Errorf("Author = %q, want alice", out.Author)
+	}
+	if len(out.Assignees) != 2 || out.Assignees[0] != "bob" || out.Assignees[1] != "carol" {
+		t.Errorf("Assignees = %v, want [bob carol]", out.Assignees)
+	}
+	if len(out.Labels) != 2 || out.Labels[0] != "planning" {
+		t.Errorf("Labels = %v, want [planning priority]", out.Labels)
+	}
+	if len(out.LinkedItems) != 1 || out.LinkedItems[0].IID != 5 || out.LinkedItems[0].LinkType != "blocks" {
+		t.Errorf("LinkedItems = %v, unexpected", out.LinkedItems)
+	}
+	if out.Color != "#FF0000" {
+		t.Errorf("Color = %q, want #FF0000", out.Color)
+	}
+	if out.HealthStatus != "onTrack" {
+		t.Errorf("HealthStatus = %q, want onTrack", out.HealthStatus)
+	}
+	if out.ParentIID != 10 {
+		t.Errorf("ParentIID = %d, want 10", out.ParentIID)
+	}
+	if out.ParentPath != "g" {
+		t.Errorf("ParentPath = %q, want g", out.ParentPath)
+	}
+	if out.StartDate != "2026-01-01" {
+		t.Errorf("StartDate = %q, want 2026-01-01", out.StartDate)
+	}
+	if out.DueDate != "2026-03-31" {
+		t.Errorf("DueDate = %q, want 2026-03-31", out.DueDate)
+	}
+	if out.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want 2026-01-01T00:00:00Z", out.CreatedAt)
+	}
+	if out.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("UpdatedAt = %q, want 2026-01-02T00:00:00Z", out.UpdatedAt)
+	}
+	if out.ClosedAt != "2026-03-01T00:00:00Z" {
+		t.Errorf("ClosedAt = %q, want 2026-03-01T00:00:00Z", out.ClosedAt)
+	}
+	if !out.Confidential {
+		t.Error("Confidential should be true")
+	}
+	if out.Weight == nil || *out.Weight != 5 {
+		t.Errorf("Weight = %v, want 5", out.Weight)
+	}
+}
+
+// --- toLinkItem coverage ---
+
+// TestToLinkItem_NilAuthorAndCreatedAt verifies toLinkItem handles a minimal
+// Epic with nil Author and nil CreatedAt without panicking.
+func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
+	e := &gl.Epic{ID: 10, IID: 3, Title: "Bare", State: "opened"}
+	item := toLinkItem(e)
+	if item.Author != "" {
+		t.Errorf("Author = %q, want empty", item.Author)
+	}
+	if item.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want empty", item.CreatedAt)
+	}
+}
+
+// --- List with all filter options ---
+
+// TestList_WithAllFilters verifies that List passes all filter parameters to
+// the GraphQL API without errors when every optional field is populated.
+func TestList_WithAllFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
+	}))
+	boolTrue := true
+	first := int64(10)
+	out, err := List(context.Background(), client, ListInput{
+		FullPath:           testFullPath,
+		State:              "opened",
+		Search:             "planning",
+		AuthorUsername:     "alice",
+		LabelName:          []string{"urgent"},
+		Confidential:       &boolTrue,
+		Sort:               "CREATED_DESC",
+		First:              &first,
+		After:              "abc123",
+		IncludeAncestors:   &boolTrue,
+		IncludeDescendants: &boolTrue,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Epics) != 1 {
+		t.Errorf("len(Epics) = %d, want 1", len(out.Epics))
+	}
+}
+
+// --- Create with all optional fields ---
+
+// TestCreate_WithAllOptions verifies that Create handles all optional fields
+// (description, confidential, color, dates, assignees, labels, weight, health)
+// without errors.
+func TestCreate_WithAllOptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, createResponseJSON)
+	}))
+	boolTrue := true
+	weight := int64(5)
+	out, err := Create(context.Background(), client, CreateInput{
+		FullPath:     testFullPath,
+		Title:        "Full Epic",
+		Description:  "Full description\nwith newlines",
+		Confidential: &boolTrue,
+		Color:        "#FF0000",
+		StartDate:    "2026-01-01",
+		DueDate:      "2026-03-31",
+		AssigneeIDs:  []int64{1, 2},
+		LabelIDs:     []int64{10, 20},
+		Weight:       &weight,
+		HealthStatus: "onTrack",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 101 {
+		t.Errorf(fmtWantID, out.ID)
+	}
+}
+
+// TestCreate_CancelledContext verifies that Create returns context error early.
+func TestCreate_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Create(ctx, client, CreateInput{FullPath: testFullPath, Title: "X"})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// --- Update with all optional fields ---
+
+// TestUpdate_WithAllOptions verifies that Update handles all optional fields
+// (title, description, state event, parent, color, dates, labels, assignees,
+// weight, health, status) without errors.
+func TestUpdate_WithAllOptions(t *testing.T) {
+	call := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		call++
+		switch call {
+		case 1:
+			testutil.RespondJSON(w, http.StatusOK, deleteGIDResponseJSON)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, updateResponseJSON)
+		}
+	}))
+	parentID := int64(42)
+	weight := int64(8)
+	out, err := Update(context.Background(), client, UpdateInput{
+		FullPath:       testFullPath,
+		IID:            1,
+		Title:          "Updated",
+		Description:    "New description",
+		StateEvent:     "CLOSE",
+		ParentID:       &parentID,
+		Color:          "#00FF00",
+		StartDate:      "2026-02-01",
+		DueDate:        "2026-04-30",
+		AddLabelIDs:    []int64{100},
+		RemoveLabelIDs: []int64{200},
+		AssigneeIDs:    []int64{1, 2, 3},
+		Weight:         &weight,
+		HealthStatus:   "needsAttention",
+		Status:         "IN_PROGRESS",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 101 {
+		t.Errorf(fmtWantID, out.ID)
+	}
+}
+
+// TestUpdate_CancelledContext verifies that Update returns context error early.
+func TestUpdate_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Update(ctx, client, UpdateInput{FullPath: testFullPath, IID: 1, Title: "X"})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// --- GetLinks additional coverage ---
+
+// TestGetLinks_CancelledContext verifies GetLinks returns context error early.
+func TestGetLinks_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := GetLinks(ctx, client, GetLinksInput{FullPath: testFullPath, IID: 1})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// TestGetLinks_APIError verifies GetLinks wraps API errors.
+func TestGetLinks_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	_, err := GetLinks(context.Background(), client, GetLinksInput{FullPath: testFullPath, IID: 1})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestGet_CancelledContext verifies Get returns context error early.
+func TestGet_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Get(ctx, client, GetInput{FullPath: testFullPath, IID: 1})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// TestDelete_CancelledContext verifies Delete returns context error early.
+func TestDelete_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := Delete(ctx, client, DeleteInput{FullPath: testFullPath, IID: 1})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// --- Markdown full coverage ---
+
+// TestFormatOutputMarkdown_FullFields verifies that FormatOutputMarkdown
+// renders all optional fields (status, assignees, confidential, labels,
+// health, weight, dates, color, parent, closedAt, webURL, linked items,
+// description) into the Markdown output.
+func TestFormatOutputMarkdown_FullFields(t *testing.T) {
+	w := int64(5)
+	out := Output{
+		IID:          1,
+		Title:        "Full Epic",
+		Type:         "Epic",
+		State:        "CLOSED",
+		Status:       "IN_PROGRESS",
+		Author:       "alice",
+		Assignees:    []string{"bob", "carol"},
+		Confidential: true,
+		Labels:       []string{"planning", "urgent"},
+		HealthStatus: "onTrack",
+		Weight:       &w,
+		StartDate:    "2026-01-01",
+		DueDate:      "2026-03-31",
+		Color:        "#FF0000",
+		ParentIID:    10,
+		ParentPath:   "group",
+		CreatedAt:    "2026-01-01T00:00:00Z",
+		ClosedAt:     "2026-03-01T00:00:00Z",
+		WebURL:       "https://gitlab.example.com/groups/g/-/epics/1",
+		Description:  "Epic description body",
+		LinkedItems: []LinkedItem{
+			{IID: 5, LinkType: "blocks", Path: "g/sub"},
+		},
+	}
+	result := FormatOutputMarkdown(out)
+	for _, want := range []string{
+		"IN_PROGRESS", "bob, carol", "Confidential", "planning", "onTrack",
+		"Weight", "2026-01-01", "2026-03-31", "#FF0000", "Parent", "&10",
+		"Closed", "gitlab.example.com", "Linked Items", "blocks", "g/sub",
+		"Epic description body",
+	} {
+		if !strings.Contains(result, want) {
+			t.Errorf("expected markdown to contain %q", want)
+		}
+	}
+}
+
+// TestFormatLinksMarkdown_Empty verifies FormatLinksMarkdown renders the
+// empty state message when no child epics are present.
+func TestFormatLinksMarkdown_Empty(t *testing.T) {
+	result := FormatLinksMarkdown(LinksOutput{})
+	if !strings.Contains(result, "No child epics found") {
+		t.Errorf("expected 'No child epics found', got %q", result)
 	}
 }

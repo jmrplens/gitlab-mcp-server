@@ -131,3 +131,46 @@ func TestStripTrailingLineWhitespace(t *testing.T) {
 		t.Errorf("stripTrailingLineWhitespace = %q, want %q", got, want)
 	}
 }
+
+// TestRegisteredMarkdownTypeNames_ReturnsRegisteredTypes verifies that
+// RegisteredMarkdownTypeNames returns names for both string and result
+// formatters that have been registered.
+func TestRegisteredMarkdownTypeNames_ReturnsRegisteredTypes(t *testing.T) {
+	RegisterMarkdown(func(_ mdTestOutput) string { return "s" })
+	RegisterMarkdownResult(func(_ mdTestResultOutput) *mcp.CallToolResult { return nil })
+
+	names := RegisteredMarkdownTypeNames()
+	found := map[string]bool{}
+	for _, n := range names {
+		found[n] = true
+	}
+	if !found["toolutil.mdTestOutput"] {
+		t.Errorf("expected mdTestOutput in registered types, got %v", names)
+	}
+	if !found["toolutil.mdTestResultOutput"] {
+		t.Errorf("expected mdTestResultOutput in registered types, got %v", names)
+	}
+}
+
+// TestMarkdownForResult_DeleteOutputViaInit verifies that the init()
+// function in mdregistry.go registers the DeleteOutput formatter correctly
+// and that it produces the expected success emoji + message output.
+func TestMarkdownForResult_DeleteOutputViaInit(t *testing.T) {
+	// Re-register: earlier tests in this file reset global maps, wiping init() state.
+	RegisterMarkdown(func(v DeleteOutput) string {
+		return EmojiSuccess + " " + v.Message
+	})
+
+	result := MarkdownForResult(DeleteOutput{Message: "Project deleted"})
+	if result == nil {
+		t.Fatal("expected non-nil result for DeleteOutput")
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	want := EmojiSuccess + " Project deleted"
+	if tc.Text != want {
+		t.Errorf("text = %q, want %q", tc.Text, want)
+	}
+}

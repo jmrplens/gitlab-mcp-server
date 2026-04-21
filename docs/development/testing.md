@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-20.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-21.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,11 +14,11 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,573   |
-| Unit test functions         | 8,335   |
-| E2E test functions          | 191     |
-| cmd test functions          | 81      |
-| Test files (internal/)      | 391     |
+| Total test functions        | 8,627   |
+| Unit test functions         | 8,426   |
+| E2E test functions          | 201     |
+| cmd test functions          | 64      |
+| Test files (internal/)      | 393     |
 | Tool sub-packages tested    | 162     |
 | Core packages tested        | 16      |
 | Average coverage            | ~98.1%  |
@@ -27,9 +27,9 @@
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 7,461 | 90.3% |
-| `TestFunc` (no-underscore)     |   631 |  7.6% |
-| `TestFunc_Sc_Exp` (3-part)     |   170 |  2.1% |
+| `TestFunc_Scenario` (2-part)   | 7,782 | 90.2% |
+| `TestFunc` (no-underscore)     |   658 |  7.6% |
+| `TestFunc_Sc_Exp` (3-part)     |   187 |  2.2% |
 
 ## Test Distribution
 
@@ -37,20 +37,20 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,254 |         73 | autoupdate, config, gitlab, oauth…   |
+| Core packages            |          1,224 |         73 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            211 |         15 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (162)  |          6,889 |        305 | Domain-specific tool handlers        |
-| E2E integration          |            191 |         88 | Full workflow against real GitLab    |
-| cmd/server               |             81 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,573** |    **482** |                                      |
+| Tool sub-packages (162)  |          6,927 |        305 | Domain-specific tool handlers        |
+| E2E integration          |            201 |         92 | Full workflow against real GitLab    |
+| cmd/server               |             64 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,627** |    **486** |                                      |
 
 ### Core Packages
 
 | Package        | Tests | Coverage | Description                          |
 | -------------- | ----: | -------: | ------------------------------------ |
-| autoupdate     |   100 |   76.1%  | Self-update via GitLab releases      |
+| autoupdate     |    99 |   75.6%  | Self-update via GitLab releases      |
 | completions    |    83 |  100.0%  | Argument auto-completion             |
-| config         |    36 |   95.7%  | Configuration loading                |
+| config         |    36 |   95.0%  | Configuration loading                |
 | elicitation    |    77 |   92.1%  | MCP elicitation capability           |
 | gitlab         |    31 |  100.0%  | GitLab API client wrapper            |
 | logging        |    15 |  100.0%  | MCP logging capability               |
@@ -60,11 +60,11 @@
 | roots          |    16 |  100.0%  | MCP roots capability                 |
 | sampling       |    74 |   99.3%  | MCP sampling capability              |
 | serverpool     |    33 |   99.3%  | HTTP mode server pool                |
-| testutil       |    19 |   94.3%  | Shared test helpers                  |
-| toolutil       |   210 |   95.7%  | Shared tool utilities                |
+| testutil       |    19 |   94.7%  | Shared test helpers                  |
+| toolutil       |   230 |   95.9%  | Shared tool utilities                |
 | wizard         |   196 |   83.0%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,254**|        |                                      |
+| **Subtotal**   |**1,224**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -85,7 +85,7 @@
 | commits              |    96 |   97.1%  |    13 |
 | groupmilestones      |    87 |  100.0%  |     9 |
 | accesstokens         |    86 |  100.0%  |    19 |
-| pipelines            |   100 |   97.9%  |    12 |
+| pipelines            |    98 |   97.6%  |    12 |
 | pipelineschedules    |    80 |  100.0%  |    11 |
 | branches             |    79 |   97.4%  |    10 |
 | containerregistry    |    76 |  100.0%  |    14 |
@@ -139,17 +139,17 @@
 | elicitationtools         |    48 |
 | enterpriseusers          |    33 |
 | environments             |    46 |
-| epicdiscussions          |    28 |
+| epicdiscussions          |    14 |
 | epicissues               |    14 |
 | epicnotes                |    11 |
-| epics                    |    43 |
+| epics                    |    45 |
 | errortracking            |    26 |
 | events                   |    42 |
 | externalstatuschecks     |    75 |
 | featureflags             |    36 |
 | features                 |    19 |
 | ffuserlists              |    26 |
-| files                    |    69 |
+| files                    |    74 |
 | freezeperiods            |    32 |
 | geo                      |    47 |
 | gitignoretemplates       |    14 |
@@ -212,7 +212,7 @@
 | notifications            |    30 |
 | packages                 |   104 |
 | pages                    |    55 |
-| pipelines                |   100 |
+| pipelines                |    98 |
 | pipelineschedules        |    80 |
 | pipelinetriggers         |    49 |
 | planlimits               |    13 |
@@ -262,7 +262,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    55 |
-| **Total**                | **6,889** |
+| **Total**                | **6,927** |
 
 </details>
 
@@ -272,9 +272,9 @@
 
 | Package        | Coverage |
 | -------------- | -------: |
-| autoupdate     |   76.1%  |
+| autoupdate     |   75.6%  |
 | completions    |  100.0%  |
-| config         |   95.7%  |
+| config         |   95.0%  |
 | elicitation    |   92.1%  |
 | gitlab         |  100.0%  |
 | logging        |  100.0%  |
@@ -284,8 +284,8 @@
 | roots          |  100.0%  |
 | sampling       |   99.3%  |
 | serverpool     |   99.3%  |
-| testutil       |   94.3%  |
-| toolutil       |   95.7%  |
+| testutil       |   94.7%  |
+| toolutil       |   95.9%  |
 | wizard         |   83.0%  |
 
 ### Tool Sub-Packages
@@ -332,17 +332,17 @@
 | elicitationtools         |  100.0%  |
 | enterpriseusers          |  100.0%  |
 | environments             |  100.0%  |
-| epicdiscussions          |  100.0%  |
-| epicissues               |  100.0%  |
-| epicnotes                |  100.0%  |
-| epics                    |  100.0%  |
+| epicdiscussions          |   93.4%  |
+| epicissues               |   96.4%  |
+| epicnotes                |   96.0%  |
+| epics                    |   99.3%  |
 | errortracking            |  100.0%  |
 | events                   |  100.0%  |
 | externalstatuschecks     |  100.0%  |
 | featureflags             |  100.0%  |
 | features                 |   97.6%  |
 | ffuserlists              |  100.0%  |
-| files                    |   99.6%  |
+| files                    |   92.9%  |
 | freezeperiods            |  100.0%  |
 | geo                      |  100.0%  |
 | gitignoretemplates       |  100.0%  |
@@ -388,7 +388,7 @@
 | licensetemplates         |  100.0%  |
 | markdown                 |  100.0%  |
 | memberroles              |  100.0%  |
-| members                  |  100.0%  |
+| members                  |   99.4%  |
 | mergerequests            |   97.2%  |
 | mergetrains              |  100.0%  |
 | metadata                 |  100.0%  |
@@ -405,7 +405,7 @@
 | notifications            |  100.0%  |
 | packages                 |   95.2%  |
 | pages                    |   99.1%  |
-| pipelines                |   97.9%  |
+| pipelines                |   97.6%  |
 | pipelineschedules        |  100.0%  |
 | pipelinetriggers         |  100.0%  |
 | planlimits               |  100.0%  |
@@ -422,7 +422,7 @@
 | protectedpackages        |  100.0%  |
 | releaselinks             |  100.0%  |
 | releases                 |   99.0%  |
-| repository               |  100.0%  |
+| repository               |   96.3%  |
 | repositorysubmodules     |  100.0%  |
 | resourceevents           |  100.0%  |
 | resourcegroups           |  100.0%  |
@@ -433,7 +433,7 @@
 | samplingtools            |  100.0%  |
 | search                   |  100.0%  |
 | securefiles              |   99.0%  |
-| securityfindings         |   97.6%  |
+| securityfindings         |   96.4%  |
 | securitysettings         |  100.0%  |
 | serverupdate             |   90.9%  |
 | settings                 |   92.3%  |
@@ -442,7 +442,7 @@
 | snippetnotes             |  100.0%  |
 | snippets                 |   98.7%  |
 | snippetstoragemoves      |  100.0%  |
-| systemhooks              |   96.7%  |
+| systemhooks              |   97.0%  |
 | tags                     |   99.0%  |
 | terraformstates          |   91.8%  |
 | todos                    |  100.0%  |
@@ -452,13 +452,13 @@
 | useremails               |  100.0%  |
 | usergpgkeys              |  100.0%  |
 | users                    |  100.0%  |
-| vulnerabilities          |   99.4%  |
+| vulnerabilities          |   98.5%  |
 | wikis                    |   98.9%  |
 | workitems                |  100.0%  |
 
 Coverage target: **>90%** per package. Exceptions:
 
-- **autoupdate** (76.1%) — OS-level operations (`syscall.Exec` process
+- **autoupdate** (75.6%) — OS-level operations (`syscall.Exec` process
   replacement, Windows-gated binary rename, signal handling) cannot be
   unit tested without integration infrastructure. The `ExecSelf` function
   replaces the current process, making it untestable in-process.

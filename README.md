@@ -4,24 +4,22 @@
 
 # GitLab MCP Server
 
+<p align="center">
+
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jmrplens/gitlab-mcp-server)](https://goreportcard.com/report/github.com/jmrplens/gitlab-mcp-server)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server)
 [![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=coverage)](https://sonarcloud.io/component_measures?id=jmrplens_gitlab-mcp-server&metric=coverage&view=list)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=security_rating)](https://sonarcloud.io/project/security_hotspots?id=jmrplens_gitlab-mcp-server)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=sqale_rating)](https://sonarcloud.io/project/issues?id=jmrplens_gitlab-mcp-server&resolved=false&types=CODE_SMELL)
+</p>
 
-<!-- Metric badges: update counts when tools/resources/prompts change (see cmd/audit_metrics) -->
-![MCP Tools: 1006](https://img.shields.io/badge/MCP_Tools-1006-6F42C1?style=flat&logo=puzzle-piece&logoColor=white)
-![Domains: 162](https://img.shields.io/badge/Domains-162-blue?style=flat)
-![Meta‑tools: 42](https://img.shields.io/badge/Meta--tools-42-teal?style=flat)
-![Prompts: 38](https://img.shields.io/badge/Prompts-38-green?style=flat)
-![Resources: 24](https://img.shields.io/badge/Resources-24-orange?style=flat)
+<p align="center">
+
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 ![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
+
+</p>
 
 A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as MCP tools, resources, and prompts for AI assistants. Single static binary — zero dependencies.
 
