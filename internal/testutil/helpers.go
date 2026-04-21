@@ -4,6 +4,7 @@
 package testutil
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
+
+// CancelledCtx returns a pre-cancelled context for testing cancellation handling.
+func CancelledCtx(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}
 
 // MsgErrEmptyProjectID is the shared assertion message for tests that expect
 // an error when project_id is empty.

@@ -118,8 +118,7 @@ func TestConfigurePullMirror_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ConfigurePullMirror(ctx, client, ConfigurePullMirrorInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)

@@ -120,8 +120,7 @@ const fmtUnexpErr = "unexpected error: %v"
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
@@ -176,8 +175,7 @@ func TestList_EmptyResult(t *testing.T) {
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{Key: "Go"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")

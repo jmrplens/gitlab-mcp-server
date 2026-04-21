@@ -94,7 +94,7 @@ func TestPing_ContextCancelled(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	cancel()
 
 	if _, err = client.Ping(ctx); err == nil {
 		t.Error("Ping() expected error for canceled context, got nil")

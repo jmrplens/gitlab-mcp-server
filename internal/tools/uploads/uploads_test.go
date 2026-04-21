@@ -126,8 +126,7 @@ func TestProjectUpload_CancelledContext(t *testing.T) {
 		t.Fatal("API should not be called with canceled context")
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Upload(ctx, nil, client, UploadInput{
 		ProjectID:     "42",
@@ -528,8 +527,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
@@ -608,8 +606,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", UploadID: 5})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")

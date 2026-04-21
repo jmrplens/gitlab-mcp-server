@@ -261,8 +261,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
@@ -495,8 +494,7 @@ func TestEnrichSubmoduleCommitSHAs_CancelledContext(t *testing.T) {
 		{Name: "b", Path: "dir2/b"},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	enrichSubmoduleCommitSHAs(ctx, client, "42", "main", entries)
 

@@ -553,8 +553,7 @@ func TestTagCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", TagName: "v0", Ref: "main"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -566,8 +565,7 @@ func TestTagDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -579,8 +577,7 @@ func TestTagList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -592,8 +589,7 @@ func TestTagGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -605,8 +601,7 @@ func TestTagGetSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetSignature(ctx, client, SignatureInput{ProjectID: "42", TagName: "v0"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -618,8 +613,7 @@ func TestTagListProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProtectedTags(ctx, client, ListProtectedTagsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -631,8 +625,7 @@ func TestTagGetProtected_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetProtectedTag(ctx, client, GetProtectedTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -644,8 +637,7 @@ func TestTagProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ProtectTag(ctx, client, ProtectTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)
@@ -657,8 +649,7 @@ func TestTagUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := UnprotectTag(ctx, client, UnprotectTagInput{ProjectID: "42", TagName: "v*"})
 	if err == nil {
 		t.Fatal(errCancelledCtx)

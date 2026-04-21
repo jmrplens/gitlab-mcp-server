@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
@@ -588,8 +589,7 @@ func TestRevalidateAll_CancelledContext(t *testing.T) {
 
 	_, _ = pool.GetOrCreate("tok-1")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	// Should return quickly without panicking.
 	pool.revalidateAll(ctx)

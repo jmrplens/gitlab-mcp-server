@@ -94,8 +94,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -195,8 +194,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -246,8 +244,7 @@ func TestGetPublicKey_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetPublicKey(ctx, client, GetPublicKeyInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -355,8 +352,7 @@ func TestAdd_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Add(ctx, client, AddInput{ProjectID: testProjectID, URL: "https://example.com/repo.git"})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -413,8 +409,7 @@ func TestEdit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Edit(ctx, client, EditInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -461,8 +456,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -509,8 +503,7 @@ func TestForcePushUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := ForcePushUpdate(ctx, client, ForcePushInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")

@@ -468,8 +468,7 @@ func TestList_APIError(t *testing.T) {
 
 // TestList_ContextCancelled verifies the behavior of list context cancelled.
 func TestList_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
@@ -553,8 +552,7 @@ func TestFileList_APIError(t *testing.T) {
 
 // TestFileList_ContextCancelled verifies the behavior of file list context cancelled.
 func TestFileList_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
@@ -616,8 +614,7 @@ func TestDelete_APIError(t *testing.T) {
 
 // TestDelete_ContextCancelled verifies the behavior of delete context cancelled.
 func TestDelete_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
@@ -644,8 +641,7 @@ func TestFileDelete_APIError(t *testing.T) {
 
 // TestFileDelete_ContextCancelled verifies the behavior of file delete context cancelled.
 func TestFileDelete_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
@@ -749,8 +745,7 @@ func TestPublishDirectory_NonexistentDir(t *testing.T) {
 
 // TestStreamDownload_ContextCancelled verifies the behavior of stream download context cancelled.
 func TestStreamDownload_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
@@ -1264,8 +1259,7 @@ func TestPublish_APIError(t *testing.T) {
 
 // TestPublish_ContextCancelled verifies the behavior of publish context cancelled.
 func TestPublish_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))

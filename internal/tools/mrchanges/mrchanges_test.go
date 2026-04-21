@@ -579,8 +579,7 @@ func TestRawDiffs_APIError(t *testing.T) {
 
 // TestRawDiffs_CancelledContext verifies the behavior of raw diffs cancelled context.
 func TestRawDiffs_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -642,8 +641,7 @@ func TestFormatRawDiffsMarkdown_NoTrailingNewline(t *testing.T) {
 
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -667,8 +665,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 
 // TestListDiffVersions_CancelledContext verifies the behavior of list diff versions cancelled context.
 func TestListDiffVersions_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -681,8 +678,7 @@ func TestListDiffVersions_CancelledContext(t *testing.T) {
 
 // TestGetDiffVersion_CancelledContext verifies the behavior of get diff version cancelled context.
 func TestGetDiffVersion_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -95,8 +96,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 		session: &mcp.ServerSession{},
 		token:   "test-token",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	// Should silently return without sending
 	tracker.Update(ctx, 1, 3, "test")
 }

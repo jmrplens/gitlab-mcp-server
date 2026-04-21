@@ -263,8 +263,7 @@ const fmtUnexpErr = "unexpected error: %v"
 // TestGetAccessSettings_CancelledContext verifies the behavior of get access settings cancelled context.
 func TestGetAccessSettings_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetAccessSettings(ctx, client, GetAccessSettingsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -289,8 +288,7 @@ func TestPatchAccessSettings_APIError(t *testing.T) {
 // TestPatchAccessSettings_CancelledContext verifies the behavior of patch access settings cancelled context.
 func TestPatchAccessSettings_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := PatchAccessSettings(ctx, client, PatchAccessSettingsInput{ProjectID: "42", Enabled: false})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -315,8 +313,7 @@ func TestListInboundAllowlist_APIError(t *testing.T) {
 // TestListInboundAllowlist_CancelledContext verifies the behavior of list inbound allowlist cancelled context.
 func TestListInboundAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListInboundAllowlist(ctx, client, ListInboundAllowlistInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -378,8 +375,7 @@ func TestAddProjectAllowlist_APIError(t *testing.T) {
 // TestAddProjectAllowlist_CancelledContext verifies the behavior of add project allowlist cancelled context.
 func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddProjectAllowlist(ctx, client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -393,8 +389,7 @@ func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 // TestRemoveProjectAllowlist_CancelledContext verifies the behavior of remove project allowlist cancelled context.
 func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := RemoveProjectAllowlist(ctx, client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -419,8 +414,7 @@ func TestListGroupAllowlist_APIError(t *testing.T) {
 // TestListGroupAllowlist_CancelledContext verifies the behavior of list group allowlist cancelled context.
 func TestListGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListGroupAllowlist(ctx, client, ListGroupAllowlistInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -482,8 +476,7 @@ func TestAddGroupAllowlist_APIError(t *testing.T) {
 // TestAddGroupAllowlist_CancelledContext verifies the behavior of add group allowlist cancelled context.
 func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddGroupAllowlist(ctx, client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -508,8 +501,7 @@ func TestRemoveGroupAllowlist_APIError(t *testing.T) {
 // TestRemoveGroupAllowlist_CancelledContext verifies the behavior of remove group allowlist cancelled context.
 func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := RemoveGroupAllowlist(ctx, client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

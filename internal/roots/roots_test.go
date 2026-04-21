@@ -9,6 +9,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -313,8 +314,7 @@ func TestRefresh_WithCancelledContext(t *testing.T) {
 	ss := setupInMemorySession(t, []*mcp.Root{{URI: "file:///tmp"}})
 
 	m := NewManager()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	ctx := testutil.CancelledCtx(t) // cancel immediately
 
 	err := m.Refresh(ctx, ss)
 	if err == nil {
@@ -359,8 +359,7 @@ func TestListClientRoots_WithSession(t *testing.T) {
 func TestListClientRoots_CancelledContext(t *testing.T) {
 	ss := setupInMemorySession(t, []*mcp.Root{{URI: "file:///tmp"}})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListClientRoots(ctx, ss)
 	if err == nil {

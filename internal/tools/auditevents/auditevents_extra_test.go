@@ -18,8 +18,7 @@ func TestListInstance_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called on cancelled context")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListInstance(ctx, client, ListInstanceInput{})
 	if err == nil {
@@ -33,8 +32,7 @@ func TestGetInstance_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetInstance(ctx, client, GetInstanceInput{EventID: 1})
 	if err == nil {
@@ -48,8 +46,7 @@ func TestListGroup_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: "5"})
 	if err == nil {
@@ -63,8 +60,7 @@ func TestGetGroup_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "5", EventID: 1})
 	if err == nil {
@@ -78,8 +74,7 @@ func TestListProject_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListProject(ctx, client, ListProjectInput{ProjectID: "42"})
 	if err == nil {
@@ -93,8 +88,7 @@ func TestGetProject_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "42", EventID: 1})
 	if err == nil {

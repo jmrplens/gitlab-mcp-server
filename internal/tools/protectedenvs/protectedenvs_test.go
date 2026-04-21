@@ -216,8 +216,7 @@ func TestGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, envJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", Environment: "prod"})
 	if err == nil {
@@ -232,8 +231,7 @@ func TestProtect_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, envJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Protect(ctx, client, ProtectInput{ProjectID: "42", Name: "prod"})
 	if err == nil {
@@ -248,8 +246,7 @@ func TestUnprotect_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", Environment: "prod"})
 	if err == nil {
@@ -555,8 +552,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, envJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{
 		ProjectID:   "42",
 		Environment: "production",
@@ -582,8 +578,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")

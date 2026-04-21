@@ -77,8 +77,7 @@ func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -182,8 +181,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{
 		ProjectID:          testProjectID,
 		PackageNamePattern: "@scope/pkg*",
@@ -271,8 +269,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: testProjectID, RuleID: 1})
 	if err == nil {
 		t.Fatal("expected context error")
@@ -341,8 +338,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, RuleID: 1})
 	if err == nil {
 		t.Fatal("expected context error")

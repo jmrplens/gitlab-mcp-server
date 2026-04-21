@@ -142,8 +142,7 @@ func TestPipelineList_CancelledContext(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -921,8 +920,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -934,8 +932,7 @@ func TestCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Cancel(ctx, client, ActionInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -947,8 +944,7 @@ func TestRetry_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Retry(ctx, client, ActionInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -960,8 +956,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -973,8 +968,7 @@ func TestGetVariables_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetVariables(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -986,8 +980,7 @@ func TestGetTestReport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetTestReport(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -999,8 +992,7 @@ func TestGetTestReportSummary_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetTestReportSummary(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1012,8 +1004,7 @@ func TestGetLatest_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetLatest(ctx, client, GetLatestInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1025,8 +1016,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Ref: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1038,8 +1028,7 @@ func TestUpdateMetadata_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not be called")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateMetadata(ctx, client, UpdateMetadataInput{ProjectID: "42", PipelineID: 10, Name: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

@@ -105,8 +105,7 @@ func TestDraftNoteList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -163,8 +162,7 @@ func TestDraftNoteGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", MRIID: 1, NoteID: 10})
 	if err == nil {
@@ -291,8 +289,7 @@ func TestDraftNoteCreate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", MRIID: 1, Note: "x"})
 	if err == nil {
@@ -351,8 +348,7 @@ func TestDraftNoteUpdate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "x"})
 	if err == nil {
@@ -406,8 +402,7 @@ func TestDraftNoteDelete_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", MRIID: 1, NoteID: 10})
 	if err == nil {
@@ -477,8 +472,7 @@ func TestDraftNotePublish_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Publish(ctx, client, PublishInput{ProjectID: "42", MRIID: 1, NoteID: 10})
 	if err == nil {
@@ -545,8 +539,7 @@ func TestDraftNotePublishAll_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := PublishAll(ctx, client, PublishAllInput{ProjectID: "42", MRIID: 1})
 	if err == nil {
@@ -995,8 +988,7 @@ func TestPublish_MissingProjectID(t *testing.T) {
 
 // TestPublishAll_CancelledContext verifies the behavior of publish all cancelled context.
 func TestPublishAll_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

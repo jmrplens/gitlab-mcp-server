@@ -399,8 +399,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{})
 	if err == nil {
@@ -413,8 +412,7 @@ func TestList_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
@@ -433,8 +431,7 @@ func TestGet_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -449,8 +446,7 @@ func TestEdit_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Edit(ctx, client, EditInput{ID: 1})
 	if err == nil {
@@ -465,8 +461,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -481,8 +476,7 @@ func TestRepair_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Repair(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -497,8 +491,7 @@ func TestListStatus_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListStatus(ctx, client, ListStatusInput{})
 	if err == nil {
@@ -513,8 +506,7 @@ func TestGetStatus_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetStatus(ctx, client, IDInput{ID: 1})
 	if err == nil {

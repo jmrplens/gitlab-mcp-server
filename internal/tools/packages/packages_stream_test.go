@@ -96,8 +96,7 @@ func TestStreamDownloadPackageFile_CreatesDirectory(t *testing.T) {
 func TestStreamDownloadPackageFile_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Download(ctx, nil, client, DownloadInput{
 		ProjectID:      "42",

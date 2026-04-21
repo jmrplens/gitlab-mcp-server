@@ -250,8 +250,7 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveAll(ctx, client, ListInput{})
 	if err == nil {

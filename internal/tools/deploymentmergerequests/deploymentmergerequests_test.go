@@ -212,8 +212,7 @@ func TestList_APIError404(t *testing.T) {
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42", DeploymentID: 7})
 	if err == nil {
 		t.Fatal("expected error for canceled context")

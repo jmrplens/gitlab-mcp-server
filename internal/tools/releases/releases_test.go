@@ -383,8 +383,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 // TestCreate_CancelledContext verifies the behavior of create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", TagName: "v1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -443,8 +442,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 // TestUpdate_CancelledContext verifies the behavior of update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", TagName: "v1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -478,8 +476,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 // TestDelete_CancelledContext verifies the behavior of delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Delete(ctx, client, DeleteInput{ProjectID: "42", TagName: "v1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -513,8 +510,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 // TestGet_CancelledContext verifies the behavior of get cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", TagName: "v1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -548,8 +544,7 @@ func TestGetLatest_MissingProjectID(t *testing.T) {
 // TestGetLatest_CancelledContext verifies the behavior of get latest cancelled context.
 func TestGetLatest_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetLatest(ctx, client, GetLatestInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -583,8 +578,7 @@ func TestList_MissingProjectID(t *testing.T) {
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

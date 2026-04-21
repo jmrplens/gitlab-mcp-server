@@ -203,8 +203,7 @@ func TestRepositoryTree_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Tree(ctx, client, TreeInput{ProjectID: "42"})
 	if err == nil {
@@ -218,8 +217,7 @@ func TestRepositoryCompare_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Compare(ctx, client, CompareInput{
 		ProjectID: "42",
@@ -582,8 +580,7 @@ func TestRepositoryContributors_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Contributors(ctx, client, ContributorsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -595,8 +592,7 @@ func TestRepositoryMergeBase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := MergeBase(ctx, client, MergeBaseInput{ProjectID: "42", Refs: []string{"main", "dev"}})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -608,8 +604,7 @@ func TestRepositoryBlob_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Blob(ctx, client, BlobInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -621,8 +616,7 @@ func TestRepositoryRawBlobContent_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := RawBlobContent(ctx, client, BlobInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -634,8 +628,7 @@ func TestRepositoryArchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Archive(ctx, client, ArchiveInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -647,8 +640,7 @@ func TestRepositoryAddChangelog_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddChangelog(ctx, client, AddChangelogInput{ProjectID: "42", Version: "1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -660,8 +652,7 @@ func TestRepositoryGenerateChangelogData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"notes":""}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GenerateChangelogData(ctx, client, GenerateChangelogInput{ProjectID: "42", Version: "1.0.0"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

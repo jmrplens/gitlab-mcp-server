@@ -817,8 +817,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{FullPath: testProjectPath, IID: 1})
 	if err == nil {
@@ -833,8 +832,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{FullPath: testProjectPath})
 	if err == nil {
@@ -849,8 +847,7 @@ func TestCreate_ContextCancelled(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{
 		FullPath:       testProjectPath,
@@ -1098,8 +1095,7 @@ func TestUpdate_ContextCancelled(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{FullPath: testProjectPath, IID: 1, Title: "x"})
 	if err == nil {

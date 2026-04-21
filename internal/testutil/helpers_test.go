@@ -4,10 +4,20 @@
 package testutil
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+// TestCancelledCtx verifies that CancelledCtx returns a context that is
+// already cancelled with context.Canceled error.
+func TestCancelledCtx(t *testing.T) {
+	ctx := CancelledCtx(t)
+	if ctx.Err() != context.Canceled {
+		t.Errorf("ctx.Err() = %v, want %v", ctx.Err(), context.Canceled)
+	}
+}
 
 // TestAssertRequestMethod verifies AssertRequestMethod does not fail the test
 // when the expected method matches.

@@ -67,8 +67,7 @@ func TestGet(t *testing.T) {
 			name:    "returns error when context is cancelled",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}),
 			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
+				ctx := testutil.CancelledCtx(t)
 				return ctx
 			},
 			wantErr: true,
@@ -173,8 +172,7 @@ func TestUpdate(t *testing.T) {
 			input:   UpdateInput{CSPNamespaceID: &nsID},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}),
 			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
+				ctx := testutil.CancelledCtx(t)
 				return ctx
 			},
 			wantErr: true,

@@ -344,8 +344,7 @@ func TestList(t *testing.T) {
 
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
 		t.Fatal("List() expected context error, got nil")
@@ -466,8 +465,7 @@ func TestAssign(t *testing.T) {
 
 func TestAssign_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Assign(ctx, client, AssignInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
 	if err == nil {
 		t.Fatal("Assign() expected context error, got nil")
@@ -585,8 +583,7 @@ func TestRemove(t *testing.T) {
 
 func TestRemove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Remove(ctx, client, RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject, ChildIID: 10})
 	if err == nil {
 		t.Fatal("Remove() expected context error, got nil")
@@ -766,8 +763,7 @@ func TestUpdateOrder(t *testing.T) {
 
 func TestUpdateOrder_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateOrder(ctx, client, UpdateInput{
 		FullPath: testFullPath, IID: 1,
 		ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",

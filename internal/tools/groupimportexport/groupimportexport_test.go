@@ -198,8 +198,7 @@ const errExpCancelledCtx = "expected error for canceled context"
 // TestScheduleExport_CancelledContext verifies the behavior of schedule export cancelled context.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ScheduleExport(ctx, client, ScheduleExportInput{GroupID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -243,8 +242,7 @@ func TestExportDownload_ReadAllError(t *testing.T) {
 // TestExportDownload_CancelledContext verifies the behavior of export download cancelled context.
 func TestExportDownload_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ExportDownload(ctx, client, ExportDownloadInput{GroupID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -258,8 +256,7 @@ func TestExportDownload_CancelledContext(t *testing.T) {
 // TestImportFile_CancelledContext verifies the behavior of import file cancelled context.
 func TestImportFile_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
 	if err := os.WriteFile(tmpFile, []byte("fake"), 0644); err != nil {

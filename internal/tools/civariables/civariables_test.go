@@ -67,8 +67,7 @@ func TestCIVariableList_MissingProjectID(t *testing.T) {
 // TestCIVariableList_CancelledContext verifies the behavior of c i variable list cancelled context.
 func TestCIVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -127,8 +126,7 @@ func TestCIVariableGet_MissingFields(t *testing.T) {
 // TestCIVariableGet_CancelledContext verifies the behavior of c i variable get cancelled context.
 func TestCIVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "1", Key: "K"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -186,8 +184,7 @@ func TestCIVariableCreate_MissingFields(t *testing.T) {
 // TestCIVariableCreate_CancelledContext verifies the behavior of c i variable create cancelled context.
 func TestCIVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{
 		ProjectID: "1", Key: "K", Value: "V",
 	})
@@ -246,8 +243,7 @@ func TestCIVariableUpdate_MissingFields(t *testing.T) {
 // TestCIVariableUpdate_CancelledContext verifies the behavior of c i variable update cancelled context.
 func TestCIVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{
 		ProjectID: "1", Key: "K",
 	})
@@ -301,8 +297,7 @@ func TestCIVariableDelete_MissingFields(t *testing.T) {
 // TestCIVariableDelete_CancelledContext verifies the behavior of c i variable delete cancelled context.
 func TestCIVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{
 		ProjectID: "1", Key: "K",
 	})

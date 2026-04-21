@@ -97,8 +97,7 @@ func TestEnvironmentList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -153,8 +152,7 @@ func TestEnvironmentGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", EnvironmentID: 1})
 	if err == nil {
@@ -211,8 +209,7 @@ func TestEnvironmentCreate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Name: "qa"})
 	if err == nil {
@@ -270,8 +267,7 @@ func TestEnvironmentUpdate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", EnvironmentID: 1, Name: "x"})
 	if err == nil {
@@ -323,8 +319,7 @@ func TestEnvironmentDelete_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", EnvironmentID: 1})
 	if err == nil {
@@ -403,8 +398,7 @@ func TestEnvironmentStop_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Stop(ctx, client, StopInput{ProjectID: "42", EnvironmentID: 1})
 	if err == nil {

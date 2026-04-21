@@ -40,8 +40,7 @@ func TestListInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListInstance(ctx, client, ListInstanceInput{})
 	if err == nil {
@@ -100,8 +99,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: toolutil.StringOrInt("mygroup")})
 	if err == nil {
@@ -182,8 +180,7 @@ func TestCreateInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateInstance(ctx, client, CreateInstanceInput{
 		Name:            "custom-dev",
@@ -281,8 +278,7 @@ func TestCreateGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := CreateGroup(ctx, client, CreateGroupInput{
 		GroupID:         toolutil.StringOrInt("mygroup"),
@@ -344,8 +340,7 @@ func TestDeleteInstance_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteInstance(ctx, client, DeleteInstanceInput{MemberRoleID: 1})
 	if err == nil {
@@ -415,8 +410,7 @@ func TestDeleteGroup_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := DeleteGroup(ctx, client, DeleteGroupInput{
 		GroupID:      toolutil.StringOrInt("mygroup"),

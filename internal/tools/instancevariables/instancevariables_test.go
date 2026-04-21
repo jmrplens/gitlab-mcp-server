@@ -354,8 +354,7 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 // TestInstanceVariableList_CancelledContext verifies the behavior of instance variable list cancelled context.
 func TestInstanceVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -380,8 +379,7 @@ func TestInstanceVariableGet_APIError(t *testing.T) {
 // TestInstanceVariableGet_CancelledContext verifies the behavior of instance variable get cancelled context.
 func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{Key: "MY_VAR"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -446,8 +444,7 @@ func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
 // TestInstanceVariableCreate_CancelledContext verifies the behavior of instance variable create cancelled context.
 func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{Key: "K", Value: "V"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -506,8 +503,7 @@ func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
 // TestInstanceVariableUpdate_CancelledContext verifies the behavior of instance variable update cancelled context.
 func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{Key: "K"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -532,8 +528,7 @@ func TestInstanceVariableDelete_APIError(t *testing.T) {
 // TestInstanceVariableDelete_CancelledContext verifies the behavior of instance variable delete cancelled context.
 func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{Key: "K"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

@@ -111,8 +111,7 @@ func TestCreateUser_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{
 		Email: "a@b.com", Name: "User", Username: "user",
@@ -185,8 +184,7 @@ func TestModifyUser_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Modify(ctx, client, ModifyInput{UserID: 42})
 	if err == nil {
@@ -224,8 +222,7 @@ func TestDeleteUser_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Delete(ctx, client, DeleteInput{UserID: 42})
 	if err == nil {

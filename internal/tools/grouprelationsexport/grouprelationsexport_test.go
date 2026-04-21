@@ -105,8 +105,7 @@ const fmtUnexpErr = "unexpected error: %v"
 // TestScheduleExport_CancelledContext verifies the behavior of schedule export cancelled context.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := ScheduleExport(ctx, client, ScheduleExportInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error for canceled context, got nil")
@@ -147,8 +146,7 @@ func TestScheduleExport_EmptyGroupID(t *testing.T) {
 // TestListExportStatus_CancelledContext verifies the behavior of list export status cancelled context.
 func TestListExportStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListExportStatus(ctx, client, ListExportStatusInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error for canceled context, got nil")

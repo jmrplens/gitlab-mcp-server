@@ -127,8 +127,7 @@ func TestCILintProject_MissingProjectID(t *testing.T) {
 // TestCILintProject_CancelledContext verifies the behavior of c i lint project cancelled context.
 func TestCILintProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := LintProject(ctx, client, ProjectInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
@@ -228,8 +227,7 @@ func TestCILint_EmptyContent(t *testing.T) {
 // TestCILint_CancelledContext verifies the behavior of c i lint cancelled context.
 func TestCILint_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := LintContent(ctx, client, ContentInput{ProjectID: "1", Content: "stages: []"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")

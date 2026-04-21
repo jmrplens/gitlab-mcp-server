@@ -180,8 +180,7 @@ func TestWait_CanceledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, pipelineJSON("running"))
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Wait(ctx, nil, client, WaitInput{
 		ProjectID:       "42",

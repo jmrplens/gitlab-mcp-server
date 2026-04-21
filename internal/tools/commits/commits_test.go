@@ -279,8 +279,7 @@ func TestCommitList_CancelledContext(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -820,8 +819,7 @@ func TestCommitCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Branch: "main", CommitMessage: "t", Actions: []Action{{Action: actionCreate, FilePath: "f"}}})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -833,8 +831,7 @@ func TestCommitGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -846,8 +843,7 @@ func TestCommitDiff_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Diff(ctx, client, DiffInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -859,8 +855,7 @@ func TestGetRefs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetRefs(ctx, client, RefsInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -872,8 +867,7 @@ func TestGetComments_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetComments(ctx, client, CommentsInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -885,8 +879,7 @@ func TestPostComment_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := PostComment(ctx, client, PostCommentInput{ProjectID: "42", SHA: "abc", Note: "t"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -898,8 +891,7 @@ func TestGetStatuses_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetStatuses(ctx, client, StatusesInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -911,8 +903,7 @@ func TestSetStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := SetStatus(ctx, client, SetStatusInput{ProjectID: "42", SHA: "abc", State: "success"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -924,8 +915,7 @@ func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListMRsByCommit(ctx, client, MRsByCommitInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -937,8 +927,7 @@ func TestCherryPick_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := CherryPick(ctx, client, CherryPickInput{ProjectID: "42", SHA: "abc", Branch: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -950,8 +939,7 @@ func TestRevert_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Revert(ctx, client, RevertInput{ProjectID: "42", SHA: "abc", Branch: "main"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -963,8 +951,7 @@ func TestGetGPGSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetGPGSignature(ctx, client, GPGSignatureInput{ProjectID: "42", SHA: "abc"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

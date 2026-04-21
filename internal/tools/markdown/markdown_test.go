@@ -94,8 +94,7 @@ func TestRender_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"html":"<p>x</p>"}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Render(ctx, client, RenderInput{Text: "test"})
 	if err == nil {
 		t.Fatal("expected error for canceled context, got nil")

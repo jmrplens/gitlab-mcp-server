@@ -88,8 +88,7 @@ func TestAdminActions_TableDriven(t *testing.T) {
 				w.WriteHeader(http.StatusCreated)
 			}))
 
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
+			ctx := testutil.CancelledCtx(t)
 
 			_, err := action.fn(ctx, client, AdminActionInput{UserID: 42})
 			if err == nil {

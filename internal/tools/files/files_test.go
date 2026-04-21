@@ -604,8 +604,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
@@ -618,8 +617,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", FilePath: "f.txt", Branch: "main", CommitMessage: "m"})
 	if err == nil {
@@ -632,8 +630,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", FilePath: "f.txt", Branch: "main", CommitMessage: "m"})
 	if err == nil {
@@ -646,8 +643,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", FilePath: "f.txt", Branch: "main", CommitMessage: "m"})
 	if err == nil {
@@ -660,8 +656,7 @@ func TestBlame_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Blame(ctx, client, BlameInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
@@ -674,8 +669,7 @@ func TestGetMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetMetaData(ctx, client, MetaDataInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
@@ -688,8 +682,7 @@ func TestGetRaw_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetRaw(ctx, client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
@@ -702,8 +695,7 @@ func TestGetRawFileMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetRawFileMetaData(ctx, client, RawMetaDataInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {

@@ -98,8 +98,7 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -148,8 +147,7 @@ func TestDeploymentGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", DeploymentID: 1})
 	if err == nil {
@@ -217,8 +215,7 @@ func TestDeploymentCreate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Environment: "e", Ref: "r", SHA: "s"})
 	if err == nil {
@@ -283,8 +280,7 @@ func TestDeploymentUpdate_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", DeploymentID: 1, Status: "success"})
 	if err == nil {
@@ -330,8 +326,7 @@ func TestDeploymentDelete_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", DeploymentID: 1})
 	if err == nil {
@@ -606,8 +601,7 @@ func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 // TestDeploymentApproveOrReject_CancelledContext verifies the behavior of deployment approve or reject cancelled context.
 func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ApproveOrReject(ctx, client, ApproveOrRejectInput{
 		ProjectID: "42", DeploymentID: 10, Status: "approved",

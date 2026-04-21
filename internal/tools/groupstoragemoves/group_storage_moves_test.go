@@ -253,8 +253,7 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveAll(ctx, client, ListInput{})
 	if err == nil {
@@ -317,8 +316,7 @@ func TestRetrieveForGroup_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := RetrieveForGroup(ctx, client, ListForGroupInput{GroupID: 10})
 	if err == nil {
@@ -375,8 +373,7 @@ func TestGet_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, IDInput{ID: 1})
 	if err == nil {
@@ -404,8 +401,7 @@ func TestGetForGroup_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetForGroup(ctx, client, GroupMoveInput{GroupID: 10, ID: 1})
 	if err == nil {
@@ -433,8 +429,7 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Schedule(ctx, client, ScheduleInput{GroupID: 10})
 	if err == nil {
@@ -467,8 +462,7 @@ func TestScheduleAll_ContextCanceled(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ScheduleAll(ctx, client, ScheduleAllInput{})
 	if err == nil {

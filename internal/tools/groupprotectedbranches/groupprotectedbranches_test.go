@@ -134,8 +134,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: "mygroup"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -231,8 +230,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, branchJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{GroupID: "mygroup", Branch: "main"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -369,8 +367,7 @@ func TestProtect_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Protect(ctx, client, ProtectInput{GroupID: "mygroup", Name: "main"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -488,8 +485,7 @@ func TestUpdate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{GroupID: "mygroup", Branch: "main"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
@@ -554,8 +550,7 @@ func TestUnprotect_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Unprotect(ctx, client, UnprotectInput{GroupID: "mygroup", Branch: "main"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")

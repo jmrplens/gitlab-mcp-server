@@ -157,8 +157,7 @@ func TestGroupList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
@@ -212,8 +211,7 @@ func TestGroupGet_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, groupDetailJSON)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{GroupID: "99"})
 	if err == nil {
@@ -318,8 +316,7 @@ func TestGroupMembersList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := MembersList(ctx, client, MembersListInput{GroupID: "99"})
 	if err == nil {
@@ -417,8 +414,7 @@ func TestSubgroupsList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := SubgroupsList(ctx, client, SubgroupsListInput{GroupID: "99"})
 	if err == nil {
@@ -1061,8 +1057,7 @@ func TestSubgroupsList_WithPagination(t *testing.T) {
 // TestCreate_CancelledContext verifies the behavior of cov create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{Name: "g"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1109,8 +1104,7 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 // TestUpdate_CancelledContext verifies the behavior of cov update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{GroupID: "99", Name: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1154,8 +1148,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // TestDelete_CancelledContext verifies the behavior of cov delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1189,8 +1182,7 @@ func TestDelete_PermanentlyRemove(t *testing.T) {
 // TestRestore_CancelledContext verifies the behavior of cov restore cancelled context.
 func TestRestore_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Restore(ctx, client, RestoreInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1231,8 +1223,7 @@ func TestArchive_Success(t *testing.T) {
 // TestArchive_CancelledContext verifies archive respects context cancellation.
 func TestArchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Archive(ctx, client, ArchiveInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1282,8 +1273,7 @@ func TestUnarchive_Success(t *testing.T) {
 // TestUnarchive_CancelledContext verifies unarchive respects context cancellation.
 func TestUnarchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Unarchive(ctx, client, ArchiveInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1317,8 +1307,7 @@ func TestUnarchive_EmptyGroupID(t *testing.T) {
 // TestSearch_CancelledContext verifies the behavior of cov search cancelled context.
 func TestSearch_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Search(ctx, client, SearchInput{Query: "q"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1343,8 +1332,7 @@ func TestSearch_ServerError(t *testing.T) {
 // TestTransferProject_CancelledContext verifies the behavior of cov transfer project cancelled context.
 func TestTransferProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := TransferProject(ctx, client, TransferInput{GroupID: "99", ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1369,8 +1357,7 @@ func TestTransferProject_ServerError(t *testing.T) {
 // TestListProjects_CancelledContext verifies the behavior of cov list projects cancelled context.
 func TestListProjects_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProjects(ctx, client, ListProjectsInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1440,8 +1427,7 @@ func TestListProjects_AllOptionalFilters(t *testing.T) {
 // TestListHooks_CancelledContext verifies the behavior of cov list hooks cancelled context.
 func TestListHooks_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListHooks(ctx, client, ListHooksInput{GroupID: "99"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1499,8 +1485,7 @@ func TestListHooks_WithPagination(t *testing.T) {
 // TestGetHook_CancelledContext verifies the behavior of cov get hook cancelled context.
 func TestGetHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetHook(ctx, client, GetHookInput{GroupID: "99", HookID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1523,8 +1508,7 @@ func TestGetHook_MissingGroupID(t *testing.T) {
 // TestAddHook_CancelledContext verifies the behavior of cov add hook cancelled context.
 func TestAddHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := AddHook(ctx, client, AddHookInput{
 		GroupID:   "99",
 		HookInput: HookInput{URL: "https://example.com"},
@@ -1616,8 +1600,7 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 // TestEditHook_CancelledContext verifies the behavior of cov edit hook cancelled context.
 func TestEditHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := EditHook(ctx, client, EditHookInput{
 		GroupID:   "99",
 		HookID:    10,
@@ -1695,8 +1678,7 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 // TestDeleteHook_CancelledContext verifies the behavior of cov delete hook cancelled context.
 func TestDeleteHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := DeleteHook(ctx, client, DeleteHookInput{GroupID: "99", HookID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

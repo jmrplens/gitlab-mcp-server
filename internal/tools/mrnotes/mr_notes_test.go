@@ -418,8 +418,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 
 // TestCreate_CancelledContext verifies the behavior of create cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -447,8 +446,7 @@ func TestList_MissingProjectID(t *testing.T) {
 
 // TestList_CancelledContext verifies the behavior of list cancelled context.
 func TestList_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -510,8 +508,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 
 // TestUpdate_CancelledContext verifies the behavior of update cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -539,8 +536,7 @@ func TestUpdate_APIError(t *testing.T) {
 
 // TestGetNote_CancelledContext verifies the behavior of get note cancelled context.
 func TestGetNote_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -579,8 +575,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 
 // TestDelete_CancelledContext verifies the behavior of delete cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

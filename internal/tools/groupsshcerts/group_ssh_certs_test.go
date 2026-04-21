@@ -110,8 +110,7 @@ func TestList_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{GroupID: toolutil.StringOrInt("mygroup")})
 	if err == nil {
@@ -205,8 +204,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{
 		GroupID: toolutil.StringOrInt("mygroup"),
@@ -282,8 +280,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{
 		GroupID:       toolutil.StringOrInt("mygroup"),

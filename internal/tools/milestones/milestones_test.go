@@ -619,8 +619,7 @@ func TestMilestoneList_CancelledContext(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -731,8 +730,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -759,8 +757,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Title: "v1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -804,8 +801,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", MilestoneIID: 1, Title: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -821,8 +817,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -838,8 +833,7 @@ func TestGetIssues_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetIssues(ctx, client, GetIssuesInput{ProjectID: "42", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -899,8 +893,7 @@ func TestGetMergeRequests_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetMergeRequests(ctx, client, GetMergeRequestsInput{ProjectID: "42", MilestoneIID: 1})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

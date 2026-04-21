@@ -110,8 +110,7 @@ func TestList_APIError(t *testing.T) {
 // TestList_ContextCancelled verifies that List respects context cancellation.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ControllerID: 1})
 	if err == nil {
@@ -178,8 +177,7 @@ func TestGet_APIError(t *testing.T) {
 // TestGet_ContextCancelled verifies that Get respects context cancellation.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ControllerID: 1, TokenID: 10})
 	if err == nil {
@@ -248,8 +246,7 @@ func TestCreate_APIError(t *testing.T) {
 // TestCreate_ContextCancelled verifies that Create respects context cancellation.
 func TestCreate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ControllerID: 1})
 	if err == nil {
@@ -313,8 +310,7 @@ func TestRotate_APIError(t *testing.T) {
 // TestRotate_ContextCancelled verifies that Rotate respects context cancellation.
 func TestRotate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Rotate(ctx, client, RotateInput{ControllerID: 1, TokenID: 10})
 	if err == nil {
@@ -375,8 +371,7 @@ func TestRevoke_APIError(t *testing.T) {
 // TestRevoke_ContextCancelled verifies that Revoke respects context cancellation.
 func TestRevoke_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Revoke(ctx, client, RevokeInput{ControllerID: 1, TokenID: 10})
 	if err == nil {

@@ -297,8 +297,7 @@ func TestJobList_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -854,8 +853,7 @@ func TestJobGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -882,8 +880,7 @@ func TestJobTrace_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Trace(ctx, client, TraceInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -910,8 +907,7 @@ func TestJobCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Cancel(ctx, client, ActionInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -938,8 +934,7 @@ func TestJobRetry_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Retry(ctx, client, ActionInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -966,8 +961,7 @@ func TestListProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListProject(ctx, client, ListProjectInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1024,8 +1018,7 @@ func TestListBridges_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListBridges(ctx, client, BridgeListInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1084,8 +1077,7 @@ func TestGetArtifacts_CancelledContext(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("PK"))
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := GetArtifacts(ctx, client, GetInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1114,8 +1106,7 @@ func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadArtifacts(ctx, client, DownloadArtifactsInput{
 		ProjectID: "42", RefName: "main",
 	})
@@ -1157,8 +1148,7 @@ func TestDownloadSingleArtifact_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadSingleArtifact(ctx, client, SingleArtifactInput{
 		ProjectID: "42", JobID: 100, ArtifactPath: "report.txt",
 	})
@@ -1202,8 +1192,7 @@ func TestDownloadSingleArtifactByRef_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadSingleArtifactByRef(ctx, client, SingleArtifactRefInput{
 		ProjectID: "42", RefName: "main", ArtifactPath: "report.txt", JobName: "build",
 	})
@@ -1258,8 +1247,7 @@ func TestErase_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Erase(ctx, client, ActionInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1286,8 +1274,7 @@ func TestKeepArtifacts_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := KeepArtifacts(ctx, client, ActionInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1314,8 +1301,7 @@ func TestPlay_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Play(ctx, client, PlayInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)

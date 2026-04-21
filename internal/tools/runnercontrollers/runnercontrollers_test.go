@@ -108,8 +108,7 @@ func TestList_APIError(t *testing.T) {
 // TestList_ContextCancelled verifies that List respects context cancellation.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
@@ -163,8 +162,7 @@ func TestGet_APIError(t *testing.T) {
 // TestGet_ContextCancelled verifies that Get respects context cancellation.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Get(ctx, client, GetInput{ControllerID: 1})
 	if err == nil {
@@ -220,8 +218,7 @@ func TestCreate_APIError(t *testing.T) {
 // TestCreate_ContextCancelled verifies that Create respects context cancellation.
 func TestCreate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{Description: "x"})
 	if err == nil {
@@ -275,8 +272,7 @@ func TestUpdate_APIError(t *testing.T) {
 // TestUpdate_ContextCancelled verifies that Update respects context cancellation.
 func TestUpdate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Update(ctx, client, UpdateInput{ControllerID: 1})
 	if err == nil {
@@ -324,8 +320,7 @@ func TestDelete_APIError(t *testing.T) {
 // TestDelete_ContextCancelled verifies that Delete respects context cancellation.
 func TestDelete_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ControllerID: 1})
 	if err == nil {

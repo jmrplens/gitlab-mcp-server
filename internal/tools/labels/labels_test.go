@@ -134,8 +134,7 @@ func TestLabelList_CancelledContext(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -449,8 +448,7 @@ func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", LabelID: "bug"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -519,8 +517,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Name: "x", Color: "#000"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -578,8 +575,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "x"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -617,8 +613,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", LabelID: "bug"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -645,8 +640,7 @@ func TestSubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := Subscribe(ctx, client, SubscribeInput{ProjectID: "42", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -673,8 +667,7 @@ func TestUnsubscribe_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Unsubscribe(ctx, client, SubscribeInput{ProjectID: "42", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
@@ -701,8 +694,7 @@ func TestPromote_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	err := Promote(ctx, client, PromoteInput{ProjectID: "42", LabelID: "1"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)

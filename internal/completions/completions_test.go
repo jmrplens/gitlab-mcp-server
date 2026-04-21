@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -306,8 +307,7 @@ func TestComplete_APIErrorReturnsEmpty(t *testing.T) {
 func TestComplete_ContextCancelled(t *testing.T) {
 	h := NewHandler(newTestClient(t, http.NotFoundHandler()))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{

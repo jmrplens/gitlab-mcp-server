@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
 // TestJustUpdated_Default verifies JustUpdated returns false when the
@@ -430,8 +431,7 @@ func TestDownloadAndReplace_FullSuccess(t *testing.T) {
 // indirectly since PreStartUpdate creates its own Updater with a real GitHub
 // source; we use a cancelled context to trigger the error path.
 func TestPreStartUpdate_CheckForUpdateFails(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	result := PreStartUpdate(ctx, Config{
 		Mode:           ModeAuto,

@@ -181,8 +181,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, Title: "test"})
 	if err == nil {
@@ -456,8 +455,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, IssueIID: 10})
 	if err == nil {
@@ -532,8 +530,7 @@ func TestListGroup_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: "10"})
 	if err == nil {
@@ -866,8 +863,7 @@ func TestListAll_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx := testutil.CancelledCtx(t)
 	_, err := ListAll(ctx, client, ListAllInput{})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
