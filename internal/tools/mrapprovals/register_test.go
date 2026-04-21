@@ -1,0 +1,134 @@
+package mrapprovals
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// TestRegisterTools_DeleteError verifies that the approval rule delete handler
+// returns an error result when the GitLab API fails, covering the if-err branch
+// in the registration closure.
+func TestRegisterTools_DeleteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	_, _ = server.Connect(ctx, st, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_mr_approval_rule_delete",
+		Arguments: map[string]any{"project_id": "my-project", "mr_iid": float64(1), "approval_rule_id": float64(10)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Error("expected error result from delete with failing backend")
+	}
+}
+
+// TestRegisterTools_ResetError verifies that the gitlab_mr_approval_reset handler
+// returns an error result when the GitLab API responds with 500.
+func TestRegisterTools_ResetError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	_, _ = server.Connect(ctx, st, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_mr_approval_reset",
+		Arguments: map[string]any{"project_id": "42", "mr_iid": float64(1)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Error("expected error result from reset with failing backend")
+	}
+}
+
+// TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
+// branch in the gitlab_mr_approval_rule_delete handler when the user declines.
+func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_mr_approval_rule_delete",
+		Arguments: map[string]any{"project_id": "p", "mr_iid": float64(1), "approval_rule_id": float64(10)},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for declined confirmation")
+	}
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			if tc.Text == "" {
+				t.Error("expected non-empty cancellation message")
+			}
+			return
+		}
+	}
+	t.Error("expected text content in cancellation result")
+}
