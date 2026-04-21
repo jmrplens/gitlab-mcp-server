@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 180">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="glow-soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="text-glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <linearGradient id="core-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d1b69"/>
+      <stop offset="100%" stop-color="#1a1145"/>
+    </linearGradient>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0618"/>
+      <stop offset="50%" stop-color="#0E0A1F"/>
+      <stop offset="100%" stop-color="#0B0618"/>
+    </linearGradient>
+    <linearGradient id="line-fade-r" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="0.12" cy="0.5" r="0.25">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="aura2" cx="0.65" cy="0.5" r="0.4">
+      <stop offset="0%" stop-color="#7C3AED" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="840" height="180" rx="12" fill="url(#bg-grad)"/>
+  <rect width="840" height="180" rx="12" fill="url(#aura)"/>
+  <rect width="840" height="180" rx="12" fill="url(#aura2)"/>
+
+  <!-- Hex grid pattern -->
+  <g stroke="#2d1b69" stroke-width="0.4" fill="none" opacity="0.35">
+    <!-- Top-left -->
+    <path d="M0,8 L8,4 16,8 16,16 8,20 0,16Z"/>
+    <path d="M16,8 L24,4 32,8 32,16 24,20 16,16Z"/>
+    <path d="M32,8 L40,4 48,8 48,16 40,20 32,16Z"/>
+    <path d="M48,8 L56,4 64,8 64,16 56,20 48,16Z"/>
+    <path d="M64,8 L72,4 80,8 80,16 72,20 64,16Z"/>
+    <path d="M80,8 L88,4 96,8 96,16 88,20 80,16Z"/>
+    <path d="M96,8 L104,4 112,8 112,16 104,20 96,16Z"/>
+    <path d="M112,8 L120,4 128,8 128,16 120,20 112,16Z"/>
+    <path d="M128,8 L136,4 144,8 144,16 136,20 128,16Z"/>
+    <path d="M144,8 L152,4 160,8 160,16 152,20 144,16Z"/>
+    <path d="M160,8 L168,4 176,8 176,16 168,20 160,16Z"/>
+    <path d="M176,8 L184,4 192,8 192,16 184,20 176,16Z"/>
+    <path d="M8,20 L16,16 24,20 24,28 16,32 8,28Z"/>
+    <path d="M24,20 L32,16 40,20 40,28 32,32 24,28Z"/>
+    <path d="M40,20 L48,16 56,20 56,28 48,32 40,28Z"/>
+    <path d="M56,20 L64,16 72,20 72,28 64,32 56,28Z"/>
+    <path d="M72,20 L80,16 88,20 88,28 80,32 72,28Z"/>
+    <path d="M88,20 L96,16 104,20 104,28 96,32 88,28Z"/>
+    <path d="M104,20 L112,16 120,20 120,28 112,32 104,28Z"/>
+    <path d="M120,20 L128,16 136,20 136,28 128,32 120,28Z"/>
+    <path d="M136,20 L144,16 152,20 152,28 144,32 136,28Z"/>
+    <path d="M0,32 L8,28 16,32 16,40 8,44 0,40Z"/>
+    <path d="M16,32 L24,28 32,32 32,40 24,44 16,40Z"/>
+    <path d="M32,32 L40,28 48,32 48,40 40,44 32,40Z"/>
+    <path d="M48,32 L56,28 64,32 64,40 56,44 48,40Z"/>
+    <path d="M64,32 L72,28 80,32 80,40 72,44 64,40Z"/>
+    <path d="M80,32 L88,28 96,32 96,40 88,44 80,40Z"/>
+    <path d="M96,32 L104,28 112,32 112,40 104,44 96,40Z"/>
+    <path d="M8,44 L16,40 24,44 24,52 16,56 8,52Z"/>
+    <path d="M24,44 L32,40 40,44 40,52 32,56 24,52Z"/>
+    <path d="M40,44 L48,40 56,44 56,52 48,56 40,52Z"/>
+    <path d="M0,80 L8,76 16,80 16,88 8,92 0,88Z"/>
+    <path d="M16,80 L24,76 32,80 32,88 24,92 16,88Z"/>
+    <path d="M32,80 L40,76 48,80 48,88 40,92 32,88Z"/>
+    <path d="M8,92 L16,88 24,92 24,100 16,104 8,100Z"/>
+    <path d="M24,92 L32,88 40,92 40,100 32,104 24,100Z"/>
+    <!-- Bottom-left -->
+    <path d="M0,128 L8,124 16,128 16,136 8,140 0,136Z"/>
+    <path d="M16,128 L24,124 32,128 32,136 24,140 16,136Z"/>
+    <path d="M32,128 L40,124 48,128 48,136 40,140 32,136Z"/>
+    <path d="M48,128 L56,124 64,128 64,136 56,140 48,136Z"/>
+    <path d="M8,140 L16,136 24,140 24,148 16,152 8,148Z"/>
+    <path d="M24,140 L32,136 40,140 40,148 32,152 24,148Z"/>
+    <path d="M40,140 L48,136 56,140 56,148 48,152 40,148Z"/>
+    <path d="M0,152 L8,148 16,152 16,160 8,164 0,160Z"/>
+    <path d="M16,152 L24,148 32,152 32,160 24,164 16,160Z"/>
+    <path d="M32,152 L40,148 48,152 48,160 40,164 32,160Z"/>
+    <path d="M48,152 L56,148 64,152 64,160 56,164 48,160Z"/>
+    <path d="M64,152 L72,148 80,152 80,160 72,164 64,160Z"/>
+    <path d="M8,164 L16,160 24,164 24,172 16,176 8,172Z"/>
+    <path d="M24,164 L32,160 40,164 40,172 32,176 24,172Z"/>
+    <!-- Top-right -->
+    <path d="M700,8 L708,4 716,8 716,16 708,20 700,16Z"/>
+    <path d="M716,8 L724,4 732,8 732,16 724,20 716,16Z"/>
+    <path d="M732,8 L740,4 748,8 748,16 740,20 732,16Z"/>
+    <path d="M748,8 L756,4 764,8 764,16 756,20 748,16Z"/>
+    <path d="M764,8 L772,4 780,8 780,16 772,20 764,16Z"/>
+    <path d="M780,8 L788,4 796,8 796,16 788,20 780,16Z"/>
+    <path d="M796,8 L804,4 812,8 812,16 804,20 796,16Z"/>
+    <path d="M812,8 L820,4 828,8 828,16 820,20 812,16Z"/>
+    <path d="M708,20 L716,16 724,20 724,28 716,32 708,28Z"/>
+    <path d="M724,20 L732,16 740,20 740,28 732,32 724,28Z"/>
+    <path d="M740,20 L748,16 756,20 756,28 748,32 740,28Z"/>
+    <path d="M756,20 L764,16 772,20 772,28 764,32 756,28Z"/>
+    <path d="M772,20 L780,16 788,20 788,28 780,32 772,28Z"/>
+    <path d="M788,20 L796,16 804,20 804,28 796,32 788,28Z"/>
+    <path d="M700,32 L708,28 716,32 716,40 708,44 700,40Z"/>
+    <path d="M716,32 L724,28 732,32 732,40 724,44 716,40Z"/>
+    <path d="M732,32 L740,28 748,32 748,40 740,44 732,40Z"/>
+    <path d="M748,32 L756,28 764,32 764,40 756,44 748,40Z"/>
+    <path d="M764,32 L772,28 780,32 780,40 772,44 764,40Z"/>
+    <path d="M780,32 L788,28 796,32 796,40 788,44 780,40Z"/>
+    <!-- Right-middle -->
+    <path d="M708,92 L716,88 724,92 724,100 716,104 708,100Z"/>
+    <path d="M724,92 L732,88 740,92 740,100 732,104 724,100Z"/>
+    <path d="M740,92 L748,88 756,92 756,100 748,104 740,100Z"/>
+    <path d="M700,104 L708,100 716,104 716,112 708,116 700,112Z"/>
+    <path d="M716,104 L724,100 732,104 732,112 724,116 716,112Z"/>
+    <!-- Bottom-right -->
+    <path d="M700,128 L708,124 716,128 716,136 708,140 700,136Z"/>
+    <path d="M716,128 L724,124 732,128 732,136 724,140 716,136Z"/>
+    <path d="M732,128 L740,124 748,128 748,136 740,140 732,136Z"/>
+    <path d="M748,128 L756,124 764,128 764,136 756,140 748,136Z"/>
+    <path d="M764,128 L772,124 780,128 780,136 772,140 764,136Z"/>
+    <path d="M780,128 L788,124 796,128 796,136 788,140 780,136Z"/>
+    <path d="M796,128 L804,124 812,128 812,136 804,140 796,136Z"/>
+    <path d="M812,128 L820,124 828,128 828,136 820,140 812,136Z"/>
+    <path d="M708,140 L716,136 724,140 724,148 716,152 708,148Z"/>
+    <path d="M724,140 L732,136 740,140 740,148 732,152 724,148Z"/>
+    <path d="M740,140 L748,136 756,140 756,148 748,152 740,148Z"/>
+    <path d="M756,140 L764,136 772,140 772,148 764,152 756,148Z"/>
+    <path d="M772,140 L780,136 788,140 788,148 780,152 772,148Z"/>
+    <path d="M788,140 L796,136 804,140 804,148 796,152 788,148Z"/>
+    <path d="M700,152 L708,148 716,152 716,160 708,164 700,160Z"/>
+    <path d="M716,152 L724,148 732,152 732,160 724,164 716,160Z"/>
+    <path d="M732,152 L740,148 748,152 748,160 740,164 732,160Z"/>
+    <path d="M748,152 L756,148 764,152 764,160 756,164 748,160Z"/>
+    <path d="M764,152 L772,148 780,152 780,160 772,164 764,160Z"/>
+    <path d="M780,152 L788,148 796,152 796,160 788,164 780,160Z"/>
+    <path d="M796,152 L804,148 812,152 812,160 804,164 796,160Z"/>
+    <path d="M812,152 L820,148 828,152 828,160 820,164 812,160Z"/>
+  </g>
+
+  <!-- Decorative horizontal lines -->
+  <line x1="185" y1="90" x2="840" y2="90" stroke="url(#line-fade-r)" stroke-width="0.5" opacity="0.3"/>
+  <line x1="220" y1="118" x2="650" y2="118" stroke="url(#line-fade-r)" stroke-width="0.3" opacity="0.2"/>
+
+  <!-- ===== LOGO AREA (left, centered at y=90) ===== -->
+  <circle cx="100" cy="90" r="60" fill="url(#aura)" filter="url(#glow-soft)" opacity="0.8"/>
+
+  <!-- Protocol rings -->
+  <circle cx="100" cy="90" r="62" stroke="#2d1b69" stroke-width="0.6" fill="none" opacity="0.6"/>
+  <circle cx="100" cy="90" r="50" stroke="#3b2780" stroke-width="0.4" stroke-dasharray="2 4" fill="none" opacity="0.5"/>
+  <circle cx="100" cy="90" r="68" stroke="#1a1145" stroke-width="0.3" stroke-dasharray="1 6" fill="none" opacity="0.4"/>
+
+  <!-- Data lines from logo -->
+  <g stroke="#A78BFA" stroke-width="0.5" stroke-dasharray="1.5 2.5" opacity="0.5">
+    <line x1="100" y1="48" x2="100" y2="14"/>
+    <line x1="100" y1="132" x2="100" y2="166"/>
+    <line x1="58" y1="90" x2="24" y2="90"/>
+    <line x1="142" y1="90" x2="176" y2="90"/>
+    <line x1="72" y1="62" x2="46" y2="36"/>
+    <line x1="128" y1="62" x2="154" y2="36"/>
+    <line x1="72" y1="118" x2="46" y2="144"/>
+    <line x1="128" y1="118" x2="154" y2="144"/>
+  </g>
+
+  <!-- Network nodes -->
+  <g fill="#A78BFA" filter="url(#glow)">
+    <circle cx="24" cy="90" r="1.5"/>
+    <circle cx="176" cy="90" r="1.5"/>
+    <circle cx="100" cy="14" r="1.5"/>
+    <circle cx="100" cy="166" r="1.5"/>
+    <circle cx="46" cy="36" r="1.2"/>
+    <circle cx="154" cy="36" r="1.2"/>
+    <circle cx="46" cy="144" r="1.2"/>
+    <circle cx="154" cy="144" r="1.2"/>
+  </g>
+
+  <!-- MCP Core box -->
+  <rect x="70" y="60" width="60" height="60" rx="13" fill="url(#core-grad)" stroke="#A78BFA" stroke-width="0.6" filter="url(#glow)"/>
+  <rect x="72" y="62" width="56" height="56" rx="11" fill="none" stroke="#A78BFA" stroke-width="0.3" opacity="0.3"/>
+
+  <!-- GitLab tanuki (centered in core box via nested SVG viewBox) -->
+  <svg x="76" y="66" width="48" height="48" viewBox="100 100 180 180">
+    <path fill="#E24329" d="M265.26416,174.37243l-.2134-.55822-21.19899-55.30908c-.4236-1.08359-1.18542-1.99642-2.17699-2.62689-.98837-.63373-2.14749-.93253-3.32305-.87014-1.1689.06239-2.29195.48925-3.20809,1.21821-.90957.73554-1.56629,1.73047-1.87493,2.85346l-14.31327,43.80662h-57.90965l-14.31327-43.80662c-.30864-1.12299-.96536-2.11791-1.87493-2.85346-.91614-.72895-2.03911-1.15582-3.20809-1.21821-1.17548-.06239-2.33468.23641-3.32297.87014-.99166.63047-1.75348,1.5433-2.17707,2.62689l-21.19891,55.31237-.21348.55493c-6.28158,16.38521-.92929,34.90803,13.05891,45.48782.02621.01641.04922.03611.07552.05582l.18719.14119,32.29094,24.17392,15.97151,12.09024,9.71951,7.34871c2.34117,1.77316,5.57877,1.77316,7.92002,0l9.71943-7.34871,15.96822-12.09024,32.48142-24.31511c.02958-.02299.05588-.04269.08538-.06568,13.97834-10.57977,19.32735-29.09604,13.04905-45.47796Z"/>
+    <path fill="#FC6D26" d="M265.26416,174.37243l-.2134-.55822c-10.5174,2.16062-20.20405,6.6099-28.49844,12.81593-.1346.0985-25.20497,19.05805-46.55171,35.19699,15.84998,11.98517,29.6477,22.40405,29.6477,22.40405l32.48142-24.31511c.02958-.02299.05588-.04269.08538-.06568,13.97834-10.57977,19.32735-29.09604,13.04905-45.47796Z"/>
+    <path fill="#FCA326" d="M160.34962,244.23117l15.97151,12.09024,9.71951,7.34871c2.34117,1.77316,5.57877,1.77316,7.92002,0l9.71943-7.34871,15.96822-12.09024s-13.79772-10.41888-29.6477-22.40405c-15.85327,11.98517-29.65099,22.40405-29.65099,22.40405Z"/>
+    <path fill="#FC6D26" d="M143.44561,186.63014c-8.29111-6.20274-17.97446-10.65531-28.49507-12.81264l-.21348.55493c-6.28158,16.38521-.92929,34.90803,13.05891,45.48782.02621.01641.04922.03611.07552.05582l.18719.14119,32.29094,24.17392s13.79772-10.41888,29.65099-22.40405c-21.34673-16.13894-46.42031-35.09848-46.55499-35.19699Z"/>
+  </svg>
+
+  <!-- ===== TEXT AREA (right) ===== -->
+  <text x="220" y="68" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="38" font-weight="700" fill="#F5F3FF" letter-spacing="-0.5" filter="url(#text-glow)">
+    GitLab MCP Server
+  </text>
+
+  <text x="222" y="96" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="15" fill="#A78BFA" opacity="0.9" letter-spacing="0.3">
+    The entire GitLab API as MCP tools for AI assistants
+  </text>
+
+  <!-- Feature pills -->
+  <g transform="translate(220, 116)">
+    <rect x="0" y="0" width="118" height="28" rx="14" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.5" opacity="0.8"/>
+    <text x="59" y="18" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="12" fill="#A78BFA" text-anchor="middle" font-weight="600">Single Binary</text>
+
+    <rect x="128" y="0" width="152" height="28" rx="14" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.5" opacity="0.8"/>
+    <text x="204" y="18" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="12" fill="#A78BFA" text-anchor="middle" font-weight="600">Zero Dependencies</text>
+
+    <rect x="290" y="0" width="138" height="28" rx="14" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.5" opacity="0.8"/>
+    <text x="359" y="18" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="12" fill="#A78BFA" text-anchor="middle" font-weight="600">Cross-Platform</text>
+
+    <rect x="438" y="0" width="120" height="28" rx="14" fill="#1a1145" stroke="#3b2780" stroke-width="0.5" opacity="0.8"/>
+    <text x="498" y="18" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="12" fill="#8B7FC7" text-anchor="middle" font-weight="500">stdio &amp; HTTP</text>
+  </g>
+
+  <!-- Subtle bottom border glow -->
+  <rect x="200" y="175" width="440" height="1" rx="0.5" fill="#A78BFA" opacity="0.15"/>
+</svg>
