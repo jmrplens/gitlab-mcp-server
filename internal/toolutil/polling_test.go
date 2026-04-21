@@ -47,17 +47,27 @@ func TestClampPollTimeout(t *testing.T) {
 }
 
 func TestIsTerminalStatus(t *testing.T) {
-	terminal := []string{"success", "failed", "canceled", "skipped", "manual"}
-	for _, s := range terminal {
-		if !IsTerminalStatus(s) {
-			t.Errorf("IsTerminalStatus(%q) = false, want true", s)
-		}
+	tests := []struct {
+		name   string
+		status string
+		want   bool
+	}{
+		{"terminal: success", "success", true},
+		{"terminal: failed", "failed", true},
+		{"terminal: canceled", "canceled", true},
+		{"terminal: skipped", "skipped", true},
+		{"terminal: manual", "manual", true},
+		{"non-terminal: running", "running", false},
+		{"non-terminal: pending", "pending", false},
+		{"non-terminal: created", "created", false},
+		{"non-terminal: waiting_for_resource", "waiting_for_resource", false},
+		{"non-terminal: empty", "", false},
 	}
-
-	nonTerminal := []string{"running", "pending", "created", "waiting_for_resource", ""}
-	for _, s := range nonTerminal {
-		if IsTerminalStatus(s) {
-			t.Errorf("IsTerminalStatus(%q) = true, want false", s)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsTerminalStatus(tt.status); got != tt.want {
+				t.Errorf("IsTerminalStatus(%q) = %v, want %v", tt.status, got, tt.want)
+			}
+		})
 	}
 }

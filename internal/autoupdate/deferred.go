@@ -20,7 +20,7 @@ var errNotBinary = errors.New("autoupdate: downloaded file is not a valid execut
 
 // writeToFile creates a file at path and copies all data from r into it.
 // After writing, it validates that the file looks like an executable binary.
-// On Unix, the file is made executable (0o755).
+// On Unix, the file is made executable for the owner only (0o700).
 func writeToFile(path string, r io.Reader) error {
 	f, err := os.Create(path) //#nosec G304 -- path derived from os.Executable
 	if err != nil {
@@ -45,7 +45,10 @@ func writeToFile(path string, r io.Reader) error {
 		return err
 	}
 	if runtime.GOOS != "windows" {
-		_ = os.Chmod(path, 0o700) //#nosec G302 -- executable binary needs owner-only permissions
+		if err = os.Chmod(path, 0o700); err != nil { //#nosec G302 -- executable binary needs owner-only permissions
+			_ = os.Remove(path)
+			return fmt.Errorf("autoupdate: setting staging file permissions: %w", err)
+		}
 	}
 	return nil
 }

@@ -137,6 +137,9 @@ func NewProgressReader(ctx context.Context, r io.Reader, total int64, tracker pr
 	return &ProgressReader{
 		inner: r,
 		onProgress: func(read, total int64) {
+			if !tracker.IsActive() {
+				return
+			}
 			tracker.Update(ctx, float64(read), float64(total),
 				fmt.Sprintf("Uploaded %d / %d bytes", read, total))
 		},
@@ -154,7 +157,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	n, err := pr.inner.Read(p)
 	pr.read += int64(n)
 
-	if pr.read-pr.lastReport >= pr.interval || err == io.EOF {
+	if pr.onProgress != nil && (pr.read-pr.lastReport >= pr.interval || err == io.EOF) {
 		pr.onProgress(pr.read, pr.total)
 		pr.lastReport = pr.read
 	}
@@ -178,6 +181,9 @@ func NewProgressWriter(ctx context.Context, w io.Writer, total int64, tracker pr
 	return &ProgressWriter{
 		inner: w,
 		onProgress: func(written, total int64) {
+			if !tracker.IsActive() {
+				return
+			}
 			tracker.Update(ctx, float64(written), float64(total),
 				fmt.Sprintf("Downloaded %d / %d bytes", written, total))
 		},
@@ -195,7 +201,7 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 	n, err := pw.inner.Write(p)
 	pw.written += int64(n)
 
-	if pw.written-pw.lastReport >= pw.interval || err != nil {
+	if pw.onProgress != nil && (pw.written-pw.lastReport >= pw.interval || err != nil) {
 		pw.onProgress(pw.written, pw.total)
 		pw.lastReport = pw.written
 	}
