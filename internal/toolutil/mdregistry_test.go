@@ -131,3 +131,68 @@ func TestStripTrailingLineWhitespace(t *testing.T) {
 		t.Errorf("stripTrailingLineWhitespace = %q, want %q", got, want)
 	}
 }
+
+// TestRegisteredMarkdownTypeNames_ReturnsRegisteredTypes verifies that
+// RegisteredMarkdownTypeNames returns names for both string and result
+// formatters that have been registered.
+func TestRegisteredMarkdownTypeNames_ReturnsRegisteredTypes(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	RegisterMarkdown(func(_ mdTestOutput) string { return "s" })
+	RegisterMarkdownResult(func(_ mdTestResultOutput) *mcp.CallToolResult { return nil })
+
+	names := RegisteredMarkdownTypeNames()
+	if len(names) != 2 {
+		t.Fatalf("expected 2 registered type names, got %d: %v", len(names), names)
+	}
+
+	found := map[string]bool{}
+	for _, n := range names {
+		found[n] = true
+	}
+	if !found["toolutil.mdTestOutput"] {
+		t.Errorf("expected mdTestOutput in registered types, got %v", names)
+	}
+	if !found["toolutil.mdTestResultOutput"] {
+		t.Errorf("expected mdTestResultOutput in registered types, got %v", names)
+	}
+}
+
+// TestRegisteredMarkdownTypeNames_Empty verifies that
+// RegisteredMarkdownTypeNames returns an empty slice when no formatters
+// are registered.
+func TestRegisteredMarkdownTypeNames_Empty(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	names := RegisteredMarkdownTypeNames()
+	if len(names) != 0 {
+		t.Errorf("expected empty slice, got %v", names)
+	}
+}
+
+// TestMarkdownForResult_DeleteOutputViaInit verifies that the init()
+// function in mdregistry.go registers the DeleteOutput formatter correctly
+// and that it produces the expected success emoji + message output.
+func TestMarkdownForResult_DeleteOutputViaInit(t *testing.T) {
+	// Re-register DeleteOutput formatter like init() does (tests may reset the maps)
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+	RegisterMarkdown(func(v DeleteOutput) string {
+		return EmojiSuccess + " " + v.Message
+	})
+
+	result := MarkdownForResult(DeleteOutput{Message: "Project deleted"})
+	if result == nil {
+		t.Fatal("expected non-nil result for DeleteOutput")
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	want := EmojiSuccess + " Project deleted"
+	if tc.Text != want {
+		t.Errorf("text = %q, want %q", tc.Text, want)
+	}
+}

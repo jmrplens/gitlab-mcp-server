@@ -41,3 +41,30 @@ func TestLogToolCallAll_WithRequest(t *testing.T) {
 	LogToolCallAll(ctx, req, "test_tool", time.Now(), nil)
 	LogToolCallAll(ctx, req, "test_tool", time.Now(), errors.New("err"))
 }
+
+// TestLogToolCallAll_WithAuthenticatedUser verifies that LogToolCallAll
+// routes to logToolCallWithUser when an authenticated identity is present
+// in the context. Covers both success and error paths with user info.
+func TestLogToolCallAll_WithAuthenticatedUser(t *testing.T) {
+	identity := UserIdentity{UserID: "123", Username: "testuser"}
+	ctx := IdentityToContext(context.Background(), identity)
+
+	// Success path with authenticated user
+	LogToolCallAll(ctx, nil, "test_tool", time.Now(), nil)
+	// Error path with authenticated user
+	LogToolCallAll(ctx, nil, "test_tool", time.Now(), errors.New("test error"))
+}
+
+// TestLogToolCallWithUser_Success verifies that logToolCallWithUser does not
+// panic when logging a successful tool call with user identity.
+func TestLogToolCallWithUser_Success(t *testing.T) {
+	user := UserIdentity{UserID: "42", Username: "admin"}
+	logToolCallWithUser("test_tool", time.Now(), nil, user)
+}
+
+// TestLogToolCallWithUser_Error verifies that logToolCallWithUser does not
+// panic when logging a failed tool call with user identity.
+func TestLogToolCallWithUser_Error(t *testing.T) {
+	user := UserIdentity{UserID: "42", Username: "admin"}
+	logToolCallWithUser("test_tool", time.Now(), errors.New("api failure"), user)
+}
