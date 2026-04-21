@@ -5,6 +5,7 @@ package integrations
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -402,8 +403,11 @@ func TestDelete_APIError400(t *testing.T) {
 
 // TestSetJira_WithAllOptionalFields verifies the behavior of set jira with all optional fields.
 func TestSetJira_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"title":"Jira","slug":"jira","active":true}`)
 			return
 		}
@@ -441,6 +445,11 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	}
 	if out.Integration.Slug != "jira" {
 		t.Errorf("expected slug 'jira', got %q", out.Integration.Slug)
+	}
+	for _, want := range []string{"api_url", "jira_issue_prefix", "jira_issue_regex", "project_keys", "comment_on_event_enabled", "jira_issue_transition_automatic"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

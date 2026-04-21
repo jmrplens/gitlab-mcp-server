@@ -5,6 +5,7 @@ package protectedenvs
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -181,8 +182,11 @@ func TestProtect_WithAccessLevels(t *testing.T) {
 // optional field branches: UserID, GroupID, GroupInheritanceType in both
 // DeployAccessLevels and ApprovalRules.
 func TestProtect_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, envJSON)
 			return
 		}
@@ -206,6 +210,11 @@ func TestProtect_WithAllOptionalFields(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Protect() unexpected error: %v", err)
+	}
+	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -489,8 +498,11 @@ func boolPtr(v bool) *bool { return new(v) }
 // TestUpdate_WithAllFields verifies Update maps all optional fields including
 // DeployAccessLevels and ApprovalRules with all sub-fields populated.
 func TestUpdate_WithAllFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProtectedEnv1 {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, envJSON)
 			return
 		}
@@ -530,6 +542,11 @@ func TestUpdate_WithAllFields(t *testing.T) {
 	}
 	if out.Name != "production" {
 		t.Errorf("Name = %q, want %q", out.Name, "production")
+	}
+	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals", "_destroy"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

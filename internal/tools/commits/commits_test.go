@@ -5,6 +5,7 @@ package commits
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -1089,8 +1090,11 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 
 // TestCommitCreate_WithAllOptions verifies the behavior of commit create with all options.
 func TestCommitCreate_WithAllOptions(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathRepoCommits {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":"opt1","short_id":"opt1","title":"t"}`)
 			return
 		}
@@ -1114,6 +1118,11 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	}
 	if out.ShortID != "opt1" {
 		t.Errorf(fmtOutShortIDWant, out.ShortID, "opt1")
+	}
+	for _, want := range []string{"start_sha", "author_email", "author_name", "force", "actions"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
@@ -1283,8 +1292,11 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 
 // TestSetStatus_WithAllOptions verifies the behavior of set status with all options.
 func TestSetStatus_WithAllOptions(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/statuses/abc" {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":3,"sha":"abc","ref":"main","status":"success","name":"deploy",
 				"target_url":"https://ci.example.com","description":"OK","coverage":95.5,
@@ -1320,6 +1332,11 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	}
 	if out.CreatedAt == "" {
 		t.Error("CreatedAt is empty")
+	}
+	for _, want := range []string{"ref", "name", "context", "target_url", "description", "coverage", "pipeline_id"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

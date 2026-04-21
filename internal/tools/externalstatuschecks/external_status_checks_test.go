@@ -5,7 +5,9 @@ package externalstatuschecks
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -540,8 +542,11 @@ func TestUpdateProjectExternalStatusCheck_Success(t *testing.T) {
 
 // TestUpdateProjectExternalStatusCheck_WithAllFields verifies update with all optional fields.
 func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
+	var capturedBody string
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, projectStatusCheckJSON)
 	})
 	client := testutil.NewTestClient(t, mux)
@@ -559,6 +564,11 @@ func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 	}
 	if out.Name != "Security Scan" {
 		t.Errorf("expected name 'Security Scan', got %q", out.Name)
+	}
+	for _, want := range []string{"name", "external_url", "shared_secret", "protected_branch_ids"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

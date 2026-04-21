@@ -5,6 +5,7 @@ package snippets
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -419,7 +420,10 @@ func TestExplore_APIError(t *testing.T) {
 
 // TestCreate_WithAllOptions verifies the behavior of create with all options.
 func TestCreate_WithAllOptions(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, covSnippetJSON)
 	}))
 	out, err := Create(context.Background(), client, CreateInput{
@@ -436,11 +440,19 @@ func TestCreate_WithAllOptions(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDEquals, out.ID)
 	}
+	for _, want := range []string{"title", "description", "visibility", "files"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
+	}
 }
 
 // TestUpdate_WithAllOptions verifies the behavior of update with all options.
 func TestUpdate_WithAllOptions(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, covSnippetJSON)
 	}))
 	out, err := Update(context.Background(), client, UpdateInput{
@@ -457,6 +469,11 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 	}
 	if out.ID != 1 {
 		t.Errorf(fmtIDEquals, out.ID)
+	}
+	for _, want := range []string{"title", "description", "visibility", "files"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

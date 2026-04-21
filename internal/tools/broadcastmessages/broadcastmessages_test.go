@@ -5,6 +5,7 @@ package broadcastmessages
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -332,8 +333,11 @@ func TestCreate_InvalidEndsAt(t *testing.T) {
 
 // TestCreate_WithAllOptionalFields verifies the behavior of create with all optional fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"message":"Full test","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"serif","active":true,"target_access_levels":[30],"target_path":"/dashboard","broadcast_type":"notification","dismissable":true,"theme":"blue"}`)
 			return
 		}
@@ -357,6 +361,11 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 	}
 	if out.Message.BroadcastType != "notification" {
 		t.Errorf("expected notification, got %s", out.Message.BroadcastType)
+	}
+	for _, want := range []string{"starts_at", "ends_at", "font", "target_access_levels", "target_path", "broadcast_type", "dismissable", "theme"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

@@ -5,6 +5,7 @@ package importservice
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -253,8 +254,11 @@ const fmtUnexpErr = "unexpected error: %v"
 
 // TestImportFromGitHub_WithAllOptionalFields verifies the behavior of import from git hub with all optional fields.
 func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/github" {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"imported","full_path":"ns/imported","full_name":"ns / imported","import_source":"github.com/user/repo","import_status":"scheduled"}`)
 			return
 		}
@@ -273,6 +277,11 @@ func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 	}
 	if out.Name != "imported" {
 		t.Errorf("expected name 'imported', got %q", out.Name)
+	}
+	for _, want := range []string{"personal_access_token", "repo_id", "target_namespace", "new_name", "github_hostname", "timeout_strategy"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

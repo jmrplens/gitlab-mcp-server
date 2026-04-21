@@ -2,7 +2,9 @@ package memberroles
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -455,10 +457,13 @@ func TestToOutput_Nil(t *testing.T) {
 // forwards all permission flags to the GitLab API. This exercises every branch
 // in buildCreateOpts that handles optional permission fields.
 func TestCreateInstance_WithAllPermissions(t *testing.T) {
+	var capturedBody string
 	trueVal := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.AssertRequestPath(t, r, "/api/v4/member_roles")
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"id":10,"name":"full-perms","description":"All permissions",
 			"base_access_level":30,
@@ -515,6 +520,11 @@ func TestCreateInstance_WithAllPermissions(t *testing.T) {
 	}
 	if out.RemoveProject == nil || !*out.RemoveProject {
 		t.Error("expected RemoveProject to be true")
+	}
+	for _, want := range []string{"admin_cicd_variables", "admin_merge_request", "read_code", "remove_project", "manage_deploy_tokens", "admin_vulnerability"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 

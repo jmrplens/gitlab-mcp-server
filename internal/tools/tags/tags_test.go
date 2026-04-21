@@ -5,6 +5,7 @@ package tags
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -758,8 +759,11 @@ func TestTagUnprotect_APIError(t *testing.T) {
 
 // TestTagProtect_WithAllowedToCreate verifies the behavior of tag protect with allowed to create.
 func TestTagProtect_WithAllowedToCreate(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
+			body, _ := io.ReadAll(r.Body)
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[{"id":1,"access_level":30,"access_level_description":"Developers + Maintainers","user_id":5}]}`)
 			return
 		}
@@ -780,6 +784,11 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 	}
 	if out.Name != "v*" {
 		t.Errorf(fmtNameWant, out.Name, "v*")
+	}
+	for _, want := range []string{"allowed_to_create", "user_id", "group_id", "deploy_key_id"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q", want)
+		}
 	}
 }
 
