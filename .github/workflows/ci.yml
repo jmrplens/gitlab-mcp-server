@@ -1,7 +1,7 @@
 # CI pipeline for gitlab-mcp-server
 #
 # Runs on: pull requests to main, pushes to main
-# Jobs: test, build, 8 Go analyzers (parallel), markdown, docker (PR+paths)
+# Jobs: test, sonarcloud, build, 8 Go analyzers (parallel), markdown, docker (PR+paths)
 
 name: CI
 
@@ -39,6 +39,34 @@ jobs:
             exit 1
           fi
           echo "PASS: coverage ${COVERAGE}% meets minimum ${COVERAGE_MIN}%"
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 1
+
+  sonarcloud:
+    name: "SA: SonarCloud"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          name: coverage
+      - name: SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v7
+        continue-on-error: true
+        env:
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build

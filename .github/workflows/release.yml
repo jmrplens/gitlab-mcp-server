@@ -83,6 +83,7 @@ jobs:
   release:
     name: GoReleaser
     runs-on: ubuntu-latest
+    environment: release
     needs: [e2e]
     steps:
       - uses: actions/checkout@v6
@@ -116,7 +117,7 @@ jobs:
 
       - name: Commit updated server.json to main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
           FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" -q '.sha')
