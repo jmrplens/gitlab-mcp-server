@@ -1,0 +1,266 @@
+---
+title: Modo Servidor HTTP
+description: Despliegue multiusuario con autenticación por solicitud
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/http-server-mode.md) en el repositorio.
+:::
+
+Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
+
+## Cuándo usar el modo HTTP
+
+| Escenario                                     | Modo Recomendado |
+| --------------------------------------------- | ---------------- |
+| Desarrollador individual, cliente de IA local | stdio            |
+| Equipo compartiendo una instancia de servidor | **HTTP**         |
+| Despliegue en servidor remoto/sin pantalla    | **HTTP**         |
+| Integración CI/CD con MCP                     | **HTTP**         |
+| Pruebas con curl o clientes HTTP              | **HTTP**         |
+
+## Iniciar el servidor
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com
+```
+
+El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP está disponible en `/mcp`.
+
+## Flags de CLI
+
+| Flag                     | Por Defecto                  | Descripción                                                                 |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------- |
+| `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                           |
+| `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                   |
+| `--gitlab-url`           | _(requerido)_                | URL base de la instancia de GitLab                                          |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados      |
+| `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (42 o 57 con --enterprise)           |
+| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) |
+| `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura           |
+| `--max-http-clients`     | `100`                        | Máximo de tokens únicos en el pool del servidor                             |
+| `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                              |
+| `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                 |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                               |
+| `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                      |
+| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                        |
+| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                     |
+
+:::note
+`--gitlab-url` es el único flag requerido. Todos los demás tienen valores predeterminados sensatos.
+:::
+
+## Autenticación
+
+Los clientes deben proporcionar su Token de Acceso Personal de GitLab en cada solicitud HTTP usando una de dos cabeceras:
+
+### Cabecera private-token (recomendada)
+
+```
+PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+### Cabecera authorization Bearer
+
+```
+Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+Si ambas cabeceras están presentes, `PRIVATE-TOKEN` tiene precedencia. Las solicitudes sin un token válido son rechazadas.
+
+### Modo OAuth
+
+El modo OAuth (`--auth-mode=oauth`) habilita autenticación OAuth 2.1 compatible con RFC 9728. En lugar de gestionar tokens manualmente, los clientes MCP descubren el servidor de autorización automáticamente y manejan el flujo OAuth:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com --auth-mode=oauth
+```
+
+**Cómo funciona:**
+
+1. El servidor expone `/.well-known/oauth-protected-resource` con metadatos que apuntan a tu instancia de GitLab como servidor de autorización
+2. Los clientes MCP (VS Code, Claude Code) descubren este endpoint e inician el flujo OAuth 2.1 PKCE
+3. Los usuarios autorizan en el navegador — no se requiere copiar tokens
+4. El servidor valida los tokens Bearer contra la API de GitLab y cachea la identidad durante `--oauth-cache-ttl` (por defecto: 15 minutos)
+
+**Configuración del cliente en modo OAuth:**
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://tu-servidor:8080/mcp",
+			"oauth": {
+				"clientId": "TU_APPLICATION_ID_DE_GITLAB",
+				"scopes": ["api"]
+			}
+		}
+	}
+}
+```
+
+- **`clientId`**: El Application ID de tu Aplicación OAuth de GitLab (ver [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md))
+- **`scopes`**: Debe incluir `api` para funcionalidad completa de herramientas
+
+VS Code maneja el descubrimiento OAuth y la autorización automáticamente.
+
+:::caution
+Sin `clientId`, VS Code recurre al Registro Dinámico de Clientes (DCR). El DCR de GitLab asigna el scope `mcp` en lugar de `api`, lo que causa que la mayoría de las operaciones fallen.
+:::
+
+</TabItem>
+<TabItem label="Claude Code">
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id TU_APPLICATION_ID_DE_GITLAB \
+  --callback-port 8090 \
+  http://tu-servidor:8080/mcp
+```
+
+Claude Code descubre los metadatos OAuth y abre el navegador para la autorización.
+
+</TabItem>
+</Tabs>
+
+:::tip
+El modo OAuth requiere una Aplicación OAuth de GitLab. Consulta la guía [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para instrucciones de configuración.
+:::
+
+:::note
+La cabecera `PRIVATE-TOKEN` sigue funcionando en modo OAuth — el middleware la normaliza a un token Bearer. Esto permite compatibilidad hacia atrás con clientes que no soportan OAuth.
+:::
+
+## Gestión de sesiones
+
+### Arquitectura del pool de servidores
+
+El núcleo del modo HTTP es un **pool LRU limitado** de instancias de servidor MCP, indexado por el hash SHA-256 del token de cada cliente.
+
+```mermaid
+graph TD
+    subgraph "Arquitectura del Modo HTTP"
+        REQ1["Cliente A<br/>Token: glpat-aaa"] --> HANDLER[StreamableHTTPHandler]
+        REQ2["Cliente B<br/>Token: glpat-bbb"] --> HANDLER
+        REQ3["Cliente C<br/>Token: glpat-aaa"] --> HANDLER
+
+        HANDLER --> POOL[Pool de Servidores]
+
+        POOL --> ENTRY1["hash(glpat-aaa)<br/>Servidor MCP + Cliente GitLab"]
+        POOL --> ENTRY2["hash(glpat-bbb)<br/>Servidor MCP + Cliente GitLab"]
+    end
+
+    ENTRY1 --> GL1["API de GitLab<br/>como usuario A"]
+    ENTRY2 --> GL2["API de GitLab<br/>como usuario B"]
+```
+
+**Propiedades clave:**
+
+- Los clientes con el **mismo token** comparten la misma instancia del servidor MCP
+- Los clientes con **diferentes tokens** obtienen instancias completamente aisladas
+- Los tokens sin procesar **nunca se almacenan** — solo se mantienen hashes SHA-256 en memoria
+- Cuando el pool alcanza `--max-http-clients`, la entrada menos usada recientemente es desalojada
+
+### Ciclo de vida de la sesión
+
+1. **Primera solicitud**: El token se extrae, se hashea, y se crea un nuevo servidor MCP + cliente GitLab
+2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
+3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
+4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
+
+## Configuración del cliente
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+Añadir a `.vscode/mcp.json`:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="OpenCode">
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="curl (Pruebas)">
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+</TabItem>
+</Tabs>
+
+## Despliegue con Docker Compose
+
+```yaml
+services:
+  gitlab-mcp:
+    image: ghcr.io/jmrplens/gitlab-mcp-server:latest
+    ports:
+      - "8080:8080"
+    command:
+      - "--http"
+      - "--gitlab-url=https://gitlab.ejemplo.com"
+      - "--http-addr=:8080"
+      - "--max-http-clients=200"
+      - "--session-timeout=1h"
+    restart: unless-stopped
+```
+
+Iniciar el servicio:
+
+```bash
+docker compose up -d
+```
+
+## Verificación de salud
+
+Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
+
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-tu-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+```
+
+Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramientas disponibles.
+
+:::tip
+Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.
+:::

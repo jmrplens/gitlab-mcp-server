@@ -1,0 +1,70 @@
+---
+title: Compatibility
+description: Platform, GitLab edition, and MCP client compatibility for GitLab MCP Server
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## GitLab edition compatibility
+
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The `GITLAB_ENTERPRISE` environment variable unlocks 15 additional enterprise-only meta-tools.
+
+| Feature                                 | Community (CE) | Enterprise (EE) |
+| --------------------------------------- | :------------: | :-------------: |
+| Projects, Issues, MRs, Pipelines, CI/CD |       ✅       |       ✅        |
+| Wikis, Labels, Milestones, Releases     |       ✅       |       ✅        |
+| Users, Groups, Members, Search          |       ✅       |       ✅        |
+| Deployments, Environments, Packages     |       ✅       |       ✅        |
+| 42 base meta-tools                      |       ✅       |       ✅        |
+| 24 resources, 38 prompts                |       ✅       |       ✅        |
+| Merge Trains                            |       ❌       |       ✅        |
+| DORA Metrics                            |       ❌       |       ✅        |
+| Vulnerability Management                |       ❌       |       ✅        |
+| Audit Events                            |       ❌       |       ✅        |
+| Compliance Policies                     |       ❌       |       ✅        |
+| +15 enterprise meta-tools               |       ✖        |       ✅        |
+
+To enable enterprise features, set `GITLAB_ENTERPRISE=true`.
+
+## Platform support
+
+Pre-built binaries are available for all major platforms:
+
+| OS      | Architecture          | Binary                                |
+| ------- | --------------------- | ------------------------------------- |
+| Linux   | amd64                 | `gitlab-mcp-server-linux-amd64`       |
+| Linux   | arm64                 | `gitlab-mcp-server-linux-arm64`       |
+| macOS   | amd64 (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
+| macOS   | arm64 (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
+| Windows | amd64                 | `gitlab-mcp-server-windows-amd64.exe` |
+| Windows | arm64                 | `gitlab-mcp-server-windows-arm64.exe` |
+
+## MCP client compatibility
+
+Any client supporting the Model Context Protocol stdio transport can use this server. Tested clients:
+
+| Client                     | Transport | Status |
+| -------------------------- | --------- | :----: |
+| VS Code + GitHub Copilot   | stdio     |   ✅   |
+| Claude Desktop             | stdio     |   ✅   |
+| Cursor                     | stdio     |   ✅   |
+| Claude Code (CLI)          | stdio     |   ✅   |
+| Windsurf                   | stdio     |   ✅   |
+| JetBrains IDEs             | stdio     |   ✅   |
+| Zed                        | stdio     |   ✅   |
+| Kiro                       | stdio     |   ✅   |
+| Any Streamable HTTP client | HTTP      |   ✅   |
+
+## MCP protocol features
+
+| Capability  |             Supported             |
+| ----------- | :-------------------------------: |
+| Tools       | ✅ (1006 individual / 42–57 meta) |
+| Resources   |              ✅ (24)              |
+| Prompts     |              ✅ (38)              |
+| Completions |      ✅ (17 argument types)       |
+| Sampling    |                ✅                 |
+| Elicitation |                ✅                 |
+| Roots       |                ✅                 |
+| Logging     |                ✅                 |
+| Progress    |                ✅                 |

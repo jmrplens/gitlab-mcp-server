@@ -1,0 +1,282 @@
+---
+title: Configuración
+description: Variables de entorno, configuración de clientes y opciones de despliegue
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/configuration.md) en el repositorio.
+:::
+
+GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre todas las opciones de configuración.
+
+## Variables requeridas
+
+Estas deben establecerse para que el servidor arranque en modo stdio:
+
+| Variable       | Descripción                           | Ejemplo                      |
+| -------------- | ------------------------------------- | ---------------------------- |
+| `GITLAB_URL`   | URL base de la instancia de GitLab    | `https://gitlab.example.com` |
+| `GITLAB_TOKEN` | Personal Access Token con scope `api` | `glpat-xxxxxxxxxxxxxxxxxxxx` |
+
+## Opciones principales
+
+| Variable                 | Predeterminado | Descripción                                                                                               |
+| ------------------------ | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `GITLAB_SKIP_TLS_VERIFY` | `false`        | Omitir verificación de certificados TLS para certificados autofirmados                                    |
+| `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (42 herramientas de dominio en lugar de 1000+ herramientas individuales) |
+| `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) para GitLab Premium/Ultimate  |
+| `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                              |
+| `GITLAB_SAFE_MODE`       | `false`        | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)     |
+| `LOG_LEVEL`              | `info`         | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                             |
+
+:::tip
+**El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
+:::
+
+## Componentes opcionales
+
+Estos controlan qué capacidades MCP están habilitadas:
+
+| Variable                | Predeterminado | Descripción                                                          |
+| ----------------------- | -------------- | -------------------------------------------------------------------- |
+| `ENABLE_ANALYSIS_TOOLS` | `true`         | Habilitar 11 herramientas de análisis con IA (requiere MCP sampling) |
+| `ENABLE_ELICITATION`    | `true`         | Habilitar asistentes de creación interactivos (proyecto, issue, MR)  |
+| `ENABLE_RESOURCES`      | `true`         | Habilitar 24 recursos MCP para acceso de datos de solo lectura       |
+| `ENABLE_PROMPTS`        | `true`         | Habilitar 38 plantillas de prompts MCP                               |
+
+## Autoactualización
+
+| Variable               | Predeterminado               | Descripción                                                                                                         |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Comportamiento de autoactualización: `true` (aplicar al iniciar), `check` (solo notificar), `false` (deshabilitado) |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release                                                                    |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de comprobación periódica (solo modo HTTP)                                                                |
+
+## Opciones de administración
+
+| Variable    | Predeterminado | Descripción                                                     |
+| ----------- | -------------- | --------------------------------------------------------------- |
+| `YOLO_MODE` | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado) |
+
+## Archivo .env de ejemplo
+
+```bash title=".env"
+# Requeridas
+GITLAB_URL=https://gitlab.example.com
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+
+# Opcionales
+GITLAB_SKIP_TLS_VERIFY=false
+META_TOOLS=true
+GITLAB_ENTERPRISE=false
+GITLAB_READ_ONLY=false
+GITLAB_SAFE_MODE=false
+LOG_LEVEL=info
+
+# Componentes opcionales
+ENABLE_ANALYSIS_TOOLS=true
+ENABLE_ELICITATION=true
+ENABLE_RESOURCES=true
+ENABLE_PROMPTS=true
+
+# Autoactualización
+AUTO_UPDATE=true
+```
+
+## Configuración de clientes
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+Crea `.vscode/mcp.json` en tu workspace:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+**Configuración segura del token usando variables de entrada de VS Code:**
+
+```json
+{
+	"inputs": [
+		{
+			"id": "gitlab-token",
+			"type": "promptString",
+			"description": "GitLab Personal Access Token",
+			"password": true
+		}
+	],
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlab-token}"
+			}
+		}
+	}
+}
+```
+
+:::tip
+La opción `password: true` oculta la entrada del token. VS Code lo solicitará una vez por sesión.
+:::
+
+</TabItem>
+<TabItem label="Claude Desktop">
+
+Edita `claude_desktop_config.json`:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="Cursor">
+
+Crea `.cursor/mcp.json` en tu proyecto:
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="Claude Code">
+
+```bash
+claude mcp add gitlab \
+  --transport stdio \
+  -- /ruta/a/gitlab-mcp-server
+```
+
+Establece las variables de entorno antes de iniciar:
+
+```bash
+export GITLAB_URL="https://gitlab.example.com"
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+O usa un archivo `.env` en el directorio de trabajo.
+
+</TabItem>
+</Tabs>
+
+## Flags del modo HTTP
+
+Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar de variables de entorno:
+
+| Flag                     | Predeterminado               | Descripción                                            |
+| ------------------------ | ---------------------------- | ------------------------------------------------------ |
+| `--http`                 | `false`                      | Habilitar modo de transporte HTTP                      |
+| `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                          |
+| `--gitlab-url`           | —                            | URL de la instancia de GitLab (requerida)              |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                |
+| `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                       |
+| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium              |
+| `--read-only`            | `false`                      | Modo solo lectura                                      |
+| `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas             |
+| `--session-timeout`      | `30m`                        | Tiempo de espera de sesión inactiva                    |
+| `--auto-update`          | `true`                       | Modo de autoactualización                              |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                    |
+| `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones |
+| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`              |
+| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                |
+
+**Flags generales** (modos stdio y HTTP):
+
+| Flag         | Predeterminado | Descripción                                        |
+| ------------ | -------------- | -------------------------------------------------- |
+| `--shutdown` | `false`        | Terminar todas las instancias en ejecución y salir |
+
+Ejemplo:
+
+```bash
+./gitlab-mcp-server \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --max-http-clients=200 \
+  --session-timeout=1h
+```
+
+## Orden de carga de la configuración
+
+El servidor carga la configuración en el siguiente orden (las fuentes posteriores anulan las anteriores):
+
+1. **`~/.gitlab-mcp-server.env`** — Valores predeterminados a nivel de usuario (directorio home)
+2. **`.env`** — Configuración a nivel de proyecto (directorio de trabajo actual)
+3. **Variables de entorno del sistema** — Variables exportadas en el shell
+4. **Flags de CLI** — Argumentos de línea de comandos (prioridad más alta)
+
+:::note
+En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP.
+:::
+
+## Certificados autofirmados
+
+Para instancias de GitLab con certificados TLS autofirmados:
+
+```bash
+GITLAB_SKIP_TLS_VERIFY=true
+```
+
+:::caution
+Usa esto solo en entornos de red confiables. Desactiva la verificación de certificados para todas las conexiones a la instancia de GitLab.
+:::
+
+## Modo solo lectura
+
+Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de solo lectura. Todas las herramientas que crean, actualizan o eliminan recursos se desactivan. Esto es útil para:
+
+- Entornos de auditoría y cumplimiento
+- Servidores compartidos donde los usuarios solo deben consultar datos
+- Tokens con scope `read_api`
+
+## Modo seguro
+
+Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura y devolver una vista previa JSON estructurada de lo que se ejecutaría, sin realizar la operación. Las herramientas de solo lectura funcionan normalmente. Esto es útil para:
+
+- Revisar operaciones antes de ejecutarlas (dry-run)
+- Entornos de formación donde se quiere ver el comportamiento de las herramientas
+- Depurar parámetros de herramientas sin efectos secundarios
+
+:::note
+Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
+:::

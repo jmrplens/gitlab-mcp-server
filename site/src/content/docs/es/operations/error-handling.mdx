@@ -1,0 +1,169 @@
+---
+title: Manejo de Errores
+description: Clasificación de errores, diagnósticos detallados y sugerencias accionables
+---
+
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/error-handling.md) en el repositorio.
+:::
+
+GitLab MCP Server proporciona un manejo de errores estructurado que clasifica los errores, extrae detalles accionables de las respuestas de la API de GitLab y sugiere acciones correctivas al asistente de IA.
+
+## Clasificación de errores
+
+Cada error de la API de GitLab se clasifica por código de estado HTTP en un mensaje accionable:
+
+| Código de Estado | Clasificación        | Mensaje                                              |
+| ---------------- | -------------------- | ---------------------------------------------------- |
+| 400              | Solicitud incorrecta | Verifica tus parámetros de entrada                   |
+| 401              | Autenticación        | `GITLAB_TOKEN` puede ser inválido o haber expirado   |
+| 403              | Permisos             | Tu token carece de los permisos requeridos           |
+| 404              | No encontrado        | El recurso no existe o no tienes acceso              |
+| 409              | Conflicto            | El recurso ya existe o hay un conflicto de estado    |
+| 422              | Validación           | GitLab rechazó la solicitud debido a datos inválidos |
+| 429              | Límite de velocidad  | Demasiadas solicitudes — espera antes de reintentar  |
+| 500              | Error del servidor   | Error interno del servidor de GitLab                 |
+| 502              | Bad gateway          | GitLab está temporalmente no disponible              |
+| 503              | Mantenimiento        | GitLab está en mantenimiento o sobrecargado          |
+
+Los errores a nivel de red también se clasifican:
+
+| Tipo de Error      | Mensaje                                              |
+| ------------------ | ---------------------------------------------------- |
+| Conexión rechazada | El servidor de GitLab es inaccesible                 |
+| Fallo DNS          | No se pudo resolver el nombre del servidor de GitLab |
+| Timeout            | La solicitud a GitLab excedió el tiempo de espera    |
+| TLS/SSL            | El handshake TLS/SSL falló                           |
+
+## Funciones de envoltura de errores
+
+El servidor usa tres funciones de envoltura de errores, elegidas según el tipo de operación:
+
+### WrapErr — Operaciones de solo lectura
+
+Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
+
+```text
+list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
+```
+
+### WrapErrWithMessage — Operaciones de escritura
+
+Usada para operaciones `create`, `update` y `delete`. Incluye el detalle específico del error extraído de la respuesta de la API de GitLab:
+
+```text
+fileCreate: bad request — A file with this name already exists: POST .../files: 400
+```
+
+El servidor extrae el mensaje de error detallado de la respuesta de la API de GitLab, manejando formatos anidados como `{message: {base: [text]}}`, y trunca a 300 caracteres.
+
+### WrapErrWithHint — Acciones correctivas conocidas
+
+Usada cuando se conoce la acción correctiva para un error específico. Añade una sugerencia accionable:
+
+```text
+branchProtect: conflict — Protected branch rule already exists.
+Suggestion: use gitlab_protected_branch_get to view current rules
+```
+
+### Árbol de decisión
+
+| Escenario                                       | Función              |
+| ----------------------------------------------- | -------------------- |
+| Operación de solo lectura (list, get, search)   | `WrapErr`            |
+| Operación de escritura (create, update, delete) | `WrapErrWithMessage` |
+| Error específico con corrección conocida        | `WrapErrWithHint`    |
+| Operación get que devuelve 404                  | `NotFoundResult`     |
+
+### NotFoundResult — Respuestas informativas para 404
+
+Para los handlers de tipo `get`, los errores 404 se tratan como informativos en lugar de fallos. En vez de devolver un error Go opaco (registrado a nivel ERROR), el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio:
+
+```markdown
+## ❓ Branch Not Found
+
+Branch `feature/old` was not found in the project.
+
+💡 **Next steps:**
+
+- Use `gitlab_list_branches` to see available branches
+- Check branch name spelling and case sensitivity
+```
+
+Este patrón se aplica a los 27 handlers get en 21 dominios. Se registra a nivel INFO (resultado esperado) y proporciona al asistente de IA los siguientes pasos accionables.
+
+## Sugerencias de validación
+
+Para **errores de validación 422**, el servidor enriquece automáticamente el error con guía basada en coincidencia de patrones. Se reconocen más de 15 patrones comunes, incluyendo:
+
+- Campos requeridos faltantes
+- Formatos de fecha inválidos
+- Límites de longitud de nombre/título
+- Nombres de recursos duplicados
+- Valores de enumeración inválidos
+
+Estas sugerencias ayudan al asistente de IA a corregir su solicitud sin llamadas adicionales a la API.
+
+## Formato de respuesta de error
+
+Cuando una herramienta encuentra un error, la respuesta se formatea como un bloque Markdown con campos de diagnóstico estructurados:
+
+```markdown
+## ❌ Error: list_branches
+
+**Status**: 401 Unauthorized
+**Detail**: authentication failed — GITLAB_TOKEN may be invalid or expired
+**Request ID**: abc123def456
+
+💡 **Suggestion**: Check that your token is valid and has the `api` scope.
+```
+
+La respuesta estructurada incluye:
+
+| Campo          | Descripción                                      |
+| -------------- | ------------------------------------------------ |
+| **Operation**  | La acción de la herramienta que falló            |
+| **Status**     | Código de estado HTTP y clasificación            |
+| **Detail**     | Mensaje de error específico de GitLab            |
+| **Request ID** | `X-Request-Id` de GitLab para tickets de soporte |
+| **Suggestion** | Sugerencia accionable (cuando está disponible)   |
+
+## Errores transitorios vs permanentes
+
+El servidor clasifica los errores como **transitorios** (reintentables) o **permanentes**:
+
+| Tipo        | Códigos de Estado                      | Comportamiento                                      |
+| ----------- | -------------------------------------- | --------------------------------------------------- |
+| Transitorio | 429, 5xx, timeouts, conexión rechazada | Seguro reintentar después de una espera             |
+| Permanente  | 4xx (excepto 429)                      | No reintentar — corregir la entrada o configuración |
+
+## Ejemplos de escenarios de error
+
+### Token inválido
+
+```text
+❌ list_projects: authentication failed — GITLAB_TOKEN may be invalid or expired
+💡 Generate a new token with api scope at GitLab → Preferences → Access Tokens
+```
+
+### Permiso denegado
+
+```text
+❌ create_issue: access denied — your token lacks the required permissions
+Detail: 403 Forbidden
+💡 Ensure the token has api scope and you have Developer+ access to the project
+```
+
+### Conflicto de recurso
+
+```text
+❌ branchProtect: conflict — Protected branch rule already exists
+💡 Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify
+```
+
+### Error de validación
+
+```text
+❌ create_issue: validation failed — title is too long (maximum is 255 characters)
+💡 Shorten the title to 255 characters or less
+```

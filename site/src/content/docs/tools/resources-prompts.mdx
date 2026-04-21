@@ -1,0 +1,209 @@
+---
+title: Resources & Prompts
+description: MCP resources for read-only data and prompt templates
+---
+
+Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two additional MCP primitives that provide context and reusable templates to AI assistants.
+
+## Resources
+
+MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for providing background information that helps the LLM make better decisions.
+
+The server exposes **24 resources** across several categories:
+
+### Static resources (3)
+
+| Resource                   | Description                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `gitlab://user/current`    | Current authenticated user profile (username, email, state, admin status)                                      |
+| `gitlab://groups`          | All GitLab groups accessible to the authenticated user                                                         |
+| `gitlab://workspace/roots` | Workspace root directories from the MCP client, for project discovery via `gitlab_resolve_project_from_remote` |
+
+### Project resource templates (8)
+
+| Resource                                   | Description                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}`            | Project metadata (name, namespace, visibility, default branch)                     |
+| `gitlab://project/{project_id}/members`    | Project members with access levels (guest, reporter, developer, maintainer, owner) |
+| `gitlab://project/{project_id}/labels`     | Project labels with colors, descriptions, and issue/MR counts                      |
+| `gitlab://project/{project_id}/milestones` | Project milestones with state, due dates, and web URLs                             |
+| `gitlab://project/{project_id}/branches`   | Branches with protection status, merge status, and default flag                    |
+| `gitlab://project/{project_id}/issues`     | Open issues with labels, assignees, author, and creation date                      |
+| `gitlab://project/{project_id}/releases`   | All releases with tag names, descriptions, and dates                               |
+| `gitlab://project/{project_id}/tags`       | Repository tags with messages, commit SHAs, and protection status                  |
+
+### Issue & merge request templates (2)
+
+| Resource                                          | Description                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}/issue/{issue_iid}` | Single issue details (title, state, labels, assignees, web URL)             |
+| `gitlab://project/{project_id}/mr/{mr_iid}`       | Single merge request details (title, state, branches, author, merge status) |
+
+### CI/CD resource templates (3)
+
+| Resource                                                    | Description                                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `gitlab://project/{project_id}/pipelines/latest`            | Most recent pipeline (status, ref, SHA, source, web URL)                |
+| `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | Specific pipeline details by numeric ID                                 |
+| `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | All jobs for a pipeline (name, stage, status, duration, failure reason) |
+
+### Group resource templates (3)
+
+| Resource                             | Description                                                   |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `gitlab://group/{group_id}`          | Group details (name, path, description, visibility)           |
+| `gitlab://group/{group_id}/members`  | Group members with access levels, including inherited members |
+| `gitlab://group/{group_id}/projects` | Projects within a group (ID, name, namespace, visibility)     |
+
+### Workflow guide resources (5)
+
+Static best-practice guides for AI assistants — no API calls required.
+
+| Resource                                   | Description                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `gitlab://guides/git-workflow`             | Git branching strategy, commit hygiene, and merge best practices   |
+| `gitlab://guides/merge-request-hygiene`    | MR sizing, descriptions, review workflow, and merge strategies     |
+| `gitlab://guides/conventional-commits`     | Conventional Commits specification with GitLab-specific examples   |
+| `gitlab://guides/code-review`              | Structured code review checklist (quality, security, testing)      |
+| `gitlab://guides/pipeline-troubleshooting` | CI/CD debugging guide: common failures, job logs, retry strategies |
+
+:::note
+Resource URIs with `{project_id}`, `{group_id}`, etc. are **resource templates**. The client substitutes the actual ID or URL-encoded path when requesting the resource.
+:::
+
+### Accessing resources
+
+MCP clients can request resources at any time using the `resources/read` method:
+
+```json
+{
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://user/current"
+	}
+}
+```
+
+The server returns the resource content as structured JSON data.
+
+## Prompts
+
+MCP prompts are **reusable templates** that guide AI assistants through common workflows. The server collects relevant data from GitLab and returns structured context that the LLM uses to produce high-quality outputs.
+
+The server provides **38 prompt templates** organized into categories:
+
+### Core prompts (12)
+
+Merge request analysis, project overview, and personal productivity.
+
+| Prompt                      | Description                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `summarize_mr_changes`      | Summarize changed files and modifications in a merge request                                 |
+| `review_mr`                 | Structured code review with risk categorization and per-file metrics                         |
+| `suggest_mr_reviewers`      | Suggest reviewers based on changed files and active project members                          |
+| `mr_risk_assessment`        | Assess MR risk level (LOW/MEDIUM/HIGH/CRITICAL) based on size, files, and sensitive patterns |
+| `summarize_pipeline_status` | Latest CI/CD pipeline status with failure reasons                                            |
+| `summarize_open_mrs`        | All open MRs with age and merge status, highlighting stale MRs                               |
+| `project_health_check`      | Comprehensive health assessment (pipeline, MRs, branch hygiene)                              |
+| `generate_release_notes`    | Release notes from commits between two Git refs                                              |
+| `compare_branches`          | Compare two branches showing commit differences and file changes                             |
+| `daily_standup`             | Daily standup summary from GitLab activity (done/planned/blockers)                           |
+| `team_member_workload`      | Workload summary for a team member over configurable time period                             |
+| `user_stats`                | User statistics with contribution events, MR/issue stats, and activity chart                 |
+
+### Cross-project prompts (4)
+
+Personal dashboards that aggregate across all accessible projects.
+
+| Prompt                | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `my_open_mrs`         | All open MRs where you are author or assignee        |
+| `my_pending_reviews`  | All open MRs assigned to you as reviewer             |
+| `my_issues`           | All issues assigned to you with overdue detection    |
+| `my_activity_summary` | Personal activity summary across projects for N days |
+
+### Team prompts (4)
+
+Group-level team management prompts.
+
+| Prompt                 | Description                                                  |
+| ---------------------- | ------------------------------------------------------------ |
+| `user_activity_report` | Detailed activity report for a specific user (for managers)  |
+| `team_overview`        | Team dashboard with open MR counts and workload pie chart    |
+| `team_mr_dashboard`    | All MRs for a group with state and target branch filters     |
+| `reviewer_workload`    | Review distribution analysis to identify workload imbalances |
+
+### Project report prompts (5)
+
+Project-level analysis and reporting.
+
+| Prompt                    | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `branch_mr_summary`       | All MRs targeting a branch with readiness summary                |
+| `project_activity_report` | Project activity report with events, merged MRs, and open issues |
+| `mr_review_status`        | Discussion health of open MRs (unresolved thread counts)         |
+| `unassigned_items`        | Find open MRs and issues without assignees                       |
+| `stale_items_report`      | MRs and issues not updated for N days (default: 14)              |
+
+### Analytics prompts (4)
+
+Velocity and release analytics.
+
+| Prompt              | Description                                              |
+| ------------------- | -------------------------------------------------------- |
+| `merge_velocity`    | MR throughput, average time-to-merge, and daily chart    |
+| `release_readiness` | Release branch readiness (open MRs, conflicts, drafts)   |
+| `release_cadence`   | Release frequency analysis with cadence chart            |
+| `weekly_team_recap` | Comprehensive weekly recap combining MRs, issues, events |
+
+### Milestone & label prompts (4)
+
+Milestone tracking and label analysis.
+
+| Prompt                     | Description                                                       |
+| -------------------------- | ----------------------------------------------------------------- |
+| `milestone_progress`       | Milestone progress with completion percentage and due date risk   |
+| `label_distribution`       | Label usage distribution (open/closed issues, open MRs per label) |
+| `group_milestone_progress` | Milestone progress across all projects in a group                 |
+| `project_contributors`     | Rank contributors by commits, additions, and deletions            |
+
+### Audit prompts (5)
+
+Project configuration audit prompts.
+
+| Prompt                    | Description                                                          |
+| ------------------------- | -------------------------------------------------------------------- |
+| `audit_project_settings`  | Audit visibility, merge strategy, CI/CD, push rules, feature toggles |
+| `audit_branch_protection` | Audit protected branches, access levels, code owner approvals        |
+| `audit_project_access`    | Audit user access, blocked accounts, elevated privileges             |
+| `audit_project_workflow`  | Audit labels, milestones, issue/MR templates                         |
+| `audit_project_full`      | Comprehensive audit combining all categories with a scorecard        |
+
+### Using prompts
+
+Prompts are requested via the `prompts/get` MCP method:
+
+```json
+{
+	"method": "prompts/get",
+	"params": {
+		"name": "review_mr",
+		"arguments": {
+			"project_id": "my-group/my-project",
+			"mr_iid": "42"
+		}
+	}
+}
+```
+
+The server returns a structured prompt with context-aware content that the LLM uses to guide its workflow.
+
+## Configuration
+
+| Variable     | Default | Description                                        |
+| ------------ | ------- | -------------------------------------------------- |
+| `META_TOOLS` | `true`  | Resources and prompts are registered in both modes |
+
+:::tip
+Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
+:::

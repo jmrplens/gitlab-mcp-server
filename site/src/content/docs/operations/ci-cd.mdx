@@ -1,0 +1,295 @@
+---
+title: CI/CD Usage
+description: Use gitlab-mcp-server in CI/CD pipelines with or without an LLM
+---
+
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/ci-cd.md) in the repository.
+:::
+
+gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two usage modes are available:
+
+| Mode                                 | LLM Required | Use Case                                                         |      Determinism       |
+| ------------------------------------ | :----------: | ---------------------------------------------------------------- | :--------------------: |
+| **Deterministic** (JSON-RPC)         |      No      | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
+| **LLM-driven** (headless MCP client) |     Yes      | Intelligent workflows: code review, issue triage, MR analysis    |  ❌ Non-deterministic  |
+
+Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full 1006-tool surface when using a token with `api` scope.
+
+## Prerequisites
+
+1. **Download the binary** from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases):
+
+   ```bash
+   curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64" \
+     -o gitlab-mcp-server
+   chmod +x gitlab-mcp-server
+   ```
+
+2. **Create a Project Access Token** with `api` scope (recommended over personal PATs for CI).
+
+3. **Store the token** as a masked CI/CD variable named `MCP_PAT`.
+
+## Mode 1: Deterministic (No LLM)
+
+Send JSON-RPC messages directly to the server via stdio. Fully deterministic — no LLM or external API needed.
+
+### How it works
+
+The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires an `initialize` handshake, an `initialized` notification, then one or more `tools/call` requests.
+
+### GitLab CI example
+
+```yaml
+# .gitlab-ci.yml
+mcp-list-issues:
+  stage: test
+  image: alpine:latest
+  variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
+  before_script:
+    - apk add --no-cache curl jq
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+      -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+  script:
+    - |
+      RESULT=$({
+        echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+        echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
+      } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
+    - echo "${RESULT}"
+```
+
+### Helper function
+
+For pipelines with many tool calls, wrap the protocol in a reusable function:
+
+```bash
+mcp_call() {
+  local tool="$1"
+  local args="$2"
+  {
+    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
+    echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":2}'
+  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
+}
+
+# Usage
+ISSUES=$(mcp_call "gitlab_list_issues" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
+```
+
+## Mode 2: LLM-driven (Headless MCP client)
+
+Use a headless MCP client to let an LLM drive tool selection and orchestration. Ideal for intelligent workflows like code review, issue triage, and release notes generation.
+
+### Recommended client: IBM mcp-cli
+
+[IBM mcp-cli](https://github.com/IBM/mcp-cli) supports command mode for scriptable LLM-driven workflows, with OpenAI, Anthropic, Azure, Gemini, Groq, and local Ollama providers.
+
+### GitLab CI: automated MR review
+
+```yaml
+# .gitlab-ci.yml
+auto-review:
+  stage: review
+  image: python:3.12-slim
+  variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
+    OPENAI_API_KEY: ${OPENAI_KEY}
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+      -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+    - pip install --quiet mcp-cli
+  script:
+    - |
+      cat > server_config.json << 'EOF'
+      {
+        "mcpServers": {
+          "gitlab": {
+            "command": "./gitlab-mcp-server",
+            "env": {
+              "GITLAB_URL": "${GITLAB_URL}",
+              "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+            }
+          }
+        }
+      }
+      EOF
+    - |
+      mcp-cli cmd \
+        --config-file server_config.json \
+        --server gitlab \
+        --provider openai \
+        --model gpt-4o \
+        --prompt "Review merge request !${CI_MERGE_REQUEST_IID} in project ${CI_PROJECT_ID}. Check for code quality, security issues, and missing tests. Post your review as a note on the MR." \
+        --raw
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+```
+
+### Using a local LLM (Ollama)
+
+For pipelines that cannot use external LLM APIs, run Ollama as a CI service:
+
+```yaml
+local-llm-review:
+  stage: review
+  image: python:3.12-slim
+  services:
+    - name: ollama/ollama:latest
+      alias: ollama
+  variables:
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_TOKEN: ${MCP_PAT}
+    OLLAMA_HOST: http://ollama:11434
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl
+    - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
+      -o gitlab-mcp-server
+    - chmod +x gitlab-mcp-server
+    - pip install --quiet mcp-cli
+    - curl -s "${OLLAMA_HOST}/api/pull" -d '{"name":"qwen2.5-coder:7b"}'
+  script:
+    - |
+      cat > server_config.json << 'EOF'
+      {
+        "mcpServers": {
+          "gitlab": {
+            "command": "./gitlab-mcp-server",
+            "env": {
+              "GITLAB_URL": "${GITLAB_URL}",
+              "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+            }
+          }
+        }
+      }
+      EOF
+    - |
+      mcp-cli cmd \
+        --config-file server_config.json \
+        --server gitlab \
+        --provider ollama \
+        --model qwen2.5-coder:7b \
+        --prompt "Summarize the latest 5 merge requests in project ${CI_PROJECT_ID}." \
+        --raw
+```
+
+## HTTP transport in CI
+
+For pipelines that make many tool calls, the HTTP transport avoids per-call process startup overhead:
+
+```yaml
+http-mode-pipeline:
+  script:
+    # Start HTTP server in background
+    - ./gitlab-mcp-server --http --gitlab-url="${CI_SERVER_URL}" --http-addr=127.0.0.1:8080 &
+    - sleep 2
+    # Call tools via HTTP
+    - |
+      curl -s -X POST http://127.0.0.1:8080/mcp \
+        -H "Content-Type: application/json" \
+        -H "PRIVATE-TOKEN: ${MCP_PAT}" \
+        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}},"id":2}' \
+        | jq '.result.content[0].text'
+```
+
+See [HTTP Server Mode](/operations/http-server/) for full details.
+
+## CI/CD tools available
+
+Beyond running the server in pipelines, GitLab MCP Server provides comprehensive CI/CD management tools that AI assistants can use interactively. These are available as meta-tools in the default mode.
+
+### Pipelines
+
+The `gitlab_pipeline` meta-tool manages the full pipeline lifecycle:
+
+| Action        | Description                                   |
+| ------------- | --------------------------------------------- |
+| `list`        | List pipelines with filtering by status, ref  |
+| `get`         | Get pipeline details and status               |
+| `create`      | Trigger a new pipeline with variables         |
+| `cancel`      | Cancel a running pipeline                     |
+| `retry`       | Retry a failed pipeline                       |
+| `delete`      | Delete a pipeline                             |
+| `variables`   | List pipeline variables                       |
+| `test_report` | Get test report for a pipeline                |
+| `wait`        | **Wait for pipeline completion** with polling |
+
+:::tip[Wait for pipeline]
+The `wait` action polls a pipeline until it reaches a terminal state (success, failed, canceled). This is especially useful in CI scripts that need to block until a triggered pipeline finishes.
+:::
+
+### Jobs
+
+The `gitlab_job` meta-tool provides complete job management:
+
+| Action              | Description                              |
+| ------------------- | ---------------------------------------- |
+| `list`              | List jobs for a pipeline                 |
+| `get`               | Get job details                          |
+| `play`              | Trigger a manual job                     |
+| `cancel`            | Cancel a running job                     |
+| `retry`             | Retry a failed job                       |
+| `trace`             | Get job log output                       |
+| `artifacts`         | List job artifacts                       |
+| `download_artifact` | Download a specific artifact             |
+| `delete_artifacts`  | Delete job artifacts                     |
+| `wait`              | **Wait for job completion** with polling |
+
+### CI/CD configuration
+
+| Meta-tool                  | Actions                                                | Description                      |
+| -------------------------- | ------------------------------------------------------ | -------------------------------- |
+| `gitlab_ci_lint`           | `validate`, `project_lint`                             | Validate `.gitlab-ci.yml` syntax |
+| `gitlab_ci_variable`       | `list`, `get`, `create`, `update`, `delete`            | Manage CI/CD variables           |
+| `gitlab_pipeline_schedule` | `list`, `get`, `create`, `update`, `delete`, `trigger` | Manage scheduled pipelines       |
+| `gitlab_environment`       | `list`, `get`, `create`, `update`, `delete`, `stop`    | Manage environments              |
+| `gitlab_deployment`        | `list`, `get`                                          | Track deployments                |
+
+### Pipeline with variables example
+
+Trigger a pipeline with custom variables using JSON-RPC:
+
+```json
+{
+	"tool": "gitlab_pipeline",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"ref": "main",
+		"variables": [
+			{ "key": "DEPLOY_ENV", "value": "staging", "variable_type": "env_var" },
+			{ "key": "CONFIG", "value": "...", "variable_type": "file" }
+		]
+	}
+}
+```
+
+For the complete tool reference, see [Tools Overview](/en/tools/).
+
+## Security best practices
+
+| Practice      | Recommendation                                                   |
+| ------------- | ---------------------------------------------------------------- |
+| Token type    | **Project Access Token** — scoped to a single project, auditable |
+| Scope         | `api` for full access, `read_api` for read-only workflows        |
+| Expiration    | 90 days maximum, rotate before expiry                            |
+| Storage       | **Masked CI/CD variable** — never commit to repository           |
+| Multi-project | Use **Group Access Tokens** for cross-project workflows          |
+
+## Troubleshooting
+
+| Error                                           | Solution                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| `not found` / permission denied                 | Verify binary downloaded for correct platform, run `chmod +x`   |
+| `401 Unauthorized`                              | Check `MCP_PAT` variable is set and token not expired           |
+| `x509: certificate signed by unknown authority` | Set `GITLAB_SKIP_TLS_VERIFY=true`                               |
+| Timeout on large responses                      | Add `per_page` argument to limit results                        |
+| mcp-cli provider errors                         | Verify API key variables, check `pip install --upgrade mcp-cli` |

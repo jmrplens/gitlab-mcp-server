@@ -1,0 +1,103 @@
+---
+title: Use Cases
+description: Common workflows and scenarios for using GitLab MCP Server with AI assistants
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+Explore what you can accomplish with GitLab MCP Server, organized by workflow rather than API domain.
+
+## Workflows
+
+<CardGrid>
+	<Card title="🔀 Code Review" icon="pencil">
+		Review merge requests, analyze changes, check for security issues, and leave comments — all through natural language.
+
+    	**Key tools:** `gitlab_merge_request`, `gitlab_mr_changes`, `gitlab_mr_discussion`
+
+    	**Try:** _"Summarize the changes in MR !42 and check for security issues"_
+    </Card>
+
+    <Card title="🔄 CI/CD Automation" icon="setting">
+    	Monitor pipelines, debug failures, manage CI variables, and review pipeline schedules without leaving your editor.
+
+    	**Key tools:** `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`
+
+    	**Try:** _"Why did the last pipeline fail on branch feature/auth?"_
+    </Card>
+
+    <Card title="📋 Issue Management" icon="list-format">
+    	Create, update, and track issues. Manage labels, milestones, and assignments through conversation.
+
+    	**Key tools:** `gitlab_issue`, `gitlab_label`, `gitlab_milestone`
+
+    	**Try:** _"Create a bug report titled 'Fix login page' with label 'bug' and assign to @alice"_
+    </Card>
+
+    <Card title="📦 Release Management" icon="rocket">
+    	Create releases, generate changelogs, manage tags, and upload release assets.
+
+    	**Key tools:** `gitlab_release`, `gitlab_tag`, `gitlab_release_link`
+
+    	**Try:** _"Generate release notes comparing v1.0 to v2.0"_
+    </Card>
+
+    <Card title="👥 Team Management" icon="seti:ignored-vscode">
+    	Manage project members, group memberships, and access levels.
+
+    	**Key tools:** `gitlab_user`, `gitlab_group`, `gitlab_member`
+
+    	**Try:** _"Add @bob as a developer to project my-app"_
+    </Card>
+
+    <Card title="🔍 Code Search" icon="magnifier">
+    	Search across code, issues, merge requests, and wikis. Explore repository trees and compare branches.
+
+    	**Key tools:** `gitlab_search`, `gitlab_repository`, `gitlab_file`
+
+    	**Try:** _"Find all TODO comments across project my-app"_
+    </Card>
+
+    <Card title="📊 Reports & Analytics" icon="open-book">
+    	Generate standup summaries, risk assessments, milestone reports, and team workload analysis using AI-powered prompts.
+
+    	**Key prompts:** standup, risk-assessment, workload, milestone-report
+
+    	**Try:** _"Give me a daily standup summary for project my-app"_
+    </Card>
+
+    <Card title="🛡️ Security Review" icon="approve-check">
+    	Audit merge requests for security issues, review vulnerabilities, and analyze CI configurations.
+
+    	**Key tools:** `gitlab_review_mr_security`, `gitlab_vulnerability`, `gitlab_audit_event`
+
+    	**Try:** _"Review MR !42 for security vulnerabilities"_
+    </Card>
+
+</CardGrid>
+
+## Workflow examples
+
+### Code review workflow
+
+1. _"Show open MRs in my-app that need review"_ — lists MRs awaiting review
+2. _"Summarize the changes in MR !42"_ — gets a diff summary
+3. _"Check MR !42 for security issues"_ — runs security analysis
+4. _"Leave a comment on MR !42 suggesting to add input validation"_ — adds review feedback
+5. _"Approve MR !42"_ — approves the merge request
+
+### CI/CD debugging workflow
+
+1. _"What's the pipeline status for my-app on main?"_ — checks latest pipeline
+2. _"Show the failed jobs in pipeline #8847"_ — identifies failing stages
+3. _"Get the logs for job unit-tests in pipeline #8847"_ — retrieves error details
+4. _"What CI variables are set for project my-app?"_ — checks configuration
+5. _"Retry the failed jobs in pipeline #8847"_ — re-runs failures
+
+### Sprint planning workflow
+
+1. _"Show milestone v3.0 in project my-app"_ — reviews milestone scope
+2. _"List open issues in milestone v3.0"_ — sees remaining work
+3. _"Create an issue for 'Implement rate limiting' in milestone v3.0"_ — adds missing tasks
+4. _"Assign issue #234 to @alice"_ — distributes work
+5. _"Generate a milestone progress report for v3.0"_ — creates status overview

@@ -1,0 +1,232 @@
+---
+title: Security
+description: Security model, token management, and best practices
+---
+
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/security.md) in the repository.
+:::
+
+GitLab MCP Server is designed with a security-first architecture. This page covers the security model, credential handling, and best practices for safe deployment.
+
+## Security model overview
+
+```mermaid
+flowchart TB
+    subgraph Local["Local Machine"]
+        Token["GitLab Token<br/>(env var / .env file)"]
+        Server["MCP Server Process"]
+        Client["MCP Client<br/>(VS Code, etc.)"]
+    end
+    subgraph Remote["Network"]
+        GitLab["GitLab Instance"]
+    end
+
+    Token --> Server
+    Client <-->|"stdio (stdin/stdout)"| Server
+    Server <-->|"HTTPS"| GitLab
+```
+
+### Key principles
+
+- **Token isolation**: In stdio mode, the GitLab token never leaves the local server process. It is loaded from the environment and used exclusively for GitLab API calls.
+- **No token forwarding**: The token is never sent to the MCP client, never included in tool outputs, and never passed through MCP sampling requests.
+- **Process-level isolation**: The server runs as a local process communicating via stdin/stdout. No network ports are opened in stdio mode.
+- **Minimal privilege**: The server only needs a GitLab token with scopes required for the operations you intend to use.
+
+## Token management
+
+### Recommended: Environment file
+
+Store your token in a `.env` file with restricted permissions:
+
+```bash
+# Create .env file
+echo 'GITLAB_URL=https://gitlab.example.com' > .env
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' >> .env
+
+# Restrict permissions (owner read/write only)
+chmod 600 .env
+```
+
+:::danger
+Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
+:::
+
+### VS Code input variables
+
+For VS Code users, you can use input variables to avoid storing tokens in plain text:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlabToken}"
+			}
+		}
+	}
+}
+```
+
+The token is prompted at startup and kept only in memory.
+
+### Token scopes
+
+Use the minimum required scopes for your workflow:
+
+| Scope              | Required For                             |
+| ------------------ | ---------------------------------------- |
+| `read_api`         | Read-only operations (list, get, search) |
+| `api`              | Full operations (create, update, delete) |
+| `read_repository`  | Repository file access                   |
+| `write_repository` | Repository file modifications            |
+
+:::tip
+If you only need read operations, use `read_api` scope and enable `GITLAB_READ_ONLY=true` for defense-in-depth.
+:::
+
+## Credential stripping in sampling
+
+When analysis tools use MCP sampling to send data to the client's LLM, the server applies **automatic credential stripping** before any data leaves the process. This is a critical defense-in-depth measure that prevents accidental token leakage through LLM context.
+
+### Stripped patterns
+
+The credential stripping engine uses regex patterns to detect and remove:
+
+| Pattern               | Example                           | Replacement                |
+| --------------------- | --------------------------------- | -------------------------- |
+| GitLab PAT            | `glpat-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| GitLab Pipeline Token | `glptt-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
+| AWS Access Key        | `AKIAIOSFODNN7EXAMPLE`            | `[REDACTED:AWS_KEY]`       |
+| AWS Secret Key        | `wJalrXUtnFEMI/K7MDENG/...`       | `[REDACTED:AWS_SECRET]`    |
+| Slack Token           | `xoxb-...` / `xoxp-...`           | `[REDACTED:SLACK_TOKEN]`   |
+| Slack Webhook         | `hooks.slack.com/services/...`    | `[REDACTED:SLACK_WEBHOOK]` |
+| JWT                   | `eyJhbGciOi...`                   | `[REDACTED:JWT]`           |
+| Generic API Key       | `api_key=...`, `apikey: ...`      | `[REDACTED:API_KEY]`       |
+| Private SSH Key       | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]`   |
+
+:::note
+Credential stripping is applied to all data sent through MCP sampling, including job logs, file contents, issue descriptions, and MR diffs.
+:::
+
+## TLS verification
+
+By default, the server verifies TLS certificates when connecting to GitLab. For self-signed certificates:
+
+```bash
+GITLAB_SKIP_TLS_VERIFY=true
+```
+
+:::caution
+Disabling TLS verification removes protection against man-in-the-middle attacks. Only use this for development environments with self-signed certificates. Never disable TLS verification in production.
+:::
+
+## Read-only mode
+
+Enable read-only mode to prevent any mutating operations:
+
+```bash
+GITLAB_READ_ONLY=true
+```
+
+In read-only mode:
+
+- All write tools are **not registered** (create, update, delete, merge, etc.)
+- Only read operations are available (list, get, search)
+- This provides a hard guarantee at the server level — the LLM cannot accidentally modify data
+
+This is useful for:
+
+- Exploration and discovery workflows
+- Demo environments
+- Environments where the token has write access but you want to restrict the server
+
+## Safe mode
+
+Enable safe mode to preview mutating operations without executing them:
+
+```bash
+GITLAB_SAFE_MODE=true
+```
+
+In safe mode:
+
+- Mutating tools return a **structured JSON preview** showing tool name, parameters, and annotations
+- Read-only tools execute normally
+- If `GITLAB_READ_ONLY=true` is also set, it takes precedence (mutating tools are fully disabled)
+
+This is useful for dry-run workflows, training environments, and debugging tool parameters.
+
+## HTTP mode security
+
+When running in HTTP mode (`--http`), additional security considerations apply:
+
+### Per-request authentication
+
+In HTTP mode, GitLab tokens are provided per-request via headers, not environment variables. Each user session uses its own token:
+
+```
+Authorization: Bearer <gitlab-personal-access-token>
+```
+
+### Session isolation
+
+The server maintains a **bounded LRU pool** of client sessions:
+
+- Each token gets its own isolated MCP server instance
+- Sessions are independent — one user cannot access another's context
+- Idle sessions expire after `--session-timeout` (default: 30 minutes)
+- Maximum concurrent sessions controlled by `--max-http-clients` (default: 100)
+
+### HTTP mode recommendations
+
+- Deploy behind a reverse proxy with TLS termination
+- Enable rate limiting at the proxy level
+- Restrict access to trusted networks
+- Monitor session metrics for unusual patterns
+
+### OAuth mode
+
+For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`). It enables RFC 9728–compliant OAuth 2.1 authentication:
+
+- Users authorize through the browser — no manual token distribution
+- OAuth 2.1 with PKCE protects against authorization code interception
+- Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h)
+- The `PRIVATE-TOKEN` header remains supported for backward compatibility
+
+See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/en/operations/http-server/) for full configuration details.
+
+## Best practices checklist
+
+### Token security
+
+- ☐ Use a dedicated GitLab token with minimum required scopes
+- ☐ Store tokens in `.env` files with `chmod 600` permissions
+- ☐ Add `.env` to `.gitignore`
+- ☐ Rotate tokens periodically
+- ☐ Use `read_api` scope when write access is not needed
+
+### Server configuration
+
+- ☐ Enable `GITLAB_READ_ONLY=true` for read-only workflows
+- ☐ Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
+- ☐ Use stdio transport when possible (no network exposure)
+- ☐ Keep the server binary updated (`AUTO_UPDATE=true`)
+
+### HTTP mode
+
+- ☐ Deploy behind TLS-terminating reverse proxy
+- ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
+- ☐ Enable rate limiting
+- ☐ Restrict network access to trusted clients
+
+### Monitoring
+
+- ☐ Review server logs regularly
+- ☐ Monitor for unusual API call patterns
+- ☐ Check for token expiration or permission changes
+- ☐ Enable `LOG_LEVEL=info` for production audit trails

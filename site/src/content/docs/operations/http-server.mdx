@@ -1,0 +1,266 @@
+---
+title: HTTP Server Mode
+description: Multi-user deployment with per-request authentication
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/http-server-mode.md) in the repository.
+:::
+
+By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns its own server process. **HTTP mode** is an alternative where a single server process serves multiple clients over the network, each authenticating with their own GitLab token.
+
+## When to use HTTP mode
+
+| Scenario                          | Recommended Mode |
+| --------------------------------- | ---------------- |
+| Single developer, local AI client | stdio            |
+| Team sharing one server instance  | **HTTP**         |
+| Remote/headless server deployment | **HTTP**         |
+| CI/CD integration with MCP        | **HTTP**         |
+| Testing with curl or HTTP clients | **HTTP**         |
+
+## Starting the server
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://your-gitlab.example.com
+```
+
+The server starts listening on port 8080 by default. The MCP endpoint is available at `/mcp`.
+
+## CLI flags
+
+| Flag                     | Default                      | Description                                                     |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------- |
+| `--http`                 | _(off)_                      | Enable HTTP transport mode                                      |
+| `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                               |
+| `--gitlab-url`           | _(required)_                 | GitLab instance base URL                                        |
+| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs         |
+| `--meta-tools`           | `true`                       | Enable domain meta-tools (42 or 57 with --enterprise)           |
+| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
+| `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                      |
+| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                        |
+| `--session-timeout`      | `30m`                        | Idle MCP session timeout                                        |
+| `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                   |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                            |
+| `--auto-update-interval` | `1h`                         | Periodic update check interval                                  |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)             |
+| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                   |
+
+:::note
+`--gitlab-url` is the only required flag. All others have sensible defaults.
+:::
+
+## Authentication
+
+Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers:
+
+### Private-token header (recommended)
+
+```
+PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+### Authorization Bearer header
+
+```
+Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+If both headers are present, `PRIVATE-TOKEN` takes precedence. Requests without a valid token are rejected.
+
+### OAuth mode
+
+OAuth mode (`--auth-mode=oauth`) enables RFC 9728–compliant OAuth 2.1 authentication. Instead of managing tokens manually, MCP clients discover the authorization server automatically and handle the OAuth flow:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth
+```
+
+**How it works:**
+
+1. The server exposes `/.well-known/oauth-protected-resource` with metadata pointing to your GitLab instance as the authorization server
+2. MCP clients (VS Code, Claude Code) discover this endpoint and initiate the OAuth 2.1 PKCE flow
+3. Users authorize in the browser — no token copying required
+4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes)
+
+**Client configuration in OAuth mode:**
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://your-server:8080/mcp",
+			"oauth": {
+				"clientId": "YOUR_GITLAB_APPLICATION_ID",
+				"scopes": ["api"]
+			}
+		}
+	}
+}
+```
+
+- **`clientId`**: The Application ID from your GitLab OAuth Application (see [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md))
+- **`scopes`**: Must include `api` for full tool functionality
+
+VS Code handles OAuth discovery and authorization automatically.
+
+:::caution
+Without `clientId`, VS Code falls back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail.
+:::
+
+</TabItem>
+<TabItem label="Claude Code">
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id YOUR_GITLAB_APPLICATION_ID \
+  --callback-port 8090 \
+  http://your-server:8080/mcp
+```
+
+Claude Code discovers the OAuth metadata and opens the browser for authorization.
+
+</TabItem>
+</Tabs>
+
+:::tip
+OAuth mode requires a GitLab OAuth Application. See the [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) guide for setup instructions.
+:::
+
+:::note
+The `PRIVATE-TOKEN` header still works in OAuth mode — the middleware normalizes it to a Bearer token. This enables backward compatibility with clients that don't support OAuth yet.
+:::
+
+## Session management
+
+### Server pool architecture
+
+The core of HTTP mode is a **bounded LRU pool** of MCP server instances, keyed by the SHA-256 hash of each client's token.
+
+```mermaid
+graph TD
+    subgraph "HTTP Mode Architecture"
+        REQ1["Client A<br/>Token: glpat-aaa"] --> HANDLER[StreamableHTTPHandler]
+        REQ2["Client B<br/>Token: glpat-bbb"] --> HANDLER
+        REQ3["Client C<br/>Token: glpat-aaa"] --> HANDLER
+
+        HANDLER --> POOL[Server Pool]
+
+        POOL --> ENTRY1["hash(glpat-aaa)<br/>MCP Server + GitLab Client"]
+        POOL --> ENTRY2["hash(glpat-bbb)<br/>MCP Server + GitLab Client"]
+    end
+
+    ENTRY1 --> GL1["GitLab API<br/>as user A"]
+    ENTRY2 --> GL2["GitLab API<br/>as user B"]
+```
+
+**Key properties:**
+
+- Clients with the **same token** share the same MCP server instance
+- Clients with **different tokens** get completely isolated instances
+- Raw tokens are **never stored** — only SHA-256 hashes are kept in memory
+- When the pool reaches `--max-http-clients`, the least recently used entry is evicted
+
+### Session lifecycle
+
+1. **First request**: Token is extracted, hashed, and a new MCP server + GitLab client is created
+2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
+3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
+4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
+
+## Client configuration
+
+<Tabs>
+<TabItem label="VS Code / Copilot">
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://your-server:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-your-token"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="OpenCode">
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"url": "http://your-server:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-your-token"
+			}
+		}
+	}
+}
+```
+
+</TabItem>
+<TabItem label="curl (Testing)">
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+</TabItem>
+</Tabs>
+
+## Docker Compose deployment
+
+```yaml
+services:
+  gitlab-mcp:
+    image: ghcr.io/jmrplens/gitlab-mcp-server:latest
+    ports:
+      - "8080:8080"
+    command:
+      - "--http"
+      - "--gitlab-url=https://gitlab.example.com"
+      - "--http-addr=:8080"
+      - "--max-http-clients=200"
+      - "--session-timeout=1h"
+    restart: unless-stopped
+```
+
+Start the service:
+
+```bash
+docker compose up -d
+```
+
+## Health check
+
+You can verify the server is running by sending a `tools/list` request:
+
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+```
+
+A successful response returns a JSON-RPC result with the list of available tools.
+
+:::tip
+For production deployments, place the server behind a reverse proxy (nginx, Caddy) that handles TLS termination. The MCP endpoint at `/mcp` supports standard HTTP load balancing.
+:::

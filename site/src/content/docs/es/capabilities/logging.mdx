@@ -1,0 +1,76 @@
+---
+title: Registro de Logs
+description: Registro estructurado mediante el protocolo MCP
+---
+
+GitLab MCP Server utiliza **registro dual** — los mensajes de log se envían tanto a stderr (para captura en terminal/archivo) como al cliente MCP a través de la capacidad de logging del protocolo.
+
+## Salida dual
+
+| Destino           | Formato                 | Propósito                                                                         |
+| ----------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| **stderr**        | Texto legible o JSON    | Salida de terminal, redirección a archivo, depuración                             |
+| **Protocolo MCP** | `notifications/message` | Mostrado en la interfaz del cliente MCP (por ejemplo, panel de salida de VS Code) |
+
+Esto garantiza que los logs siempre sean visibles independientemente del soporte de logging del cliente.
+
+## Niveles de log
+
+El servidor soporta cuatro niveles de log:
+
+| Nivel   | Cuándo se Usa                                                                                                                                         |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug` | Información de diagnóstico detallada — parámetros de llamadas a herramientas, detalles de peticiones/respuestas API, operaciones del pool de sesiones |
+| `info`  | Eventos operativos normales — inicio del servidor, registro de herramientas, comprobaciones de actualización                                          |
+| `warn`  | Problemas no fatales — tiempos de espera de red, configuración opcional faltante, uso obsoleto                                                        |
+| `error` | Fallos — errores de autenticación, fallos de API, errores irrecuperables de herramientas                                                              |
+
+## Configuración
+
+Establece el nivel de log mediante variable de entorno:
+
+```bash
+# Modo stdio
+LOG_LEVEL=debug ./gitlab-mcp-server
+
+# Modo HTTP
+LOG_LEVEL=info ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
+```
+
+El nivel predeterminado es `info`.
+
+## Mensajes de log MCP
+
+Cuando el cliente MCP soporta logging, el servidor envía notificaciones de log estructuradas:
+
+```json
+{
+	"jsonrpc": "2.0",
+	"method": "notifications/message",
+	"params": {
+		"level": "info",
+		"logger": "gitlab-mcp-server",
+		"data": {
+			"message": "starting MCP server",
+			"transport": "stdio",
+			"version": "2.1.0",
+			"tools": 40,
+			"resources": 24,
+			"prompts": 38
+		}
+	}
+}
+```
+
+### Reglas de seguridad
+
+Los mensajes de log siguen reglas estrictas de seguridad:
+
+- **Sin tokens** — Los tokens de GitLab nunca se incluyen en los mensajes de log
+- **Identificadores enmascarados** — En modo HTTP, los tokens se muestran como `...a1b2` (solo los últimos 4 caracteres)
+- **Sin PII** — Los datos enviados por el usuario no se registran en nivel `info` o superior
+- **Solo debug** — Los datos detallados de petición/respuesta solo se registran en nivel `debug`
+
+:::tip
+En VS Code, visualiza los logs del servidor MCP mediante `Ctrl+Shift+P` → **MCP: List Servers** → selecciona el servidor → **Show Output**.
+:::
