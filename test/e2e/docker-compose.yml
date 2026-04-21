@@ -1,0 +1,55 @@
+services:
+  gitlab:
+    image: ${GITLAB_IMAGE:-gitlab/gitlab-ce:latest}
+    hostname: gitlab-e2e
+    ports:
+      - "8929:80"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8929'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0', '::/0']
+        gitlab_rails['initial_root_password'] = 'E2e_R0ot!xK9mZ#2026'
+        # Performance: handle ~40 parallel project creations without connection resets
+        puma['workers'] = 4
+        puma['min_threads'] = 4
+        puma['max_threads'] = 8
+        sidekiq['concurrency'] = 10
+        postgresql['shared_buffers'] = '512MB'
+        nginx['worker_connections'] = 2048
+        nginx['proxy_connect_timeout'] = '120'
+        nginx['proxy_read_timeout'] = '120'
+        nginx['keepalive_timeout'] = '120'
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        # Disable unnecessary services
+        gitlab_kas['enable'] = false
+        sentinel['enable'] = false
+        registry['enable'] = false
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    shm_size: '512m'
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/-/readiness?all=1"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 120s
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - runner-config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+  runner-config:
