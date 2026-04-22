@@ -232,7 +232,7 @@ The **#1 source of bugs** in the TypeScript ecosystem is type handling:
 | Logging | ❌ | ✅ |
 | Progress | ❌ | ✅ |
 | Roots | ❌ | ✅ |
-| Sampling | ❌ | ✅ (11 tools) |
+| Sampling | ❌ | ✅ (1 meta-tool, 11 actions) |
 | Elicitation | ❌ | ✅ |
 | Completions | ❌ | ✅ (17 types) |
 | Icons | ❌ | ✅ (44 domain SVGs) |

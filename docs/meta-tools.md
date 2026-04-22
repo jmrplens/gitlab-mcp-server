@@ -70,10 +70,10 @@ META_TOOLS=false
 
 | # | Tool Name               | Actions | Sources                                   |
 |---|-------------------------|---------|-------------------------------------------|
-| 20 | `gitlab_access`        | ~48     | Access tokens, deploy tokens, deploy keys, access requests, invites |
-| 21 | `gitlab_package`       | ~20     | Packages, container registry              |
-| 22 | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji |
-| 23 | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists    |
+| 18 | `gitlab_access`        | ~48     | Access tokens, deploy tokens, deploy keys, access requests, invites |
+| 19 | `gitlab_package`       | ~20     | Packages, container registry              |
+| 20 | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji |
+| 21 | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists    |
 
 ### Always-Registered Meta-Tools (3)
 
@@ -119,7 +119,7 @@ The meta-tool architecture evolved through ADR-0005:
 - **v6.0**: 32 base / 47 enterprise (23 inline + 4 always-registered + 3 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 11 individual sampling tools consolidated into 1 `gitlab_analyze` meta-tool with 11 actions
 - **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
 
-The base mode provides a 60% reduction from v3.0, with enterprise features gated behind `GITLAB_ENTERPRISE=true`.
+The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind `GITLAB_ENTERPRISE=true`.
 
 - Token usage in `tools/list` MCP responses
 - LLM selection confusion when choosing among similar tools

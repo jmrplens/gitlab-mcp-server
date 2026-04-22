@@ -211,7 +211,7 @@ Call: gitlab_merge_request(action="list", project_id="42")
 → Dispatches to gitlab_list_merge_requests with the given parameters
 ```
 
-Available meta-tool domains: `project`, `branch`, `tag`, `release`, `merge_request`, `mr_review`, `repository`, `group`, `issue`, `pipeline`, `job`, `user`, `wiki`, `environment`, `deployment`, `pipeline_schedule`, `ci_variable`, `template`, `admin`, `access`, `package`, `snippet`, `feature_flags`, `search`, `runner`, `analyze_mr_changes`, `summarize_issue`.
+Available meta-tool domains: `project`, `branch`, `tag`, `release`, `merge_request`, `mr_review`, `repository`, `group`, `issue`, `pipeline`, `job`, `user`, `wiki`, `environment`, `ci_variable`, `template`, `admin`, `access`, `package`, `snippet`, `feature_flags`, `search`, `runner`, `analyze`.
 
 ## Sampling Tools
 

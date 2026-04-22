@@ -289,7 +289,7 @@ Plus `gitlab_analyze` (11 LLM-assisted sampling actions), 4 elicitation tools, a
 | **Completions** | Project, user, group, branch, tag |
 | **Logging** | Structured (text/JSON) + MCP notifications |
 | **Progress** | Tool execution progress reporting |
-| **Sampling** | 11 LLM-powered analysis tools |
+| **Sampling** | 11 LLM-powered analysis actions via `gitlab_analyze` |
 | **Elicitation** | 4 interactive creation wizards |
 | **Roots** | Workspace root tracking |
 

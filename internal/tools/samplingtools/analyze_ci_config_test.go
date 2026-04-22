@@ -123,8 +123,8 @@ func TestAnalyzeCIConfig_LintError(t *testing.T) {
 	}
 }
 
-// TestIsMissingCIConfig validates detection of the "no .gitlab-ci.yml" lint error.
-func TestIsMissingCIConfig(t *testing.T) {
+// TestIsMissingCIConfig_DetectsLintError validates detection of the "no .gitlab-ci.yml" lint error.
+func TestIsMissingCIConfig_DetectsLintError(t *testing.T) {
 	tests := []struct {
 		name string
 		errs []string

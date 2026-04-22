@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: MCP Capabilities (Sampling, Elicitation, Health)
 > **Individual tools**: 16
-> **Meta-tool**: None (sampling and elicitation tools are always registered individually; health is included in `gitlab_server` meta-tool as `status` action)
+> **Meta-tool**: `gitlab_analyze` (11 sampling actions), elicitation tools are always registered individually; health is included in `gitlab_server` meta-tool as `status` action
 > **MCP Protocol**: [Sampling](https://modelcontextprotocol.io/specification/2025-11-25/client/sampling), [Elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
 > **Audience**: 👤 End users, AI assistant users
 

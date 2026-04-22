@@ -17887,4 +17887,3 @@ Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs,
 
 - `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
 - `days`: Number of days to look back (default: 7)
-

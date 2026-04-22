@@ -2264,8 +2264,8 @@ Actions:
 - invite_project: Invite members to project. Params: project_id (required), email (required), access_level (required), expires_at
 - invite_group: Invite members to group. Params: group_id (required), email (required), access_level (required), expires_at
 
-Use this tool for access credentials: deploy keys, deploy tokens, project access tokens, and group access tokens.
-Do NOT use for personal access tokens or SSH keys (use gitlab_user) or instance admin (use gitlab_admin).
+Use this tool for access credentials: deploy keys, deploy tokens, project/group access tokens, and personal access token management (list, get, rotate, revoke).
+Do NOT use for SSH/GPG keys or creating user-scoped PATs (use gitlab_user), or instance admin (use gitlab_admin).
 See also: gitlab_user (user management), gitlab_project (project settings)`, routes, metaAnnotations, toolutil.IconToken)
 }
 

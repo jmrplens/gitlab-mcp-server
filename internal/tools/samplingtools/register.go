@@ -5,6 +5,7 @@ package samplingtools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -286,7 +287,7 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 	case AnalyzeDeploymentHistoryOutput:
 		return toolutil.ToolResultWithMarkdown(FormatAnalyzeDeploymentHistoryMarkdown(v))
 	default:
-		return nil
+		return toolutil.ToolResultWithMarkdown(fmt.Sprintf("Unknown sampling output type: %T", result))
 	}
 }
 

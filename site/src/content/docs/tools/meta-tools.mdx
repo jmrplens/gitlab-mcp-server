@@ -16,10 +16,10 @@ LLMs have limited context windows. When an MCP server registers 1006 individual 
 | Mode              | Tool Count | Token Overhead | Functionality           |
 | ----------------- | ---------- | -------------- | ----------------------- |
 | Individual        | 1006       | Very high      | Full                    |
-| Meta (base)       | 40         | Low            | Full                    |
-| Meta (enterprise) | 59         | Low            | Full + Premium/Ultimate |
+| Meta (base)       | 28         | Low            | Full                    |
+| Meta (enterprise) | 43         | Low            | Full + Premium/Ultimate |
 
-Meta-tools reduce the tool count by **96%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
+Meta-tools reduce the tool count by **97%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
 :::note[Client compatibility]
 Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (28 tools) works within these constraints. If you disable meta-tools (`META_TOOLS=false`), clients with such limits will only see a subset of the 1006 individual tools.
