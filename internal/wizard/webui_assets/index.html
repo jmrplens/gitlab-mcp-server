@@ -451,11 +451,12 @@ try {
   console.error('Failed to load defaults:', e);
 }
 
-document.getElementById('installPath').addEventListener('input', function() {
+function hideInstalledVersion() {
   const el = document.getElementById('installedVersion');
   el.style.display = 'none';
   el.textContent = '';
-});
+}
+document.getElementById('installPath').addEventListener('input', hideInstalledVersion);
 document.getElementById('browseBtn').addEventListener('click', pickDirectory);
 document.getElementById('selectAllBtn').addEventListener('click', toggleAll);
 document.getElementById('configureBtn').addEventListener('click', configure);
@@ -481,7 +482,10 @@ async function pickDirectory() {
     });
     if (resp.ok) {
       const data = await resp.json();
-      if (data.path) document.getElementById('installPath').value = data.path;
+      if (data.path) {
+        document.getElementById('installPath').value = data.path;
+        hideInstalledVersion();
+      }
     }
   } catch(e) {
     console.error('Pick directory failed:', e);

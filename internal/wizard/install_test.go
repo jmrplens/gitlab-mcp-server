@@ -142,10 +142,10 @@ func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
 	}
 }
 
-// TestGetVersionFromBinary validates the version parsing logic across
+// TestGetVersionFromBinary_Scenarios validates the version parsing logic across
 // multiple scenarios: non-existent binary, non-executable file, expected
 // output format, v-prefixed version, single-word output, and error exit.
-func TestGetVersionFromBinary(t *testing.T) {
+func TestGetVersionFromBinary_Scenarios(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell script fake binaries not supported on Windows")
 	}
