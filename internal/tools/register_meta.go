@@ -172,7 +172,7 @@ import (
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
-// Base: 28 meta-tools (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone).
+// Base: 28 meta-tools (24 inline + 3 delegated + 1 standalone).
 // Enterprise: +15 inline = 43 meta-tools total.
 // Each meta-tool dispatches to the underlying handler based on
 // the "action" parameter. This reduces token usage for LLMs while preserving full functionality.

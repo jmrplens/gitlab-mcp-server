@@ -171,7 +171,7 @@ The largest package — contains 1006 MCP tool implementations organized across 
 | File               | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
 | `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
-| `register_meta.go` | `RegisterAllMeta()` — 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone (+ 15 enterprise inline) |
+| `register_meta.go` | `RegisterAllMeta()` — 24 inline + 3 delegated + 1 standalone (+ 15 enterprise inline) |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `wrapAction`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |
