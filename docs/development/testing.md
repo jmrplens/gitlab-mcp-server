@@ -40,7 +40,7 @@
 | Core packages            |          1,248 |         74 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
 | Tool sub-packages (162)  |          6,937 |        306 | Domain-specific tool handlers        |
-| E2E integration          |            201 |         92 | Full workflow against real GitLab    |
+| E2E integration          |            210 |         94 | Full workflow against real GitLab    |
 | cmd/server               |             64 |          1 | Main entry point + OAuth integration |
 | **Total**                |      **8,664** |    **488** |                                      |
 
@@ -773,7 +773,7 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (88 test files)
+└── suite/                    # Go test package (94 test files)
     ├── setup_test.go         # MCP server setup, helpers, shared state
     ├── fixture_test.go       # Self-contained GitLab resource builders
     └── *_test.go             # Domain-specific test files
