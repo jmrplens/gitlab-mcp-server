@@ -3,7 +3,7 @@
 // clusteragents_test.go tests the cluster agent MCP tools against a live GitLab instance.
 // Exercises the full lifecycle: register agent → list → get → create token →
 // list tokens → get token → revoke token → delete agent, using both individual
-// tools and the gitlab_project meta-tool.
+// tools and the gitlab_admin meta-tool.
 package suite
 
 import (
