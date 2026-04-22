@@ -34,7 +34,7 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 | ----------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
 | MCP client shows 1006 tools instead of 28 | Meta-tools disabled      | Set `META_TOOLS=true` (default) to consolidate into domain meta-tools                           |
 | Tool not found in `tools/list`            | Meta-tool mode mismatch  | Individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create` |
-| `unknown action` in meta-tool call        | Invalid action parameter | Check valid actions in the [Tools Overview](/gitlab-mcp-server/tools/overview/)                                  |
+| `unknown action` in meta-tool call        | Invalid action parameter | Check valid actions in the [Tools Overview](/gitlab-mcp-server/tools/overview/)                 |
 | Enterprise tools missing                  | Enterprise mode disabled | Set `GITLAB_ENTERPRISE=true` to enable 15 additional enterprise meta-tools                      |
 
 ## Auto-update
@@ -56,13 +56,13 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 
 ## OAuth mode (`--auth-mode=oauth`)
 
-| Symptom                                          | Cause                                        | Solution                                                                                                      |
-| ------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `401 Unauthorized` with valid OAuth token        | Token expired or GitLab rejected it          | Re-authorize through the OAuth flow; check that the GitLab OAuth app is still active                          |
-| High latency on first request after cache expiry | Token re-validation against GitLab API       | Expected behavior — increase `--oauth-cache-ttl` (default: 15m, max: 2h) to reduce validation frequency       |
-| `404` on `/.well-known/oauth-protected-resource` | OAuth mode not enabled                       | Start the server with `--auth-mode=oauth`                                                                     |
-| Client doesn't start OAuth flow                  | Client lacks OAuth 2.1 support               | Use `PRIVATE-TOKEN` header instead — it works in OAuth mode via automatic normalization                       |
-| `PRIVATE-TOKEN` header not working in OAuth mode | Should still work                            | The middleware normalizes `PRIVATE-TOKEN` to Bearer — check token validity                                    |
+| Symptom                                          | Cause                                        | Solution                                                                                                                     |
+| ------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `401 Unauthorized` with valid OAuth token        | Token expired or GitLab rejected it          | Re-authorize through the OAuth flow; check that the GitLab OAuth app is still active                                         |
+| High latency on first request after cache expiry | Token re-validation against GitLab API       | Expected behavior — increase `--oauth-cache-ttl` (default: 15m, max: 2h) to reduce validation frequency                      |
+| `404` on `/.well-known/oauth-protected-resource` | OAuth mode not enabled                       | Start the server with `--auth-mode=oauth`                                                                                    |
+| Client doesn't start OAuth flow                  | Client lacks OAuth 2.1 support               | Use `PRIVATE-TOKEN` header instead — it works in OAuth mode via automatic normalization                                      |
+| `PRIVATE-TOKEN` header not working in OAuth mode | Should still work                            | The middleware normalizes `PRIVATE-TOKEN` to Bearer — check token validity                                                   |
 | Operations fail with insufficient `mcp` scope    | DCR fallback assigned `mcp` instead of `api` | Configure `clientId` explicitly in the MCP client config. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) |
 
 ## Pagination
