@@ -49,7 +49,7 @@ sequenceDiagram
 
 ### Startup check (stdio mode)
 
-In stdio mode (the default), auto-update runs as a **pre-start check** with a 15-second timeout before the MCP server begins accepting connections:
+In stdio mode (the default), auto-update runs as a **pre-start check** with a configurable timeout (default: 60 seconds) before the MCP server begins accepting connections:
 
 1. `CleanupOldBinary()` removes any leftover `.old` file from a previous update
 2. Checks for a newer release on GitHub
@@ -77,6 +77,7 @@ In HTTP mode, auto-update runs as a **background periodic check**:
 | `AUTO_UPDATE`          | `true`                       | Update mode: `true`, `check`, or `false`                 |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Check interval (used by HTTP mode periodic checks)       |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Pre-start download timeout (range: 5s–10m)              |
 
 ### CLI flags (HTTP mode)
 
@@ -85,6 +86,7 @@ In HTTP mode, auto-update runs as a **background periodic check**:
 | `--auto-update`          | `true`                       | Update mode: `true`, `check`, or `false`                 |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (`owner/repo`) for release assets |
 | `--auto-update-interval` | `1h`                         | Interval between periodic update checks                  |
+| `--auto-update-timeout`  | `60s`                        | Pre-start download timeout (range: 5s–10m)              |
 
 :::note
 Auto-update uses the **GitHub Releases API** — it is completely independent of your GitLab configuration. Your `GITLAB_URL`, `GITLAB_TOKEN`, and `GITLAB_SKIP_TLS_VERIFY` settings do not affect auto-update.

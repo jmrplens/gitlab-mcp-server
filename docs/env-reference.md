@@ -77,6 +77,7 @@ These variables configure the HTTP server pool when running in HTTP mode. In std
 | `AUTO_UPDATE` | `true` | Update mode: `true` (download and apply), `check` (log only), `false` (disabled) |
 | `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
 | `AUTO_UPDATE_INTERVAL` | `1h` | Periodic update check interval (HTTP mode background checks) |
+| `AUTO_UPDATE_TIMEOUT` | `60s` | Pre-start download timeout (range: 5s–10m) |
 
 > **Note**: Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. See [Auto-Update](auto-update.md) for details.
 
@@ -131,6 +132,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `AUTO_UPDATE` | `--auto-update` | |
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |
 | `AUTO_UPDATE_INTERVAL` | `--auto-update-interval` | |
+| `AUTO_UPDATE_TIMEOUT` | `--auto-update-timeout` | |
 
 ---
 

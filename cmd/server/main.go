@@ -71,6 +71,7 @@ type httpConfig struct {
 	autoUpdate         string
 	autoUpdateRepo     string
 	autoUpdateInterval time.Duration
+	autoUpdateTimeout  time.Duration
 	revalidateInterval time.Duration
 	authMode           string
 	oauthCacheTTL      time.Duration
@@ -104,6 +105,7 @@ func main() {
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
 	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
+	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for pre-start update download (default 60s)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
@@ -195,6 +197,7 @@ FLAGS
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitLab project path for updates (default "%s")
   -auto-update-interval dur How often to check for updates (default %s)
+  -auto-update-timeout dur  Timeout for pre-start update download (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
 
@@ -208,6 +211,7 @@ ENVIRONMENT VARIABLES (stdio mode)
   AUTO_UPDATE               Auto-update mode: true/check/false (default true)
   AUTO_UPDATE_REPO          GitLab project for updates (default %s)
   AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
+  AUTO_UPDATE_TIMEOUT       Pre-start download timeout (default 60s, range 5s–10m)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
 
 JSON CONFIGURATION EXAMPLES
@@ -247,6 +251,7 @@ JSON CONFIGURATION EXAMPLES
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
+		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultAutoUpdateRepo)
 }
@@ -303,6 +308,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		AutoUpdate:         hcfg.autoUpdate,
 		AutoUpdateRepo:     hcfg.autoUpdateRepo,
 		AutoUpdateInterval: hcfg.autoUpdateInterval,
+		AutoUpdateTimeout:  hcfg.autoUpdateTimeout,
 		AuthMode:           hcfg.authMode,
 		OAuthCacheTTL:      hcfg.oauthCacheTTL,
 	}

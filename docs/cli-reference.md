@@ -55,6 +55,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-auto-update` | string | `true` | Auto-update mode: `true` (auto-apply), `check` (log-only), `false` (disabled) |
 | `-auto-update-repo` | string | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for update release assets |
 | `-auto-update-interval` | duration | `1h` | How often to check for new releases (HTTP mode periodic checks) |
+| `-auto-update-timeout` | duration | `60s` | Timeout for pre-start update download (range: 5s–10m) |
 
 ---
 

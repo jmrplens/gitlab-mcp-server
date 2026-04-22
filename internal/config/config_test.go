@@ -430,6 +430,58 @@ func TestLoad_AutoUpdateInterval(t *testing.T) {
 	})
 }
 
+// TestLoad_AutoUpdateTimeout verifies AUTO_UPDATE_TIMEOUT env var parsing, default, and bounds.
+func TestLoad_AutoUpdateTimeout(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run(subtestDefault, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AutoUpdateTimeout != DefaultAutoUpdateTimeout {
+			t.Errorf("AutoUpdateTimeout = %v, want %v", cfg.AutoUpdateTimeout, DefaultAutoUpdateTimeout)
+		}
+	})
+
+	t.Run(subtestCustom, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "90s")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AutoUpdateTimeout != 90*time.Second {
+			t.Errorf("AutoUpdateTimeout = %v, want 90s", cfg.AutoUpdateTimeout)
+		}
+	})
+
+	t.Run(subtestInvalid, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "not-a-duration")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for invalid AUTO_UPDATE_TIMEOUT")
+		}
+	})
+
+	t.Run("below_minimum", func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "1s")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for AUTO_UPDATE_TIMEOUT below minimum")
+		}
+	})
+
+	t.Run("above_maximum", func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "15m")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for AUTO_UPDATE_TIMEOUT above maximum")
+		}
+	})
+}
+
 // TestValidate_URLFormat verifies that GITLAB_URL must have a valid scheme and host.
 func TestValidate_URLFormat(t *testing.T) {
 	tests := []struct {

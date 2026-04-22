@@ -41,7 +41,9 @@ const (
 const (
 	DefaultAutoUpdateRepo     = "jmrplens/gitlab-mcp-server"
 	DefaultAutoUpdateInterval = 1 * time.Hour
-	DefaultAutoUpdateTimeout  = 15 * time.Second
+	DefaultAutoUpdateTimeout  = 60 * time.Second
+	MinAutoUpdateTimeout      = 5 * time.Second
+	MaxAutoUpdateTimeout      = 10 * time.Minute
 )
 
 // Config holds all configuration values for the MCP server.
@@ -150,6 +152,12 @@ func Load() (*Config, error) {
 	autoUpdateTimeout, err := parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
+	}
+	if autoUpdateTimeout < MinAutoUpdateTimeout {
+		return nil, fmt.Errorf("AUTO_UPDATE_TIMEOUT %s is below minimum of %s", autoUpdateTimeout, MinAutoUpdateTimeout)
+	}
+	if autoUpdateTimeout > MaxAutoUpdateTimeout {
+		return nil, fmt.Errorf("AUTO_UPDATE_TIMEOUT %s exceeds maximum of %s", autoUpdateTimeout, MaxAutoUpdateTimeout)
 	}
 
 	autoUpdate := os.Getenv("AUTO_UPDATE")
