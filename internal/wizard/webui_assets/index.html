@@ -394,10 +394,19 @@ let defaults = {};
 function updateTokenLink(gitlabUrl) {
   const link = document.getElementById('tokenLink');
   if (gitlabUrl) {
-    let base = gitlabUrl;
+    let base = gitlabUrl.trim();
     while (base.endsWith('/')) base = base.slice(0, -1);
-    link.href = base + '/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api';
-    link.textContent = 'Create one on your GitLab instance';
+    if (base && !base.match(/^https?:\/\//i)) base = 'https://' + base;
+    try {
+      const parsed = new URL(base);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('invalid protocol');
+      const path = parsed.pathname.endsWith('/') ? parsed.pathname.slice(0, -1) : parsed.pathname;
+      link.href = parsed.origin + path + '/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api';
+      link.textContent = 'Create one on your GitLab instance';
+    } catch {
+      link.removeAttribute('href');
+      link.textContent = 'Enter a valid GitLab URL first';
+    }
   } else {
     link.href = '#';
     link.textContent = 'Enter GitLab URL first';

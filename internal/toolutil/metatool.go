@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,9 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
+
+// maxInt is the maximum int value; used for overflow-safe capacity calculations.
+const maxInt = int(math.MaxInt)
 
 // MetaToolInput is the common input for all meta-tools.
 // The LLM sends an action name and a params object; the dispatcher
@@ -199,7 +203,16 @@ func enrichWithHints(result any, callResult *mcp.CallToolResult) any {
 		return result
 	}
 	// Build JSON with next_steps as the first field so LLMs see guidance early.
-	buf := make([]byte, 0, len(data)+len(hintsData)+len(`"next_steps":,`))
+	overhead := len(`"next_steps":,`)
+	if len(data) > maxInt-overhead {
+		return result
+	}
+	capacity := overhead + len(data)
+	if len(hintsData) > maxInt-capacity {
+		return result
+	}
+	capacity += len(hintsData)
+	buf := make([]byte, 0, capacity)
 	buf = append(buf, '{')
 	buf = append(buf, `"next_steps":`...)
 	buf = append(buf, hintsData...)
