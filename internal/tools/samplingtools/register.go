@@ -294,18 +294,18 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 // RegisterMeta registers a single gitlab_analyze meta-tool that consolidates
 // all 11 sampling analysis tools under one action-dispatched interface.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"mr_changes":         wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
-		"issue_summary":      wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
-		"release_notes":      wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
-		"pipeline_failure":   wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
-		"mr_review":          wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
-		"milestone_report":   wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
-		"ci_config":          wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
-		"issue_scope":        wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
-		"mr_security":        wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
-		"technical_debt":     wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
-		"deployment_history": wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory),
+	routes := toolutil.ActionMap{
+		"mr_changes":         toolutil.Route(wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges)),
+		"issue_summary":      toolutil.Route(wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue)),
+		"release_notes":      toolutil.Route(wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes)),
+		"pipeline_failure":   toolutil.Route(wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure)),
+		"mr_review":          toolutil.Route(wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview)),
+		"milestone_report":   toolutil.Route(wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport)),
+		"ci_config":          toolutil.Route(wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig)),
+		"issue_scope":        toolutil.Route(wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope)),
+		"mr_security":        toolutil.Route(wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity)),
+		"technical_debt":     toolutil.Route(wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt)),
+		"deployment_history": toolutil.Route(wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory)),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

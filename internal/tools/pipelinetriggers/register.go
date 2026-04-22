@@ -102,13 +102,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the pipeline trigger meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, ListTriggers),
-		"get":    toolutil.WrapAction(client, GetTrigger),
-		"create": toolutil.WrapAction(client, CreateTrigger),
-		"update": toolutil.WrapAction(client, UpdateTrigger),
-		"delete": toolutil.WrapVoidAction(client, DeleteTrigger),
-		"run":    toolutil.WrapAction(client, RunTrigger),
+	routes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, ListTriggers),
+		"get":    toolutil.RouteAction(client, GetTrigger),
+		"create": toolutil.RouteAction(client, CreateTrigger),
+		"update": toolutil.RouteAction(client, UpdateTrigger),
+		"delete": toolutil.DestructiveVoidAction(client, DeleteTrigger),
+		"run":    toolutil.RouteAction(client, RunTrigger),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

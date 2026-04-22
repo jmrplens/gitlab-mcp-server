@@ -126,14 +126,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_group_member meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get":           toolutil.WrapAction(client, GetMember),
-		"get_inherited": toolutil.WrapAction(client, GetInheritedMember),
-		"add":           toolutil.WrapAction(client, AddMember),
-		"edit":          toolutil.WrapAction(client, EditMember),
-		"remove":        toolutil.WrapVoidAction(client, RemoveMember),
-		"share":         toolutil.WrapAction(client, ShareGroup),
-		"unshare":       toolutil.WrapVoidAction(client, UnshareGroup),
+	routes := toolutil.ActionMap{
+		"get":           toolutil.RouteAction(client, GetMember),
+		"get_inherited": toolutil.RouteAction(client, GetInheritedMember),
+		"add":           toolutil.RouteAction(client, AddMember),
+		"edit":          toolutil.RouteAction(client, EditMember),
+		"remove":        toolutil.DestructiveVoidAction(client, RemoveMember),
+		"share":         toolutil.RouteAction(client, ShareGroup),
+		"unshare":       toolutil.RouteVoidAction(client, UnshareGroup),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

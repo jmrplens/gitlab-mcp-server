@@ -33,8 +33,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_project_statistics meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get": toolutil.WrapAction(client, Get),
+	routes := toolutil.ActionMap{
+		"get": toolutil.RouteAction(client, Get),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

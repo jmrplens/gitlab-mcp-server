@@ -176,17 +176,17 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 // RegisterMeta registers the gitlab_search meta-tool with all search
 // scopes available in the GitLab Search API.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"code":           toolutil.WrapAction(client, Code),
-		"merge_requests": toolutil.WrapAction(client, MergeRequests),
-		"issues":         toolutil.WrapAction(client, Issues),
-		"commits":        toolutil.WrapAction(client, Commits),
-		"milestones":     toolutil.WrapAction(client, Milestones),
-		"notes":          toolutil.WrapAction(client, Notes),
-		"projects":       toolutil.WrapAction(client, Projects),
-		"snippets":       toolutil.WrapAction(client, Snippets),
-		"users":          toolutil.WrapAction(client, Users),
-		"wiki":           toolutil.WrapAction(client, Wiki),
+	routes := toolutil.ActionMap{
+		"code":           toolutil.RouteAction(client, Code),
+		"merge_requests": toolutil.RouteAction(client, MergeRequests),
+		"issues":         toolutil.RouteAction(client, Issues),
+		"commits":        toolutil.RouteAction(client, Commits),
+		"milestones":     toolutil.RouteAction(client, Milestones),
+		"notes":          toolutil.RouteAction(client, Notes),
+		"projects":       toolutil.RouteAction(client, Projects),
+		"snippets":       toolutil.RouteAction(client, Snippets),
+		"users":          toolutil.RouteAction(client, Users),
+		"wiki":           toolutil.RouteAction(client, Wiki),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

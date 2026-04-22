@@ -200,15 +200,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_registry and gitlab_registry_protection meta-tools.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_project":      toolutil.WrapAction(client, ListProject),
-		"list_group":        toolutil.WrapAction(client, ListGroup),
-		"get_repository":    toolutil.WrapAction(client, GetRepository),
-		"delete_repository": toolutil.WrapVoidAction(client, DeleteRepository),
-		"list_tags":         toolutil.WrapAction(client, ListTags),
-		"get_tag":           toolutil.WrapAction(client, GetTag),
-		"delete_tag":        toolutil.WrapVoidAction(client, DeleteTag),
-		"delete_tags_bulk":  toolutil.WrapVoidAction(client, DeleteTagsBulk),
+	routes := toolutil.ActionMap{
+		"list_project":      toolutil.RouteAction(client, ListProject),
+		"list_group":        toolutil.RouteAction(client, ListGroup),
+		"get_repository":    toolutil.RouteAction(client, GetRepository),
+		"delete_repository": toolutil.DestructiveVoidAction(client, DeleteRepository),
+		"list_tags":         toolutil.RouteAction(client, ListTags),
+		"get_tag":           toolutil.RouteAction(client, GetTag),
+		"delete_tag":        toolutil.DestructiveVoidAction(client, DeleteTag),
+		"delete_tags_bulk":  toolutil.DestructiveVoidAction(client, DeleteTagsBulk),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -230,11 +230,11 @@ Actions:
 	}, toolutil.MakeMetaHandler("gitlab_registry", routes, nil))
 
 	// Protection rules meta-tool
-	protRoutes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, ListProtectionRules),
-		"create": toolutil.WrapAction(client, CreateProtectionRule),
-		"update": toolutil.WrapAction(client, UpdateProtectionRule),
-		"delete": toolutil.WrapVoidAction(client, DeleteProtectionRule),
+	protRoutes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, ListProtectionRules),
+		"create": toolutil.RouteAction(client, CreateProtectionRule),
+		"update": toolutil.RouteAction(client, UpdateProtectionRule),
+		"delete": toolutil.DestructiveVoidAction(client, DeleteProtectionRule),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

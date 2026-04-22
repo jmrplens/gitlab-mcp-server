@@ -89,12 +89,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_runner_controller_token meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, List),
-		"get":    toolutil.WrapAction(client, Get),
-		"create": toolutil.WrapAction(client, Create),
-		"rotate": toolutil.WrapAction(client, Rotate),
-		"revoke": toolutil.WrapVoidAction(client, Revoke),
+	routes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, List),
+		"get":    toolutil.RouteAction(client, Get),
+		"create": toolutil.RouteAction(client, Create),
+		"rotate": toolutil.RouteAction(client, Rotate),
+		"revoke": toolutil.DestructiveVoidAction(client, Revoke),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

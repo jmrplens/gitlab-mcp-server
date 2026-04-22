@@ -56,10 +56,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_group_import_export meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"schedule_export": toolutil.WrapAction(client, ScheduleExport),
-		"export_download": toolutil.WrapAction(client, ExportDownload),
-		"import_file":     toolutil.WrapAction(client, ImportFile),
+	routes := toolutil.ActionMap{
+		"schedule_export": toolutil.RouteAction(client, ScheduleExport),
+		"export_download": toolutil.RouteAction(client, ExportDownload),
+		"import_file":     toolutil.RouteAction(client, ImportFile),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

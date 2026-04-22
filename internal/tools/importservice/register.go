@@ -98,12 +98,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_import meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"from_github":           toolutil.WrapAction(client, ImportFromGitHub),
-		"cancel_github":         toolutil.WrapAction(client, CancelGitHubImport),
-		"github_gists":          toolutil.WrapVoidAction(client, ImportGists),
-		"from_bitbucket_cloud":  toolutil.WrapAction(client, ImportFromBitbucketCloud),
-		"from_bitbucket_server": toolutil.WrapAction(client, ImportFromBitbucketServer),
+	routes := toolutil.ActionMap{
+		"from_github":           toolutil.RouteAction(client, ImportFromGitHub),
+		"cancel_github":         toolutil.RouteAction(client, CancelGitHubImport),
+		"github_gists":          toolutil.RouteVoidAction(client, ImportGists),
+		"from_bitbucket_cloud":  toolutil.RouteAction(client, ImportFromBitbucketCloud),
+		"from_bitbucket_server": toolutil.RouteAction(client, ImportFromBitbucketServer),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

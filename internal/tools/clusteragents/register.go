@@ -154,15 +154,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_cluster_agent meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_agents":        toolutil.WrapAction(client, ListAgents),
-		"get_agent":          toolutil.WrapAction(client, GetAgent),
-		"register_agent":     toolutil.WrapAction(client, RegisterAgent),
-		"delete_agent":       toolutil.WrapVoidAction(client, DeleteAgent),
-		"list_agent_tokens":  toolutil.WrapAction(client, ListAgentTokens),
-		"get_agent_token":    toolutil.WrapAction(client, GetAgentToken),
-		"create_agent_token": toolutil.WrapAction(client, CreateAgentToken),
-		"revoke_agent_token": toolutil.WrapVoidAction(client, RevokeAgentToken),
+	routes := toolutil.ActionMap{
+		"list_agents":        toolutil.RouteAction(client, ListAgents),
+		"get_agent":          toolutil.RouteAction(client, GetAgent),
+		"register_agent":     toolutil.RouteAction(client, RegisterAgent),
+		"delete_agent":       toolutil.DestructiveVoidAction(client, DeleteAgent),
+		"list_agent_tokens":  toolutil.RouteAction(client, ListAgentTokens),
+		"get_agent_token":    toolutil.RouteAction(client, GetAgentToken),
+		"create_agent_token": toolutil.RouteAction(client, CreateAgentToken),
+		"revoke_agent_token": toolutil.DestructiveVoidAction(client, RevokeAgentToken),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

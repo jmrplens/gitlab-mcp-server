@@ -162,17 +162,17 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_board meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":        toolutil.WrapAction(client, ListBoards),
-		"get":         toolutil.WrapAction(client, GetBoard),
-		"create":      toolutil.WrapAction(client, CreateBoard),
-		"update":      toolutil.WrapAction(client, UpdateBoard),
-		"delete":      toolutil.WrapVoidAction(client, DeleteBoard),
-		"list_lists":  toolutil.WrapAction(client, ListBoardLists),
-		"get_list":    toolutil.WrapAction(client, GetBoardList),
-		"create_list": toolutil.WrapAction(client, CreateBoardList),
-		"update_list": toolutil.WrapAction(client, UpdateBoardList),
-		"delete_list": toolutil.WrapVoidAction(client, DeleteBoardList),
+	routes := toolutil.ActionMap{
+		"list":        toolutil.RouteAction(client, ListBoards),
+		"get":         toolutil.RouteAction(client, GetBoard),
+		"create":      toolutil.RouteAction(client, CreateBoard),
+		"update":      toolutil.RouteAction(client, UpdateBoard),
+		"delete":      toolutil.DestructiveVoidAction(client, DeleteBoard),
+		"list_lists":  toolutil.RouteAction(client, ListBoardLists),
+		"get_list":    toolutil.RouteAction(client, GetBoardList),
+		"create_list": toolutil.RouteAction(client, CreateBoardList),
+		"update_list": toolutil.RouteAction(client, UpdateBoardList),
+		"delete_list": toolutil.DestructiveVoidAction(client, DeleteBoardList),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

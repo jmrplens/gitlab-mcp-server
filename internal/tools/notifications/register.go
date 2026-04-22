@@ -95,13 +95,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_notification meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"global_get":     toolutil.WrapAction(client, GetGlobalSettings),
-		"project_get":    toolutil.WrapAction(client, GetSettingsForProject),
-		"group_get":      toolutil.WrapAction(client, GetSettingsForGroup),
-		"global_update":  toolutil.WrapAction(client, UpdateGlobalSettings),
-		"project_update": toolutil.WrapAction(client, UpdateSettingsForProject),
-		"group_update":   toolutil.WrapAction(client, UpdateSettingsForGroup),
+	routes := toolutil.ActionMap{
+		"global_get":     toolutil.RouteAction(client, GetGlobalSettings),
+		"project_get":    toolutil.RouteAction(client, GetSettingsForProject),
+		"group_get":      toolutil.RouteAction(client, GetSettingsForGroup),
+		"global_update":  toolutil.RouteAction(client, UpdateGlobalSettings),
+		"project_update": toolutil.RouteAction(client, UpdateSettingsForProject),
+		"group_update":   toolutil.RouteAction(client, UpdateSettingsForGroup),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

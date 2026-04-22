@@ -118,14 +118,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers group label meta-tool on the MCP server.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":        toolutil.WrapAction(client, List),
-		"get":         toolutil.WrapAction(client, Get),
-		"create":      toolutil.WrapAction(client, Create),
-		"update":      toolutil.WrapAction(client, Update),
-		"delete":      toolutil.WrapVoidAction(client, Delete),
-		"subscribe":   toolutil.WrapAction(client, Subscribe),
-		"unsubscribe": toolutil.WrapVoidAction(client, Unsubscribe),
+	routes := toolutil.ActionMap{
+		"list":        toolutil.RouteAction(client, List),
+		"get":         toolutil.RouteAction(client, Get),
+		"create":      toolutil.RouteAction(client, Create),
+		"update":      toolutil.RouteAction(client, Update),
+		"delete":      toolutil.DestructiveVoidAction(client, Delete),
+		"subscribe":   toolutil.RouteAction(client, Subscribe),
+		"unsubscribe": toolutil.RouteVoidAction(client, Unsubscribe),
 	}
 
 	desc := `Manage GitLab group labels (list, get, create, update, delete, subscribe, unsubscribe).

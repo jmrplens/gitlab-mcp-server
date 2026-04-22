@@ -89,12 +89,12 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 
 // RegisterMeta registers the gitlab_group_variable meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlab.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, List),
-		"get":    toolutil.WrapAction(client, Get),
-		"create": toolutil.WrapAction(client, Create),
-		"update": toolutil.WrapAction(client, Update),
-		"delete": toolutil.WrapVoidAction(client, Delete),
+	routes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, List),
+		"get":    toolutil.RouteAction(client, Get),
+		"create": toolutil.RouteAction(client, Create),
+		"update": toolutil.RouteAction(client, Update),
+		"delete": toolutil.DestructiveVoidAction(client, Delete),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

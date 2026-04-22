@@ -99,13 +99,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_commit_discussion meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":        toolutil.WrapAction(client, List),
-		"get":         toolutil.WrapAction(client, Get),
-		"create":      toolutil.WrapAction(client, Create),
-		"add_note":    toolutil.WrapAction(client, AddNote),
-		"update_note": toolutil.WrapAction(client, UpdateNote),
-		"delete_note": toolutil.WrapVoidAction(client, DeleteNote),
+	routes := toolutil.ActionMap{
+		"list":        toolutil.RouteAction(client, List),
+		"get":         toolutil.RouteAction(client, Get),
+		"create":      toolutil.RouteAction(client, Create),
+		"add_note":    toolutil.RouteAction(client, AddNote),
+		"update_note": toolutil.RouteAction(client, UpdateNote),
+		"delete_note": toolutil.DestructiveVoidAction(client, DeleteNote),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

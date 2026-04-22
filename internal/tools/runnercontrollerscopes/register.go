@@ -95,12 +95,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_runner_controller_scope meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":            toolutil.WrapAction(client, List),
-		"add_instance":    toolutil.WrapAction(client, AddInstanceScope),
-		"remove_instance": toolutil.WrapVoidAction(client, RemoveInstanceScope),
-		"add_runner":      toolutil.WrapAction(client, AddRunnerScope),
-		"remove_runner":   toolutil.WrapVoidAction(client, RemoveRunnerScope),
+	routes := toolutil.ActionMap{
+		"list":            toolutil.RouteAction(client, List),
+		"add_instance":    toolutil.RouteAction(client, AddInstanceScope),
+		"remove_instance": toolutil.DestructiveVoidAction(client, RemoveInstanceScope),
+		"add_runner":      toolutil.RouteAction(client, AddRunnerScope),
+		"remove_runner":   toolutil.DestructiveVoidAction(client, RemoveRunnerScope),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

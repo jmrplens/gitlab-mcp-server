@@ -243,16 +243,16 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_snippet and gitlab_project_snippet meta-tools.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":         toolutil.WrapAction(client, List),
-		"list_all":     toolutil.WrapAction(client, ListAll),
-		"get":          toolutil.WrapAction(client, Get),
-		"content":      toolutil.WrapAction(client, Content),
-		"file_content": toolutil.WrapAction(client, FileContent),
-		"create":       toolutil.WrapAction(client, Create),
-		"update":       toolutil.WrapAction(client, Update),
-		"delete":       toolutil.WrapVoidAction(client, Delete),
-		"explore":      toolutil.WrapAction(client, Explore),
+	routes := toolutil.ActionMap{
+		"list":         toolutil.RouteAction(client, List),
+		"list_all":     toolutil.RouteAction(client, ListAll),
+		"get":          toolutil.RouteAction(client, Get),
+		"content":      toolutil.RouteAction(client, Content),
+		"file_content": toolutil.RouteAction(client, FileContent),
+		"create":       toolutil.RouteAction(client, Create),
+		"update":       toolutil.RouteAction(client, Update),
+		"delete":       toolutil.DestructiveVoidAction(client, Delete),
+		"explore":      toolutil.RouteAction(client, Explore),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -274,13 +274,13 @@ Actions:
 		Icons:       toolutil.IconSnippet,
 	}, toolutil.MakeMetaHandler("gitlab_snippet", routes, nil))
 
-	projRoutes := map[string]toolutil.ActionFunc{
-		"list":    toolutil.WrapAction(client, ProjectList),
-		"get":     toolutil.WrapAction(client, ProjectGet),
-		"content": toolutil.WrapAction(client, ProjectContent),
-		"create":  toolutil.WrapAction(client, ProjectCreate),
-		"update":  toolutil.WrapAction(client, ProjectUpdate),
-		"delete":  toolutil.WrapVoidAction(client, ProjectDelete),
+	projRoutes := toolutil.ActionMap{
+		"list":    toolutil.RouteAction(client, ProjectList),
+		"get":     toolutil.RouteAction(client, ProjectGet),
+		"content": toolutil.RouteAction(client, ProjectContent),
+		"create":  toolutil.RouteAction(client, ProjectCreate),
+		"update":  toolutil.RouteAction(client, ProjectUpdate),
+		"delete":  toolutil.DestructiveVoidAction(client, ProjectDelete),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

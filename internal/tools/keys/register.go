@@ -43,9 +43,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_key meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get_key_with_user":      toolutil.WrapAction(client, GetKeyWithUser),
-		"get_key_by_fingerprint": toolutil.WrapAction(client, GetKeyByFingerprint),
+	routes := toolutil.ActionMap{
+		"get_key_with_user":      toolutil.RouteAction(client, GetKeyWithUser),
+		"get_key_by_fingerprint": toolutil.RouteAction(client, GetKeyByFingerprint),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

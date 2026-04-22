@@ -86,11 +86,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_alert_management meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_metric_images":  toolutil.WrapAction(client, ListMetricImages),
-		"upload_metric_image": toolutil.WrapAction(client, UploadMetricImage),
-		"update_metric_image": toolutil.WrapAction(client, UpdateMetricImage),
-		"delete_metric_image": toolutil.WrapVoidAction(client, DeleteMetricImage),
+	routes := toolutil.ActionMap{
+		"list_metric_images":  toolutil.RouteAction(client, ListMetricImages),
+		"upload_metric_image": toolutil.RouteAction(client, UploadMetricImage),
+		"update_metric_image": toolutil.RouteAction(client, UpdateMetricImage),
+		"delete_metric_image": toolutil.DestructiveVoidAction(client, DeleteMetricImage),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

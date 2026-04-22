@@ -74,10 +74,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_group_markdown_upload meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":             toolutil.WrapAction(client, List),
-		"delete_by_id":     toolutil.WrapVoidAction(client, DeleteByID),
-		"delete_by_secret": toolutil.WrapVoidAction(client, DeleteBySecretAndFilename),
+	routes := toolutil.ActionMap{
+		"list":             toolutil.RouteAction(client, List),
+		"delete_by_id":     toolutil.DestructiveVoidAction(client, DeleteByID),
+		"delete_by_secret": toolutil.DestructiveVoidAction(client, DeleteBySecretAndFilename),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

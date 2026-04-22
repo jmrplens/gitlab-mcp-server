@@ -102,12 +102,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_error_tracking meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get_settings":      toolutil.WrapAction(client, GetSettings),
-		"enable_disable":    toolutil.WrapAction(client, EnableDisable),
-		"list_client_keys":  toolutil.WrapAction(client, ListClientKeys),
-		"create_client_key": toolutil.WrapAction(client, CreateClientKey),
-		"delete_client_key": toolutil.WrapVoidAction(client, DeleteClientKey),
+	routes := toolutil.ActionMap{
+		"get_settings":      toolutil.RouteAction(client, GetSettings),
+		"enable_disable":    toolutil.RouteAction(client, EnableDisable),
+		"list_client_keys":  toolutil.RouteAction(client, ListClientKeys),
+		"create_client_key": toolutil.RouteAction(client, CreateClientKey),
+		"delete_client_key": toolutil.DestructiveVoidAction(client, DeleteClientKey),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

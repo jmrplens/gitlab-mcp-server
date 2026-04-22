@@ -217,22 +217,22 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_resource_event meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_issue_label_events":     toolutil.WrapAction(client, ListIssueLabelEvents),
-		"get_issue_label_event":       toolutil.WrapAction(client, GetIssueLabelEvent),
-		"list_mr_label_events":        toolutil.WrapAction(client, ListMRLabelEvents),
-		"get_mr_label_event":          toolutil.WrapAction(client, GetMRLabelEvent),
-		"list_issue_milestone_events": toolutil.WrapAction(client, ListIssueMilestoneEvents),
-		"get_issue_milestone_event":   toolutil.WrapAction(client, GetIssueMilestoneEvent),
-		"list_mr_milestone_events":    toolutil.WrapAction(client, ListMRMilestoneEvents),
-		"get_mr_milestone_event":      toolutil.WrapAction(client, GetMRMilestoneEvent),
-		"list_issue_state_events":     toolutil.WrapAction(client, ListIssueStateEvents),
-		"get_issue_state_event":       toolutil.WrapAction(client, GetIssueStateEvent),
-		"list_mr_state_events":        toolutil.WrapAction(client, ListMRStateEvents),
-		"get_mr_state_event":          toolutil.WrapAction(client, GetMRStateEvent),
-		"list_issue_iteration_events": toolutil.WrapAction(client, ListIssueIterationEvents),
-		"get_issue_iteration_event":   toolutil.WrapAction(client, GetIssueIterationEvent),
-		"list_issue_weight_events":    toolutil.WrapAction(client, ListIssueWeightEvents),
+	routes := toolutil.ActionMap{
+		"list_issue_label_events":     toolutil.RouteAction(client, ListIssueLabelEvents),
+		"get_issue_label_event":       toolutil.RouteAction(client, GetIssueLabelEvent),
+		"list_mr_label_events":        toolutil.RouteAction(client, ListMRLabelEvents),
+		"get_mr_label_event":          toolutil.RouteAction(client, GetMRLabelEvent),
+		"list_issue_milestone_events": toolutil.RouteAction(client, ListIssueMilestoneEvents),
+		"get_issue_milestone_event":   toolutil.RouteAction(client, GetIssueMilestoneEvent),
+		"list_mr_milestone_events":    toolutil.RouteAction(client, ListMRMilestoneEvents),
+		"get_mr_milestone_event":      toolutil.RouteAction(client, GetMRMilestoneEvent),
+		"list_issue_state_events":     toolutil.RouteAction(client, ListIssueStateEvents),
+		"get_issue_state_event":       toolutil.RouteAction(client, GetIssueStateEvent),
+		"list_mr_state_events":        toolutil.RouteAction(client, ListMRStateEvents),
+		"get_mr_state_event":          toolutil.RouteAction(client, GetMRStateEvent),
+		"list_issue_iteration_events": toolutil.RouteAction(client, ListIssueIterationEvents),
+		"get_issue_iteration_event":   toolutil.RouteAction(client, GetIssueIterationEvent),
+		"list_issue_weight_events":    toolutil.RouteAction(client, ListIssueWeightEvents),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

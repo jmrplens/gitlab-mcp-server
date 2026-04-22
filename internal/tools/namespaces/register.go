@@ -84,11 +84,11 @@ func markdownForResult(result any) *mcp.CallToolResult {
 
 // RegisterMeta registers the gitlab_namespace meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, List),
-		"get":    toolutil.WrapAction(client, Get),
-		"exists": toolutil.WrapAction(client, Exists),
-		"search": toolutil.WrapAction(client, Search),
+	routes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, List),
+		"get":    toolutil.RouteAction(client, Get),
+		"exists": toolutil.RouteAction(client, Exists),
+		"search": toolutil.RouteAction(client, Search),
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_namespace",

@@ -252,135 +252,135 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 // pages_domain_list_all, pages_domain_list, pages_domain_get, pages_domain_create,
 // pages_domain_update, and pages_domain_delete.
 func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
-	routes := map[string]actionFunc{
-		"create":                   wrapAction(client, projects.Create),
-		"get":                      wrapAction(client, projects.Get),
-		"list":                     wrapAction(client, projects.List),
-		"update":                   wrapAction(client, projects.Update),
-		"delete":                   wrapAction(client, projects.Delete),
-		"restore":                  wrapAction(client, projects.Restore),
-		"fork":                     wrapAction(client, projects.Fork),
-		"star":                     wrapAction(client, projects.Star),
-		"unstar":                   wrapAction(client, projects.Unstar),
-		"archive":                  wrapAction(client, projects.Archive),
-		"unarchive":                wrapAction(client, projects.Unarchive),
-		"transfer":                 wrapAction(client, projects.Transfer),
-		"list_forks":               wrapAction(client, projects.ListForks),
-		"languages":                wrapAction(client, projects.GetLanguages),
-		"hook_list":                wrapAction(client, projects.ListHooks),
-		"hook_get":                 wrapAction(client, projects.GetHook),
-		"hook_add":                 wrapAction(client, projects.AddHook),
-		"hook_edit":                wrapAction(client, projects.EditHook),
-		"hook_delete":              wrapVoidAction(client, projects.DeleteHook),
-		"hook_test":                wrapAction(client, projects.TriggerTestHook),
-		"list_user_projects":       wrapAction(client, projects.ListUserProjects),
-		"list_users":               wrapAction(client, projects.ListProjectUsers),
-		"list_groups":              wrapAction(client, projects.ListProjectGroups),
-		"list_starrers":            wrapAction(client, projects.ListProjectStarrers),
-		"share_with_group":         wrapAction(client, projects.ShareProjectWithGroup),
-		"delete_shared_group":      wrapVoidAction(client, projects.DeleteSharedProjectFromGroup),
-		"list_invited_groups":      wrapAction(client, projects.ListInvitedGroups),
-		"list_user_contributed":    wrapAction(client, projects.ListUserContributedProjects),
-		"list_user_starred":        wrapAction(client, projects.ListUserStarredProjects),
-		"members":                  wrapAction(client, members.List),
-		"member_get":               wrapAction(client, members.Get),
-		"member_inherited":         wrapAction(client, members.GetInherited),
-		"member_add":               wrapAction(client, members.Add),
-		"member_edit":              wrapAction(client, members.Edit),
-		"member_delete":            wrapVoidAction(client, members.Delete),
-		"upload":                   wrapActionWithRequest(client, uploads.Upload),
-		"upload_list":              wrapAction(client, uploads.List),
-		"upload_delete":            wrapVoidAction(client, uploads.Delete),
-		"label_list":               wrapAction(client, labels.List),
-		"label_get":                wrapAction(client, labels.Get),
-		"label_create":             wrapAction(client, labels.Create),
-		"label_update":             wrapAction(client, labels.Update),
-		"label_delete":             wrapVoidAction(client, labels.Delete),
-		"label_subscribe":          wrapAction(client, labels.Subscribe),
-		"label_unsubscribe":        wrapVoidAction(client, labels.Unsubscribe),
-		"label_promote":            wrapVoidAction(client, labels.Promote),
-		"milestone_list":           wrapAction(client, milestones.List),
-		"milestone_get":            wrapAction(client, milestones.Get),
-		"milestone_create":         wrapAction(client, milestones.Create),
-		"milestone_update":         wrapAction(client, milestones.Update),
-		"milestone_delete":         wrapVoidAction(client, milestones.Delete),
-		"milestone_issues":         wrapAction(client, milestones.GetIssues),
-		"milestone_merge_requests": wrapAction(client, milestones.GetMergeRequests),
-		"integration_list":         wrapAction(client, integrations.List),
-		"integration_get":          wrapAction(client, integrations.Get),
-		"integration_delete":       wrapVoidAction(client, integrations.Delete),
-		"integration_set_jira":     wrapAction(client, integrations.SetJira),
-		"badge_list":               wrapAction(client, badges.ListProject),
-		"badge_get":                wrapAction(client, badges.GetProject),
-		"badge_add":                wrapAction(client, badges.AddProject),
-		"badge_edit":               wrapAction(client, badges.EditProject),
-		"badge_delete":             wrapVoidAction(client, badges.DeleteProject),
-		"badge_preview":            wrapAction(client, badges.PreviewProject),
-		"board_list":               wrapAction(client, boards.ListBoards),
-		"board_get":                wrapAction(client, boards.GetBoard),
-		"board_create":             wrapAction(client, boards.CreateBoard),
-		"board_update":             wrapAction(client, boards.UpdateBoard),
-		"board_delete":             wrapVoidAction(client, boards.DeleteBoard),
-		"board_list_list":          wrapAction(client, boards.ListBoardLists),
-		"board_list_get":           wrapAction(client, boards.GetBoardList),
-		"board_list_create":        wrapAction(client, boards.CreateBoardList),
-		"board_list_update":        wrapAction(client, boards.UpdateBoardList),
-		"board_list_delete":        wrapVoidAction(client, boards.DeleteBoardList),
-		"export_schedule":          wrapAction(client, projectimportexport.ScheduleExport),
-		"export_status":            wrapAction(client, projectimportexport.GetExportStatus),
-		"export_download":          wrapAction(client, projectimportexport.ExportDownload),
-		"import_from_file":         wrapAction(client, projectimportexport.ImportFromFile),
-		"import_status":            wrapAction(client, projectimportexport.GetImportStatus),
-		"statistics_get":           wrapAction(client, projectstatistics.Get),
-		"pages_get":                wrapAction(client, pages.GetPages),
-		"pages_update":             wrapAction(client, pages.UpdatePages),
-		"pages_unpublish":          wrapVoidAction(client, pages.UnpublishPages),
-		"pages_domain_list_all":    wrapAction(client, pages.ListAllDomains),
-		"pages_domain_list":        wrapAction(client, pages.ListDomains),
-		"pages_domain_get":         wrapAction(client, pages.GetDomain),
-		"pages_domain_create":      wrapAction(client, pages.CreateDomain),
-		"pages_domain_update":      wrapAction(client, pages.UpdateDomain),
-		"pages_domain_delete":      wrapVoidAction(client, pages.DeleteDomain),
+	routes := actionMap{
+		"create":                   routeAction(client, projects.Create),
+		"get":                      routeAction(client, projects.Get),
+		"list":                     routeAction(client, projects.List),
+		"update":                   routeAction(client, projects.Update),
+		"delete":                   destructiveAction(client, projects.Delete),
+		"restore":                  routeAction(client, projects.Restore),
+		"fork":                     routeAction(client, projects.Fork),
+		"star":                     routeAction(client, projects.Star),
+		"unstar":                   routeAction(client, projects.Unstar),
+		"archive":                  routeAction(client, projects.Archive),
+		"unarchive":                routeAction(client, projects.Unarchive),
+		"transfer":                 routeAction(client, projects.Transfer),
+		"list_forks":               routeAction(client, projects.ListForks),
+		"languages":                routeAction(client, projects.GetLanguages),
+		"hook_list":                routeAction(client, projects.ListHooks),
+		"hook_get":                 routeAction(client, projects.GetHook),
+		"hook_add":                 routeAction(client, projects.AddHook),
+		"hook_edit":                routeAction(client, projects.EditHook),
+		"hook_delete":              destructiveVoidAction(client, projects.DeleteHook),
+		"hook_test":                routeAction(client, projects.TriggerTestHook),
+		"list_user_projects":       routeAction(client, projects.ListUserProjects),
+		"list_users":               routeAction(client, projects.ListProjectUsers),
+		"list_groups":              routeAction(client, projects.ListProjectGroups),
+		"list_starrers":            routeAction(client, projects.ListProjectStarrers),
+		"share_with_group":         routeAction(client, projects.ShareProjectWithGroup),
+		"delete_shared_group":      destructiveVoidAction(client, projects.DeleteSharedProjectFromGroup),
+		"list_invited_groups":      routeAction(client, projects.ListInvitedGroups),
+		"list_user_contributed":    routeAction(client, projects.ListUserContributedProjects),
+		"list_user_starred":        routeAction(client, projects.ListUserStarredProjects),
+		"members":                  routeAction(client, members.List),
+		"member_get":               routeAction(client, members.Get),
+		"member_inherited":         routeAction(client, members.GetInherited),
+		"member_add":               routeAction(client, members.Add),
+		"member_edit":              routeAction(client, members.Edit),
+		"member_delete":            destructiveVoidAction(client, members.Delete),
+		"upload":                   routeActionWithRequest(client, uploads.Upload),
+		"upload_list":              routeAction(client, uploads.List),
+		"upload_delete":            destructiveVoidAction(client, uploads.Delete),
+		"label_list":               routeAction(client, labels.List),
+		"label_get":                routeAction(client, labels.Get),
+		"label_create":             routeAction(client, labels.Create),
+		"label_update":             routeAction(client, labels.Update),
+		"label_delete":             destructiveVoidAction(client, labels.Delete),
+		"label_subscribe":          routeAction(client, labels.Subscribe),
+		"label_unsubscribe":        routeVoidAction(client, labels.Unsubscribe),
+		"label_promote":            routeVoidAction(client, labels.Promote),
+		"milestone_list":           routeAction(client, milestones.List),
+		"milestone_get":            routeAction(client, milestones.Get),
+		"milestone_create":         routeAction(client, milestones.Create),
+		"milestone_update":         routeAction(client, milestones.Update),
+		"milestone_delete":         destructiveVoidAction(client, milestones.Delete),
+		"milestone_issues":         routeAction(client, milestones.GetIssues),
+		"milestone_merge_requests": routeAction(client, milestones.GetMergeRequests),
+		"integration_list":         routeAction(client, integrations.List),
+		"integration_get":          routeAction(client, integrations.Get),
+		"integration_delete":       destructiveVoidAction(client, integrations.Delete),
+		"integration_set_jira":     routeAction(client, integrations.SetJira),
+		"badge_list":               routeAction(client, badges.ListProject),
+		"badge_get":                routeAction(client, badges.GetProject),
+		"badge_add":                routeAction(client, badges.AddProject),
+		"badge_edit":               routeAction(client, badges.EditProject),
+		"badge_delete":             destructiveVoidAction(client, badges.DeleteProject),
+		"badge_preview":            routeAction(client, badges.PreviewProject),
+		"board_list":               routeAction(client, boards.ListBoards),
+		"board_get":                routeAction(client, boards.GetBoard),
+		"board_create":             routeAction(client, boards.CreateBoard),
+		"board_update":             routeAction(client, boards.UpdateBoard),
+		"board_delete":             destructiveVoidAction(client, boards.DeleteBoard),
+		"board_list_list":          routeAction(client, boards.ListBoardLists),
+		"board_list_get":           routeAction(client, boards.GetBoardList),
+		"board_list_create":        routeAction(client, boards.CreateBoardList),
+		"board_list_update":        routeAction(client, boards.UpdateBoardList),
+		"board_list_delete":        destructiveVoidAction(client, boards.DeleteBoardList),
+		"export_schedule":          routeAction(client, projectimportexport.ScheduleExport),
+		"export_status":            routeAction(client, projectimportexport.GetExportStatus),
+		"export_download":          routeAction(client, projectimportexport.ExportDownload),
+		"import_from_file":         routeAction(client, projectimportexport.ImportFromFile),
+		"import_status":            routeAction(client, projectimportexport.GetImportStatus),
+		"statistics_get":           routeAction(client, projectstatistics.Get),
+		"pages_get":                routeAction(client, pages.GetPages),
+		"pages_update":             routeAction(client, pages.UpdatePages),
+		"pages_unpublish":          destructiveVoidAction(client, pages.UnpublishPages),
+		"pages_domain_list_all":    routeAction(client, pages.ListAllDomains),
+		"pages_domain_list":        routeAction(client, pages.ListDomains),
+		"pages_domain_get":         routeAction(client, pages.GetDomain),
+		"pages_domain_create":      routeAction(client, pages.CreateDomain),
+		"pages_domain_update":      routeAction(client, pages.UpdateDomain),
+		"pages_domain_delete":      destructiveVoidAction(client, pages.DeleteDomain),
 
 		// Extended project operations
-		"hook_set_custom_header":    wrapVoidAction(client, projects.SetCustomHeader),
-		"hook_delete_custom_header": wrapVoidAction(client, projects.DeleteCustomHeader),
-		"hook_set_url_variable":     wrapVoidAction(client, projects.SetWebhookURLVariable),
-		"hook_delete_url_variable":  wrapVoidAction(client, projects.DeleteWebhookURLVariable),
-		"create_fork_relation":      wrapAction(client, projects.CreateForkRelation),
-		"delete_fork_relation":      wrapVoidAction(client, projects.DeleteForkRelation),
-		"upload_avatar":             wrapAction(client, projects.UploadAvatar),
-		"download_avatar":           wrapAction(client, projects.DownloadAvatar),
-		"approval_config_get":       wrapAction(client, projects.GetApprovalConfig),
-		"approval_config_change":    wrapAction(client, projects.ChangeApprovalConfig),
-		"approval_rule_list":        wrapAction(client, projects.ListApprovalRules),
-		"approval_rule_get":         wrapAction(client, projects.GetApprovalRule),
-		"approval_rule_create":      wrapAction(client, projects.CreateApprovalRule),
-		"approval_rule_update":      wrapAction(client, projects.UpdateApprovalRule),
-		"approval_rule_delete":      wrapVoidAction(client, projects.DeleteApprovalRule),
-		"pull_mirror_get":           wrapAction(client, projects.GetPullMirror),
-		"pull_mirror_configure":     wrapAction(client, projects.ConfigurePullMirror),
-		"start_mirroring":           wrapVoidAction(client, projects.StartMirroring),
-		"start_housekeeping":        wrapVoidAction(client, projects.StartHousekeeping),
-		"repository_storage_get":    wrapAction(client, projects.GetRepositoryStorage),
-		"create_for_user":           wrapAction(client, projects.CreateForUser),
+		"hook_set_custom_header":    routeVoidAction(client, projects.SetCustomHeader),
+		"hook_delete_custom_header": destructiveVoidAction(client, projects.DeleteCustomHeader),
+		"hook_set_url_variable":     routeVoidAction(client, projects.SetWebhookURLVariable),
+		"hook_delete_url_variable":  destructiveVoidAction(client, projects.DeleteWebhookURLVariable),
+		"create_fork_relation":      routeAction(client, projects.CreateForkRelation),
+		"delete_fork_relation":      destructiveVoidAction(client, projects.DeleteForkRelation),
+		"upload_avatar":             routeAction(client, projects.UploadAvatar),
+		"download_avatar":           routeAction(client, projects.DownloadAvatar),
+		"approval_config_get":       routeAction(client, projects.GetApprovalConfig),
+		"approval_config_change":    routeAction(client, projects.ChangeApprovalConfig),
+		"approval_rule_list":        routeAction(client, projects.ListApprovalRules),
+		"approval_rule_get":         routeAction(client, projects.GetApprovalRule),
+		"approval_rule_create":      routeAction(client, projects.CreateApprovalRule),
+		"approval_rule_update":      routeAction(client, projects.UpdateApprovalRule),
+		"approval_rule_delete":      destructiveVoidAction(client, projects.DeleteApprovalRule),
+		"pull_mirror_get":           routeAction(client, projects.GetPullMirror),
+		"pull_mirror_configure":     routeAction(client, projects.ConfigurePullMirror),
+		"start_mirroring":           routeVoidAction(client, projects.StartMirroring),
+		"start_housekeeping":        routeVoidAction(client, projects.StartHousekeeping),
+		"repository_storage_get":    routeAction(client, projects.GetRepositoryStorage),
+		"create_for_user":           routeAction(client, projects.CreateForUser),
 		// Remote mirrors (Free tier — verified via GitLab docs)
-		"mirror_list":           wrapAction(client, projectmirrors.List),
-		"mirror_get":            wrapAction(client, projectmirrors.Get),
-		"mirror_get_public_key": wrapAction(client, projectmirrors.GetPublicKey),
-		"mirror_add":            wrapAction(client, projectmirrors.Add),
-		"mirror_edit":           wrapAction(client, projectmirrors.Edit),
-		"mirror_delete":         wrapVoidAction(client, projectmirrors.Delete),
-		"mirror_force_push":     wrapVoidAction(client, projectmirrors.ForcePushUpdate),
+		"mirror_list":           routeAction(client, projectmirrors.List),
+		"mirror_get":            routeAction(client, projectmirrors.Get),
+		"mirror_get_public_key": routeAction(client, projectmirrors.GetPublicKey),
+		"mirror_add":            routeAction(client, projectmirrors.Add),
+		"mirror_edit":           routeAction(client, projectmirrors.Edit),
+		"mirror_delete":         destructiveVoidAction(client, projectmirrors.Delete),
+		"mirror_force_push":     routeVoidAction(client, projectmirrors.ForcePushUpdate),
 	}
 
 	if enterprise {
-		routes["push_rule_get"] = wrapAction(client, projects.GetPushRules)
-		routes["push_rule_add"] = wrapAction(client, projects.AddPushRule)
-		routes["push_rule_edit"] = wrapAction(client, projects.EditPushRule)
-		routes["push_rule_delete"] = wrapVoidAction(client, projects.DeletePushRule)
-		routes["security_settings_get"] = wrapAction(client, securitysettings.GetProject)
-		routes["security_settings_update"] = wrapAction(client, securitysettings.UpdateProject)
+		routes["push_rule_get"] = routeAction(client, projects.GetPushRules)
+		routes["push_rule_add"] = routeAction(client, projects.AddPushRule)
+		routes["push_rule_edit"] = routeAction(client, projects.EditPushRule)
+		routes["push_rule_delete"] = destructiveVoidAction(client, projects.DeletePushRule)
+		routes["security_settings_get"] = routeAction(client, securitysettings.GetProject)
+		routes["security_settings_update"] = routeAction(client, securitysettings.UpdateProject)
 	}
 
 	desc := `Create, list, get, update, delete, fork, star, archive, and transfer GitLab projects. Also manages project members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export.
@@ -559,24 +559,24 @@ Do NOT use for file content or commits (use gitlab_repository), branches (use gi
 See also: gitlab_repository (file/commit operations), gitlab_wiki, gitlab_branch, gitlab_discover_project`
 	}
 
-	addMetaTool(server, "gitlab_project", desc, routes, metaAnnotations, toolutil.IconProject)
+	addMetaTool(server, "gitlab_project", desc, routes, toolutil.IconProject)
 }
 
 // registerBranchMeta registers the gitlab_branch meta-tool with actions:
 // create, get, list, delete, protect, unprotect, list_protected, get_protected, and update_protected.
 func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"create":           wrapAction(client, branches.Create),
-		"get":              wrapAction(client, branches.Get),
-		"list":             wrapAction(client, branches.List),
-		"delete":           wrapVoidAction(client, branches.Delete),
-		"delete_merged":    wrapVoidAction(client, branches.DeleteMerged),
-		"protect":          wrapAction(client, branches.Protect),
-		"unprotect":        wrapAction(client, branches.Unprotect),
-		"list_protected":   wrapAction(client, branches.ProtectedList),
-		"get_protected":    wrapAction(client, branches.ProtectedGet),
-		"update_protected": wrapAction(client, branches.ProtectedUpdate),
-		"rule_list":        wrapAction(client, branchrules.List),
+	routes := actionMap{
+		"create":           routeAction(client, branches.Create),
+		"get":              routeAction(client, branches.Get),
+		"list":             routeAction(client, branches.List),
+		"delete":           destructiveVoidAction(client, branches.Delete),
+		"delete_merged":    destructiveVoidAction(client, branches.DeleteMerged),
+		"protect":          routeAction(client, branches.Protect),
+		"unprotect":        destructiveAction(client, branches.Unprotect),
+		"list_protected":   routeAction(client, branches.ProtectedList),
+		"get_protected":    routeAction(client, branches.ProtectedGet),
+		"update_protected": routeAction(client, branches.ProtectedUpdate),
+		"rule_list":        routeAction(client, branchrules.List),
 	}
 
 	addMetaTool(server, "gitlab_branch", `Create, list, get, delete, and protect Git branches in GitLab repositories. Query branch rules (aggregated view via GraphQL).
@@ -598,23 +598,23 @@ Actions:
 
 Use this tool for creating, listing, deleting, and protecting branches, and querying branch rules.
 Do NOT use for file operations on branches (use gitlab_repository).
-See also: gitlab_repository, gitlab_merge_request`, routes, metaAnnotations, toolutil.IconBranch)
+See also: gitlab_repository, gitlab_merge_request`, routes, toolutil.IconBranch)
 }
 
 // registerTagMeta registers the gitlab_tag meta-tool with actions:
 // create, get, list, delete, get_signature, list_protected, get_protected,
 // protect, and unprotect.
 func registerTagMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"create":         wrapAction(client, tags.Create),
-		"get":            wrapAction(client, tags.Get),
-		"list":           wrapAction(client, tags.List),
-		"delete":         wrapVoidAction(client, tags.Delete),
-		"get_signature":  wrapAction(client, tags.GetSignature),
-		"list_protected": wrapAction(client, tags.ListProtectedTags),
-		"get_protected":  wrapAction(client, tags.GetProtectedTag),
-		"protect":        wrapAction(client, tags.ProtectTag),
-		"unprotect":      wrapVoidAction(client, tags.UnprotectTag),
+	routes := actionMap{
+		"create":         routeAction(client, tags.Create),
+		"get":            routeAction(client, tags.Get),
+		"list":           routeAction(client, tags.List),
+		"delete":         destructiveVoidAction(client, tags.Delete),
+		"get_signature":  routeAction(client, tags.GetSignature),
+		"list_protected": routeAction(client, tags.ListProtectedTags),
+		"get_protected":  routeAction(client, tags.GetProtectedTag),
+		"protect":        routeAction(client, tags.ProtectTag),
+		"unprotect":      destructiveVoidAction(client, tags.UnprotectTag),
 	}
 
 	addMetaTool(server, "gitlab_tag", `Create, list, get, delete, and protect Git tags in GitLab repositories. Verify tag GPG signatures.
@@ -632,26 +632,26 @@ Actions:
 - protect: Protect a tag or wildcard pattern. Params: project_id (required), tag_name (required, tag name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
 - unprotect: Remove tag protection. Params: project_id (required), tag_name (required)
 
-See also: gitlab_release, gitlab_repository`, routes, metaAnnotations, toolutil.IconTag)
+See also: gitlab_release, gitlab_repository`, routes, toolutil.IconTag)
 }
 
 // registerReleaseMeta registers the gitlab_release meta-tool with actions:
 // create, get, get_latest, list, update, delete, link_create, link_create_batch,
 // link_get, link_list, link_update, and link_delete.
 func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"create":            wrapAction(client, releases.Create),
-		"get":               wrapAction(client, releases.Get),
-		"get_latest":        wrapAction(client, releases.GetLatest),
-		"list":              wrapAction(client, releases.List),
-		"update":            wrapAction(client, releases.Update),
-		"delete":            wrapAction(client, releases.Delete),
-		"link_create":       wrapAction(client, releaselinks.Create),
-		"link_create_batch": wrapAction(client, releaselinks.CreateBatch),
-		"link_get":          wrapAction(client, releaselinks.Get),
-		"link_list":         wrapAction(client, releaselinks.List),
-		"link_update":       wrapAction(client, releaselinks.Update),
-		"link_delete":       wrapAction(client, releaselinks.Delete),
+	routes := actionMap{
+		"create":            routeAction(client, releases.Create),
+		"get":               routeAction(client, releases.Get),
+		"get_latest":        routeAction(client, releases.GetLatest),
+		"list":              routeAction(client, releases.List),
+		"update":            routeAction(client, releases.Update),
+		"delete":            destructiveAction(client, releases.Delete),
+		"link_create":       routeAction(client, releaselinks.Create),
+		"link_create_batch": routeAction(client, releaselinks.CreateBatch),
+		"link_get":          routeAction(client, releaselinks.Get),
+		"link_list":         routeAction(client, releaselinks.List),
+		"link_update":       routeAction(client, releaselinks.Update),
+		"link_delete":       destructiveAction(client, releaselinks.Delete),
 	}
 
 	addMetaTool(server, "gitlab_release", `Create, list, get, update, and delete GitLab releases and release asset links (binaries, downloads).
@@ -672,7 +672,7 @@ Actions:
 - link_update: Update a release asset link. Params: project_id (required), tag_name (required), link_id (required), name, url, filepath, direct_asset_path, link_type
 - link_delete: Remove an asset link. Params: project_id (required), tag_name (required), link_id (required)
 
-See also: gitlab_tag (create tags first), gitlab_package (package registry)`, routes, metaAnnotations, toolutil.IconRelease)
+See also: gitlab_tag (create tags first), gitlab_package (package registry)`, routes, toolutil.IconRelease)
 }
 
 // registerMergeRequestMeta registers the gitlab_merge_request meta-tool with actions:
@@ -686,60 +686,60 @@ See also: gitlab_tag (create tags first), gitlab_package (package registry)`, ro
 // spent_time_reset, time_stats, context_commits_list, context_commits_create,
 // context_commits_delete.
 func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"create":                           wrapAction(client, mergerequests.Create),
-		"get":                              wrapAction(client, mergerequests.Get),
-		"list":                             wrapAction(client, mergerequests.List),
-		"list_global":                      wrapAction(client, mergerequests.ListGlobal),
-		"list_group":                       wrapAction(client, mergerequests.ListGroup),
-		"update":                           wrapAction(client, mergerequests.Update),
-		"merge":                            wrapAction(client, mergerequests.Merge),
-		"approve":                          wrapAction(client, mergerequests.Approve),
-		"unapprove":                        wrapVoidAction(client, mergerequests.Unapprove),
-		"commits":                          wrapAction(client, mergerequests.Commits),
-		"pipelines":                        wrapAction(client, mergerequests.Pipelines),
-		"delete":                           wrapVoidAction(client, mergerequests.Delete),
-		"rebase":                           wrapAction(client, mergerequests.Rebase),
-		"participants":                     wrapAction(client, mergerequests.Participants),
-		"reviewers":                        wrapAction(client, mergerequests.Reviewers),
-		"create_pipeline":                  wrapAction(client, mergerequests.CreatePipeline),
-		"issues_closed":                    wrapAction(client, mergerequests.IssuesClosed),
-		"cancel_auto_merge":                wrapAction(client, mergerequests.CancelAutoMerge),
-		"approval_state":                   wrapAction(client, mrapprovals.State),
-		"approval_rules":                   wrapAction(client, mrapprovals.Rules),
-		"approval_config":                  wrapAction(client, mrapprovals.Config),
-		"approval_reset":                   wrapVoidAction(client, mrapprovals.Reset),
-		"approval_rule_create":             wrapAction(client, mrapprovals.CreateRule),
-		"approval_rule_update":             wrapAction(client, mrapprovals.UpdateRule),
-		"approval_rule_delete":             wrapVoidAction(client, mrapprovals.DeleteRule),
-		"approval_settings_group_get":      wrapAction(client, mrapprovalsettings.GetGroupSettings),
-		"approval_settings_group_update":   wrapAction(client, mrapprovalsettings.UpdateGroupSettings),
-		"approval_settings_project_get":    wrapAction(client, mrapprovalsettings.GetProjectSettings),
-		"approval_settings_project_update": wrapAction(client, mrapprovalsettings.UpdateProjectSettings),
-		"subscribe":                        wrapAction(client, mergerequests.Subscribe),
-		"unsubscribe":                      wrapAction(client, mergerequests.Unsubscribe),
-		"time_estimate_set":                wrapAction(client, mergerequests.SetTimeEstimate),
-		"time_estimate_reset":              wrapAction(client, mergerequests.ResetTimeEstimate),
-		"spent_time_add":                   wrapAction(client, mergerequests.AddSpentTime),
-		"spent_time_reset":                 wrapAction(client, mergerequests.ResetSpentTime),
-		"time_stats":                       wrapAction(client, mergerequests.GetTimeStats),
-		"context_commits_list":             wrapAction(client, mrcontextcommits.List),
-		"context_commits_create":           wrapAction(client, mrcontextcommits.Create),
-		"context_commits_delete":           wrapVoidAction(client, mrcontextcommits.Delete),
-		"emoji_mr_list":                    wrapAction(client, awardemoji.ListMRAwardEmoji),
-		"emoji_mr_get":                     wrapAction(client, awardemoji.GetMRAwardEmoji),
-		"emoji_mr_create":                  wrapAction(client, awardemoji.CreateMRAwardEmoji),
-		"emoji_mr_delete":                  wrapVoidAction(client, awardemoji.DeleteMRAwardEmoji),
-		"emoji_mr_note_list":               wrapAction(client, awardemoji.ListMRNoteAwardEmoji),
-		"emoji_mr_note_get":                wrapAction(client, awardemoji.GetMRNoteAwardEmoji),
-		"emoji_mr_note_create":             wrapAction(client, awardemoji.CreateMRNoteAwardEmoji),
-		"emoji_mr_note_delete":             wrapVoidAction(client, awardemoji.DeleteMRNoteAwardEmoji),
-		"event_mr_label_list":              wrapAction(client, resourceevents.ListMRLabelEvents),
-		"event_mr_label_get":               wrapAction(client, resourceevents.GetMRLabelEvent),
-		"event_mr_milestone_list":          wrapAction(client, resourceevents.ListMRMilestoneEvents),
-		"event_mr_milestone_get":           wrapAction(client, resourceevents.GetMRMilestoneEvent),
-		"event_mr_state_list":              wrapAction(client, resourceevents.ListMRStateEvents),
-		"event_mr_state_get":               wrapAction(client, resourceevents.GetMRStateEvent),
+	routes := actionMap{
+		"create":                           routeAction(client, mergerequests.Create),
+		"get":                              routeAction(client, mergerequests.Get),
+		"list":                             routeAction(client, mergerequests.List),
+		"list_global":                      routeAction(client, mergerequests.ListGlobal),
+		"list_group":                       routeAction(client, mergerequests.ListGroup),
+		"update":                           routeAction(client, mergerequests.Update),
+		"merge":                            destructiveAction(client, mergerequests.Merge),
+		"approve":                          routeAction(client, mergerequests.Approve),
+		"unapprove":                        destructiveVoidAction(client, mergerequests.Unapprove),
+		"commits":                          routeAction(client, mergerequests.Commits),
+		"pipelines":                        routeAction(client, mergerequests.Pipelines),
+		"delete":                           destructiveVoidAction(client, mergerequests.Delete),
+		"rebase":                           routeAction(client, mergerequests.Rebase),
+		"participants":                     routeAction(client, mergerequests.Participants),
+		"reviewers":                        routeAction(client, mergerequests.Reviewers),
+		"create_pipeline":                  routeAction(client, mergerequests.CreatePipeline),
+		"issues_closed":                    routeAction(client, mergerequests.IssuesClosed),
+		"cancel_auto_merge":                routeAction(client, mergerequests.CancelAutoMerge),
+		"approval_state":                   routeAction(client, mrapprovals.State),
+		"approval_rules":                   routeAction(client, mrapprovals.Rules),
+		"approval_config":                  routeAction(client, mrapprovals.Config),
+		"approval_reset":                   destructiveVoidAction(client, mrapprovals.Reset),
+		"approval_rule_create":             routeAction(client, mrapprovals.CreateRule),
+		"approval_rule_update":             routeAction(client, mrapprovals.UpdateRule),
+		"approval_rule_delete":             destructiveVoidAction(client, mrapprovals.DeleteRule),
+		"approval_settings_group_get":      routeAction(client, mrapprovalsettings.GetGroupSettings),
+		"approval_settings_group_update":   routeAction(client, mrapprovalsettings.UpdateGroupSettings),
+		"approval_settings_project_get":    routeAction(client, mrapprovalsettings.GetProjectSettings),
+		"approval_settings_project_update": routeAction(client, mrapprovalsettings.UpdateProjectSettings),
+		"subscribe":                        routeAction(client, mergerequests.Subscribe),
+		"unsubscribe":                      routeAction(client, mergerequests.Unsubscribe),
+		"time_estimate_set":                routeAction(client, mergerequests.SetTimeEstimate),
+		"time_estimate_reset":              routeAction(client, mergerequests.ResetTimeEstimate),
+		"spent_time_add":                   routeAction(client, mergerequests.AddSpentTime),
+		"spent_time_reset":                 routeAction(client, mergerequests.ResetSpentTime),
+		"time_stats":                       routeAction(client, mergerequests.GetTimeStats),
+		"context_commits_list":             routeAction(client, mrcontextcommits.List),
+		"context_commits_create":           routeAction(client, mrcontextcommits.Create),
+		"context_commits_delete":           destructiveVoidAction(client, mrcontextcommits.Delete),
+		"emoji_mr_list":                    routeAction(client, awardemoji.ListMRAwardEmoji),
+		"emoji_mr_get":                     routeAction(client, awardemoji.GetMRAwardEmoji),
+		"emoji_mr_create":                  routeAction(client, awardemoji.CreateMRAwardEmoji),
+		"emoji_mr_delete":                  destructiveVoidAction(client, awardemoji.DeleteMRAwardEmoji),
+		"emoji_mr_note_list":               routeAction(client, awardemoji.ListMRNoteAwardEmoji),
+		"emoji_mr_note_get":                routeAction(client, awardemoji.GetMRNoteAwardEmoji),
+		"emoji_mr_note_create":             routeAction(client, awardemoji.CreateMRNoteAwardEmoji),
+		"emoji_mr_note_delete":             destructiveVoidAction(client, awardemoji.DeleteMRNoteAwardEmoji),
+		"event_mr_label_list":              routeAction(client, resourceevents.ListMRLabelEvents),
+		"event_mr_label_get":               routeAction(client, resourceevents.GetMRLabelEvent),
+		"event_mr_milestone_list":          routeAction(client, resourceevents.ListMRMilestoneEvents),
+		"event_mr_milestone_get":           routeAction(client, resourceevents.GetMRMilestoneEvent),
+		"event_mr_state_list":              routeAction(client, resourceevents.ListMRStateEvents),
+		"event_mr_state_get":               routeAction(client, resourceevents.GetMRStateEvent),
 	}
 
 	addMetaTool(server, "gitlab_merge_request", `Create, list, get, update, merge, approve, rebase, and delete GitLab merge requests. Also manages MR approvals, approval rules, approval settings, time tracking, subscriptions, context commits, award emoji, and resource events.
@@ -803,7 +803,7 @@ Actions:
 
 Use this tool for MR lifecycle: create, update, merge, approve, rebase, delete, approvals, time tracking, and resource events.
 Do NOT use for reviewing/commenting on MRs (use gitlab_mr_review).
-See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch`, routes, metaAnnotations, toolutil.IconMR)
+See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch`, routes, toolutil.IconMR)
 }
 
 // registerMRReviewMeta registers the gitlab_mr_review meta-tool with actions:
@@ -814,29 +814,29 @@ See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_p
 // draft_note_delete, draft_note_publish, draft_note_publish_all,
 // diff_versions_list, diff_version_get.
 func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"note_create":            wrapAction(client, mrnotes.Create),
-		"note_list":              wrapAction(client, mrnotes.List),
-		"note_get":               wrapAction(client, mrnotes.GetNote),
-		"note_update":            wrapAction(client, mrnotes.Update),
-		"note_delete":            wrapVoidAction(client, mrnotes.Delete),
-		"discussion_create":      wrapAction(client, mrdiscussions.Create),
-		"discussion_list":        wrapAction(client, mrdiscussions.List),
-		"discussion_get":         wrapAction(client, mrdiscussions.Get),
-		"discussion_reply":       wrapAction(client, mrdiscussions.Reply),
-		"discussion_resolve":     wrapAction(client, mrdiscussions.Resolve),
-		"discussion_note_update": wrapAction(client, mrdiscussions.UpdateNote),
-		"discussion_note_delete": wrapVoidAction(client, mrdiscussions.DeleteNote),
-		"changes_get":            wrapAction(client, mrchanges.Get),
-		"draft_note_list":        wrapAction(client, mrdraftnotes.List),
-		"draft_note_get":         wrapAction(client, mrdraftnotes.Get),
-		"draft_note_create":      wrapAction(client, mrdraftnotes.Create),
-		"draft_note_update":      wrapAction(client, mrdraftnotes.Update),
-		"draft_note_delete":      wrapVoidAction(client, mrdraftnotes.Delete),
-		"draft_note_publish":     wrapVoidAction(client, mrdraftnotes.Publish),
-		"draft_note_publish_all": wrapVoidAction(client, mrdraftnotes.PublishAll),
-		"diff_versions_list":     wrapAction(client, mrchanges.ListDiffVersions),
-		"diff_version_get":       wrapAction(client, mrchanges.GetDiffVersion),
+	routes := actionMap{
+		"note_create":            routeAction(client, mrnotes.Create),
+		"note_list":              routeAction(client, mrnotes.List),
+		"note_get":               routeAction(client, mrnotes.GetNote),
+		"note_update":            routeAction(client, mrnotes.Update),
+		"note_delete":            destructiveVoidAction(client, mrnotes.Delete),
+		"discussion_create":      routeAction(client, mrdiscussions.Create),
+		"discussion_list":        routeAction(client, mrdiscussions.List),
+		"discussion_get":         routeAction(client, mrdiscussions.Get),
+		"discussion_reply":       routeAction(client, mrdiscussions.Reply),
+		"discussion_resolve":     routeAction(client, mrdiscussions.Resolve),
+		"discussion_note_update": routeAction(client, mrdiscussions.UpdateNote),
+		"discussion_note_delete": destructiveVoidAction(client, mrdiscussions.DeleteNote),
+		"changes_get":            routeAction(client, mrchanges.Get),
+		"draft_note_list":        routeAction(client, mrdraftnotes.List),
+		"draft_note_get":         routeAction(client, mrdraftnotes.Get),
+		"draft_note_create":      routeAction(client, mrdraftnotes.Create),
+		"draft_note_update":      routeAction(client, mrdraftnotes.Update),
+		"draft_note_delete":      destructiveVoidAction(client, mrdraftnotes.Delete),
+		"draft_note_publish":     routeVoidAction(client, mrdraftnotes.Publish),
+		"draft_note_publish_all": routeVoidAction(client, mrdraftnotes.PublishAll),
+		"diff_versions_list":     routeAction(client, mrchanges.ListDiffVersions),
+		"diff_version_get":       routeAction(client, mrchanges.GetDiffVersion),
 	}
 
 	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes (comments), threaded discussions, code changes/diffs, draft notes, and diff versions.
@@ -871,54 +871,54 @@ Actions:
 
 Use this tool for code review workflows: notes, discussions, code diffs, and draft notes (batch review).
 Do NOT use for MR lifecycle operations like create, merge, or approve (use gitlab_merge_request).
-See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline`, routes, metaAnnotations, toolutil.IconDiscussion)
+See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline`, routes, toolutil.IconDiscussion)
 }
 
 // registerRepositoryMeta registers the gitlab_repository meta-tool with actions:
 // tree, compare, contributors, merge_base, blob, raw_blob, archive, changelog,
 // commit operations, file operations, update_submodule, and markdown_render.
 func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"tree":                          wrapAction(client, repository.Tree),
-		"compare":                       wrapAction(client, repository.Compare),
-		"contributors":                  wrapAction(client, repository.Contributors),
-		"merge_base":                    wrapAction(client, repository.MergeBase),
-		"blob":                          wrapAction(client, repository.Blob),
-		"raw_blob":                      wrapAction(client, repository.RawBlobContent),
-		"archive":                       wrapAction(client, repository.Archive),
-		"changelog_add":                 wrapAction(client, repository.AddChangelog),
-		"changelog_generate":            wrapAction(client, repository.GenerateChangelogData),
-		"commit_create":                 wrapAction(client, commits.Create),
-		"commit_list":                   wrapAction(client, commits.List),
-		"commit_get":                    wrapAction(client, commits.Get),
-		"commit_diff":                   wrapAction(client, commits.Diff),
-		"commit_refs":                   wrapAction(client, commits.GetRefs),
-		"commit_comments":               wrapAction(client, commits.GetComments),
-		"commit_comment_create":         wrapAction(client, commits.PostComment),
-		"commit_statuses":               wrapAction(client, commits.GetStatuses),
-		"commit_status_set":             wrapAction(client, commits.SetStatus),
-		"commit_merge_requests":         wrapAction(client, commits.ListMRsByCommit),
-		"commit_cherry_pick":            wrapAction(client, commits.CherryPick),
-		"commit_revert":                 wrapAction(client, commits.Revert),
-		"commit_signature":              wrapAction(client, commits.GetGPGSignature),
-		"file_get":                      wrapAction(client, files.Get),
-		"file_create":                   wrapAction(client, files.Create),
-		"file_update":                   wrapAction(client, files.Update),
-		"file_delete":                   wrapVoidAction(client, files.Delete),
-		"file_blame":                    wrapAction(client, files.Blame),
-		"file_metadata":                 wrapAction(client, files.GetMetaData),
-		"file_raw":                      wrapAction(client, files.GetRaw),
-		"update_submodule":              wrapAction(client, repositorysubmodules.Update),
-		"list_submodules":               wrapAction(client, repositorysubmodules.List),
-		"read_submodule_file":           wrapAction(client, repositorysubmodules.Read),
-		"markdown_render":               wrapAction(client, markdown.Render),
-		"commit_discussion_list":        wrapAction(client, commitdiscussions.List),
-		"commit_discussion_get":         wrapAction(client, commitdiscussions.Get),
-		"commit_discussion_create":      wrapAction(client, commitdiscussions.Create),
-		"commit_discussion_add_note":    wrapAction(client, commitdiscussions.AddNote),
-		"commit_discussion_update_note": wrapAction(client, commitdiscussions.UpdateNote),
-		"commit_discussion_delete_note": wrapVoidAction(client, commitdiscussions.DeleteNote),
-		"file_history":                  wrapAction(client, commits.List),
+	routes := actionMap{
+		"tree":                          routeAction(client, repository.Tree),
+		"compare":                       routeAction(client, repository.Compare),
+		"contributors":                  routeAction(client, repository.Contributors),
+		"merge_base":                    routeAction(client, repository.MergeBase),
+		"blob":                          routeAction(client, repository.Blob),
+		"raw_blob":                      routeAction(client, repository.RawBlobContent),
+		"archive":                       routeAction(client, repository.Archive),
+		"changelog_add":                 routeAction(client, repository.AddChangelog),
+		"changelog_generate":            routeAction(client, repository.GenerateChangelogData),
+		"commit_create":                 routeAction(client, commits.Create),
+		"commit_list":                   routeAction(client, commits.List),
+		"commit_get":                    routeAction(client, commits.Get),
+		"commit_diff":                   routeAction(client, commits.Diff),
+		"commit_refs":                   routeAction(client, commits.GetRefs),
+		"commit_comments":               routeAction(client, commits.GetComments),
+		"commit_comment_create":         routeAction(client, commits.PostComment),
+		"commit_statuses":               routeAction(client, commits.GetStatuses),
+		"commit_status_set":             routeAction(client, commits.SetStatus),
+		"commit_merge_requests":         routeAction(client, commits.ListMRsByCommit),
+		"commit_cherry_pick":            routeAction(client, commits.CherryPick),
+		"commit_revert":                 routeAction(client, commits.Revert),
+		"commit_signature":              routeAction(client, commits.GetGPGSignature),
+		"file_get":                      routeAction(client, files.Get),
+		"file_create":                   routeAction(client, files.Create),
+		"file_update":                   routeAction(client, files.Update),
+		"file_delete":                   destructiveVoidAction(client, files.Delete),
+		"file_blame":                    routeAction(client, files.Blame),
+		"file_metadata":                 routeAction(client, files.GetMetaData),
+		"file_raw":                      routeAction(client, files.GetRaw),
+		"update_submodule":              routeAction(client, repositorysubmodules.Update),
+		"list_submodules":               routeAction(client, repositorysubmodules.List),
+		"read_submodule_file":           routeAction(client, repositorysubmodules.Read),
+		"markdown_render":               routeAction(client, markdown.Render),
+		"commit_discussion_list":        routeAction(client, commitdiscussions.List),
+		"commit_discussion_get":         routeAction(client, commitdiscussions.Get),
+		"commit_discussion_create":      routeAction(client, commitdiscussions.Create),
+		"commit_discussion_add_note":    routeAction(client, commitdiscussions.AddNote),
+		"commit_discussion_update_note": routeAction(client, commitdiscussions.UpdateNote),
+		"commit_discussion_delete_note": destructiveVoidAction(client, commitdiscussions.DeleteNote),
+		"file_history":                  routeAction(client, commits.List),
 	}
 
 	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions.
@@ -969,7 +969,7 @@ Actions:
 
 Use this tool for repository content: file tree, read/write files, commits, diffs, blame, compare branches, and submodules.
 Do NOT use for branch CRUD (use gitlab_branch) or tag CRUD (use gitlab_tag).
-See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request`, routes, metaAnnotations, toolutil.IconFile)
+See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request`, routes, toolutil.IconFile)
 }
 
 // registerGroupMeta registers the gitlab_group meta-tool with actions:
@@ -991,142 +991,142 @@ See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request`, rout
 // service_account_delete, service_account_pat_list, service_account_pat_create,
 // service_account_pat_revoke.
 func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
-	routes := map[string]actionFunc{
-		"list":                           wrapAction(client, groups.List),
-		"get":                            wrapAction(client, groups.Get),
-		"create":                         wrapAction(client, groups.Create),
-		"update":                         wrapAction(client, groups.Update),
-		"delete":                         wrapVoidAction(client, groups.Delete),
-		"restore":                        wrapAction(client, groups.Restore),
-		"archive":                        wrapVoidAction(client, groups.Archive),
-		"unarchive":                      wrapVoidAction(client, groups.Unarchive),
-		"search":                         wrapAction(client, groups.Search),
-		"transfer_project":               wrapAction(client, groups.TransferProject),
-		"projects":                       wrapAction(client, groups.ListProjects),
-		"members":                        wrapAction(client, groups.MembersList),
-		"subgroups":                      wrapAction(client, groups.SubgroupsList),
-		"issues":                         wrapAction(client, issues.ListGroup),
-		"hook_list":                      wrapAction(client, groups.ListHooks),
-		"hook_get":                       wrapAction(client, groups.GetHook),
-		"hook_add":                       wrapAction(client, groups.AddHook),
-		"hook_edit":                      wrapAction(client, groups.EditHook),
-		"hook_delete":                    wrapVoidAction(client, groups.DeleteHook),
-		"badge_list":                     wrapAction(client, badges.ListGroup),
-		"badge_get":                      wrapAction(client, badges.GetGroup),
-		"badge_add":                      wrapAction(client, badges.AddGroup),
-		"badge_edit":                     wrapAction(client, badges.EditGroup),
-		"badge_delete":                   wrapVoidAction(client, badges.DeleteGroup),
-		"badge_preview":                  wrapAction(client, badges.PreviewGroup),
-		"group_member_get":               wrapAction(client, groupmembers.GetMember),
-		"group_member_get_inherited":     wrapAction(client, groupmembers.GetInheritedMember),
-		"group_member_add":               wrapAction(client, groupmembers.AddMember),
-		"group_member_edit":              wrapAction(client, groupmembers.EditMember),
-		"group_member_remove":            wrapVoidAction(client, groupmembers.RemoveMember),
-		"group_member_share":             wrapAction(client, groupmembers.ShareGroup),
-		"group_member_unshare":           wrapVoidAction(client, groupmembers.UnshareGroup),
-		"group_label_list":               wrapAction(client, grouplabels.List),
-		"group_label_get":                wrapAction(client, grouplabels.Get),
-		"group_label_create":             wrapAction(client, grouplabels.Create),
-		"group_label_update":             wrapAction(client, grouplabels.Update),
-		"group_label_delete":             wrapVoidAction(client, grouplabels.Delete),
-		"group_label_subscribe":          wrapAction(client, grouplabels.Subscribe),
-		"group_label_unsubscribe":        wrapVoidAction(client, grouplabels.Unsubscribe),
-		"group_milestone_list":           wrapAction(client, groupmilestones.List),
-		"group_milestone_get":            wrapAction(client, groupmilestones.Get),
-		"group_milestone_create":         wrapAction(client, groupmilestones.Create),
-		"group_milestone_update":         wrapAction(client, groupmilestones.Update),
-		"group_milestone_delete":         wrapVoidAction(client, groupmilestones.Delete),
-		"group_milestone_issues":         wrapAction(client, groupmilestones.GetIssues),
-		"group_milestone_merge_requests": wrapAction(client, groupmilestones.GetMergeRequests),
-		"group_milestone_burndown":       wrapAction(client, groupmilestones.GetBurndownChartEvents),
-		"group_board_list":               wrapAction(client, groupboards.ListGroupBoards),
-		"group_board_get":                wrapAction(client, groupboards.GetGroupBoard),
-		"group_board_create":             wrapAction(client, groupboards.CreateGroupBoard),
-		"group_board_update":             wrapAction(client, groupboards.UpdateGroupBoard),
-		"group_board_delete":             wrapVoidAction(client, groupboards.DeleteGroupBoard),
-		"group_board_list_lists":         wrapAction(client, groupboards.ListGroupBoardLists),
-		"group_board_get_list":           wrapAction(client, groupboards.GetGroupBoardList),
-		"group_board_create_list":        wrapAction(client, groupboards.CreateGroupBoardList),
-		"group_board_update_list":        wrapAction(client, groupboards.UpdateGroupBoardList),
-		"group_board_delete_list":        wrapVoidAction(client, groupboards.DeleteGroupBoardList),
-		"group_upload_list":              wrapAction(client, groupmarkdownuploads.List),
-		"group_upload_delete_by_id":      wrapVoidAction(client, groupmarkdownuploads.DeleteByID),
-		"group_upload_delete_by_secret":  wrapVoidAction(client, groupmarkdownuploads.DeleteBySecretAndFilename),
-		"group_relations_schedule":       wrapVoidAction(client, grouprelationsexport.ScheduleExport),
-		"group_relations_list_status":    wrapAction(client, grouprelationsexport.ListExportStatus),
-		"group_export_schedule":          wrapAction(client, groupimportexport.ScheduleExport),
-		"group_export_download":          wrapAction(client, groupimportexport.ExportDownload),
-		"group_import_file":              wrapAction(client, groupimportexport.ImportFile),
+	routes := actionMap{
+		"list":                           routeAction(client, groups.List),
+		"get":                            routeAction(client, groups.Get),
+		"create":                         routeAction(client, groups.Create),
+		"update":                         routeAction(client, groups.Update),
+		"delete":                         destructiveVoidAction(client, groups.Delete),
+		"restore":                        routeAction(client, groups.Restore),
+		"archive":                        routeVoidAction(client, groups.Archive),
+		"unarchive":                      routeVoidAction(client, groups.Unarchive),
+		"search":                         routeAction(client, groups.Search),
+		"transfer_project":               routeAction(client, groups.TransferProject),
+		"projects":                       routeAction(client, groups.ListProjects),
+		"members":                        routeAction(client, groups.MembersList),
+		"subgroups":                      routeAction(client, groups.SubgroupsList),
+		"issues":                         routeAction(client, issues.ListGroup),
+		"hook_list":                      routeAction(client, groups.ListHooks),
+		"hook_get":                       routeAction(client, groups.GetHook),
+		"hook_add":                       routeAction(client, groups.AddHook),
+		"hook_edit":                      routeAction(client, groups.EditHook),
+		"hook_delete":                    destructiveVoidAction(client, groups.DeleteHook),
+		"badge_list":                     routeAction(client, badges.ListGroup),
+		"badge_get":                      routeAction(client, badges.GetGroup),
+		"badge_add":                      routeAction(client, badges.AddGroup),
+		"badge_edit":                     routeAction(client, badges.EditGroup),
+		"badge_delete":                   destructiveVoidAction(client, badges.DeleteGroup),
+		"badge_preview":                  routeAction(client, badges.PreviewGroup),
+		"group_member_get":               routeAction(client, groupmembers.GetMember),
+		"group_member_get_inherited":     routeAction(client, groupmembers.GetInheritedMember),
+		"group_member_add":               routeAction(client, groupmembers.AddMember),
+		"group_member_edit":              routeAction(client, groupmembers.EditMember),
+		"group_member_remove":            destructiveVoidAction(client, groupmembers.RemoveMember),
+		"group_member_share":             routeAction(client, groupmembers.ShareGroup),
+		"group_member_unshare":           routeVoidAction(client, groupmembers.UnshareGroup),
+		"group_label_list":               routeAction(client, grouplabels.List),
+		"group_label_get":                routeAction(client, grouplabels.Get),
+		"group_label_create":             routeAction(client, grouplabels.Create),
+		"group_label_update":             routeAction(client, grouplabels.Update),
+		"group_label_delete":             destructiveVoidAction(client, grouplabels.Delete),
+		"group_label_subscribe":          routeAction(client, grouplabels.Subscribe),
+		"group_label_unsubscribe":        routeVoidAction(client, grouplabels.Unsubscribe),
+		"group_milestone_list":           routeAction(client, groupmilestones.List),
+		"group_milestone_get":            routeAction(client, groupmilestones.Get),
+		"group_milestone_create":         routeAction(client, groupmilestones.Create),
+		"group_milestone_update":         routeAction(client, groupmilestones.Update),
+		"group_milestone_delete":         destructiveVoidAction(client, groupmilestones.Delete),
+		"group_milestone_issues":         routeAction(client, groupmilestones.GetIssues),
+		"group_milestone_merge_requests": routeAction(client, groupmilestones.GetMergeRequests),
+		"group_milestone_burndown":       routeAction(client, groupmilestones.GetBurndownChartEvents),
+		"group_board_list":               routeAction(client, groupboards.ListGroupBoards),
+		"group_board_get":                routeAction(client, groupboards.GetGroupBoard),
+		"group_board_create":             routeAction(client, groupboards.CreateGroupBoard),
+		"group_board_update":             routeAction(client, groupboards.UpdateGroupBoard),
+		"group_board_delete":             destructiveVoidAction(client, groupboards.DeleteGroupBoard),
+		"group_board_list_lists":         routeAction(client, groupboards.ListGroupBoardLists),
+		"group_board_get_list":           routeAction(client, groupboards.GetGroupBoardList),
+		"group_board_create_list":        routeAction(client, groupboards.CreateGroupBoardList),
+		"group_board_update_list":        routeAction(client, groupboards.UpdateGroupBoardList),
+		"group_board_delete_list":        destructiveVoidAction(client, groupboards.DeleteGroupBoardList),
+		"group_upload_list":              routeAction(client, groupmarkdownuploads.List),
+		"group_upload_delete_by_id":      destructiveVoidAction(client, groupmarkdownuploads.DeleteByID),
+		"group_upload_delete_by_secret":  destructiveVoidAction(client, groupmarkdownuploads.DeleteBySecretAndFilename),
+		"group_relations_schedule":       routeVoidAction(client, grouprelationsexport.ScheduleExport),
+		"group_relations_list_status":    routeAction(client, grouprelationsexport.ListExportStatus),
+		"group_export_schedule":          routeAction(client, groupimportexport.ScheduleExport),
+		"group_export_download":          routeAction(client, groupimportexport.ExportDownload),
+		"group_import_file":              routeAction(client, groupimportexport.ImportFile),
 		// Group releases (Free tier — verified via GitLab docs and E2E on CE)
-		"release_list": wrapAction(client, groupreleases.List),
+		"release_list": routeAction(client, groupreleases.List),
 	}
 
 	if enterprise {
 		// Group service accounts (EE-only — returns 404 on CE)
-		routes["service_account_list"] = wrapAction(client, groupserviceaccounts.List)
-		routes["service_account_create"] = wrapAction(client, groupserviceaccounts.Create)
-		routes["service_account_update"] = wrapAction(client, groupserviceaccounts.Update)
-		routes["service_account_delete"] = wrapVoidAction(client, groupserviceaccounts.Delete)
-		routes["service_account_pat_list"] = wrapAction(client, groupserviceaccounts.ListPATs)
-		routes["service_account_pat_create"] = wrapAction(client, groupserviceaccounts.CreatePAT)
-		routes["service_account_pat_revoke"] = wrapVoidAction(client, groupserviceaccounts.RevokePAT)
-		routes["epic_discussion_list"] = wrapAction(client, epicdiscussions.List)
-		routes["epic_discussion_get"] = wrapAction(client, epicdiscussions.Get)
-		routes["epic_discussion_create"] = wrapAction(client, epicdiscussions.Create)
-		routes["epic_discussion_add_note"] = wrapAction(client, epicdiscussions.AddNote)
-		routes["epic_discussion_update_note"] = wrapAction(client, epicdiscussions.UpdateNote)
-		routes["epic_discussion_delete_note"] = wrapVoidAction(client, epicdiscussions.DeleteNote)
-		routes["epic_list"] = wrapAction(client, epics.List)
-		routes["epic_get"] = wrapAction(client, epics.Get)
-		routes["epic_get_links"] = wrapAction(client, epics.GetLinks)
-		routes["epic_create"] = wrapAction(client, epics.Create)
-		routes["epic_update"] = wrapAction(client, epics.Update)
-		routes["epic_delete"] = wrapVoidAction(client, epics.Delete)
-		routes["epic_issue_list"] = wrapAction(client, epicissues.List)
-		routes["epic_issue_assign"] = wrapAction(client, epicissues.Assign)
-		routes["epic_issue_remove"] = wrapAction(client, epicissues.Remove)
-		routes["epic_issue_update"] = wrapAction(client, epicissues.UpdateOrder)
-		routes["epic_note_list"] = wrapAction(client, epicnotes.List)
-		routes["epic_note_get"] = wrapAction(client, epicnotes.Get)
-		routes["epic_note_create"] = wrapAction(client, epicnotes.Create)
-		routes["epic_note_update"] = wrapAction(client, epicnotes.Update)
-		routes["epic_note_delete"] = wrapVoidAction(client, epicnotes.Delete)
-		routes["epic_board_list"] = wrapAction(client, groupepicboards.List)
-		routes["epic_board_get"] = wrapAction(client, groupepicboards.Get)
-		routes["wiki_list"] = wrapAction(client, groupwikis.List)
-		routes["wiki_get"] = wrapAction(client, groupwikis.Get)
-		routes["wiki_create"] = wrapAction(client, groupwikis.Create)
-		routes["wiki_edit"] = wrapAction(client, groupwikis.Edit)
-		routes["wiki_delete"] = wrapVoidAction(client, groupwikis.Delete)
-		routes["protected_branch_list"] = wrapAction(client, groupprotectedbranches.List)
-		routes["protected_branch_get"] = wrapAction(client, groupprotectedbranches.Get)
-		routes["protected_branch_protect"] = wrapAction(client, groupprotectedbranches.Protect)
-		routes["protected_branch_update"] = wrapAction(client, groupprotectedbranches.Update)
-		routes["protected_branch_unprotect"] = wrapVoidAction(client, groupprotectedbranches.Unprotect)
-		routes["protected_env_list"] = wrapAction(client, groupprotectedenvs.List)
-		routes["protected_env_get"] = wrapAction(client, groupprotectedenvs.Get)
-		routes["protected_env_protect"] = wrapAction(client, groupprotectedenvs.Protect)
-		routes["protected_env_update"] = wrapAction(client, groupprotectedenvs.Update)
-		routes["protected_env_unprotect"] = wrapVoidAction(client, groupprotectedenvs.Unprotect)
-		routes["ldap_link_list"] = wrapAction(client, groupldap.List)
-		routes["ldap_link_add"] = wrapAction(client, groupldap.Add)
-		routes["ldap_link_delete"] = wrapVoidAction(client, groupldap.DeleteWithCNOrFilter)
-		routes["ldap_link_delete_for_provider"] = wrapVoidAction(client, groupldap.DeleteForProvider)
-		routes["saml_link_list"] = wrapAction(client, groupsaml.List)
-		routes["saml_link_get"] = wrapAction(client, groupsaml.Get)
-		routes["saml_link_add"] = wrapAction(client, groupsaml.Add)
-		routes["saml_link_delete"] = wrapVoidAction(client, groupsaml.Delete)
-		routes["analytics_issues_count"] = wrapAction(client, groupanalytics.GetIssuesCount)
-		routes["analytics_mr_count"] = wrapAction(client, groupanalytics.GetMRCount)
-		routes["analytics_members_count"] = wrapAction(client, groupanalytics.GetMembersCount)
-		routes["credential_list_pats"] = wrapAction(client, groupcredentials.ListPATs)
-		routes["credential_list_ssh_keys"] = wrapAction(client, groupcredentials.ListSSHKeys)
-		routes["credential_revoke_pat"] = wrapVoidAction(client, groupcredentials.RevokePAT)
-		routes["credential_delete_ssh_key"] = wrapVoidAction(client, groupcredentials.DeleteSSHKey)
-		routes["ssh_cert_list"] = wrapAction(client, groupsshcerts.List)
-		routes["ssh_cert_create"] = wrapAction(client, groupsshcerts.Create)
-		routes["ssh_cert_delete"] = wrapVoidAction(client, groupsshcerts.Delete)
-		routes["security_settings_update"] = wrapAction(client, securitysettings.UpdateGroup)
+		routes["service_account_list"] = routeAction(client, groupserviceaccounts.List)
+		routes["service_account_create"] = routeAction(client, groupserviceaccounts.Create)
+		routes["service_account_update"] = routeAction(client, groupserviceaccounts.Update)
+		routes["service_account_delete"] = destructiveVoidAction(client, groupserviceaccounts.Delete)
+		routes["service_account_pat_list"] = routeAction(client, groupserviceaccounts.ListPATs)
+		routes["service_account_pat_create"] = routeAction(client, groupserviceaccounts.CreatePAT)
+		routes["service_account_pat_revoke"] = destructiveVoidAction(client, groupserviceaccounts.RevokePAT)
+		routes["epic_discussion_list"] = routeAction(client, epicdiscussions.List)
+		routes["epic_discussion_get"] = routeAction(client, epicdiscussions.Get)
+		routes["epic_discussion_create"] = routeAction(client, epicdiscussions.Create)
+		routes["epic_discussion_add_note"] = routeAction(client, epicdiscussions.AddNote)
+		routes["epic_discussion_update_note"] = routeAction(client, epicdiscussions.UpdateNote)
+		routes["epic_discussion_delete_note"] = destructiveVoidAction(client, epicdiscussions.DeleteNote)
+		routes["epic_list"] = routeAction(client, epics.List)
+		routes["epic_get"] = routeAction(client, epics.Get)
+		routes["epic_get_links"] = routeAction(client, epics.GetLinks)
+		routes["epic_create"] = routeAction(client, epics.Create)
+		routes["epic_update"] = routeAction(client, epics.Update)
+		routes["epic_delete"] = destructiveVoidAction(client, epics.Delete)
+		routes["epic_issue_list"] = routeAction(client, epicissues.List)
+		routes["epic_issue_assign"] = routeAction(client, epicissues.Assign)
+		routes["epic_issue_remove"] = destructiveAction(client, epicissues.Remove)
+		routes["epic_issue_update"] = routeAction(client, epicissues.UpdateOrder)
+		routes["epic_note_list"] = routeAction(client, epicnotes.List)
+		routes["epic_note_get"] = routeAction(client, epicnotes.Get)
+		routes["epic_note_create"] = routeAction(client, epicnotes.Create)
+		routes["epic_note_update"] = routeAction(client, epicnotes.Update)
+		routes["epic_note_delete"] = destructiveVoidAction(client, epicnotes.Delete)
+		routes["epic_board_list"] = routeAction(client, groupepicboards.List)
+		routes["epic_board_get"] = routeAction(client, groupepicboards.Get)
+		routes["wiki_list"] = routeAction(client, groupwikis.List)
+		routes["wiki_get"] = routeAction(client, groupwikis.Get)
+		routes["wiki_create"] = routeAction(client, groupwikis.Create)
+		routes["wiki_edit"] = routeAction(client, groupwikis.Edit)
+		routes["wiki_delete"] = destructiveVoidAction(client, groupwikis.Delete)
+		routes["protected_branch_list"] = routeAction(client, groupprotectedbranches.List)
+		routes["protected_branch_get"] = routeAction(client, groupprotectedbranches.Get)
+		routes["protected_branch_protect"] = routeAction(client, groupprotectedbranches.Protect)
+		routes["protected_branch_update"] = routeAction(client, groupprotectedbranches.Update)
+		routes["protected_branch_unprotect"] = destructiveVoidAction(client, groupprotectedbranches.Unprotect)
+		routes["protected_env_list"] = routeAction(client, groupprotectedenvs.List)
+		routes["protected_env_get"] = routeAction(client, groupprotectedenvs.Get)
+		routes["protected_env_protect"] = routeAction(client, groupprotectedenvs.Protect)
+		routes["protected_env_update"] = routeAction(client, groupprotectedenvs.Update)
+		routes["protected_env_unprotect"] = destructiveVoidAction(client, groupprotectedenvs.Unprotect)
+		routes["ldap_link_list"] = routeAction(client, groupldap.List)
+		routes["ldap_link_add"] = routeAction(client, groupldap.Add)
+		routes["ldap_link_delete"] = destructiveVoidAction(client, groupldap.DeleteWithCNOrFilter)
+		routes["ldap_link_delete_for_provider"] = destructiveVoidAction(client, groupldap.DeleteForProvider)
+		routes["saml_link_list"] = routeAction(client, groupsaml.List)
+		routes["saml_link_get"] = routeAction(client, groupsaml.Get)
+		routes["saml_link_add"] = routeAction(client, groupsaml.Add)
+		routes["saml_link_delete"] = destructiveVoidAction(client, groupsaml.Delete)
+		routes["analytics_issues_count"] = routeAction(client, groupanalytics.GetIssuesCount)
+		routes["analytics_mr_count"] = routeAction(client, groupanalytics.GetMRCount)
+		routes["analytics_members_count"] = routeAction(client, groupanalytics.GetMembersCount)
+		routes["credential_list_pats"] = routeAction(client, groupcredentials.ListPATs)
+		routes["credential_list_ssh_keys"] = routeAction(client, groupcredentials.ListSSHKeys)
+		routes["credential_revoke_pat"] = destructiveVoidAction(client, groupcredentials.RevokePAT)
+		routes["credential_delete_ssh_key"] = destructiveVoidAction(client, groupcredentials.DeleteSSHKey)
+		routes["ssh_cert_list"] = routeAction(client, groupsshcerts.List)
+		routes["ssh_cert_create"] = routeAction(client, groupsshcerts.Create)
+		routes["ssh_cert_delete"] = destructiveVoidAction(client, groupsshcerts.Delete)
+		routes["security_settings_update"] = routeAction(client, securitysettings.UpdateGroup)
 	}
 
 	desc := `Create, list, get, update, delete, and manage GitLab groups and subgroups. Also manages group members, labels, milestones, webhooks, badges, boards, variables, access tokens, deploy tokens, hooks, notifications, push rules, and transfer projects.
@@ -1294,7 +1294,7 @@ Use this tool for group-level management: subgroups, members, labels, milestones
 See also: gitlab_project, gitlab_user`
 	}
 
-	addMetaTool(server, "gitlab_group", desc, routes, metaAnnotations, toolutil.IconGroup)
+	addMetaTool(server, "gitlab_group", desc, routes, toolutil.IconGroup)
 }
 
 // registerIssueMeta registers the gitlab_issue meta-tool with actions:
@@ -1302,73 +1302,73 @@ See also: gitlab_project, gitlab_user`
 // note_update, note_delete, list_group, link_list, link_get, link_create, link_delete,
 // work_item_get, work_item_list, work_item_create, work_item_update, work_item_delete.
 func registerIssueMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
-	routes := map[string]actionFunc{
-		"create":                     wrapAction(client, issues.Create),
-		"get":                        wrapAction(client, issues.Get),
-		"get_by_id":                  wrapAction(client, issues.GetByID),
-		"list":                       wrapAction(client, issues.List),
-		"list_all":                   wrapAction(client, issues.ListAll),
-		"update":                     wrapAction(client, issues.Update),
-		"delete":                     wrapVoidAction(client, issues.Delete),
-		"list_group":                 wrapAction(client, issues.ListGroup),
-		"reorder":                    wrapAction(client, issues.Reorder),
-		"move":                       wrapAction(client, issues.Move),
-		"subscribe":                  wrapAction(client, issues.Subscribe),
-		"unsubscribe":                wrapAction(client, issues.Unsubscribe),
-		"create_todo":                wrapAction(client, issues.CreateTodo),
-		"note_create":                wrapAction(client, issuenotes.Create),
-		"note_list":                  wrapAction(client, issuenotes.List),
-		"note_get":                   wrapAction(client, issuenotes.GetNote),
-		"note_update":                wrapAction(client, issuenotes.Update),
-		"note_delete":                wrapVoidAction(client, issuenotes.Delete),
-		"link_list":                  wrapAction(client, issuelinks.List),
-		"link_get":                   wrapAction(client, issuelinks.Get),
-		"link_create":                wrapAction(client, issuelinks.Create),
-		"link_delete":                wrapVoidAction(client, issuelinks.Delete),
-		"time_estimate_set":          wrapAction(client, issues.SetTimeEstimate),
-		"time_estimate_reset":        wrapAction(client, issues.ResetTimeEstimate),
-		"spent_time_add":             wrapAction(client, issues.AddSpentTime),
-		"spent_time_reset":           wrapAction(client, issues.ResetSpentTime),
-		"time_stats_get":             wrapAction(client, issues.GetTimeStats),
-		"participants":               wrapAction(client, issues.GetParticipants),
-		"mrs_closing":                wrapAction(client, issues.ListMRsClosing),
-		"mrs_related":                wrapAction(client, issues.ListMRsRelated),
-		"work_item_get":              wrapAction(client, workitems.Get),
-		"work_item_list":             wrapAction(client, workitems.List),
-		"work_item_create":           wrapAction(client, workitems.Create),
-		"work_item_update":           wrapAction(client, workitems.Update),
-		"work_item_delete":           wrapVoidAction(client, workitems.Delete),
-		"discussion_list":            wrapAction(client, issuediscussions.List),
-		"discussion_get":             wrapAction(client, issuediscussions.Get),
-		"discussion_create":          wrapAction(client, issuediscussions.Create),
-		"discussion_add_note":        wrapAction(client, issuediscussions.AddNote),
-		"discussion_update_note":     wrapAction(client, issuediscussions.UpdateNote),
-		"discussion_delete_note":     wrapVoidAction(client, issuediscussions.DeleteNote),
-		"statistics_get":             wrapAction(client, issuestatistics.Get),
-		"statistics_get_group":       wrapAction(client, issuestatistics.GetGroup),
-		"statistics_get_project":     wrapAction(client, issuestatistics.GetProject),
-		"emoji_issue_list":           wrapAction(client, awardemoji.ListIssueAwardEmoji),
-		"emoji_issue_get":            wrapAction(client, awardemoji.GetIssueAwardEmoji),
-		"emoji_issue_create":         wrapAction(client, awardemoji.CreateIssueAwardEmoji),
-		"emoji_issue_delete":         wrapVoidAction(client, awardemoji.DeleteIssueAwardEmoji),
-		"emoji_issue_note_list":      wrapAction(client, awardemoji.ListIssueNoteAwardEmoji),
-		"emoji_issue_note_get":       wrapAction(client, awardemoji.GetIssueNoteAwardEmoji),
-		"emoji_issue_note_create":    wrapAction(client, awardemoji.CreateIssueNoteAwardEmoji),
-		"emoji_issue_note_delete":    wrapVoidAction(client, awardemoji.DeleteIssueNoteAwardEmoji),
-		"event_issue_label_list":     wrapAction(client, resourceevents.ListIssueLabelEvents),
-		"event_issue_label_get":      wrapAction(client, resourceevents.GetIssueLabelEvent),
-		"event_issue_milestone_list": wrapAction(client, resourceevents.ListIssueMilestoneEvents),
-		"event_issue_milestone_get":  wrapAction(client, resourceevents.GetIssueMilestoneEvent),
-		"event_issue_state_list":     wrapAction(client, resourceevents.ListIssueStateEvents),
-		"event_issue_state_get":      wrapAction(client, resourceevents.GetIssueStateEvent),
-		"event_issue_iteration_list": wrapAction(client, resourceevents.ListIssueIterationEvents),
-		"event_issue_iteration_get":  wrapAction(client, resourceevents.GetIssueIterationEvent),
-		"event_issue_weight_list":    wrapAction(client, resourceevents.ListIssueWeightEvents),
+	routes := actionMap{
+		"create":                     routeAction(client, issues.Create),
+		"get":                        routeAction(client, issues.Get),
+		"get_by_id":                  routeAction(client, issues.GetByID),
+		"list":                       routeAction(client, issues.List),
+		"list_all":                   routeAction(client, issues.ListAll),
+		"update":                     routeAction(client, issues.Update),
+		"delete":                     destructiveVoidAction(client, issues.Delete),
+		"list_group":                 routeAction(client, issues.ListGroup),
+		"reorder":                    routeAction(client, issues.Reorder),
+		"move":                       routeAction(client, issues.Move),
+		"subscribe":                  routeAction(client, issues.Subscribe),
+		"unsubscribe":                routeAction(client, issues.Unsubscribe),
+		"create_todo":                routeAction(client, issues.CreateTodo),
+		"note_create":                routeAction(client, issuenotes.Create),
+		"note_list":                  routeAction(client, issuenotes.List),
+		"note_get":                   routeAction(client, issuenotes.GetNote),
+		"note_update":                routeAction(client, issuenotes.Update),
+		"note_delete":                destructiveVoidAction(client, issuenotes.Delete),
+		"link_list":                  routeAction(client, issuelinks.List),
+		"link_get":                   routeAction(client, issuelinks.Get),
+		"link_create":                routeAction(client, issuelinks.Create),
+		"link_delete":                destructiveVoidAction(client, issuelinks.Delete),
+		"time_estimate_set":          routeAction(client, issues.SetTimeEstimate),
+		"time_estimate_reset":        routeAction(client, issues.ResetTimeEstimate),
+		"spent_time_add":             routeAction(client, issues.AddSpentTime),
+		"spent_time_reset":           routeAction(client, issues.ResetSpentTime),
+		"time_stats_get":             routeAction(client, issues.GetTimeStats),
+		"participants":               routeAction(client, issues.GetParticipants),
+		"mrs_closing":                routeAction(client, issues.ListMRsClosing),
+		"mrs_related":                routeAction(client, issues.ListMRsRelated),
+		"work_item_get":              routeAction(client, workitems.Get),
+		"work_item_list":             routeAction(client, workitems.List),
+		"work_item_create":           routeAction(client, workitems.Create),
+		"work_item_update":           routeAction(client, workitems.Update),
+		"work_item_delete":           destructiveVoidAction(client, workitems.Delete),
+		"discussion_list":            routeAction(client, issuediscussions.List),
+		"discussion_get":             routeAction(client, issuediscussions.Get),
+		"discussion_create":          routeAction(client, issuediscussions.Create),
+		"discussion_add_note":        routeAction(client, issuediscussions.AddNote),
+		"discussion_update_note":     routeAction(client, issuediscussions.UpdateNote),
+		"discussion_delete_note":     destructiveVoidAction(client, issuediscussions.DeleteNote),
+		"statistics_get":             routeAction(client, issuestatistics.Get),
+		"statistics_get_group":       routeAction(client, issuestatistics.GetGroup),
+		"statistics_get_project":     routeAction(client, issuestatistics.GetProject),
+		"emoji_issue_list":           routeAction(client, awardemoji.ListIssueAwardEmoji),
+		"emoji_issue_get":            routeAction(client, awardemoji.GetIssueAwardEmoji),
+		"emoji_issue_create":         routeAction(client, awardemoji.CreateIssueAwardEmoji),
+		"emoji_issue_delete":         destructiveVoidAction(client, awardemoji.DeleteIssueAwardEmoji),
+		"emoji_issue_note_list":      routeAction(client, awardemoji.ListIssueNoteAwardEmoji),
+		"emoji_issue_note_get":       routeAction(client, awardemoji.GetIssueNoteAwardEmoji),
+		"emoji_issue_note_create":    routeAction(client, awardemoji.CreateIssueNoteAwardEmoji),
+		"emoji_issue_note_delete":    destructiveVoidAction(client, awardemoji.DeleteIssueNoteAwardEmoji),
+		"event_issue_label_list":     routeAction(client, resourceevents.ListIssueLabelEvents),
+		"event_issue_label_get":      routeAction(client, resourceevents.GetIssueLabelEvent),
+		"event_issue_milestone_list": routeAction(client, resourceevents.ListIssueMilestoneEvents),
+		"event_issue_milestone_get":  routeAction(client, resourceevents.GetIssueMilestoneEvent),
+		"event_issue_state_list":     routeAction(client, resourceevents.ListIssueStateEvents),
+		"event_issue_state_get":      routeAction(client, resourceevents.GetIssueStateEvent),
+		"event_issue_iteration_list": routeAction(client, resourceevents.ListIssueIterationEvents),
+		"event_issue_iteration_get":  routeAction(client, resourceevents.GetIssueIterationEvent),
+		"event_issue_weight_list":    routeAction(client, resourceevents.ListIssueWeightEvents),
 	}
 
 	if enterprise {
-		routes["iteration_list_project"] = wrapAction(client, projectiterations.List)
-		routes["iteration_list_group"] = wrapAction(client, groupiterations.List)
+		routes["iteration_list_project"] = routeAction(client, projectiterations.List)
+		routes["iteration_list_group"] = routeAction(client, groupiterations.List)
 	}
 
 	desc := `Create, list, get, update, close, reopen, delete, and move GitLab issues. Also manages comments (notes), discussions, linked issues, time tracking, work items, award emoji, participants, statistics, and resource events.
@@ -1449,46 +1449,46 @@ Use this tool for issue CRUD, comments, discussions, linked issues, time trackin
 See also: gitlab_merge_request, gitlab_project`
 	}
 
-	addMetaTool(server, "gitlab_issue", desc, routes, metaAnnotations, toolutil.IconIssue)
+	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
 }
 
 // registerPipelineMeta registers the gitlab_pipeline meta-tool with actions:
 // list, get, cancel, retry, and delete.
 func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                              wrapAction(client, pipelines.List),
-		"get":                               wrapAction(client, pipelines.Get),
-		"cancel":                            wrapAction(client, pipelines.Cancel),
-		"retry":                             wrapAction(client, pipelines.Retry),
-		"delete":                            wrapVoidAction(client, pipelines.Delete),
-		"variables":                         wrapAction(client, pipelines.GetVariables),
-		"test_report":                       wrapAction(client, pipelines.GetTestReport),
-		"test_report_summary":               wrapAction(client, pipelines.GetTestReportSummary),
-		"latest":                            wrapAction(client, pipelines.GetLatest),
-		"create":                            wrapAction(client, pipelines.Create),
-		"update_metadata":                   wrapAction(client, pipelines.UpdateMetadata),
-		"wait":                              wrapActionWithRequest(client, pipelines.Wait),
-		"trigger_list":                      wrapAction(client, pipelinetriggers.ListTriggers),
-		"trigger_get":                       wrapAction(client, pipelinetriggers.GetTrigger),
-		"trigger_create":                    wrapAction(client, pipelinetriggers.CreateTrigger),
-		"trigger_update":                    wrapAction(client, pipelinetriggers.UpdateTrigger),
-		"trigger_delete":                    wrapVoidAction(client, pipelinetriggers.DeleteTrigger),
-		"trigger_run":                       wrapAction(client, pipelinetriggers.RunTrigger),
-		"resource_group_list":               wrapAction(client, resourcegroups.ListAll),
-		"resource_group_get":                wrapAction(client, resourcegroups.Get),
-		"resource_group_edit":               wrapAction(client, resourcegroups.Edit),
-		"resource_group_upcoming_jobs":      wrapAction(client, resourcegroups.ListUpcomingJobs),
-		"schedule_list":                     wrapAction(client, pipelineschedules.List),
-		"schedule_get":                      wrapAction(client, pipelineschedules.Get),
-		"schedule_create":                   wrapAction(client, pipelineschedules.Create),
-		"schedule_update":                   wrapAction(client, pipelineschedules.Update),
-		"schedule_delete":                   wrapVoidAction(client, pipelineschedules.Delete),
-		"schedule_run":                      wrapAction(client, pipelineschedules.Run),
-		"schedule_take_ownership":           wrapAction(client, pipelineschedules.TakeOwnership),
-		"schedule_create_variable":          wrapAction(client, pipelineschedules.CreateVariable),
-		"schedule_edit_variable":            wrapAction(client, pipelineschedules.EditVariable),
-		"schedule_delete_variable":          wrapVoidAction(client, pipelineschedules.DeleteVariable),
-		"schedule_list_triggered_pipelines": wrapAction(client, pipelineschedules.ListTriggeredPipelines),
+	routes := actionMap{
+		"list":                              routeAction(client, pipelines.List),
+		"get":                               routeAction(client, pipelines.Get),
+		"cancel":                            routeAction(client, pipelines.Cancel),
+		"retry":                             routeAction(client, pipelines.Retry),
+		"delete":                            destructiveVoidAction(client, pipelines.Delete),
+		"variables":                         routeAction(client, pipelines.GetVariables),
+		"test_report":                       routeAction(client, pipelines.GetTestReport),
+		"test_report_summary":               routeAction(client, pipelines.GetTestReportSummary),
+		"latest":                            routeAction(client, pipelines.GetLatest),
+		"create":                            routeAction(client, pipelines.Create),
+		"update_metadata":                   routeAction(client, pipelines.UpdateMetadata),
+		"wait":                              routeActionWithRequest(client, pipelines.Wait),
+		"trigger_list":                      routeAction(client, pipelinetriggers.ListTriggers),
+		"trigger_get":                       routeAction(client, pipelinetriggers.GetTrigger),
+		"trigger_create":                    routeAction(client, pipelinetriggers.CreateTrigger),
+		"trigger_update":                    routeAction(client, pipelinetriggers.UpdateTrigger),
+		"trigger_delete":                    destructiveVoidAction(client, pipelinetriggers.DeleteTrigger),
+		"trigger_run":                       routeAction(client, pipelinetriggers.RunTrigger),
+		"resource_group_list":               routeAction(client, resourcegroups.ListAll),
+		"resource_group_get":                routeAction(client, resourcegroups.Get),
+		"resource_group_edit":               routeAction(client, resourcegroups.Edit),
+		"resource_group_upcoming_jobs":      routeAction(client, resourcegroups.ListUpcomingJobs),
+		"schedule_list":                     routeAction(client, pipelineschedules.List),
+		"schedule_get":                      routeAction(client, pipelineschedules.Get),
+		"schedule_create":                   routeAction(client, pipelineschedules.Create),
+		"schedule_update":                   routeAction(client, pipelineschedules.Update),
+		"schedule_delete":                   destructiveVoidAction(client, pipelineschedules.Delete),
+		"schedule_run":                      routeAction(client, pipelineschedules.Run),
+		"schedule_take_ownership":           routeAction(client, pipelineschedules.TakeOwnership),
+		"schedule_create_variable":          routeAction(client, pipelineschedules.CreateVariable),
+		"schedule_edit_variable":            routeAction(client, pipelineschedules.EditVariable),
+		"schedule_delete_variable":          destructiveVoidAction(client, pipelineschedules.DeleteVariable),
+		"schedule_list_triggered_pipelines": routeAction(client, pipelineschedules.ListTriggeredPipelines),
 	}
 
 	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules.
@@ -1532,7 +1532,7 @@ Actions:
 
 Use this tool for pipeline CRUD, test reports, trigger tokens, resource groups, and pipeline schedules.
 Do NOT use for job-level operations (use gitlab_job).
-See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable`, routes, metaAnnotations, toolutil.IconPipeline)
+See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable`, routes, toolutil.IconPipeline)
 }
 
 // registerJobMeta registers the gitlab_job meta-tool with actions:
@@ -1540,32 +1540,32 @@ See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_
 // download_single_artifact, download_single_artifact_by_ref, erase, keep_artifacts, play,
 // delete_artifacts, delete_project_artifacts.
 func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                            wrapAction(client, jobs.List),
-		"list_project":                    wrapAction(client, jobs.ListProject),
-		"get":                             wrapAction(client, jobs.Get),
-		"trace":                           wrapAction(client, jobs.Trace),
-		"cancel":                          wrapAction(client, jobs.Cancel),
-		"retry":                           wrapAction(client, jobs.Retry),
-		"list_bridges":                    wrapAction(client, jobs.ListBridges),
-		"artifacts":                       wrapAction(client, jobs.GetArtifacts),
-		"download_artifacts":              wrapAction(client, jobs.DownloadArtifacts),
-		"download_single_artifact":        wrapAction(client, jobs.DownloadSingleArtifact),
-		"download_single_artifact_by_ref": wrapAction(client, jobs.DownloadSingleArtifactByRef),
-		"erase":                           wrapAction(client, jobs.Erase),
-		"keep_artifacts":                  wrapAction(client, jobs.KeepArtifacts),
-		"play":                            wrapAction(client, jobs.Play),
-		"delete_artifacts":                wrapVoidAction(client, jobs.DeleteArtifacts),
-		"delete_project_artifacts":        wrapVoidAction(client, jobs.DeleteProjectArtifacts),
-		"wait":                            wrapActionWithRequest(client, jobs.Wait),
-		"token_scope_get":                 wrapAction(client, jobtokenscope.GetAccessSettings),
-		"token_scope_patch":               wrapAction(client, jobtokenscope.PatchAccessSettings),
-		"token_scope_list_inbound":        wrapAction(client, jobtokenscope.ListInboundAllowlist),
-		"token_scope_add_project":         wrapAction(client, jobtokenscope.AddProjectAllowlist),
-		"token_scope_remove_project":      wrapVoidAction(client, jobtokenscope.RemoveProjectAllowlist),
-		"token_scope_list_groups":         wrapAction(client, jobtokenscope.ListGroupAllowlist),
-		"token_scope_add_group":           wrapAction(client, jobtokenscope.AddGroupAllowlist),
-		"token_scope_remove_group":        wrapVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
+	routes := actionMap{
+		"list":                            routeAction(client, jobs.List),
+		"list_project":                    routeAction(client, jobs.ListProject),
+		"get":                             routeAction(client, jobs.Get),
+		"trace":                           routeAction(client, jobs.Trace),
+		"cancel":                          routeAction(client, jobs.Cancel),
+		"retry":                           routeAction(client, jobs.Retry),
+		"list_bridges":                    routeAction(client, jobs.ListBridges),
+		"artifacts":                       routeAction(client, jobs.GetArtifacts),
+		"download_artifacts":              routeAction(client, jobs.DownloadArtifacts),
+		"download_single_artifact":        routeAction(client, jobs.DownloadSingleArtifact),
+		"download_single_artifact_by_ref": routeAction(client, jobs.DownloadSingleArtifactByRef),
+		"erase":                           destructiveAction(client, jobs.Erase),
+		"keep_artifacts":                  routeAction(client, jobs.KeepArtifacts),
+		"play":                            routeAction(client, jobs.Play),
+		"delete_artifacts":                destructiveVoidAction(client, jobs.DeleteArtifacts),
+		"delete_project_artifacts":        destructiveVoidAction(client, jobs.DeleteProjectArtifacts),
+		"wait":                            routeActionWithRequest(client, jobs.Wait),
+		"token_scope_get":                 routeAction(client, jobtokenscope.GetAccessSettings),
+		"token_scope_patch":               routeAction(client, jobtokenscope.PatchAccessSettings),
+		"token_scope_list_inbound":        routeAction(client, jobtokenscope.ListInboundAllowlist),
+		"token_scope_add_project":         routeAction(client, jobtokenscope.AddProjectAllowlist),
+		"token_scope_remove_project":      destructiveVoidAction(client, jobtokenscope.RemoveProjectAllowlist),
+		"token_scope_list_groups":         routeAction(client, jobtokenscope.ListGroupAllowlist),
+		"token_scope_add_group":           routeAction(client, jobtokenscope.AddGroupAllowlist),
+		"token_scope_remove_group":        destructiveVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
 	addMetaTool(server, "gitlab_job", `List, get, retry, cancel, erase, play, and wait for GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
@@ -1601,99 +1601,99 @@ Actions:
 
 Use this tool for CI/CD job operations: list, retry, cancel, erase, play, download artifacts/logs, and Kubernetes agents.
 Do NOT use for pipeline-level operations (use gitlab_pipeline).
-See also: gitlab_pipeline, gitlab_repository`, routes, metaAnnotations, toolutil.IconJob)
+See also: gitlab_pipeline, gitlab_repository`, routes, toolutil.IconJob)
 }
 
 // registerUserMeta registers the gitlab_user meta-tool with user,
 // SSH key, email, event, notification, key, GPG key, impersonation token, and task-list management actions.
 func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
-	routes := map[string]actionFunc{
-		"current":                     wrapAction(client, users.Current),
-		"list":                        wrapAction(client, users.List),
-		"get":                         wrapAction(client, users.Get),
-		"get_status":                  wrapAction(client, users.GetStatus),
-		"set_status":                  wrapAction(client, users.SetStatus),
-		"ssh_keys":                    wrapAction(client, users.ListSSHKeys),
-		"emails":                      wrapAction(client, users.ListEmails),
-		"contribution_events":         wrapAction(client, users.ListContributionEvents),
-		"associations_count":          wrapAction(client, users.GetAssociationsCount),
-		"todo_list":                   wrapAction(client, todos.List),
-		"todo_mark_done":              wrapAction(client, todos.MarkDone),
-		"todo_mark_all_done":          wrapAction(client, todos.MarkAllDone),
-		"event_list_project":          wrapAction(client, events.ListProjectEvents),
-		"event_list_contributions":    wrapAction(client, events.ListCurrentUserContributionEvents),
-		"notification_global_get":     wrapAction(client, notifications.GetGlobalSettings),
-		"notification_project_get":    wrapAction(client, notifications.GetSettingsForProject),
-		"notification_group_get":      wrapAction(client, notifications.GetSettingsForGroup),
-		"notification_global_update":  wrapAction(client, notifications.UpdateGlobalSettings),
-		"notification_project_update": wrapAction(client, notifications.UpdateSettingsForProject),
-		"notification_group_update":   wrapAction(client, notifications.UpdateSettingsForGroup),
-		"key_get_with_user":           wrapAction(client, keys.GetKeyWithUser),
-		"key_get_by_fingerprint":      wrapAction(client, keys.GetKeyByFingerprint),
-		"namespace_list":              wrapAction(client, namespaces.List),
-		"namespace_get":               wrapAction(client, namespaces.Get),
-		"namespace_exists":            wrapAction(client, namespaces.Exists),
-		"namespace_search":            wrapAction(client, namespaces.Search),
-		"avatar_get":                  wrapAction(client, avatar.Get),
-		"me":                          wrapAction(client, users.Current),
+	routes := actionMap{
+		"current":                     routeAction(client, users.Current),
+		"list":                        routeAction(client, users.List),
+		"get":                         routeAction(client, users.Get),
+		"get_status":                  routeAction(client, users.GetStatus),
+		"set_status":                  routeAction(client, users.SetStatus),
+		"ssh_keys":                    routeAction(client, users.ListSSHKeys),
+		"emails":                      routeAction(client, users.ListEmails),
+		"contribution_events":         routeAction(client, users.ListContributionEvents),
+		"associations_count":          routeAction(client, users.GetAssociationsCount),
+		"todo_list":                   routeAction(client, todos.List),
+		"todo_mark_done":              routeAction(client, todos.MarkDone),
+		"todo_mark_all_done":          routeAction(client, todos.MarkAllDone),
+		"event_list_project":          routeAction(client, events.ListProjectEvents),
+		"event_list_contributions":    routeAction(client, events.ListCurrentUserContributionEvents),
+		"notification_global_get":     routeAction(client, notifications.GetGlobalSettings),
+		"notification_project_get":    routeAction(client, notifications.GetSettingsForProject),
+		"notification_group_get":      routeAction(client, notifications.GetSettingsForGroup),
+		"notification_global_update":  routeAction(client, notifications.UpdateGlobalSettings),
+		"notification_project_update": routeAction(client, notifications.UpdateSettingsForProject),
+		"notification_group_update":   routeAction(client, notifications.UpdateSettingsForGroup),
+		"key_get_with_user":           routeAction(client, keys.GetKeyWithUser),
+		"key_get_by_fingerprint":      routeAction(client, keys.GetKeyByFingerprint),
+		"namespace_list":              routeAction(client, namespaces.List),
+		"namespace_get":               routeAction(client, namespaces.Get),
+		"namespace_exists":            routeAction(client, namespaces.Exists),
+		"namespace_search":            routeAction(client, namespaces.Search),
+		"avatar_get":                  routeAction(client, avatar.Get),
+		"me":                          routeAction(client, users.Current),
 		// Extended user admin actions
-		"block":              wrapAction(client, users.BlockUser),
-		"unblock":            wrapAction(client, users.UnblockUser),
-		"ban":                wrapAction(client, users.BanUser),
-		"unban":              wrapAction(client, users.UnbanUser),
-		"activate":           wrapAction(client, users.ActivateUser),
-		"deactivate":         wrapAction(client, users.DeactivateUser),
-		"approve":            wrapAction(client, users.ApproveUser),
-		"reject":             wrapAction(client, users.RejectUser),
-		"disable_two_factor": wrapAction(client, users.DisableTwoFactor),
+		"block":              destructiveAction(client, users.BlockUser),
+		"unblock":            routeAction(client, users.UnblockUser),
+		"ban":                destructiveAction(client, users.BanUser),
+		"unban":              routeAction(client, users.UnbanUser),
+		"activate":           routeAction(client, users.ActivateUser),
+		"deactivate":         destructiveAction(client, users.DeactivateUser),
+		"approve":            routeAction(client, users.ApproveUser),
+		"reject":             destructiveAction(client, users.RejectUser),
+		"disable_two_factor": destructiveAction(client, users.DisableTwoFactor),
 		// User CRUD
-		"create": wrapAction(client, users.Create),
-		"modify": wrapAction(client, users.Modify),
-		"delete": wrapAction(client, users.Delete),
+		"create": routeAction(client, users.Create),
+		"modify": routeAction(client, users.Modify),
+		"delete": destructiveAction(client, users.Delete),
 		// Extended SSH keys
-		"ssh_keys_for_user":       wrapAction(client, users.ListSSHKeysForUser),
-		"get_ssh_key":             wrapAction(client, users.GetSSHKey),
-		"get_ssh_key_for_user":    wrapAction(client, users.GetSSHKeyForUser),
-		"add_ssh_key":             wrapAction(client, users.AddSSHKey),
-		"add_ssh_key_for_user":    wrapAction(client, users.AddSSHKeyForUser),
-		"delete_ssh_key":          wrapAction(client, users.DeleteSSHKey),
-		"delete_ssh_key_for_user": wrapAction(client, users.DeleteSSHKeyForUser),
+		"ssh_keys_for_user":       routeAction(client, users.ListSSHKeysForUser),
+		"get_ssh_key":             routeAction(client, users.GetSSHKey),
+		"get_ssh_key_for_user":    routeAction(client, users.GetSSHKeyForUser),
+		"add_ssh_key":             routeAction(client, users.AddSSHKey),
+		"add_ssh_key_for_user":    routeAction(client, users.AddSSHKeyForUser),
+		"delete_ssh_key":          destructiveAction(client, users.DeleteSSHKey),
+		"delete_ssh_key_for_user": destructiveAction(client, users.DeleteSSHKeyForUser),
 		// Misc user tools
-		"current_user_status": wrapAction(client, users.CurrentUserStatus),
-		"activities":          wrapAction(client, users.GetUserActivities),
-		"memberships":         wrapAction(client, users.GetUserMemberships),
-		"create_runner":       wrapAction(client, users.CreateUserRunner),
-		"delete_identity":     wrapAction(client, users.DeleteUserIdentity),
+		"current_user_status": routeAction(client, users.CurrentUserStatus),
+		"activities":          routeAction(client, users.GetUserActivities),
+		"memberships":         routeAction(client, users.GetUserMemberships),
+		"create_runner":       routeAction(client, users.CreateUserRunner),
+		"delete_identity":     destructiveAction(client, users.DeleteUserIdentity),
 		// GPG keys
-		"gpg_keys":                wrapAction(client, usergpgkeys.List),
-		"gpg_keys_for_user":       wrapAction(client, usergpgkeys.ListForUser),
-		"get_gpg_key":             wrapAction(client, usergpgkeys.Get),
-		"get_gpg_key_for_user":    wrapAction(client, usergpgkeys.GetForUser),
-		"add_gpg_key":             wrapAction(client, usergpgkeys.Add),
-		"add_gpg_key_for_user":    wrapAction(client, usergpgkeys.AddForUser),
-		"delete_gpg_key":          wrapAction(client, usergpgkeys.Delete),
-		"delete_gpg_key_for_user": wrapAction(client, usergpgkeys.DeleteForUser),
+		"gpg_keys":                routeAction(client, usergpgkeys.List),
+		"gpg_keys_for_user":       routeAction(client, usergpgkeys.ListForUser),
+		"get_gpg_key":             routeAction(client, usergpgkeys.Get),
+		"get_gpg_key_for_user":    routeAction(client, usergpgkeys.GetForUser),
+		"add_gpg_key":             routeAction(client, usergpgkeys.Add),
+		"add_gpg_key_for_user":    routeAction(client, usergpgkeys.AddForUser),
+		"delete_gpg_key":          destructiveAction(client, usergpgkeys.Delete),
+		"delete_gpg_key_for_user": destructiveAction(client, usergpgkeys.DeleteForUser),
 		// Emails (extended)
-		"emails_for_user":       wrapAction(client, useremails.ListForUser),
-		"get_email":             wrapAction(client, useremails.Get),
-		"add_email":             wrapAction(client, useremails.Add),
-		"add_email_for_user":    wrapAction(client, useremails.AddForUser),
-		"delete_email":          wrapAction(client, useremails.Delete),
-		"delete_email_for_user": wrapAction(client, useremails.DeleteForUser),
+		"emails_for_user":       routeAction(client, useremails.ListForUser),
+		"get_email":             routeAction(client, useremails.Get),
+		"add_email":             routeAction(client, useremails.Add),
+		"add_email_for_user":    routeAction(client, useremails.AddForUser),
+		"delete_email":          destructiveAction(client, useremails.Delete),
+		"delete_email_for_user": destructiveAction(client, useremails.DeleteForUser),
 		// Impersonation tokens
-		"list_impersonation_tokens":    wrapAction(client, impersonationtokens.List),
-		"get_impersonation_token":      wrapAction(client, impersonationtokens.Get),
-		"create_impersonation_token":   wrapAction(client, impersonationtokens.Create),
-		"revoke_impersonation_token":   wrapAction(client, impersonationtokens.Revoke),
-		"create_personal_access_token": wrapAction(client, impersonationtokens.CreatePAT),
+		"list_impersonation_tokens":    routeAction(client, impersonationtokens.List),
+		"get_impersonation_token":      routeAction(client, impersonationtokens.Get),
+		"create_impersonation_token":   routeAction(client, impersonationtokens.Create),
+		"revoke_impersonation_token":   destructiveAction(client, impersonationtokens.Revoke),
+		"create_personal_access_token": routeAction(client, impersonationtokens.CreatePAT),
 		// Current user PAT (CE-compatible)
-		"create_current_user_pat": wrapAction(client, users.CreateCurrentUserPAT),
+		"create_current_user_pat": routeAction(client, users.CreateCurrentUserPAT),
 	}
 
 	// Service accounts (EE-only — returns 404 on CE)
 	if enterprise {
-		routes["create_service_account"] = wrapAction(client, users.CreateServiceAccount)
-		routes["list_service_accounts"] = wrapAction(client, users.ListServiceAccounts)
+		routes["create_service_account"] = routeAction(client, users.CreateServiceAccount)
+		routes["list_service_accounts"] = routeAction(client, users.ListServiceAccounts)
 	}
 
 	desc := `List, get, create, update, block, unblock, ban, deactivate, and delete GitLab users. Also manages SSH keys, GPG keys, personal access tokens, emails, impersonation tokens, activities, memberships, and user status.
@@ -1786,19 +1786,19 @@ Do NOT use for deploy tokens or project/group access tokens (use gitlab_access) 
 See also: gitlab_access (deploy tokens/keys, access tokens), gitlab_admin (instance administration)`
 	}
 
-	addMetaTool(server, "gitlab_user", desc, routes, metaAnnotations, toolutil.IconUser)
+	addMetaTool(server, "gitlab_user", desc, routes, toolutil.IconUser)
 }
 
 // registerWikiMeta registers the gitlab_wiki meta-tool with actions:
 // list, get, create, update, delete, upload_attachment.
 func registerWikiMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":              wrapAction(client, wikis.List),
-		"get":               wrapAction(client, wikis.Get),
-		"create":            wrapAction(client, wikis.Create),
-		"update":            wrapAction(client, wikis.Update),
-		"delete":            wrapVoidAction(client, wikis.Delete),
-		"upload_attachment": wrapAction(client, wikis.UploadAttachment),
+	routes := actionMap{
+		"list":              routeAction(client, wikis.List),
+		"get":               routeAction(client, wikis.Get),
+		"create":            routeAction(client, wikis.Create),
+		"update":            routeAction(client, wikis.Update),
+		"delete":            destructiveVoidAction(client, wikis.Delete),
+		"upload_attachment": routeAction(client, wikis.UploadAttachment),
 	}
 
 	addMetaTool(server, "gitlab_wiki", `Create, list, get, update, delete, and upload attachments to GitLab project wiki pages.
@@ -1813,36 +1813,36 @@ Actions:
 - delete: Delete a wiki page. Params: project_id (required), slug (required)
 - upload_attachment: Upload a file attachment to a wiki. Params: project_id (required), filename (required), content_base64 or file_path (one required), branch (optional)
 
-See also: gitlab_project`, routes, metaAnnotations, toolutil.IconWiki)
+See also: gitlab_project`, routes, toolutil.IconWiki)
 }
 
 // registerEnvironmentMeta registers the gitlab_environment meta-tool with actions:
 // list, get, create, update, delete, stop.
 func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                         wrapAction(client, environments.List),
-		"get":                          wrapAction(client, environments.Get),
-		"create":                       wrapAction(client, environments.Create),
-		"update":                       wrapAction(client, environments.Update),
-		"delete":                       wrapVoidAction(client, environments.Delete),
-		"stop":                         wrapAction(client, environments.Stop),
-		"protected_list":               wrapAction(client, protectedenvs.List),
-		"protected_get":                wrapAction(client, protectedenvs.Get),
-		"protected_protect":            wrapAction(client, protectedenvs.Protect),
-		"protected_update":             wrapAction(client, protectedenvs.Update),
-		"protected_unprotect":          wrapVoidAction(client, protectedenvs.Unprotect),
-		"freeze_list":                  wrapAction(client, freezeperiods.List),
-		"freeze_get":                   wrapAction(client, freezeperiods.Get),
-		"freeze_create":                wrapAction(client, freezeperiods.Create),
-		"freeze_update":                wrapAction(client, freezeperiods.Update),
-		"freeze_delete":                wrapVoidAction(client, freezeperiods.Delete),
-		"deployment_list":              wrapAction(client, deployments.List),
-		"deployment_get":               wrapAction(client, deployments.Get),
-		"deployment_create":            wrapAction(client, deployments.Create),
-		"deployment_update":            wrapAction(client, deployments.Update),
-		"deployment_delete":            wrapVoidAction(client, deployments.Delete),
-		"deployment_approve_or_reject": wrapAction(client, deployments.ApproveOrReject),
-		"deployment_merge_requests":    wrapAction(client, deploymentmergerequests.List),
+	routes := actionMap{
+		"list":                         routeAction(client, environments.List),
+		"get":                          routeAction(client, environments.Get),
+		"create":                       routeAction(client, environments.Create),
+		"update":                       routeAction(client, environments.Update),
+		"delete":                       destructiveVoidAction(client, environments.Delete),
+		"stop":                         destructiveAction(client, environments.Stop),
+		"protected_list":               routeAction(client, protectedenvs.List),
+		"protected_get":                routeAction(client, protectedenvs.Get),
+		"protected_protect":            routeAction(client, protectedenvs.Protect),
+		"protected_update":             routeAction(client, protectedenvs.Update),
+		"protected_unprotect":          destructiveVoidAction(client, protectedenvs.Unprotect),
+		"freeze_list":                  routeAction(client, freezeperiods.List),
+		"freeze_get":                   routeAction(client, freezeperiods.Get),
+		"freeze_create":                routeAction(client, freezeperiods.Create),
+		"freeze_update":                routeAction(client, freezeperiods.Update),
+		"freeze_delete":                destructiveVoidAction(client, freezeperiods.Delete),
+		"deployment_list":              routeAction(client, deployments.List),
+		"deployment_get":               routeAction(client, deployments.Get),
+		"deployment_create":            routeAction(client, deployments.Create),
+		"deployment_update":            routeAction(client, deployments.Update),
+		"deployment_delete":            destructiveVoidAction(client, deployments.Delete),
+		"deployment_approve_or_reject": routeAction(client, deployments.ApproveOrReject),
+		"deployment_merge_requests":    routeAction(client, deploymentmergerequests.List),
 	}
 
 	addMetaTool(server, "gitlab_environment", `Create, list, get, update, delete, and stop GitLab environments. Manage protected environments, deployment freeze periods, and deployment records.
@@ -1875,28 +1875,28 @@ Actions:
 - deployment_merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page
 
 Use this tool for environment lifecycle, deployment records, freeze periods, and protected environments.
-See also: gitlab_pipeline`, routes, metaAnnotations, toolutil.IconEnvironment)
+See also: gitlab_pipeline`, routes, toolutil.IconEnvironment)
 }
 
 // registerCIVariableMeta registers the gitlab_ci_variable meta-tool with actions:
 // list, get, create, update, delete.
 func registerCIVariableMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":            wrapAction(client, civariables.List),
-		"get":             wrapAction(client, civariables.Get),
-		"create":          wrapAction(client, civariables.Create),
-		"update":          wrapAction(client, civariables.Update),
-		"delete":          wrapVoidAction(client, civariables.Delete),
-		"group_list":      wrapAction(client, groupvariables.List),
-		"group_get":       wrapAction(client, groupvariables.Get),
-		"group_create":    wrapAction(client, groupvariables.Create),
-		"group_update":    wrapAction(client, groupvariables.Update),
-		"group_delete":    wrapVoidAction(client, groupvariables.Delete),
-		"instance_list":   wrapAction(client, instancevariables.List),
-		"instance_get":    wrapAction(client, instancevariables.Get),
-		"instance_create": wrapAction(client, instancevariables.Create),
-		"instance_update": wrapAction(client, instancevariables.Update),
-		"instance_delete": wrapVoidAction(client, instancevariables.Delete),
+	routes := actionMap{
+		"list":            routeAction(client, civariables.List),
+		"get":             routeAction(client, civariables.Get),
+		"create":          routeAction(client, civariables.Create),
+		"update":          routeAction(client, civariables.Update),
+		"delete":          destructiveVoidAction(client, civariables.Delete),
+		"group_list":      routeAction(client, groupvariables.List),
+		"group_get":       routeAction(client, groupvariables.Get),
+		"group_create":    routeAction(client, groupvariables.Create),
+		"group_update":    routeAction(client, groupvariables.Update),
+		"group_delete":    destructiveVoidAction(client, groupvariables.Delete),
+		"instance_list":   routeAction(client, instancevariables.List),
+		"instance_get":    routeAction(client, instancevariables.Get),
+		"instance_create": routeAction(client, instancevariables.Create),
+		"instance_update": routeAction(client, instancevariables.Update),
+		"instance_delete": destructiveVoidAction(client, instancevariables.Delete),
 	}
 
 	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Create, list, get, update, and delete variables at each level.
@@ -1921,29 +1921,29 @@ Actions:
 - instance_delete: Delete an instance variable. Params: key (required)
 
 Use this tool for CI/CD variables at instance, group, and project scope.
-See also: gitlab_pipeline`, routes, metaAnnotations, toolutil.IconVariable)
+See also: gitlab_pipeline`, routes, toolutil.IconVariable)
 }
 
 // registerTemplateMeta registers the gitlab_template meta-tool with actions:
 // lint, lint_project, ci_yml_list, ci_yml_get, dockerfile_list, dockerfile_get,
 // gitignore_list, gitignore_get, license_list, license_get, project_template_list, project_template_get.
 func registerTemplateMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"lint":                  wrapAction(client, cilint.LintContent),
-		"lint_project":          wrapAction(client, cilint.LintProject),
-		"ci_yml_list":           wrapAction(client, ciyamltemplates.List),
-		"ci_yml_get":            wrapAction(client, ciyamltemplates.Get),
-		"dockerfile_list":       wrapAction(client, dockerfiletemplates.List),
-		"dockerfile_get":        wrapAction(client, dockerfiletemplates.Get),
-		"gitignore_list":        wrapAction(client, gitignoretemplates.List),
-		"gitignore_get":         wrapAction(client, gitignoretemplates.Get),
-		"license_list":          wrapAction(client, licensetemplates.List),
-		"license_get":           wrapAction(client, licensetemplates.Get),
-		"project_template_list": wrapAction(client, projecttemplates.List),
-		"project_template_get":  wrapAction(client, projecttemplates.Get),
+	routes := actionMap{
+		"lint":                  routeAction(client, cilint.LintContent),
+		"lint_project":          routeAction(client, cilint.LintProject),
+		"ci_yml_list":           routeAction(client, ciyamltemplates.List),
+		"ci_yml_get":            routeAction(client, ciyamltemplates.Get),
+		"dockerfile_list":       routeAction(client, dockerfiletemplates.List),
+		"dockerfile_get":        routeAction(client, dockerfiletemplates.Get),
+		"gitignore_list":        routeAction(client, gitignoretemplates.List),
+		"gitignore_get":         routeAction(client, gitignoretemplates.Get),
+		"license_list":          routeAction(client, licensetemplates.List),
+		"license_get":           routeAction(client, licensetemplates.Get),
+		"project_template_list": routeAction(client, projecttemplates.List),
+		"project_template_get":  routeAction(client, projecttemplates.Get),
 	}
 
-	addMetaTool(server, "gitlab_template", `Browse and retrieve GitLab project templates: gitignores, CI/CD YAML, Dockerfiles, licenses, and project-specific issue/MR templates. Lint CI configuration.
+	addReadOnlyMetaTool(server, "gitlab_template", `Browse and retrieve GitLab project templates: gitignores, CI/CD YAML, Dockerfiles, licenses, and project-specific issue/MR templates. Lint CI configuration.
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -1961,96 +1961,96 @@ Actions:
 - project_template_list: List project templates of a given type. Params: project_id (required), template_type (required), page, per_page
 - project_template_get: Get a single project template. Params: project_id (required), template_type (required), key (required)
 
-See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog (Enterprise: CI/CD Catalog components)`, routes, readOnlyMetaAnnotations, toolutil.IconTemplate)
+See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog (Enterprise: CI/CD Catalog components)`, routes, toolutil.IconTemplate)
 }
 
 // registerAdminMeta registers the gitlab_admin meta-tool with actions:
 // topic_list, topic_get, topic_create, topic_update, topic_delete,
 // settings_get, settings_update, appearance_get, appearance_update.
 func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"topic_list":                     wrapAction(client, topics.List),
-		"topic_get":                      wrapAction(client, topics.Get),
-		"topic_create":                   wrapAction(client, topics.Create),
-		"topic_update":                   wrapAction(client, topics.Update),
-		"topic_delete":                   wrapVoidAction(client, topics.Delete),
-		"settings_get":                   wrapAction(client, settings.Get),
-		"settings_update":                wrapAction(client, settings.Update),
-		"appearance_get":                 wrapAction(client, appearance.Get),
-		"appearance_update":              wrapAction(client, appearance.Update),
-		"broadcast_message_list":         wrapAction(client, broadcastmessages.List),
-		"broadcast_message_get":          wrapAction(client, broadcastmessages.Get),
-		"broadcast_message_create":       wrapAction(client, broadcastmessages.Create),
-		"broadcast_message_update":       wrapAction(client, broadcastmessages.Update),
-		"broadcast_message_delete":       wrapVoidAction(client, broadcastmessages.Delete),
-		"feature_list":                   wrapAction(client, features.List),
-		"feature_list_definitions":       wrapAction(client, features.ListDefinitions),
-		"feature_set":                    wrapAction(client, features.Set),
-		"feature_delete":                 wrapVoidAction(client, features.Delete),
-		"license_get":                    wrapAction(client, license.Get),
-		"license_add":                    wrapAction(client, license.Add),
-		"license_delete":                 wrapVoidAction(client, license.Delete),
-		"system_hook_list":               wrapAction(client, systemhooks.List),
-		"system_hook_get":                wrapAction(client, systemhooks.Get),
-		"system_hook_add":                wrapAction(client, systemhooks.Add),
-		"system_hook_test":               wrapAction(client, systemhooks.Test),
-		"system_hook_delete":             wrapVoidAction(client, systemhooks.Delete),
-		"sidekiq_queue_metrics":          wrapAction(client, sidekiq.GetQueueMetrics),
-		"sidekiq_process_metrics":        wrapAction(client, sidekiq.GetProcessMetrics),
-		"sidekiq_job_stats":              wrapAction(client, sidekiq.GetJobStats),
-		"sidekiq_compound_metrics":       wrapAction(client, sidekiq.GetCompoundMetrics),
-		"plan_limits_get":                wrapAction(client, planlimits.Get),
-		"plan_limits_change":             wrapAction(client, planlimits.Change),
-		"usage_data_service_ping":        wrapAction(client, usagedata.GetServicePing),
-		"usage_data_non_sql_metrics":     wrapAction(client, usagedata.GetNonSQLMetrics),
-		"usage_data_queries":             wrapAction(client, usagedata.GetQueries),
-		"usage_data_metric_definitions":  wrapAction(client, usagedata.GetMetricDefinitions),
-		"usage_data_track_event":         wrapAction(client, usagedata.TrackEvent),
-		"usage_data_track_events":        wrapAction(client, usagedata.TrackEvents),
-		"db_migration_mark":              wrapAction(client, dbmigrations.Mark),
-		"application_list":               wrapAction(client, applications.List),
-		"application_create":             wrapAction(client, applications.Create),
-		"application_delete":             wrapVoidAction(client, applications.Delete),
-		"app_statistics_get":             wrapAction(client, appstatistics.Get),
-		"metadata_get":                   wrapAction(client, metadata.Get),
-		"custom_attr_list":               wrapAction(client, customattributes.List),
-		"custom_attr_get":                wrapAction(client, customattributes.Get),
-		"custom_attr_set":                wrapAction(client, customattributes.Set),
-		"custom_attr_delete":             wrapVoidAction(client, customattributes.Delete),
-		"bulk_import_start":              wrapAction(client, bulkimports.StartMigration),
-		"error_tracking_list":            wrapAction(client, errortracking.ListClientKeys),
-		"error_tracking_create":          wrapAction(client, errortracking.CreateClientKey),
-		"error_tracking_delete":          wrapVoidAction(client, errortracking.DeleteClientKey),
-		"error_tracking_get_settings":    wrapAction(client, errortracking.GetSettings),
-		"error_tracking_update_settings": wrapAction(client, errortracking.EnableDisable),
-		"alert_metric_image_list":        wrapAction(client, alertmanagement.ListMetricImages),
-		"alert_metric_image_upload":      wrapAction(client, alertmanagement.UploadMetricImage),
-		"alert_metric_image_update":      wrapAction(client, alertmanagement.UpdateMetricImage),
-		"alert_metric_image_delete":      wrapVoidAction(client, alertmanagement.DeleteMetricImage),
-		"secure_file_list":               wrapAction(client, securefiles.List),
-		"secure_file_get":                wrapAction(client, securefiles.Show),
-		"secure_file_create":             wrapAction(client, securefiles.Create),
-		"secure_file_delete":             wrapVoidAction(client, securefiles.Remove),
-		"terraform_state_list":           wrapAction(client, terraformstates.List),
-		"terraform_state_get":            wrapAction(client, terraformstates.Get),
-		"terraform_state_delete":         wrapVoidAction(client, terraformstates.Delete),
-		"terraform_state_lock":           wrapAction(client, terraformstates.Lock),
-		"terraform_state_unlock":         wrapAction(client, terraformstates.Unlock),
-		"terraform_version_delete":       wrapVoidAction(client, terraformstates.DeleteVersion),
-		"cluster_agent_list":             wrapAction(client, clusteragents.ListAgents),
-		"cluster_agent_get":              wrapAction(client, clusteragents.GetAgent),
-		"cluster_agent_register":         wrapAction(client, clusteragents.RegisterAgent),
-		"cluster_agent_delete":           wrapVoidAction(client, clusteragents.DeleteAgent),
-		"cluster_agent_token_list":       wrapAction(client, clusteragents.ListAgentTokens),
-		"cluster_agent_token_get":        wrapAction(client, clusteragents.GetAgentToken),
-		"cluster_agent_token_create":     wrapAction(client, clusteragents.CreateAgentToken),
-		"cluster_agent_token_revoke":     wrapVoidAction(client, clusteragents.RevokeAgentToken),
-		"dependency_proxy_delete":        wrapVoidAction(client, dependencyproxy.Purge),
-		"import_github":                  wrapAction(client, importservice.ImportFromGitHub),
-		"import_bitbucket":               wrapAction(client, importservice.ImportFromBitbucketCloud),
-		"import_bitbucket_server":        wrapAction(client, importservice.ImportFromBitbucketServer),
-		"import_cancel_github":           wrapAction(client, importservice.CancelGitHubImport),
-		"import_gists":                   wrapVoidAction(client, importservice.ImportGists),
+	routes := actionMap{
+		"topic_list":                     routeAction(client, topics.List),
+		"topic_get":                      routeAction(client, topics.Get),
+		"topic_create":                   routeAction(client, topics.Create),
+		"topic_update":                   routeAction(client, topics.Update),
+		"topic_delete":                   destructiveVoidAction(client, topics.Delete),
+		"settings_get":                   routeAction(client, settings.Get),
+		"settings_update":                routeAction(client, settings.Update),
+		"appearance_get":                 routeAction(client, appearance.Get),
+		"appearance_update":              routeAction(client, appearance.Update),
+		"broadcast_message_list":         routeAction(client, broadcastmessages.List),
+		"broadcast_message_get":          routeAction(client, broadcastmessages.Get),
+		"broadcast_message_create":       routeAction(client, broadcastmessages.Create),
+		"broadcast_message_update":       routeAction(client, broadcastmessages.Update),
+		"broadcast_message_delete":       destructiveVoidAction(client, broadcastmessages.Delete),
+		"feature_list":                   routeAction(client, features.List),
+		"feature_list_definitions":       routeAction(client, features.ListDefinitions),
+		"feature_set":                    routeAction(client, features.Set),
+		"feature_delete":                 destructiveVoidAction(client, features.Delete),
+		"license_get":                    routeAction(client, license.Get),
+		"license_add":                    routeAction(client, license.Add),
+		"license_delete":                 destructiveVoidAction(client, license.Delete),
+		"system_hook_list":               routeAction(client, systemhooks.List),
+		"system_hook_get":                routeAction(client, systemhooks.Get),
+		"system_hook_add":                routeAction(client, systemhooks.Add),
+		"system_hook_test":               routeAction(client, systemhooks.Test),
+		"system_hook_delete":             destructiveVoidAction(client, systemhooks.Delete),
+		"sidekiq_queue_metrics":          routeAction(client, sidekiq.GetQueueMetrics),
+		"sidekiq_process_metrics":        routeAction(client, sidekiq.GetProcessMetrics),
+		"sidekiq_job_stats":              routeAction(client, sidekiq.GetJobStats),
+		"sidekiq_compound_metrics":       routeAction(client, sidekiq.GetCompoundMetrics),
+		"plan_limits_get":                routeAction(client, planlimits.Get),
+		"plan_limits_change":             routeAction(client, planlimits.Change),
+		"usage_data_service_ping":        routeAction(client, usagedata.GetServicePing),
+		"usage_data_non_sql_metrics":     routeAction(client, usagedata.GetNonSQLMetrics),
+		"usage_data_queries":             routeAction(client, usagedata.GetQueries),
+		"usage_data_metric_definitions":  routeAction(client, usagedata.GetMetricDefinitions),
+		"usage_data_track_event":         routeAction(client, usagedata.TrackEvent),
+		"usage_data_track_events":        routeAction(client, usagedata.TrackEvents),
+		"db_migration_mark":              routeAction(client, dbmigrations.Mark),
+		"application_list":               routeAction(client, applications.List),
+		"application_create":             routeAction(client, applications.Create),
+		"application_delete":             destructiveVoidAction(client, applications.Delete),
+		"app_statistics_get":             routeAction(client, appstatistics.Get),
+		"metadata_get":                   routeAction(client, metadata.Get),
+		"custom_attr_list":               routeAction(client, customattributes.List),
+		"custom_attr_get":                routeAction(client, customattributes.Get),
+		"custom_attr_set":                routeAction(client, customattributes.Set),
+		"custom_attr_delete":             destructiveVoidAction(client, customattributes.Delete),
+		"bulk_import_start":              routeAction(client, bulkimports.StartMigration),
+		"error_tracking_list":            routeAction(client, errortracking.ListClientKeys),
+		"error_tracking_create":          routeAction(client, errortracking.CreateClientKey),
+		"error_tracking_delete":          destructiveVoidAction(client, errortracking.DeleteClientKey),
+		"error_tracking_get_settings":    routeAction(client, errortracking.GetSettings),
+		"error_tracking_update_settings": routeAction(client, errortracking.EnableDisable),
+		"alert_metric_image_list":        routeAction(client, alertmanagement.ListMetricImages),
+		"alert_metric_image_upload":      routeAction(client, alertmanagement.UploadMetricImage),
+		"alert_metric_image_update":      routeAction(client, alertmanagement.UpdateMetricImage),
+		"alert_metric_image_delete":      destructiveVoidAction(client, alertmanagement.DeleteMetricImage),
+		"secure_file_list":               routeAction(client, securefiles.List),
+		"secure_file_get":                routeAction(client, securefiles.Show),
+		"secure_file_create":             routeAction(client, securefiles.Create),
+		"secure_file_delete":             destructiveVoidAction(client, securefiles.Remove),
+		"terraform_state_list":           routeAction(client, terraformstates.List),
+		"terraform_state_get":            routeAction(client, terraformstates.Get),
+		"terraform_state_delete":         destructiveVoidAction(client, terraformstates.Delete),
+		"terraform_state_lock":           routeAction(client, terraformstates.Lock),
+		"terraform_state_unlock":         routeAction(client, terraformstates.Unlock),
+		"terraform_version_delete":       destructiveVoidAction(client, terraformstates.DeleteVersion),
+		"cluster_agent_list":             routeAction(client, clusteragents.ListAgents),
+		"cluster_agent_get":              routeAction(client, clusteragents.GetAgent),
+		"cluster_agent_register":         routeAction(client, clusteragents.RegisterAgent),
+		"cluster_agent_delete":           destructiveVoidAction(client, clusteragents.DeleteAgent),
+		"cluster_agent_token_list":       routeAction(client, clusteragents.ListAgentTokens),
+		"cluster_agent_token_get":        routeAction(client, clusteragents.GetAgentToken),
+		"cluster_agent_token_create":     routeAction(client, clusteragents.CreateAgentToken),
+		"cluster_agent_token_revoke":     destructiveVoidAction(client, clusteragents.RevokeAgentToken),
+		"dependency_proxy_delete":        destructiveVoidAction(client, dependencyproxy.Purge),
+		"import_github":                  routeAction(client, importservice.ImportFromGitHub),
+		"import_bitbucket":               routeAction(client, importservice.ImportFromBitbucketCloud),
+		"import_bitbucket_server":        routeAction(client, importservice.ImportFromBitbucketServer),
+		"import_cancel_github":           routeAction(client, importservice.CancelGitHubImport),
+		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
 	addMetaTool(server, "gitlab_admin", `GitLab instance administration: Sidekiq metrics/queues/jobs, instance settings, license, plan limits, OAuth applications, broadcast messages, system hooks, personal access tokens, appearance, system info, statistics, topics, metadata, linked Jira, alert metric images, and notification settings.
@@ -2143,7 +2143,7 @@ Actions:
 
 Use this tool for GitLab instance administration: Sidekiq, settings, license, OAuth apps, broadcast messages, system hooks, and import.
 Do NOT use for user CRUD (use gitlab_user) or MCP server operations (use gitlab_server).
-See also: gitlab_user (user management), gitlab_server (server health)`, routes, metaAnnotations, toolutil.IconServer)
+See also: gitlab_user (user management), gitlab_server (server health)`, routes, toolutil.IconServer)
 }
 
 // registerAccessMeta registers the gitlab_access meta-tool with actions:
@@ -2161,55 +2161,55 @@ See also: gitlab_user (user management), gitlab_server (server health)`, routes,
 // approve_project, approve_group, deny_project, deny_group,
 // invite_list_project, invite_list_group, invite_project, and invite_group.
 func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"token_project_list":           wrapAction(client, accesstokens.ProjectList),
-		"token_project_get":            wrapAction(client, accesstokens.ProjectGet),
-		"token_project_create":         wrapAction(client, accesstokens.ProjectCreate),
-		"token_project_rotate":         wrapAction(client, accesstokens.ProjectRotate),
-		"token_project_rotate_self":    wrapAction(client, accesstokens.ProjectRotateSelf),
-		"token_project_revoke":         wrapVoidAction(client, accesstokens.ProjectRevoke),
-		"token_group_list":             wrapAction(client, accesstokens.GroupList),
-		"token_group_get":              wrapAction(client, accesstokens.GroupGet),
-		"token_group_create":           wrapAction(client, accesstokens.GroupCreate),
-		"token_group_rotate":           wrapAction(client, accesstokens.GroupRotate),
-		"token_group_rotate_self":      wrapAction(client, accesstokens.GroupRotateSelf),
-		"token_group_revoke":           wrapVoidAction(client, accesstokens.GroupRevoke),
-		"token_personal_list":          wrapAction(client, accesstokens.PersonalList),
-		"token_personal_get":           wrapAction(client, accesstokens.PersonalGet),
-		"token_personal_rotate":        wrapAction(client, accesstokens.PersonalRotate),
-		"token_personal_rotate_self":   wrapAction(client, accesstokens.PersonalRotateSelf),
-		"token_personal_revoke":        wrapVoidAction(client, accesstokens.PersonalRevoke),
-		"token_personal_revoke_self":   wrapVoidAction(client, accesstokens.PersonalRevokeSelf),
-		"deploy_token_list_all":        wrapAction(client, deploytokens.ListAll),
-		"deploy_token_list_project":    wrapAction(client, deploytokens.ListProject),
-		"deploy_token_list_group":      wrapAction(client, deploytokens.ListGroup),
-		"deploy_token_get_project":     wrapAction(client, deploytokens.GetProject),
-		"deploy_token_get_group":       wrapAction(client, deploytokens.GetGroup),
-		"deploy_token_create_project":  wrapAction(client, deploytokens.CreateProject),
-		"deploy_token_create_group":    wrapAction(client, deploytokens.CreateGroup),
-		"deploy_token_delete_project":  wrapVoidAction(client, deploytokens.DeleteProject),
-		"deploy_token_delete_group":    wrapVoidAction(client, deploytokens.DeleteGroup),
-		"deploy_key_list_project":      wrapAction(client, deploykeys.ListProject),
-		"deploy_key_get":               wrapAction(client, deploykeys.Get),
-		"deploy_key_add":               wrapAction(client, deploykeys.Add),
-		"deploy_key_update":            wrapAction(client, deploykeys.Update),
-		"deploy_key_delete":            wrapVoidAction(client, deploykeys.Delete),
-		"deploy_key_enable":            wrapAction(client, deploykeys.Enable),
-		"deploy_key_list_all":          wrapAction(client, deploykeys.ListAll),
-		"deploy_key_add_instance":      wrapAction(client, deploykeys.AddInstance),
-		"deploy_key_list_user_project": wrapAction(client, deploykeys.ListUserProject),
-		"request_list_project":         wrapAction(client, accessrequests.ListProject),
-		"request_list_group":           wrapAction(client, accessrequests.ListGroup),
-		"request_project":              wrapAction(client, accessrequests.RequestProject),
-		"request_group":                wrapAction(client, accessrequests.RequestGroup),
-		"approve_project":              wrapAction(client, accessrequests.ApproveProject),
-		"approve_group":                wrapAction(client, accessrequests.ApproveGroup),
-		"deny_project":                 wrapVoidAction(client, accessrequests.DenyProject),
-		"deny_group":                   wrapVoidAction(client, accessrequests.DenyGroup),
-		"invite_list_project":          wrapAction(client, invites.ListPendingProjectInvitations),
-		"invite_list_group":            wrapAction(client, invites.ListPendingGroupInvitations),
-		"invite_project":               wrapAction(client, invites.ProjectInvites),
-		"invite_group":                 wrapAction(client, invites.GroupInvites),
+	routes := actionMap{
+		"token_project_list":           routeAction(client, accesstokens.ProjectList),
+		"token_project_get":            routeAction(client, accesstokens.ProjectGet),
+		"token_project_create":         routeAction(client, accesstokens.ProjectCreate),
+		"token_project_rotate":         routeAction(client, accesstokens.ProjectRotate),
+		"token_project_rotate_self":    routeAction(client, accesstokens.ProjectRotateSelf),
+		"token_project_revoke":         destructiveVoidAction(client, accesstokens.ProjectRevoke),
+		"token_group_list":             routeAction(client, accesstokens.GroupList),
+		"token_group_get":              routeAction(client, accesstokens.GroupGet),
+		"token_group_create":           routeAction(client, accesstokens.GroupCreate),
+		"token_group_rotate":           routeAction(client, accesstokens.GroupRotate),
+		"token_group_rotate_self":      routeAction(client, accesstokens.GroupRotateSelf),
+		"token_group_revoke":           destructiveVoidAction(client, accesstokens.GroupRevoke),
+		"token_personal_list":          routeAction(client, accesstokens.PersonalList),
+		"token_personal_get":           routeAction(client, accesstokens.PersonalGet),
+		"token_personal_rotate":        routeAction(client, accesstokens.PersonalRotate),
+		"token_personal_rotate_self":   routeAction(client, accesstokens.PersonalRotateSelf),
+		"token_personal_revoke":        destructiveVoidAction(client, accesstokens.PersonalRevoke),
+		"token_personal_revoke_self":   destructiveVoidAction(client, accesstokens.PersonalRevokeSelf),
+		"deploy_token_list_all":        routeAction(client, deploytokens.ListAll),
+		"deploy_token_list_project":    routeAction(client, deploytokens.ListProject),
+		"deploy_token_list_group":      routeAction(client, deploytokens.ListGroup),
+		"deploy_token_get_project":     routeAction(client, deploytokens.GetProject),
+		"deploy_token_get_group":       routeAction(client, deploytokens.GetGroup),
+		"deploy_token_create_project":  routeAction(client, deploytokens.CreateProject),
+		"deploy_token_create_group":    routeAction(client, deploytokens.CreateGroup),
+		"deploy_token_delete_project":  destructiveVoidAction(client, deploytokens.DeleteProject),
+		"deploy_token_delete_group":    destructiveVoidAction(client, deploytokens.DeleteGroup),
+		"deploy_key_list_project":      routeAction(client, deploykeys.ListProject),
+		"deploy_key_get":               routeAction(client, deploykeys.Get),
+		"deploy_key_add":               routeAction(client, deploykeys.Add),
+		"deploy_key_update":            routeAction(client, deploykeys.Update),
+		"deploy_key_delete":            destructiveVoidAction(client, deploykeys.Delete),
+		"deploy_key_enable":            routeAction(client, deploykeys.Enable),
+		"deploy_key_list_all":          routeAction(client, deploykeys.ListAll),
+		"deploy_key_add_instance":      routeAction(client, deploykeys.AddInstance),
+		"deploy_key_list_user_project": routeAction(client, deploykeys.ListUserProject),
+		"request_list_project":         routeAction(client, accessrequests.ListProject),
+		"request_list_group":           routeAction(client, accessrequests.ListGroup),
+		"request_project":              routeAction(client, accessrequests.RequestProject),
+		"request_group":                routeAction(client, accessrequests.RequestGroup),
+		"approve_project":              routeAction(client, accessrequests.ApproveProject),
+		"approve_group":                routeAction(client, accessrequests.ApproveGroup),
+		"deny_project":                 destructiveVoidAction(client, accessrequests.DenyProject),
+		"deny_group":                   destructiveVoidAction(client, accessrequests.DenyGroup),
+		"invite_list_project":          routeAction(client, invites.ListPendingProjectInvitations),
+		"invite_list_group":            routeAction(client, invites.ListPendingGroupInvitations),
+		"invite_project":               routeAction(client, invites.ProjectInvites),
+		"invite_group":                 routeAction(client, invites.GroupInvites),
 	}
 	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: deploy keys (project and instance), deploy tokens (project and group), project access tokens, and group access tokens. CRUD, rotate, and approve/deny access requests.
 Valid actions: `+validActionsString(routes)+`
@@ -2266,7 +2266,7 @@ Actions:
 
 Use this tool for access credentials: deploy keys, deploy tokens, project/group access tokens, and personal access token management (list, get, rotate, revoke).
 Do NOT use for SSH/GPG keys or creating user-scoped PATs (use gitlab_user), or instance admin (use gitlab_admin).
-See also: gitlab_user (user management), gitlab_project (project settings)`, routes, metaAnnotations, toolutil.IconToken)
+See also: gitlab_user (user management), gitlab_project (project settings)`, routes, toolutil.IconToken)
 }
 
 // registerPackageMeta registers the gitlab_package meta-tool with actions from
@@ -2320,31 +2320,31 @@ func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
 		return packages.PublishDirectory(ctx, nil, client, input)
 	}
 
-	routes := map[string]actionFunc{
-		"publish":                  publishAction,
-		"download":                 downloadAction,
-		"list":                     wrapAction(client, packages.List),
-		"file_list":                wrapAction(client, packages.FileList),
-		"delete":                   deleteAction,
-		"file_delete":              fileDeleteAction,
-		"publish_and_link":         publishAndLinkAction,
-		"publish_directory":        publishDirAction,
-		"registry_list_project":    wrapAction(client, containerregistry.ListProject),
-		"registry_list_group":      wrapAction(client, containerregistry.ListGroup),
-		"registry_get":             wrapAction(client, containerregistry.GetRepository),
-		"registry_delete":          wrapVoidAction(client, containerregistry.DeleteRepository),
-		"registry_tag_list":        wrapAction(client, containerregistry.ListTags),
-		"registry_tag_get":         wrapAction(client, containerregistry.GetTag),
-		"registry_tag_delete":      wrapVoidAction(client, containerregistry.DeleteTag),
-		"registry_tag_delete_bulk": wrapVoidAction(client, containerregistry.DeleteTagsBulk),
-		"registry_rule_list":       wrapAction(client, containerregistry.ListProtectionRules),
-		"registry_rule_create":     wrapAction(client, containerregistry.CreateProtectionRule),
-		"registry_rule_update":     wrapAction(client, containerregistry.UpdateProtectionRule),
-		"registry_rule_delete":     wrapVoidAction(client, containerregistry.DeleteProtectionRule),
-		"protection_rule_list":     wrapAction(client, protectedpackages.List),
-		"protection_rule_create":   wrapAction(client, protectedpackages.Create),
-		"protection_rule_update":   wrapAction(client, protectedpackages.Update),
-		"protection_rule_delete":   wrapVoidAction(client, protectedpackages.Delete),
+	routes := actionMap{
+		"publish":                  route(publishAction),
+		"download":                 route(downloadAction),
+		"list":                     routeAction(client, packages.List),
+		"file_list":                routeAction(client, packages.FileList),
+		"delete":                   destructiveRoute(deleteAction),
+		"file_delete":              destructiveRoute(fileDeleteAction),
+		"publish_and_link":         route(publishAndLinkAction),
+		"publish_directory":        route(publishDirAction),
+		"registry_list_project":    routeAction(client, containerregistry.ListProject),
+		"registry_list_group":      routeAction(client, containerregistry.ListGroup),
+		"registry_get":             routeAction(client, containerregistry.GetRepository),
+		"registry_delete":          destructiveVoidAction(client, containerregistry.DeleteRepository),
+		"registry_tag_list":        routeAction(client, containerregistry.ListTags),
+		"registry_tag_get":         routeAction(client, containerregistry.GetTag),
+		"registry_tag_delete":      destructiveVoidAction(client, containerregistry.DeleteTag),
+		"registry_tag_delete_bulk": destructiveVoidAction(client, containerregistry.DeleteTagsBulk),
+		"registry_rule_list":       routeAction(client, containerregistry.ListProtectionRules),
+		"registry_rule_create":     routeAction(client, containerregistry.CreateProtectionRule),
+		"registry_rule_update":     routeAction(client, containerregistry.UpdateProtectionRule),
+		"registry_rule_delete":     destructiveVoidAction(client, containerregistry.DeleteProtectionRule),
+		"protection_rule_list":     routeAction(client, protectedpackages.List),
+		"protection_rule_create":   routeAction(client, protectedpackages.Create),
+		"protection_rule_update":   routeAction(client, protectedpackages.Update),
+		"protection_rule_delete":   destructiveVoidAction(client, protectedpackages.Delete),
 	}
 
 	addMetaTool(server, "gitlab_package", `Manage GitLab package registry: list, get, and delete packages. Upload and download generic package files. Manage package protection rules.
@@ -2376,7 +2376,7 @@ Actions:
 - protection_rule_update: Update package protection rule. Params: project_id (required), rule_id (required, int), package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
 - protection_rule_delete: Delete package protection rule. Params: project_id (required), rule_id (required, int)
 
-See also: gitlab_release (release asset links), gitlab_project`, routes, metaAnnotations, toolutil.IconPackage)
+See also: gitlab_release (release asset links), gitlab_project`, routes, toolutil.IconPackage)
 }
 
 // registerSnippetMeta registers the gitlab_snippet meta-tool with actions:
@@ -2386,41 +2386,41 @@ See also: gitlab_release (release asset links), gitlab_project`, routes, metaAnn
 // discussion_update_note, discussion_delete_note, note_list, note_get, note_create,
 // note_update, and note_delete.
 func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                      wrapAction(client, snippets.List),
-		"list_all":                  wrapAction(client, snippets.ListAll),
-		"get":                       wrapAction(client, snippets.Get),
-		"content":                   wrapAction(client, snippets.Content),
-		"file_content":              wrapAction(client, snippets.FileContent),
-		"create":                    wrapAction(client, snippets.Create),
-		"update":                    wrapAction(client, snippets.Update),
-		"delete":                    wrapVoidAction(client, snippets.Delete),
-		"explore":                   wrapAction(client, snippets.Explore),
-		"project_list":              wrapAction(client, snippets.ProjectList),
-		"project_get":               wrapAction(client, snippets.ProjectGet),
-		"project_content":           wrapAction(client, snippets.ProjectContent),
-		"project_create":            wrapAction(client, snippets.ProjectCreate),
-		"project_update":            wrapAction(client, snippets.ProjectUpdate),
-		"project_delete":            wrapVoidAction(client, snippets.ProjectDelete),
-		"discussion_list":           wrapAction(client, snippetdiscussions.List),
-		"discussion_get":            wrapAction(client, snippetdiscussions.Get),
-		"discussion_create":         wrapAction(client, snippetdiscussions.Create),
-		"discussion_add_note":       wrapAction(client, snippetdiscussions.AddNote),
-		"discussion_update_note":    wrapAction(client, snippetdiscussions.UpdateNote),
-		"discussion_delete_note":    wrapVoidAction(client, snippetdiscussions.DeleteNote),
-		"note_list":                 wrapAction(client, snippetnotes.List),
-		"note_get":                  wrapAction(client, snippetnotes.Get),
-		"note_create":               wrapAction(client, snippetnotes.Create),
-		"note_update":               wrapAction(client, snippetnotes.Update),
-		"note_delete":               wrapVoidAction(client, snippetnotes.Delete),
-		"emoji_snippet_list":        wrapAction(client, awardemoji.ListSnippetAwardEmoji),
-		"emoji_snippet_get":         wrapAction(client, awardemoji.GetSnippetAwardEmoji),
-		"emoji_snippet_create":      wrapAction(client, awardemoji.CreateSnippetAwardEmoji),
-		"emoji_snippet_delete":      wrapVoidAction(client, awardemoji.DeleteSnippetAwardEmoji),
-		"emoji_snippet_note_list":   wrapAction(client, awardemoji.ListSnippetNoteAwardEmoji),
-		"emoji_snippet_note_get":    wrapAction(client, awardemoji.GetSnippetNoteAwardEmoji),
-		"emoji_snippet_note_create": wrapAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
-		"emoji_snippet_note_delete": wrapVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
+	routes := actionMap{
+		"list":                      routeAction(client, snippets.List),
+		"list_all":                  routeAction(client, snippets.ListAll),
+		"get":                       routeAction(client, snippets.Get),
+		"content":                   routeAction(client, snippets.Content),
+		"file_content":              routeAction(client, snippets.FileContent),
+		"create":                    routeAction(client, snippets.Create),
+		"update":                    routeAction(client, snippets.Update),
+		"delete":                    destructiveVoidAction(client, snippets.Delete),
+		"explore":                   routeAction(client, snippets.Explore),
+		"project_list":              routeAction(client, snippets.ProjectList),
+		"project_get":               routeAction(client, snippets.ProjectGet),
+		"project_content":           routeAction(client, snippets.ProjectContent),
+		"project_create":            routeAction(client, snippets.ProjectCreate),
+		"project_update":            routeAction(client, snippets.ProjectUpdate),
+		"project_delete":            destructiveVoidAction(client, snippets.ProjectDelete),
+		"discussion_list":           routeAction(client, snippetdiscussions.List),
+		"discussion_get":            routeAction(client, snippetdiscussions.Get),
+		"discussion_create":         routeAction(client, snippetdiscussions.Create),
+		"discussion_add_note":       routeAction(client, snippetdiscussions.AddNote),
+		"discussion_update_note":    routeAction(client, snippetdiscussions.UpdateNote),
+		"discussion_delete_note":    destructiveVoidAction(client, snippetdiscussions.DeleteNote),
+		"note_list":                 routeAction(client, snippetnotes.List),
+		"note_get":                  routeAction(client, snippetnotes.Get),
+		"note_create":               routeAction(client, snippetnotes.Create),
+		"note_update":               routeAction(client, snippetnotes.Update),
+		"note_delete":               destructiveVoidAction(client, snippetnotes.Delete),
+		"emoji_snippet_list":        routeAction(client, awardemoji.ListSnippetAwardEmoji),
+		"emoji_snippet_get":         routeAction(client, awardemoji.GetSnippetAwardEmoji),
+		"emoji_snippet_create":      routeAction(client, awardemoji.CreateSnippetAwardEmoji),
+		"emoji_snippet_delete":      destructiveVoidAction(client, awardemoji.DeleteSnippetAwardEmoji),
+		"emoji_snippet_note_list":   routeAction(client, awardemoji.ListSnippetNoteAwardEmoji),
+		"emoji_snippet_note_get":    routeAction(client, awardemoji.GetSnippetNoteAwardEmoji),
+		"emoji_snippet_note_create": routeAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
+		"emoji_snippet_note_delete": destructiveVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
 	}
 	addMetaTool(server, "gitlab_snippet", `Create, list, get, update, and delete GitLab snippets (project and personal). Also manages raw content, user files, discussions, notes, and award emoji.
 Valid actions: `+validActionsString(routes)+`
@@ -2461,24 +2461,24 @@ Actions:
 - emoji_snippet_note_create: Add award emoji to a snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
 - emoji_snippet_note_delete: Delete award emoji from a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
 
-See also: gitlab_project, gitlab_user`, routes, metaAnnotations, toolutil.IconSnippet)
+See also: gitlab_project, gitlab_user`, routes, toolutil.IconSnippet)
 }
 
 // registerFeatureFlagsMeta registers the gitlab_feature_flags meta-tool with actions:
 // feature_flag_list, feature_flag_get, feature_flag_create, feature_flag_update, feature_flag_delete,
 // ff_user_list_list, ff_user_list_get, ff_user_list_create, ff_user_list_update, and ff_user_list_delete.
 func registerFeatureFlagsMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"feature_flag_list":   wrapAction(client, featureflags.ListFeatureFlags),
-		"feature_flag_get":    wrapAction(client, featureflags.GetFeatureFlag),
-		"feature_flag_create": wrapAction(client, featureflags.CreateFeatureFlag),
-		"feature_flag_update": wrapAction(client, featureflags.UpdateFeatureFlag),
-		"feature_flag_delete": wrapVoidAction(client, featureflags.DeleteFeatureFlag),
-		"ff_user_list_list":   wrapAction(client, ffuserlists.ListUserLists),
-		"ff_user_list_get":    wrapAction(client, ffuserlists.GetUserList),
-		"ff_user_list_create": wrapAction(client, ffuserlists.CreateUserList),
-		"ff_user_list_update": wrapAction(client, ffuserlists.UpdateUserList),
-		"ff_user_list_delete": wrapVoidAction(client, ffuserlists.DeleteUserList),
+	routes := actionMap{
+		"feature_flag_list":   routeAction(client, featureflags.ListFeatureFlags),
+		"feature_flag_get":    routeAction(client, featureflags.GetFeatureFlag),
+		"feature_flag_create": routeAction(client, featureflags.CreateFeatureFlag),
+		"feature_flag_update": routeAction(client, featureflags.UpdateFeatureFlag),
+		"feature_flag_delete": destructiveVoidAction(client, featureflags.DeleteFeatureFlag),
+		"ff_user_list_list":   routeAction(client, ffuserlists.ListUserLists),
+		"ff_user_list_get":    routeAction(client, ffuserlists.GetUserList),
+		"ff_user_list_create": routeAction(client, ffuserlists.CreateUserList),
+		"ff_user_list_update": routeAction(client, ffuserlists.UpdateUserList),
+		"ff_user_list_delete": destructiveVoidAction(client, ffuserlists.DeleteUserList),
 	}
 	addMetaTool(server, "gitlab_feature_flags", `Manage GitLab feature flags and feature flag user lists (named sets of user IDs).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2495,17 +2495,17 @@ Actions:
 - ff_user_list_update: Update a feature flag user list. Params: project_id (required), iid (required), name, user_xids
 - ff_user_list_delete: Delete a feature flag user list. Params: project_id (required), iid (required)
 
-See also: gitlab_project, gitlab_environment`, routes, metaAnnotations, toolutil.IconConfig)
+See also: gitlab_project, gitlab_environment`, routes, toolutil.IconConfig)
 }
 
 // registerMergeTrainMeta registers the gitlab_merge_train meta-tool with actions
 // for listing, getting, and adding merge requests to merge trains.
 func registerMergeTrainMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list_project": wrapAction(client, mergetrains.ListProjectMergeTrains),
-		"list_branch":  wrapAction(client, mergetrains.ListMergeRequestInMergeTrain),
-		"get":          wrapAction(client, mergetrains.GetMergeRequestOnMergeTrain),
-		"add":          wrapAction(client, mergetrains.AddMergeRequestToMergeTrain),
+	routes := actionMap{
+		"list_project": routeAction(client, mergetrains.ListProjectMergeTrains),
+		"list_branch":  routeAction(client, mergetrains.ListMergeRequestInMergeTrain),
+		"get":          routeAction(client, mergetrains.GetMergeRequestOnMergeTrain),
+		"add":          routeAction(client, mergetrains.AddMergeRequestToMergeTrain),
 	}
 	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues). List, get, and add merge requests to merge trains.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2516,19 +2516,19 @@ Actions:
 - get: Get the status of a merge request in a merge train. Params: project_id (required), merge_request_id (required)
 - add: Add a merge request to a merge train. Params: project_id (required), merge_request_id (required), auto_merge (bool), sha (string), squash (bool)
 
-See also: gitlab_merge_request, gitlab_pipeline`, routes, metaAnnotations, toolutil.IconMR)
+See also: gitlab_merge_request, gitlab_pipeline`, routes, toolutil.IconMR)
 }
 
 // registerAuditEventMeta registers the gitlab_audit_event meta-tool with actions
 // for listing and getting audit events at instance, group, and project levels.
 func registerAuditEventMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list_instance": wrapAction(client, auditevents.ListInstance),
-		"get_instance":  wrapAction(client, auditevents.GetInstance),
-		"list_group":    wrapAction(client, auditevents.ListGroup),
-		"get_group":     wrapAction(client, auditevents.GetGroup),
-		"list_project":  wrapAction(client, auditevents.ListProject),
-		"get_project":   wrapAction(client, auditevents.GetProject),
+	routes := actionMap{
+		"list_instance": routeAction(client, auditevents.ListInstance),
+		"get_instance":  routeAction(client, auditevents.GetInstance),
+		"list_group":    routeAction(client, auditevents.ListGroup),
+		"get_group":     routeAction(client, auditevents.GetGroup),
+		"list_project":  routeAction(client, auditevents.ListProject),
+		"get_project":   routeAction(client, auditevents.GetProject),
 	}
 	addMetaTool(server, "gitlab_audit_event", `List and get GitLab audit events at instance, group, and project levels. Track who did what and when for compliance.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2541,15 +2541,15 @@ Actions:
 - list_project: List project audit events. Params: project_id (required), created_after, created_before, page, per_page
 - get_project: Get a single project audit event. Params: project_id (required), event_id (required)
 
-See also: gitlab_admin (instance administration)`, routes, metaAnnotations, toolutil.IconEvent)
+See also: gitlab_admin (instance administration)`, routes, toolutil.IconEvent)
 }
 
 // registerDORAMetricsMeta registers the gitlab_dora_metrics meta-tool with actions
 // for retrieving DORA metrics at project and group levels.
 func registerDORAMetricsMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"project": wrapAction(client, dorametrics.GetProjectMetrics),
-		"group":   wrapAction(client, dorametrics.GetGroupMetrics),
+	routes := actionMap{
+		"project": routeAction(client, dorametrics.GetProjectMetrics),
+		"group":   routeAction(client, dorametrics.GetGroupMetrics),
 	}
 	addMetaTool(server, "gitlab_dora_metrics", `Get GitLab DORA metrics (deployment frequency, lead time, MTTR, change failure rate).
 Use "action" to specify the scope. Valid actions: `+validActionsString(routes)+`
@@ -2558,17 +2558,17 @@ Actions:
 - project: Get DORA metrics for a project. Params: project_id (required), metric (required: deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), interval (daily|monthly|all), environment_tiers (array)
 - group: Get DORA metrics for a group. Params: group_id (required), metric (required), start_date, end_date, interval, environment_tiers
 
-See also: gitlab_environment, gitlab_pipeline`, routes, metaAnnotations, toolutil.IconAnalytics)
+See also: gitlab_environment, gitlab_pipeline`, routes, toolutil.IconAnalytics)
 }
 
 // registerDependencyMeta registers the gitlab_dependency meta-tool with actions
 // for listing project dependencies and managing dependency list exports (SBOM).
 func registerDependencyMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":            wrapAction(client, dependencies.ListDeps),
-		"export_create":   wrapAction(client, dependencies.CreateExport),
-		"export_get":      wrapAction(client, dependencies.GetExport),
-		"export_download": wrapAction(client, dependencies.DownloadExport),
+	routes := actionMap{
+		"list":            routeAction(client, dependencies.ListDeps),
+		"export_create":   routeAction(client, dependencies.CreateExport),
+		"export_get":      routeAction(client, dependencies.GetExport),
+		"export_download": routeAction(client, dependencies.DownloadExport),
 	}
 	addMetaTool(server, "gitlab_dependency", `List GitLab project dependencies and create/download SBOM exports (CycloneDX).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2579,27 +2579,27 @@ Actions:
 - export_get: Check status of a dependency list export. Params: export_id (required)
 - export_download: Download a completed export (CycloneDX JSON, max 1MB). Params: export_id (required)
 
-See also: gitlab_project, gitlab_vulnerability (security vulnerabilities)`, routes, metaAnnotations, toolutil.IconPackage)
+See also: gitlab_project, gitlab_vulnerability (security vulnerabilities)`, routes, toolutil.IconPackage)
 }
 
 // registerExternalStatusCheckMeta registers the gitlab_external_status_check meta-tool with actions
 // for managing external status checks on merge requests and projects (legacy + project-scoped APIs).
 func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list_mr_checks":         wrapAction(client, externalstatuschecks.ListMergeStatusChecks),
-		"set_status":             wrapVoidAction(client, externalstatuschecks.SetExternalStatusCheckStatus),
-		"list_project_checks":    wrapAction(client, externalstatuschecks.ListProjectStatusChecks),
-		"create":                 wrapVoidAction(client, externalstatuschecks.CreateExternalStatusCheck),
-		"delete":                 wrapVoidAction(client, externalstatuschecks.DeleteExternalStatusCheck),
-		"update":                 wrapVoidAction(client, externalstatuschecks.UpdateExternalStatusCheck),
-		"retry":                  wrapVoidAction(client, externalstatuschecks.RetryFailedStatusCheckForMR),
-		"list_project_mr_checks": wrapAction(client, externalstatuschecks.ListProjectMRExternalStatusChecks),
-		"list_project":           wrapAction(client, externalstatuschecks.ListProjectExternalStatusChecks),
-		"create_project":         wrapAction(client, externalstatuschecks.CreateProjectExternalStatusCheck),
-		"delete_project":         wrapVoidAction(client, externalstatuschecks.DeleteProjectExternalStatusCheck),
-		"update_project":         wrapAction(client, externalstatuschecks.UpdateProjectExternalStatusCheck),
-		"retry_project":          wrapVoidAction(client, externalstatuschecks.RetryFailedExternalStatusCheckForProjectMR),
-		"set_project_mr_status":  wrapVoidAction(client, externalstatuschecks.SetProjectMRExternalStatusCheckStatus),
+	routes := actionMap{
+		"list_mr_checks":         routeAction(client, externalstatuschecks.ListMergeStatusChecks),
+		"set_status":             routeVoidAction(client, externalstatuschecks.SetExternalStatusCheckStatus),
+		"list_project_checks":    routeAction(client, externalstatuschecks.ListProjectStatusChecks),
+		"create":                 routeVoidAction(client, externalstatuschecks.CreateExternalStatusCheck),
+		"delete":                 destructiveVoidAction(client, externalstatuschecks.DeleteExternalStatusCheck),
+		"update":                 routeVoidAction(client, externalstatuschecks.UpdateExternalStatusCheck),
+		"retry":                  routeVoidAction(client, externalstatuschecks.RetryFailedStatusCheckForMR),
+		"list_project_mr_checks": routeAction(client, externalstatuschecks.ListProjectMRExternalStatusChecks),
+		"list_project":           routeAction(client, externalstatuschecks.ListProjectExternalStatusChecks),
+		"create_project":         routeAction(client, externalstatuschecks.CreateProjectExternalStatusCheck),
+		"delete_project":         destructiveVoidAction(client, externalstatuschecks.DeleteProjectExternalStatusCheck),
+		"update_project":         routeAction(client, externalstatuschecks.UpdateProjectExternalStatusCheck),
+		"retry_project":          routeVoidAction(client, externalstatuschecks.RetryFailedExternalStatusCheckForProjectMR),
+		"set_project_mr_status":  routeVoidAction(client, externalstatuschecks.SetProjectMRExternalStatusCheckStatus),
 	}
 	addMetaTool(server, "gitlab_external_status_check", `Manage GitLab external status checks for merge requests and projects. Create, list, update, delete checks and set/retry check status.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2622,17 +2622,17 @@ Actions (project-scoped, preferred):
 - retry_project: Retry a failed status check for a project MR. Params: project_id, mr_iid, check_id (required)
 - set_project_mr_status: Set status of an external status check. Params: project_id, mr_iid, sha, external_status_check_id, status (required)
 
-See also: gitlab_merge_request`, routes, metaAnnotations, toolutil.IconSecurity)
+See also: gitlab_merge_request`, routes, toolutil.IconSecurity)
 }
 
 // registerGroupSCIMMeta registers the gitlab_group_scim meta-tool with actions
 // for managing SCIM identities in a group.
 func registerGroupSCIMMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":   wrapAction(client, groupscim.List),
-		"get":    wrapAction(client, groupscim.Get),
-		"update": wrapVoidAction(client, groupscim.Update),
-		"delete": wrapVoidAction(client, groupscim.Delete),
+	routes := actionMap{
+		"list":   routeAction(client, groupscim.List),
+		"get":    routeAction(client, groupscim.Get),
+		"update": routeVoidAction(client, groupscim.Update),
+		"delete": destructiveVoidAction(client, groupscim.Delete),
 	}
 	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning (list, get, update, delete).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2643,19 +2643,19 @@ Actions:
 - update: Update a SCIM identity's external UID. Params: group_id (required), uid (required), extern_uid (required)
 - delete: Delete a SCIM identity. Params: group_id (required), uid (required)
 
-See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconSecurity)
+See also: gitlab_group, gitlab_user`, routes, toolutil.IconSecurity)
 }
 
 // registerMemberRoleMeta registers the gitlab_member_role meta-tool with actions
 // for managing custom member roles at instance and group levels.
 func registerMemberRoleMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list_instance":   wrapAction(client, memberroles.ListInstance),
-		"create_instance": wrapAction(client, memberroles.CreateInstance),
-		"delete_instance": wrapVoidAction(client, memberroles.DeleteInstance),
-		"list_group":      wrapAction(client, memberroles.ListGroup),
-		"create_group":    wrapAction(client, memberroles.CreateGroup),
-		"delete_group":    wrapVoidAction(client, memberroles.DeleteGroup),
+	routes := actionMap{
+		"list_instance":   routeAction(client, memberroles.ListInstance),
+		"create_instance": routeAction(client, memberroles.CreateInstance),
+		"delete_instance": destructiveVoidAction(client, memberroles.DeleteInstance),
+		"list_group":      routeAction(client, memberroles.ListGroup),
+		"create_group":    routeAction(client, memberroles.CreateGroup),
+		"delete_group":    destructiveVoidAction(client, memberroles.DeleteGroup),
 	}
 	addMetaTool(server, "gitlab_member_role", `Manage custom member roles in GitLab at instance or group level. Define fine-grained permissions beyond standard access levels.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2668,17 +2668,17 @@ Actions:
 - create_group: Create a group-level member role. Params: group_id (required), name (required), base_access_level (required), description, permissions
 - delete_group: Delete a group-level member role. Params: group_id (required), member_role_id (required)
 
-See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconSecurity)
+See also: gitlab_group, gitlab_user`, routes, toolutil.IconSecurity)
 }
 
 // registerEnterpriseUserMeta registers the gitlab_enterprise_user meta-tool with actions
 // for listing, getting, disabling 2FA, and deleting enterprise users.
 func registerEnterpriseUserMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":        wrapAction(client, enterpriseusers.List),
-		"get":         wrapAction(client, enterpriseusers.Get),
-		"disable_2fa": wrapVoidAction(client, enterpriseusers.Disable2FA),
-		"delete":      wrapVoidAction(client, enterpriseusers.Delete),
+	routes := actionMap{
+		"list":        routeAction(client, enterpriseusers.List),
+		"get":         routeAction(client, enterpriseusers.Get),
+		"disable_2fa": destructiveVoidAction(client, enterpriseusers.Disable2FA),
+		"delete":      destructiveVoidAction(client, enterpriseusers.Delete),
 	}
 	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group: list, get, disable 2FA, and delete.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2689,32 +2689,32 @@ Actions:
 - disable_2fa: Disable two-factor authentication for an enterprise user. Params: group_id (required), user_id (required)
 - delete: Delete an enterprise user. Params: group_id (required), user_id (required), hard_delete (optional)
 
-See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconUser)
+See also: gitlab_group, gitlab_user`, routes, toolutil.IconUser)
 }
 
 // registerAttestationMeta registers the gitlab_attestation meta-tool with actions
 // for listing and downloading build attestations.
 func registerAttestationMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":     wrapAction(client, attestations.List),
-		"download": wrapAction(client, attestations.Download),
+	routes := actionMap{
+		"list":     routeAction(client, attestations.List),
+		"download": routeAction(client, attestations.Download),
 	}
-	addMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for GitLab project artifacts.
+	addReadOnlyMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for GitLab project artifacts.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - list: List attestations for a project matching a subject digest. Params: project_id (required), subject_digest (required)
 - download: Download a specific attestation. Params: project_id (required), attestation_iid (required)
 
-See also: gitlab_pipeline, gitlab_package`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
+See also: gitlab_pipeline, gitlab_package`, routes, toolutil.IconSecurity)
 }
 
 // registerCompliancePolicyMeta registers the gitlab_compliance_policy meta-tool with actions:
 // get, update.
 func registerCompliancePolicyMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"get":    wrapAction(client, compliancepolicy.Get),
-		"update": wrapAction(client, compliancepolicy.Update),
+	routes := actionMap{
+		"get":    routeAction(client, compliancepolicy.Get),
+		"update": routeAction(client, compliancepolicy.Update),
 	}
 	addMetaTool(server, "gitlab_compliance_policy", `Get and update admin compliance policy settings (CSP namespace configuration).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2723,17 +2723,17 @@ Actions:
 - get: Get current compliance policy settings (admin). No params required.
 - update: Update compliance policy settings (admin). Params: csp_namespace_id (optional, int64)
 
-See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconSecurity)
+See also: gitlab_admin`, routes, toolutil.IconSecurity)
 }
 
 // registerProjectAliasMeta registers the gitlab_project_alias meta-tool with actions:
 // list, get, create, delete.
 func registerProjectAliasMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":   wrapAction(client, projectaliases.List),
-		"get":    wrapAction(client, projectaliases.Get),
-		"create": wrapAction(client, projectaliases.Create),
-		"delete": wrapVoidAction(client, projectaliases.Delete),
+	routes := actionMap{
+		"list":   routeAction(client, projectaliases.List),
+		"get":    routeAction(client, projectaliases.Get),
+		"create": routeAction(client, projectaliases.Create),
+		"delete": destructiveVoidAction(client, projectaliases.Delete),
 	}
 	addMetaTool(server, "gitlab_project_alias", `Manage GitLab project aliases: create short names that redirect to projects (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2744,21 +2744,21 @@ Actions:
 - create: Create a project alias. Params: name (required), project_id (required, int64)
 - delete: Delete a project alias. Params: name (required)
 
-See also: gitlab_project`, routes, metaAnnotations, toolutil.IconProject)
+See also: gitlab_project`, routes, toolutil.IconProject)
 }
 
 // registerGeoMeta registers the gitlab_geo enterprise meta-tool that provides
 // Geo replication site management (create, list, get, edit, delete, repair, status).
 func registerGeoMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"create":      wrapAction(client, geo.Create),
-		"list":        wrapAction(client, geo.List),
-		"get":         wrapAction(client, geo.Get),
-		"edit":        wrapAction(client, geo.Edit),
-		"delete":      wrapVoidAction(client, geo.Delete),
-		"repair":      wrapAction(client, geo.Repair),
-		"list_status": wrapAction(client, geo.ListStatus),
-		"get_status":  wrapAction(client, geo.GetStatus),
+	routes := actionMap{
+		"create":      routeAction(client, geo.Create),
+		"list":        routeAction(client, geo.List),
+		"get":         routeAction(client, geo.Get),
+		"edit":        routeAction(client, geo.Edit),
+		"delete":      destructiveVoidAction(client, geo.Delete),
+		"repair":      routeAction(client, geo.Repair),
+		"list_status": routeAction(client, geo.ListStatus),
+		"get_status":  routeAction(client, geo.GetStatus),
 	}
 	addMetaTool(server, "gitlab_geo", `Manage GitLab Geo replication sites: create, list, get, edit, delete, repair, and check status (admin, Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2773,46 +2773,46 @@ Actions:
 - list_status: List replication status of all Geo sites. Pagination: page, per_page
 - get_status: Get replication status of a Geo site. Params: id (required)
 
-See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconServer)
+See also: gitlab_admin`, routes, toolutil.IconServer)
 }
 
 // registerModelRegistryMeta registers the gitlab_model_registry enterprise meta-tool
 // that provides ML model registry operations (download model package files).
 func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"download": wrapAction(client, modelregistry.Download),
+	routes := actionMap{
+		"download": routeAction(client, modelregistry.Download),
 	}
-	addMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate).
+	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
 
-See also: gitlab_package`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
+See also: gitlab_package`, routes, toolutil.IconPackage)
 }
 
 // registerStorageMoveMeta registers the gitlab_storage_move enterprise meta-tool
 // that provides repository storage move operations for projects, groups, and snippets.
 func registerStorageMoveMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"retrieve_all_project":    wrapAction(client, projectstoragemoves.RetrieveAll),
-		"retrieve_project":        wrapAction(client, projectstoragemoves.RetrieveForProject),
-		"get_project":             wrapAction(client, projectstoragemoves.Get),
-		"get_project_for_project": wrapAction(client, projectstoragemoves.GetForProject),
-		"schedule_project":        wrapAction(client, projectstoragemoves.Schedule),
-		"schedule_all_project":    wrapAction(client, projectstoragemoves.ScheduleAll),
-		"retrieve_all_group":      wrapAction(client, groupstoragemoves.RetrieveAll),
-		"retrieve_group":          wrapAction(client, groupstoragemoves.RetrieveForGroup),
-		"get_group":               wrapAction(client, groupstoragemoves.Get),
-		"get_group_for_group":     wrapAction(client, groupstoragemoves.GetForGroup),
-		"schedule_group":          wrapAction(client, groupstoragemoves.Schedule),
-		"schedule_all_group":      wrapAction(client, groupstoragemoves.ScheduleAll),
-		"retrieve_all_snippet":    wrapAction(client, snippetstoragemoves.RetrieveAll),
-		"retrieve_snippet":        wrapAction(client, snippetstoragemoves.RetrieveForSnippet),
-		"get_snippet":             wrapAction(client, snippetstoragemoves.Get),
-		"get_snippet_for_snippet": wrapAction(client, snippetstoragemoves.GetForSnippet),
-		"schedule_snippet":        wrapAction(client, snippetstoragemoves.Schedule),
-		"schedule_all_snippet":    wrapAction(client, snippetstoragemoves.ScheduleAll),
+	routes := actionMap{
+		"retrieve_all_project":    routeAction(client, projectstoragemoves.RetrieveAll),
+		"retrieve_project":        routeAction(client, projectstoragemoves.RetrieveForProject),
+		"get_project":             routeAction(client, projectstoragemoves.Get),
+		"get_project_for_project": routeAction(client, projectstoragemoves.GetForProject),
+		"schedule_project":        routeAction(client, projectstoragemoves.Schedule),
+		"schedule_all_project":    routeAction(client, projectstoragemoves.ScheduleAll),
+		"retrieve_all_group":      routeAction(client, groupstoragemoves.RetrieveAll),
+		"retrieve_group":          routeAction(client, groupstoragemoves.RetrieveForGroup),
+		"get_group":               routeAction(client, groupstoragemoves.Get),
+		"get_group_for_group":     routeAction(client, groupstoragemoves.GetForGroup),
+		"schedule_group":          routeAction(client, groupstoragemoves.Schedule),
+		"schedule_all_group":      routeAction(client, groupstoragemoves.ScheduleAll),
+		"retrieve_all_snippet":    routeAction(client, snippetstoragemoves.RetrieveAll),
+		"retrieve_snippet":        routeAction(client, snippetstoragemoves.RetrieveForSnippet),
+		"get_snippet":             routeAction(client, snippetstoragemoves.Get),
+		"get_snippet_for_snippet": routeAction(client, snippetstoragemoves.GetForSnippet),
+		"schedule_snippet":        routeAction(client, snippetstoragemoves.Schedule),
+		"schedule_all_snippet":    routeAction(client, snippetstoragemoves.ScheduleAll),
 	}
 	addMetaTool(server, "gitlab_storage_move", `Manage GitLab repository storage moves across projects, groups, and snippets (admin only).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2841,21 +2841,21 @@ Actions (Snippet):
 - schedule_snippet: Schedule a storage move for a snippet. Params: snippet_id (required), destination_storage_name (optional)
 - schedule_all_snippet: Schedule storage moves for all snippets. Params: source_storage_name (optional), destination_storage_name (optional)
 
-See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconServer)
+See also: gitlab_admin`, routes, toolutil.IconServer)
 }
 
 // registerVulnerabilityMeta registers the gitlab_vulnerability meta-tool with actions:
 // list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
 func registerVulnerabilityMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                      wrapAction(client, vulnerabilities.List),
-		"get":                       wrapAction(client, vulnerabilities.Get),
-		"dismiss":                   wrapAction(client, vulnerabilities.Dismiss),
-		"confirm":                   wrapAction(client, vulnerabilities.Confirm),
-		"resolve":                   wrapAction(client, vulnerabilities.Resolve),
-		"revert":                    wrapAction(client, vulnerabilities.Revert),
-		"severity_count":            wrapAction(client, vulnerabilities.SeverityCount),
-		"pipeline_security_summary": wrapAction(client, vulnerabilities.PipelineSecuritySummary),
+	routes := actionMap{
+		"list":                      routeAction(client, vulnerabilities.List),
+		"get":                       routeAction(client, vulnerabilities.Get),
+		"dismiss":                   routeAction(client, vulnerabilities.Dismiss),
+		"confirm":                   routeAction(client, vulnerabilities.Confirm),
+		"resolve":                   routeAction(client, vulnerabilities.Resolve),
+		"revert":                    routeAction(client, vulnerabilities.Revert),
+		"severity_count":            routeAction(client, vulnerabilities.SeverityCount),
+		"pipeline_security_summary": routeAction(client, vulnerabilities.PipelineSecuritySummary),
 	}
 	addMetaTool(server, "gitlab_vulnerability", `List, get, dismiss, confirm, resolve, and revert GitLab project vulnerabilities. Get severity counts and pipeline security summaries (Premium/Ultimate, GraphQL).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2870,45 +2870,45 @@ Actions:
 - severity_count: Get vulnerability severity counts for a project. Params: project_path (required)
 - pipeline_security_summary: Get security report summary for a pipeline. Params: project_path (required), pipeline_iid (required)
 
-See also: gitlab_security_finding (pipeline security report), gitlab_pipeline`, routes, metaAnnotations, toolutil.IconSecurity)
+See also: gitlab_security_finding (pipeline security report), gitlab_pipeline`, routes, toolutil.IconSecurity)
 }
 
 // registerSecurityFindingsMeta registers the gitlab_security_finding meta-tool with actions: list.
 func registerSecurityFindingsMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list": wrapAction(client, securityfindings.List),
+	routes := actionMap{
+		"list": routeAction(client, securityfindings.List),
 	}
-	addMetaTool(server, "gitlab_security_finding", `List pipeline security report findings via GraphQL API (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
+	addReadOnlyMetaTool(server, "gitlab_security_finding", `List pipeline security report findings via GraphQL API (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - list: List security report findings for a pipeline. Params: project_path (required), pipeline_iid (required), severity (optional, array), confidence (optional, array), scanner (optional, array), report_type (optional, array). Pagination: first, after
 
-See also: gitlab_vulnerability (project vulnerabilities), gitlab_pipeline`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
+See also: gitlab_vulnerability (project vulnerabilities), gitlab_pipeline`, routes, toolutil.IconSecurity)
 }
 
 // registerCICatalogMeta registers the gitlab_ci_catalog meta-tool with actions: list, get.
 func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list": wrapAction(client, cicatalog.List),
-		"get":  wrapAction(client, cicatalog.Get),
+	routes := actionMap{
+		"list": routeAction(client, cicatalog.List),
+		"get":  routeAction(client, cicatalog.Get),
 	}
-	addMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
+	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
 - get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
 
-See also: gitlab_pipeline, gitlab_template (standard templates)`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
+See also: gitlab_pipeline, gitlab_template (standard templates)`, routes, toolutil.IconPackage)
 }
 
 // registerCustomEmojiMeta registers the gitlab_custom_emoji meta-tool with actions: list, create, delete.
 func registerCustomEmojiMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":   wrapAction(client, customemoji.List),
-		"create": wrapAction(client, customemoji.Create),
-		"delete": wrapVoidAction(client, customemoji.Delete),
+	routes := actionMap{
+		"list":   routeAction(client, customemoji.List),
+		"create": routeAction(client, customemoji.Create),
+		"delete": destructiveVoidAction(client, customemoji.Delete),
 	}
 	addMetaTool(server, "gitlab_custom_emoji", `Manage group-level custom emoji via GraphQL API (Premium/Ultimate). Custom emoji are group-level assets with custom images, distinct from award emoji (reactions).
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
@@ -2918,5 +2918,5 @@ Actions:
 - create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
 - delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
 
-See also: gitlab_group`, routes, metaAnnotations, toolutil.IconLabel)
+See also: gitlab_group`, routes, toolutil.IconLabel)
 }

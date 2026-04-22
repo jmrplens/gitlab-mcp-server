@@ -86,12 +86,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_freeze_period meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_freeze_periods":  toolutil.WrapAction(client, List),
-		"get_freeze_period":    toolutil.WrapAction(client, Get),
-		"create_freeze_period": toolutil.WrapAction(client, Create),
-		"update_freeze_period": toolutil.WrapAction(client, Update),
-		"delete_freeze_period": toolutil.WrapVoidAction(client, Delete),
+	routes := toolutil.ActionMap{
+		"list_freeze_periods":  toolutil.RouteAction(client, List),
+		"get_freeze_period":    toolutil.RouteAction(client, Get),
+		"create_freeze_period": toolutil.RouteAction(client, Create),
+		"update_freeze_period": toolutil.RouteAction(client, Update),
+		"delete_freeze_period": toolutil.DestructiveVoidAction(client, Delete),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

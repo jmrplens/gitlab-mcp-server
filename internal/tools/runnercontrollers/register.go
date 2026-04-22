@@ -92,25 +92,25 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 // RegisterMeta registers the gitlab_runner_controller meta-tool, consolidating
 // controller CRUD, scope management, and token management into a single tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
+	routes := toolutil.ActionMap{
 		// Controller CRUD
-		"list":   toolutil.WrapAction(client, List),
-		"get":    toolutil.WrapAction(client, Get),
-		"create": toolutil.WrapAction(client, Create),
-		"update": toolutil.WrapAction(client, Update),
-		"delete": toolutil.WrapVoidAction(client, Delete),
+		"list":   toolutil.RouteAction(client, List),
+		"get":    toolutil.RouteAction(client, Get),
+		"create": toolutil.RouteAction(client, Create),
+		"update": toolutil.RouteAction(client, Update),
+		"delete": toolutil.DestructiveVoidAction(client, Delete),
 		// Scope management
-		"scope_list":            toolutil.WrapAction(client, runnercontrollerscopes.List),
-		"scope_add_instance":    toolutil.WrapAction(client, runnercontrollerscopes.AddInstanceScope),
-		"scope_remove_instance": toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
-		"scope_add_runner":      toolutil.WrapAction(client, runnercontrollerscopes.AddRunnerScope),
-		"scope_remove_runner":   toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
+		"scope_list":            toolutil.RouteAction(client, runnercontrollerscopes.List),
+		"scope_add_instance":    toolutil.RouteAction(client, runnercontrollerscopes.AddInstanceScope),
+		"scope_remove_instance": toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
+		"scope_add_runner":      toolutil.RouteAction(client, runnercontrollerscopes.AddRunnerScope),
+		"scope_remove_runner":   toolutil.DestructiveVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
 		// Token management
-		"token_list":   toolutil.WrapAction(client, runnercontrollertokens.List),
-		"token_get":    toolutil.WrapAction(client, runnercontrollertokens.Get),
-		"token_create": toolutil.WrapAction(client, runnercontrollertokens.Create),
-		"token_rotate": toolutil.WrapAction(client, runnercontrollertokens.Rotate),
-		"token_revoke": toolutil.WrapVoidAction(client, runnercontrollertokens.Revoke),
+		"token_list":   toolutil.RouteAction(client, runnercontrollertokens.List),
+		"token_get":    toolutil.RouteAction(client, runnercontrollertokens.Get),
+		"token_create": toolutil.RouteAction(client, runnercontrollertokens.Create),
+		"token_rotate": toolutil.RouteAction(client, runnercontrollertokens.Rotate),
+		"token_revoke": toolutil.DestructiveVoidAction(client, runnercontrollertokens.Revoke),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

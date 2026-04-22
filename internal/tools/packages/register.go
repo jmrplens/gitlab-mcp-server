@@ -179,15 +179,15 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		return PublishDirectory(ctx, nil, client, input)
 	}
 
-	routes := map[string]toolutil.ActionFunc{
-		"publish":           publishAction,
-		"download":          downloadAction,
-		"list":              toolutil.WrapAction(client, List),
-		"file_list":         toolutil.WrapAction(client, FileList),
-		"delete":            deleteAction,
-		"file_delete":       fileDeleteAction,
-		"publish_and_link":  publishAndLinkAction,
-		"publish_directory": publishDirAction,
+	routes := toolutil.ActionMap{
+		"publish":           toolutil.Route(publishAction),
+		"download":          toolutil.Route(downloadAction),
+		"list":              toolutil.RouteAction(client, List),
+		"file_list":         toolutil.RouteAction(client, FileList),
+		"delete":            toolutil.DestructiveRoute(deleteAction),
+		"file_delete":       toolutil.DestructiveRoute(fileDeleteAction),
+		"publish_and_link":  toolutil.Route(publishAndLinkAction),
+		"publish_directory": toolutil.Route(publishDirAction),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

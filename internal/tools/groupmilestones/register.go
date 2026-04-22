@@ -128,15 +128,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the group milestone meta-tool on the MCP server.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":            toolutil.WrapAction(client, List),
-		"get":             toolutil.WrapAction(client, Get),
-		"create":          toolutil.WrapAction(client, Create),
-		"update":          toolutil.WrapAction(client, Update),
-		"delete":          toolutil.WrapVoidAction(client, Delete),
-		"issues":          toolutil.WrapAction(client, GetIssues),
-		"merge_requests":  toolutil.WrapAction(client, GetMergeRequests),
-		"burndown_events": toolutil.WrapAction(client, GetBurndownChartEvents),
+	routes := toolutil.ActionMap{
+		"list":            toolutil.RouteAction(client, List),
+		"get":             toolutil.RouteAction(client, Get),
+		"create":          toolutil.RouteAction(client, Create),
+		"update":          toolutil.RouteAction(client, Update),
+		"delete":          toolutil.DestructiveVoidAction(client, Delete),
+		"issues":          toolutil.RouteAction(client, GetIssues),
+		"merge_requests":  toolutil.RouteAction(client, GetMergeRequests),
+		"burndown_events": toolutil.RouteAction(client, GetBurndownChartEvents),
 	}
 
 	desc := `Manage GitLab group milestones (list, get, create, update, delete, issues, merge_requests, burndown_events).

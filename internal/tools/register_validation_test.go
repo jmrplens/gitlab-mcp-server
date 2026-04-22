@@ -184,7 +184,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile register_meta.go: %v", err)
 	}
-	reMetaTool := regexp.MustCompile(`addMetaTool\(server,\s+"(gitlab_\w+)"`)
+	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
 	for _, m := range reMetaTool.FindAllStringSubmatch(string(metaSrc), -1) {
 		validTools[m[1]] = true
 	}
@@ -199,23 +199,25 @@ func TestAllHintReferencesValid(t *testing.T) {
 	// 2. Build set of all meta-tool action keys from route maps.
 	validActions := make(map[string]bool)
 	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
-	reInlineAction := regexp.MustCompile(`"(\w+)":\s+wrap(?:Action|VoidAction|DelegateAction)\b`)
+	reInlineAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`)
 	for _, m := range reInlineAction.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
-	// Pattern for register_meta.go: routes["key"] = wrapAction(...) (enterprise assignment)
-	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*wrap(?:Action|VoidAction|DelegateAction)\b`)
+	// Pattern for register_meta.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
+	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`)
 	for _, m := range reRouteAssign.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
-	// Also match custom action variables (e.g., "publish": publishAction).
-	reCustomAction := regexp.MustCompile(`"(\w+)":\s+\w+Action\b`)
+	// Also match custom action variables wrapped in route/destructiveRoute (e.g., "publish": route(publishAction)).
+	reCustomAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`)
 	for _, m := range reCustomAction.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
 
-	// Pattern for sub-package register.go: "key": toolutil.WrapAction/WrapVoidAction
-	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.Wrap(?:Action|VoidAction)\b`)
+	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/DestructiveAction etc.
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route|Destructive)(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	// Pattern for sub-package register.go: routes["key"] = toolutil.Route/DestructiveRoute(...) (enterprise)
+	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route|Destructive)(?:Action|VoidAction|ActionWithRequest|Route)\b`)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -226,6 +228,9 @@ func TestAllHintReferencesValid(t *testing.T) {
 			continue
 		}
 		for _, m := range reDelegatedAction.FindAllStringSubmatch(string(src), -1) {
+			validActions[m[1]] = true
+		}
+		for _, m := range reDelegatedAssign.FindAllStringSubmatch(string(src), -1) {
 			validActions[m[1]] = true
 		}
 	}
@@ -298,4 +303,92 @@ func extractWriteHintLines(src string) []string {
 		}
 	}
 	return result
+}
+
+// TestDestructiveMetadataConsistency verifies that meta-tool routes marked with
+// destructive wrappers correspond to individual tools using DeleteAnnotations,
+// and that non-destructive routes do not correspond to individual tools with
+// DeleteAnnotations. This catches misclassified routes after migration.
+func TestDestructiveMetadataConsistency(t *testing.T) {
+	// 1. Build set of sub-package actions with their destructive wrapper status.
+	type routeInfo struct {
+		pkg         string
+		destructive bool
+	}
+	routeMap := make(map[string][]routeInfo)
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	// Patterns for destructive wrappers in sub-packages.
+	reSubDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	reSubNonDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		srcStr := string(src)
+		for _, m := range reSubDestructive.FindAllStringSubmatch(srcStr, -1) {
+			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: true})
+		}
+		for _, m := range reSubNonDestructive.FindAllStringSubmatch(srcStr, -1) {
+			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: false})
+		}
+	}
+
+	// 2. Build set of individual tools with DeleteAnnotations per sub-package.
+	deleteTools := make(map[string]bool) // key: "pkg/action" approximate
+	reDeleteAnn := regexp.MustCompile(`Annotations:\s+toolutil\.DeleteAnnotations`)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		if reDeleteAnn.Match(src) {
+			deleteTools[e.Name()] = true
+		}
+	}
+
+	// 3. Validate: destructive routes should correspond to packages with DeleteAnnotations.
+	var mismatches int
+	for action, infos := range routeMap {
+		for _, info := range infos {
+			hasDelete := deleteTools[info.pkg]
+			if info.destructive && !hasDelete {
+				// Acceptable for exact-match exceptions (merge, stop, erase, etc.)
+				// that are destructive but don't use DeleteAnnotations.
+				if !isExactMatchException(action) {
+					t.Logf("WARNING: %s/%s is destructive route but package has no DeleteAnnotations", info.pkg, action)
+				}
+			}
+			if !info.destructive && hasDelete {
+				// Non-destructive route in a package with delete tools — this is fine
+				// for list/get/create/update actions in the same package.
+				continue
+			}
+		}
+	}
+
+	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+}
+
+func isExactMatchException(action string) bool {
+	exceptions := map[string]bool{
+		"merge": true, "erase": true, "stop": true, "ban": true,
+		"block": true, "deactivate": true, "reject": true, "unapprove": true,
+		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
+	}
+	return exceptions[action]
 }

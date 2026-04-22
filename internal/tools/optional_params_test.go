@@ -404,11 +404,11 @@ func TestUnmarshalParamsMarshal_Error(t *testing.T) {
 // TestMakeMetaHandler_SuccessfulDispatch exercises the successful dispatch path.
 func TestMakeMetaHandler_SuccessfulDispatch(t *testing.T) {
 	called := false
-	handler := makeMetaHandler("test_tool", map[string]actionFunc{
-		"get": func(ctx context.Context, params map[string]any) (any, error) {
+	handler := makeMetaHandler("test_tool", actionMap{
+		"get": route(func(ctx context.Context, params map[string]any) (any, error) {
 			called = true
 			return "result", nil
-		},
+		}),
 	})
 
 	_, result, err := handler(context.Background(), nil, MetaToolInput{Action: "get", Params: map[string]any{}})

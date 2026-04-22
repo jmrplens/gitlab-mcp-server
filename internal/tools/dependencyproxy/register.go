@@ -38,8 +38,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_dependency_proxy meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"purge": toolutil.WrapVoidAction(client, Purge),
+	routes := toolutil.ActionMap{
+		"purge": toolutil.DestructiveVoidAction(client, Purge),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

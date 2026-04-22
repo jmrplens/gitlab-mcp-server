@@ -89,12 +89,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the feature flag user list meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, ListUserLists),
-		"get":    toolutil.WrapAction(client, GetUserList),
-		"create": toolutil.WrapAction(client, CreateUserList),
-		"update": toolutil.WrapAction(client, UpdateUserList),
-		"delete": toolutil.WrapVoidAction(client, DeleteUserList),
+	routes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, ListUserLists),
+		"get":    toolutil.RouteAction(client, GetUserList),
+		"create": toolutil.RouteAction(client, CreateUserList),
+		"update": toolutil.RouteAction(client, UpdateUserList),
+		"delete": toolutil.DestructiveVoidAction(client, DeleteUserList),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{

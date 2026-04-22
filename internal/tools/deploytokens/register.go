@@ -147,16 +147,16 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_deploy_token meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_all":       toolutil.WrapAction(client, ListAll),
-		"list_project":   toolutil.WrapAction(client, ListProject),
-		"list_group":     toolutil.WrapAction(client, ListGroup),
-		"get_project":    toolutil.WrapAction(client, GetProject),
-		"get_group":      toolutil.WrapAction(client, GetGroup),
-		"create_project": toolutil.WrapAction(client, CreateProject),
-		"create_group":   toolutil.WrapAction(client, CreateGroup),
-		"delete_project": toolutil.WrapVoidAction(client, DeleteProject),
-		"delete_group":   toolutil.WrapVoidAction(client, DeleteGroup),
+	routes := toolutil.ActionMap{
+		"list_all":       toolutil.RouteAction(client, ListAll),
+		"list_project":   toolutil.RouteAction(client, ListProject),
+		"list_group":     toolutil.RouteAction(client, ListGroup),
+		"get_project":    toolutil.RouteAction(client, GetProject),
+		"get_group":      toolutil.RouteAction(client, GetGroup),
+		"create_project": toolutil.RouteAction(client, CreateProject),
+		"create_group":   toolutil.RouteAction(client, CreateGroup),
+		"delete_project": toolutil.DestructiveVoidAction(client, DeleteProject),
+		"delete_group":   toolutil.DestructiveVoidAction(client, DeleteGroup),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
