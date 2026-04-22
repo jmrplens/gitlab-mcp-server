@@ -193,7 +193,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_search",
 		Title: toolutil.TitleFromName("gitlab_search"),
 		Description: `Search GitLab by scope. All actions need query*. Scope: project_id > group_id > global. Pagination: page, per_page.
-Valid actions: code, merge_requests, issues, commits, milestones, notes, projects, snippets, users, wiki
+Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
 - code: query*, project_id, group_id, ref
 - merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id

@@ -312,7 +312,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_analyze",
 		Title: toolutil.TitleFromName("gitlab_analyze"),
 		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Requires client sampling capability (human-in-the-loop).
-Valid actions: mr_changes, issue_summary, release_notes, pipeline_failure, mr_review, milestone_report, ci_config, issue_scope, mr_security, technical_debt, deployment_history
+Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
 All actions need project_id*. Additional params per action:
 - mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.

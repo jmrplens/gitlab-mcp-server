@@ -350,7 +350,7 @@ Runner CRUD:
 - list_all: (admin) type, status, paused, tag_list
 - get / remove: runner_id*
 - update: runner_id*, description, paused, tag_list, run_untagged, locked, access_level, maximum_timeout, maintenance_note
-- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort
+- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort, page, per_page
 
 Project/Group runners:
 - list_project: project_id*, type, status, tag_list
@@ -370,7 +370,7 @@ Registration and tokens:
 - list_managers: runner_id*
 
 Runner controllers (admin, experimental):
-- controller_list: (no params)
+- controller_list
 - controller_get / controller_delete: controller_id*
 - controller_create: description, state (enabled/disabled/dry_run)
 - controller_update: controller_id*, description, state
