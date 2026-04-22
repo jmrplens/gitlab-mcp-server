@@ -165,10 +165,11 @@ func TestRegisterMeta_RegistersTool(t *testing.T) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
+	ss, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
+	defer ss.Close()
 	cs, err := client.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
