@@ -34,7 +34,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 - **24 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, workspace roots, and 5 workflow best-practice guides
 - **38 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, audit
 - **6 MCP capabilities** — logging, completions, roots, progress, sampling, elicitation
-- **43 tool icons** — SVG data-URI icons on all tools, resources, and prompts for visual identification in MCP clients
+- **44 tool icons** — SVG data-URI icons on all tools, resources, and prompts for visual identification in MCP clients
 - **Pagination** on all list endpoints with metadata (total items, pages, next/prev)
 - **Transports**: stdio (default for desktop AI) and HTTP (Streamable HTTP for remote clients)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64

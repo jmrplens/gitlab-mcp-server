@@ -294,16 +294,16 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 // all 11 sampling analysis tools under one action-dispatched interface.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := map[string]toolutil.ActionFunc{
-		"mr_changes":        wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
-		"issue_summary":     wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
-		"release_notes":     wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
-		"pipeline_failure":  wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
-		"mr_review":         wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
-		"milestone_report":  wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
-		"ci_config":         wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
-		"issue_scope":       wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
-		"mr_security":       wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
-		"technical_debt":    wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
+		"mr_changes":         wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
+		"issue_summary":      wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
+		"release_notes":      wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
+		"pipeline_failure":   wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
+		"mr_review":          wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
+		"milestone_report":   wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
+		"ci_config":          wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
+		"issue_scope":        wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
+		"mr_security":        wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
+		"technical_debt":     wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
 		"deployment_history": wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory),
 	}
 

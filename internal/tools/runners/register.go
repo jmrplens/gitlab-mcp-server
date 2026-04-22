@@ -316,11 +316,11 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"reset_project_reg_token":  toolutil.WrapAction(client, ResetProjectRegToken),
 		"list_managers":            toolutil.WrapAction(client, ListManagers),
 		// Runner controller CRUD (admin, experimental)
-		"controller_list":             toolutil.WrapAction(client, runnercontrollers.List),
-		"controller_get":              toolutil.WrapAction(client, runnercontrollers.Get),
-		"controller_create":           toolutil.WrapAction(client, runnercontrollers.Create),
-		"controller_update":           toolutil.WrapAction(client, runnercontrollers.Update),
-		"controller_delete":           toolutil.WrapVoidAction(client, runnercontrollers.Delete),
+		"controller_list":   toolutil.WrapAction(client, runnercontrollers.List),
+		"controller_get":    toolutil.WrapAction(client, runnercontrollers.Get),
+		"controller_create": toolutil.WrapAction(client, runnercontrollers.Create),
+		"controller_update": toolutil.WrapAction(client, runnercontrollers.Update),
+		"controller_delete": toolutil.WrapVoidAction(client, runnercontrollers.Delete),
 		// Runner controller scope management
 		"controller_scope_list":            toolutil.WrapAction(client, runnercontrollerscopes.List),
 		"controller_scope_add_instance":    toolutil.WrapAction(client, runnercontrollerscopes.AddInstanceScope),

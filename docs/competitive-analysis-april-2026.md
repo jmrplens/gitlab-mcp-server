@@ -33,7 +33,7 @@ The **#1 pain point** across the entire ecosystem is **tool explosion** — IDEs
 |--------|-------|
 | Language | Go |
 | Individual tools | 1,004 |
-| Meta-tools | 42 base / 57 enterprise |
+| Meta-tools | 28 base / 43 enterprise |
 | Domain sub-packages | 162 |
 | MCP Resources | 24 |
 | MCP Prompts | 38 |
@@ -51,7 +51,7 @@ These represent our **biggest documentation opportunities** — users are filing
 
 **User demand**: zereight #371 (6+ reactions), rifqi96 #3, HainanZhao #1
 **Problem**: JetBrains has 100-tool limit. Cursor warns about too many tools. Users want whitelist/filter.
-**Our solution**: Meta-tool architecture consolidates 1,004 tools into 42 domain meta-tools. `META_TOOLS=true` (default).
+**Our solution**: Meta-tool architecture consolidates 1,004 tools into 28 domain meta-tools. `META_TOOLS=true` (default).
 **Competitor approach**: zereight added `GITLAB_TOOLSETS` / `GITLAB_TOOLS` env vars (simpler, less elegant).
 **Documentation priority**: **🔴 HIGHEST** — This is our strongest differentiator and nobody knows about it.
 
@@ -209,7 +209,7 @@ The **#1 source of bugs** in the TypeScript ecosystem is type handling:
 | Approach | zereight (GITLAB_TOOLSETS) | Our Meta-Tools |
 |----------|---------------------------|----------------|
 | Mechanism | Env var whitelist | Domain aggregation |
-| Tool count visible to LLM | Up to 141 | 42 (or 57 enterprise) |
+| Tool count visible to LLM | Up to 141 | 28 (or 43 enterprise) |
 | Discovery | None — user must know tool names | Built-in: meta-tools list available tools |
 | LLM efficiency | Low — large tool list | High — small, focused tool list |
 | IDE compatibility | Still hits tool limits | Well within all IDE limits |

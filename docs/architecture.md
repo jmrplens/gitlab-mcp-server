@@ -489,7 +489,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (42/57) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 tools | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (28/43) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 tools | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |
