@@ -137,7 +137,11 @@ Actions (token management):
 - token_get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
 - token_create: Create a new token. Params: controller_id (required, int), description
 - token_rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
-- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)`,
+- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)
+
+Use this tool for runner controller lifecycle (admin, experimental): CRUD, scopes, and tokens.
+Do NOT use for managing runner instances (use gitlab_runner).
+See also: gitlab_runner (runner instance management)`,
 		Annotations: toolutil.MetaAnnotations,
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),

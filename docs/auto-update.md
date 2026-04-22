@@ -175,9 +175,9 @@ gitlab-mcp-server --http \
 
 ## MCP Tools
 
-When auto-update is enabled, update tools are registered as part of the `gitlab_mcp` meta-tool (or as individual tools in non-meta mode). These allow AI assistants to check for and apply updates on demand:
+When auto-update is enabled, update tools are registered as part of the `gitlab_server` meta-tool (or as individual tools in non-meta mode). These allow AI assistants to check for and apply updates on demand:
 
-### `gitlab_mcp_check_update`
+### `gitlab_server_check_update`
 
 Check if a newer version of the MCP server is available.
 
@@ -211,7 +211,7 @@ Check if a newer version of the MCP server is available.
 - Fixed merge request approval handling
 ```
 
-### `gitlab_mcp_apply_update`
+### `gitlab_server_apply_update`
 
 Download and apply the latest MCP server update. The binary is replaced using the rename trick (rename current → `.old`, place new binary at original path). On all platforms a server restart is required to use the new version.
 
@@ -270,8 +270,8 @@ graph TD
 
     subgraph "internal/tools/serverupdate"
         C --> L[RegisterTools]
-        L --> M[gitlab_mcp_check_update]
-        L --> N[gitlab_mcp_apply_update]
+        L --> M[gitlab_server_check_update]
+        L --> N[gitlab_server_apply_update]
         M --> H
         N --> I
         N -->|Windows fallback| S[DownloadAndReplace]
@@ -361,4 +361,4 @@ This disables:
 
 - Startup update check (stdio mode)
 - Periodic background checks (HTTP mode)
-- MCP tool registration (`gitlab_mcp_check_update` and `gitlab_mcp_apply_update` are not registered)
+- MCP tool registration (`gitlab_server_check_update` and `gitlab_server_apply_update` are not registered)

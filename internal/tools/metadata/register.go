@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_metadata",
 		Title:       toolutil.TitleFromName("gitlab_get_metadata"),
-		Description: "Get GitLab instance metadata (version, revision, KAS info, enterprise flag).\n\nReturns: JSON with GitLab instance metadata.\n\nSee also: gitlab_mcp_status",
+		Description: "Get GitLab instance metadata (version, revision, KAS info, enterprise flag).\n\nReturns: JSON with GitLab instance metadata.\n\nSee also: gitlab_server_status",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconServer,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {

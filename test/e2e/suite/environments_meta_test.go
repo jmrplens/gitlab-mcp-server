@@ -163,7 +163,7 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 	})
 }
 
-// TestMeta_DeploymentsExtended exercises deployment CRUD via gitlab_deployment.
+// TestMeta_DeploymentsExtended exercises deployment CRUD via gitlab_environment (deployment_* actions).
 func TestMeta_DeploymentsExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -187,8 +187,8 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 	requireNoError(t, envErr, "create environment for deployments")
 
 	t.Run("DeploymentList", func(t *testing.T) {
-		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "list",
+		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "deployment list")
@@ -197,8 +197,8 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 
 	t.Run("DeploymentCreate", func(t *testing.T) {
 		commitFileMeta(ctx, t, sess.meta, proj, "main", "deploy.txt", "deploy content", "deployment commit")
-		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "create",
+		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_create",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"environment": envName,

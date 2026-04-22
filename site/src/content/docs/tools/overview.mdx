@@ -71,13 +71,11 @@ All tools follow a consistent naming pattern:
 
 | Meta-tool                  | Description                 | Key Actions                                            |
 | -------------------------- | --------------------------- | ------------------------------------------------------ |
-| `gitlab_pipeline`          | Pipeline management         | list, get, create, cancel, retry, delete, wait         |
+| `gitlab_pipeline`          | Pipeline management         | list, get, create, cancel, retry, delete, wait, schedule_* |
 | `gitlab_job`               | CI job management           | list, get, play, cancel, retry, trace, artifacts, wait |
-| `gitlab_pipeline_schedule` | Scheduled pipelines         | list, get, create, update, delete, trigger             |
 | `gitlab_ci_lint`           | CI configuration validation | validate, project_lint                                 |
 | `gitlab_ci_variable`       | CI/CD variables             | list, get, create, update, delete                      |
-| `gitlab_environment`       | Environment management      | list, get, create, update, delete, stop                |
-| `gitlab_deployment`        | Deployment tracking         | list, get                                              |
+| `gitlab_environment`       | Environment management      | list, get, create, update, delete, stop, deployment_*  |
 | `gitlab_package`           | Package registry            | list, get, delete                                      |
 
 ### Collaboration

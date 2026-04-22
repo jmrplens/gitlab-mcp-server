@@ -1,7 +1,7 @@
 //go:build e2e
 
 // pipelineschedules_meta_test.go tests extended pipeline schedule actions via the
-// gitlab_pipeline_schedule meta-tool against a live GitLab instance. Covers get,
+// gitlab_pipeline meta-tool (schedule_* actions) against a live GitLab instance. Covers get,
 // edit_variable, and list_triggered_pipelines actions not exercised by the main schedule tests.
 package suite
 
@@ -29,8 +29,8 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "sched.txt", "content", "init for schedules")
 
 	// Create a schedule for testing
-	schedOut, schedErr := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-		"action": "create",
+	schedOut, schedErr := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+		"action": "schedule_create",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
 			"description": "e2e-extended-schedule",
@@ -41,15 +41,15 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 	requireNoError(t, schedErr, "create schedule")
 	schedID := strconv.Itoa(schedOut.ID)
 	defer func() {
-		_ = callToolVoidOn(ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "delete",
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": schedID},
 		})
 	}()
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "get",
+		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_get",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": schedID},
 		})
 		requireNoError(t, err, "get schedule")
@@ -59,8 +59,8 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 
 	// Create a variable, then edit it
 	varKey := "SCHED_VAR"
-	_, schedErr = callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-		"action": "create_variable",
+	_, schedErr = callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+		"action": "schedule_create_variable",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
 			"schedule_id": schedID,
@@ -71,8 +71,8 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 	requireNoError(t, schedErr, "create_variable for edit test")
 
 	t.Run("EditVariable", func(t *testing.T) {
-		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "edit_variable",
+		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_edit_variable",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"schedule_id": schedID,
@@ -86,8 +86,8 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 	})
 
 	t.Run("ListTriggeredPipelines", func(t *testing.T) {
-		out, err := callToolOn[pipelineschedules.TriggeredPipelinesListOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "list_triggered_pipelines",
+		out, err := callToolOn[pipelineschedules.TriggeredPipelinesListOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_list_triggered_pipelines",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": schedID},
 		})
 		requireNoError(t, err, "list_triggered_pipelines")

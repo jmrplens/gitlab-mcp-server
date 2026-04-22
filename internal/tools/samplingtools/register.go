@@ -236,3 +236,103 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatAnalyzeDeploymentHistoryMarkdown(out)), out, err)
 	})
 }
+
+// samplingUnsupportedOutput is a sentinel type returned by wrapSamplingAction
+// when the MCP client does not support the sampling capability.
+type samplingUnsupportedOutput struct{}
+
+// wrapSamplingAction wraps a sampling handler as an ActionFunc, converting
+// sampling.ErrSamplingNotSupported into a sentinel so the meta handler returns
+// an informational error result instead of a Go error.
+func wrapSamplingAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) toolutil.ActionFunc {
+	return func(ctx context.Context, params map[string]any) (any, error) {
+		input, err := toolutil.UnmarshalParams[T](params)
+		if err != nil {
+			return nil, err
+		}
+		result, err := fn(ctx, toolutil.RequestFromContext(ctx), client, input)
+		if errors.Is(err, sampling.ErrSamplingNotSupported) {
+			return samplingUnsupportedOutput{}, nil
+		}
+		return result, err
+	}
+}
+
+// metaMarkdownForResult dispatches sampling output types to their Markdown formatters.
+func metaMarkdownForResult(result any) *mcp.CallToolResult {
+	switch v := result.(type) {
+	case samplingUnsupportedOutput:
+		return SamplingUnsupportedResult("gitlab_analyze")
+	case AnalyzeMRChangesOutput:
+		return toolutil.ToolResultWithMarkdown(FormatAnalyzeMRChangesMarkdown(v))
+	case SummarizeIssueOutput:
+		return toolutil.ToolResultWithMarkdown(FormatSummarizeIssueMarkdown(v))
+	case GenerateReleaseNotesOutput:
+		return toolutil.ToolResultWithMarkdown(FormatGenerateReleaseNotesMarkdown(v))
+	case AnalyzePipelineFailureOutput:
+		return toolutil.ToolResultWithMarkdown(FormatAnalyzePipelineFailureMarkdown(v))
+	case SummarizeMRReviewOutput:
+		return toolutil.ToolResultWithMarkdown(FormatSummarizeMRReviewMarkdown(v))
+	case GenerateMilestoneReportOutput:
+		return toolutil.ToolResultWithMarkdown(FormatGenerateMilestoneReportMarkdown(v))
+	case AnalyzeCIConfigOutput:
+		return toolutil.ToolResultWithMarkdown(FormatAnalyzeCIConfigMarkdown(v))
+	case AnalyzeIssueScopeOutput:
+		return toolutil.ToolResultWithMarkdown(FormatAnalyzeIssueScopeMarkdown(v))
+	case ReviewMRSecurityOutput:
+		return toolutil.ToolResultWithMarkdown(FormatReviewMRSecurityMarkdown(v))
+	case FindTechnicalDebtOutput:
+		return toolutil.ToolResultWithMarkdown(FormatFindTechnicalDebtMarkdown(v))
+	case AnalyzeDeploymentHistoryOutput:
+		return toolutil.ToolResultWithMarkdown(FormatAnalyzeDeploymentHistoryMarkdown(v))
+	default:
+		return nil
+	}
+}
+
+// RegisterMeta registers a single gitlab_analyze meta-tool that consolidates
+// all 11 sampling analysis tools under one action-dispatched interface.
+func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
+	routes := map[string]toolutil.ActionFunc{
+		"mr_changes":        wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
+		"issue_summary":     wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
+		"release_notes":     wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
+		"pipeline_failure":  wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
+		"mr_review":         wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
+		"milestone_report":  wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
+		"ci_config":         wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
+		"issue_scope":       wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
+		"mr_security":       wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
+		"technical_debt":    wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
+		"deployment_history": wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory),
+	}
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:  "gitlab_analyze",
+		Title: toolutil.TitleFromName("gitlab_analyze"),
+		Description: `LLM-assisted analysis of GitLab data via MCP sampling. ` +
+			`Use 'action' to select the analysis type and 'params' for action-specific parameters. ` +
+			`All actions require the MCP client to support the sampling capability (human-in-the-loop approval).
+
+Actions:
+- mr_changes: Analyze MR code changes for quality, bugs, improvements. Params: project_id, mr_iid
+- issue_summary: Summarize issue discussion with key decisions and action items. Params: project_id, issue_iid
+- release_notes: Generate categorized release notes between two Git refs. Params: project_id, from_ref, to_ref
+- pipeline_failure: Analyze pipeline failure root cause with fix suggestions. Params: project_id, pipeline_id
+- mr_review: Summarize MR review feedback and unresolved threads. Params: project_id, mr_iid
+- milestone_report: Generate milestone progress report with metrics. Params: project_id, milestone_iid
+- ci_config: Analyze CI/CD configuration for best practices and security. Params: project_id, content_ref (optional)
+- issue_scope: Analyze issue scope, complexity, and breakdown recommendations. Params: project_id, issue_iid
+- mr_security: Security review of MR (OWASP Top 10, secrets, auth). Params: project_id, mr_iid
+- technical_debt: Find and categorize TODO/FIXME/HACK markers. Params: project_id, ref (optional)
+- deployment_history: Analyze deployment frequency, success rate, patterns. Params: project_id, environment (optional)
+
+Use this tool when you need AI-assisted analysis, summarization, or review of GitLab data.
+Do NOT use for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline instead.
+
+See also: gitlab_merge_request, gitlab_issue, gitlab_pipeline, gitlab_release`,
+		Annotations: toolutil.ReadOnlyMetaAnnotations,
+		Icons:       toolutil.IconAnalytics,
+		InputSchema: toolutil.MetaToolSchema(routes),
+	}, toolutil.MakeMetaHandler("gitlab_analyze", routes, metaMarkdownForResult))
+}

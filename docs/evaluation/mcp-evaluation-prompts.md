@@ -1178,7 +1178,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Hay despliegues (deployments) registrados en el proyecto my-project?" |
-| **Expected Path** | `gitlab_deployment` → action `list` for project 393 |
+| **Expected Path** | `gitlab_environment` → action `deployment_list` for project 393 |
 | **Expected Data** | Deployment list (if any) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -1501,7 +1501,7 @@ packageDelete: access denied — your token lacks the required permissions for t
 
 ---
 
-Parece que el autoupdate no funciona porque el checksums subido es `checksums.sha256` en lugar de .txt que es el que busca, usando gitlab_mcp_check_update, devuelve: "checking for update: autoupdate: detecting latest release: validation file not found: "checksums.txt""
+Parece que el autoupdate no funciona porque el checksums subido es `checksums.sha256` en lugar de .txt que es el que busca, usando gitlab_server_check_update, devuelve: "checking for update: autoupdate: detecting latest release: validation file not found: "checksums.txt""
 
 Despues hace gitlab_admin con:
 {

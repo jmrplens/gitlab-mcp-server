@@ -35,15 +35,15 @@ func TestMeta_FeatureFlags(t *testing.T) {
 	})
 }
 
-// TestMeta_BranchRules exercises branch rule listing via the gitlab_branch_rule meta-tool.
+// TestMeta_BranchRules exercises branch rule listing via the gitlab_branch meta-tool.
 func TestMeta_BranchRules(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/BranchRule/List", func(t *testing.T) {
-		out, err := callToolOn[branchrules.ListOutput](ctx, sess.meta, "gitlab_branch_rule", map[string]any{
-			"action": "list",
+		out, err := callToolOn[branchrules.ListOutput](ctx, sess.meta, "gitlab_branch", map[string]any{
+			"action": "rule_list",
 			"params": map[string]any{
 				"project_path": proj.Path,
 			},
@@ -68,15 +68,15 @@ func TestMeta_CICatalog(t *testing.T) {
 	})
 }
 
-// TestMeta_Deployments exercises deployment listing via the gitlab_deployment meta-tool.
+// TestMeta_Deployments exercises deployment listing via the gitlab_environment meta-tool.
 func TestMeta_Deployments(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/Deployment/List", func(t *testing.T) {
-		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "list",
+		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},

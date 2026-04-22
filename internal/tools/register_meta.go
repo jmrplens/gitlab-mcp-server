@@ -143,7 +143,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repositorysubmodules"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
@@ -173,8 +172,8 @@ import (
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
-// Base: 42 meta-tools (23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone).
-// Enterprise: +15 inline = 57 meta-tools total.
+// Base: 28 meta-tools (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone).
+// Enterprise: +15 inline = 43 meta-tools total.
 // Each meta-tool dispatches to the underlying handler based on
 // the "action" parameter. This reduces token usage for LLMs while preserving full functionality.
 func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
@@ -193,8 +192,6 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	registerUserMeta(server, client, enterprise)
 	registerWikiMeta(server, client)
 	registerEnvironmentMeta(server, client)
-	registerDeploymentMeta(server, client)
-	registerPipelineScheduleMeta(server, client)
 	registerCIVariableMeta(server, client)
 	registerTemplateMeta(server, client)
 	registerAdminMeta(server, client)
@@ -208,7 +205,6 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	// Free-tier meta-tools (available on CE — GraphQL/REST based)
 	registerModelRegistryMeta(server, client)
 	registerCICatalogMeta(server, client)
-	registerBranchRulesMeta(server, client)
 	registerCustomEmojiMeta(server, client)
 
 	// Enterprise meta-tools (Premium/Ultimate — gated by GITLAB_ENTERPRISE)
@@ -233,8 +229,7 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	// Delegated meta-tools (sub-package RegisterMeta)
 	search.RegisterMeta(server, client)
 	runners.RegisterMeta(server, client)
-	runnercontrollers.RegisterMeta(server, client)
-	samplingtools.RegisterTools(server, client)
+	samplingtools.RegisterMeta(server, client)
 
 	// Standalone utility tools (not consolidated into meta-tools)
 	projectdiscovery.RegisterTools(server, client)
@@ -557,7 +552,11 @@ Push Mirrors (Free tier):
 
 Security Settings (Ultimate — requires GITLAB_ENTERPRISE=true):
 - security_settings_get: Get project security settings. Params: project_id (required)
-- security_settings_update: Update project secret push protection. Params: project_id (required), secret_push_protection_enabled (required)`
+- security_settings_update: Update project secret push protection. Params: project_id (required), secret_push_protection_enabled (required)
+
+Use this tool for project-level CRUD, settings, members, labels, milestones, webhooks, and boards.
+Do NOT use for file content or commits (use gitlab_repository), branches (use gitlab_branch), or wiki pages (use gitlab_wiki).
+See also: gitlab_repository (file/commit operations), gitlab_wiki, gitlab_branch, gitlab_discover_project`
 	}
 
 	addMetaTool(server, "gitlab_project", desc, routes, metaAnnotations, toolutil.IconProject)
@@ -577,9 +576,10 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list_protected":   wrapAction(client, branches.ProtectedList),
 		"get_protected":    wrapAction(client, branches.ProtectedGet),
 		"update_protected": wrapAction(client, branches.ProtectedUpdate),
+		"rule_list":        wrapAction(client, branchrules.List),
 	}
 
-	addMetaTool(server, "gitlab_branch", `Create, list, get, delete, and protect Git branches in GitLab repositories.
+	addMetaTool(server, "gitlab_branch", `Create, list, get, delete, and protect Git branches in GitLab repositories. Query branch rules (aggregated view via GraphQL).
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -593,7 +593,12 @@ Actions:
 - unprotect: Remove branch protection. Params: project_id (required), branch_name (required)
 - list_protected: List all protected branches. Params: project_id (required), page, per_page
 - get_protected: Get details of a single protected branch. Params: project_id (required), branch_name (required)
-- update_protected: Update protected branch settings. Params: project_id (required), branch_name (required), allow_force_push, code_owner_approval_required`, routes, metaAnnotations, toolutil.IconBranch)
+- update_protected: Update protected branch settings. Params: project_id (required), branch_name (required), allow_force_push, code_owner_approval_required
+- rule_list: List branch rules for a project (aggregated view of protections, approval rules, status checks via GraphQL). Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
+
+Use this tool for creating, listing, deleting, and protecting branches, and querying branch rules.
+Do NOT use for file operations on branches (use gitlab_repository).
+See also: gitlab_repository, gitlab_merge_request`, routes, metaAnnotations, toolutil.IconBranch)
 }
 
 // registerTagMeta registers the gitlab_tag meta-tool with actions:
@@ -625,7 +630,9 @@ Actions:
 - list_protected: List protected tags. Params: project_id (required), page, per_page
 - get_protected: Get a protected tag. Params: project_id (required), tag_name (required)
 - protect: Protect a tag or wildcard pattern. Params: project_id (required), tag_name (required, tag name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
-- unprotect: Remove tag protection. Params: project_id (required), tag_name (required)`, routes, metaAnnotations, toolutil.IconTag)
+- unprotect: Remove tag protection. Params: project_id (required), tag_name (required)
+
+See also: gitlab_release, gitlab_repository`, routes, metaAnnotations, toolutil.IconTag)
 }
 
 // registerReleaseMeta registers the gitlab_release meta-tool with actions:
@@ -663,7 +670,9 @@ Actions:
 - link_get: Get release link details. Params: project_id (required), tag_name (required), link_id (required)
 - link_list: List release asset links. Params: project_id (required), tag_name (required), page, per_page
 - link_update: Update a release asset link. Params: project_id (required), tag_name (required), link_id (required), name, url, filepath, direct_asset_path, link_type
-- link_delete: Remove an asset link. Params: project_id (required), tag_name (required), link_id (required)`, routes, metaAnnotations, toolutil.IconRelease)
+- link_delete: Remove an asset link. Params: project_id (required), tag_name (required), link_id (required)
+
+See also: gitlab_tag (create tags first), gitlab_package (package registry)`, routes, metaAnnotations, toolutil.IconRelease)
 }
 
 // registerMergeRequestMeta registers the gitlab_merge_request meta-tool with actions:
@@ -790,7 +799,11 @@ Actions:
 - event_mr_milestone_list: List milestone events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
 - event_mr_milestone_get: Get a milestone event on a merge request. Params: project_id (required), mr_iid (required), milestone_event_id (required)
 - event_mr_state_list: List state events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
-- event_mr_state_get: Get a state event on a merge request. Params: project_id (required), mr_iid (required), state_event_id (required)`, routes, metaAnnotations, toolutil.IconMR)
+- event_mr_state_get: Get a state event on a merge request. Params: project_id (required), mr_iid (required), state_event_id (required)
+
+Use this tool for MR lifecycle: create, update, merge, approve, rebase, delete, approvals, time tracking, and resource events.
+Do NOT use for reviewing/commenting on MRs (use gitlab_mr_review).
+See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch`, routes, metaAnnotations, toolutil.IconMR)
 }
 
 // registerMRReviewMeta registers the gitlab_mr_review meta-tool with actions:
@@ -854,7 +867,11 @@ Actions:
 - draft_note_publish: Publish a single draft note. Params: project_id (required), mr_iid (required, int), note_id (required, int)
 - draft_note_publish_all: Publish all draft notes on a MR at once (single notification). Params: project_id (required), mr_iid (required, int)
 - diff_versions_list: List all diff versions of an MR. Params: project_id (required), mr_iid (required), page, per_page
-- diff_version_get: Get a single diff version with commits and file diffs. Params: project_id (required), mr_iid (required), version_id (required), unidiff (bool, optional)`, routes, metaAnnotations, toolutil.IconDiscussion)
+- diff_version_get: Get a single diff version with commits and file diffs. Params: project_id (required), mr_iid (required), version_id (required), unidiff (bool, optional)
+
+Use this tool for code review workflows: notes, discussions, code diffs, and draft notes (batch review).
+Do NOT use for MR lifecycle operations like create, merge, or approve (use gitlab_merge_request).
+See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline`, routes, metaAnnotations, toolutil.IconDiscussion)
 }
 
 // registerRepositoryMeta registers the gitlab_repository meta-tool with actions:
@@ -948,7 +965,11 @@ Actions:
 - commit_discussion_create: Create a commit discussion. Params: project_id (required), commit_id (required), body (required), position (optional)
 - commit_discussion_add_note: Add a note to a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), body (required)
 - commit_discussion_update_note: Update a note in a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required), body (required)
-- commit_discussion_delete_note: Delete a note from a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required)`, routes, metaAnnotations, toolutil.IconFile)
+- commit_discussion_delete_note: Delete a note from a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required)
+
+Use this tool for repository content: file tree, read/write files, commits, diffs, blame, compare branches, and submodules.
+Do NOT use for branch CRUD (use gitlab_branch) or tag CRUD (use gitlab_tag).
+See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request`, routes, metaAnnotations, toolutil.IconFile)
 }
 
 // registerGroupMeta registers the gitlab_group meta-tool with actions:
@@ -1267,7 +1288,10 @@ SSH Certificates (Premium+ — requires GITLAB_ENTERPRISE=true):
 - ssh_cert_delete: Delete an SSH certificate. Params: group_id (required), certificate_id (required)
 
 Security Settings (Ultimate — requires GITLAB_ENTERPRISE=true):
-- security_settings_update: Update group secret push protection. Params: group_id (required), secret_push_protection_enabled (required), projects_to_exclude (optional, array of project IDs)`
+- security_settings_update: Update group secret push protection. Params: group_id (required), secret_push_protection_enabled (required), projects_to_exclude (optional, array of project IDs)
+
+Use this tool for group-level management: subgroups, members, labels, milestones, webhooks, badges, boards, and variables.
+See also: gitlab_project, gitlab_user`
 	}
 
 	addMetaTool(server, "gitlab_group", desc, routes, metaAnnotations, toolutil.IconGroup)
@@ -1419,7 +1443,10 @@ Actions:
 
 Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
 - iteration_list_project: List iterations for a project. Params: project_id (required), state (1=opened, 2=upcoming, 3=current, 4=closed), search (string), include_ancestors (bool), page, per_page
-- iteration_list_group: List iterations for a group. Params: group_id (required), state, search, include_ancestors (bool), page, per_page`
+- iteration_list_group: List iterations for a group. Params: group_id (required), state, search, include_ancestors (bool), page, per_page
+
+Use this tool for issue CRUD, comments, discussions, linked issues, time tracking, work items, and resource events.
+See also: gitlab_merge_request, gitlab_project`
 	}
 
 	addMetaTool(server, "gitlab_issue", desc, routes, metaAnnotations, toolutil.IconIssue)
@@ -1451,9 +1478,20 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"resource_group_get":           wrapAction(client, resourcegroups.Get),
 		"resource_group_edit":          wrapAction(client, resourcegroups.Edit),
 		"resource_group_upcoming_jobs": wrapAction(client, resourcegroups.ListUpcomingJobs),
+		"schedule_list":                wrapAction(client, pipelineschedules.List),
+		"schedule_get":                 wrapAction(client, pipelineschedules.Get),
+		"schedule_create":              wrapAction(client, pipelineschedules.Create),
+		"schedule_update":              wrapAction(client, pipelineschedules.Update),
+		"schedule_delete":              wrapVoidAction(client, pipelineschedules.Delete),
+		"schedule_run":                 wrapAction(client, pipelineschedules.Run),
+		"schedule_take_ownership":      wrapAction(client, pipelineschedules.TakeOwnership),
+		"schedule_create_variable":     wrapAction(client, pipelineschedules.CreateVariable),
+		"schedule_edit_variable":       wrapAction(client, pipelineschedules.EditVariable),
+		"schedule_delete_variable":     wrapVoidAction(client, pipelineschedules.DeleteVariable),
+		"schedule_list_triggered_pipelines": wrapAction(client, pipelineschedules.ListTriggeredPipelines),
 	}
 
-	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
+	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules.
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -1479,7 +1517,22 @@ Actions:
 - resource_group_list: List resource groups. Params: project_id (required), page, per_page
 - resource_group_get: Get a resource group. Params: project_id (required), key (required)
 - resource_group_edit: Edit a resource group. Params: project_id (required), key (required), process_mode
-- resource_group_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required), page, per_page`, routes, metaAnnotations, toolutil.IconPipeline)
+- resource_group_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required), page, per_page
+- schedule_list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
+- schedule_get: Get schedule details. Params: project_id (required), schedule_id (required, int)
+- schedule_create: Create a schedule. Params: project_id (required), description (required), ref (required), cron (required), cron_timezone, active (bool)
+- schedule_update: Update a schedule. Params: project_id (required), schedule_id (required, int), description, ref, cron, cron_timezone, active (bool)
+- schedule_delete: Delete a schedule. Params: project_id (required), schedule_id (required, int)
+- schedule_run: Trigger immediate run. Params: project_id (required), schedule_id (required, int)
+- schedule_take_ownership: Take ownership of a schedule. Params: project_id (required), schedule_id (required, int)
+- schedule_create_variable: Create a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type (env_var/file)
+- schedule_edit_variable: Edit a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type
+- schedule_delete_variable: Delete a schedule variable. Params: project_id (required), schedule_id (required, int), key (required)
+- schedule_list_triggered_pipelines: List pipelines triggered by schedule. Params: project_id (required), schedule_id (required, int), page, per_page
+
+Use this tool for pipeline CRUD, test reports, trigger tokens, resource groups, and pipeline schedules.
+Do NOT use for job-level operations (use gitlab_job).
+See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable`, routes, metaAnnotations, toolutil.IconPipeline)
 }
 
 // registerJobMeta registers the gitlab_job meta-tool with actions:
@@ -1544,7 +1597,11 @@ Actions:
 - token_scope_remove_project: Remove a project from the inbound allowlist. Params: project_id (required), target_project_id (required)
 - token_scope_list_groups: List group allowlist for job tokens. Params: project_id (required), page, per_page
 - token_scope_add_group: Add a group to the job token allowlist. Params: project_id (required), target_group_id (required)
-- token_scope_remove_group: Remove a group from the job token allowlist. Params: project_id (required), target_group_id (required)`, routes, metaAnnotations, toolutil.IconJob)
+- token_scope_remove_group: Remove a group from the job token allowlist. Params: project_id (required), target_group_id (required)
+
+Use this tool for CI/CD job operations: list, retry, cancel, erase, play, download artifacts/logs, and Kubernetes agents.
+Do NOT use for pipeline-level operations (use gitlab_pipeline).
+See also: gitlab_pipeline, gitlab_repository`, routes, metaAnnotations, toolutil.IconJob)
 }
 
 // registerUserMeta registers the gitlab_user meta-tool with user,
@@ -1722,7 +1779,11 @@ Actions:
 
 Service Accounts (Premium+ — requires GITLAB_ENTERPRISE=true):
 - create_service_account: Create a service account. Params: name, username, email
-- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page`
+- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page
+
+Use this tool for user management: CRUD, SSH/GPG keys, personal access tokens, emails, and user status.
+Do NOT use for deploy tokens or project/group access tokens (use gitlab_access) or instance admin operations (use gitlab_admin).
+See also: gitlab_access (deploy tokens/keys, access tokens), gitlab_admin (instance administration)`
 	}
 
 	addMetaTool(server, "gitlab_user", desc, routes, metaAnnotations, toolutil.IconUser)
@@ -1750,32 +1811,41 @@ Actions:
 - create: Create a new wiki page. Params: project_id (required), title (required), content (required), format (markdown/rdoc/asciidoc/org)
 - update: Update an existing wiki page. Params: project_id (required), slug (required), title, content, format
 - delete: Delete a wiki page. Params: project_id (required), slug (required)
-- upload_attachment: Upload a file attachment to a wiki. Params: project_id (required), filename (required), content_base64 or file_path (one required), branch (optional)`, routes, metaAnnotations, toolutil.IconWiki)
+- upload_attachment: Upload a file attachment to a wiki. Params: project_id (required), filename (required), content_base64 or file_path (one required), branch (optional)
+
+See also: gitlab_project`, routes, metaAnnotations, toolutil.IconWiki)
 }
 
 // registerEnvironmentMeta registers the gitlab_environment meta-tool with actions:
 // list, get, create, update, delete, stop.
 func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := map[string]actionFunc{
-		"list":                wrapAction(client, environments.List),
-		"get":                 wrapAction(client, environments.Get),
-		"create":              wrapAction(client, environments.Create),
-		"update":              wrapAction(client, environments.Update),
-		"delete":              wrapVoidAction(client, environments.Delete),
-		"stop":                wrapAction(client, environments.Stop),
-		"protected_list":      wrapAction(client, protectedenvs.List),
-		"protected_get":       wrapAction(client, protectedenvs.Get),
-		"protected_protect":   wrapAction(client, protectedenvs.Protect),
-		"protected_update":    wrapAction(client, protectedenvs.Update),
-		"protected_unprotect": wrapVoidAction(client, protectedenvs.Unprotect),
-		"freeze_list":         wrapAction(client, freezeperiods.List),
-		"freeze_get":          wrapAction(client, freezeperiods.Get),
-		"freeze_create":       wrapAction(client, freezeperiods.Create),
-		"freeze_update":       wrapAction(client, freezeperiods.Update),
-		"freeze_delete":       wrapVoidAction(client, freezeperiods.Delete),
+		"list":                      wrapAction(client, environments.List),
+		"get":                       wrapAction(client, environments.Get),
+		"create":                    wrapAction(client, environments.Create),
+		"update":                    wrapAction(client, environments.Update),
+		"delete":                    wrapVoidAction(client, environments.Delete),
+		"stop":                      wrapAction(client, environments.Stop),
+		"protected_list":            wrapAction(client, protectedenvs.List),
+		"protected_get":             wrapAction(client, protectedenvs.Get),
+		"protected_protect":         wrapAction(client, protectedenvs.Protect),
+		"protected_update":          wrapAction(client, protectedenvs.Update),
+		"protected_unprotect":       wrapVoidAction(client, protectedenvs.Unprotect),
+		"freeze_list":               wrapAction(client, freezeperiods.List),
+		"freeze_get":                wrapAction(client, freezeperiods.Get),
+		"freeze_create":             wrapAction(client, freezeperiods.Create),
+		"freeze_update":             wrapAction(client, freezeperiods.Update),
+		"freeze_delete":             wrapVoidAction(client, freezeperiods.Delete),
+		"deployment_list":           wrapAction(client, deployments.List),
+		"deployment_get":            wrapAction(client, deployments.Get),
+		"deployment_create":         wrapAction(client, deployments.Create),
+		"deployment_update":         wrapAction(client, deployments.Update),
+		"deployment_delete":         wrapVoidAction(client, deployments.Delete),
+		"deployment_approve_or_reject": wrapAction(client, deployments.ApproveOrReject),
+		"deployment_merge_requests": wrapAction(client, deploymentmergerequests.List),
 	}
 
-	addMetaTool(server, "gitlab_environment", `Create, list, get, update, delete, and stop GitLab environments. Manage protected environments and deployment freeze periods.
+	addMetaTool(server, "gitlab_environment", `Create, list, get, update, delete, and stop GitLab environments. Manage protected environments, deployment freeze periods, and deployment records.
 Valid actions: `+validActionsString(routes)+`
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
@@ -1795,69 +1865,17 @@ Actions:
 - freeze_get: Get a freeze period. Params: project_id (required), freeze_period_id (required)
 - freeze_create: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
 - freeze_update: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
-- freeze_delete: Delete a freeze period. Params: project_id (required), freeze_period_id (required)`, routes, metaAnnotations, toolutil.IconEnvironment)
-}
+- freeze_delete: Delete a freeze period. Params: project_id (required), freeze_period_id (required)
+- deployment_list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
+- deployment_get: Get deployment details. Params: project_id (required), deployment_id (required, int)
+- deployment_create: Create a deployment. Params: project_id (required), environment (required), ref (required), sha (required), tag (bool), status
+- deployment_update: Update deployment status. Params: project_id (required), deployment_id (required, int), status (required)
+- deployment_delete: Delete a deployment. Params: project_id (required), deployment_id (required, int)
+- deployment_approve_or_reject: Approve or reject a blocked deployment. Params: project_id (required), deployment_id (required, int), status (required, approved/rejected), comment
+- deployment_merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page
 
-// registerDeploymentMeta registers the gitlab_deployment meta-tool with actions:
-// list, get, create, update, delete, approve_or_reject.
-func registerDeploymentMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":              wrapAction(client, deployments.List),
-		"get":               wrapAction(client, deployments.Get),
-		"create":            wrapAction(client, deployments.Create),
-		"update":            wrapAction(client, deployments.Update),
-		"delete":            wrapVoidAction(client, deployments.Delete),
-		"approve_or_reject": wrapAction(client, deployments.ApproveOrReject),
-		"merge_requests":    wrapAction(client, deploymentmergerequests.List),
-	}
-
-	addMetaTool(server, "gitlab_deployment", `List, get, create, update, approve/reject, and delete GitLab deployments. List merge requests associated with a deployment.
-Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
-- get: Get deployment details. Params: project_id (required), deployment_id (required, int)
-- create: Create a deployment. Params: project_id (required), environment (required), ref (required), sha (required), tag (bool), status
-- update: Update deployment status. Params: project_id (required), deployment_id (required, int), status (required)
-- delete: Delete a deployment. Params: project_id (required), deployment_id (required, int)
-- approve_or_reject: Approve or reject a blocked deployment. Params: project_id (required), deployment_id (required, int), status (required, approved/rejected), comment
-- merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page`, routes, metaAnnotations, toolutil.IconDeploy)
-}
-
-// registerPipelineScheduleMeta registers the gitlab_pipeline_schedule meta-tool with actions:
-// list, get, create, update, delete, run, take_ownership, create_variable, edit_variable, delete_variable, list_triggered_pipelines.
-func registerPipelineScheduleMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list":                     wrapAction(client, pipelineschedules.List),
-		"get":                      wrapAction(client, pipelineschedules.Get),
-		"create":                   wrapAction(client, pipelineschedules.Create),
-		"update":                   wrapAction(client, pipelineschedules.Update),
-		"delete":                   wrapVoidAction(client, pipelineschedules.Delete),
-		"run":                      wrapAction(client, pipelineschedules.Run),
-		"take_ownership":           wrapAction(client, pipelineschedules.TakeOwnership),
-		"create_variable":          wrapAction(client, pipelineschedules.CreateVariable),
-		"edit_variable":            wrapAction(client, pipelineschedules.EditVariable),
-		"delete_variable":          wrapVoidAction(client, pipelineschedules.DeleteVariable),
-		"list_triggered_pipelines": wrapAction(client, pipelineschedules.ListTriggeredPipelines),
-	}
-
-	addMetaTool(server, "gitlab_pipeline_schedule", `Create, list, get, update, delete, and run GitLab pipeline schedules. Manage schedule variables and ownership.
-Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
-- get: Get schedule details. Params: project_id (required), schedule_id (required, int)
-- create: Create a schedule. Params: project_id (required), description (required), ref (required), cron (required), cron_timezone, active (bool)
-- update: Update a schedule. Params: project_id (required), schedule_id (required, int), description, ref, cron, cron_timezone, active (bool)
-- delete: Delete a schedule. Params: project_id (required), schedule_id (required, int)
-- run: Trigger immediate run. Params: project_id (required), schedule_id (required, int)
-- take_ownership: Take ownership of a schedule. Params: project_id (required), schedule_id (required, int)
-- create_variable: Create a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type (env_var/file)
-- edit_variable: Edit a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type
-- delete_variable: Delete a schedule variable. Params: project_id (required), schedule_id (required, int), key (required)
-- list_triggered_pipelines: List pipelines triggered by schedule. Params: project_id (required), schedule_id (required, int), page, per_page`, routes, metaAnnotations, toolutil.IconSchedule)
+Use this tool for environment lifecycle, deployment records, freeze periods, and protected environments.
+See also: gitlab_pipeline`, routes, metaAnnotations, toolutil.IconEnvironment)
 }
 
 // registerCIVariableMeta registers the gitlab_ci_variable meta-tool with actions:
@@ -1900,7 +1918,10 @@ Actions:
 - instance_get: Get an instance variable. Params: key (required)
 - instance_create: Create an instance variable. Params: key (required), value (required), description, variable_type, protected (bool), masked (bool), raw (bool)
 - instance_update: Update an instance variable. Params: key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool)
-- instance_delete: Delete an instance variable. Params: key (required)`, routes, metaAnnotations, toolutil.IconVariable)
+- instance_delete: Delete an instance variable. Params: key (required)
+
+Use this tool for CI/CD variables at instance, group, and project scope.
+See also: gitlab_pipeline`, routes, metaAnnotations, toolutil.IconVariable)
 }
 
 // registerTemplateMeta registers the gitlab_template meta-tool with actions:
@@ -1938,7 +1959,9 @@ Actions:
 - license_list: List all license templates. Params: page, per_page, popular (bool)
 - license_get: Get a license template by key. Params: key (required), project, fullname
 - project_template_list: List project templates of a given type. Params: project_id (required), template_type (required), page, per_page
-- project_template_get: Get a single project template. Params: project_id (required), template_type (required), key (required)`, routes, readOnlyMetaAnnotations, toolutil.IconTemplate)
+- project_template_get: Get a single project template. Params: project_id (required), template_type (required), key (required)
+
+See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog (Enterprise: CI/CD Catalog components)`, routes, readOnlyMetaAnnotations, toolutil.IconTemplate)
 }
 
 // registerAdminMeta registers the gitlab_admin meta-tool with actions:
@@ -2116,7 +2139,11 @@ Actions:
 - import_bitbucket: Import project from Bitbucket Cloud. Params: bitbucket_username (required), bitbucket_app_password (required), repo_path (required), target_namespace (required), new_name
 - import_bitbucket_server: Import from Bitbucket Server. Params: bitbucket_server_url (required), bitbucket_server_username (required), personal_access_token (required), bitbucket_server_project (required), bitbucket_server_repo (required), new_namespace, new_name
 - import_cancel_github: Cancel a GitHub import. Params: project_id (required)
-- import_gists: Import GitHub gists. Params: personal_access_token (required)`, routes, metaAnnotations, toolutil.IconServer)
+- import_gists: Import GitHub gists. Params: personal_access_token (required)
+
+Use this tool for GitLab instance administration: Sidekiq, settings, license, OAuth apps, broadcast messages, system hooks, and import.
+Do NOT use for user CRUD (use gitlab_user) or MCP server operations (use gitlab_server).
+See also: gitlab_user (user management), gitlab_server (server health)`, routes, metaAnnotations, toolutil.IconServer)
 }
 
 // registerAccessMeta registers the gitlab_access meta-tool with actions:
@@ -2235,7 +2262,11 @@ Actions:
 - invite_list_project: List pending project invitations. Params: project_id (required), page, per_page
 - invite_list_group: List pending group invitations. Params: group_id (required), page, per_page
 - invite_project: Invite members to project. Params: project_id (required), email (required), access_level (required), expires_at
-- invite_group: Invite members to group. Params: group_id (required), email (required), access_level (required), expires_at`, routes, metaAnnotations, toolutil.IconToken)
+- invite_group: Invite members to group. Params: group_id (required), email (required), access_level (required), expires_at
+
+Use this tool for access credentials: deploy keys, deploy tokens, project access tokens, and group access tokens.
+Do NOT use for personal access tokens or SSH keys (use gitlab_user) or instance admin (use gitlab_admin).
+See also: gitlab_user (user management), gitlab_project (project settings)`, routes, metaAnnotations, toolutil.IconToken)
 }
 
 // registerPackageMeta registers the gitlab_package meta-tool with actions from
@@ -2343,7 +2374,9 @@ Actions:
 - protection_rule_list: List package protection rules. Params: project_id (required), page, per_page
 - protection_rule_create: Create package protection rule. Params: project_id (required), package_name_pattern (required), package_type (required), minimum_access_level_for_push (maintainer/owner/admin), minimum_access_level_for_delete (maintainer/owner/admin)
 - protection_rule_update: Update package protection rule. Params: project_id (required), rule_id (required, int), package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
-- protection_rule_delete: Delete package protection rule. Params: project_id (required), rule_id (required, int)`, routes, metaAnnotations, toolutil.IconPackage)
+- protection_rule_delete: Delete package protection rule. Params: project_id (required), rule_id (required, int)
+
+See also: gitlab_release (release asset links), gitlab_project`, routes, metaAnnotations, toolutil.IconPackage)
 }
 
 // registerSnippetMeta registers the gitlab_snippet meta-tool with actions:
@@ -2426,7 +2459,9 @@ Actions:
 - emoji_snippet_note_list: List award emoji on a snippet note. Params: project_id (required), iid (required), note_id (required), page, per_page
 - emoji_snippet_note_get: Get an award emoji on a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
 - emoji_snippet_note_create: Add award emoji to a snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
-- emoji_snippet_note_delete: Delete award emoji from a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)`, routes, metaAnnotations, toolutil.IconSnippet)
+- emoji_snippet_note_delete: Delete award emoji from a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
+
+See also: gitlab_project, gitlab_user`, routes, metaAnnotations, toolutil.IconSnippet)
 }
 
 // registerFeatureFlagsMeta registers the gitlab_feature_flags meta-tool with actions:
@@ -2458,7 +2493,9 @@ Actions:
 - ff_user_list_get: Get a feature flag user list by IID. Params: project_id (required), iid (required)
 - ff_user_list_create: Create a feature flag user list. Params: project_id (required), name (required), user_xids (required, comma-separated user identifiers)
 - ff_user_list_update: Update a feature flag user list. Params: project_id (required), iid (required), name, user_xids
-- ff_user_list_delete: Delete a feature flag user list. Params: project_id (required), iid (required)`, routes, metaAnnotations, toolutil.IconConfig)
+- ff_user_list_delete: Delete a feature flag user list. Params: project_id (required), iid (required)
+
+See also: gitlab_project, gitlab_environment`, routes, metaAnnotations, toolutil.IconConfig)
 }
 
 // registerMergeTrainMeta registers the gitlab_merge_train meta-tool with actions
@@ -2477,7 +2514,9 @@ Actions:
 - list_project: List all merge trains for a project. Params: project_id (required), scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: List merge requests in a merge train for a specific branch. Params: project_id (required), target_branch (required), scope, sort, page, per_page
 - get: Get the status of a merge request in a merge train. Params: project_id (required), merge_request_id (required)
-- add: Add a merge request to a merge train. Params: project_id (required), merge_request_id (required), auto_merge (bool), sha (string), squash (bool)`, routes, metaAnnotations, toolutil.IconMR)
+- add: Add a merge request to a merge train. Params: project_id (required), merge_request_id (required), auto_merge (bool), sha (string), squash (bool)
+
+See also: gitlab_merge_request, gitlab_pipeline`, routes, metaAnnotations, toolutil.IconMR)
 }
 
 // registerAuditEventMeta registers the gitlab_audit_event meta-tool with actions
@@ -2500,7 +2539,9 @@ Actions:
 - list_group: List group audit events. Params: group_id (required), created_after, created_before, page, per_page
 - get_group: Get a single group audit event. Params: group_id (required), event_id (required)
 - list_project: List project audit events. Params: project_id (required), created_after, created_before, page, per_page
-- get_project: Get a single project audit event. Params: project_id (required), event_id (required)`, routes, metaAnnotations, toolutil.IconEvent)
+- get_project: Get a single project audit event. Params: project_id (required), event_id (required)
+
+See also: gitlab_admin (instance administration)`, routes, metaAnnotations, toolutil.IconEvent)
 }
 
 // registerDORAMetricsMeta registers the gitlab_dora_metrics meta-tool with actions
@@ -2515,7 +2556,9 @@ Use "action" to specify the scope. Valid actions: `+validActionsString(routes)+`
 
 Actions:
 - project: Get DORA metrics for a project. Params: project_id (required), metric (required: deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), interval (daily|monthly|all), environment_tiers (array)
-- group: Get DORA metrics for a group. Params: group_id (required), metric (required), start_date, end_date, interval, environment_tiers`, routes, metaAnnotations, toolutil.IconAnalytics)
+- group: Get DORA metrics for a group. Params: group_id (required), metric (required), start_date, end_date, interval, environment_tiers
+
+See also: gitlab_environment, gitlab_pipeline`, routes, metaAnnotations, toolutil.IconAnalytics)
 }
 
 // registerDependencyMeta registers the gitlab_dependency meta-tool with actions
@@ -2534,7 +2577,9 @@ Actions:
 - list: List project dependencies. Params: project_id (required), package_manager (optional filter), page, per_page
 - export_create: Create a dependency list export (SBOM) from a pipeline. Params: pipeline_id (required), export_type (default: sbom)
 - export_get: Check status of a dependency list export. Params: export_id (required)
-- export_download: Download a completed export (CycloneDX JSON, max 1MB). Params: export_id (required)`, routes, metaAnnotations, toolutil.IconPackage)
+- export_download: Download a completed export (CycloneDX JSON, max 1MB). Params: export_id (required)
+
+See also: gitlab_project, gitlab_vulnerability (security vulnerabilities)`, routes, metaAnnotations, toolutil.IconPackage)
 }
 
 // registerExternalStatusCheckMeta registers the gitlab_external_status_check meta-tool with actions
@@ -2575,7 +2620,9 @@ Actions (project-scoped, preferred):
 - delete_project: Delete an external status check. Params: project_id, check_id (required)
 - update_project: Update an external status check (returns updated object). Params: project_id, check_id (required), name, external_url, shared_secret, protected_branch_ids
 - retry_project: Retry a failed status check for a project MR. Params: project_id, mr_iid, check_id (required)
-- set_project_mr_status: Set status of an external status check. Params: project_id, mr_iid, sha, external_status_check_id, status (required)`, routes, metaAnnotations, toolutil.IconSecurity)
+- set_project_mr_status: Set status of an external status check. Params: project_id, mr_iid, sha, external_status_check_id, status (required)
+
+See also: gitlab_merge_request`, routes, metaAnnotations, toolutil.IconSecurity)
 }
 
 // registerGroupSCIMMeta registers the gitlab_group_scim meta-tool with actions
@@ -2594,7 +2641,9 @@ Actions:
 - list: List SCIM identities for a group. Params: group_id (required)
 - get: Get a single SCIM identity. Params: group_id (required), uid (required)
 - update: Update a SCIM identity's external UID. Params: group_id (required), uid (required), extern_uid (required)
-- delete: Delete a SCIM identity. Params: group_id (required), uid (required)`, routes, metaAnnotations, toolutil.IconSecurity)
+- delete: Delete a SCIM identity. Params: group_id (required), uid (required)
+
+See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconSecurity)
 }
 
 // registerMemberRoleMeta registers the gitlab_member_role meta-tool with actions
@@ -2617,7 +2666,9 @@ Actions:
 - delete_instance: Delete an instance-level member role. Params: member_role_id (required)
 - list_group: List member roles for a group. Params: group_id (required)
 - create_group: Create a group-level member role. Params: group_id (required), name (required), base_access_level (required), description, permissions
-- delete_group: Delete a group-level member role. Params: group_id (required), member_role_id (required)`, routes, metaAnnotations, toolutil.IconSecurity)
+- delete_group: Delete a group-level member role. Params: group_id (required), member_role_id (required)
+
+See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconSecurity)
 }
 
 // registerEnterpriseUserMeta registers the gitlab_enterprise_user meta-tool with actions
@@ -2636,7 +2687,9 @@ Actions:
 - list: List enterprise users. Params: group_id (required), username, search, active, blocked, created_after, created_before, two_factor, page, per_page
 - get: Get details of a specific enterprise user. Params: group_id (required), user_id (required)
 - disable_2fa: Disable two-factor authentication for an enterprise user. Params: group_id (required), user_id (required)
-- delete: Delete an enterprise user. Params: group_id (required), user_id (required), hard_delete (optional)`, routes, metaAnnotations, toolutil.IconUser)
+- delete: Delete an enterprise user. Params: group_id (required), user_id (required), hard_delete (optional)
+
+See also: gitlab_group, gitlab_user`, routes, metaAnnotations, toolutil.IconUser)
 }
 
 // registerAttestationMeta registers the gitlab_attestation meta-tool with actions
@@ -2651,7 +2704,9 @@ Use "action" to specify the operation. Valid actions: `+validActionsString(route
 
 Actions:
 - list: List attestations for a project matching a subject digest. Params: project_id (required), subject_digest (required)
-- download: Download a specific attestation. Params: project_id (required), attestation_iid (required)`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
+- download: Download a specific attestation. Params: project_id (required), attestation_iid (required)
+
+See also: gitlab_pipeline, gitlab_package`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
 }
 
 // registerCompliancePolicyMeta registers the gitlab_compliance_policy meta-tool with actions:
@@ -2666,7 +2721,9 @@ Use "action" to specify the operation. Valid actions: `+validActionsString(route
 
 Actions:
 - get: Get current compliance policy settings (admin). No params required.
-- update: Update compliance policy settings (admin). Params: csp_namespace_id (optional, int64)`, routes, metaAnnotations, toolutil.IconSecurity)
+- update: Update compliance policy settings (admin). Params: csp_namespace_id (optional, int64)
+
+See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconSecurity)
 }
 
 // registerProjectAliasMeta registers the gitlab_project_alias meta-tool with actions:
@@ -2685,7 +2742,9 @@ Actions:
 - list: List all project aliases. No params required.
 - get: Get a project alias by name. Params: name (required)
 - create: Create a project alias. Params: name (required), project_id (required, int64)
-- delete: Delete a project alias. Params: name (required)`, routes, metaAnnotations, toolutil.IconProject)
+- delete: Delete a project alias. Params: name (required)
+
+See also: gitlab_project`, routes, metaAnnotations, toolutil.IconProject)
 }
 
 // registerGeoMeta registers the gitlab_geo enterprise meta-tool that provides
@@ -2712,7 +2771,9 @@ Actions:
 - delete: Delete a Geo site. Params: id (required)
 - repair: Repair OAuth for a Geo site. Params: id (required)
 - list_status: List replication status of all Geo sites. Pagination: page, per_page
-- get_status: Get replication status of a Geo site. Params: id (required)`, routes, metaAnnotations, toolutil.IconServer)
+- get_status: Get replication status of a Geo site. Params: id (required)
+
+See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconServer)
 }
 
 // registerModelRegistryMeta registers the gitlab_model_registry enterprise meta-tool
@@ -2725,7 +2786,9 @@ func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) 
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
-- download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
+- download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
+
+See also: gitlab_package`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
 }
 
 // registerStorageMoveMeta registers the gitlab_storage_move enterprise meta-tool
@@ -2776,7 +2839,9 @@ Actions (Snippet):
 - get_snippet: Get a snippet storage move by ID. Params: id (required)
 - get_snippet_for_snippet: Get a storage move for a specific snippet. Params: snippet_id (required), id (required)
 - schedule_snippet: Schedule a storage move for a snippet. Params: snippet_id (required), destination_storage_name (optional)
-- schedule_all_snippet: Schedule storage moves for all snippets. Params: source_storage_name (optional), destination_storage_name (optional)`, routes, metaAnnotations, toolutil.IconServer)
+- schedule_all_snippet: Schedule storage moves for all snippets. Params: source_storage_name (optional), destination_storage_name (optional)
+
+See also: gitlab_admin`, routes, metaAnnotations, toolutil.IconServer)
 }
 
 // registerVulnerabilityMeta registers the gitlab_vulnerability meta-tool with actions:
@@ -2803,7 +2868,9 @@ Actions:
 - resolve: Resolve a vulnerability. Params: id (required, GID)
 - revert: Revert a vulnerability to detected state. Params: id (required, GID)
 - severity_count: Get vulnerability severity counts for a project. Params: project_path (required)
-- pipeline_security_summary: Get security report summary for a pipeline. Params: project_path (required), pipeline_iid (required)`, routes, metaAnnotations, toolutil.IconSecurity)
+- pipeline_security_summary: Get security report summary for a pipeline. Params: project_path (required), pipeline_iid (required)
+
+See also: gitlab_security_finding (pipeline security report), gitlab_pipeline`, routes, metaAnnotations, toolutil.IconSecurity)
 }
 
 // registerSecurityFindingsMeta registers the gitlab_security_finding meta-tool with actions: list.
@@ -2815,7 +2882,9 @@ func registerSecurityFindingsMeta(server *mcp.Server, client *gitlabclient.Clien
 Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
 
 Actions:
-- list: List security report findings for a pipeline. Params: project_path (required), pipeline_iid (required), severity (optional, array), confidence (optional, array), scanner (optional, array), report_type (optional, array). Pagination: first, after`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
+- list: List security report findings for a pipeline. Params: project_path (required), pipeline_iid (required), severity (optional, array), confidence (optional, array), scanner (optional, array), report_type (optional, array). Pagination: first, after
+
+See also: gitlab_vulnerability (project vulnerabilities), gitlab_pipeline`, routes, readOnlyMetaAnnotations, toolutil.IconSecurity)
 }
 
 // registerCICatalogMeta registers the gitlab_ci_catalog meta-tool with actions: list, get.
@@ -2829,19 +2898,9 @@ Use "action" to specify the operation. Valid actions: `+validActionsString(route
 
 Actions:
 - list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
-- get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
-}
+- get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
 
-// registerBranchRulesMeta registers the gitlab_branch_rule meta-tool with actions: list.
-func registerBranchRulesMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]actionFunc{
-		"list": wrapAction(client, branchrules.List),
-	}
-	addMetaTool(server, "gitlab_branch_rule", `Query branch rules for a project via GraphQL API (Premium/Ultimate). Provides an aggregated read-only view of branch protections, approval rules, and external status checks.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
-
-Actions:
-- list: List branch rules for a project. Params: project_path (required, e.g. my-group/my-project). Pagination: first, after`, routes, readOnlyMetaAnnotations, toolutil.IconBranch)
+See also: gitlab_pipeline, gitlab_template (standard templates)`, routes, readOnlyMetaAnnotations, toolutil.IconPackage)
 }
 
 // registerCustomEmojiMeta registers the gitlab_custom_emoji meta-tool with actions: list, create, delete.
@@ -2857,5 +2916,7 @@ Use "action" to specify the operation. Valid actions: `+validActionsString(route
 Actions:
 - list: List custom emoji for a group. Params: group_path (required). Pagination: first, after
 - create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
-- delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)`, routes, metaAnnotations, toolutil.IconLabel)
+- delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
+
+See also: gitlab_group`, routes, metaAnnotations, toolutil.IconLabel)
 }

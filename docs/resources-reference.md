@@ -18,7 +18,7 @@ Static resources have a fixed URI and require no parameters.
 |---|------|-----|-------------|
 | 1 | `current_user` | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL. |
 | 2 | `groups` | `gitlab://groups` | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL. |
-| 3 | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_resolve_project_from_remote`. |
+| 3 | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
 
 ## Resource Templates (16)
 

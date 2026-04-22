@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.0.0 | 1006 tools | 42 meta-tools (57 enterprise) | 24 resources | 38 prompts
+> Version 1.0.3 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -63,6 +63,10 @@ Actions:
 - invite_list_group: List pending group invitations. Params: group_id (required), page, per_page
 - invite_project: Invite members to project. Params: project_id (required), email (required), access_level (required), expires_at
 - invite_group: Invite members to group. Params: group_id (required), email (required), access_level (required), expires_at
+
+Use this tool for access credentials: deploy keys, deploy tokens, project access tokens, and group access tokens.
+Do NOT use for personal access tokens or SSH keys (use gitlab_user) or instance admin (use gitlab_admin).
+See also: gitlab_user (user management), gitlab_project (project settings)
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -158,65 +162,35 @@ Actions:
 - import_cancel_github: Cancel a GitHub import. Params: project_id (required)
 - import_gists: Import GitHub gists. Params: personal_access_token (required)
 
+Use this tool for GitLab instance administration: Sidekiq, settings, license, OAuth apps, broadcast messages, system hooks, and import.
+Do NOT use for user CRUD (use gitlab_user) or MCP server operations (use gitlab_server).
+See also: gitlab_user (user management), gitlab_server (server health)
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
-### gitlab_analyze_ci_configuration
+### gitlab_analyze
 
-**Analyze CI Configuration**
+**Analyze**
 
-Analyze a GitLab project's CI/CD configuration using LLM-assisted analysis via MCP sampling. Lints the CI config, fetches merged YAML and includes, then requests LLM analysis for best practices, performance, security, and maintainability. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
+LLM-assisted analysis of GitLab data via MCP sampling. Use 'action' to select the analysis type and 'params' for action-specific parameters. All actions require the MCP client to support the sampling capability (human-in-the-loop approval).
 
-Returns: Markdown analysis of CI/CD configuration covering best practices, performance, security, and maintainability.
+Actions:
+- mr_changes: Analyze MR code changes for quality, bugs, improvements. Params: project_id, mr_iid
+- issue_summary: Summarize issue discussion with key decisions and action items. Params: project_id, issue_iid
+- release_notes: Generate categorized release notes between two Git refs. Params: project_id, from_ref, to_ref
+- pipeline_failure: Analyze pipeline failure root cause with fix suggestions. Params: project_id, pipeline_id
+- mr_review: Summarize MR review feedback and unresolved threads. Params: project_id, mr_iid
+- milestone_report: Generate milestone progress report with metrics. Params: project_id, milestone_iid
+- ci_config: Analyze CI/CD configuration for best practices and security. Params: project_id, content_ref (optional)
+- issue_scope: Analyze issue scope, complexity, and breakdown recommendations. Params: project_id, issue_iid
+- mr_security: Security review of MR (OWASP Top 10, secrets, auth). Params: project_id, mr_iid
+- technical_debt: Find and categorize TODO/FIXME/HACK markers. Params: project_id, ref (optional)
+- deployment_history: Analyze deployment frequency, success rate, patterns. Params: project_id, environment (optional)
 
-See also: gitlab_ci_lint_project, gitlab_list_pipelines
+Use this tool when you need AI-assisted analysis, summarization, or review of GitLab data.
+Do NOT use for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline instead.
 
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_analyze_deployment_history
-
-**Analyze Deployment History**
-
-Analyze deployment history and patterns for a GitLab project using LLM-assisted analysis via MCP sampling. Fetches recent deployments, then requests LLM to assess deployment frequency, success rate, rollback patterns, and suggest improvements. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown analysis of deployment patterns with frequency, success rate, and improvement suggestions.
-
-See also: gitlab_list_deployments, gitlab_list_environments
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_analyze_issue_scope
-
-**Analyze Issue Scope**
-
-Analyze a GitLab issue's scope and effort using LLM-assisted analysis via MCP sampling. Fetches issue details, time stats, participants, related MRs, and discussion notes, then requests LLM to assess scope, complexity, risks, and whether the issue should be broken down. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown analysis of issue scope, complexity, risks, and breakdown recommendations.
-
-See also: gitlab_summarize_issue, gitlab_get_issue
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_analyze_mr_changes
-
-**Analyze MR Changes**
-
-Analyze a GitLab merge request using LLM-assisted code review via MCP sampling. Fetches MR details and diffs, then requests LLM analysis for code quality, bugs, and improvements. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown analysis of merge request changes including code quality, bugs, and improvement recommendations.
-
-See also: gitlab_review_mr_security, gitlab_summarize_mr_review
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_analyze_pipeline_failure
-
-**Analyze Pipeline Failure**
-
-Analyze a GitLab pipeline failure using LLM-assisted root cause analysis via MCP sampling. Fetches pipeline details, failed jobs and their traces, then requests LLM analysis for root cause, fix suggestions, and impact assessment. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown analysis of pipeline failure with root cause and suggested fixes.
-
-See also: gitlab_get_pipeline, gitlab_get_job_trace
+See also: gitlab_merge_request, gitlab_issue, gitlab_pipeline, gitlab_release
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -224,8 +198,8 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Branch**
 
-Create, list, get, delete, and protect Git branches in GitLab repositories.
-Valid actions: create, delete, delete_merged, get, get_protected, list, list_protected, protect, unprotect, update_protected
+Create, list, get, delete, and protect Git branches in GitLab repositories. Query branch rules (aggregated view via GraphQL).
+Valid actions: create, delete, delete_merged, get, get_protected, list, list_protected, protect, rule_list, unprotect, update_protected
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
@@ -239,20 +213,13 @@ Actions:
 - list_protected: List all protected branches. Params: project_id (required), page, per_page
 - get_protected: Get details of a single protected branch. Params: project_id (required), branch_name (required)
 - update_protected: Update protected branch settings. Params: project_id (required), branch_name (required), allow_force_push, code_owner_approval_required
+- rule_list: List branch rules for a project (aggregated view of protections, approval rules, status checks via GraphQL). Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
+
+Use this tool for creating, listing, deleting, and protecting branches, and querying branch rules.
+Do NOT use for file operations on branches (use gitlab_repository).
+See also: gitlab_repository, gitlab_merge_request
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_branch_rule
-
-**Branch Rule**
-
-Query branch rules for a project via GraphQL API (Premium/Ultimate). Provides an aggregated read-only view of branch protections, approval rules, and external status checks.
-Use "action" to specify the operation. Valid actions: list
-
-Actions:
-- list: List branch rules for a project. Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### gitlab_ci_catalog
 
@@ -264,6 +231,8 @@ Use "action" to specify the operation. Valid actions: get, list
 Actions:
 - list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
 - get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
+
+See also: gitlab_pipeline, gitlab_template (standard templates)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -292,6 +261,9 @@ Actions:
 - instance_update: Update an instance variable. Params: key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool)
 - instance_delete: Delete an instance variable. Params: key (required)
 
+Use this tool for CI/CD variables at instance, group, and project scope.
+See also: gitlab_pipeline
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_custom_emoji
@@ -306,33 +278,28 @@ Actions:
 - create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
 - delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
 
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_deployment
-
-**Deployment**
-
-List, get, create, update, approve/reject, and delete GitLab deployments. List merge requests associated with a deployment.
-Valid actions: approve_or_reject, create, delete, get, list, merge_requests, update
-Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
-- get: Get deployment details. Params: project_id (required), deployment_id (required, int)
-- create: Create a deployment. Params: project_id (required), environment (required), ref (required), sha (required), tag (bool), status
-- update: Update deployment status. Params: project_id (required), deployment_id (required, int), status (required)
-- delete: Delete a deployment. Params: project_id (required), deployment_id (required, int)
-- approve_or_reject: Approve or reject a blocked deployment. Params: project_id (required), deployment_id (required, int), status (required, approved/rejected), comment
-- merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page
+See also: gitlab_group
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+### gitlab_discover_project
+
+**Discover Project**
+
+Resolve a git remote URL to a GitLab project. Extract the FULL remote URL from the workspace .git/config file (look for [remote "origin"] url = ...) or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. IMPORTANT: Pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats: HTTPS (https://gitlab.example.com/group/project.git), SSH shorthand (git@gitlab.example.com:group/project.git), SSH protocol (ssh://git@gitlab.example.com/group/project.git).
+
+Returns: JSON with the resolved project ID and details.
+
+See also: gitlab_project, gitlab_server
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### gitlab_environment
 
 **Environment**
 
-Create, list, get, update, delete, and stop GitLab environments. Manage protected environments and deployment freeze periods.
-Valid actions: create, delete, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, update
+Create, list, get, update, delete, and stop GitLab environments. Manage protected environments, deployment freeze periods, and deployment records.
+Valid actions: create, delete, deployment_approve_or_reject, deployment_create, deployment_delete, deployment_get, deployment_list, deployment_merge_requests, deployment_update, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, update
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
@@ -352,6 +319,16 @@ Actions:
 - freeze_create: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
 - freeze_update: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
 - freeze_delete: Delete a freeze period. Params: project_id (required), freeze_period_id (required)
+- deployment_list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
+- deployment_get: Get deployment details. Params: project_id (required), deployment_id (required, int)
+- deployment_create: Create a deployment. Params: project_id (required), environment (required), ref (required), sha (required), tag (bool), status
+- deployment_update: Update deployment status. Params: project_id (required), deployment_id (required, int), status (required)
+- deployment_delete: Delete a deployment. Params: project_id (required), deployment_id (required, int)
+- deployment_approve_or_reject: Approve or reject a blocked deployment. Params: project_id (required), deployment_id (required, int), status (required, approved/rejected), comment
+- deployment_merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page
+
+Use this tool for environment lifecycle, deployment records, freeze periods, and protected environments.
+See also: gitlab_pipeline
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -374,43 +351,9 @@ Actions:
 - ff_user_list_update: Update a feature flag user list. Params: project_id (required), iid (required), name, user_xids
 - ff_user_list_delete: Delete a feature flag user list. Params: project_id (required), iid (required)
 
+See also: gitlab_project, gitlab_environment
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_find_technical_debt
-
-**Find Technical Debt**
-
-Find and analyze technical debt in a GitLab project using LLM-assisted analysis via MCP sampling. Searches for TODO, FIXME, HACK, XXX, and DEPRECATED markers in source code, then requests LLM to categorize, prioritize, and recommend a remediation strategy. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown report of technical debt categorized by priority with remediation strategy.
-
-See also: gitlab_search_code, gitlab_get_project
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_generate_milestone_report
-
-**Generate Milestone Report**
-
-Generate a comprehensive milestone progress report using LLM-assisted analysis via MCP sampling. Fetches milestone details, linked issues and merge requests, then requests LLM to produce a data-driven progress report with metrics, risks, and recommendations. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown progress report with metrics, risks, and recommendations.
-
-See also: gitlab_get_milestone, gitlab_list_milestone_issues
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_generate_release_notes
-
-**Generate Release Notes**
-
-Generate polished release notes using LLM-assisted analysis via MCP sampling. Compares two Git refs, fetches commits and merged MRs with labels, then requests LLM to produce categorized release notes (Features, Bug Fixes, Improvements, Breaking Changes). Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown release notes categorized by Features, Bug Fixes, Improvements, and Breaking Changes.
-
-See also: gitlab_create_release, gitlab_list_commits
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### gitlab_group
 
@@ -600,6 +543,10 @@ Actions:
 - token_scope_add_group: Add a group to the job token allowlist. Params: project_id (required), target_group_id (required)
 - token_scope_remove_group: Remove a group from the job token allowlist. Params: project_id (required), target_group_id (required)
 
+Use this tool for CI/CD job operations: list, retry, cancel, erase, play, download artifacts/logs, and Kubernetes agents.
+Do NOT use for pipeline-level operations (use gitlab_pipeline).
+See also: gitlab_pipeline, gitlab_repository
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_merge_request
@@ -665,6 +612,10 @@ Actions:
 - event_mr_state_list: List state events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
 - event_mr_state_get: Get a state event on a merge request. Params: project_id (required), mr_iid (required), state_event_id (required)
 
+Use this tool for MR lifecycle: create, update, merge, approve, rebase, delete, approvals, time tracking, and resource events.
+Do NOT use for reviewing/commenting on MRs (use gitlab_mr_review).
+See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_model_registry
@@ -676,6 +627,8 @@ Use "action" to specify the operation. Valid actions: download
 
 Actions:
 - download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
+
+See also: gitlab_package
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -713,6 +666,10 @@ Actions:
 - diff_versions_list: List all diff versions of an MR. Params: project_id (required), mr_iid (required), page, per_page
 - diff_version_get: Get a single diff version with commits and file diffs. Params: project_id (required), mr_iid (required), version_id (required), unidiff (bool, optional)
 
+Use this tool for code review workflows: notes, discussions, code diffs, and draft notes (batch review).
+Do NOT use for MR lifecycle operations like create, merge, or approve (use gitlab_merge_request).
+See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_package
@@ -748,14 +705,16 @@ Actions:
 - protection_rule_update: Update package protection rule. Params: project_id (required), rule_id (required, int), package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
 - protection_rule_delete: Delete package protection rule. Params: project_id (required), rule_id (required, int)
 
+See also: gitlab_release (release asset links), gitlab_project
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_pipeline
 
 **Pipeline**
 
-List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, and pipeline bridges.
-Valid actions: cancel, create, delete, get, latest, list, resource_group_edit, resource_group_get, resource_group_list, resource_group_upcoming_jobs, retry, test_report, test_report_summary, trigger_create, trigger_delete, trigger_get, trigger_list, trigger_run, trigger_update, update_metadata, variables, wait
+List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules.
+Valid actions: cancel, create, delete, get, latest, list, resource_group_edit, resource_group_get, resource_group_list, resource_group_upcoming_jobs, retry, schedule_create, schedule_create_variable, schedule_delete, schedule_delete_variable, schedule_edit_variable, schedule_get, schedule_list, schedule_list_triggered_pipelines, schedule_run, schedule_take_ownership, schedule_update, test_report, test_report_summary, trigger_create, trigger_delete, trigger_get, trigger_list, trigger_run, trigger_update, update_metadata, variables, wait
 Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
@@ -781,29 +740,21 @@ Actions:
 - resource_group_get: Get a resource group. Params: project_id (required), key (required)
 - resource_group_edit: Edit a resource group. Params: project_id (required), key (required), process_mode
 - resource_group_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required), page, per_page
+- schedule_list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
+- schedule_get: Get schedule details. Params: project_id (required), schedule_id (required, int)
+- schedule_create: Create a schedule. Params: project_id (required), description (required), ref (required), cron (required), cron_timezone, active (bool)
+- schedule_update: Update a schedule. Params: project_id (required), schedule_id (required, int), description, ref, cron, cron_timezone, active (bool)
+- schedule_delete: Delete a schedule. Params: project_id (required), schedule_id (required, int)
+- schedule_run: Trigger immediate run. Params: project_id (required), schedule_id (required, int)
+- schedule_take_ownership: Take ownership of a schedule. Params: project_id (required), schedule_id (required, int)
+- schedule_create_variable: Create a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type (env_var/file)
+- schedule_edit_variable: Edit a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type
+- schedule_delete_variable: Delete a schedule variable. Params: project_id (required), schedule_id (required, int), key (required)
+- schedule_list_triggered_pipelines: List pipelines triggered by schedule. Params: project_id (required), schedule_id (required, int), page, per_page
 
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_pipeline_schedule
-
-**Pipeline Schedule**
-
-Create, list, get, update, delete, and run GitLab pipeline schedules. Manage schedule variables and ownership.
-Valid actions: create, create_variable, delete, delete_variable, edit_variable, get, list, list_triggered_pipelines, run, take_ownership, update
-Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions:
-- list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
-- get: Get schedule details. Params: project_id (required), schedule_id (required, int)
-- create: Create a schedule. Params: project_id (required), description (required), ref (required), cron (required), cron_timezone, active (bool)
-- update: Update a schedule. Params: project_id (required), schedule_id (required, int), description, ref, cron, cron_timezone, active (bool)
-- delete: Delete a schedule. Params: project_id (required), schedule_id (required, int)
-- run: Trigger immediate run. Params: project_id (required), schedule_id (required, int)
-- take_ownership: Take ownership of a schedule. Params: project_id (required), schedule_id (required, int)
-- create_variable: Create a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type (env_var/file)
-- edit_variable: Edit a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type
-- delete_variable: Delete a schedule variable. Params: project_id (required), schedule_id (required, int), key (required)
-- list_triggered_pipelines: List pipelines triggered by schedule. Params: project_id (required), schedule_id (required, int), page, per_page
+Use this tool for pipeline CRUD, test reports, trigger tokens, resource groups, and pipeline schedules.
+Do NOT use for job-level operations (use gitlab_job).
+See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -984,6 +935,8 @@ Actions:
 - link_update: Update a release asset link. Params: project_id (required), tag_name (required), link_id (required), name, url, filepath, direct_asset_path, link_type
 - link_delete: Remove an asset link. Params: project_id (required), tag_name (required), link_id (required)
 
+See also: gitlab_tag (create tags first), gitlab_package (package registry)
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_repository
@@ -1036,37 +989,17 @@ Actions:
 - commit_discussion_update_note: Update a note in a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required), body (required)
 - commit_discussion_delete_note: Delete a note from a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required)
 
+Use this tool for repository content: file tree, read/write files, commits, diffs, blame, compare branches, and submodules.
+Do NOT use for branch CRUD (use gitlab_branch) or tag CRUD (use gitlab_tag).
+See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_resolve_project_from_remote
-
-**Resolve Project From Remote**
-
-Resolve a git remote URL to a GitLab project. Extract the FULL remote URL from the workspace .git/config file (look for [remote "origin"] url = ...) or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. IMPORTANT: Pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats: HTTPS (https://gitlab.example.com/group/project.git), SSH shorthand (git@gitlab.example.com:group/project.git), SSH protocol (ssh://git@gitlab.example.com/group/project.git).
-
-Returns: JSON with the resolved project ID and details.
-
-See also: gitlab_project_get, gitlab_project_list
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_review_mr_security
-
-**Review MR Security**
-
-Perform a security-focused review of a GitLab merge request using LLM-assisted analysis via MCP sampling. Fetches MR details and code diffs, then requests LLM to identify injection vulnerabilities, auth issues, exposed secrets, and OWASP Top 10 findings. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown security review with vulnerability findings and OWASP Top 10 assessment.
-
-See also: gitlab_analyze_mr_changes, gitlab_get_merge_request
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### gitlab_runner
 
 **Runner**
 
-Manage CI/CD runners in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
+Manage CI/CD runners in GitLab, including runner controllers (admin, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List owned runners. Params: type, status, paused (bool), tag_list (comma-separated), page, per_page
@@ -1088,35 +1021,24 @@ Actions:
 - reset_group_reg_token: Reset group runner registration token (deprecated). Params: group_id (required)
 - reset_project_reg_token: Reset project runner registration token (deprecated). Params: project_id (required)
 - list_managers: List all managers for a runner. Params: runner_id (required, int)
+- controller_list: List all runner controllers (admin). Params: page, per_page
+- controller_get: Get runner controller details (admin). Params: controller_id (required, int)
+- controller_create: Register a new runner controller (admin). Params: description, state (enabled/disabled/dry_run)
+- controller_update: Update a runner controller (admin). Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
+- controller_delete: Delete a runner controller (admin). Params: controller_id (required, int)
+- controller_scope_list: List all scopes for a controller. Params: controller_id (required, int)
+- controller_scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
+- controller_scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
+- controller_scope_add_runner: Add runner scope. Params: controller_id (required, int), runner_id (required, int)
+- controller_scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
+- controller_token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
+- controller_token_get: Get a specific controller token. Params: controller_id (required, int), token_id (required, int)
+- controller_token_create: Create a controller token. Params: controller_id (required, int), description
+- controller_token_rotate: Rotate a controller token. Params: controller_id (required, int), token_id (required, int)
+- controller_token_revoke: Revoke a controller token. Params: controller_id (required, int), token_id (required, int)
 
-Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_runner_controller
-
-**Runner Controller**
-
-Manage GitLab runner controllers, their scopes, and tokens (admin only, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
-
-Actions (controller CRUD):
-- list: List all runner controllers. Params: page, per_page
-- get: Get runner controller details. Params: controller_id (required, int)
-- create: Register a new runner controller. Params: description, state (enabled/disabled/dry_run)
-- update: Update a runner controller. Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
-- delete: Delete a runner controller. Params: controller_id (required, int)
-
-Actions (scope management):
-- scope_list: List all scopes for a controller. Params: controller_id (required, int)
-- scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
-- scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
-- scope_add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
-- scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
-
-Actions (token management):
-- token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
-- token_get: Get a specific token. Params: controller_id (required, int), token_id (required, int)
-- token_create: Create a new token. Params: controller_id (required, int), description
-- token_rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
-- token_revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)
+Use this tool for managing runner instances, tokens, and runner controllers (admin).
+See also: gitlab_pipeline
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1138,6 +1060,8 @@ Actions:
 - snippets: Search for snippet titles globally. Params: query (required)
 - users: Search for users. Params: query (required), project_id, group_id
 - wiki: Search for wiki blobs. Params: query (required), project_id, group_id
+
+See also: gitlab_project, gitlab_merge_request, gitlab_issue
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -1184,31 +1108,9 @@ Actions:
 - emoji_snippet_note_create: Add award emoji to a snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
 - emoji_snippet_note_delete: Delete award emoji from a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
 
+See also: gitlab_project, gitlab_user
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
-
-### gitlab_summarize_issue
-
-**Summarize Issue**
-
-Summarize a GitLab issue discussion using LLM-assisted analysis via MCP sampling. Fetches issue details and all notes, then requests LLM summary of key decisions and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown summary of the issue with key decisions and action items.
-
-See also: gitlab_analyze_issue_scope, gitlab_list_issues
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### gitlab_summarize_mr_review
-
-**Summarize MR Review**
-
-Summarize a GitLab merge request review using LLM-assisted analysis via MCP sampling. Fetches MR details, discussions, and approval state, then requests LLM summary of reviewer feedback, unresolved threads, and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).
-
-Returns: Markdown summary of reviewer feedback, unresolved threads, and action items.
-
-See also: gitlab_analyze_mr_changes, gitlab_list_mr_discussions
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### gitlab_tag
 
@@ -1228,6 +1130,8 @@ Actions:
 - get_protected: Get a protected tag. Params: project_id (required), tag_name (required)
 - protect: Protect a tag or wildcard pattern. Params: project_id (required), tag_name (required, tag name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
 - unprotect: Remove tag protection. Params: project_id (required), tag_name (required)
+
+See also: gitlab_release, gitlab_repository
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1252,6 +1156,8 @@ Actions:
 - license_get: Get a license template by key. Params: key (required), project, fullname
 - project_template_list: List project templates of a given type. Params: project_id (required), template_type (required), page, per_page
 - project_template_get: Get a single project template. Params: project_id (required), template_type (required), key (required)
+
+See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog (Enterprise: CI/CD Catalog components)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -1355,6 +1261,8 @@ Actions:
 - delete: Delete a wiki page. Params: project_id (required), slug (required)
 - upload_attachment: Upload a file attachment to a wiki. Params: project_id (required), filename (required), content_base64 or file_path (one required), branch (optional)
 
+See also: gitlab_project
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
@@ -1371,6 +1279,8 @@ Use "action" to specify the operation. Valid actions: download, list
 Actions:
 - list: List attestations for a project matching a subject digest. Params: project_id (required), subject_digest (required)
 - download: Download a specific attestation. Params: project_id (required), attestation_iid (required)
+
+See also: gitlab_pipeline, gitlab_package
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -1389,6 +1299,8 @@ Actions:
 - list_project: List project audit events. Params: project_id (required), created_after, created_before, page, per_page
 - get_project: Get a single project audit event. Params: project_id (required), event_id (required)
 
+See also: gitlab_admin (instance administration)
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_compliance_policy
@@ -1401,6 +1313,8 @@ Use "action" to specify the operation. Valid actions: get, update
 Actions:
 - get: Get current compliance policy settings (admin). No params required.
 - update: Update compliance policy settings (admin). Params: csp_namespace_id (optional, int64)
+
+See also: gitlab_admin
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1417,6 +1331,8 @@ Actions:
 - export_get: Check status of a dependency list export. Params: export_id (required)
 - export_download: Download a completed export (CycloneDX JSON, max 1MB). Params: export_id (required)
 
+See also: gitlab_project, gitlab_vulnerability (security vulnerabilities)
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_dora_metrics
@@ -1429,6 +1345,8 @@ Use "action" to specify the scope. Valid actions: group, project
 Actions:
 - project: Get DORA metrics for a project. Params: project_id (required), metric (required: deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), interval (daily|monthly|all), environment_tiers (array)
 - group: Get DORA metrics for a group. Params: group_id (required), metric (required), start_date, end_date, interval, environment_tiers
+
+See also: gitlab_environment, gitlab_pipeline
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1444,6 +1362,8 @@ Actions:
 - get: Get details of a specific enterprise user. Params: group_id (required), user_id (required)
 - disable_2fa: Disable two-factor authentication for an enterprise user. Params: group_id (required), user_id (required)
 - delete: Delete an enterprise user. Params: group_id (required), user_id (required), hard_delete (optional)
+
+See also: gitlab_group, gitlab_user
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1472,6 +1392,8 @@ Actions (project-scoped, preferred):
 - retry_project: Retry a failed status check for a project MR. Params: project_id, mr_iid, check_id (required)
 - set_project_mr_status: Set status of an external status check. Params: project_id, mr_iid, sha, external_status_check_id, status (required)
 
+See also: gitlab_merge_request
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_geo
@@ -1491,6 +1413,8 @@ Actions:
 - list_status: List replication status of all Geo sites. Pagination: page, per_page
 - get_status: Get replication status of a Geo site. Params: id (required)
 
+See also: gitlab_admin
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_group_scim
@@ -1505,6 +1429,8 @@ Actions:
 - get: Get a single SCIM identity. Params: group_id (required), uid (required)
 - update: Update a SCIM identity's external UID. Params: group_id (required), uid (required), extern_uid (required)
 - delete: Delete a SCIM identity. Params: group_id (required), uid (required)
+
+See also: gitlab_group, gitlab_user
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1523,6 +1449,8 @@ Actions:
 - create_group: Create a group-level member role. Params: group_id (required), name (required), base_access_level (required), description, permissions
 - delete_group: Delete a group-level member role. Params: group_id (required), member_role_id (required)
 
+See also: gitlab_group, gitlab_user
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_merge_train
@@ -1537,6 +1465,8 @@ Actions:
 - list_branch: List merge requests in a merge train for a specific branch. Params: project_id (required), target_branch (required), scope, sort, page, per_page
 - get: Get the status of a merge request in a merge train. Params: project_id (required), merge_request_id (required)
 - add: Add a merge request to a merge train. Params: project_id (required), merge_request_id (required), auto_merge (bool), sha (string), squash (bool)
+
+See also: gitlab_merge_request, gitlab_pipeline
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -1553,6 +1483,8 @@ Actions:
 - create: Create a project alias. Params: name (required), project_id (required, int64)
 - delete: Delete a project alias. Params: name (required)
 
+See also: gitlab_project
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_security_finding
@@ -1564,6 +1496,8 @@ Use "action" to specify the operation. Valid actions: list
 
 Actions:
 - list: List security report findings for a pipeline. Params: project_path (required), pipeline_iid (required), severity (optional, array), confidence (optional, array), scanner (optional, array), report_type (optional, array). Pagination: first, after
+
+See also: gitlab_vulnerability (project vulnerabilities), gitlab_pipeline
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -1598,6 +1532,8 @@ Actions (Snippet):
 - schedule_snippet: Schedule a storage move for a snippet. Params: snippet_id (required), destination_storage_name (optional)
 - schedule_all_snippet: Schedule storage moves for all snippets. Params: source_storage_name (optional), destination_storage_name (optional)
 
+See also: gitlab_admin
+
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### gitlab_vulnerability
@@ -1616,6 +1552,8 @@ Actions:
 - revert: Revert a vulnerability to detected state. Params: id (required, GID)
 - severity_count: Get vulnerability severity counts for a project. Params: project_path (required)
 - pipeline_security_summary: Get security report summary for a pipeline. Params: project_path (required), pipeline_iid (required)
+
+See also: gitlab_security_finding (pipeline security report), gitlab_pipeline
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
@@ -4439,6 +4377,18 @@ Returns: JSON with action confirmation.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
+### discover (1 tools)
+
+#### gitlab_discover_project
+
+Resolve a git remote URL to a GitLab project. Extract the FULL remote URL from the workspace .git/config file (look for [remote "origin"] url = ...) or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. IMPORTANT: Pass the complete URL ex...
+
+**Parameters:**
+
+- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the comple...
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 ### dismiss (1 tools)
 
 #### gitlab_dismiss_vulnerability
@@ -5342,7 +5292,7 @@ Get application statistics (admin). Returns counts for users, projects, groups, 
 
 Returns: JSON with application statistics.
 
-See also: gitlab_mcp_status.
+See also: gitlab_server_status.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -5895,7 +5845,7 @@ Get GitLab instance metadata (version, revision, KAS info, enterprise flag).
 
 Returns: JSON with GitLab instance metadata.
 
-See also: gitlab_mcp_status
+See also: gitlab_server_status
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10546,7 +10496,7 @@ Mark a pending database migration as successfully executed (admin). Params: vers
 
 Returns: JSON with the migration mark confirmation.
 
-See also: gitlab_mcp_status.
+See also: gitlab_server_status.
 
 **Parameters:**
 
@@ -10554,18 +10504,6 @@ See also: gitlab_mcp_status.
 - `version` (integer) (required): Migration version number to mark as successful,required
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
-
-### mcp (1 tools)
-
-#### gitlab_mcp_status
-
-Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.
-
-Returns: JSON with server health and connectivity information.
-
-See also: gitlab_m...
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### milestone (7 tools)
 
@@ -15080,17 +15018,7 @@ List the files and directories (tree) of a GitLab repository at a given path and
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### resolve (2 tools)
-
-#### gitlab_resolve_project_from_remote
-
-Resolve a git remote URL to a GitLab project. Extract the FULL remote URL from the workspace .git/config file (look for [remote "origin"] url = ...) or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. IMPORTANT: Pass the complete URL ex...
-
-**Parameters:**
-
-- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the comple...
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+### resolve (1 tools)
 
 #### gitlab_resolve_vulnerability
 
@@ -16121,6 +16049,18 @@ Returns: JSON array of matching wiki pages with pagination. See also: gitlab_wik
 - `per_page` (integer): Items per page (default 20, max 100)
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string,required
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+### server (1 tools)
+
+#### gitlab_server_status
+
+Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.
+
+Returns: JSON with server health and connectivity information.
+
+See also: gitlab_s...
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

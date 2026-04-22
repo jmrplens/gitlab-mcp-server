@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: MCP Capabilities (Sampling, Elicitation, Health)
 > **Individual tools**: 16
-> **Meta-tool**: None (sampling and elicitation tools are always registered individually; health is included in `gitlab_mcp` meta-tool as `status` action)
+> **Meta-tool**: None (sampling and elicitation tools are always registered individually; health is included in `gitlab_server` meta-tool as `status` action)
 > **MCP Protocol**: [Sampling](https://modelcontextprotocol.io/specification/2025-11-25/client/sampling), [Elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -144,7 +144,7 @@ Interactively create a GitLab project with step-by-step user prompts via MCP eli
 
 ## Health
 
-### `gitlab_mcp_status`
+### `gitlab_server_status`
 
 Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.
 
@@ -172,7 +172,7 @@ Check MCP server health and GitLab connectivity. Returns server version, author,
 | 13 | `gitlab_interactive_mr_create` | Elicitation | Create |
 | 14 | `gitlab_interactive_release_create` | Elicitation | Create |
 | 15 | `gitlab_interactive_project_create` | Elicitation | Create |
-| 16 | `gitlab_mcp_status` | Health | Read |
+| 16 | `gitlab_server_status` | Health | Read |
 
 ### Capability Requirements
 
@@ -193,7 +193,7 @@ Check MCP server health and GitLab connectivity. Returns server version, author,
 | `gitlab_interactive_mr_create` | Elicitation | Returns informational message if unsupported |
 | `gitlab_interactive_release_create` | Elicitation | Returns informational message if unsupported |
 | `gitlab_interactive_project_create` | Elicitation | Returns informational message if unsupported |
-| `gitlab_mcp_status` | None | Always available |
+| `gitlab_server_status` | None | Always available |
 
 ---
 

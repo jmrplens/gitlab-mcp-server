@@ -71,13 +71,11 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 
 | Meta-herramienta           | Descripción                    | Acciones principales                                   |
 | -------------------------- | ------------------------------ | ------------------------------------------------------ |
-| `gitlab_pipeline`          | Gestión de pipelines           | list, get, create, cancel, retry, delete, wait         |
+| `gitlab_pipeline`          | Gestión de pipelines           | list, get, create, cancel, retry, delete, wait, schedule_* |
 | `gitlab_job`               | Gestión de jobs de CI          | list, get, play, cancel, retry, trace, artifacts, wait |
-| `gitlab_pipeline_schedule` | Pipelines programados          | list, get, create, update, delete, trigger             |
 | `gitlab_ci_lint`           | Validación de configuración CI | validate, project_lint                                 |
 | `gitlab_ci_variable`       | Variables de CI/CD             | list, get, create, update, delete                      |
-| `gitlab_environment`       | Gestión de entornos            | list, get, create, update, delete, stop                |
-| `gitlab_deployment`        | Seguimiento de despliegues     | list, get                                              |
+| `gitlab_environment`       | Gestión de entornos            | list, get, create, update, delete, stop, deployment_*  |
 | `gitlab_package`           | Registro de paquetes           | list, get, delete                                      |
 
 ### Colaboración
