@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"maps"
 	"reflect"
 	"regexp"
 	"sort"
@@ -14,8 +15,8 @@ func jsonTagsFromStruct(t *testing.T, v any) map[string]bool {
 	t.Helper()
 	rt := reflect.TypeOf(v)
 	tags := make(map[string]bool)
-	for i := range rt.NumField() {
-		tag := rt.Field(i).Tag.Get("json")
+	for f := range rt.Fields() {
+		tag := f.Tag.Get("json")
 		if tag == "" || tag == "-" {
 			continue
 		}
@@ -154,9 +155,7 @@ func TestWebUI_DefaultsJSONFields_UsedInJS(t *testing.T) {
 	// JSON field names extracted via reflection from defaultsResponse and
 	// clientResponse structs. This ensures the test stays in sync with Go code.
 	goFields := jsonTagsFromStruct(t, defaultsResponse{})
-	for k, v := range jsonTagsFromStruct(t, clientResponse{}) {
-		goFields[k] = v
-	}
+	maps.Copy(goFields, jsonTagsFromStruct(t, clientResponse{}))
 
 	var unknown []string
 	for field := range jsFields {
