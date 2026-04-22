@@ -116,7 +116,8 @@ Actions:
 - global_update: Update global notification settings. Params: level, notification_email, and event booleans (close_issue, new_issue, etc.)
 - project_update: Update project notification settings. Params: project_id (required), level, notification_email, and event booleans
 - group_update: Update group notification settings. Params: group_id (required), level, notification_email, and event booleans`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconNotify,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_notification", routes, nil))
 }

@@ -121,7 +121,8 @@ Actions:
 - list_client_keys: List error tracking client keys. Params: project_id (required)
 - create_client_key: Create error tracking client key. Params: project_id (required)
 - delete_client_key: Delete error tracking client key. Params: project_id (required), key_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconAlert,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_error_tracking", routes, nil))
 }

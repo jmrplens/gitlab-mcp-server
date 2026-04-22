@@ -56,7 +56,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 Actions:
 - get_key_with_user: Get an SSH key and its user by key ID. Params: key_id (required)
 - get_key_by_fingerprint: Get an SSH key and its user by fingerprint. Params: fingerprint (required, e.g. SHA256:abc123)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconKey,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_key", routes, nil))
 }

@@ -133,7 +133,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"edit":          toolutil.RouteAction(client, EditMember),
 		"remove":        toolutil.DestructiveVoidAction(client, RemoveMember),
 		"share":         toolutil.RouteAction(client, ShareGroup),
-		"unshare":       toolutil.RouteVoidAction(client, UnshareGroup),
+		"unshare":       toolutil.DestructiveVoidAction(client, UnshareGroup),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -149,7 +149,8 @@ Actions:
 - remove: Remove a member from a group (group_id, user_id, skip_subresources, unassign_issuables)
 - share: Share a group with another group (group_id, share_group_id, group_access, expires_at)
 - unshare: Stop sharing a group (group_id, share_group_id)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_member", routes, nil))
 }

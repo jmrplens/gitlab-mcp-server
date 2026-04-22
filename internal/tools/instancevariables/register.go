@@ -108,7 +108,8 @@ Actions:
 - create: Create variable. Params: key (required), value (required), description, variable_type, protected (bool), masked (bool), raw (bool)
 - update: Update variable. Params: key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool)
 - delete: Delete variable. Params: key (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconVariable,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_instance_variable", routes, nil))
 }

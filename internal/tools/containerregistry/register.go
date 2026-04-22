@@ -225,8 +225,9 @@ Actions:
 - get_tag: Get tag details. Params: project_id (required), repository_id (required, int), tag_name (required)
 - delete_tag: Delete a single tag. Params: project_id (required), repository_id (required, int), tag_name (required)
 - delete_tags_bulk: Bulk delete tags by regex. Params: project_id (required), repository_id (required, int), name_regex_delete, name_regex_keep, keep_n (int), older_than`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconContainer,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_registry", routes, nil))
 
 	// Protection rules meta-tool
@@ -247,7 +248,8 @@ Actions:
 - create: Create protection rule. Params: project_id (required), repository_path_pattern (required), minimum_access_level_for_push (maintainer/owner/admin), minimum_access_level_for_delete (maintainer/owner/admin)
 - update: Update protection rule. Params: project_id (required), rule_id (required, int), repository_path_pattern, minimum_access_level_for_push, minimum_access_level_for_delete
 - delete: Delete protection rule. Params: project_id (required), rule_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(protRoutes),
 		Icons:       toolutil.IconContainer,
+		InputSchema: toolutil.MetaToolSchema(protRoutes),
 	}, toolutil.MakeMetaHandler("gitlab_registry_protection", protRoutes, nil))
 }

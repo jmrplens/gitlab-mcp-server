@@ -78,7 +78,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteIssueAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_emoji_delete", start, err)
 		if err != nil {
@@ -142,7 +144,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteOnNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteIssueNoteAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_note_emoji_delete", start, err)
 		if err != nil {
@@ -206,7 +210,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteMRAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_emoji_delete", start, err)
 		if err != nil {
@@ -270,7 +276,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteOnNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteMRNoteAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_emoji_delete", start, err)
 		if err != nil {
@@ -334,7 +342,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteSnippetAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_emoji_delete", start, err)
 		if err != nil {
@@ -398,7 +408,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteOnNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, deleteAction)
+		if r := toolutil.ConfirmAction(ctx, req, deleteAction); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteSnippetNoteAwardEmoji(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_snippet_note_emoji_delete", start, err)
 		if err != nil {
@@ -477,7 +489,8 @@ Actions — Snippet note emoji:
 - snippet_note_get: Get single emoji on snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
 - snippet_note_create: Add emoji to snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
 - snippet_note_delete: Delete emoji from snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconLabel,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_award_emoji", routes, nil))
 }

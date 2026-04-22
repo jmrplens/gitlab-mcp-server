@@ -155,7 +155,8 @@ Actions:
 		Name:        "gitlab_group_milestone",
 		Title:       toolutil.TitleFromName("gitlab_group_milestone"),
 		Description: desc,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconMilestone,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_milestone", routes, nil))
 }

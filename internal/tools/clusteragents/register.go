@@ -179,7 +179,8 @@ Actions:
 - get_agent_token: Get a single agent token. Params: project_id (required), agent_id (required, int), token_id (required, int)
 - create_agent_token: Create a token for a cluster agent. Params: project_id (required), agent_id (required, int), name (required), description
 - revoke_agent_token: Revoke a cluster agent token. Params: project_id (required), agent_id (required, int), token_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconRunner,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_cluster_agent", routes, nil))
 }

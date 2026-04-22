@@ -142,7 +142,7 @@ Actions (token management):
 Use this tool for runner controller lifecycle (admin, experimental): CRUD, scopes, and tokens.
 Do NOT use for managing runner instances (use gitlab_runner).
 See also: gitlab_runner (runner instance management)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_runner_controller", routes, nil))

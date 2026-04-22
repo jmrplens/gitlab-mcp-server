@@ -71,7 +71,8 @@ Actions:
 - schedule_export: Schedule an async group export. Params: group_id (required)
 - export_download: Download finished group export archive as base64. Params: group_id (required)
 - import_file: Import group from archive. Params: name, path, file (required), parent_id`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconImport,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_import_export", routes, nil))
 }

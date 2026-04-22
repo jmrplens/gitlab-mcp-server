@@ -143,7 +143,8 @@ Actions:
 		Name:        "gitlab_group_label",
 		Title:       toolutil.TitleFromName("gitlab_group_label"),
 		Description: desc,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconLabel,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_label", routes, nil))
 }

@@ -333,7 +333,8 @@ Actions:
 - personal_rotate_self: Rotate the personal access token used for auth. Params: expires_at (YYYY-MM-DD)
 - personal_revoke: Revoke personal access token. Params: token_id (required, int)
 - personal_revoke_self: Revoke the personal access token used for auth. No params`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconToken,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_access_token", routes, nil))
 }

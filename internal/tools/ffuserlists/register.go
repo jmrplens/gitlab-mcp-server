@@ -108,7 +108,8 @@ Actions:
 - create: Create a user list (project_id, name, user_xids)
 - update: Update a user list (project_id, iid, name, user_xids)
 - delete: Delete a user list (project_id, iid)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_ff_user_list", routes, nil))
 }

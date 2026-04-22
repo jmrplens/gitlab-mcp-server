@@ -176,7 +176,8 @@ Actions:
 - create_domain: Create a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
 - update_domain: Update a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
 - delete_domain: Delete a Pages domain. Params: project_id (required), domain (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconFile,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_page", routes, nil))
 }

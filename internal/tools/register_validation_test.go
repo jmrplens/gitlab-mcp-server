@@ -214,10 +214,10 @@ func TestAllHintReferencesValid(t *testing.T) {
 		validActions[m[1]] = true
 	}
 
-	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/DestructiveAction etc.
-	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route|Destructive)(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/Route/DestructiveAction etc.
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
 	// Pattern for sub-package register.go: routes["key"] = toolutil.Route/DestructiveRoute(...) (enterprise)
-	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route|Destructive)(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -370,7 +370,8 @@ func TestDestructiveMetadataConsistency(t *testing.T) {
 				// Acceptable for exact-match exceptions (merge, stop, erase, etc.)
 				// that are destructive but don't use DeleteAnnotations.
 				if !isExactMatchException(action) {
-					t.Logf("WARNING: %s/%s is destructive route but package has no DeleteAnnotations", info.pkg, action)
+					t.Errorf("%s/%s is destructive route but package has no DeleteAnnotations", info.pkg, action)
+					mismatches++
 				}
 			}
 			if !info.destructive && hasDelete {
@@ -389,6 +390,7 @@ func isExactMatchException(action string) bool {
 		"merge": true, "erase": true, "stop": true, "ban": true,
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
+		"unshare": true, "disable_project": true,
 	}
 	return exceptions[action]
 }
@@ -491,7 +493,7 @@ func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
 	// Keywords that MUST use destructive wrappers.
 	destructiveKeywords := []string{
 		"delete", "remove", "revoke", "purge", "unprotect",
-		"destroy", "unpublish",
+		"destroy", "unpublish", "deny",
 	}
 	containsDestructiveKeyword := func(action string) bool {
 		for _, kw := range destructiveKeywords {
@@ -522,7 +524,7 @@ func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
 		"merge": true, "erase": true, "stop": true, "ban": true,
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"deny_project": true, "deny_group": true,
+		"unshare": true, "disable_project": true,
 	}
 
 	var failures int
@@ -607,6 +609,7 @@ func TestDestructiveRoutesMinimumInventory(t *testing.T) {
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count
 	// across BOTH register_meta.go inline routes AND sub-package routes.
+	// Observed: 194 as of 2025-07-16 (after metadata-driven destructive detection).
 	const minExpectedDestructiveRoutes = 150
 
 	total := len(uniqueActions)

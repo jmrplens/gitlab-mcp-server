@@ -304,7 +304,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"jobs":                     toolutil.RouteAction(client, ListJobs),
 		"list_project":             toolutil.RouteAction(client, ListProject),
 		"enable_project":           toolutil.RouteAction(client, EnableProject),
-		"disable_project":          toolutil.RouteVoidAction(client, DisableProject),
+		"disable_project":          toolutil.DestructiveVoidAction(client, DisableProject),
 		"list_group":               toolutil.RouteAction(client, ListGroup),
 		"register":                 toolutil.RouteAction(client, Register),
 		"delete_registered":        toolutil.DestructiveVoidAction(client, DeleteByID),
@@ -378,7 +378,7 @@ Actions:
 
 Use this tool for managing runner instances, tokens, and runner controllers (admin).
 See also: gitlab_pipeline`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_runner", routes, nil))

@@ -87,7 +87,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, "delete commit discussion note")
+		if r := toolutil.ConfirmAction(ctx, req, "delete commit discussion note"); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteNote(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_delete_commit_discussion_note", start, err)
 		if err != nil {
@@ -120,7 +122,8 @@ Actions:
 - add_note: Reply to an existing discussion. Params: project_id, commit_sha, discussion_id, body (required)
 - update_note: Update a discussion note. Params: project_id, commit_sha, discussion_id, note_id, body (required)
 - delete_note: Delete a discussion note. Params: project_id, commit_sha, discussion_id, note_id (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconDiscussion,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_commit_discussion", routes, nil))
 }

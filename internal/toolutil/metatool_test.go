@@ -1,6 +1,10 @@
 // metatool_test.go tests the generic meta-tool dispatch infrastructure:
 // UnmarshalParams, WrapAction, WrapVoidAction, MakeMetaHandler,
-// defaultFormatResult, ValidActionsString and MetaToolSchema.
+// defaultFormatResult, ValidActionsString, MetaToolSchema,
+// Route, DestructiveRoute, DeriveAnnotations,
+// and composite wrappers (RouteAction, RouteVoidAction,
+// RouteActionWithRequest, DestructiveAction, DestructiveVoidAction,
+// DestructiveActionWithRequest).
 package toolutil
 
 import (

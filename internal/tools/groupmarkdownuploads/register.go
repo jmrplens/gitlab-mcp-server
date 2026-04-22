@@ -89,7 +89,8 @@ Actions:
 - list: List markdown uploads for a group. Params: group_id (required), page, per_page
 - delete_by_id: Delete a group markdown upload by ID. Params: group_id (required), upload_id (required, int)
 - delete_by_secret: Delete a group markdown upload by secret and filename. Params: group_id (required), secret (required), filename (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUpload,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_markdown_upload", routes, nil))
 }

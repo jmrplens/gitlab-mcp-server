@@ -343,13 +343,16 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 }
 
 // DeriveAnnotations computes tool-level MCP annotations from the route map.
-// If any route is destructive, returns MetaAnnotations (DestructiveHint: true).
-// If all routes are non-destructive, returns NonDestructiveMetaAnnotations.
+// If any route is destructive, returns a copy of MetaAnnotations (DestructiveHint: true).
+// If all routes are non-destructive, returns a copy of NonDestructiveMetaAnnotations.
+// Each call returns a fresh copy to avoid aliasing the shared singletons.
 func DeriveAnnotations(routes ActionMap) *mcp.ToolAnnotations {
 	for _, r := range routes {
 		if r.Destructive {
-			return MetaAnnotations
+			cp := *MetaAnnotations
+			return &cp
 		}
 	}
-	return NonDestructiveMetaAnnotations
+	cp := *NonDestructiveMetaAnnotations
+	return &cp
 }
