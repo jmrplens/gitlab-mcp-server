@@ -60,20 +60,33 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 			}
 		}
 
-		isReadOnly := false
-		for _, verb := range readOnlyVerbs {
-			if strings.Contains(name, verb) {
-				isReadOnly = true
+		// Mutating suffixes override read-only heuristic (e.g. gitlab_board_list_create
+		// contains "_list_" in the resource name but ends with a mutating verb).
+		mutatingVerbs := []string{"_create", "_update", "_add", "_edit", "_set", "_upload"}
+		isMutating := false
+		for _, verb := range mutatingVerbs {
+			if strings.HasSuffix(name, verb) {
+				isMutating = true
 				break
 			}
 		}
-		// Also check suffix
-		for _, verb := range readOnlyVerbs {
-			suffix := strings.TrimPrefix(verb, "_")
-			suffix = strings.TrimSuffix(suffix, "_")
-			if strings.HasSuffix(name, "_"+suffix) {
-				isReadOnly = true
-				break
+
+		isReadOnly := false
+		if !isMutating {
+			for _, verb := range readOnlyVerbs {
+				if strings.Contains(name, verb) {
+					isReadOnly = true
+					break
+				}
+			}
+			// Also check suffix
+			for _, verb := range readOnlyVerbs {
+				suffix := strings.TrimPrefix(verb, "_")
+				suffix = strings.TrimSuffix(suffix, "_")
+				if strings.HasSuffix(name, "_"+suffix) {
+					isReadOnly = true
+					break
+				}
 			}
 		}
 

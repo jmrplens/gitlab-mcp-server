@@ -121,7 +121,7 @@ func TestIndividual_ClusterAgents(t *testing.T) {
 }
 
 // TestMeta_ClusterAgents exercises the cluster agent lifecycle via the
-// gitlab_project meta-tool: register → list → get → create token →
+// gitlab_admin meta-tool: register → list → get → create token →
 // list tokens → get token → revoke token → delete agent.
 func TestMeta_ClusterAgents(t *testing.T) {
 	t.Parallel()
@@ -138,7 +138,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 	var tokenID int64
 
 	t.Run("Meta/ClusterAgent/Register", func(t *testing.T) {
-		out, err := callToolOn[clusteragents.AgentItem](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.AgentItem](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_register",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -153,7 +153,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/List", func(t *testing.T) {
 		requireTrue(t, agentID > 0, "agentID not set")
-		out, err := callToolOn[clusteragents.ListAgentsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.ListAgentsOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -165,7 +165,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/Get", func(t *testing.T) {
 		requireTrue(t, agentID > 0, "agentID not set")
-		out, err := callToolOn[clusteragents.AgentItem](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.AgentItem](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -178,7 +178,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/CreateToken", func(t *testing.T) {
 		requireTrue(t, agentID > 0, "agentID not set")
-		out, err := callToolOn[clusteragents.AgentTokenItem](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.AgentTokenItem](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_token_create",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
@@ -195,7 +195,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/ListTokens", func(t *testing.T) {
 		requireTrue(t, agentID > 0, "agentID not set")
-		out, err := callToolOn[clusteragents.ListAgentTokensOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.ListAgentTokensOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_token_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -208,7 +208,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/GetToken", func(t *testing.T) {
 		requireTrue(t, tokenID > 0, "tokenID not set")
-		out, err := callToolOn[clusteragents.AgentTokenItem](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[clusteragents.AgentTokenItem](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_token_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -222,7 +222,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/RevokeToken", func(t *testing.T) {
 		requireTrue(t, tokenID > 0, "tokenID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_token_revoke",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -236,7 +236,7 @@ func TestMeta_ClusterAgents(t *testing.T) {
 
 	t.Run("Meta/ClusterAgent/Delete", func(t *testing.T) {
 		requireTrue(t, agentID > 0, "agentID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "cluster_agent_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
