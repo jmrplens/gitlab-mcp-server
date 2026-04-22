@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLinksValidator from "starlight-links-validator";
 import mermaid from "astro-mermaid";
 
 // Converts deprecated HTML align attributes to CSS text-align (WCAG2AA compliance)
@@ -85,6 +86,12 @@ export default defineConfig({
 		}),
 		starlight({
 			title: "GitLab MCP Server",
+			plugins: [
+				starlightLinksValidator({
+					errorOnRelativeLinks: false,
+					errorOnFallbackPages: false,
+				}),
+			],
 			description:
 				"A Model Context Protocol (MCP) server exposing 1000+ GitLab operations as AI-accessible tools. Written in Go.",
 			logo: {

@@ -307,7 +307,7 @@ GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-The server loads `.env` from the current working directory automatically. See [Configuration](/en/configuration/) for the full load order.
+The server loads `.env` from the current working directory automatically. See [Configuration](/gitlab-mcp-server/configuration/) for the full load order.
 
 ## HTTP mode
 
@@ -317,7 +317,7 @@ For team deployments, you can run the server in HTTP mode where each user authen
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
 ```
 
-Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/en/operations/http-server/) for details.
+Each client connects via HTTP and provides their own GitLab token. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for details.
 
 ### OAuth mode (recommended for production)
 
@@ -330,7 +330,7 @@ For zero-config token management, use OAuth mode. Users authorize through the br
 MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application.
 
 :::caution
-Clients must be configured with the `clientId` from the GitLab OAuth Application and `api` scope. Without `clientId`, clients fall back to Dynamic Client Registration (DCR) which assigns the `mcp` scope instead of `api`, causing most operations to fail. See [HTTP Server Mode](/en/operations/http-server/) for per-client examples.
+Clients must be configured with the `clientId` from the GitLab OAuth Application and `api` scope. Without `clientId`, clients fall back to Dynamic Client Registration (DCR) which assigns the `mcp` scope instead of `api`, causing most operations to fail. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for per-client examples.
 :::
 
 ## Self-hosted GitLab
@@ -396,7 +396,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, enable enterprise mode with `GITLAB_ENTERPRISE=true`. See [Configuration](/en/configuration/) for all available options.
+Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, enable enterprise mode with `GITLAB_ENTERPRISE=true`. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
 
 ## Verify the setup
 
@@ -446,12 +446,12 @@ For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `g
 This is transparent to you — your AI client handles the routing automatically. You just ask naturally: _"create an issue for the login bug"_ and the LLM selects the right meta-tool and action.
 
 :::tip
-Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/en/tools/meta-tools/) for the complete reference.
+Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 :::
 
 ## Next steps
 
-- [Configuration](/en/configuration/) — Fine-tune environment variables and optional features
-- [Meta-tools](/en/tools/meta-tools/) — Understand how tools are organized and discover all available operations
-- [Architecture](/en/architecture/) — Understand how the server works under the hood
-- [Tools Reference](/en/tools/) — Explore all available tools by domain
+- [Configuration](/gitlab-mcp-server/configuration/) — Fine-tune environment variables and optional features
+- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — Understand how tools are organized and discover all available operations
+- [Architecture](/gitlab-mcp-server/architecture/) — Understand how the server works under the hood
+- [Tools Reference](/gitlab-mcp-server/tools/overview/) — Explore all available tools by domain
