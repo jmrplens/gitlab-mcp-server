@@ -28,7 +28,7 @@ The project discovery domain provides a utility tool that resolves git remote UR
 
 ## Tools
 
-### `gitlab_resolve_project_from_remote`
+### `gitlab_discover_project`
 
 Resolve a git remote URL to a GitLab project. Extract the remote URL from the workspace `.git/config` file (look for `[remote "origin"] url = ...`) and pass it here to discover the `project_id` needed for all other GitLab operations.
 
@@ -53,7 +53,7 @@ Supports both HTTPS and SSH remote URL formats:
 
 ```text
 1. LLM reads .git/config → finds url = git@gitlab.example.com:team/my-app.git
-2. LLM calls: gitlab_resolve_project_from_remote(remote_url="git@gitlab.example.com:team/my-app.git")
+2. LLM calls: gitlab_discover_project(remote_url="git@gitlab.example.com:team/my-app.git")
 3. Returns: { id: 42, path_with_namespace: "team/my-app", default_branch: "main", ... }
 4. LLM uses project_id=42 for subsequent operations (create MR, list issues, etc.)
 ```
@@ -73,7 +73,7 @@ When an LLM needs to work with a GitLab project in the current workspace:
 
 1. **Read workspace roots** — Fetch `gitlab://workspace/roots` to discover workspace directory paths
 2. **Find git config** — Read the `.git/config` file from a workspace root to find the `[remote "origin"]` URL
-3. **Resolve project** — Call `gitlab_resolve_project_from_remote` with the remote URL
+3. **Resolve project** — Call `gitlab_discover_project` with the remote URL
 4. **Use project_id** — All subsequent GitLab operations use the returned `project_id`
 
 Alternative approaches (if `.git/config` is not accessible):

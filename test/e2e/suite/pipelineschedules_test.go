@@ -2,7 +2,7 @@
 
 // pipelineschedules_test.go tests the pipeline schedule MCP tools against a live GitLab
 // instance. Covers the full schedule lifecycle: create, get, list, update, variable CRUD,
-// take ownership, run, and delete for both individual tools and the gitlab_pipeline_schedule meta-tool.
+// take ownership, run, and delete for both individual tools and the gitlab_pipeline meta-tool (schedule_* actions).
 package suite
 
 import (
@@ -125,7 +125,7 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 }
 
 // TestMeta_PipelineSchedules exercises the same pipeline schedule lifecycle via the
-// gitlab_pipeline_schedule meta-tool, including variable CRUD, take ownership, and run.
+// gitlab_pipeline meta-tool (schedule_* actions), including variable CRUD, take ownership, and run.
 func TestMeta_PipelineSchedules(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -140,8 +140,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	var scheduleID int
 
 	t.Run("Create", func(t *testing.T) {
-		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "create",
+		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_create",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"description": "e2e-meta-schedule",
@@ -156,8 +156,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	})
 
 	t.Run("List", func(t *testing.T) {
-		out, err := callToolOn[pipelineschedules.ListOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "list",
+		out, err := callToolOn[pipelineschedules.ListOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list schedules")
@@ -166,8 +166,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 
 	t.Run("Update", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
-		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "update",
+		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_update",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"schedule_id": scheduleID,
@@ -180,8 +180,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 
 	t.Run("CreateVariable", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
-		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "create_variable",
+		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_create_variable",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"schedule_id": scheduleID,
@@ -195,8 +195,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 
 	t.Run("DeleteVariable", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "delete_variable",
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_delete_variable",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
 				"schedule_id": scheduleID,
@@ -208,8 +208,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 
 	t.Run("TakeOwnership", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
-		_, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "take_ownership",
+		_, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_take_ownership",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": scheduleID},
 		})
 		requireNoError(t, err, "meta take ownership")
@@ -218,8 +218,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
 		// Run may fail on CE if no runners configured — just verify the call doesn't panic
-		_, _ = callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "run",
+		_, _ = callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_run",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": scheduleID},
 		})
 		t.Log("Run attempted (may fail without runner)")
@@ -227,8 +227,8 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 
 	t.Run("Delete", func(t *testing.T) {
 		requireTrue(t, scheduleID > 0, "scheduleID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline_schedule", map[string]any{
-			"action": "delete",
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "schedule_delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": scheduleID},
 		})
 		requireNoError(t, err, "meta delete schedule")

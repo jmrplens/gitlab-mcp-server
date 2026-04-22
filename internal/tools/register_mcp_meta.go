@@ -1,4 +1,4 @@
-// register_mcp_meta.go registers the gitlab_mcp meta-tool that exposes
+// register_mcp_meta.go registers the gitlab_server meta-tool that exposes
 // MCP server health, version, and update operations.
 
 package tools
@@ -15,7 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// RegisterMCPMeta registers the gitlab_mcp meta-tool consolidating MCP server
+// RegisterMCPMeta registers the gitlab_server meta-tool consolidating MCP server
 // health/status and update operations. If updater is nil, only the status
 // action is available.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
@@ -24,11 +24,16 @@ func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *a
 		"health_check": wrapAction(client, health.Check),
 	}
 
-	desc := `MCP server operations: health check, version info, and update management. Use 'action' to specify the operation.
+	desc := `MCP server operations: health check, version info, and update management.
+Use this tool to verify GitLab connectivity, check server version, or manage updates.
+Do NOT use for GitLab resource operations — use the domain-specific tools instead.
+Use 'action' to specify the operation.
 
 Actions:
 - status: Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Params: (none required)
-- health_check: Alias for status — check server health. Params: (none required)`
+- health_check: Alias for status — check server health. Params: (none required)
+
+See also: gitlab_discover_project (resolve git remote URL to project ID)`
 
 	annotations := readOnlyMetaAnnotations
 
@@ -36,18 +41,23 @@ Actions:
 		routes["check_update"] = wrapUpdaterAction(updater, serverupdate.Check)
 		routes["apply_update"] = wrapUpdaterAction(updater, serverupdate.Apply)
 
-		desc = `MCP server operations: health check, version info, and update management. Use 'action' to specify the operation.
+		desc = `MCP server operations: health check, version info, and update management.
+Use this tool to verify GitLab connectivity, check server version, or manage updates.
+Do NOT use for GitLab resource operations — use the domain-specific tools instead.
+Use 'action' to specify the operation.
 
 Actions:
 - status: Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Params: (none required)
 - health_check: Alias for status — check server health. Params: (none required)
 - check_update: Check if a newer version of the MCP server is available. Returns current version, latest version, release URL, and release notes. Params: (none required)
-- apply_update: Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script. Params: (none required)`
+- apply_update: Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script. Params: (none required)
+
+See also: gitlab_discover_project (resolve git remote URL to project ID)`
 
 		annotations = metaAnnotations
 	}
 
-	addMetaTool(server, "gitlab_mcp", desc, routes, annotations, toolutil.IconHealth)
+	addMetaTool(server, "gitlab_server", desc, routes, annotations, toolutil.IconHealth)
 }
 
 // wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead

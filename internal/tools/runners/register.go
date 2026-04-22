@@ -10,6 +10,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollers"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -312,12 +315,30 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"reset_group_reg_token":    toolutil.WrapAction(client, ResetGroupRegToken),
 		"reset_project_reg_token":  toolutil.WrapAction(client, ResetProjectRegToken),
 		"list_managers":            toolutil.WrapAction(client, ListManagers),
+		// Runner controller CRUD (admin, experimental)
+		"controller_list":   toolutil.WrapAction(client, runnercontrollers.List),
+		"controller_get":    toolutil.WrapAction(client, runnercontrollers.Get),
+		"controller_create": toolutil.WrapAction(client, runnercontrollers.Create),
+		"controller_update": toolutil.WrapAction(client, runnercontrollers.Update),
+		"controller_delete": toolutil.WrapVoidAction(client, runnercontrollers.Delete),
+		// Runner controller scope management
+		"controller_scope_list":            toolutil.WrapAction(client, runnercontrollerscopes.List),
+		"controller_scope_add_instance":    toolutil.WrapAction(client, runnercontrollerscopes.AddInstanceScope),
+		"controller_scope_remove_instance": toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveInstanceScope),
+		"controller_scope_add_runner":      toolutil.WrapAction(client, runnercontrollerscopes.AddRunnerScope),
+		"controller_scope_remove_runner":   toolutil.WrapVoidAction(client, runnercontrollerscopes.RemoveRunnerScope),
+		// Runner controller token management
+		"controller_token_list":   toolutil.WrapAction(client, runnercontrollertokens.List),
+		"controller_token_get":    toolutil.WrapAction(client, runnercontrollertokens.Get),
+		"controller_token_create": toolutil.WrapAction(client, runnercontrollertokens.Create),
+		"controller_token_rotate": toolutil.WrapAction(client, runnercontrollertokens.Rotate),
+		"controller_token_revoke": toolutil.WrapVoidAction(client, runnercontrollertokens.Revoke),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_runner",
 		Title: toolutil.TitleFromName("gitlab_runner"),
-		Description: `Manage CI/CD runners in GitLab. Use 'action' to specify the operation and 'params' for action-specific parameters.
+		Description: `Manage CI/CD runners in GitLab, including runner controllers (admin, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
 
 Actions:
 - list: List owned runners. Params: type, status, paused (bool), tag_list (comma-separated), page, per_page
@@ -338,7 +359,25 @@ Actions:
 - reset_instance_reg_token: Reset instance runner registration token (deprecated). No params
 - reset_group_reg_token: Reset group runner registration token (deprecated). Params: group_id (required)
 - reset_project_reg_token: Reset project runner registration token (deprecated). Params: project_id (required)
-- list_managers: List all managers for a runner. Params: runner_id (required, int)`,
+- list_managers: List all managers for a runner. Params: runner_id (required, int)
+- controller_list: List all runner controllers (admin). Params: page, per_page
+- controller_get: Get runner controller details (admin). Params: controller_id (required, int)
+- controller_create: Register a new runner controller (admin). Params: description, state (enabled/disabled/dry_run)
+- controller_update: Update a runner controller (admin). Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
+- controller_delete: Delete a runner controller (admin). Params: controller_id (required, int)
+- controller_scope_list: List all scopes for a controller. Params: controller_id (required, int)
+- controller_scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
+- controller_scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
+- controller_scope_add_runner: Add runner scope. Params: controller_id (required, int), runner_id (required, int)
+- controller_scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
+- controller_token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
+- controller_token_get: Get a specific controller token. Params: controller_id (required, int), token_id (required, int)
+- controller_token_create: Create a controller token. Params: controller_id (required, int), description
+- controller_token_rotate: Rotate a controller token. Params: controller_id (required, int), token_id (required, int)
+- controller_token_revoke: Revoke a controller token. Params: controller_id (required, int), token_id (required, int)
+
+Use this tool for managing runner instances, tokens, and runner controllers (admin).
+See also: gitlab_pipeline`,
 		Annotations: toolutil.MetaAnnotations,
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),

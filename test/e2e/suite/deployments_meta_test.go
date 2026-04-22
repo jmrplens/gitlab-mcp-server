@@ -1,7 +1,7 @@
 //go:build e2e
 
 // deployments_meta_test.go tests the deployment MCP tools against a live GitLab instance.
-// Exercises get, update, and delete via the gitlab_deployment meta-tool.
+// Exercises get, update, and delete via the gitlab_environment meta-tool (deployment_* actions).
 package suite
 
 import (
@@ -14,7 +14,7 @@ import (
 )
 
 // TestMeta_DeploymentsGetUpdateDelete exercises get, update, and delete
-// deployment actions via the gitlab_deployment meta-tool.
+// deployment actions via the gitlab_environment meta-tool (deployment_* actions).
 func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -37,8 +37,8 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "deploy-get.txt", "deploy content", "deploy commit")
 
 	// Create a deployment
-	createOut, createErr := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
-		"action": "create",
+	createOut, createErr := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
+		"action": "deployment_create",
 		"params": map[string]any{
 			"project_id":  proj.pidStr(),
 			"environment": envName,
@@ -53,8 +53,8 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	deployID := strconv.Itoa(createOut.ID)
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "get",
+		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_get",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
 				"deployment_id": deployID,
@@ -66,8 +66,8 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "update",
+		out, err := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_update",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
 				"deployment_id": deployID,
@@ -80,8 +80,8 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 
 	t.Run("Delete", func(t *testing.T) {
 		// Deployment was updated to "success" status — GitLab blocks deletion of completed deployments
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_deployment", map[string]any{
-			"action": "delete",
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "deployment_delete",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
 				"deployment_id": deployID,

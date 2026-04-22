@@ -77,8 +77,8 @@ func FormatVariableMarkdown(v VariableOutput) string {
 		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
 	}
 	toolutil.WriteHints(&b,
-		"Use action 'edit_variable' to change this variable",
-		"Use action 'delete_variable' to remove it",
+		"Use action 'schedule_edit_variable' to change this variable",
+		"Use action 'schedule_delete_variable' to remove it",
 	)
 	return b.String()
 }

@@ -210,17 +210,20 @@ Beyond running the server in pipelines, GitLab MCP Server provides comprehensive
 
 The `gitlab_pipeline` meta-tool manages the full pipeline lifecycle:
 
-| Action        | Description                                   |
-| ------------- | --------------------------------------------- |
-| `list`        | List pipelines with filtering by status, ref  |
-| `get`         | Get pipeline details and status               |
-| `create`      | Trigger a new pipeline with variables         |
-| `cancel`      | Cancel a running pipeline                     |
-| `retry`       | Retry a failed pipeline                       |
-| `delete`      | Delete a pipeline                             |
-| `variables`   | List pipeline variables                       |
-| `test_report` | Get test report for a pipeline                |
-| `wait`        | **Wait for pipeline completion** with polling |
+| Action                | Description                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `list`                | List pipelines with filtering by status, ref                                             |
+| `get`                 | Get pipeline details and status                                                          |
+| `create`              | Trigger a new pipeline with variables                                                    |
+| `cancel`              | Cancel a running pipeline                                                                |
+| `retry`               | Retry a failed pipeline                                                                  |
+| `delete`              | Delete a pipeline                                                                        |
+| `variables`           | List pipeline variables                                                                  |
+| `test_report`         | Get test report for a pipeline                                                           |
+| `wait`                | **Wait for pipeline completion** with polling                                            |
+| `schedule_*`          | Pipeline schedule CRUD (list, get, create, edit, delete, run, take_ownership)            |
+| `schedule_*_variable` | Schedule variable CRUD (list_variables, create_variable, edit_variable, delete_variable) |
+| `trigger_*`           | Pipeline trigger token management (list, get, create, update, delete)                    |
 
 :::tip[Wait for pipeline]
 The `wait` action polls a pipeline until it reaches a terminal state (success, failed, canceled). This is especially useful in CI scripts that need to block until a triggered pipeline finishes.
@@ -245,13 +248,11 @@ The `gitlab_job` meta-tool provides complete job management:
 
 ### CI/CD configuration
 
-| Meta-tool                  | Actions                                                | Description                      |
-| -------------------------- | ------------------------------------------------------ | -------------------------------- |
-| `gitlab_ci_lint`           | `validate`, `project_lint`                             | Validate `.gitlab-ci.yml` syntax |
-| `gitlab_ci_variable`       | `list`, `get`, `create`, `update`, `delete`            | Manage CI/CD variables           |
-| `gitlab_pipeline_schedule` | `list`, `get`, `create`, `update`, `delete`, `trigger` | Manage scheduled pipelines       |
-| `gitlab_environment`       | `list`, `get`, `create`, `update`, `delete`, `stop`    | Manage environments              |
-| `gitlab_deployment`        | `list`, `get`                                          | Track deployments                |
+| Meta-tool            | Actions                                                             | Description                         |
+| -------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| `gitlab_template`    | `lint`, `lint_project`                                              | Validate `.gitlab-ci.yml` syntax    |
+| `gitlab_ci_variable` | `list`, `get`, `create`, `update`, `delete`                         | Manage CI/CD variables              |
+| `gitlab_environment` | `list`, `get`, `create`, `update`, `delete`, `stop`, `deployment_*` | Manage environments and deployments |
 
 ### Pipeline with variables example
 

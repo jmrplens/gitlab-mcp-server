@@ -534,7 +534,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 
 	session := newMCPSession(t, handler)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_resolve_project_from_remote",
+		Name: "gitlab_discover_project",
 		Arguments: map[string]any{
 			"remote_url": "https://gitlab.example.com/group/subgroup/my-project.git",
 		},
@@ -567,7 +567,7 @@ func TestRegisterTools_CallThroughMCP_Error(t *testing.T) {
 
 	session := newMCPSession(t, handler)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_resolve_project_from_remote",
+		Name: "gitlab_discover_project",
 		Arguments: map[string]any{
 			"remote_url": "https://gitlab.example.com/group/project.git",
 		},
@@ -588,7 +588,7 @@ func TestRegisterTools_CallThroughMCP_InvalidInput(t *testing.T) {
 	}))
 
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "gitlab_resolve_project_from_remote",
+		Name: "gitlab_discover_project",
 		Arguments: map[string]any{
 			"remote_url": "",
 		},

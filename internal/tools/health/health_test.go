@@ -440,7 +440,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_mcp_status
+// MCP round-trip — gitlab_server_status
 // ---------------------------------------------------------------------------.
 
 // TestMCPRound_Trip verifies the behavior of cov m c p round trip.
@@ -470,11 +470,11 @@ func TestMCPRound_Trip(t *testing.T) {
 	}
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_mcp_status",
+		Name:      "gitlab_server_status",
 		Arguments: map[string]any{},
 	})
 	if err != nil {
-		t.Fatalf("CallTool gitlab_mcp_status: %v", err)
+		t.Fatalf("CallTool gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")
@@ -485,7 +485,7 @@ func TestMCPRound_Trip(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP round-trip — gitlab_mcp_status unhealthy (API error)
+// MCP round-trip — gitlab_server_status unhealthy (API error)
 // ---------------------------------------------------------------------------.
 
 // TestMCPRound_TripUnhealthy verifies the behavior of cov m c p round trip unhealthy.
@@ -508,11 +508,11 @@ func TestMCPRound_TripUnhealthy(t *testing.T) {
 	}
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_mcp_status",
+		Name:      "gitlab_server_status",
 		Arguments: map[string]any{},
 	})
 	if err != nil {
-		t.Fatalf("CallTool gitlab_mcp_status: %v", err)
+		t.Fatalf("CallTool gitlab_server_status: %v", err)
 	}
 	if res == nil {
 		t.Fatal("nil result")

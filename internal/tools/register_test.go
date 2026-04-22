@@ -114,7 +114,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 42 base, 57 with enterprise.
+// the expected number of meta-tools: 28 base, 43 with enterprise.
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -126,7 +126,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 42
+		const expectedTools = 28
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -141,7 +141,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 57
+		const expectedTools = 43
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -745,7 +745,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_list_work_items":                                   true,
 		"gitlab_lock_terraform_state":                              true,
 		"gitlab_mark_migration":                                    true,
-		"gitlab_mcp_status":                                        true,
+		"gitlab_server_status":                                     true,
 		"gitlab_milestone_create":                                  true,
 		"gitlab_milestone_delete":                                  true,
 		"gitlab_milestone_get":                                     true,
@@ -1022,7 +1022,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_repository_merge_base":                             true,
 		"gitlab_repository_raw_blob":                               true,
 		"gitlab_repository_tree":                                   true,
-		"gitlab_resolve_project_from_remote":                       true,
+		"gitlab_discover_project":                                  true,
 		"gitlab_resolve_vulnerability":                             true,
 		"gitlab_retrieve_all_group_storage_moves":                  true,
 		"gitlab_retrieve_all_project_storage_moves":                true,
@@ -1198,62 +1198,48 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 	}
 
 	expectedNames := map[string]bool{
-		"gitlab_access":                      true,
-		"gitlab_admin":                       true,
-		"gitlab_analyze_ci_configuration":    true,
-		"gitlab_analyze_deployment_history":  true,
-		"gitlab_analyze_issue_scope":         true,
-		"gitlab_analyze_mr_changes":          true,
-		"gitlab_analyze_pipeline_failure":    true,
-		"gitlab_attestation":                 true,
-		"gitlab_audit_event":                 true,
-		"gitlab_branch":                      true,
-		"gitlab_branch_rule":                 true,
-		"gitlab_ci_catalog":                  true,
-		"gitlab_ci_variable":                 true,
-		"gitlab_compliance_policy":           true,
-		"gitlab_custom_emoji":                true,
-		"gitlab_dependency":                  true,
-		"gitlab_deployment":                  true,
-		"gitlab_dora_metrics":                true,
-		"gitlab_enterprise_user":             true,
-		"gitlab_environment":                 true,
-		"gitlab_external_status_check":       true,
-		"gitlab_feature_flags":               true,
-		"gitlab_find_technical_debt":         true,
-		"gitlab_generate_milestone_report":   true,
-		"gitlab_generate_release_notes":      true,
-		"gitlab_geo":                         true,
-		"gitlab_group":                       true,
-		"gitlab_group_scim":                  true,
-		"gitlab_issue":                       true,
-		"gitlab_job":                         true,
-		"gitlab_member_role":                 true,
-		"gitlab_merge_request":               true,
-		"gitlab_merge_train":                 true,
-		"gitlab_model_registry":              true,
-		"gitlab_mr_review":                   true,
-		"gitlab_package":                     true,
-		"gitlab_pipeline":                    true,
-		"gitlab_pipeline_schedule":           true,
-		"gitlab_project":                     true,
-		"gitlab_project_alias":               true,
-		"gitlab_release":                     true,
-		"gitlab_repository":                  true,
-		"gitlab_resolve_project_from_remote": true,
-		"gitlab_review_mr_security":          true,
-		"gitlab_runner":                      true,
-		"gitlab_runner_controller":           true,
-		"gitlab_search":                      true,
-		"gitlab_security_finding":            true,
-		"gitlab_snippet":                     true,
-		"gitlab_storage_move":                true,
-		"gitlab_summarize_issue":             true,
-		"gitlab_summarize_mr_review":         true,
-		"gitlab_tag":                         true,
-		"gitlab_template":                    true,
-		"gitlab_user":                        true,
-		"gitlab_vulnerability":               true,
+		"gitlab_access":                true,
+		"gitlab_admin":                 true,
+		"gitlab_analyze":               true,
+		"gitlab_attestation":           true,
+		"gitlab_audit_event":           true,
+		"gitlab_branch":                true,
+		"gitlab_ci_catalog":            true,
+		"gitlab_ci_variable":           true,
+		"gitlab_compliance_policy":     true,
+		"gitlab_custom_emoji":          true,
+		"gitlab_dependency":            true,
+		"gitlab_dora_metrics":          true,
+		"gitlab_enterprise_user":       true,
+		"gitlab_environment":           true,
+		"gitlab_external_status_check": true,
+		"gitlab_feature_flags":         true,
+		"gitlab_geo":                   true,
+		"gitlab_group":                 true,
+		"gitlab_group_scim":            true,
+		"gitlab_issue":                 true,
+		"gitlab_job":                   true,
+		"gitlab_member_role":           true,
+		"gitlab_merge_request":         true,
+		"gitlab_merge_train":           true,
+		"gitlab_model_registry":        true,
+		"gitlab_mr_review":             true,
+		"gitlab_package":               true,
+		"gitlab_pipeline":              true,
+		"gitlab_project":               true,
+		"gitlab_project_alias":         true,
+		"gitlab_release":               true,
+		"gitlab_repository":            true,
+		"gitlab_discover_project":      true,
+		"gitlab_runner":                true,
+		"gitlab_search":                true,
+		"gitlab_security_finding":      true,
+		"gitlab_snippet":               true,
+		"gitlab_storage_move":          true,
+		"gitlab_tag":                   true,
+		"gitlab_template":              true,
+		"gitlab_user":                  true,
+		"gitlab_vulnerability":         true,
 
 		"gitlab_wiki": true,
 	}

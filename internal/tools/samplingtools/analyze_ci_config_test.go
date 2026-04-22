@@ -123,6 +123,56 @@ func TestAnalyzeCIConfig_LintError(t *testing.T) {
 	}
 }
 
+// TestIsMissingCIConfig_DetectsLintError validates detection of the "no .gitlab-ci.yml" lint error.
+func TestIsMissingCIConfig_DetectsLintError(t *testing.T) {
+	tests := []struct {
+		name string
+		errs []string
+		want bool
+	}{
+		{"exact GitLab message", []string{"Please provide content of .gitlab-ci.yml"}, true},
+		{"mixed case", []string{"please Provide Content of .gitlab-ci.yml"}, true},
+		{"among other errors", []string{"syntax error", "Please provide content of .gitlab-ci.yml"}, true},
+		{"unrelated error", []string{"unknown keyword 'deploy_stage'"}, false},
+		{"empty errors", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isMissingCIConfig(tt.errs)
+			if got != tt.want {
+				t.Errorf("isMissingCIConfig(%v) = %v, want %v", tt.errs, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAnalyzeCIConfig_MissingCIFile verifies that the handler returns an error
+// instead of wasting a sampling call when the project has no .gitlab-ci.yml.
+func TestAnalyzeCIConfig_MissingCIFile(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/ci/lint", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"valid": false,
+			"errors": ["Please provide content of .gitlab-ci.yml"],
+			"warnings": [], "merged_yaml": "", "includes": []
+		}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	ctx := context.Background()
+	_, ss, cleanup := setupSamplingSession(t, ctx)
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{Session: ss}
+	_, err := AnalyzeCIConfig(ctx, req, client, AnalyzeCIConfigInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for missing .gitlab-ci.yml, got nil")
+	}
+	if !strings.Contains(err.Error(), "no .gitlab-ci.yml") {
+		t.Errorf("error = %q, want message about missing .gitlab-ci.yml", err.Error())
+	}
+}
+
 // TestAnalyzeCIConfig_FullFlow verifies the complete CI config analysis flow.
 func TestAnalyzeCIConfig_FullFlow(t *testing.T) {
 	mux := http.NewServeMux()

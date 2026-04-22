@@ -29,7 +29,7 @@ type WorkspaceRootsOutput struct {
 
 // RegisterWorkspaceRoots registers the "gitlab://workspace/roots" resource.
 // It exposes the client workspace root URIs so LLMs can read .git/config
-// and use gitlab_resolve_project_from_remote to discover the project.
+// and use gitlab_discover_project to discover the project.
 func RegisterWorkspaceRoots(server *mcp.Server, rootsMgr *roots.Manager) {
 	server.AddResource(&mcp.Resource{
 		URI:      "gitlab://workspace/roots",
@@ -38,14 +38,14 @@ func RegisterWorkspaceRoots(server *mcp.Server, rootsMgr *roots.Manager) {
 		Icons:    toolutil.IconProject,
 		Description: "List workspace root directories provided by the MCP client. " +
 			"Use these paths to locate .git/config files and extract git remote URLs " +
-			"for project discovery via gitlab_resolve_project_from_remote.",
+			"for project discovery via gitlab_discover_project.",
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		cachedRoots := rootsMgr.GetRoots()
 		out := WorkspaceRootsOutput{
 			Roots: make([]WorkspaceRootOutput, 0, len(cachedRoots)),
 			Hint: "To discover the GitLab project: " +
 				"1) Read .git/config from a root directory to find [remote \"origin\"] url = ... " +
-				"2) Call gitlab_resolve_project_from_remote with that URL to get the project_id.",
+				"2) Call gitlab_discover_project with that URL to get the project_id.",
 		}
 		for _, r := range cachedRoots {
 			out.Roots = append(out.Roots, WorkspaceRootOutput{

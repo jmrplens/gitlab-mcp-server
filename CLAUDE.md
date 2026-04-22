@@ -14,14 +14,14 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.0.3                                               |
+| Version       | 1.0.4                                               |
 
 ### Scale
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1006                                                                                                         |
-| Meta-mode tools           | 42 base / 57 enterprise (23 inline + 3 delegated + 11 sampling + 1 standalone + 4 always-registered + 15 enterprise inline) |
+| Meta-mode tools           | 28 base / 43 enterprise (24 inline + 3 delegated + 1 standalone + 15 enterprise inline) |
 | MCP Resources             | 24                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.0.3)
+└── VERSION                      # Semantic version (1.0.4)
 ```
 
 ## Key Development Patterns

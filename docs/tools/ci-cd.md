@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Lint)
 > **Individual tools**: 59
-> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_pipeline_schedule`, `gitlab_pipeline_trigger`, `gitlab_instance_variable` (when `META_TOOLS=true`, default)
+> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_instance_variable` (when `META_TOOLS=true`, default). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix.
 > **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html)
 > **Audience**: 👤 End users, AI assistant users
 

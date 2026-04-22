@@ -205,7 +205,9 @@ Actions:
 - projects: Search for projects. Params: query (required), group_id
 - snippets: Search for snippet titles globally. Params: query (required)
 - users: Search for users. Params: query (required), project_id, group_id
-- wiki: Search for wiki blobs. Params: query (required), project_id, group_id`,
+- wiki: Search for wiki blobs. Params: query (required), project_id, group_id
+
+See also: gitlab_project, gitlab_merge_request, gitlab_issue`,
 		Annotations: toolutil.ReadOnlyMetaAnnotations,
 		Icons:       toolutil.IconSearch,
 		InputSchema: toolutil.MetaToolSchema(routes),

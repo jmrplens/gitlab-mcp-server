@@ -121,9 +121,9 @@ The roots infrastructure is **fully implemented** and operational. The `Manager`
 | Consumer | How It Uses Roots |
 | -------- | ----------------- |
 | **`gitlab://workspace/roots` resource** | Exposes cached roots as an MCP resource so LLMs can read workspace directories |
-| **`gitlab_resolve_project_from_remote` tool** | LLMs read `.git/config` from root directories to discover `project_id` automatically |
+| **`gitlab_discover_project` tool** | LLMs read `.git/config` from root directories to discover `project_id` automatically |
 
-The **project discovery workflow** chains these components: LLM fetches `gitlab://workspace/roots` → reads `.git/config` from each root → calls `gitlab_resolve_project_from_remote` with the remote URL → obtains `project_id` for all subsequent operations.
+The **project discovery workflow** chains these components: LLM fetches `gitlab://workspace/roots` → reads `.git/config` from each root → calls `gitlab_discover_project` with the remote URL → obtains `project_id` for all subsequent operations.
 
 ### Future Features
 

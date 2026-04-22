@@ -24,6 +24,7 @@ func TestSampling(t *testing.T) {
 	// Create a project with an issue, milestone, MR, and a commit for sampling tools.
 	proj := createProject(ctx, t, sess.sampling)
 	commitFile(ctx, t, sess.sampling, proj, "main", "sampling-init.txt", "# Sampling E2E\nproject init", "init commit")
+	commitFile(ctx, t, sess.sampling, proj, "main", ".gitlab-ci.yml", "stages:\n  - test\nunit_test:\n  stage: test\n  script:\n    - echo \"running tests\"", "add CI config for AnalyzeCIConfig test")
 
 	issue := createIssue(ctx, t, sess.sampling, proj, "Sampling test issue")
 

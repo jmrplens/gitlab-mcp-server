@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_application_statistics",
 		Title:       toolutil.TitleFromName("gitlab_get_application_statistics"),
-		Description: "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_mcp_status.",
+		Description: "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_server_status.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {

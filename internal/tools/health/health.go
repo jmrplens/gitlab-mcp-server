@@ -1,4 +1,4 @@
-// Package health implements the gitlab_mcp_status diagnostic tool for checking
+// Package health implements the gitlab_server_status diagnostic tool for checking
 // MCP server health and GitLab connectivity.
 package health
 

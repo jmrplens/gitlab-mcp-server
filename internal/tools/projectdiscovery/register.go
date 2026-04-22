@@ -15,8 +15,8 @@ import (
 // RegisterTools registers project discovery tools on the MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_resolve_project_from_remote",
-		Title: toolutil.TitleFromName("gitlab_resolve_project_from_remote"),
+		Name:  "gitlab_discover_project",
+		Title: toolutil.TitleFromName("gitlab_discover_project"),
 		Description: "Resolve a git remote URL to a GitLab project. " +
 			"Extract the FULL remote URL from the workspace .git/config file (look for [remote \"origin\"] url = ...) " +
 			"or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. " +
@@ -24,13 +24,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Supported formats: HTTPS (https://gitlab.example.com/group/project.git), " +
 			"SSH shorthand (git@gitlab.example.com:group/project.git), " +
 			"SSH protocol (ssh://git@gitlab.example.com/group/project.git)." +
-			"\n\nReturns: JSON with the resolved project ID and details.\n\nSee also: gitlab_project_get, gitlab_project_list",
+			"\n\nReturns: JSON with the resolved project ID and details.\n\nSee also: gitlab_project, gitlab_server",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ResolveInput) (*mcp.CallToolResult, ResolveOutput, error) {
 		start := time.Now()
 		out, err := Resolve(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_resolve_project_from_remote", start, err)
+		toolutil.LogToolCallAll(ctx, req, "gitlab_discover_project", start, err)
 		if err != nil {
 			return nil, out, err
 		}

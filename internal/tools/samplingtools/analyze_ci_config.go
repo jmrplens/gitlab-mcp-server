@@ -68,6 +68,14 @@ func AnalyzeCIConfig(ctx context.Context, req *mcp.CallToolRequest, client *gitl
 		return AnalyzeCIConfigOutput{}, fmt.Errorf("linting CI config: %w", err)
 	}
 
+	// Detect missing .gitlab-ci.yml before wasting a sampling call.
+	if !lintResult.Valid && isMissingCIConfig(lintResult.Errors) {
+		return AnalyzeCIConfigOutput{}, fmt.Errorf(
+			"project %s has no .gitlab-ci.yml — add a CI/CD configuration first, then retry",
+			input.ProjectID,
+		)
+	}
+
 	data := FormatCIConfigForAnalysis(lintResult)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
@@ -152,4 +160,15 @@ func FormatAnalyzeCIConfigMarkdown(a AnalyzeCIConfigOutput) string {
 		"Use `gitlab_get_ci_variables` to review referenced variables",
 	)
 	return b.String()
+}
+
+// isMissingCIConfig returns true when the lint errors indicate the project
+// has no .gitlab-ci.yml file at all.
+func isMissingCIConfig(errs []string) bool {
+	for _, e := range errs {
+		if strings.Contains(strings.ToLower(e), "provide content of .gitlab-ci.yml") {
+			return true
+		}
+	}
+	return false
 }

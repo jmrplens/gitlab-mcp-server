@@ -32,8 +32,8 @@ type responseComplianceCase struct {
 func individualComplianceCases() []responseComplianceCase {
 	return []responseComplianceCase{
 		{
-			name:      "gitlab_mcp_status",
-			toolName:  "gitlab_mcp_status",
+			name:      "gitlab_server_status",
+			toolName:  "gitlab_server_status",
 			arguments: map[string]any{},
 			routes: map[string]string{
 				"/api/v4/version": `{"version":"17.0.0","revision":"abc"}`,

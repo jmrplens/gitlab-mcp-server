@@ -461,7 +461,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	t.Cleanup(func() { session.Close() })
 
 	// Check tool — should succeed (no update from empty releases)
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_mcp_check_update"})
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_server_check_update"})
 	if err != nil {
 		t.Fatalf("CallTool(check) error: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 
 	// Apply tool — should succeed (no update, returns current version)
-	result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_mcp_apply_update"})
+	result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_server_apply_update"})
 	if err != nil {
 		t.Fatalf("CallTool(apply) error: %v", err)
 	}

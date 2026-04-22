@@ -28,13 +28,13 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1006 MCP tools** — complete GitLab REST API v4 coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **42 meta-tools** (57 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
-- **11 sampling tools** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via MCP sampling capability
+- **28 meta-tools** (43 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **24 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, workspace roots, and 5 workflow best-practice guides
 - **38 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, audit
 - **6 MCP capabilities** — logging, completions, roots, progress, sampling, elicitation
-- **43 tool icons** — SVG data-URI icons on all tools, resources, and prompts for visual identification in MCP clients
+- **44 tool icons** — SVG data-URI icons on all tools, resources, and prompts for visual identification in MCP clients
 - **Pagination** on all list endpoints with metadata (total items, pages, next/prev)
 - **Transports**: stdio (default for desktop AI) and HTTP (Streamable HTTP for remote clients)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
@@ -253,7 +253,7 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
-| **Meta-Tools** (default) | 42 base / 57 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Meta-Tools** (default) | 28 base / 43 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
 | **Individual** | 1006 | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:
@@ -269,28 +269,27 @@ Meta-tool summary:
 | `gitlab_repository` | Repository tree/compare, commit discussions, files |
 | `gitlab_group` | Groups, members, labels, milestones, boards, uploads |
 | `gitlab_issue` | Issues, notes, discussions, links, statistics, emoji, events |
-| `gitlab_pipeline` | Pipelines, pipeline triggers |
+| `gitlab_pipeline` | Pipelines, pipeline triggers, pipeline schedules |
 | `gitlab_job` | Jobs, job token scope |
 | `gitlab_user` | Users, events, notifications, keys, namespaces |
 | `gitlab_wiki` | Project/group wikis |
-| `gitlab_environment` | Environments, protected envs, freeze periods |
-| `gitlab_deployment` | Deployments |
+| `gitlab_environment` | Environments, protected envs, freeze periods, deployments |
 | `gitlab_ci_variable` | CI/CD variables (project, group, instance) |
 | `gitlab_search` | Global, project, group search |
 
-Plus 11 sampling tools, 4 elicitation tools, and additional domain tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
+Plus `gitlab_analyze` (11 LLM-assisted sampling actions), 4 elicitation tools, and additional domain tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
 
 ## Compatibility
 
 | MCP Capability | Support |
 |----------------|---------|
-| **Tools** | 1006 individual / 42–57 meta |
+| **Tools** | 1006 individual / 28–43 meta |
 | **Resources** | 24 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
 | **Logging** | Structured (text/JSON) + MCP notifications |
 | **Progress** | Tool execution progress reporting |
-| **Sampling** | 11 LLM-powered analysis tools |
+| **Sampling** | 11 LLM-powered analysis actions via `gitlab_analyze` |
 | **Elicitation** | 4 interactive creation wizards |
 | **Roots** | Workspace root tracking |
 
@@ -307,7 +306,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
 | [Tools Reference](docs/tools/README.md) | All 1006 individual tools with input/output schemas |
-| [Meta-Tools](docs/meta-tools.md) | 42/57 domain meta-tools with action dispatching |
+| [Meta-Tools](docs/meta-tools.md) | 28/43 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 24 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |

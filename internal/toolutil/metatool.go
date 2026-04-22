@@ -142,6 +142,11 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // MakeMetaHandler creates a generic MCP tool handler that dispatches to action routes.
 // The formatResult function converts the action result into an MCP response.
 // If formatResult is nil, a default JSON formatter is used.
+//
+// Destructive actions (delete, remove, revoke, unprotect, etc.) are automatically
+// intercepted with a user confirmation prompt via MCP elicitation before execution.
+// Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
+// "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 	if formatResult == nil {
 		formatResult = defaultFormatResult
@@ -156,6 +161,14 @@ func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult
 			return nil, nil, fmt.Errorf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))
 		}
 
+		// Confirm destructive actions before execution.
+		if IsDestructiveAction(input.Action) {
+			msg := fmt.Sprintf("Confirm %s/%s? This action may be irreversible.", toolName, input.Action)
+			if result := ConfirmDestructiveAction(ctx, req, input.Params, msg); result != nil {
+				return result, nil, nil
+			}
+		}
+
 		// Store the request in context so WrapActionWithRequest handlers can access it.
 		actionCtx := ContextWithRequest(ctx, req)
 
@@ -166,6 +179,34 @@ func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult
 		callResult := formatResult(result)
 		return callResult, enrichWithHints(result, callResult), err
 	}
+}
+
+// destructiveVerbs lists substrings that indicate a destructive action.
+var destructiveVerbs = []string{
+	"delete", "remove", "revoke", "unprotect", "unpublish", "purge", "deny",
+}
+
+// destructiveExact lists action names that are destructive but don't
+// match any substring pattern from destructiveVerbs.
+var destructiveExact = map[string]bool{
+	"merge": true, "erase": true, "stop": true,
+	"ban": true, "block": true, "deactivate": true,
+	"reject": true, "unapprove": true, "approval_reset": true,
+	"disable_two_factor": true,
+}
+
+// IsDestructiveAction reports whether the given meta-tool action name
+// indicates a destructive operation that warrants user confirmation.
+func IsDestructiveAction(action string) bool {
+	if destructiveExact[action] {
+		return true
+	}
+	for _, verb := range destructiveVerbs {
+		if strings.Contains(action, verb) {
+			return true
+		}
+	}
+	return false
 }
 
 // enrichWithHints extracts next-step hints from the Markdown content in

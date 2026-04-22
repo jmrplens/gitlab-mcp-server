@@ -1,5 +1,5 @@
 // register_mcp_meta_test.go tests RegisterMCPMeta registration and the
-// wrapUpdaterAction generic helper. Tests verify that gitlab_mcp is registered
+// wrapUpdaterAction generic helper. Tests verify that gitlab_server is registered
 // with both nil and non-nil updater paths, and that wrapUpdaterAction correctly
 // delegates to the wrapped function.
 
@@ -16,7 +16,7 @@ import (
 )
 
 // TestRegisterMCPMeta_NilUpdater verifies that RegisterMCPMeta registers the
-// gitlab_mcp tool with only status and health_check actions when updater is nil.
+// gitlab_server tool with only status and health_check actions when updater is nil.
 func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -44,18 +44,18 @@ func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 	}
 	found := false
 	for _, tool := range result.Tools {
-		if tool.Name == "gitlab_mcp" {
+		if tool.Name == "gitlab_server" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatal("gitlab_mcp tool not found after RegisterMCPMeta with nil updater")
+		t.Fatal("gitlab_server tool not found after RegisterMCPMeta with nil updater")
 	}
 
 	// Call status action to verify it works
 	callResult, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_mcp",
+		Name:      "gitlab_server",
 		Arguments: map[string]any{"action": "status"},
 	})
 	if err != nil {
@@ -67,7 +67,7 @@ func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 }
 
 // TestRegisterMCPMeta_WithUpdater verifies that RegisterMCPMeta registers the
-// gitlab_mcp tool with check_update and apply_update actions when updater is
+// gitlab_server tool with check_update and apply_update actions when updater is
 // provided. The test uses a mock source for the updater.
 func TestRegisterMCPMeta_WithUpdater(t *testing.T) {
 	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
@@ -102,13 +102,13 @@ func TestRegisterMCPMeta_WithUpdater(t *testing.T) {
 	}
 	found := false
 	for _, tool := range result.Tools {
-		if tool.Name == "gitlab_mcp" {
+		if tool.Name == "gitlab_server" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatal("gitlab_mcp tool not found after RegisterMCPMeta with updater")
+		t.Fatal("gitlab_server tool not found after RegisterMCPMeta with updater")
 	}
 }
 

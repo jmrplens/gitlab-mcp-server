@@ -144,7 +144,7 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 ## Tool Modes
 
-By default, the server registers **42 meta-tools** (57 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead. Each meta-tool handles multiple actions via an `action` parameter.
+By default, the server registers **28 meta-tools** (43 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead. Each meta-tool handles multiple actions via an `action` parameter.
 
 To register all **1006 individual tools** instead (one per GitLab operation), set:
 

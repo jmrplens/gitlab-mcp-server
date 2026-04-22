@@ -671,14 +671,14 @@ Get a single project-level audit event by ID.
 
 ## Server Update
 
-### `gitlab_mcp_check_update`
+### `gitlab_server_check_update`
 
 Check if a newer version of the MCP server is available. Returns current version, latest version, release URL, and release notes.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_mcp_apply_update`
+### `gitlab_server_apply_update`
 
 Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script.
 
@@ -766,8 +766,8 @@ Download and apply the latest MCP server update. On Linux/macOS the binary is re
 | 73 | `gitlab_get_group_audit_event` | Audit Events | Read |
 | 74 | `gitlab_list_project_audit_events` | Audit Events | Read |
 | 75 | `gitlab_get_project_audit_event` | Audit Events | Read |
-| 76 | `gitlab_mcp_check_update` | Server Update | Read |
-| 77 | `gitlab_mcp_apply_update` | Server Update | Update |
+| 76 | `gitlab_server_check_update` | Server Update | Read |
+| 77 | `gitlab_server_apply_update` | Server Update | Update |
 
 ### Destructive Tools (Require Confirmation)
 

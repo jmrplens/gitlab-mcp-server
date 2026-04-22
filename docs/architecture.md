@@ -68,7 +68,7 @@ graph TD
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
         TOOLS[tools<br/>1006 individual tool handlers<br/>in 162 domain sub-packages]
-        META[metatool<br/>42 base / 57 enterprise meta-tools]
+        META[metatool<br/>28 base / 43 enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
         RES[resources<br/>24 resource handlers]
@@ -171,7 +171,7 @@ The largest package — contains 1006 MCP tool implementations organized across 
 | File               | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
 | `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
-| `register_meta.go` | `RegisterAllMeta()` — 23 inline + 4 always-registered + 3 delegated + 11 sampling + 1 standalone (+ 15 enterprise inline) |
+| `register_meta.go` | `RegisterAllMeta()` — 24 inline + 3 delegated + 1 standalone (+ 15 enterprise inline) |
 | `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `wrapAction`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |
@@ -248,7 +248,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 42 base domain meta-tools are registered: 23 inline handlers in `register_meta.go` + 4 always-registered + 3 delegated to sub-packages + 11 sampling tools + 1 standalone tool. With `GITLAB_ENTERPRISE=true`, 15 additional enterprise inline meta-tools bring the total to 57.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 base domain meta-tools are registered: 21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool. With `GITLAB_ENTERPRISE=true`, 15 additional enterprise inline meta-tools bring the total to 43.
 
 ```mermaid
 sequenceDiagram
@@ -489,7 +489,7 @@ sequenceDiagram
 | Go with official MCP SDK       | Type safety, single binary, cross-compilation         | —                                                      |
 | Official GitLab client library | Maintained by GitLab, complete API coverage           | —                                                      |
 | Modular tools sub-packages     | Domain isolation, independent testing, clean imports  | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md)  |
-| Meta-tool consolidation (42/57) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 tools | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
+| Meta-tool consolidation (28/43) | Reduce tool count for LLM token efficiency; enterprise tier adds 15 tools | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)    |
 | Struct-based I/O               | Type safety + automatic JSON Schema generation        | Go SDK convention                                      |
 | Dual response format           | JSON for LLM tool-chaining + Markdown for display     | See [Output Format](output-format.md)               |
 | Content annotations            | Audience targeting + priority for display optimization | See [Output Format](output-format.md)               |

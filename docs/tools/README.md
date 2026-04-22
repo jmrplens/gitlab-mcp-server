@@ -15,7 +15,7 @@ Per-domain tool reference for gitlab-mcp-server. Each document covers one logica
 | Issues | 44 | `gitlab_issue` | [issues.md](issues.md) |
 | CI/CD | 58 | `gitlab_pipeline`, `gitlab_job`, etc. | [ci-cd.md](ci-cd.md) |
 | Releases | 12 | `gitlab_release` | [releases.md](releases.md) |
-| Environments & Deployments | 24 | `gitlab_environment`, `gitlab_deployment` | [environments.md](environments.md) |
+| Environments & Deployments | 24 | `gitlab_environment` | [environments.md](environments.md) |
 | Groups | 69 | `gitlab_group` | [groups.md](groups.md) |
 | Users & Todos | 27 | `gitlab_user` | [users.md](users.md) |
 | Access & Tokens | 68 | various | [access.md](access.md) |
