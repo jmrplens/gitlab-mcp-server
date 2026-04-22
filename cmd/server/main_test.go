@@ -371,7 +371,7 @@ func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients,
+			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
 	}()
@@ -403,7 +403,7 @@ func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      true,
-			maxHTTPClients: config.DefaultMaxHTTPClients,
+			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
 	}()
@@ -486,7 +486,7 @@ func TestRunWithContext_HTTPMissingURL(t *testing.T) {
 	err := runWithContext(context.Background(), &httpConfig{
 		addr:           ":0",
 		gitlabURL:      "",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -512,7 +512,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 			err := runWithContext(context.Background(), &httpConfig{
 				addr:           ":0",
 				gitlabURL:      tt.url,
-				maxHTTPClients: config.DefaultMaxHTTPClients,
+				maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 				sessionTimeout: config.DefaultSessionTimeout,
 			})
 			if err == nil {
@@ -909,7 +909,7 @@ func TestRunHTTP_AutoUpdateDisabled(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients,
+			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 			sessionTimeout: config.DefaultSessionTimeout,
 			autoUpdate:     "false",
 		})
@@ -1000,7 +1000,7 @@ func TestRunHTTP_AutoUpdateInvalid(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients,
+			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 			sessionTimeout: config.DefaultSessionTimeout,
 			autoUpdate:     "bogus",
 		})
@@ -1492,7 +1492,7 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "saml",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -1510,7 +1510,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		oauthCacheTTL:  10 * time.Second,
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -1528,7 +1528,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
 		oauthCacheTTL:  5 * time.Hour,
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -1544,7 +1544,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: 48 * time.Hour,
 	})
 	if err == nil {
@@ -1577,7 +1577,7 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 func TestRunHTTP_MissingGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -1585,11 +1585,62 @@ func TestRunHTTP_MissingGitLabURL(t *testing.T) {
 	}
 }
 
+// TestRunHTTP_AutoUpdateTimeoutBelowMin verifies that runHTTP rejects an
+// auto-update-timeout below the minimum threshold.
+func TestRunHTTP_AutoUpdateTimeoutBelowMin(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:         "https://gitlab.example.com",
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		autoUpdateTimeout: 1 * time.Second,
+	})
+	if err == nil {
+		t.Fatal("expected error for auto-update-timeout below minimum")
+	}
+	if !strings.Contains(err.Error(), "auto-update-timeout") {
+		t.Errorf("error should mention auto-update-timeout, got: %v", err)
+	}
+}
+
+// TestRunHTTP_AutoUpdateTimeoutAboveMax verifies that runHTTP rejects an
+// auto-update-timeout above the maximum threshold.
+func TestRunHTTP_AutoUpdateTimeoutAboveMax(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:         "https://gitlab.example.com",
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		autoUpdateTimeout: 15 * time.Minute,
+	})
+	if err == nil {
+		t.Fatal("expected error for auto-update-timeout above maximum")
+	}
+	if !strings.Contains(err.Error(), "auto-update-timeout") {
+		t.Errorf("error should mention auto-update-timeout, got: %v", err)
+	}
+}
+
+// TestRunHTTP_AutoUpdateTimeoutZero verifies that runHTTP rejects an
+// explicit zero timeout instead of silently falling back to a default.
+func TestRunHTTP_AutoUpdateTimeoutZero(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:         "https://gitlab.example.com",
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		autoUpdateTimeout: 0,
+	})
+	if err == nil {
+		t.Fatal("expected error for zero auto-update-timeout")
+	}
+	if !strings.Contains(err.Error(), "auto-update-timeout") {
+		t.Errorf("error should mention auto-update-timeout, got: %v", err)
+	}
+}
+
 // TestRunHTTP_InvalidGitLabURL verifies that runHTTP rejects a non-HTTP(S) URL.
 func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "ftp://gitlab.example.com",
-		maxHTTPClients: config.DefaultMaxHTTPClients,
+		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {

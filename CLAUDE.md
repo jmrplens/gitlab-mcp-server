@@ -242,6 +242,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
+| `AUTO_UPDATE_TIMEOUT`    | No       | Pre-start download timeout (`60s` default, range 5s–10m) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate (`false` default) |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
@@ -265,6 +266,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |
+| `--auto-update-timeout` | `60s` | Pre-start download timeout (range 5s–10m)                |
 
 **General flags** (both stdio and HTTP modes):
 

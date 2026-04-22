@@ -191,6 +191,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
+| `AUTO_UPDATE_TIMEOUT`    | Pre-start download timeout (range 5s–10m) | `60s` (default)    |
 | `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |

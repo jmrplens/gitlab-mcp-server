@@ -67,7 +67,7 @@ Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-inse
 
 ### Stdio Mode
 
-When running as a stdio server (the default), auto-update runs as a **pre-start update** with a 15-second timeout, **before** the MCP server logic begins:
+When running as a stdio server (the default), auto-update runs as a **pre-start update** with a configurable timeout (default: 60 seconds), **before** the MCP server logic begins:
 
 1. `CleanupOldBinary()` — remove leftover `.old` file from a previous update.
 2. Parse `AUTO_UPDATE` mode from environment variables.
@@ -129,6 +129,7 @@ When running as an HTTP server (`--http`), auto-update runs as a **background pe
 | `AUTO_UPDATE` | `true` | Update mode: `true`, `check`, or `false` |
 | `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
 | `AUTO_UPDATE_INTERVAL` | `1h` | Check interval (used by HTTP mode periodic checks) |
+| `AUTO_UPDATE_TIMEOUT` | `60s` | Timeout for pre-start update download (range: 5s–10m) |
 
 Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not** use the user's `GITLAB_URL`, `GITLAB_TOKEN`, or `GITLAB_SKIP_TLS_VERIFY`.
 
@@ -139,6 +140,7 @@ Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not**
 | `--auto-update` | `true` | Update mode: `true`, `check`, or `false` |
 | `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
 | `--auto-update-interval` | `1h` | Interval between periodic update checks |
+| `--auto-update-timeout` | `60s` | Timeout for pre-start update download (range: 5s–10m) |
 
 Auto-update uses the GitHub Releases API, so `--gitlab-url` and `--skip-tls-verify` do **not** affect auto-update behaviour.
 
@@ -162,6 +164,12 @@ Custom repository and fast check interval:
 AUTO_UPDATE=true
 AUTO_UPDATE_REPO=my-group/my-project
 AUTO_UPDATE_INTERVAL=15m
+```
+
+Increase the download timeout for slow connections:
+
+```env
+AUTO_UPDATE_TIMEOUT=120s
 ```
 
 HTTP mode with custom settings:
@@ -333,7 +341,7 @@ The Makefile `release` target generates all of these automatically.
 | `autoupdate: repository is required` | `AUTO_UPDATE_REPO` is empty | Set `AUTO_UPDATE_REPO` or use the default |
 | `autoupdate: creating GitHub source` | Network error reaching GitHub API | Verify network connectivity to `github.com` |
 | `autoupdate: detecting latest release` | No releases in repository, or token lacks permissions | Create a release or check token permissions |
-| `autoupdate: startup check failed` | Network timeout (10s limit at startup) | Check network connectivity; the server starts anyway |
+| `autoupdate: startup check failed` | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s) | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
 | `autoupdate: could not initialize periodic updater` | Missing required config in HTTP mode | Verify `--auto-update-repo` flag and network connectivity |
 | Update detected but not applied | Mode is `check` | Set `AUTO_UPDATE=true` to enable automatic application |
 | Server still runs old version after update (Windows) | Binary replaced but process not restarted | Restart the server process (Windows only — Unix re-execs automatically) |

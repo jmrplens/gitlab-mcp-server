@@ -430,6 +430,58 @@ func TestLoad_AutoUpdateInterval(t *testing.T) {
 	})
 }
 
+// TestLoad_AutoUpdateTimeout verifies AUTO_UPDATE_TIMEOUT env var parsing, default, and bounds.
+func TestLoad_AutoUpdateTimeout(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run(subtestDefault, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AutoUpdateTimeout != DefaultAutoUpdateTimeout {
+			t.Errorf("AutoUpdateTimeout = %v, want %v", cfg.AutoUpdateTimeout, DefaultAutoUpdateTimeout)
+		}
+	})
+
+	t.Run(subtestCustom, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "90s")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.AutoUpdateTimeout != 90*time.Second {
+			t.Errorf("AutoUpdateTimeout = %v, want 90s", cfg.AutoUpdateTimeout)
+		}
+	})
+
+	t.Run(subtestInvalid, func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "not-a-duration")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for invalid AUTO_UPDATE_TIMEOUT")
+		}
+	})
+
+	t.Run("below_minimum", func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "1s")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for AUTO_UPDATE_TIMEOUT below minimum")
+		}
+	})
+
+	t.Run("above_maximum", func(t *testing.T) {
+		t.Setenv("AUTO_UPDATE_TIMEOUT", "15m")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for AUTO_UPDATE_TIMEOUT above maximum")
+		}
+	})
+}
+
 // TestValidate_URLFormat verifies that GITLAB_URL must have a valid scheme and host.
 func TestValidate_URLFormat(t *testing.T) {
 	tests := []struct {
@@ -705,6 +757,41 @@ func TestValidate_OAuthCacheTTL(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("validate() for OAuthCacheTTL %v unexpected error: %v", tt.ttl, err)
+			}
+		})
+	}
+}
+
+// TestValidate_AutoUpdateTimeout verifies that validate enforces min/max bounds
+// on AutoUpdateTimeout when it is non-zero (covers HTTP-mode direct construction).
+func TestValidate_AutoUpdateTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		wantErr bool
+	}{
+		{name: "zero is valid (uses default)", timeout: 0, wantErr: false},
+		{name: "at minimum", timeout: MinAutoUpdateTimeout, wantErr: false},
+		{name: "at maximum", timeout: MaxAutoUpdateTimeout, wantErr: false},
+		{name: "between bounds", timeout: 2 * time.Minute, wantErr: false},
+		{name: "below minimum", timeout: 1 * time.Second, wantErr: true},
+		{name: "above maximum", timeout: 15 * time.Minute, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				GitLabURL:         "https://gitlab.example.com",
+				GitLabToken:       "test-token",
+				MaxHTTPClients:    1,
+				AutoUpdateTimeout: tt.timeout,
+			}
+			err := cfg.validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("validate() for AutoUpdateTimeout %v expected error, got nil", tt.timeout)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validate() for AutoUpdateTimeout %v unexpected error: %v", tt.timeout, err)
 			}
 		})
 	}
