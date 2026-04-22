@@ -192,20 +192,14 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_search",
 		Title: toolutil.TitleFromName("gitlab_search"),
-		Description: `Search within GitLab. Use 'action' to specify the search scope and 'params' for search-specific parameters.
-All actions support pagination via page and per_page params. Scope is determined by optional project_id > group_id > global.
+		Description: `Search GitLab by scope. All actions need query*. Scope: project_id > group_id > global. Pagination: page, per_page.
+Valid actions: code, merge_requests, issues, commits, milestones, notes, projects, snippets, users, wiki
 
-Actions:
-- code: Search for code (blobs). Params: query (required), project_id, group_id, ref
-- merge_requests: Search for merge requests. Params: query (required), project_id, group_id
-- issues: Search for issues. Params: query (required), project_id, group_id
-- commits: Search for commits. Params: query (required), project_id, group_id
-- milestones: Search for milestones. Params: query (required), project_id, group_id
-- notes: Search for notes/comments within a project. Params: query (required), project_id (required)
-- projects: Search for projects. Params: query (required), group_id
-- snippets: Search for snippet titles globally. Params: query (required)
-- users: Search for users. Params: query (required), project_id, group_id
-- wiki: Search for wiki blobs. Params: query (required), project_id, group_id
+- code: query*, project_id, group_id, ref
+- merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id
+- notes: query*, project_id* (project-scoped only)
+- projects: query*, group_id
+- snippets: query* (global only)
 
 See also: gitlab_project, gitlab_merge_request, gitlab_issue`,
 		Annotations: toolutil.ReadOnlyMetaAnnotations,

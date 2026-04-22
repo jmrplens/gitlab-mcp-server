@@ -338,46 +338,53 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_runner",
 		Title: toolutil.TitleFromName("gitlab_runner"),
-		Description: `Manage CI/CD runners in GitLab, including runner controllers (admin, experimental). Use 'action' to specify the operation and 'params' for action-specific parameters.
+		Description: `Manage CI/CD runners: CRUD, project/group assignment, registration, token resets, and runner controllers (admin, experimental). Remove/delete/revoke actions are destructive.
+Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
-Actions:
-- list: List owned runners. Params: type, status, paused (bool), tag_list (comma-separated), page, per_page
-- list_all: List all runners (admin). Params: type, status, paused (bool), tag_list (comma-separated), page, per_page
-- get: Get runner details. Params: runner_id (required, int)
-- update: Update runner. Params: runner_id (required, int), description, paused (bool), tag_list (array), run_untagged (bool), locked (bool), access_level, maximum_timeout (int), maintenance_note
-- remove: Remove runner. Params: runner_id (required, int)
-- jobs: List runner jobs. Params: runner_id (required, int), status (running/success/failed/canceled), order_by, sort, page, per_page
-- list_project: List project runners. Params: project_id (required), type, status, tag_list, page, per_page
-- enable_project: Assign runner to project. Params: project_id (required), runner_id (required, int)
-- disable_project: Remove runner from project. Params: project_id (required), runner_id (required, int)
-- list_group: List group runners. Params: group_id (required), type, status, tag_list, page, per_page
-- register: Register new runner. Params: token (required), description, paused (bool), locked (bool), run_untagged (bool), tag_list (array), access_level, maximum_timeout (int), maintenance_note
-- delete_registered: Delete registered runner. Params: runner_id (required, int)
-- delete_by_token: Delete runner by auth token. Params: token (required)
-- verify: Verify runner token. Params: token (required)
-- reset_token: Reset runner auth token. Params: runner_id (required, int)
-- reset_instance_reg_token: Reset instance runner registration token (deprecated). No params
-- reset_group_reg_token: Reset group runner registration token (deprecated). Params: group_id (required)
-- reset_project_reg_token: Reset project runner registration token (deprecated). Params: project_id (required)
-- list_managers: List all managers for a runner. Params: runner_id (required, int)
-- controller_list: List all runner controllers (admin). Params: page, per_page
-- controller_get: Get runner controller details (admin). Params: controller_id (required, int)
-- controller_create: Register a new runner controller (admin). Params: description, state (enabled/disabled/dry_run)
-- controller_update: Update a runner controller (admin). Params: controller_id (required, int), description, state (enabled/disabled/dry_run)
-- controller_delete: Delete a runner controller (admin). Params: controller_id (required, int)
-- controller_scope_list: List all scopes for a controller. Params: controller_id (required, int)
-- controller_scope_add_instance: Add instance-level scope. Params: controller_id (required, int)
-- controller_scope_remove_instance: Remove instance-level scope. Params: controller_id (required, int)
-- controller_scope_add_runner: Add runner scope. Params: controller_id (required, int), runner_id (required, int)
-- controller_scope_remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)
-- controller_token_list: List all tokens for a controller. Params: controller_id (required, int), page, per_page
-- controller_token_get: Get a specific controller token. Params: controller_id (required, int), token_id (required, int)
-- controller_token_create: Create a controller token. Params: controller_id (required, int), description
-- controller_token_rotate: Rotate a controller token. Params: controller_id (required, int), token_id (required, int)
-- controller_token_revoke: Revoke a controller token. Params: controller_id (required, int), token_id (required, int)
+When to use: manage runner instances, tokens, project/group runner assignment, runner controllers. NOT for: pipeline runs (use gitlab_pipeline), job logs (use gitlab_job).
 
-Use this tool for managing runner instances, tokens, and runner controllers (admin).
-See also: gitlab_pipeline`,
+Param conventions: * = required. List actions accept page, per_page. Runner IDs are integers.
+
+Runner CRUD:
+- list: type, status, paused, tag_list (comma-separated)
+- list_all: (admin) type, status, paused, tag_list
+- get / remove: runner_id*
+- update: runner_id*, description, paused, tag_list, run_untagged, locked, access_level, maximum_timeout, maintenance_note
+- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort
+
+Project/Group runners:
+- list_project: project_id*, type, status, tag_list
+- enable_project: project_id*, runner_id*
+- disable_project: project_id*, runner_id*
+- list_group: group_id*, type, status, tag_list
+
+Registration and tokens:
+- register: token*, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
+- delete_registered: runner_id*
+- delete_by_token: token*
+- verify: token*
+- reset_token: runner_id*
+- reset_instance_reg_token: (deprecated, no params)
+- reset_group_reg_token: group_id* (deprecated)
+- reset_project_reg_token: project_id* (deprecated)
+- list_managers: runner_id*
+
+Runner controllers (admin, experimental):
+- controller_list: (no params)
+- controller_get / controller_delete: controller_id*
+- controller_create: description, state (enabled/disabled/dry_run)
+- controller_update: controller_id*, description, state
+
+Controller scopes:
+- controller_scope_list / controller_scope_add_instance / controller_scope_remove_instance: controller_id*
+- controller_scope_add_runner / controller_scope_remove_runner: controller_id*, runner_id*
+
+Controller tokens:
+- controller_token_list: controller_id*
+- controller_token_get / controller_token_rotate / controller_token_revoke: controller_id*, token_id*
+- controller_token_create: controller_id*, description
+
+See also: gitlab_pipeline, gitlab_job`,
 		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),

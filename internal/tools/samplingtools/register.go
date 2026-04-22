@@ -311,26 +311,23 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_analyze",
 		Title: toolutil.TitleFromName("gitlab_analyze"),
-		Description: `LLM-assisted analysis of GitLab data via MCP sampling. ` +
-			`Use 'action' to select the analysis type and 'params' for action-specific parameters. ` +
-			`All actions require the MCP client to support the sampling capability (human-in-the-loop approval).
+		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Requires client sampling capability (human-in-the-loop).
+Valid actions: mr_changes, issue_summary, release_notes, pipeline_failure, mr_review, milestone_report, ci_config, issue_scope, mr_security, technical_debt, deployment_history
 
-Actions:
-- mr_changes: Analyze MR code changes for quality, bugs, improvements. Params: project_id, mr_iid
-- issue_summary: Summarize issue discussion with key decisions and action items. Params: project_id, issue_iid
-- release_notes: Generate categorized release notes between two Git refs. Params: project_id, from_ref, to_ref
-- pipeline_failure: Analyze pipeline failure root cause with fix suggestions. Params: project_id, pipeline_id
-- mr_review: Summarize MR review feedback and unresolved threads. Params: project_id, mr_iid
-- milestone_report: Generate milestone progress report with metrics. Params: project_id, milestone_iid
-- ci_config: Analyze CI/CD configuration for best practices and security. Params: project_id, content_ref (optional)
-- issue_scope: Analyze issue scope, complexity, and breakdown recommendations. Params: project_id, issue_iid
-- mr_security: Security review of MR (OWASP Top 10, secrets, auth). Params: project_id, mr_iid
-- technical_debt: Find and categorize TODO/FIXME/HACK markers. Params: project_id, ref (optional)
-- deployment_history: Analyze deployment frequency, success rate, patterns. Params: project_id, environment (optional)
+All actions need project_id*. Additional params per action:
+- mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
+- issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
+- release_notes: from_ref*, to_ref*. Generate categorized release notes between refs.
+- pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
+- mr_review: mr_iid*. Summarize review feedback and unresolved threads.
+- milestone_report: milestone_iid*. Progress report with metrics.
+- ci_config: content_ref. Analyze CI/CD config for best practices and security.
+- issue_scope: issue_iid*. Scope, complexity, and breakdown recommendations.
+- mr_security: mr_iid*. OWASP Top 10, secrets, auth review.
+- technical_debt: ref. Find TODO/FIXME/HACK markers.
+- deployment_history: environment. Frequency, success rate, patterns.
 
-Use this tool when you need AI-assisted analysis, summarization, or review of GitLab data.
-Do NOT use for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline instead.
-
+NOT for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline.
 See also: gitlab_merge_request, gitlab_issue, gitlab_pipeline, gitlab_release`,
 		Annotations: toolutil.ReadOnlyMetaAnnotations,
 		Icons:       toolutil.IconAnalytics,

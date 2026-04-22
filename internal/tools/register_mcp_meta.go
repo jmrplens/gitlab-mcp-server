@@ -24,14 +24,13 @@ func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *a
 		"health_check": routeAction(client, health.Check),
 	}
 
-	desc := `MCP server operations: health check, version info, and update management.
-Use this tool to verify GitLab connectivity, check server version, or manage updates.
-Do NOT use for GitLab resource operations — use the domain-specific tools instead.
-Use 'action' to specify the operation.
+	desc := `MCP server health, version, and GitLab connectivity check. Read-only, no params required.
+Valid actions: ` + validActionsString(routes) + `
 
-Actions:
-- status: Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Params: (none required)
-- health_check: Alias for status — check server health. Params: (none required)
+When to use: verify GitLab connectivity, check server/GitLab version, diagnose auth issues. NOT for: GitLab resource operations (use domain-specific tools).
+
+- status: Returns server version, GitLab version, auth status, current user, response time. No params.
+- health_check: Alias for status. No params.
 
 See also: gitlab_discover_project (resolve git remote URL to project ID)`
 
@@ -39,16 +38,15 @@ See also: gitlab_discover_project (resolve git remote URL to project ID)`
 		routes["check_update"] = route(wrapUpdaterAction(updater, serverupdate.Check))
 		routes["apply_update"] = destructiveRoute(wrapUpdaterAction(updater, serverupdate.Apply))
 
-		desc = `MCP server operations: health check, version info, and update management.
-Use this tool to verify GitLab connectivity, check server version, or manage updates.
-Do NOT use for GitLab resource operations — use the domain-specific tools instead.
-Use 'action' to specify the operation.
+		desc = `MCP server health, version, update management, and GitLab connectivity check. apply_update replaces the server binary (destructive on Linux/macOS, staged on Windows).
+Valid actions: ` + validActionsString(routes) + `
 
-Actions:
-- status: Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Params: (none required)
-- health_check: Alias for status — check server health. Params: (none required)
-- check_update: Check if a newer version of the MCP server is available. Returns current version, latest version, release URL, and release notes. Params: (none required)
-- apply_update: Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script. Params: (none required)
+When to use: verify GitLab connectivity, check server/GitLab version, manage server updates. NOT for: GitLab resource operations (use domain-specific tools).
+
+- status: Returns server version, GitLab version, auth status, current user, response time. No params.
+- health_check: Alias for status. No params.
+- check_update: Check if newer server version is available. Returns current/latest version, release URL, notes. No params.
+- apply_update: Download and apply latest server update. Linux/macOS: atomic binary replace. Windows: staged download with update script. No params.
 
 See also: gitlab_discover_project (resolve git remote URL to project ID)`
 	}
