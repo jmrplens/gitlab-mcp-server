@@ -341,6 +341,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Description: `Manage CI/CD runners: CRUD, project/group assignment, registration, token resets, and runner controllers (admin, experimental). Remove/delete/revoke actions are destructive.
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 When to use: manage runner instances, tokens, project/group runner assignment, runner controllers. NOT for: pipeline runs (use gitlab_pipeline), job logs (use gitlab_job).
 
 Param conventions: * = required. List actions accept page, per_page. Runner IDs are integers.

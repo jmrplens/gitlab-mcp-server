@@ -195,6 +195,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Description: `Search GitLab by scope. All actions need query*. Scope: project_id > group_id > global. Pagination: page, per_page.
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 - code: query*, project_id, group_id, ref
 - merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id
 - notes: query*, project_id* (project-scoped only)

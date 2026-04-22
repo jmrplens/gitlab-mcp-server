@@ -314,6 +314,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Requires client sampling capability (human-in-the-loop).
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 All actions need project_id*. Additional params per action:
 - mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.

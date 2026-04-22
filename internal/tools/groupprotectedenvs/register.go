@@ -15,7 +15,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_protected_environment_list",
 		Title:       toolutil.TitleFromName("gitlab_group_protected_environment_list"),
-		Description: "List all protected environments for a GitLab group.\n\nReturns: paginated list of protected environments with deploy access levels and approval rules.",
+		Description: "List all protected environments for a GitLab group.\n\nReturns: paginated list of protected environments with deploy access levels and approval rules. See also: gitlab_group_protected_environment_get, gitlab_protected_environment_list, gitlab_environment_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -28,7 +28,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_protected_environment_get",
 		Title:       toolutil.TitleFromName("gitlab_group_protected_environment_get"),
-		Description: "Get a single group-level protected environment by name.\n\nReturns: protected environment with deploy access levels and approval rules.",
+		Description: "Get a single group-level protected environment by name.\n\nReturns: protected environment with deploy access levels and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
@@ -41,7 +41,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_protected_environment_protect",
 		Title:       toolutil.TitleFromName("gitlab_group_protected_environment_protect"),
-		Description: "Protect an environment at the group level.\n\nReturns: created protected environment with access levels and approval rules.",
+		Description: "Protect an environment at the group level.\n\nReturns: created protected environment with access levels and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_unprotect.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProtectInput) (*mcp.CallToolResult, Output, error) {
@@ -54,7 +54,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_protected_environment_update",
 		Title:       toolutil.TitleFromName("gitlab_group_protected_environment_update"),
-		Description: "Update a group-level protected environment.\n\nReturns: updated protected environment with access levels and approval rules.",
+		Description: "Update a group-level protected environment.\n\nReturns: updated protected environment with access levels and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
@@ -67,7 +67,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_protected_environment_unprotect",
 		Title:       toolutil.TitleFromName("gitlab_group_protected_environment_unprotect"),
-		Description: "Remove protection from a group-level environment.\n\nReturns: confirmation of removal.",
+		Description: "Remove protection from a group-level environment.\n\nReturns: confirmation of removal. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_protect.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UnprotectInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

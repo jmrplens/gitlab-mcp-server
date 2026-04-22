@@ -551,6 +551,8 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_branch", `CRUD and protect Git branches. Query branch rules (aggregated view via GraphQL).
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. All actions need project_id* except rule_list.
 
 - create: project_id*, branch_name*, ref* (branch/tag/SHA)
@@ -624,6 +626,8 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 	addMetaTool(server, "gitlab_release", `CRUD GitLab releases and release asset links (binaries, downloads).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except create/list).
 
@@ -718,6 +722,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: MR lifecycle, approvals, time tracking, resource events. NOT for: reviewing/commenting (use gitlab_mr_review).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
 
 IMPORTANT for create: target_branch* — if user doesn't specify, retrieve project's default_branch via gitlab_project get; do NOT assume 'main'.
@@ -804,6 +810,8 @@ IMPORTANT — Batch review: use draft_note_create for EACH comment (with positio
 
 When to use: code review, comments, discussions, diffs. NOT for: MR lifecycle (create/merge/approve — use gitlab_merge_request).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page.
 
 Notes (comments):
@@ -889,6 +897,8 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 Valid actions: `+validActionsString(routes)+`
 
 When to use: file/commit operations, diffs, blame, compare, archives, submodules, markdown rendering. NOT for: branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
 
@@ -1494,6 +1504,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: pipeline CRUD, test reports, triggers, resource groups, schedules. NOT for: job-level operations (use gitlab_job).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. All pipeline actions need project_id*. List actions accept page, per_page.
 
 Pipelines:
@@ -1811,6 +1823,8 @@ func registerWikiMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_wiki", `CRUD and upload attachments to GitLab project wiki pages.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. All actions need project_id*.
 
 - list: project_id*, with_content (bool)
@@ -1854,6 +1868,8 @@ func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 	addMetaTool(server, "gitlab_environment", `Manage GitLab environments, protected environments, deployment freeze periods, and deployment records.
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. All actions need project_id*.
 
@@ -1912,6 +1928,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: CRUD CI/CD variables at project, group, or instance level. NOT for: pipeline configuration (use gitlab_template for CI lint), secrets management outside GitLab.
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. Project-scoped actions need project_id*, group-scoped need group_id*, instance-scoped need no ID. Common optional params: variable_type, protected, masked, raw, environment_scope.
 
 Project variables:
@@ -1956,6 +1974,8 @@ func registerTemplateMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 	addReadOnlyMetaTool(server, "gitlab_template", `Browse GitLab templates (gitignores, CI/CD YAML, Dockerfiles, licenses, project templates) and lint CI configuration.
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required.
 
@@ -2069,6 +2089,8 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 Valid actions: `+validActionsString(routes)+`
 
 When to use: instance-level admin operations, Sidekiq monitoring, settings, license management, bulk imports. NOT for: user CRUD (use gitlab_user), MCP server ops (use gitlab_server).
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. List actions accept page, per_page.
 
@@ -2246,6 +2268,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: manage deploy keys, deploy tokens, access tokens (project/group/personal), access requests, and invitations. NOT for: SSH/GPG keys or user-scoped PATs (use gitlab_user), instance admin tokens (use gitlab_admin), project settings (use gitlab_project).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.
 
 Access tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:
@@ -2375,6 +2399,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: package upload/download, container registry browsing, protection rules. NOT for: release asset links (use gitlab_release).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
 
 Packages:
@@ -2458,6 +2484,8 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: snippet CRUD, reading snippet content, discussions/notes on snippets. NOT for: project files (use gitlab_repository).
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. List actions accept page, per_page.
 
 Personal snippets:
@@ -2517,6 +2545,8 @@ func registerFeatureFlagsMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_feature_flags", `CRUD GitLab feature flags and feature flag user lists (named sets of user IDs).
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. All actions need project_id*.
 
 Feature flags (feature_flag_*):
@@ -2546,6 +2576,8 @@ func registerMergeTrainMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
@@ -2570,6 +2602,8 @@ func registerAuditEventMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_audit_event", `List and get GitLab audit events at instance, group, and project levels for compliance tracking.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 Common optional params: created_after (YYYY-MM-DD), created_before, page, per_page.
 
 - list_instance: (admin only) created_after, created_before
@@ -2592,6 +2626,8 @@ func registerDORAMetricsMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_dora_metrics", `Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 Common params: metric* (deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date, interval (daily/monthly/all), environment_tiers (array).
 
 - project: project_id*, metric*, start_date, end_date, interval, environment_tiers
@@ -2611,6 +2647,8 @@ func registerDependencyMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_dependency", `List project dependencies and create/download SBOM exports (CycloneDX).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - list: project_id*, package_manager, page, per_page
 - export_create: pipeline_id*, export_type (default: sbom)
@@ -2641,6 +2679,8 @@ func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Cl
 	}
 	addMetaTool(server, "gitlab_external_status_check", `Manage external status checks for MRs and projects. CRUD checks and set/retry status.
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required.
 
@@ -2677,6 +2717,8 @@ func registerGroupSCIMMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 All actions need group_id*.
 
 - list: group_id*
@@ -2699,6 +2741,8 @@ func registerMemberRoleMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_member_role", `Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Instance-level:
 - list_instance: no params
@@ -2725,6 +2769,8 @@ func registerEnterpriseUserMeta(server *mcp.Server, client *gitlabclient.Client)
 	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 All actions need group_id*.
 
 - list: group_id*, username, search, active, blocked, created_after, created_before, two_factor, page, per_page
@@ -2745,6 +2791,8 @@ func registerAttestationMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addReadOnlyMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for project artifacts.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 - list: project_id*, subject_digest*
 - download: project_id*, attestation_iid*
 
@@ -2760,6 +2808,8 @@ func registerCompliancePolicyMeta(server *mcp.Server, client *gitlabclient.Clien
 	}
 	addMetaTool(server, "gitlab_compliance_policy", `Get and update admin compliance policy settings (CSP namespace configuration).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - get: no params
 - update: csp_namespace_id (int64)
@@ -2778,6 +2828,8 @@ func registerProjectAliasMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_project_alias", `CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - list: no params
 - get / delete: name*
@@ -2801,6 +2853,8 @@ func registerGeoMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_geo", `Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required.
 
@@ -2854,6 +2908,8 @@ func registerStorageMoveMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_storage_move", `Manage repository storage moves for projects, groups, and snippets (admin only).
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 Param conventions: * = required. retrieve_all/list actions accept page, per_page. Each resource type (project/group/snippet) has the same action pattern.
 
 Project storage moves:
@@ -2899,6 +2955,8 @@ func registerVulnerabilityMeta(server *mcp.Server, client *gitlabclient.Client) 
 	addMetaTool(server, "gitlab_vulnerability", `List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
 Param conventions: * = required. GID format: gid://gitlab/Vulnerability/42.
 
 - list: project_path*, severity, state, scanner, report_type (arrays), has_issues, has_resolution, sort, first, after
@@ -2918,6 +2976,8 @@ func registerSecurityFindingsMeta(server *mcp.Server, client *gitlabclient.Clien
 	addReadOnlyMetaTool(server, "gitlab_security_finding", `List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Valid actions: `+validActionsString(routes)+`
 
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+
 - list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after
 
 See also: gitlab_vulnerability, gitlab_pipeline`, routes, toolutil.IconSecurity)
@@ -2931,6 +2991,8 @@ func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
 
 - list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first, after
 - get: id (GID) or full_path* (one required)
@@ -2947,6 +3009,8 @@ func registerCustomEmojiMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_custom_emoji", `CRUD group-level custom emoji via GraphQL (Premium/Ultimate). Distinct from award emoji (reactions).
 Valid actions: `+validActionsString(routes)+`
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 - list: group_path*, first, after
 - create: group_path*, name* (without colons), url* (image URL)
