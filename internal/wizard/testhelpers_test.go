@@ -89,3 +89,12 @@ func stubInstallBinary(t *testing.T) string {
 	t.Cleanup(func() { installBinaryFn = orig })
 	return tmpDir
 }
+
+// stubGetInstalledVersion overrides getInstalledVersionFn to return the given
+// version string without executing a real binary.
+func stubGetInstalledVersion(t *testing.T, version string) {
+	t.Helper()
+	orig := getInstalledVersionFn
+	getInstalledVersionFn = func() string { return version }
+	t.Cleanup(func() { getInstalledVersionFn = orig })
+}

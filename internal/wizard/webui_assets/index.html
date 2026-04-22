@@ -290,6 +290,7 @@
     <h1>Setup Wizard</h1>
     <div class="subtitle">gitlab-mcp-server</div>
     <div class="version" id="version">loading...</div>
+    <div class="installed-version" id="installedVersion" style="display:none;margin-top:0.35rem;font-size:0.72rem;color:var(--text-muted);"></div>
   </div>
 
   <div id="formPanel">
@@ -299,7 +300,7 @@
         <label for="installPath">Install path</label>
         <div class="input-row">
           <input type="text" id="installPath" placeholder="Loading defaults...">
-          <button class="btn-browse" id="browseBtnutton>
+          <button class="btn-browse" id="browseBtn">Browse</button>
         </div>
         <div class="hint">Full path where the binary will be installed</div>
       </div>
@@ -330,7 +331,7 @@
       <div class="field">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
           <span style="margin-bottom:0;font-size:0.8rem;color:var(--text-muted);font-weight:500;letter-spacing:0.01em;">Select clients to configure</span>
-          <button class="select-all-btn" id="selectAllBtnlect all</button>
+          <button class="select-all-btn" id="selectAllBtn">Select all</button>
         </div>
         <div class="checkbox-group" id="clientList"></div>
       </div>
@@ -367,7 +368,7 @@
       </div>
     </details>
 
-    <button class="btn btn-primary" id="configureBtn" em;">Configure</button>
+    <button class="btn btn-primary" id="configureBtn" style="margin-top:0.75rem;">Configure</button>
   </div>
 
   <div class="result" id="resultPanel">
@@ -382,7 +383,7 @@
       To reconfigure later, run: <code>gitlab-mcp-server --setup</code>
     </p>
     <div style="text-align:center;margin-top:1.25rem;">
-      <button class="btn btn-primary" id="closeBtn" style="width:auto;padding:0.6rem 2rem;tton>
+      <button class="btn btn-primary" id="closeBtn" style="width:auto;padding:0.6rem 2rem;">Close</button>
     </div>
   </div>
 </div>
@@ -407,6 +408,15 @@ try {
   const resp = await fetch('/api/defaults');
   defaults = await resp.json();
   document.getElementById('version').textContent = 'v' + (defaults.version || 'dev');
+  if (defaults.installed_version) {
+    const el = document.getElementById('installedVersion');
+    if (defaults.installed_version === defaults.version) {
+      el.textContent = 'Same version already installed';
+    } else {
+      el.textContent = 'Installed: v' + defaults.installed_version + ' → will update to v' + defaults.version;
+    }
+    el.style.display = 'block';
+  }
   document.getElementById('installPath').value = defaults.install_path || '';
   if (defaults.gitlab_url) {
     document.getElementById('gitlabUrl').value = defaults.gitlab_url;
@@ -441,6 +451,12 @@ try {
   console.error('Failed to load defaults:', e);
 }
 
+function hideInstalledVersion() {
+  const el = document.getElementById('installedVersion');
+  el.style.display = 'none';
+  el.textContent = '';
+}
+document.getElementById('installPath').addEventListener('input', hideInstalledVersion);
 document.getElementById('browseBtn').addEventListener('click', pickDirectory);
 document.getElementById('selectAllBtn').addEventListener('click', toggleAll);
 document.getElementById('configureBtn').addEventListener('click', configure);
@@ -466,7 +482,10 @@ async function pickDirectory() {
     });
     if (resp.ok) {
       const data = await resp.json();
-      if (data.path) document.getElementById('installPath').value = data.path;
+      if (data.path) {
+        document.getElementById('installPath').value = data.path;
+        hideInstalledVersion();
+      }
     }
   } catch(e) {
     console.error('Pick directory failed:', e);
