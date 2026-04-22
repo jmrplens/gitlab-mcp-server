@@ -93,7 +93,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list":   toolutil.RouteAction(client, List),
 		"get":    toolutil.RouteAction(client, Get),
 		"create": toolutil.RouteAction(client, Create),
-		"rotate": toolutil.RouteAction(client, Rotate),
+		"rotate": toolutil.DestructiveAction(client, Rotate),
 		"revoke": toolutil.DestructiveVoidAction(client, Revoke),
 	}
 

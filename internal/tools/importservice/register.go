@@ -100,7 +100,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := toolutil.ActionMap{
 		"from_github":           toolutil.RouteAction(client, ImportFromGitHub),
-		"cancel_github":         toolutil.RouteAction(client, CancelGitHubImport),
+		"cancel_github":         toolutil.DestructiveAction(client, CancelGitHubImport),
 		"github_gists":          toolutil.RouteVoidAction(client, ImportGists),
 		"from_bitbucket_cloud":  toolutil.RouteAction(client, ImportFromBitbucketCloud),
 		"from_bitbucket_server": toolutil.RouteAction(client, ImportFromBitbucketServer),

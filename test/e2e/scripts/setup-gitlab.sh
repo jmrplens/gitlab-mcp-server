@@ -15,15 +15,28 @@ ENV_FILE="test/e2e/.env.docker"
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"
 
-# 1. Get root OAuth token
+# 1. Get root OAuth token (with retry — GitLab may still be warming up)
 echo "  [1/4] Authenticating as root..."
-ROOT_TOKEN=$(curl -sf "${GITLAB_URL}/oauth/token" \
-    --data-urlencode "grant_type=password" \
-    --data-urlencode "username=root" \
-    --data-urlencode "password=${ROOT_PASSWORD}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+ROOT_TOKEN=""
+for attempt in 1 2 3 4 5; do
+    OAUTH_RESPONSE=$(curl -sf "${GITLAB_URL}/oauth/token" \
+        --data-urlencode "grant_type=password" \
+        --data-urlencode "username=root" \
+        --data-urlencode "password=${ROOT_PASSWORD}" 2>/dev/null || true)
+
+    if [ -n "$OAUTH_RESPONSE" ]; then
+        ROOT_TOKEN=$(echo "$OAUTH_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+    fi
+
+    if [ -n "$ROOT_TOKEN" ]; then
+        break
+    fi
+    echo "    Attempt ${attempt}/5 failed, retrying in 3s..."
+    sleep 3
+done
 
 if [ -z "$ROOT_TOKEN" ]; then
-    echo "ERROR: Failed to authenticate as root"
+    echo "ERROR: Failed to authenticate as root after 5 attempts"
     exit 1
 fi
 echo "    Root OAuth token obtained"

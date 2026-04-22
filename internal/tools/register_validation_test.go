@@ -309,7 +309,7 @@ func extractWriteHintLines(src string) []string {
 // destructive wrappers correspond to individual tools using DeleteAnnotations,
 // and that non-destructive routes do not correspond to individual tools with
 // DeleteAnnotations. This catches misclassified routes after migration.
-func TestDestructiveMetadataConsistency(t *testing.T) {
+func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *testing.T) {
 	// 1. Build set of sub-package actions with their destructive wrapper status.
 	type routeInfo struct {
 		pkg         string
@@ -391,6 +391,7 @@ func isExactMatchException(action string) bool {
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
 		"unshare": true, "disable_project": true,
+		"cancel_github": true, "rotate": true, "import_from_file": true,
 	}
 	return exceptions[action]
 }
@@ -401,7 +402,7 @@ func isExactMatchException(action string) bool {
 // destructive wrappers, and that safe action names (list, get, search, create,
 // update) never use destructive wrappers. This test prevents accidental
 // misclassification when adding new routes.
-func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
+func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	// routeEntry captures a single action definition found in source code.
 	type routeEntry struct {
 		file        string
@@ -412,11 +413,11 @@ func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
 
 	// Regex patterns for register_meta.go (lowercase wrappers, no package prefix).
 	reMetaMapDestructive := regexp.MustCompile(
-		`"(\w+)":\s+destructive(?:Action|VoidAction)\b`)
+		`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`)
 	reMetaMapNonDestructive := regexp.MustCompile(
 		`"(\w+)":\s+route(?:Action|VoidAction|ActionWithRequest)\b`)
 	reMetaAssignDestructive := regexp.MustCompile(
-		`routes\["(\w+)"\]\s*=\s*destructive(?:Action|VoidAction)\b`)
+		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`)
 	reMetaAssignNonDestructive := regexp.MustCompile(
 		`routes\["(\w+)"\]\s*=\s*route(?:Action|VoidAction|ActionWithRequest)\b`)
 
@@ -524,7 +525,8 @@ func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
 		"merge": true, "erase": true, "stop": true, "ban": true,
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
-		"unshare": true, "disable_project": true,
+		"unshare": true, "disable_project": true, "import_from_file": true,
+		"cancel_github": true, "rotate": true,
 	}
 
 	var failures int
@@ -562,12 +564,12 @@ func TestDestructiveRoutesByNameHeuristic(t *testing.T) {
 // destructive routes across the entire codebase does not drop below a
 // known minimum. This prevents accidental mass reclassification of
 // destructive actions to non-destructive (e.g., a bad find-and-replace).
-func TestDestructiveRoutesMinimumInventory(t *testing.T) {
+func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *testing.T) {
 	// Regex patterns matching all destructive wrapper usages.
 	destructivePatterns := []*regexp.Regexp{
 		// register_meta.go inline patterns.
-		regexp.MustCompile(`"(\w+)":\s+destructive(?:Action|VoidAction)\b`),
-		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Action|VoidAction)\b`),
+		regexp.MustCompile(`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`),
+		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`),
 		// Sub-package patterns.
 		regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`),
 	}

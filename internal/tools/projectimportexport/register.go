@@ -86,7 +86,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"schedule_export":  toolutil.RouteAction(client, ScheduleExport),
 		"export_status":    toolutil.RouteAction(client, GetExportStatus),
 		"export_download":  toolutil.RouteAction(client, ExportDownload),
-		"import_from_file": toolutil.RouteAction(client, ImportFromFile),
+		"import_from_file": toolutil.DestructiveAction(client, ImportFromFile),
 		"import_status":    toolutil.RouteAction(client, GetImportStatus),
 	}
 

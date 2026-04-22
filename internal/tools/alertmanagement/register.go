@@ -100,7 +100,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 Actions:
 - list_metric_images: List metric images for an alert. Params: project_id (required), alert_iid (required, int)
-- upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), content (required, base64), url, url_text
+- upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), file_path or content_base64 (one required), url, url_text
 - update_metric_image: Update a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int), filename, url, url_text
 - delete_metric_image: Delete a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int)`,
 		Annotations: toolutil.DeriveAnnotations(routes),
