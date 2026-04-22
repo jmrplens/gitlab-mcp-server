@@ -386,13 +386,6 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
 </details>
 
-## Related Projects
-
-- [Redmine MCP Server](https://github.com/jmrplens/redmine-mcp-server) — Sister project: MCP server for Redmine with 152 tools
-- [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) — The official Go SDK this server is built on
-- [Model Context Protocol](https://modelcontextprotocol.io/) — The MCP specification
-- [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers) — Curated list of MCP servers
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch naming, commit conventions, and pull request process.

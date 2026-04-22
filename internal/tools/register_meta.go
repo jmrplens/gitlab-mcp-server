@@ -383,180 +383,149 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		routes["security_settings_update"] = routeAction(client, securitysettings.UpdateProject)
 	}
 
-	desc := `Create, list, get, update, delete, fork, star, archive, and transfer GitLab projects. Also manages project members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export.
+	desc := `Manage GitLab projects: CRUD, settings, members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export. Delete and unpublish actions are destructive.
 Valid actions: ` + validActionsString(routes) + `
-Use 'action' to specify the operation and 'params' for action-specific parameters.
+
+When to use: project-level CRUD, settings, members, labels, milestones, webhooks, boards, integrations, Pages, mirrors, approval rules. NOT for: file content/commits (use gitlab_repository), branches (use gitlab_branch), wiki pages (use gitlab_wiki), issues (use gitlab_issue), MRs (use gitlab_merge_request).
+
+Param conventions: * = required. Most actions need project_id* (numeric ID or URL-encoded path like 'group/repo'). List actions accept page, per_page. Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.
 
 Project CRUD:
-- create: Create a new project. Params: name (required), namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics ([]string), merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), only_allow_merge_if_pipeline_succeeds, only_allow_merge_if_all_discussions_are_resolved, issues_enabled (bool), merge_requests_enabled (bool), wiki_enabled (bool), jobs_enabled (bool), lfs_enabled (bool), request_access_enabled (bool), ci_config_path, allow_merge_on_skipped_pipeline (bool), remove_source_branch_after_merge (bool), autoclose_referenced_issues (bool)
-- get: Get project details. Params: project_id (required, numeric ID or URL-encoded path like 'group/repo')
-- list: List accessible projects. Params: owned (bool), search, visibility, archived (bool), order_by, sort, topic, simple (bool), min_access_level (int), last_activity_after (ISO 8601), last_activity_before (ISO 8601), starred (bool), membership (bool), with_issues_enabled (bool), with_merge_requests_enabled (bool), search_namespaces (bool), statistics (bool), include_pending_delete (bool, include projects marked for deletion), include_hidden (bool), page, per_page
-- update: Update project settings. Params: project_id (required), name, description, visibility, default_branch, merge_method, topics, squash_option, only_allow_merge_if_pipeline_succeeds (bool), only_allow_merge_if_all_discussions_are_resolved (bool), issues_enabled (bool), merge_requests_enabled (bool), wiki_enabled (bool), jobs_enabled (bool), ci_config_path, allow_merge_on_skipped_pipeline (bool), remove_source_branch_after_merge (bool), autoclose_referenced_issues (bool), merge_commit_template, squash_commit_template, merge_pipelines_enabled (bool), merge_trains_enabled (bool), resolve_outdated_diff_discussions (bool), approvals_before_merge (int)
-- delete: Delete a project. On instances with delayed deletion, the project is marked for deletion rather than removed immediately. Set permanently_remove=true with full_path to bypass delayed deletion. Params: project_id (required), permanently_remove (bool), full_path (string, required when permanently_remove=true)
-- restore: Restore a project that was marked/scheduled for deletion. Params: project_id (required)
+- create: name*, namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics, merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), ci_config_path, feature toggles (issues/merge_requests/wiki/jobs/lfs/request_access_enabled)
+- get: project_id*
+- list: owned, search, visibility, archived, order_by, sort, topic, simple, min_access_level, last_activity_after/before, starred, membership, search_namespaces, statistics, include_pending_delete, include_hidden
+- update: project_id*, name, description, visibility, default_branch, merge_method, topics, squash_option, merge_commit_template, squash_commit_template, merge_pipelines_enabled, merge_trains_enabled, approvals_before_merge, feature toggles
+- delete: project_id*, permanently_remove, full_path (required when permanently_remove=true). Delayed deletion by default; permanently_remove bypasses it
+- restore: project_id*
 
 Project actions:
-- fork: Fork a project. Params: project_id (required), name, path, namespace_id, namespace_path, description, visibility, branches, mr_default_target_self (bool)
-- star: Star a project. Params: project_id (required)
-- unstar: Unstar a project. Params: project_id (required)
-- archive: Archive a project (read-only). Params: project_id (required)
-- unarchive: Unarchive a project. Params: project_id (required)
-- transfer: Transfer project to another namespace. Params: project_id (required), namespace (required, ID or path)
-- list_forks: List project forks. Params: project_id (required), owned (bool), search, visibility, order_by, sort, page, per_page
-- create_fork_relation: Create a fork relation between two projects. Params: project_id (required), forked_from_id (required)
-- delete_fork_relation: Remove the fork relation from a project. Params: project_id (required)
-- languages: List programming languages with percentages. Params: project_id (required)
-
-Webhooks:
-- hook_list: List project webhooks. Params: project_id (required), page, per_page
-- hook_get: Get project webhook details. Params: project_id (required), hook_id (required)
-- hook_add: Add a webhook to a project. Params: project_id (required), url (required), name, description, token, push_events (bool), push_events_branch_filter, issues_events (bool), confidential_issues_events (bool), merge_requests_events (bool), tag_push_events (bool), note_events (bool), confidential_note_events (bool), job_events (bool), pipeline_events (bool), wiki_page_events (bool), deployment_events (bool), releases_events (bool), emoji_events (bool), resource_access_token_events (bool), enable_ssl_verification (bool), custom_webhook_template, branch_filter_strategy
-- hook_edit: Edit a project webhook. Params: project_id (required), hook_id (required), url, name, description, token, push_events (bool), and all event booleans from hook_add
-- hook_delete: Delete a project webhook. Params: project_id (required), hook_id (required)
-- hook_test: Trigger a test event for a webhook. Params: project_id (required), hook_id (required), event (required, e.g. push_events)
-- hook_set_custom_header: Set a custom header on a webhook. Params: project_id (required), hook_id (required), key (required), value (required)
-- hook_delete_custom_header: Delete a custom header from a webhook. Params: project_id (required), hook_id (required), key (required)
-- hook_set_url_variable: Set a URL variable on a webhook. Params: project_id (required), hook_id (required), key (required), value (required)
-- hook_delete_url_variable: Delete a URL variable from a webhook. Params: project_id (required), hook_id (required), key (required)
+- fork: project_id*, name, path, namespace_id, namespace_path, visibility, branches, mr_default_target_self
+- star / unstar / archive / unarchive / languages: project_id*
+- transfer: project_id*, namespace* (ID or path)
+- list_forks: project_id*, owned, search, visibility, order_by, sort
+- create_fork_relation: project_id*, forked_from_id*
+- delete_fork_relation: project_id*
 
 Users and groups:
-- list_user_projects: List projects owned by a specific user. Params: user_id (required, ID or username), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
-- list_users: List users who are members of a project. Params: project_id (required), search (name or username), page, per_page
-- list_groups: List ancestor groups of a project. Params: project_id (required), search, with_shared (bool), shared_visible_only (bool), skip_groups ([]int64), shared_min_access_level (int), page, per_page
-- list_starrers: List users who starred a project. Params: project_id (required), search (name or username), page, per_page
-- share_with_group: Share a project with a group. Params: project_id (required), group_id (required), group_access (required, 10=Guest/20=Reporter/30=Developer/40=Maintainer), expires_at (YYYY-MM-DD)
-- delete_shared_group: Remove a shared group from a project. Params: project_id (required), group_id (required)
-- list_invited_groups: List groups invited to a project. Params: project_id (required), search, min_access_level (int), page, per_page
-- list_user_contributed: List projects a user has contributed to. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
-- list_user_starred: List projects a user has starred. Params: user_id (required), search, visibility, archived (bool), order_by, sort, simple (bool), page, per_page
+- list_user_projects: user_id* (ID or username), search, visibility, archived, order_by, sort, simple
+- list_users / list_starrers: project_id*, search
+- list_groups: project_id*, search, with_shared, shared_visible_only, skip_groups, shared_min_access_level
+- share_with_group: project_id*, group_id*, group_access* (10-40), expires_at
+- delete_shared_group: project_id*, group_id*
+- list_invited_groups: project_id*, search, min_access_level
+- list_user_contributed / list_user_starred: user_id*, search, visibility, archived, order_by, sort, simple
 
-Members:
-- members: List all project members (including inherited). Params: project_id (required), query (filter by name/username), page, per_page
-- member_get: Get a specific project member by user ID. Params: project_id (required), user_id (required)
-- member_inherited: Get a project member including inherited membership. Params: project_id (required), user_id (required)
-- member_add: Add a project member. Params: project_id (required), user_id or username (required), access_level (required, 10=Guest/20=Reporter/30=Developer/40=Maintainer/50=Owner), expires_at (YYYY-MM-DD), member_role_id
-- member_edit: Edit a project member. Params: project_id (required), user_id (required), access_level (required), expires_at, member_role_id
-- member_delete: Remove a project member. Params: project_id (required), user_id (required)
+Members (member_*):
+- members: project_id*, query (filter name/username)
+- member_get / member_inherited: project_id*, user_id*
+- member_add: project_id*, user_id or username*, access_level* (10-50), expires_at, member_role_id
+- member_edit: project_id*, user_id*, access_level*, expires_at, member_role_id
+- member_delete: project_id*, user_id*
+
+Webhooks (hook_*) — event booleans: push/tag_push/issues/merge_requests/note/job/pipeline/wiki_page/deployment/releases/emoji:
+- hook_list: project_id*
+- hook_get / hook_delete: project_id*, hook_id*
+- hook_add: project_id*, url*, name, description, token, event booleans, enable_ssl_verification, push_events_branch_filter, custom_webhook_template, branch_filter_strategy
+- hook_edit: project_id*, hook_id*, same params as hook_add
+- hook_test: project_id*, hook_id*, event* (e.g. push_events)
+- hook_set_custom_header / hook_set_url_variable: project_id*, hook_id*, key*, value*
+- hook_delete_custom_header / hook_delete_url_variable: project_id*, hook_id*, key*
+
+Labels (label_*):
+- label_list: project_id*, search, with_counts, include_ancestor_groups
+- label_get / label_delete / label_subscribe / label_unsubscribe / label_promote: project_id*, label_id*
+- label_create: project_id*, name*, color* (hex), description, priority
+- label_update: project_id*, label_id*, new_name, color, description, priority
+
+Milestones (milestone_*):
+- milestone_list: project_id*, state (active/closed), title, search, include_ancestors
+- milestone_get / milestone_delete: project_id*, milestone_iid*
+- milestone_create: project_id*, title*, description, start_date, due_date
+- milestone_update: project_id*, milestone_iid*, title, description, start_date, due_date, state_event (activate/close)
+- milestone_issues / milestone_merge_requests: project_id*, milestone_iid*
+
+Badges (badge_*):
+- badge_list: project_id*, name
+- badge_get / badge_delete: project_id*, badge_id*
+- badge_add / badge_preview: project_id*, link_url*, image_url*, name
+- badge_edit: project_id*, badge_id*, link_url, image_url, name
+
+Boards (board_*):
+- board_list: project_id*
+- board_get / board_delete: project_id*, board_id*
+- board_create: project_id*, name*
+- board_update: project_id*, board_id*, name, assignee_id, milestone_id, labels, weight, hide_backlog_list, hide_closed_list
+- board_list_list: project_id*, board_id*
+- board_list_get / board_list_delete: project_id*, board_id*, list_id*
+- board_list_create: project_id*, board_id*, label_id
+- board_list_update: project_id*, board_id*, list_id*, position
+
+Integrations (integration_*):
+- integration_list: project_id*
+- integration_get / integration_delete: project_id*, slug* (e.g. jira, slack, discord, datadog, jenkins, mattermost, telegram)
+- integration_set_jira: project_id*, url*, username, password, active, api_url, jira_auth_type, jira_issue_prefix, commit_events, merge_requests_events, issues_enabled, project_keys
 
 Uploads:
-- upload: Upload a file to the project. Returns a Markdown embed string. Provide either file_path (absolute local path) or content_base64 (base64-encoded), not both. Params: project_id (required), filename (required), file_path or content_base64 (one required)
-- upload_list: List all markdown uploads for a project. Params: project_id (required)
-- upload_delete: Delete a markdown upload by ID. Params: project_id (required), upload_id (required)
-
-Labels:
-- label_list: List all project labels. Params: project_id (required), search, with_counts (bool), include_ancestor_groups (bool), page, per_page
-- label_get: Get label details. Params: project_id (required), label_id (required, ID or name)
-- label_create: Create a label. Params: project_id (required), name (required), color (required, hex), description, priority (int)
-- label_update: Update a label. Params: project_id (required), label_id (required), new_name, color, description, priority
-- label_delete: Delete a label. Params: project_id (required), label_id (required)
-- label_subscribe: Subscribe to a label. Params: project_id (required), label_id (required)
-- label_unsubscribe: Unsubscribe from a label. Params: project_id (required), label_id (required)
-- label_promote: Promote a project label to group label. Params: project_id (required), label_id (required)
-
-Milestones:
-- milestone_list: List project milestones. Params: project_id (required), state (active/closed), title, search, include_ancestors (bool), page, per_page
-- milestone_get: Get a milestone by IID. Params: project_id (required), milestone_iid (required)
-- milestone_create: Create a milestone. Params: project_id (required), title (required), description, start_date (YYYY-MM-DD), due_date (YYYY-MM-DD)
-- milestone_update: Update a milestone. Params: project_id (required), milestone_iid (required), title, description, start_date (YYYY-MM-DD), due_date (YYYY-MM-DD), state_event (activate/close)
-- milestone_delete: Delete a milestone. Params: project_id (required), milestone_iid (required)
-- milestone_issues: List issues assigned to a milestone. Params: project_id (required), milestone_iid (required), page, per_page
-- milestone_merge_requests: List merge requests assigned to a milestone. Params: project_id (required), milestone_iid (required), page, per_page
-
-Integrations:
-- integration_list: List all project integrations (services). Params: project_id (required)
-- integration_get: Get a specific integration by slug. Params: project_id (required), slug (required, e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
-- integration_delete: Delete/disable a project integration. Params: project_id (required), slug (required)
-- integration_set_jira: Configure Jira integration. Params: project_id (required), url (required), username, password, active (bool), api_url, jira_auth_type, jira_issue_prefix, jira_issue_regex, jira_issue_transition_automatic (bool), jira_issue_transition_id, commit_events (bool), merge_requests_events (bool), comment_on_event_enabled (bool), issues_enabled (bool), project_keys ([]string), use_inherited_settings (bool)
-
-Badges:
-- badge_list: List project badges. Params: project_id (required), name, page, per_page
-- badge_get: Get a project badge. Params: project_id (required), badge_id (required)
-- badge_add: Add a badge to a project. Params: project_id (required), link_url (required), image_url (required), name
-- badge_edit: Edit a project badge. Params: project_id (required), badge_id (required), link_url, image_url, name
-- badge_delete: Delete a project badge. Params: project_id (required), badge_id (required)
-- badge_preview: Preview how a project badge renders. Params: project_id (required), link_url (required), image_url (required)
-
-Boards:
-- board_list: List project issue boards. Params: project_id (required), page, per_page
-- board_get: Get a project issue board. Params: project_id (required), board_id (required)
-- board_create: Create a project issue board. Params: project_id (required), name (required)
-- board_update: Update a project issue board. Params: project_id (required), board_id (required), name, assignee_id, milestone_id, labels (comma-separated string), weight, hide_backlog_list (bool), hide_closed_list (bool)
-- board_delete: Delete a project issue board. Params: project_id (required), board_id (required)
-- board_list_list: List columns (lists) within a board. Params: project_id (required), board_id (required), page, per_page
-- board_list_get: Get a single board column (list). Params: project_id (required), board_id (required), list_id (required)
-- board_list_create: Create a board column (list). Params: project_id (required), board_id (required), label_id
-- board_list_update: Update a board column (list) position. Params: project_id (required), board_id (required), list_id (required), position
-- board_list_delete: Delete a board column (list). Params: project_id (required), board_id (required), list_id (required)
+- upload: project_id*, filename*, file_path or content_base64 (one required). Returns Markdown embed
+- upload_list: project_id*
+- upload_delete: project_id*, upload_id*
 
 Import/Export:
-- export_schedule: Schedule a project export. Params: project_id (required)
-- export_status: Get export status. Params: project_id (required)
-- export_download: Download project export. Params: project_id (required)
-- import_from_file: Import project from archive. Params: file_path or content_base64 (one required), namespace, name, path, overwrite
-- import_status: Get import status. Params: project_id (required)
+- export_schedule / export_status / export_download: project_id*
+- import_from_file: file_path or content_base64 (one required), namespace, name, path, overwrite
+- import_status: project_id*
 
-Statistics and Pages:
-- statistics_get: Get project statistics. Params: project_id (required)
-- pages_get: Get Pages settings. Params: project_id (required)
-- pages_update: Update Pages settings. Params: project_id (required), pages_https_only, pages_access_level
-- pages_unpublish: Unpublish Pages. Params: project_id (required)
-- pages_domain_list_all: List all Pages domains (admin). Params: page, per_page
-- pages_domain_list: List Pages domains for a project. Params: project_id (required), page, per_page
-- pages_domain_get: Get a Pages domain. Params: project_id (required), domain (required)
-- pages_domain_create: Create a Pages domain. Params: project_id (required), domain (required), certificate, key
-- pages_domain_update: Update a Pages domain. Params: project_id (required), domain (required), certificate, key
-- pages_domain_delete: Delete a Pages domain. Params: project_id (required), domain (required)
+Pages (pages_*):
+- pages_get / pages_unpublish: project_id*
+- pages_update: project_id*, pages_https_only, pages_access_level
+- pages_domain_list_all: (admin only)
+- pages_domain_list: project_id*
+- pages_domain_get / pages_domain_delete: project_id*, domain*
+- pages_domain_create / pages_domain_update: project_id*, domain*, certificate, key
 
 Avatars:
-- upload_avatar: Upload or replace the project avatar. Params: project_id (required), filename (required), content_base64 (required, base64-encoded image)
-- download_avatar: Download project avatar as base64. Params: project_id (required)
+- upload_avatar: project_id*, filename*, content_base64*
+- download_avatar: project_id*
 
-Approval configuration:
-- approval_config_get: Get project approval settings. Params: project_id (required)
-- approval_config_change: Update project approval settings. Params: project_id (required), approvals_before_merge (int), reset_approvals_on_push (bool), disable_overriding_approvers_per_merge_request (bool), merge_requests_author_approval (bool), merge_requests_disable_committers_approval (bool), require_password_to_approve (bool), selective_code_owner_removals (bool)
-- approval_rule_list: List project approval rules. Params: project_id (required), page, per_page
-- approval_rule_get: Get an approval rule. Params: project_id (required), rule_id (required)
-- approval_rule_create: Create an approval rule. Params: project_id (required), name (required), approvals_required (required), rule_type, user_ids ([]int64), group_ids ([]int64), protected_branch_ids ([]int64), usernames ([]string), applies_to_all_protected_branches (bool)
-- approval_rule_update: Update an approval rule. Params: project_id (required), rule_id (required), name, approvals_required (int), user_ids ([]int64), group_ids ([]int64), protected_branch_ids ([]int64), usernames ([]string), applies_to_all_protected_branches (bool)
-- approval_rule_delete: Delete an approval rule. Params: project_id (required), rule_id (required)
+Approval rules (approval_*):
+- approval_config_get: project_id*
+- approval_config_change: project_id*, approvals_before_merge, reset_approvals_on_push, merge_requests_author_approval, merge_requests_disable_committers_approval, require_password_to_approve
+- approval_rule_list: project_id*
+- approval_rule_get / approval_rule_delete: project_id*, rule_id*
+- approval_rule_create: project_id*, name*, approvals_required*, rule_type, user_ids, group_ids, protected_branch_ids, usernames, applies_to_all_protected_branches
+- approval_rule_update: project_id*, rule_id*, name, approvals_required, user_ids, group_ids, protected_branch_ids, usernames
 
 Pull mirroring:
-- pull_mirror_get: Get pull mirror configuration. Params: project_id (required)
-- pull_mirror_configure: Configure pull mirroring. Params: project_id (required), enabled (bool), url, auth_user, auth_password, mirror_branch_regex, mirror_trigger_builds (bool), only_mirror_protected_branches (bool), mirror_overwrites_diverged_branches (bool)
-- start_mirroring: Trigger an immediate mirror pull. Params: project_id (required)
+- pull_mirror_get: project_id*
+- pull_mirror_configure: project_id*, enabled, url, auth_user, auth_password, mirror_branch_regex, mirror_trigger_builds, only_mirror_protected_branches
+- start_mirroring: project_id*
+
+Remote mirrors (mirror_*):
+- mirror_list: project_id*
+- mirror_get / mirror_delete: project_id*, mirror_id*
+- mirror_get_public_key: project_id*, mirror_id*
+- mirror_add: project_id*, url*, enabled, keep_divergent_refs, only_protected_branches, mirror_branch_regex, auth_method (password/ssh_public_key)
+- mirror_edit: project_id*, mirror_id*, enabled, keep_divergent_refs, only_protected_branches, mirror_branch_regex, auth_method
+- mirror_force_push: project_id*, mirror_id*
 
 Maintenance:
-- start_housekeeping: Run git gc/repack optimization. Params: project_id (required)
-- repository_storage_get: Get repository storage info. Params: project_id (required)
+- start_housekeeping / repository_storage_get / statistics_get: project_id*
 
 Admin:
-- create_for_user: Create a project for another user (admin). Params: user_id (required), name (required), path, namespace_id, description, visibility, initialize_with_readme (bool), default_branch, topics ([]string), issues_enabled (bool), merge_requests_enabled (bool), wiki_enabled (bool), jobs_enabled (bool)`
+- create_for_user: user_id*, name*, path, namespace_id, description, visibility, initialize_with_readme, default_branch, topics
+
+See also: gitlab_repository (files/commits), gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request, gitlab_discover_project (find project ID)`
 
 	if enterprise {
 		desc += `
 
-Push Rules (Premium+ — requires GITLAB_ENTERPRISE=true):
-- push_rule_get: Get push rule configuration. Params: project_id (required)
-- push_rule_add: Add push rules. Params: project_id (required), commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size (int), deny_delete_tag (bool), member_check (bool), prevent_secrets (bool), commit_committer_check (bool), commit_committer_name_check (bool), reject_unsigned_commits (bool), reject_non_dco_commits (bool)
-- push_rule_edit: Edit push rules. Params: project_id (required), same fields as push_rule_add (all optional)
-- push_rule_delete: Delete push rules from a project. Params: project_id (required)
+Push Rules (Premium+ — GITLAB_ENTERPRISE=true):
+- push_rule_get / push_rule_delete: project_id*
+- push_rule_add / push_rule_edit: project_id*, commit_message_regex, commit_message_negative_regex, branch_name_regex, author_email_regex, file_name_regex, max_file_size, deny_delete_tag, member_check, prevent_secrets, commit_committer_check, reject_unsigned_commits, reject_non_dco_commits
 
-Push Mirrors (Free tier):
-- mirror_list: List all remote push mirrors. Params: project_id (required), page, per_page
-- mirror_get: Get a single remote mirror. Params: project_id (required), mirror_id (required)
-- mirror_get_public_key: Get SSH public key for a mirror. Params: project_id (required), mirror_id (required)
-- mirror_add: Create a new remote mirror. Params: project_id (required), url (required), enabled (bool), keep_divergent_refs (bool), only_protected_branches (bool), mirror_branch_regex, auth_method (password/ssh_public_key)
-- mirror_edit: Update a remote mirror. Params: project_id (required), mirror_id (required), enabled (bool), keep_divergent_refs (bool), only_protected_branches (bool), mirror_branch_regex, auth_method
-- mirror_delete: Delete a remote mirror. Params: project_id (required), mirror_id (required)
-- mirror_force_push: Trigger an immediate mirror update. Params: project_id (required), mirror_id (required)
-
-Security Settings (Ultimate — requires GITLAB_ENTERPRISE=true):
-- security_settings_get: Get project security settings. Params: project_id (required)
-- security_settings_update: Update project secret push protection. Params: project_id (required), secret_push_protection_enabled (required)
-
-Use this tool for project-level CRUD, settings, members, labels, milestones, webhooks, and boards.
-Do NOT use for file content or commits (use gitlab_repository), branches (use gitlab_branch), or wiki pages (use gitlab_wiki).
-See also: gitlab_repository (file/commit operations), gitlab_wiki, gitlab_branch, gitlab_discover_project`
+Security Settings (Ultimate — GITLAB_ENTERPRISE=true):
+- security_settings_get: project_id*
+- security_settings_update: project_id*, secret_push_protection_enabled*`
 	}
 
 	addMetaTool(server, "gitlab_project", desc, routes, toolutil.IconProject)
@@ -579,25 +548,24 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"rule_list":        routeAction(client, branchrules.List),
 	}
 
-	addMetaTool(server, "gitlab_branch", `Create, list, get, delete, and protect Git branches in GitLab repositories. Query branch rules (aggregated view via GraphQL).
+	addMetaTool(server, "gitlab_branch", `CRUD and protect Git branches. Query branch rules (aggregated view via GraphQL).
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- create: Create a new branch from a ref. Params: project_id (required), branch_name (required), ref (required, branch/tag/SHA)
-- get: Get branch details. Params: project_id (required), branch_name (required)
-- list: List branches with optional search. Params: project_id (required), search, page, per_page
-- delete: Delete a branch. Cannot delete default or protected branches. Params: project_id (required), branch_name (required)
-- delete_merged: Delete all branches merged into the default branch. Default and protected branches are never deleted. Params: project_id (required)
-- protect: Protect a branch with access levels. Params: project_id (required), branch_name (required), push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push
-- unprotect: Remove branch protection. Params: project_id (required), branch_name (required)
-- list_protected: List all protected branches. Params: project_id (required), page, per_page
-- get_protected: Get details of a single protected branch. Params: project_id (required), branch_name (required)
-- update_protected: Update protected branch settings. Params: project_id (required), branch_name (required), allow_force_push, code_owner_approval_required
-- rule_list: List branch rules for a project (aggregated view of protections, approval rules, status checks via GraphQL). Params: project_path (required, e.g. my-group/my-project). Pagination: first, after
+Param conventions: * = required. All actions need project_id* except rule_list.
 
-Use this tool for creating, listing, deleting, and protecting branches, and querying branch rules.
-Do NOT use for file operations on branches (use gitlab_repository).
+- create: project_id*, branch_name*, ref* (branch/tag/SHA)
+- get: project_id*, branch_name*
+- list: project_id*, search, page, per_page
+- delete: Cannot delete default/protected branches. project_id*, branch_name*
+- delete_merged: Delete all merged branches (default/protected excluded). project_id*
+- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push
+- unprotect: project_id*, branch_name*
+- list_protected: project_id*, page, per_page
+- get_protected: project_id*, branch_name*
+- update_protected: project_id*, branch_name*, allow_force_push, code_owner_approval_required
+- rule_list: Aggregated protections/approval rules/status checks (GraphQL). project_path* (e.g. my-group/my-project), first, after
+
+NOT for: file operations on branches (use gitlab_repository).
 See also: gitlab_repository, gitlab_merge_request`, routes, toolutil.IconBranch)
 }
 
@@ -617,20 +585,20 @@ func registerTagMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"unprotect":      destructiveVoidAction(client, tags.UnprotectTag),
 	}
 
-	addMetaTool(server, "gitlab_tag", `Create, list, get, delete, and protect Git tags in GitLab repositories. Verify tag GPG signatures.
+	addMetaTool(server, "gitlab_tag", `Manage Git tags: create, list, get, delete, verify GPG signatures, and protect/unprotect tags. Delete removes the tag and any associated release.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- create: Create a tag from a ref. Params: project_id (required), tag_name (required), ref (required, branch/tag/SHA), message (annotation)
-- get: Get tag details. Params: project_id (required), tag_name (required)
-- list: List tags with optional search and ordering. Params: project_id (required), search, order_by (name/updated/version), sort (asc/desc), page, per_page
-- delete: Delete a tag (and associated release). Params: project_id (required), tag_name (required)
-- get_signature: Get X.509 signature of a tag. Params: project_id (required), tag_name (required)
-- list_protected: List protected tags. Params: project_id (required), page, per_page
-- get_protected: Get a protected tag. Params: project_id (required), tag_name (required)
-- protect: Protect a tag or wildcard pattern. Params: project_id (required), tag_name (required, tag name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
-- unprotect: Remove tag protection. Params: project_id (required), tag_name (required)
+When to use: tag CRUD, tag protection, signature verification. NOT for: releases (use gitlab_release), branches (use gitlab_branch).
+
+Param conventions: * = required. All actions need project_id*.
+
+- create: project_id*, tag_name*, ref* (branch/tag/SHA), message (annotation)
+- get / delete: project_id*, tag_name*
+- list: project_id*, search, order_by (name/updated/version), sort (asc/desc)
+- get_signature: project_id*, tag_name*. Returns X.509 signature.
+- list_protected: project_id*
+- get_protected / unprotect: project_id*, tag_name*
+- protect: project_id*, tag_name* (name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
 
 See also: gitlab_release, gitlab_repository`, routes, toolutil.IconTag)
 }
@@ -654,23 +622,26 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"link_delete":       destructiveAction(client, releaselinks.Delete),
 	}
 
-	addMetaTool(server, "gitlab_release", `Create, list, get, update, and delete GitLab releases and release asset links (binaries, downloads).
+	addMetaTool(server, "gitlab_release", `CRUD GitLab releases and release asset links (binaries, downloads).
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- create: Create a release for an existing tag. Params: project_id (required), tag_name (required), name, description (Markdown), released_at (ISO 8601)
-- get: Get release details. Params: project_id (required), tag_name (required)
-- get_latest: Get the latest release. Params: project_id (required)
-- list: List all releases. Params: project_id (required), order_by (released_at/created_at), sort (asc/desc), page, per_page
-- update: Update release metadata. Params: project_id (required), tag_name (required), name, description, released_at, milestones ([]string, milestone titles)
-- delete: Delete a release (tag is preserved). Params: project_id (required), tag_name (required)
-- link_create: Add a single asset link to a release. Params: project_id (required), tag_name (required), name (required), url (required), link_type (runbook/package/image/other)
-- link_create_batch: Add multiple asset links in one call — use this instead of calling link_create repeatedly. Params: project_id (required), tag_name (required), links (required, array of {name, url, link_type})
-- link_get: Get release link details. Params: project_id (required), tag_name (required), link_id (required)
-- link_list: List release asset links. Params: project_id (required), tag_name (required), page, per_page
-- link_update: Update a release asset link. Params: project_id (required), tag_name (required), link_id (required), name, url, filepath, direct_asset_path, link_type
-- link_delete: Remove an asset link. Params: project_id (required), tag_name (required), link_id (required)
+Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except create/list).
+
+Release operations:
+- create: project_id*, tag_name*, name, description (Markdown), released_at (ISO 8601)
+- get: project_id*, tag_name*
+- get_latest: project_id*
+- list: project_id*, order_by (released_at/created_at), sort (asc/desc), page, per_page
+- update: project_id*, tag_name*, name, description, released_at, milestones ([]string)
+- delete: Tag preserved. project_id*, tag_name*
+
+Asset link operations:
+- link_create: project_id*, tag_name*, name*, url*, link_type (runbook/package/image/other)
+- link_create_batch: Batch add links. project_id*, tag_name*, links* (array of {name, url, link_type})
+- link_get: project_id*, tag_name*, link_id*
+- link_list: project_id*, tag_name*, page, per_page
+- link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type
+- link_delete: project_id*, tag_name*, link_id*
 
 See also: gitlab_tag (create tags first), gitlab_package (package registry)`, routes, toolutil.IconRelease)
 }
@@ -742,67 +713,54 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"event_mr_state_get":               routeAction(client, resourceevents.GetMRStateEvent),
 	}
 
-	addMetaTool(server, "gitlab_merge_request", `Create, list, get, update, merge, approve, rebase, and delete GitLab merge requests. Also manages MR approvals, approval rules, approval settings, time tracking, subscriptions, context commits, award emoji, and resource events.
+	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. Also manages approval rules/settings, time tracking, subscriptions, context commits, award emoji, and resource events. Delete permanently removes an MR.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- create: Create a merge request. Params: project_id (required), source_branch (required), target_branch (required — if not specified by the user, retrieve the project default branch via action 'get' on gitlab_project and use its default_branch value; do NOT assume 'main'), title (required), description, assignee_id (single user ID), assignee_ids (multiple user IDs), reviewer_ids, labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), allow_collaboration (bool), target_project_id (for fork MRs)
-- get: Get MR details by IID. Params: project_id (required), mr_iid (required)
-- list: List merge requests in a project. Params: project_id (required), state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft (bool), iids ([]int), created_after/created_before (ISO 8601), updated_after/updated_before (ISO 8601), order_by (created_at/updated_at/title), sort (asc/desc), page, per_page
-- list_global: List merge requests across all projects. Params: state, labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, reviewer_username, draft (bool), created_after/created_before, updated_after/updated_before, order_by, sort, page, per_page
-- list_group: List merge requests in a group. Params: group_id (required), state, labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, reviewer_username, draft (bool), created_after/created_before, updated_after/updated_before, order_by, sort, page, per_page
-- update: Update MR metadata. Params: project_id (required), mr_iid (required), title, description, target_branch, assignee_id (single user ID), assignee_ids (multiple user IDs), reviewer_ids, labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, remove_source_branch (bool), squash (bool), discussion_locked (bool), allow_collaboration (bool), state_event (close/reopen)
-- merge: Merge an accepted MR. The server auto-detects enforced project settings (squash, source branch deletion) — do NOT set squash or should_remove_source_branch unless the user explicitly asks. Params: project_id (required), mr_iid (required), merge_commit_message, squash (bool, auto-detected), should_remove_source_branch (bool, auto-detected), auto_merge (bool), sha (safety check), squash_commit_message
-- approve: Approve a merge request. Params: project_id (required), mr_iid (required)
-- unapprove: Remove your approval. Params: project_id (required), mr_iid (required)
-- commits: List all commits in an MR. Params: project_id (required), mr_iid (required), page, per_page
-- pipelines: List all pipelines for an MR. Params: project_id (required), mr_iid (required), page, per_page
-- delete: PERMANENTLY delete an MR. Params: project_id (required), mr_iid (required)
-- rebase: Rebase MR source branch against target. Params: project_id (required), mr_iid (required), skip_ci (bool)
-- participants: List MR participants. Params: project_id (required), mr_iid (required)
-- reviewers: List MR reviewers with review state. Params: project_id (required), mr_iid (required)
-- create_pipeline: Create a new pipeline for an MR. Params: project_id (required), mr_iid (required)
-- issues_closed: List issues closed on merge. Params: project_id (required), mr_iid (required), page, per_page
-- cancel_auto_merge: Cancel merge-when-pipeline-succeeds. Params: project_id (required), mr_iid (required)
-- approval_state: Get the approval state of an MR including rule overrides and per-rule status. Params: project_id (required), mr_iid (required)
-- approval_rules: List approval rules for an MR with required/approved counts and eligible approvers. Params: project_id (required), mr_iid (required)
-- approval_config: Get the approval configuration including required approvals, current approvers, and user approval status. Params: project_id (required), mr_iid (required)
-- approval_reset: Reset all approvals on an MR. Params: project_id (required), mr_iid (required)
-- approval_rule_create: Create an approval rule. Params: project_id (required), mr_iid (required), name (required), approvals_required (required), approval_project_rule_id, user_ids ([]int), group_ids ([]int)
-- approval_rule_update: Update an approval rule. Params: project_id (required), mr_iid (required), approval_rule_id (required), name, approvals_required, user_ids ([]int), group_ids ([]int)
-- approval_rule_delete: Delete an approval rule. Params: project_id (required), mr_iid (required), approval_rule_id (required)
-- approval_settings_group_get: Get group-level MR approval settings. Params: group_id (required)
-- approval_settings_group_update: Update group-level MR approval settings. Params: group_id (required), allow_author_approval, allow_committer_approval, allow_overrides_approver_list_per_mr, retain_approvals_on_push, require_reauthentication_to_approve (all optional bool)
-- approval_settings_project_get: Get project-level MR approval settings. Params: project_id (required)
-- approval_settings_project_update: Update project-level MR approval settings. Params: project_id (required), allow_author_approval, allow_committer_approval, allow_overrides_approver_list_per_mr, retain_approvals_on_push, require_reauthentication_to_approve, selective_code_owner_removals (all optional bool)
-- subscribe: Subscribe to MR notifications. Params: project_id (required), mr_iid (required)
-- unsubscribe: Unsubscribe from MR notifications. Params: project_id (required), mr_iid (required)
-- time_estimate_set: Set time estimate. Params: project_id (required), mr_iid (required), duration (required, e.g. '3h30m', '1w2d')
-- time_estimate_reset: Reset time estimate to zero. Params: project_id (required), mr_iid (required)
-- spent_time_add: Add spent time. Params: project_id (required), mr_iid (required), duration (required), summary (optional)
-- spent_time_reset: Reset spent time to zero. Params: project_id (required), mr_iid (required)
-- time_stats: Get time tracking stats (estimate and spent). Params: project_id (required), mr_iid (required)
-- context_commits_list: List context commits for an MR. Params: project_id (required), mr_iid (required)
-- context_commits_create: Add context commits to an MR. Params: project_id (required), mr_iid (required), commits ([]string, required)
-- context_commits_delete: Remove context commits from an MR. Params: project_id (required), mr_iid (required), commits ([]string, required)
-- emoji_mr_list: List award emoji on a merge request. Params: project_id (required), iid (required), page, per_page
-- emoji_mr_get: Get an award emoji on a merge request. Params: project_id (required), iid (required), award_id (required)
-- emoji_mr_create: Add award emoji to a merge request. Params: project_id (required), iid (required), name (required)
-- emoji_mr_delete: Remove award emoji from a merge request. Params: project_id (required), iid (required), award_id (required)
-- emoji_mr_note_list: List award emoji on a merge request note. Params: project_id (required), iid (required), note_id (required), page, per_page
-- emoji_mr_note_get: Get an award emoji on a merge request note. Params: project_id (required), iid (required), note_id (required), award_id (required)
-- emoji_mr_note_create: Add award emoji to a merge request note. Params: project_id (required), iid (required), note_id (required), name (required)
-- emoji_mr_note_delete: Delete award emoji from a merge request note. Params: project_id (required), iid (required), note_id (required), award_id (required)
-- event_mr_label_list: List label events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
-- event_mr_label_get: Get a label event on a merge request. Params: project_id (required), mr_iid (required), label_event_id (required)
-- event_mr_milestone_list: List milestone events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
-- event_mr_milestone_get: Get a milestone event on a merge request. Params: project_id (required), mr_iid (required), milestone_event_id (required)
-- event_mr_state_list: List state events on a merge request. Params: project_id (required), mr_iid (required), page, per_page
-- event_mr_state_get: Get a state event on a merge request. Params: project_id (required), mr_iid (required), state_event_id (required)
+When to use: MR lifecycle, approvals, time tracking, resource events. NOT for: reviewing/commenting (use gitlab_mr_review).
 
-Use this tool for MR lifecycle: create, update, merge, approve, rebase, delete, approvals, time tracking, and resource events.
-Do NOT use for reviewing/commenting on MRs (use gitlab_mr_review).
+Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
+
+IMPORTANT for create: target_branch* — if user doesn't specify, retrieve project's default_branch via gitlab_project get; do NOT assume 'main'.
+IMPORTANT for merge: auto-detects project squash/delete-branch settings — do NOT set squash or should_remove_source_branch unless user explicitly asks.
+
+MR lifecycle:
+- create: project_id*, source_branch*, target_branch*, title*, description, assignee_id, assignee_ids, reviewer_ids, labels (comma-separated), milestone_id, remove_source_branch, squash, allow_collaboration, target_project_id (forks)
+- get: project_id*, mr_iid*
+- list: project_id*, state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft, iids, created_after/before, updated_after/before, order_by, sort
+- list_global / list_group: same filters as list. list_group needs group_id* instead of project_id.
+- update: project_id*, mr_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
+- merge: project_id*, mr_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
+- approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, mr_iid*
+- rebase also accepts: skip_ci
+- commits / pipelines / issues_closed: project_id*, mr_iid*
+- subscribe / unsubscribe: project_id*, mr_iid*
+
+Approvals:
+- approval_state / approval_rules / approval_config / approval_reset: project_id*, mr_iid*
+- approval_rule_create: project_id*, mr_iid*, name*, approvals_required*, approval_project_rule_id, user_ids, group_ids
+- approval_rule_update: project_id*, mr_iid*, approval_rule_id*, name, approvals_required, user_ids, group_ids
+- approval_rule_delete: project_id*, mr_iid*, approval_rule_id*
+- approval_settings_group_get / approval_settings_group_update: group_id*. Update params: allow_author_approval, allow_committer_approval, allow_overrides_approver_list_per_mr, retain_approvals_on_push, require_reauthentication_to_approve
+- approval_settings_project_get / approval_settings_project_update: project_id*. Same params + selective_code_owner_removals.
+
+Time tracking:
+- time_estimate_set / spent_time_add: project_id*, mr_iid*, duration* (e.g. '3h30m', '1w2d'). spent_time_add also accepts summary.
+- time_estimate_reset / spent_time_reset / time_stats: project_id*, mr_iid*
+
+Context commits:
+- context_commits_list / context_commits_create / context_commits_delete: project_id*, mr_iid*. create/delete need commits ([]string)*.
+
+Award emoji:
+- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, iid*, name* (create), award_id* (get/delete)
+- emoji_mr_get: project_id*, iid*, award_id*
+- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_mr_note_get: project_id*, iid*, note_id*, award_id*
+
+Resource events:
+- event_mr_label_list / event_mr_label_get: project_id*, mr_iid*, label_event_id* (get)
+- event_mr_milestone_list / event_mr_milestone_get: project_id*, mr_iid*, milestone_event_id* (get)
+- event_mr_state_list / event_mr_state_get: project_id*, mr_iid*, state_event_id* (get)
+
 See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch`, routes, toolutil.IconMR)
 }
 
@@ -839,38 +797,44 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"diff_version_get":       routeAction(client, mrchanges.GetDiffVersion),
 	}
 
-	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes (comments), threaded discussions, code changes/diffs, draft notes, and diff versions.
+	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions, code diffs, draft notes (batch review), and diff versions.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-IMPORTANT — Batch review workflow: When performing a code review with multiple comments, use draft_note_create (with position for inline comments, or in_reply_to_discussion_id for replies to existing threads) for EACH comment, then call draft_note_publish_all ONCE at the end. This batches all comments and replies into a single notification instead of spamming reviewers with one notification per comment. Only use discussion_create for standalone questions that need immediate visibility.
+IMPORTANT — Batch review: use draft_note_create for EACH comment (with position for inline, or in_reply_to_discussion_id for replies), then draft_note_publish_all ONCE. This sends a single notification. Only use discussion_create for standalone questions needing immediate visibility.
 
-Actions:
-- note_create: Add a comment to an MR. Params: project_id (required), mr_iid (required), body (required, Markdown)
-- note_list: List all MR comments. Params: project_id (required), mr_iid (required), order_by (created_at/updated_at), sort (asc/desc), page, per_page
-- note_get: Get a single MR comment by note ID. Params: project_id (required), mr_iid (required), note_id (required)
-- note_update: Edit a comment. Params: project_id (required), mr_iid (required), note_id (required), body (required)
-- note_delete: Delete a comment. Params: project_id (required), mr_iid (required), note_id (required)
-- discussion_create: Start a threaded discussion (general or inline diff). Params: project_id (required), mr_iid (required), body (required), position (optional object with base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line — use new_line only for added/modified lines, old_line only for removed lines, both only for unchanged context lines)
-- discussion_list: List all discussion threads. Params: project_id (required), mr_iid (required), page, per_page
-- discussion_get: Get a single discussion thread by ID. Params: project_id (required), mr_iid (required), discussion_id (required)
-- discussion_reply: Reply to a discussion thread. Params: project_id (required), mr_iid (required), discussion_id (required), body (required)
-- discussion_resolve: Resolve or unresolve a discussion. Params: project_id (required), mr_iid (required), discussion_id (required), resolved (required, true/false)
-- discussion_note_update: Update a note in a discussion (body and/or resolved status). Params: project_id (required), mr_iid (required), discussion_id (required), note_id (required), body (optional), resolved (optional, true/false)
-- discussion_note_delete: Delete a note from a discussion. Params: project_id (required), mr_iid (required), discussion_id (required), note_id (required)
-- changes_get: Get file diffs for an MR. Large diffs may be empty due to GitLab truncation — check truncated_files in response and use diff_versions_list + diff_version_get for full content. Params: project_id (required), mr_iid (required)
-- draft_note_list: List all draft notes on a MR. Params: project_id (required), mr_iid (required, int), order_by, sort, page, per_page
-- draft_note_get: Get a single draft note. Params: project_id (required), mr_iid (required, int), note_id (required, int)
-- draft_note_create: Create a new draft note (pending review comment). Supports inline diff comments via position and replies to existing discussions via in_reply_to_discussion_id. Use resolve_discussion to resolve the thread when published. Params: project_id (required), mr_iid (required, int), note (required), commit_id, in_reply_to_discussion_id (discussion ID to reply to), resolve_discussion (bool), position (optional object with base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line — use new_line only for added/modified lines, old_line only for removed lines, both only for unchanged context lines)
-- draft_note_update: Update a draft note. Params: project_id (required), mr_iid (required, int), note_id (required, int), note, position (optional object for inline comments)
-- draft_note_delete: Delete a draft note. Params: project_id (required), mr_iid (required, int), note_id (required, int)
-- draft_note_publish: Publish a single draft note. Params: project_id (required), mr_iid (required, int), note_id (required, int)
-- draft_note_publish_all: Publish all draft notes on a MR at once (single notification). Params: project_id (required), mr_iid (required, int)
-- diff_versions_list: List all diff versions of an MR. Params: project_id (required), mr_iid (required), page, per_page
-- diff_version_get: Get a single diff version with commits and file diffs. Params: project_id (required), mr_iid (required), version_id (required), unidiff (bool, optional)
+When to use: code review, comments, discussions, diffs. NOT for: MR lifecycle (create/merge/approve — use gitlab_merge_request).
 
-Use this tool for code review workflows: notes, discussions, code diffs, and draft notes (batch review).
-Do NOT use for MR lifecycle operations like create, merge, or approve (use gitlab_merge_request).
+Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page.
+
+Notes (comments):
+- note_create: body*
+- note_list: order_by (created_at/updated_at), sort
+- note_get: note_id*
+- note_update: note_id*, body*
+- note_delete: note_id*
+
+Discussions (threaded):
+- discussion_create: body*, position (optional: base_sha, start_sha, head_sha, new_path, old_path, new_line/old_line — use new_line for added/modified, old_line for removed, both for unchanged context)
+- discussion_list
+- discussion_get: discussion_id*
+- discussion_reply: discussion_id*, body*
+- discussion_resolve: discussion_id*, resolved*
+- discussion_note_update: discussion_id*, note_id*, body, resolved
+- discussion_note_delete: discussion_id*, note_id*
+
+Changes/diffs:
+- changes_get: file diffs. Large diffs may be truncated — check truncated_files and use diff_versions_list + diff_version_get for full content.
+- diff_versions_list
+- diff_version_get: version_id*, unidiff
+
+Draft notes (batch review):
+- draft_note_list: order_by, sort
+- draft_note_get: note_id*
+- draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion, position (same format as discussion_create)
+- draft_note_update: note_id*, note, position
+- draft_note_delete / draft_note_publish: note_id*
+- draft_note_publish_all: publishes all drafts (single notification)
+
 See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline`, routes, toolutil.IconDiscussion)
 }
 
@@ -921,54 +885,62 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"file_history":                  routeAction(client, commits.List),
 	}
 
-	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions.
+	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- tree: List files and directories at a path and ref. Params: project_id (required), path, ref, recursive (bool), page, per_page
-- compare: Compare two branches, tags, or commits. Params: project_id (required), from (required), to (required), straight (bool)
-- contributors: List repo contributors with commit/addition/deletion stats. Params: project_id (required), order_by (name/email/commits), sort (asc/desc), page, per_page
-- merge_base: Find common ancestor of 2+ refs. Params: project_id (required), refs (required, array of 2+ branch/tag/SHA)
-- blob: Get blob content by SHA (base64). Params: project_id (required), sha (required)
-- raw_blob: Get raw text content of a blob by SHA. Params: project_id (required), sha (required)
-- archive: Get download URL for repo archive. Params: project_id (required), sha, format (tar.gz/zip/tar.bz2), path
-- changelog_add: Add changelog data to file via commit. Params: project_id (required), version (required), branch, config_file, file, from, to, message, trailer
-- changelog_generate: Generate changelog notes without committing. Params: project_id (required), version (required), config_file, from, to, trailer
-- commit_create: Create a commit with file actions. Params: project_id (required), branch (required), commit_message (required), actions (required, array of {action: create/update/delete/move, file_path, content, previous_path}), start_branch, author_email, author_name
-- commit_list: List commits. Params: project_id (required), ref_name, since, until, path, author, with_stats (bool), page, per_page
-- file_history: Alias for commit_list — list commits that modified a specific file. Params: project_id (required), path (required, file path to filter by), ref_name, since, until, page, per_page
-- commit_get: Get a single commit by SHA. Params: project_id (required), sha (required)
-- commit_diff: List diffs for a commit. Params: project_id (required), sha (required), page, per_page
-- commit_refs: Get branches/tags a commit is pushed to. Params: project_id (required), sha (required), type (branch/tag/all)
-- commit_comments: List comments on a commit. Params: project_id (required), sha (required), page, per_page
-- commit_comment_create: Post a comment on a commit. Params: project_id (required), sha (required), note (required), path, line, line_type (new/old)
-- commit_statuses: List pipeline statuses of a commit. Params: project_id (required), sha (required), ref, stage, name, pipeline_id, all (bool), page, per_page
-- commit_status_set: Set pipeline status of a commit. Params: project_id (required), sha (required), state (required: pending/running/success/failed/canceled), ref, name, context, target_url, description, coverage, pipeline_id
-- commit_merge_requests: List MRs associated with a commit. Params: project_id (required), sha (required)
-- commit_cherry_pick: Cherry-pick a commit to a branch. Params: project_id (required), sha (required), branch (required), dry_run (bool), message
-- commit_revert: Revert a commit on a branch. Params: project_id (required), sha (required), branch (required)
-- commit_signature: Get GPG signature of a commit. Params: project_id (required), sha (required)
-- file_get: Get file content from a repository. Params: project_id (required), file_path (required), ref (branch/tag/SHA, defaults to default branch)
-- file_create: Create a new file. Params: project_id (required), file_path (required), branch (required), content, commit_message (required), start_branch, encoding (text/base64), author_email, author_name, execute_filemode (bool)
-- file_update: Update an existing file. Params: project_id (required), file_path (required), branch (required), content, commit_message (required), start_branch, encoding, author_email, author_name, last_commit_id, execute_filemode (bool)
-- file_delete: Delete a file from the repository. Params: project_id (required), file_path (required), branch (required), commit_message (required), start_branch, author_email, author_name, last_commit_id
-- file_blame: Get blame information for a file. Params: project_id (required), file_path (required), ref, range_start, range_end
-- file_metadata: Get file metadata without content. Params: project_id (required), file_path (required), ref
-- file_raw: Get raw file content as plain text. Params: project_id (required), file_path (required), ref
-- update_submodule: Update a submodule reference. Params: project_id (required), submodule (required, URL-encoded path), branch (required), commit_sha (required), commit_message
-- list_submodules: List all submodules defined in the repository. Parses .gitmodules and enriches with commit SHAs and resolved project paths. Params: project_id (required), ref (branch/tag/SHA, optional)
-- read_submodule_file: Read a file from inside a submodule transparently. Resolves the target project and pinned commit automatically. Params: project_id (required), submodule_path (required, e.g. libs/core-module), file_path (required, path inside the submodule), ref (optional)
-- markdown_render: Render arbitrary markdown text to HTML. Params: text (required), gfm (bool, use GitLab Flavored Markdown), project (path for resolving references)
-- commit_discussion_list: List discussions on a commit. Params: project_id (required), commit_id (required), page, per_page
-- commit_discussion_get: Get a single commit discussion. Params: project_id (required), commit_id (required), discussion_id (required)
-- commit_discussion_create: Create a commit discussion. Params: project_id (required), commit_id (required), body (required), position (optional)
-- commit_discussion_add_note: Add a note to a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), body (required)
-- commit_discussion_update_note: Update a note in a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required), body (required)
-- commit_discussion_delete_note: Delete a note from a commit discussion. Params: project_id (required), commit_id (required), discussion_id (required), note_id (required)
+When to use: file/commit operations, diffs, blame, compare, archives, submodules, markdown rendering. NOT for: branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
 
-Use this tool for repository content: file tree, read/write files, commits, diffs, blame, compare branches, and submodules.
-Do NOT use for branch CRUD (use gitlab_branch) or tag CRUD (use gitlab_tag).
+Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
+
+Repository browsing:
+- tree: project_id*, path, ref, recursive
+- compare: project_id*, from*, to*, straight
+- contributors: project_id*, order_by (name/email/commits), sort
+- merge_base: project_id*, refs* (array of 2+ branch/tag/SHA)
+- blob / raw_blob: project_id*, sha*
+- archive: project_id*, sha, format (tar.gz/zip/tar.bz2), path
+
+Changelogs:
+- changelog_add: project_id*, version*, branch, config_file, file, from, to, message, trailer
+- changelog_generate: project_id*, version*, config_file, from, to, trailer
+
+Commits:
+- commit_create: project_id*, branch*, commit_message*, actions* (array of {action: create/update/delete/move, file_path, content, previous_path}), start_branch, author_email, author_name
+- commit_list: project_id*, ref_name, since, until, path, author, with_stats
+- file_history: alias for commit_list filtered by path* — list commits modifying a specific file
+- commit_get: project_id*, sha*
+- commit_diff: project_id*, sha*
+- commit_refs: project_id*, sha*, type (branch/tag/all)
+- commit_comments / commit_merge_requests: project_id*, sha*
+- commit_comment_create: project_id*, sha*, note*, path, line, line_type (new/old)
+- commit_statuses: project_id*, sha*, ref, stage, name, pipeline_id, all
+- commit_status_set: project_id*, sha*, state* (pending/running/success/failed/canceled), ref, name, context, target_url, description, coverage, pipeline_id
+- commit_cherry_pick: project_id*, sha*, branch*, dry_run, message
+- commit_revert: project_id*, sha*, branch*
+- commit_signature: project_id*, sha*
+
+Files:
+- file_get / file_raw / file_metadata / file_blame: project_id*, file_path*, ref. Blame also accepts range_start, range_end.
+- file_create: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding (text/base64), author_email, author_name, execute_filemode
+- file_update: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding, author_email, author_name, last_commit_id, execute_filemode
+- file_delete: project_id*, file_path*, branch*, commit_message*, start_branch, author_email, author_name, last_commit_id
+
+Submodules:
+- update_submodule: project_id*, submodule* (URL-encoded path), branch*, commit_sha*, commit_message
+- list_submodules: project_id*, ref
+- read_submodule_file: project_id*, submodule_path*, file_path*, ref
+
+Markdown:
+- markdown_render: text*, gfm, project (path for resolving references)
+
+Commit discussions:
+- commit_discussion_list: project_id*, commit_id*
+- commit_discussion_get: project_id*, commit_id*, discussion_id*
+- commit_discussion_create: project_id*, commit_id*, body*, position
+- commit_discussion_add_note: project_id*, commit_id*, discussion_id*, body*
+- commit_discussion_update_note: project_id*, commit_id*, discussion_id*, note_id*, body*
+- commit_discussion_delete_note: project_id*, commit_id*, discussion_id*, note_id*
+
 See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request`, routes, toolutil.IconFile)
 }
 
@@ -1129,169 +1101,181 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["security_settings_update"] = routeAction(client, securitysettings.UpdateGroup)
 	}
 
-	desc := `Create, list, get, update, delete, and manage GitLab groups and subgroups. Also manages group members, labels, milestones, webhooks, badges, boards, variables, access tokens, deploy tokens, hooks, notifications, push rules, and transfer projects.
+	desc := `Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 Valid actions: ` + validActionsString(routes) + `
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List accessible groups. Params: search, owned (bool), top_level_only (bool), page, per_page
-- get: Get group details. Params: group_id (required, numeric ID or URL-encoded path like 'group/subgroup')
-- create: Create a new group. Params: name (required), path, description, visibility (private/internal/public), parent_id, request_access_enabled (bool), lfs_enabled (bool), default_branch
-- update: Update a group. Params: group_id (required), name, path, description, visibility, request_access_enabled (bool), lfs_enabled (bool), default_branch
-- delete: Delete a group. Params: group_id (required), permanently_remove (bool), full_path (required when permanently_remove=true)
-- restore: Restore a group marked for deletion. Params: group_id (required)
-- archive: Archive a group. Requires Owner role or administrator. Params: group_id (required)
-- unarchive: Unarchive a previously archived group. Requires Owner role or administrator. Params: group_id (required)
-- search: Search groups by name. Params: query (required)
-- transfer_project: Transfer a project into a group namespace. Params: group_id (required), project_id (required)
-- projects: List projects belonging to a group. Set include_subgroups=true to include projects from descendant subgroups. Params: group_id (required), search, archived (bool), visibility, order_by, sort, simple (bool), owned (bool), starred (bool), include_subgroups (bool, recommended for hierarchical groups), with_shared (bool), page, per_page
-- members: List all group members (including inherited). Params: group_id (required), query (filter by name/username), page, per_page
-- subgroups: List descendant subgroups. Params: group_id (required), search, page, per_page
-- issues: List issues across all projects in the group. Params: group_id (required), state, labels, milestone, scope, search, assignee_username, author_username, page, per_page
-- hook_list: List group webhooks. Params: group_id (required), page, per_page
-- hook_get: Get a specific group webhook. Params: group_id (required), hook_id (required)
-- hook_add: Add a new group webhook. Params: group_id (required), url (required), name, description, token, push_events (bool), tag_push_events (bool), merge_requests_events (bool), issues_events (bool), note_events (bool), job_events (bool), pipeline_events (bool), wiki_page_events (bool), deployment_events (bool), releases_events (bool), subgroup_events (bool), member_events (bool), enable_ssl_verification (bool), push_events_branch_filter
-- hook_edit: Edit an existing group webhook. Params: group_id (required), hook_id (required), url, name, description, token, (same event booleans as hook_add), enable_ssl_verification (bool)
-- hook_delete: Delete a group webhook. Params: group_id (required), hook_id (required)
-- badge_list: List group badges. Params: group_id (required), name, page, per_page
-- badge_get: Get a group badge. Params: group_id (required), badge_id (required)
-- badge_add: Add a badge to a group. Params: group_id (required), link_url (required), image_url (required), name
-- badge_edit: Edit a group badge. Params: group_id (required), badge_id (required), link_url, image_url, name
-- badge_delete: Delete a group badge. Params: group_id (required), badge_id (required)
-- badge_preview: Preview how a group badge renders. Params: group_id (required), link_url (required), image_url (required), name
-- group_member_get: Get a specific group member. Params: group_id (required), user_id (required)
-- group_member_get_inherited: Get group member including inherited membership. Params: group_id (required), user_id (required)
-- group_member_add: Add a group member. Params: group_id (required), user_id (required), access_level (required), expires_at
-- group_member_edit: Edit a group member. Params: group_id (required), user_id (required), access_level (required), expires_at
-- group_member_remove: Remove a group member. Params: group_id (required), user_id (required)
-- group_member_share: Share group with another group. Params: group_id (required), shared_with_group_id (required), group_access (required), expires_at
-- group_member_unshare: Unshare group. Params: group_id (required), shared_with_group_id (required)
-- group_label_list: List group labels. Params: group_id (required), search, with_counts (bool), include_ancestor_groups (bool), include_descendant_groups (bool), page, per_page
-- group_label_get: Get a group label. Params: group_id (required), label_id (required)
-- group_label_create: Create a group label. Params: group_id (required), name (required), color (required), description
-- group_label_update: Update a group label. Params: group_id (required), label_id (required), new_name, color, description
-- group_label_delete: Delete a group label. Params: group_id (required), label_id (required)
-- group_label_subscribe: Subscribe to a group label. Params: group_id (required), label_id (required)
-- group_label_unsubscribe: Unsubscribe from a group label. Params: group_id (required), label_id (required)
-- group_milestone_list: List group milestones. Params: group_id (required), state, title, search, include_ancestors (bool), include_descendants (bool), page, per_page
-- group_milestone_get: Get a group milestone. Params: group_id (required), milestone_iid (required)
-- group_milestone_create: Create a group milestone. Params: group_id (required), title (required), description, start_date, due_date
-- group_milestone_update: Update a group milestone. Params: group_id (required), milestone_iid (required), title, description, start_date, due_date, state_event
-- group_milestone_delete: Delete a group milestone. Params: group_id (required), milestone_iid (required)
-- group_milestone_issues: List issues in a group milestone. Params: group_id (required), milestone_iid (required), page, per_page
-- group_milestone_merge_requests: List MRs in a group milestone. Params: group_id (required), milestone_iid (required), page, per_page
-- group_milestone_burndown: Get burndown chart events. Params: group_id (required), milestone_iid (required)
-- group_board_list: List group boards. Params: group_id (required), page, per_page
-- group_board_get: Get a group board. Params: group_id (required), board_id (required)
-- group_board_create: Create a group board. Params: group_id (required), name (required)
-- group_board_update: Update a group board. Params: group_id (required), board_id (required), name, assignee_id, milestone_id, labels (comma-separated string), weight
-- group_board_delete: Delete a group board. Params: group_id (required), board_id (required)
-- group_board_list_lists: List board lists. Params: group_id (required), board_id (required)
-- group_board_get_list: Get a board list. Params: group_id (required), board_id (required), list_id (required)
-- group_board_create_list: Create a board list. Params: group_id (required), board_id (required), label_id
-- group_board_update_list: Update a board list. Params: group_id (required), board_id (required), list_id (required), position
-- group_board_delete_list: Delete a board list. Params: group_id (required), board_id (required), list_id (required)
-- group_upload_list: List group uploads. Params: group_id (required)
-- group_upload_delete_by_id: Delete a group upload by ID. Params: group_id (required), upload_id (required)
-- group_upload_delete_by_secret: Delete a group upload by secret. Params: group_id (required), secret (required), filename (required)
-- group_relations_schedule: Schedule group relations export. Params: group_id (required)
-- group_relations_list_status: List group relations export status. Params: group_id (required)
-- group_export_schedule: Schedule group export. Params: group_id (required)
-- group_export_download: Download group export archive. Params: group_id (required)
-- group_import_file: Import a group from file. Params: name (required), path (required), file (required), parent_id
+When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
 
-Group Releases (Free tier):
-- release_list: List releases across group projects. Params: group_id (required), simple (bool), page, per_page`
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
+Param conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.
+
+Group CRUD:
+- list: search, owned, top_level_only (no group_id needed)
+- get: group_id*
+- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch
+- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch
+- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)
+- restore: group_id*
+- archive / unarchive: group_id* (requires Owner role)
+- search: query* (no group_id needed)
+- transfer_project: group_id*, project_id*
+
+Group queries:
+- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared
+- members: group_id*, query (filter name/username)
+- subgroups: group_id*, search
+- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username
+
+Webhooks (hook_*):
+- hook_list: group_id*
+- hook_get / hook_delete: group_id*, hook_id*
+- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter
+- hook_edit: group_id*, hook_id*, same params as hook_add
+
+Badges (badge_*):
+- badge_list: group_id*, name
+- badge_get / badge_delete: group_id*, badge_id*
+- badge_add / badge_preview: group_id*, link_url*, image_url*, name
+- badge_edit: group_id*, badge_id*, link_url, image_url, name
+
+Members (group_member_*):
+- group_member_get: group_id*, user_id*
+- group_member_get_inherited: group_id*, user_id* (includes inherited)
+- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at
+- group_member_remove: group_id*, user_id*
+- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at
+- group_member_unshare: group_id*, shared_with_group_id*
+
+Labels (group_label_*):
+- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups
+- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*
+- group_label_create: group_id*, name*, color*, description
+- group_label_update: group_id*, label_id*, new_name, color, description
+
+Milestones (group_milestone_*):
+- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
+- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
+- group_milestone_create: group_id*, title*, description, start_date, due_date
+- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event
+- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*
+
+Boards (group_board_*):
+- group_board_list: group_id*
+- group_board_get / group_board_delete: group_id*, board_id*
+- group_board_create: group_id*, name*
+- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight
+- group_board_list_lists: group_id*, board_id*
+- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*
+- group_board_create_list: group_id*, board_id*, label_id
+- group_board_update_list: group_id*, board_id*, list_id*, position
+
+Uploads:
+- group_upload_list: group_id*
+- group_upload_delete_by_id: group_id*, upload_id*
+- group_upload_delete_by_secret: group_id*, secret*, filename*
+
+Import/Export:
+- group_relations_schedule / group_relations_list_status: group_id*
+- group_export_schedule / group_export_download: group_id*
+- group_import_file: name*, path*, file*, parent_id (no group_id)
+
+Releases:
+- release_list: group_id*, simple
+
+See also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)`
 
 	if enterprise {
 		desc += `
 
-Epics (Premium+ — requires GITLAB_ENTERPRISE=true — Epic CRUD, notes, discussions, and issues use the Work Items GraphQL API. Only epic_get_links and epic boards remain on the REST API):
-- epic_discussion_list: List epic discussions via GraphQL. Params: full_path (required), iid (required), first, after, last, before
-- epic_discussion_get: Get an epic discussion via GraphQL. Params: full_path (required), iid (required), discussion_id (required)
-- epic_discussion_create: Create an epic discussion via GraphQL. Params: full_path (required), iid (required), body (required)
-- epic_discussion_add_note: Add note to epic discussion via GraphQL. Params: full_path (required), iid (required), discussion_id (required), body (required)
-- epic_discussion_update_note: Update note in epic discussion via GraphQL. Params: full_path (required), iid (required), note_id (required), body (required)
-- epic_discussion_delete_note: Delete note from epic discussion via GraphQL. Params: full_path (required), iid (required), note_id (required)
-- epic_list: List epics in a group via Work Items API. Params: full_path (required), state, search, author_username, label_name, confidential (bool), sort, first, after, include_ancestors (bool), include_descendants (bool)
-- epic_get: Get a single epic via Work Items API. Params: full_path (required), iid (required)
-- epic_get_links: [REST] Get linked epics. Params: full_path (required), iid (required)
-- epic_create: Create an epic via Work Items API. Params: full_path (required), title (required), description, confidential (bool), color, start_date, due_date, assignee_ids, label_ids, weight, health_status
-- epic_update: Update an epic via Work Items API. Params: full_path (required), iid (required), title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
-- epic_delete: Delete an epic via Work Items API. Params: full_path (required), iid (required)
-- epic_issue_list: List child issues of an epic via GraphQL. Params: full_path (required), iid (required), first, after, last, before
-- epic_issue_assign: Assign an issue to an epic via GraphQL. Params: full_path (required), iid (required), child_project_path (required), child_iid (required)
-- epic_issue_remove: Remove an issue from an epic via GraphQL. Params: full_path (required), iid (required), child_project_path (required), child_iid (required)
-- epic_issue_update: Reorder an issue in an epic via GraphQL. Params: full_path (required), iid (required), child_id (required), adjacent_id (required), relative_position (required, BEFORE/AFTER)
-- epic_note_list: List notes on an epic via GraphQL. Params: full_path (required), iid (required), first, after, last, before
-- epic_note_get: Get a single epic note via GraphQL. Params: full_path (required), iid (required), note_id (required)
-- epic_note_create: Add a note to an epic via GraphQL. Params: full_path (required), iid (required), body (required)
-- epic_note_update: Update an epic note via GraphQL. Params: full_path (required), iid (required), note_id (required), body (required)
-- epic_note_delete: Delete an epic note via GraphQL. Params: full_path (required), iid (required), note_id (required)
-- epic_board_list: [Deprecated] List group epic boards. Params: group_id (required), page, per_page
-- epic_board_get: [Deprecated] Get a group epic board. Params: group_id (required), board_id (required)
+Epics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
 
-Group Wikis (Premium+ — requires GITLAB_ENTERPRISE=true):
-- wiki_list: List group wiki pages. Params: group_id (required), with_content (bool)
-- wiki_get: Get a group wiki page. Params: group_id (required), slug (required), render_html (bool), version
-- wiki_create: Create a group wiki page. Params: group_id (required), title (required), content (required), format (markdown/rdoc/asciidoc/org)
-- wiki_edit: Edit a group wiki page. Params: group_id (required), slug (required), title, content, format
-- wiki_delete: Delete a group wiki page. Params: group_id (required), slug (required)
+Epic discussions (epic_discussion_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+- epic_discussion_list / epic_discussion_get (+ discussion_id*)
+- epic_discussion_create: body*
+- epic_discussion_add_note: discussion_id*, body*
+- epic_discussion_update_note: note_id*, body*
+- epic_discussion_delete_note: note_id*
 
-Group Protected Branches (Premium+ — requires GITLAB_ENTERPRISE=true):
-- protected_branch_list: List group protected branches. Params: group_id (required), search, page, per_page
-- protected_branch_get: Get a group protected branch. Params: group_id (required), branch (required)
-- protected_branch_protect: Protect a group branch. Params: group_id (required), name (required), push_access_level, merge_access_level, unprotect_access_level, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
-- protected_branch_update: Update a group protected branch. Params: group_id (required), branch (required), name, allow_force_push (bool), code_owner_approval_required (bool), allowed_to_push, allowed_to_merge, allowed_to_unprotect
-- protected_branch_unprotect: Unprotect a group branch. Params: group_id (required), branch (required)
+Epic CRUD (epic_*): full_path* for all.
+- epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants
+- epic_get: iid*
+- epic_get_links: iid* [REST]
+- epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status
+- epic_update: iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
+- epic_delete: iid*
 
-Group Protected Environments (Premium+ — requires GITLAB_ENTERPRISE=true):
-- protected_env_list: List group protected environments. Params: group_id (required), page, per_page
-- protected_env_get: Get a group protected environment. Params: group_id (required), environment (required)
-- protected_env_protect: Protect a group environment. Params: group_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
-- protected_env_update: Update a group protected environment. Params: group_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
-- protected_env_unprotect: Unprotect a group environment. Params: group_id (required), environment (required)
+Epic issues (epic_issue_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+- epic_issue_list
+- epic_issue_assign / epic_issue_remove: child_project_path*, child_iid*
+- epic_issue_update: child_id*, adjacent_id*, relative_position* (BEFORE/AFTER)
 
-LDAP Links (Premium+ — requires GITLAB_ENTERPRISE=true):
-- ldap_link_list: List group LDAP links. Params: group_id (required)
-- ldap_link_add: Add a group LDAP link. Params: group_id (required), cn (required), group_access (required, access level int), provider (required)
-- ldap_link_delete: Delete a group LDAP link by CN or filter. Params: group_id (required), cn, filter, provider
-- ldap_link_delete_for_provider: Delete a group LDAP link for a specific provider. Params: group_id (required), provider (required), cn (required)
+Epic notes (epic_note_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+- epic_note_list / epic_note_get (+ note_id*) / epic_note_delete (+ note_id*)
+- epic_note_create: body*
+- epic_note_update: note_id*, body*
 
-SAML Links (Premium+ — requires GITLAB_ENTERPRISE=true):
-- saml_link_list: List group SAML links. Params: group_id (required)
-- saml_link_get: Get a group SAML link. Params: group_id (required), saml_group_name (required)
-- saml_link_add: Add a group SAML link. Params: group_id (required), saml_group_name (required), access_level (required, access level int)
-- saml_link_delete: Delete a group SAML link. Params: group_id (required), saml_group_name (required)
+Epic boards [Deprecated]:
+- epic_board_list: group_id*
+- epic_board_get: group_id*, board_id*
 
-Service Accounts (Premium+ — requires GITLAB_ENTERPRISE=true):
-- service_account_list: List group service accounts. Params: group_id (required), order_by, sort, page, per_page
-- service_account_create: Create a group service account. Params: group_id (required), name (required), username (required)
-- service_account_update: Update a group service account. Params: group_id (required), service_account_id (required), name, username
-- service_account_delete: Delete a group service account. Params: group_id (required), service_account_id (required), hard_delete (bool)
-- service_account_pat_list: List personal access tokens for a group service account. Params: group_id (required), service_account_id (required), page, per_page
-- service_account_pat_create: Create a personal access token for a group service account. Params: group_id (required), service_account_id (required), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
-- service_account_pat_revoke: Revoke a personal access token for a group service account. Params: group_id (required), service_account_id (required), token_id (required)
-- analytics_issues_count: Get count of recently created issues. Params: group_path (required, URL-encoded path)
-- analytics_mr_count: Get count of recently created merge requests. Params: group_path (required, URL-encoded path)
-- analytics_members_count: Get count of recently added members. Params: group_path (required, URL-encoded path)
+Group Wikis (Premium+):
+- wiki_list: group_id*, with_content
+- wiki_get: group_id*, slug*, render_html, version
+- wiki_create: group_id*, title*, content*, format (markdown/rdoc/asciidoc/org)
+- wiki_edit: group_id*, slug*, title, content, format
+- wiki_delete: group_id*, slug*
 
-Credentials (Ultimate — requires GITLAB_ENTERPRISE=true):
-- credential_list_pats: List personal access tokens managed by a group. Params: group_id (required), search, state (active/inactive), revoked (bool), page, per_page
-- credential_list_ssh_keys: List SSH keys managed by a group. Params: group_id (required), page, per_page
-- credential_revoke_pat: Revoke a personal access token. Params: group_id (required), token_id (required)
-- credential_delete_ssh_key: Delete an SSH key. Params: group_id (required), key_id (required)
+Protected Branches (Premium+):
+- protected_branch_list: group_id*, search
+- protected_branch_get / protected_branch_unprotect: group_id*, branch*
+- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
+- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
 
-SSH Certificates (Premium+ — requires GITLAB_ENTERPRISE=true):
-- ssh_cert_list: List SSH certificates for a group. Params: group_id (required)
-- ssh_cert_create: Create an SSH certificate. Params: group_id (required), key (required), title (required)
-- ssh_cert_delete: Delete an SSH certificate. Params: group_id (required), certificate_id (required)
+Protected Environments (Premium+):
+- protected_env_list: group_id*
+- protected_env_get / protected_env_unprotect: group_id*, environment*
+- protected_env_protect: group_id*, name*, deploy_access_levels, required_approval_count, approval_rules
+- protected_env_update: group_id*, environment*, name, deploy_access_levels, required_approval_count, approval_rules
 
-Security Settings (Ultimate — requires GITLAB_ENTERPRISE=true):
-- security_settings_update: Update group secret push protection. Params: group_id (required), secret_push_protection_enabled (required), projects_to_exclude (optional, array of project IDs)
+LDAP Links (Premium+):
+- ldap_link_list: group_id*
+- ldap_link_add: group_id*, cn*, group_access* (int), provider*
+- ldap_link_delete: group_id*, cn, filter, provider
+- ldap_link_delete_for_provider: group_id*, provider*, cn*
 
-Use this tool for group-level management: subgroups, members, labels, milestones, webhooks, badges, boards, and variables.
-See also: gitlab_project, gitlab_user`
+SAML Links (Premium+):
+- saml_link_list: group_id*
+- saml_link_get / saml_link_delete: group_id*, saml_group_name*
+- saml_link_add: group_id*, saml_group_name*, access_level* (int)
+
+Service Accounts (Premium+):
+- service_account_list: group_id*, order_by, sort
+- service_account_create: group_id*, name*, username*
+- service_account_update: group_id*, service_account_id*, name, username
+- service_account_delete: group_id*, service_account_id*, hard_delete
+- service_account_pat_list: group_id*, service_account_id*
+- service_account_pat_create: group_id*, service_account_id*, name*, scopes* (array), expires_at (YYYY-MM-DD)
+- service_account_pat_revoke: group_id*, service_account_id*, token_id*
+
+Analytics (Premium+):
+- analytics_issues_count / analytics_mr_count / analytics_members_count: group_path* (URL-encoded)
+
+Credentials (Ultimate):
+- credential_list_pats: group_id*, search, state (active/inactive), revoked
+- credential_list_ssh_keys: group_id*
+- credential_revoke_pat: group_id*, token_id*
+- credential_delete_ssh_key: group_id*, key_id*
+
+SSH Certificates (Premium+):
+- ssh_cert_list: group_id*
+- ssh_cert_create: group_id*, key*, title*
+- ssh_cert_delete: group_id*, certificate_id*
+
+Security Settings (Ultimate):
+- security_settings_update: group_id*, secret_push_protection_enabled*, projects_to_exclude (array)
+
+See also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)`
 	}
 
 	addMetaTool(server, "gitlab_group", desc, routes, toolutil.IconGroup)
@@ -1371,83 +1355,97 @@ func registerIssueMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 		routes["iteration_list_group"] = routeAction(client, groupiterations.List)
 	}
 
-	desc := `Create, list, get, update, close, reopen, delete, and move GitLab issues. Also manages comments (notes), discussions, linked issues, time tracking, work items, award emoji, participants, statistics, and resource events.
+	desc := `Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 Valid actions: ` + validActionsString(routes) + `
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- create: Create a new issue. Params: project_id (required), title (required), description, assignee_id (single user ID), assignee_ids ([]int, multiple user IDs), labels (comma-separated string), milestone_id (int), due_date (YYYY-MM-DD), confidential (bool), issue_type (issue/incident/test_case/task), weight (int), epic_id (int)
-- get: Get issue details. Params: project_id (required), issue_iid (required)
-- get_by_id: Get issue by global ID. Params: issue_id (required)
-- list: List project issues. Params: project_id (required), state (opened/closed/all), labels (comma-separated), not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential (bool), created_after/created_before (ISO 8601), updated_after/updated_before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc), page, per_page
-- list_all: List all issues visible to authenticated user (global). Params: state, labels, milestone, scope, search, assignee_username, author_username, order_by, sort, created_after/created_before, updated_after/updated_before, confidential (bool), page, per_page
-- update: Update an issue. Note: time tracking (estimates/spent time) uses dedicated actions (time_estimate_set, spent_time_add, etc.) — do NOT pass time params here. Params: project_id (required), issue_iid (required), title, description, state_event (close/reopen), assignee_id (single user ID), assignee_ids (multiple user IDs), labels (comma-separated string), add_labels (comma-separated string), remove_labels (comma-separated string), milestone_id, due_date, confidential (bool), issue_type, weight (int), epic_id (int), discussion_locked (bool)
-- delete: Delete an issue permanently. Params: project_id (required), issue_iid (required)
-- list_group: List issues for a group. Params: group_id (required), state, labels, milestone, scope, search, order_by, sort, page, per_page
-- reorder: Reorder an issue relative to others. Params: project_id (required), issue_iid (required), move_after_id (int), move_before_id (int)
-- move: Move an issue to another project. Params: project_id (required), issue_iid (required), to_project_id (required)
-- subscribe: Subscribe to issue notifications. Params: project_id (required), issue_iid (required)
-- unsubscribe: Unsubscribe from issue notifications. Params: project_id (required), issue_iid (required)
-- create_todo: Create a to-do for the issue. Params: project_id (required), issue_iid (required)
-- time_estimate_set: Set time estimate. Params: project_id (required), issue_iid (required), duration (required, e.g. 3h30m)
-- time_estimate_reset: Reset time estimate to zero. Params: project_id (required), issue_iid (required)
-- spent_time_add: Add spent time. Params: project_id (required), issue_iid (required), duration (required, e.g. 1h), summary
-- spent_time_reset: Reset spent time to zero. Params: project_id (required), issue_iid (required)
-- time_stats_get: Get time tracking statistics. Params: project_id (required), issue_iid (required)
-- participants: List issue participants. Params: project_id (required), issue_iid (required)
-- mrs_closing: List MRs that will close this issue. Params: project_id (required), issue_iid (required), page, per_page
-- mrs_related: List MRs related to this issue. Params: project_id (required), issue_iid (required), page, per_page
-- note_create: Add a comment to an issue. Params: project_id (required), issue_iid (required), body (required), internal (bool)
-- note_list: List issue comments. Params: project_id (required), issue_iid (required), order_by, sort, page, per_page
-- note_get: Get a single issue comment by note ID. Params: project_id (required), issue_iid (required), note_id (required)
-- note_update: Edit an issue comment. Params: project_id (required), issue_iid (required), note_id (required), body (required)
-- note_delete: Delete an issue comment. Params: project_id (required), issue_iid (required), note_id (required)
-- link_list: List linked issues. Params: project_id (required), issue_iid (required)
-- link_get: Get a specific link. Params: project_id (required), issue_iid (required), issue_link_id (required)
-- link_create: Create a link between issues. Params: project_id (required), issue_iid (required), target_project_id (required), target_issue_iid (required), link_type
-- link_delete: Delete an issue link. Params: project_id (required), issue_iid (required), issue_link_id (required)
-- work_item_get: Get a single work item by IID. Params: full_path (required), iid (required)
-- work_item_list: List work items for a project or group. Supports types=["Epic"] to filter epics (replaces deprecated epic_list). Params: full_path (required), state, search, types, author_username, label_name, confidential, sort, first, after
-- work_item_create: Create a new work item. Use work_item_type_id for Epic type to replace deprecated epic_create. Params: full_path (required), work_item_type_id (required), title (required), description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type: BLOCKS/BLOCKED_BY/RELATED}
-- work_item_update: Update an existing work item by IID. Params: full_path (required), iid (required), title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
-- work_item_delete: Permanently delete a work item by IID. Params: full_path (required), iid (required)
-- discussion_list: List issue discussions. Params: project_id (required), issue_iid (required), page, per_page
-- discussion_get: Get an issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required)
-- discussion_create: Create an issue discussion. Params: project_id (required), issue_iid (required), body (required)
-- discussion_add_note: Add note to issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required), body (required)
-- discussion_update_note: Update note in issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required), note_id (required), body (required)
-- discussion_delete_note: Delete note from issue discussion. Params: project_id (required), issue_iid (required), discussion_id (required), note_id (required)
-- statistics_get: Get global issue statistics. Params: (none or same filters as list)
-- statistics_get_group: Get group issue statistics. Params: group_id (required)
-- statistics_get_project: Get project issue statistics. Params: project_id (required)
-- emoji_issue_list: List award emoji on an issue. Params: project_id (required), iid (required), page, per_page
-- emoji_issue_get: Get an award emoji on an issue. Params: project_id (required), iid (required), award_id (required)
-- emoji_issue_create: Add award emoji to an issue. Params: project_id (required), iid (required), name (required)
-- emoji_issue_delete: Delete award emoji from an issue. Params: project_id (required), iid (required), award_id (required)
-- emoji_issue_note_list: List award emoji on an issue note. Params: project_id (required), iid (required), note_id (required), page, per_page
-- emoji_issue_note_get: Get an award emoji on an issue note. Params: project_id (required), iid (required), note_id (required), award_id (required)
-- emoji_issue_note_create: Add award emoji to an issue note. Params: project_id (required), iid (required), note_id (required), name (required)
-- emoji_issue_note_delete: Delete award emoji from an issue note. Params: project_id (required), iid (required), note_id (required), award_id (required)
-- event_issue_label_list: List label events on an issue. Params: project_id (required), issue_iid (required), page, per_page
-- event_issue_label_get: Get a label event. Params: project_id (required), issue_iid (required), label_event_id (required)
-- event_issue_milestone_list: List milestone events on an issue. Params: project_id (required), issue_iid (required), page, per_page
-- event_issue_milestone_get: Get a milestone event on an issue. Params: project_id (required), issue_iid (required), milestone_event_id (required)
-- event_issue_state_list: List state events on an issue. Params: project_id (required), issue_iid (required), page, per_page
-- event_issue_state_get: Get a state event on an issue. Params: project_id (required), issue_iid (required), state_event_id (required)
-- event_issue_iteration_list: List iteration events on an issue. Params: project_id (required), issue_iid (required), page, per_page
-- event_issue_iteration_get: Get an iteration event on an issue. Params: project_id (required), issue_iid (required), iteration_event_id (required)
-- event_issue_weight_list: List weight events on an issue. Params: project_id (required), issue_iid (required), page, per_page`
+When to use: issue lifecycle — creating, updating, closing, moving, commenting, linking issues, time tracking, and work item management (including Epics via Work Items API). NOT for: merge request operations (use gitlab_merge_request), project settings (use gitlab_project), CI/CD pipelines (use gitlab_pipeline).
+
+Side effects: delete/move are irreversible. move transfers the issue to another project (changes URL, IID). Time tracking uses dedicated actions (time_estimate_set, spent_time_add) — do NOT pass time params to update.
+
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions (delete) return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+
+Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).
+
+Issue CRUD:
+- create: project_id*, title*, description, assignee_id, assignee_ids ([]int), labels (comma-separated), milestone_id, due_date (YYYY-MM-DD), confidential, issue_type (issue/incident/test_case/task), weight, epic_id
+- get: project_id*, issue_iid*
+- get_by_id: issue_id* (global ID, no project_id needed)
+- list: project_id*, state (opened/closed/all), labels, not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential, created_after/before, updated_after/before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc)
+- list_all: global issue list (no project_id). Same filters as list.
+- list_group: group_id*, state, labels, milestone, scope, search, order_by, sort
+- update: project_id*, issue_iid*, title, description, state_event (close/reopen), assignee_id, assignee_ids, labels, add_labels, remove_labels, milestone_id, due_date, confidential, issue_type, weight, epic_id, discussion_locked
+- delete: project_id*, issue_iid* (permanent, irreversible)
+- reorder: project_id*, issue_iid*, move_after_id, move_before_id
+- move: project_id*, issue_iid*, to_project_id* (moves to another project)
+- subscribe / unsubscribe: project_id*, issue_iid*
+- create_todo: project_id*, issue_iid*
+
+Time tracking:
+- time_estimate_set: project_id*, issue_iid*, duration* (e.g. 3h30m)
+- time_estimate_reset / spent_time_reset: project_id*, issue_iid*
+- spent_time_add: project_id*, issue_iid*, duration*, summary
+- time_stats_get: project_id*, issue_iid*
+
+Participants & related MRs:
+- participants: project_id*, issue_iid*
+- mrs_closing / mrs_related: project_id*, issue_iid*
+
+Notes (note_*): project_id*, issue_iid* for all.
+- note_list: order_by, sort
+- note_get / note_delete: note_id*
+- note_create: body*, internal
+- note_update: note_id*, body*
+
+Issue links (link_*): project_id*, issue_iid* for all.
+- link_list
+- link_get / link_delete: issue_link_id*
+- link_create: target_project_id*, target_issue_iid*, link_type
+
+Discussions (discussion_*): project_id*, issue_iid* for all.
+- discussion_list
+- discussion_get: discussion_id*
+- discussion_create: body*
+- discussion_add_note: discussion_id*, body*
+- discussion_update_note: discussion_id*, note_id*, body*
+- discussion_delete_note: discussion_id*, note_id*
+
+Work Items (work_item_*): full_path* for all. Use types=["Epic"] to list epics (replaces deprecated epic_list).
+- work_item_list: state, search, types, author_username, label_name, confidential, sort, first, after
+- work_item_get: iid*
+- work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type}
+- work_item_update: iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
+- work_item_delete: iid* (permanent)
+
+Statistics:
+- statistics_get: global issue stats (optional filters same as list)
+- statistics_get_group: group_id*
+- statistics_get_project: project_id*
+
+Award emoji (emoji_issue_*): project_id*, iid* for all.
+- emoji_issue_list / emoji_issue_get (+ award_id*) / emoji_issue_delete (+ award_id*)
+- emoji_issue_create: name*
+- emoji_issue_note_list / emoji_issue_note_get: note_id*, (+ award_id* for get)
+- emoji_issue_note_create: note_id*, name*
+- emoji_issue_note_delete: note_id*, award_id*
+
+Resource events (event_issue_*): project_id*, issue_iid* for all.
+- event_issue_label_list / event_issue_label_get (+ label_event_id*)
+- event_issue_milestone_list / event_issue_milestone_get (+ milestone_event_id*)
+- event_issue_state_list / event_issue_state_get (+ state_event_id*)
+- event_issue_iteration_list / event_issue_iteration_get (+ iteration_event_id*)
+- event_issue_weight_list`
 
 	if enterprise {
 		desc += `
 
 Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
-- iteration_list_project: List iterations for a project. Params: project_id (required), state (1=opened, 2=upcoming, 3=current, 4=closed), search (string), include_ancestors (bool), page, per_page
-- iteration_list_group: List iterations for a group. Params: group_id (required), state, search, include_ancestors (bool), page, per_page
-
-Use this tool for issue CRUD, comments, discussions, linked issues, time tracking, work items, and resource events.
-See also: gitlab_merge_request, gitlab_project`
+- iteration_list_project: project_id*, state (1=opened, 2=upcoming, 3=current, 4=closed), search, include_ancestors
+- iteration_list_group: group_id*, state, search, include_ancestors`
 	}
+
+	desc += `
+
+See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings/files), gitlab_label (label CRUD), gitlab_milestone (milestone CRUD), gitlab_pipeline (CI/CD)`
 
 	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
 }
@@ -1491,47 +1489,44 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"schedule_list_triggered_pipelines": routeAction(client, pipelineschedules.ListTriggeredPipelines),
 	}
 
-	addMetaTool(server, "gitlab_pipeline", `List, get, create, retry, cancel, delete, and wait for GitLab CI/CD pipelines. Also manages resource groups, test reports, trigger tokens, pipeline bridges, and pipeline schedules.
+	addMetaTool(server, "gitlab_pipeline", `Manage GitLab CI/CD pipelines: list, get, create, retry, cancel, delete, and wait for completion. Also manages trigger tokens, resource groups, test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List pipelines for a project. Params: project_id (required), status (success/failed/running/pending/canceled), scope (running/pending/finished/branches/tags), source (push/web/schedule/merge_request_event), ref, sha, username, page, per_page
-- get: Get pipeline details. Params: project_id (required), pipeline_id (required)
-- cancel: Cancel a running pipeline. Params: project_id (required), pipeline_id (required)
-- retry: Retry all failed jobs in a pipeline. Params: project_id (required), pipeline_id (required)
-- delete: PERMANENTLY delete a pipeline and all its jobs. Params: project_id (required), pipeline_id (required)
-- variables: Get pipeline variables. Params: project_id (required), pipeline_id (required)
-- test_report: Get full test report. Params: project_id (required), pipeline_id (required)
-- test_report_summary: Get test report summary. Params: project_id (required), pipeline_id (required)
-- latest: Get latest pipeline. Params: project_id (required), ref (optional branch/tag)
-- create: Create a new pipeline. Params: project_id (required), ref (required), variables (optional array of {key, value, variable_type})
-- update_metadata: Update pipeline name. Params: project_id (required), pipeline_id (required), name (required)
-- wait: Wait for a pipeline to reach a terminal state (success/failed/canceled/skipped/manual). Polls at interval with progress notifications. Params: project_id (required), pipeline_id (required), interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
-- trigger_list: List pipeline triggers. Params: project_id (required), page, per_page
-- trigger_get: Get a pipeline trigger. Params: project_id (required), trigger_id (required)
-- trigger_create: Create a pipeline trigger. Params: project_id (required), description (required)
-- trigger_update: Update a pipeline trigger. Params: project_id (required), trigger_id (required), description
-- trigger_delete: Delete a pipeline trigger. Params: project_id (required), trigger_id (required)
-- trigger_run: Run a pipeline trigger. Params: project_id (required), ref (required), token (required), variables (map)
-- resource_group_list: List resource groups. Params: project_id (required), page, per_page
-- resource_group_get: Get a resource group. Params: project_id (required), key (required)
-- resource_group_edit: Edit a resource group. Params: project_id (required), key (required), process_mode
-- resource_group_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required), page, per_page
-- schedule_list: List pipeline schedules. Params: project_id (required), scope (active/inactive), page, per_page
-- schedule_get: Get schedule details. Params: project_id (required), schedule_id (required, int)
-- schedule_create: Create a schedule. Params: project_id (required), description (required), ref (required), cron (required), cron_timezone, active (bool)
-- schedule_update: Update a schedule. Params: project_id (required), schedule_id (required, int), description, ref, cron, cron_timezone, active (bool)
-- schedule_delete: Delete a schedule. Params: project_id (required), schedule_id (required, int)
-- schedule_run: Trigger immediate run. Params: project_id (required), schedule_id (required, int)
-- schedule_take_ownership: Take ownership of a schedule. Params: project_id (required), schedule_id (required, int)
-- schedule_create_variable: Create a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type (env_var/file)
-- schedule_edit_variable: Edit a schedule variable. Params: project_id (required), schedule_id (required, int), key (required), value (required), variable_type
-- schedule_delete_variable: Delete a schedule variable. Params: project_id (required), schedule_id (required, int), key (required)
-- schedule_list_triggered_pipelines: List pipelines triggered by schedule. Params: project_id (required), schedule_id (required, int), page, per_page
+When to use: pipeline CRUD, test reports, triggers, resource groups, schedules. NOT for: job-level operations (use gitlab_job).
 
-Use this tool for pipeline CRUD, test reports, trigger tokens, resource groups, and pipeline schedules.
-Do NOT use for job-level operations (use gitlab_job).
+Param conventions: * = required. All pipeline actions need project_id*. List actions accept page, per_page.
+
+Pipelines:
+- list: project_id*, status (success/failed/running/pending/canceled), scope, source, ref, sha, username
+- get / cancel / retry / variables / test_report / test_report_summary: project_id*, pipeline_id*
+- delete: project_id*, pipeline_id*. PERMANENTLY removes pipeline and jobs.
+- latest: project_id*, ref
+- create: project_id*, ref*, variables (array of {key, value, variable_type})
+- update_metadata: project_id*, pipeline_id*, name*
+- wait: project_id*, pipeline_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
+
+Triggers:
+- trigger_list: project_id*
+- trigger_get / trigger_delete: project_id*, trigger_id*
+- trigger_create: project_id*, description*
+- trigger_update: project_id*, trigger_id*, description
+- trigger_run: project_id*, ref*, token*, variables (map)
+
+Resource groups:
+- resource_group_list: project_id*
+- resource_group_get / resource_group_edit: project_id*, key*. Edit params: process_mode.
+- resource_group_upcoming_jobs: project_id*, key*
+
+Schedules:
+- schedule_list: project_id*, scope (active/inactive)
+- schedule_get / schedule_delete / schedule_run / schedule_take_ownership: project_id*, schedule_id*
+- schedule_create: project_id*, description*, ref*, cron*, cron_timezone, active
+- schedule_update: project_id*, schedule_id*, description, ref, cron, cron_timezone, active
+- schedule_create_variable: project_id*, schedule_id*, key*, value*, variable_type (env_var/file)
+- schedule_edit_variable: project_id*, schedule_id*, key*, value*, variable_type
+- schedule_delete_variable: project_id*, schedule_id*, key*
+- schedule_list_triggered_pipelines: project_id*, schedule_id*
+
 See also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable`, routes, toolutil.IconPipeline)
 }
 
@@ -1568,39 +1563,38 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"token_scope_remove_group":        destructiveVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
-	addMetaTool(server, "gitlab_job", `List, get, retry, cancel, erase, play, and wait for GitLab CI/CD jobs. Download job artifacts and logs. Manage Kubernetes agents.
+	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs: list, get, retry, cancel, erase, play manual jobs, wait for completion, download artifacts/logs, and manage CI/CD job token scope. Erase/delete actions are destructive.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List jobs for a pipeline. Params: project_id (required), pipeline_id (required), scope, page, per_page
-- list_project: List all jobs across a project. Params: project_id (required), scope, include_retried, page, per_page
-- get: Get job details. Params: project_id (required), job_id (required)
-- trace: Get job log output (truncated to 100KB). Params: project_id (required), job_id (required)
-- cancel: Cancel a running or pending job. Params: project_id (required), job_id (required)
-- retry: Retry a failed or canceled job. Params: project_id (required), job_id (required)
-- wait: Wait for a job to reach a terminal state. Polls at interval until done or timeout. Params: project_id (required), job_id (required), interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (bool, default true)
-- list_bridges: List bridge (trigger) jobs for a pipeline. Params: project_id (required), pipeline_id (required), scope, page, per_page
-- artifacts: Download artifacts archive for a job (base64, max 1MB). Params: project_id (required), job_id (required)
-- download_artifacts: Download artifacts archive by ref/job name (base64, max 1MB). Params: project_id (required), ref_name (required), job
-- download_single_artifact: Download a single artifact file by job ID and path. Params: project_id (required), job_id (required), artifact_path (required)
-- download_single_artifact_by_ref: Download a single artifact file by ref and path. Params: project_id (required), ref_name (required), artifact_path (required), job
-- erase: Erase a job's trace and artifacts. Params: project_id (required), job_id (required)
-- keep_artifacts: Prevent artifacts from expiring. Params: project_id (required), job_id (required)
-- play: Trigger a manual job. Params: project_id (required), job_id (required), variables (optional array of {key, value, variable_type})
-- delete_artifacts: Delete artifacts for a specific job. Params: project_id (required), job_id (required)
-- delete_project_artifacts: Delete all artifacts across a project. Params: project_id (required)
-- token_scope_get: Get CI/CD job token access settings. Params: project_id (required)
-- token_scope_patch: Update CI/CD job token access settings. Params: project_id (required), enabled (bool)
-- token_scope_list_inbound: List inbound project allowlist for job tokens. Params: project_id (required), page, per_page
-- token_scope_add_project: Add a project to the inbound allowlist. Params: project_id (required), target_project_id (required)
-- token_scope_remove_project: Remove a project from the inbound allowlist. Params: project_id (required), target_project_id (required)
-- token_scope_list_groups: List group allowlist for job tokens. Params: project_id (required), page, per_page
-- token_scope_add_group: Add a group to the job token allowlist. Params: project_id (required), target_group_id (required)
-- token_scope_remove_group: Remove a group from the job token allowlist. Params: project_id (required), target_group_id (required)
+When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
 
-Use this tool for CI/CD job operations: list, retry, cancel, erase, play, download artifacts/logs, and Kubernetes agents.
-Do NOT use for pipeline-level operations (use gitlab_pipeline).
+Param conventions: * = required. All job actions need project_id*. List actions accept page, per_page.
+
+Jobs:
+- list: project_id*, pipeline_id*, scope
+- list_project: project_id*, scope, include_retried
+- get: project_id*, job_id*
+- trace: project_id*, job_id*. Returns job log (truncated to 100KB).
+- cancel / retry / erase / keep_artifacts: project_id*, job_id*
+- play: project_id*, job_id*, variables (array of {key, value, variable_type})
+- wait: project_id*, job_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
+- list_bridges: project_id*, pipeline_id*, scope
+- delete_artifacts: project_id*, job_id*
+- delete_project_artifacts: project_id*. Deletes ALL artifacts across project.
+
+Artifact downloads (base64, max 1MB):
+- artifacts: project_id*, job_id*
+- download_artifacts: project_id*, ref_name*, job
+- download_single_artifact: project_id*, job_id*, artifact_path*
+- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job
+
+Job token scope:
+- token_scope_get / token_scope_patch: project_id*. Patch params: enabled.
+- token_scope_list_inbound: project_id*
+- token_scope_add_project / token_scope_remove_project: project_id*, target_project_id*
+- token_scope_list_groups: project_id*
+- token_scope_add_group / token_scope_remove_group: project_id*, target_group_id*
+
 See also: gitlab_pipeline, gitlab_repository`, routes, toolutil.IconJob)
 }
 
@@ -1696,95 +1690,108 @@ func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterpris
 		routes["list_service_accounts"] = routeAction(client, users.ListServiceAccounts)
 	}
 
-	desc := `List, get, create, update, block, unblock, ban, deactivate, and delete GitLab users. Also manages SSH keys, GPG keys, personal access tokens, emails, impersonation tokens, activities, memberships, and user status.
+	desc := `Manage GitLab users: CRUD, SSH/GPG keys, emails, PATs, impersonation tokens, status, todos, events, notifications, namespaces, and avatars. Delete/block/ban/reject actions are destructive.
 Valid actions: ` + validActionsString(routes) + `
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- current: Get information about the currently authenticated user. Params: (none required)
-- me: Alias for current — get the authenticated user. Params: (none required)
-- list: List GitLab users with optional filters. Params: search, username, active (bool), blocked (bool), external (bool), order_by, sort, page, per_page
-- get: Get a single user by ID. Params: user_id (required, int)
-- get_status: Get a user's status (emoji, message, availability). Params: user_id (required, int)
-- set_status: Set current user's status. Params: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
-- ssh_keys: List SSH keys for the current user. Params: page, per_page
-- emails: List email addresses for the current user. Params: (none)
-- contribution_events: List contribution events for a user. Params: user_id (required, int), action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, page, per_page
-- associations_count: Get count of user's groups, projects, issues, and merge requests. Params: user_id (required, int)
-- block: Block a user (admin). Params: user_id (required, int)
-- unblock: Unblock a user (admin). Params: user_id (required, int)
-- ban: Ban a user (admin). Params: user_id (required, int)
-- unban: Unban a user (admin). Params: user_id (required, int)
-- activate: Activate a user (admin). Params: user_id (required, int)
-- deactivate: Deactivate a user (admin). Params: user_id (required, int)
-- approve: Approve a user (admin). Params: user_id (required, int)
-- reject: Reject a user (admin). Params: user_id (required, int)
-- disable_two_factor: Disable 2FA for a user (admin). Params: user_id (required, int)
-- create: Create a new user (admin). Params: email (required), name (required), username (required), password, reset_password (bool), force_random_password (bool), skip_confirmation (bool), admin (bool), external (bool), bio, location, job_title, organization, projects_limit (int), note
-- modify: Modify an existing user (admin). Params: user_id (required, int), email, name, username, bio, location, job_title, organization, projects_limit (int), admin (bool), external (bool), note
-- delete: Delete a user (admin). Params: user_id (required, int)
-- ssh_keys_for_user: List SSH keys for a specific user. Params: user_id (required, int), page, per_page
-- get_ssh_key: Get SSH key by ID. Params: key_id (required, int)
-- get_ssh_key_for_user: Get SSH key for a user. Params: user_id (required, int), key_id (required, int)
-- add_ssh_key: Add SSH key to current user. Params: title (required), key (required), expires_at (YYYY-MM-DD), usage_type (auth/signing)
-- add_ssh_key_for_user: Add SSH key to a user (admin). Params: user_id (required, int), title (required), key (required), expires_at, usage_type
-- delete_ssh_key: Delete SSH key from current user. Params: key_id (required, int)
-- delete_ssh_key_for_user: Delete SSH key from user (admin). Params: user_id (required, int), key_id (required, int)
-- current_user_status: Get current user's status. Params: (none)
-- activities: List user activities (admin). Params: from (YYYY-MM-DD), page, per_page
-- memberships: List a user's memberships. Params: user_id (required, int), type (Project/Namespace), page, per_page
-- create_runner: Create a runner for current user. Params: runner_type (required), group_id (int), project_id (int), description, paused (bool), locked (bool), run_untagged (bool), tag_list, access_level, maximum_timeout (int), maintenance_note
-- delete_identity: Delete a user's identity (admin). Params: user_id (required, int), provider (required)
-- gpg_keys: List GPG keys for the current user. Params: (none)
-- gpg_keys_for_user: List GPG keys for a user. Params: user_id (required, int)
-- get_gpg_key: Get a GPG key by ID. Params: key_id (required, int)
-- get_gpg_key_for_user: Get a GPG key for a user. Params: user_id (required, int), key_id (required, int)
-- add_gpg_key: Add a GPG key to current user. Params: key (required, armored GPG public key)
-- add_gpg_key_for_user: Add a GPG key to a user (admin). Params: user_id (required, int), key (required)
-- delete_gpg_key: Delete a GPG key from current user. Params: key_id (required, int)
-- delete_gpg_key_for_user: Delete a GPG key from a user (admin). Params: user_id (required, int), key_id (required, int)
-- emails_for_user: List emails for a user. Params: user_id (required, int), page, per_page
-- get_email: Get an email by ID. Params: email_id (required, int)
-- add_email: Add email to current user. Params: email (required), skip_confirmation (bool)
-- add_email_for_user: Add email to a user (admin). Params: user_id (required, int), email (required), skip_confirmation (bool)
-- delete_email: Delete email from current user. Params: email_id (required, int)
-- delete_email_for_user: Delete email from a user (admin). Params: user_id (required, int), email_id (required, int)
-- list_impersonation_tokens: List impersonation tokens for a user. Params: user_id (required, int), state (active/inactive), page, per_page
-- get_impersonation_token: Get an impersonation token. Params: user_id (required, int), token_id (required, int)
-- create_impersonation_token: Create impersonation token (admin). Params: user_id (required, int), name (required), scopes (required, array), expires_at (YYYY-MM-DD)
-- revoke_impersonation_token: Revoke impersonation token (admin). Params: user_id (required, int), token_id (required, int)
-- create_personal_access_token: Create PAT for a user (admin). Params: user_id (required, int), name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
-- create_current_user_pat: Create PAT for current user. Params: name (required), scopes (required, array), description, expires_at (YYYY-MM-DD)
-- todo_list: List to-do items with optional filters. Params: action (assigned/mentioned/build_failed/marked/approval_required/directly_addressed), author_id (int), project_id (int), group_id (int), state (pending/done), type (Issue/MergeRequest/DesignManagement::Design/AlertManagement::Alert), page, per_page
-- todo_mark_done: Mark a single to-do item as done. Params: id (required, int)
-- todo_mark_all_done: Mark all pending to-do items as done. Params: (none)
-- event_list_project: List visible events for a project. Params: project_id (required), action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, page, per_page
-- event_list_contributions: List current user's contribution events. Params: action, target_type, before, after, sort, page, per_page
-- notification_global_get: Get global notification settings. Params: (none)
-- notification_project_get: Get project notification settings. Params: project_id (required)
-- notification_group_get: Get group notification settings. Params: group_id (required)
-- notification_global_update: Update global notification settings. Params: level, notification_email, new_note, new_issue, reopen_issue, close_issue, merge_merge_request, etc.
-- notification_project_update: Update project notification settings. Params: project_id (required), level, new_note, etc.
-- notification_group_update: Update group notification settings. Params: group_id (required), level, new_note, etc.
-- key_get_with_user: Get an SSH key by ID with user info. Params: key_id (required)
-- key_get_by_fingerprint: Get an SSH key by fingerprint. Params: fingerprint (required)
-- namespace_list: List namespaces accessible by the user. Params: search, owned_only (bool), page, per_page
-- namespace_get: Get a namespace by ID or path. Params: namespace_id (required)
-- namespace_exists: Check if a namespace path exists. Params: namespace (required), parent_id
-- namespace_search: Search namespaces. Params: search (required)
-- avatar_get: Get an avatar URL by email. Params: email (required), size (int)`
+When to use: user CRUD, SSH/GPG key management, PATs, todos, events, notifications, namespaces. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance admin (use gitlab_admin).
+
+Param conventions: * = required. User IDs are integers. List actions accept page, per_page.
+
+Current user:
+- current / me: no params. Returns authenticated user info.
+- current_user_status: no params. Returns emoji, message, availability.
+- set_status: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
+
+User CRUD (admin):
+- list: search, username, active, blocked, external, order_by, sort
+- get: user_id*
+- get_status: user_id*
+- create: email*, name*, username*, password, reset_password, force_random_password, skip_confirmation, admin, external, bio, location, job_title, organization, projects_limit, note
+- modify: user_id*, email, name, username, bio, location, job_title, organization, projects_limit, admin, external, note
+- delete: user_id*
+- associations_count: user_id*
+
+User state (admin):
+- block / unblock / ban / unban / activate / deactivate / approve / reject / disable_two_factor: user_id*
+
+SSH keys:
+- ssh_keys: (current user, no params)
+- ssh_keys_for_user: user_id*
+- get_ssh_key: key_id*
+- get_ssh_key_for_user: user_id*, key_id*
+- add_ssh_key: title*, key*, expires_at, usage_type (auth/signing)
+- add_ssh_key_for_user: user_id*, title*, key*, expires_at, usage_type
+- delete_ssh_key: key_id*
+- delete_ssh_key_for_user: user_id*, key_id*
+
+GPG keys:
+- gpg_keys: (current user, no params)
+- gpg_keys_for_user: user_id*
+- get_gpg_key: key_id*
+- get_gpg_key_for_user: user_id*, key_id*
+- add_gpg_key: key* (armored GPG public key)
+- add_gpg_key_for_user: user_id*, key*
+- delete_gpg_key: key_id*
+- delete_gpg_key_for_user: user_id*, key_id*
+
+Emails:
+- emails: (current user, no params)
+- emails_for_user: user_id*
+- get_email: email_id*
+- add_email: email*, skip_confirmation
+- add_email_for_user: user_id*, email*, skip_confirmation
+- delete_email: email_id*
+- delete_email_for_user: user_id*, email_id*
+
+Tokens:
+- list_impersonation_tokens: user_id*, state (active/inactive)
+- get_impersonation_token: user_id*, token_id*
+- create_impersonation_token: user_id*, name*, scopes*, expires_at
+- revoke_impersonation_token: user_id*, token_id*
+- create_personal_access_token: user_id*, name*, scopes*, description, expires_at
+- create_current_user_pat: name*, scopes*, description, expires_at
+
+Activity and events:
+- activities: (admin) from (YYYY-MM-DD)
+- memberships: user_id*, type (Project/Namespace)
+- contribution_events: user_id*, action, target_type, before, after, sort
+- event_list_project: project_id*, action, target_type, before, after, sort
+- event_list_contributions: action, target_type, before, after, sort
+
+Todos:
+- todo_list: action, author_id, project_id, group_id, state (pending/done), type
+- todo_mark_done: id*
+- todo_mark_all_done: no params
+
+Notifications:
+- notification_global_get / notification_global_update: no ID needed. Update params: level, notification_email, event booleans
+- notification_project_get / notification_project_update: project_id*. Update params: level, event booleans
+- notification_group_get / notification_group_update: group_id*. Update params: level, event booleans
+
+Keys and namespaces:
+- key_get_with_user: key_id*. Returns SSH key with user info.
+- key_get_by_fingerprint: fingerprint*
+- namespace_list: search, owned_only
+- namespace_get: namespace_id*
+- namespace_exists: namespace*, parent_id
+- namespace_search: search*
+- avatar_get: email*, size
+
+Misc:
+- create_runner: runner_type*, group_id, project_id, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
+- delete_identity: user_id*, provider*`
 
 	if enterprise {
 		desc += `
 
-Service Accounts (Premium+ — requires GITLAB_ENTERPRISE=true):
-- create_service_account: Create a service account. Params: name, username, email
-- list_service_accounts: List service accounts. Params: order_by, sort, page, per_page
-
-Use this tool for user management: CRUD, SSH/GPG keys, personal access tokens, emails, and user status.
-Do NOT use for deploy tokens or project/group access tokens (use gitlab_access) or instance admin operations (use gitlab_admin).
-See also: gitlab_access (deploy tokens/keys, access tokens), gitlab_admin (instance administration)`
+Service Accounts (Premium+ — GITLAB_ENTERPRISE=true):
+- create_service_account: name, username, email
+- list_service_accounts: order_by, sort`
 	}
+
+	desc += `
+
+See also: gitlab_access (deploy/access tokens), gitlab_admin (instance administration)`
 
 	addMetaTool(server, "gitlab_user", desc, routes, toolutil.IconUser)
 }
@@ -1801,17 +1808,17 @@ func registerWikiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"upload_attachment": routeAction(client, wikis.UploadAttachment),
 	}
 
-	addMetaTool(server, "gitlab_wiki", `Create, list, get, update, delete, and upload attachments to GitLab project wiki pages.
+	addMetaTool(server, "gitlab_wiki", `CRUD and upload attachments to GitLab project wiki pages.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List all wiki pages in a project. Params: project_id (required), with_content (bool, include page content)
-- get: Get a single wiki page by slug. Params: project_id (required), slug (required), render_html (bool), version (string, SHA for specific revision)
-- create: Create a new wiki page. Params: project_id (required), title (required), content (required), format (markdown/rdoc/asciidoc/org)
-- update: Update an existing wiki page. Params: project_id (required), slug (required), title, content, format
-- delete: Delete a wiki page. Params: project_id (required), slug (required)
-- upload_attachment: Upload a file attachment to a wiki. Params: project_id (required), filename (required), content_base64 or file_path (one required), branch (optional)
+Param conventions: * = required. All actions need project_id*.
+
+- list: project_id*, with_content (bool)
+- get: project_id*, slug*, render_html (bool), version (SHA)
+- create: project_id*, title*, content*, format (markdown/rdoc/asciidoc/org)
+- update: project_id*, slug*, title, content, format
+- delete: project_id*, slug*
+- upload_attachment: project_id*, filename*, content_base64 or file_path (one required), branch
 
 See also: gitlab_project`, routes, toolutil.IconWiki)
 }
@@ -1845,36 +1852,37 @@ func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"deployment_merge_requests":    routeAction(client, deploymentmergerequests.List),
 	}
 
-	addMetaTool(server, "gitlab_environment", `Create, list, get, update, delete, and stop GitLab environments. Manage protected environments, deployment freeze periods, and deployment records.
+	addMetaTool(server, "gitlab_environment", `Manage GitLab environments, protected environments, deployment freeze periods, and deployment records.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List environments. Params: project_id (required), name, search, states, page, per_page
-- get: Get environment details. Params: project_id (required), environment_id (required, int)
-- create: Create an environment. Params: project_id (required), name (required), description, external_url, tier
-- update: Update an environment. Params: project_id (required), environment_id (required, int), name, description, external_url, tier
-- delete: Delete an environment. Params: project_id (required), environment_id (required, int)
-- stop: Stop a running environment. Params: project_id (required), environment_id (required, int), force (bool)
-- protected_list: List protected environments. Params: project_id (required), page, per_page
-- protected_get: Get a protected environment. Params: project_id (required), name (required)
-- protected_protect: Protect an environment. Params: project_id (required), name (required), deploy_access_levels, approval_rules
-- protected_update: Update a protected environment. Params: project_id (required), name (required), deploy_access_levels, approval_rules
-- protected_unprotect: Unprotect an environment. Params: project_id (required), name (required)
-- freeze_list: List deploy freeze periods. Params: project_id (required), page, per_page
-- freeze_get: Get a freeze period. Params: project_id (required), freeze_period_id (required)
-- freeze_create: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
-- freeze_update: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
-- freeze_delete: Delete a freeze period. Params: project_id (required), freeze_period_id (required)
-- deployment_list: List deployments. Params: project_id (required), order_by, sort, environment, status, page, per_page
-- deployment_get: Get deployment details. Params: project_id (required), deployment_id (required, int)
-- deployment_create: Create a deployment. Params: project_id (required), environment (required), ref (required), sha (required), tag (bool), status
-- deployment_update: Update deployment status. Params: project_id (required), deployment_id (required, int), status (required)
-- deployment_delete: Delete a deployment. Params: project_id (required), deployment_id (required, int)
-- deployment_approve_or_reject: Approve or reject a blocked deployment. Params: project_id (required), deployment_id (required, int), status (required, approved/rejected), comment
-- deployment_merge_requests: List merge requests associated with a deployment. Params: project_id (required), deployment_id (required, int), state, order_by, sort, page, per_page
+Param conventions: * = required. All actions need project_id*.
 
-Use this tool for environment lifecycle, deployment records, freeze periods, and protected environments.
+Environment CRUD:
+- list: project_id*, name, search, states, page, per_page
+- get / delete: project_id*, environment_id* (int)
+- create: project_id*, name*, description, external_url, tier
+- update: project_id*, environment_id* (int), name, description, external_url, tier
+- stop: project_id*, environment_id* (int), force (bool)
+
+Protected environments (protected_*):
+- protected_list: project_id*, page, per_page
+- protected_get / protected_unprotect: project_id*, name*
+- protected_protect / protected_update: project_id*, name*, deploy_access_levels, approval_rules
+
+Freeze periods (freeze_*):
+- freeze_list: project_id*, page, per_page
+- freeze_get / freeze_delete: project_id*, freeze_period_id*
+- freeze_create: project_id*, freeze_start* (cron), freeze_end* (cron), cron_timezone
+- freeze_update: project_id*, freeze_period_id*, freeze_start, freeze_end, cron_timezone
+
+Deployments (deployment_*):
+- deployment_list: project_id*, order_by, sort, environment, status, page, per_page
+- deployment_get / deployment_delete: project_id*, deployment_id* (int)
+- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status
+- deployment_update: project_id*, deployment_id* (int), status*
+- deployment_approve_or_reject: project_id*, deployment_id* (int), status* (approved/rejected), comment
+- deployment_merge_requests: project_id*, deployment_id* (int), state, order_by, sort, page, per_page
+
 See also: gitlab_pipeline`, routes, toolutil.IconEnvironment)
 }
 
@@ -1899,29 +1907,32 @@ func registerCIVariableMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"instance_delete": destructiveVoidAction(client, instancevariables.Delete),
 	}
 
-	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Create, list, get, update, and delete variables at each level.
+	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- list: List variables. Params: project_id (required), page, per_page
-- get: Get variable by key. Params: project_id (required), key (required), environment_scope
-- create: Create variable. Params: project_id (required), key (required), value (required), description, variable_type, protected (bool), masked (bool), masked_and_hidden (bool), raw (bool), environment_scope
-- update: Update variable. Params: project_id (required), key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool), environment_scope
-- delete: Delete variable. Params: project_id (required), key (required), environment_scope
-- group_list: List group CI/CD variables. Params: group_id (required), page, per_page
-- group_get: Get a group variable. Params: group_id (required), key (required)
-- group_create: Create a group variable. Params: group_id (required), key (required), value (required), description, variable_type, protected (bool), masked (bool), raw (bool), environment_scope
-- group_update: Update a group variable. Params: group_id (required), key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool), environment_scope
-- group_delete: Delete a group variable. Params: group_id (required), key (required)
-- instance_list: List instance-level CI/CD variables. Params: page, per_page
-- instance_get: Get an instance variable. Params: key (required)
-- instance_create: Create an instance variable. Params: key (required), value (required), description, variable_type, protected (bool), masked (bool), raw (bool)
-- instance_update: Update an instance variable. Params: key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool)
-- instance_delete: Delete an instance variable. Params: key (required)
+When to use: CRUD CI/CD variables at project, group, or instance level. NOT for: pipeline configuration (use gitlab_template for CI lint), secrets management outside GitLab.
 
-Use this tool for CI/CD variables at instance, group, and project scope.
-See also: gitlab_pipeline`, routes, toolutil.IconVariable)
+Param conventions: * = required. Project-scoped actions need project_id*, group-scoped need group_id*, instance-scoped need no ID. Common optional params: variable_type, protected, masked, raw, environment_scope.
+
+Project variables:
+- list: project_id*
+- get / delete: project_id*, key*, environment_scope
+- create: project_id*, key*, value*, description, variable_type, protected, masked, masked_and_hidden, raw, environment_scope
+- update: project_id*, key*, value, description, variable_type, protected, masked, raw, environment_scope
+
+Group variables (group_*):
+- group_list: group_id*
+- group_get / group_delete: group_id*, key*
+- group_create: group_id*, key*, value*, description, variable_type, protected, masked, raw, environment_scope
+- group_update: group_id*, key*, value, description, variable_type, protected, masked, raw, environment_scope
+
+Instance variables (instance_*):
+- instance_list: (no params)
+- instance_get / instance_delete: key*
+- instance_create: key*, value*, description, variable_type, protected, masked, raw
+- instance_update: key*, value, description, variable_type, protected, masked, raw
+
+See also: gitlab_pipeline (pipeline operations), gitlab_template (CI lint)`, routes, toolutil.IconVariable)
 }
 
 // registerTemplateMeta registers the gitlab_template meta-tool with actions:
@@ -1943,25 +1954,26 @@ func registerTemplateMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"project_template_get":  routeAction(client, projecttemplates.Get),
 	}
 
-	addReadOnlyMetaTool(server, "gitlab_template", `Browse and retrieve GitLab project templates: gitignores, CI/CD YAML, Dockerfiles, licenses, and project-specific issue/MR templates. Lint CI configuration.
+	addReadOnlyMetaTool(server, "gitlab_template", `Browse GitLab templates (gitignores, CI/CD YAML, Dockerfiles, licenses, project templates) and lint CI configuration.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- lint: Validate arbitrary YAML content in project namespace. Params: project_id (required), content (required), dry_run (bool), include_jobs (bool), ref
-- lint_project: Validate a project's existing .gitlab-ci.yml. Params: project_id (required), content_ref, dry_run (bool), dry_run_ref, include_jobs (bool), ref
-- ci_yml_list: List all CI/CD YAML templates. Params: page, per_page
-- ci_yml_get: Get a CI/CD YAML template by key. Params: key (required)
-- dockerfile_list: List all Dockerfile templates. Params: page, per_page
-- dockerfile_get: Get a Dockerfile template by key. Params: key (required)
-- gitignore_list: List all .gitignore templates. Params: page, per_page
-- gitignore_get: Get a .gitignore template by key. Params: key (required)
-- license_list: List all license templates. Params: page, per_page, popular (bool)
-- license_get: Get a license template by key. Params: key (required), project, fullname
-- project_template_list: List project templates of a given type. Params: project_id (required), template_type (required), page, per_page
-- project_template_get: Get a single project template. Params: project_id (required), template_type (required), key (required)
+Param conventions: * = required.
 
-See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog (Enterprise: CI/CD Catalog components)`, routes, toolutil.IconTemplate)
+CI lint:
+- lint: Validate YAML content. project_id*, content*, dry_run (bool), include_jobs (bool), ref
+- lint_project: Validate existing .gitlab-ci.yml. project_id*, content_ref, dry_run (bool), dry_run_ref, include_jobs (bool), ref
+
+Global templates ({type}_list / {type}_get):
+- ci_yml_list / dockerfile_list / gitignore_list: page, per_page
+- ci_yml_get / dockerfile_get / gitignore_get: key*
+- license_list: page, per_page, popular (bool)
+- license_get: key*, project, fullname
+
+Project templates:
+- project_template_list: project_id*, template_type*, page, per_page
+- project_template_get: project_id*, template_type*, key*
+
+See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog`, routes, toolutil.IconTemplate)
 }
 
 // registerAdminMeta registers the gitlab_admin meta-tool with actions:
@@ -2053,96 +2065,114 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `GitLab instance administration: Sidekiq metrics/queues/jobs, instance settings, license, plan limits, OAuth applications, broadcast messages, system hooks, personal access tokens, appearance, system info, statistics, topics, metadata, linked Jira, alert metric images, and notification settings.
+	addMetaTool(server, "gitlab_admin", `GitLab instance administration: topics, settings, appearance, broadcast messages, features, licenses, system hooks, Sidekiq metrics, plan limits, usage data, migrations, OAuth apps, metadata, custom attributes, error tracking, secure files, Terraform states, cluster agents, dependency proxy, and imports. Delete/purge actions are destructive.
 Valid actions: `+validActionsString(routes)+`
-Use 'action' to specify the operation and 'params' for action-specific parameters.
 
-Actions:
-- topic_list: List project topics. Params: search, page, per_page
-- topic_get: Get a project topic by ID. Params: topic_id (required)
-- topic_create: Create a new project topic (admin). Params: name (required), title, description
-- topic_update: Update a project topic (admin). Params: topic_id (required), name, title, description
-- topic_delete: Delete a project topic (admin). Params: topic_id (required)
-- settings_get: Get current application settings (admin). No params required
-- settings_update: Update application settings (admin). Params: settings (map of setting_name to value)
-- appearance_get: Get application appearance (admin). No params required
-- appearance_update: Update application appearance (admin). Params: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
-- broadcast_message_list: List broadcast messages (admin). Params: page, per_page
-- broadcast_message_get: Get a broadcast message (admin). Params: id (required)
-- broadcast_message_create: Create a broadcast message (admin). Params: message (required), starts_at, ends_at, broadcast_type, theme, dismissable, target_path, target_access_levels
-- broadcast_message_update: Update a broadcast message (admin). Params: id (required), message, starts_at, ends_at, broadcast_type, theme, dismissable
-- broadcast_message_delete: Delete a broadcast message (admin). Params: id (required)
-- feature_list: List all feature flags (admin). No params.
-- feature_list_definitions: List all feature definitions (admin). No params.
-- feature_set: Set or create a feature flag (admin). Params: name (required), value (required), key, feature_group, user, group, namespace, project, repository, force
-- feature_delete: Delete a feature flag (admin). Params: name (required)
-- license_get: Get current GitLab license (admin). No params.
-- license_add: Add a new GitLab license (admin). Params: license (required, Base64-encoded)
-- license_delete: Delete a GitLab license (admin). Params: id (required)
-- system_hook_list: List all system hooks (admin). No params.
-- system_hook_get: Get a system hook (admin). Params: id (required)
-- system_hook_add: Add a system hook (admin). Params: url (required), token, push_events, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification
-- system_hook_test: Test a system hook (admin). Params: id (required)
-- system_hook_delete: Delete a system hook (admin). Params: id (required)
-- sidekiq_queue_metrics: Get Sidekiq queue metrics (admin). No params.
-- sidekiq_process_metrics: Get Sidekiq process metrics (admin). No params.
-- sidekiq_job_stats: Get Sidekiq job statistics (admin). No params.
-- sidekiq_compound_metrics: Get all Sidekiq metrics combined (admin). No params.
-- plan_limits_get: Get current plan limits (admin). Params: plan_name (optional)
-- plan_limits_change: Change plan limits (admin). Params: plan_name (required), conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size
-- usage_data_service_ping: Get service ping data (admin). No params.
-- usage_data_non_sql_metrics: Get non-SQL service ping metrics (admin). No params.
-- usage_data_queries: Get service ping SQL queries (admin). No params.
-- usage_data_metric_definitions: Get metric definitions as YAML (admin). No params.
-- usage_data_track_event: Track a usage event. Params: event (required), send_to_snowplow, namespace_id, project_id
-- usage_data_track_events: Track multiple usage events. Params: events (required, array)
-- db_migration_mark: Mark a pending migration as successful (admin). Params: version (required), database (optional)
-- application_list: List all OAuth2 applications (admin). Params: page, per_page
-- application_create: Create an OAuth2 application (admin). Params: name (required), redirect_uri (required), scopes (required), confidential
-- application_delete: Delete an OAuth2 application (admin). Params: id (required)
-- app_statistics_get: Get application statistics (admin). No params.
-- metadata_get: Get GitLab instance metadata (version, revision, KAS, enterprise). No params.
-- custom_attr_list: List custom attributes for a resource (admin). Params: resource_type (required: user/group/project), resource_id (required)
-- custom_attr_get: Get a custom attribute by key (admin). Params: resource_type (required), resource_id (required), key (required)
-- custom_attr_set: Set (create/update) a custom attribute (admin). Params: resource_type (required), resource_id (required), key (required), value (required)
-- custom_attr_delete: Delete a custom attribute (admin). Params: resource_type (required), resource_id (required), key (required)
-- bulk_import_start: Start a bulk import migration (admin). Params: url (required, source GitLab URL), access_token (required), entities (required, array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects, migrate_memberships})
-- error_tracking_list: List error tracking client keys. Params: project_id (required), page, per_page
-- error_tracking_create: Create error tracking client key. Params: project_id (required)
-- error_tracking_delete: Delete error tracking client key. Params: project_id (required), key_id (required)
-- error_tracking_get_settings: Get error tracking settings. Params: project_id (required)
-- error_tracking_update_settings: Enable/disable error tracking. Params: project_id (required), active, integrated
-- alert_metric_image_list: List alert metric images. Params: project_id (required), alert_iid (required), page, per_page
-- alert_metric_image_upload: Upload alert metric image. Params: project_id (required), alert_iid (required), url (required), url_text
-- alert_metric_image_update: Update alert metric image. Params: project_id (required), alert_iid (required), image_id (required), url, url_text
-- alert_metric_image_delete: Delete alert metric image. Params: project_id (required), alert_iid (required), image_id (required)
-- secure_file_list: List secure files. Params: project_id (required), page, per_page
-- secure_file_get: Get a secure file. Params: project_id (required), file_id (required)
-- secure_file_create: Create a secure file. Params: project_id (required), name (required), content (required, base64-encoded)
-- secure_file_delete: Delete a secure file. Params: project_id (required), file_id (required)
-- terraform_state_list: List Terraform states. Params: project_path (required, e.g. group/project)
-- terraform_state_get: Get a Terraform state. Params: project_path (required, e.g. group/project), name (required)
-- terraform_state_delete: Delete a Terraform state. Params: project_id (required), name (required)
-- terraform_state_lock: Lock a Terraform state. Params: project_id (required), name (required)
-- terraform_state_unlock: Unlock a Terraform state. Params: project_id (required), name (required)
-- terraform_version_delete: Delete a Terraform state version. Params: project_id (required), name (required), serial (required)
-- cluster_agent_list: List cluster agents. Params: project_id (required), page, per_page
-- cluster_agent_get: Get a cluster agent. Params: project_id (required), agent_id (required)
-- cluster_agent_register: Register a cluster agent. Params: project_id (required), name (required)
-- cluster_agent_delete: Delete a cluster agent. Params: project_id (required), agent_id (required)
-- cluster_agent_token_list: List cluster agent tokens. Params: project_id (required), agent_id (required), page, per_page
-- cluster_agent_token_get: Get a cluster agent token. Params: project_id (required), agent_id (required), token_id (required)
-- cluster_agent_token_create: Create a cluster agent token. Params: project_id (required), agent_id (required), name (required)
-- cluster_agent_token_revoke: Revoke a cluster agent token. Params: project_id (required), agent_id (required), token_id (required)
-- dependency_proxy_delete: Purge dependency proxy cache. Params: group_id (required)
-- import_github: Import project from GitHub. Params: personal_access_token (required), repo_id (required), target_namespace (required), new_name
-- import_bitbucket: Import project from Bitbucket Cloud. Params: bitbucket_username (required), bitbucket_app_password (required), repo_path (required), target_namespace (required), new_name
-- import_bitbucket_server: Import from Bitbucket Server. Params: bitbucket_server_url (required), bitbucket_server_username (required), personal_access_token (required), bitbucket_server_project (required), bitbucket_server_repo (required), new_namespace, new_name
-- import_cancel_github: Cancel a GitHub import. Params: project_id (required)
-- import_gists: Import GitHub gists. Params: personal_access_token (required)
+When to use: instance-level admin operations, Sidekiq monitoring, settings, license management, bulk imports. NOT for: user CRUD (use gitlab_user), MCP server ops (use gitlab_server).
 
-Use this tool for GitLab instance administration: Sidekiq, settings, license, OAuth apps, broadcast messages, system hooks, and import.
-Do NOT use for user CRUD (use gitlab_user) or MCP server operations (use gitlab_server).
+Param conventions: * = required. List actions accept page, per_page.
+
+Topics:
+- topic_list: search
+- topic_get / topic_delete: topic_id*
+- topic_create: name*, title, description
+- topic_update: topic_id*, name, title, description
+
+Settings and appearance:
+- settings_get / appearance_get: no params
+- settings_update: settings (map of setting_name to value)
+- appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
+
+Broadcast messages:
+- broadcast_message_list: no params
+- broadcast_message_get / broadcast_message_delete: id*
+- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable, target_path, target_access_levels
+- broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable
+
+Features:
+- feature_list / feature_list_definitions: no params
+- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force
+- feature_delete: name*
+
+License:
+- license_get: no params
+- license_add: license* (Base64-encoded)
+- license_delete: id*
+
+System hooks:
+- system_hook_list: no params
+- system_hook_get / system_hook_test / system_hook_delete: id*
+- system_hook_add: url*, token, push_events, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification
+
+Sidekiq:
+- sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics: no params
+
+Plan limits:
+- plan_limits_get: plan_name
+- plan_limits_change: plan_name*, conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size
+
+Usage data:
+- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: no params
+- usage_data_track_event: event*, send_to_snowplow, namespace_id, project_id
+- usage_data_track_events: events* (array)
+
+OAuth applications:
+- application_list: no params
+- application_create: name*, redirect_uri*, scopes*, confidential
+- application_delete: id*
+
+Misc admin:
+- db_migration_mark: version*, database
+- app_statistics_get / metadata_get: no params
+
+Custom attributes:
+- custom_attr_list: resource_type* (user/group/project), resource_id*
+- custom_attr_get / custom_attr_delete: resource_type*, resource_id*, key*
+- custom_attr_set: resource_type*, resource_id*, key*, value*
+
+Bulk import:
+- bulk_import_start: url* (source GitLab URL), access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects, migrate_memberships})
+
+Error tracking:
+- error_tracking_list: project_id*
+- error_tracking_create: project_id*
+- error_tracking_delete: project_id*, key_id*
+- error_tracking_get_settings: project_id*
+- error_tracking_update_settings: project_id*, active, integrated
+
+Alert metric images:
+- alert_metric_image_list: project_id*, alert_iid*
+- alert_metric_image_upload: project_id*, alert_iid*, url*, url_text
+- alert_metric_image_update: project_id*, alert_iid*, image_id*, url, url_text
+- alert_metric_image_delete: project_id*, alert_iid*, image_id*
+
+Secure files:
+- secure_file_list: project_id*
+- secure_file_get / secure_file_delete: project_id*, file_id*
+- secure_file_create: project_id*, name*, content* (base64-encoded)
+
+Terraform states:
+- terraform_state_list: project_path* (e.g. group/project)
+- terraform_state_get: project_path*, name*
+- terraform_state_delete / terraform_state_lock / terraform_state_unlock: project_id*, name*
+- terraform_version_delete: project_id*, name*, serial*
+
+Cluster agents:
+- cluster_agent_list: project_id*
+- cluster_agent_get / cluster_agent_delete: project_id*, agent_id*
+- cluster_agent_register: project_id*, name*
+- cluster_agent_token_list: project_id*, agent_id*
+- cluster_agent_token_get / cluster_agent_token_revoke: project_id*, agent_id*, token_id*
+- cluster_agent_token_create: project_id*, agent_id*, name*
+
+Import:
+- import_github: personal_access_token*, repo_id*, target_namespace*, new_name
+- import_bitbucket: bitbucket_username*, bitbucket_app_password*, repo_path*, target_namespace*, new_name
+- import_bitbucket_server: bitbucket_server_url*, bitbucket_server_username*, personal_access_token*, bitbucket_server_project*, bitbucket_server_repo*, new_namespace, new_name
+- import_cancel_github: project_id*
+- import_gists: personal_access_token*
+- dependency_proxy_delete: group_id*. Purges cache.
+
 See also: gitlab_user (user management), gitlab_server (server health)`, routes, toolutil.IconServer)
 }
 
@@ -2211,62 +2241,55 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"invite_project":               routeAction(client, invites.ProjectInvites),
 		"invite_group":                 routeAction(client, invites.GroupInvites),
 	}
-	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: deploy keys (project and instance), deploy tokens (project and group), project access tokens, and group access tokens. CRUD, rotate, and approve/deny access requests.
+	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- token_project_list: List project access tokens. Params: project_id (required), page, per_page
-- token_project_get: Get a project access token. Params: project_id (required), token_id (required)
-- token_project_create: Create project access token. Params: project_id (required), name (required), scopes (required), expires_at, access_level
-- token_project_rotate: Rotate project access token. Params: project_id (required), token_id (required), expires_at
-- token_project_rotate_self: Rotate the calling project access token. Params: project_id (required), expires_at
-- token_project_revoke: Revoke project access token. Params: project_id (required), token_id (required)
-- token_group_list: List group access tokens. Params: group_id (required), page, per_page
-- token_group_get: Get a group access token. Params: group_id (required), token_id (required)
-- token_group_create: Create group access token. Params: group_id (required), name (required), scopes (required), expires_at, access_level
-- token_group_rotate: Rotate group access token. Params: group_id (required), token_id (required), expires_at
-- token_group_rotate_self: Rotate the calling group access token. Params: group_id (required), expires_at
-- token_group_revoke: Revoke group access token. Params: group_id (required), token_id (required)
-- token_personal_list: List personal access tokens. Params: user_id, page, per_page
-- token_personal_get: Get a personal access token. Params: token_id (required)
-- token_personal_rotate: Rotate personal access token. Params: token_id (required), expires_at
-- token_personal_rotate_self: Rotate the calling personal access token. Params: expires_at
-- token_personal_revoke: Revoke personal access token. Params: token_id (required)
-- token_personal_revoke_self: Revoke the calling personal access token. Params: (none)
-- deploy_token_list_all: List all deploy tokens (admin). Params: page, per_page
-- deploy_token_list_project: List project deploy tokens. Params: project_id (required), page, per_page
-- deploy_token_list_group: List group deploy tokens. Params: group_id (required), page, per_page
-- deploy_token_get_project: Get project deploy token. Params: project_id (required), deploy_token_id (required)
-- deploy_token_get_group: Get group deploy token. Params: group_id (required), deploy_token_id (required)
-- deploy_token_create_project: Create project deploy token. Params: project_id (required), name (required), scopes (required), expires_at
-- deploy_token_create_group: Create group deploy token. Params: group_id (required), name (required), scopes (required), expires_at
-- deploy_token_delete_project: Delete project deploy token. Params: project_id (required), deploy_token_id (required)
-- deploy_token_delete_group: Delete group deploy token. Params: group_id (required), deploy_token_id (required)
-- deploy_key_list_project: List project deploy keys. Params: project_id (required), page, per_page
-- deploy_key_get: Get a deploy key. Params: project_id (required), deploy_key_id (required)
-- deploy_key_add: Add deploy key to project. Params: project_id (required), title (required), key (required), can_push
-- deploy_key_update: Update a deploy key. Params: project_id (required), deploy_key_id (required), title, can_push
-- deploy_key_delete: Delete a deploy key. Params: project_id (required), deploy_key_id (required)
-- deploy_key_enable: Enable a deploy key for a project. Params: project_id (required), deploy_key_id (required)
-- deploy_key_list_all: List all deploy keys (admin). Params: page, per_page
-- deploy_key_add_instance: Add instance-level deploy key. Params: title (required), key (required)
-- deploy_key_list_user_project: List deploy keys for a user project. Params: project_id (required), page, per_page
-- request_list_project: List project access requests. Params: project_id (required), page, per_page
-- request_list_group: List group access requests. Params: group_id (required), page, per_page
-- request_project: Request access to project. Params: project_id (required)
-- request_group: Request access to group. Params: group_id (required)
-- approve_project: Approve project access request. Params: project_id (required), user_id (required), access_level
-- approve_group: Approve group access request. Params: group_id (required), user_id (required), access_level
-- deny_project: Deny project access request. Params: project_id (required), user_id (required)
-- deny_group: Deny group access request. Params: group_id (required), user_id (required)
-- invite_list_project: List pending project invitations. Params: project_id (required), page, per_page
-- invite_list_group: List pending group invitations. Params: group_id (required), page, per_page
-- invite_project: Invite members to project. Params: project_id (required), email (required), access_level (required), expires_at
-- invite_group: Invite members to group. Params: group_id (required), email (required), access_level (required), expires_at
+When to use: manage deploy keys, deploy tokens, access tokens (project/group/personal), access requests, and invitations. NOT for: SSH/GPG keys or user-scoped PATs (use gitlab_user), instance admin tokens (use gitlab_admin), project settings (use gitlab_project).
 
-Use this tool for access credentials: deploy keys, deploy tokens, project/group access tokens, and personal access token management (list, get, rotate, revoke).
-Do NOT use for SSH/GPG keys or creating user-scoped PATs (use gitlab_user), or instance admin (use gitlab_admin).
-See also: gitlab_user (user management), gitlab_project (project settings)`, routes, toolutil.IconToken)
+Param conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.
+
+Access tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:
+- token_project_list / token_group_list: project_id* or group_id*
+- token_project_get / token_group_get: project_id* or group_id*, token_id*
+- token_project_create / token_group_create: project_id* or group_id*, name*, scopes*, expires_at, access_level
+- token_project_rotate / token_group_rotate: project_id* or group_id*, token_id*, expires_at
+- token_project_rotate_self / token_group_rotate_self: project_id* or group_id*, expires_at
+- token_project_revoke / token_group_revoke: project_id* or group_id*, token_id*
+- token_personal_list: user_id
+- token_personal_get: token_id*
+- token_personal_rotate: token_id*, expires_at
+- token_personal_rotate_self: expires_at
+- token_personal_revoke: token_id*
+- token_personal_revoke_self: (no params)
+
+Deploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD registry access:
+- deploy_token_list_all: (admin only)
+- deploy_token_list_project / deploy_token_list_group: project_id* or group_id*
+- deploy_token_get_project / deploy_token_get_group: project_id* or group_id*, deploy_token_id*
+- deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at
+- deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*
+
+Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:
+- deploy_key_list_project / deploy_key_list_user_project: project_id*
+- deploy_key_list_all: (admin only)
+- deploy_key_get: project_id*, deploy_key_id*
+- deploy_key_add: project_id*, title*, key*, can_push
+- deploy_key_update: project_id*, deploy_key_id*, title, can_push
+- deploy_key_delete: project_id*, deploy_key_id*
+- deploy_key_enable: project_id*, deploy_key_id*
+- deploy_key_add_instance: title*, key*
+
+Access requests (request_*, approve_*, deny_*):
+- request_list_project / request_list_group: project_id* or group_id*
+- request_project / request_group: project_id* or group_id*
+- approve_project / approve_group: project_id* or group_id*, user_id*, access_level
+- deny_project / deny_group: project_id* or group_id*, user_id*
+
+Invitations (invite_*):
+- invite_list_project / invite_list_group: project_id* or group_id*
+- invite_project / invite_group: project_id* or group_id*, email*, access_level*, expires_at
+
+See also: gitlab_user (SSH/GPG keys, user PATs), gitlab_admin (instance admin), gitlab_project (project settings)`, routes, toolutil.IconToken)
 }
 
 // registerPackageMeta registers the gitlab_package meta-tool with actions from
@@ -2347,34 +2370,42 @@ func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"protection_rule_delete":   destructiveVoidAction(client, protectedpackages.Delete),
 	}
 
-	addMetaTool(server, "gitlab_package", `Manage GitLab package registry: list, get, and delete packages. Upload and download generic package files. Manage package protection rules.
+	addMetaTool(server, "gitlab_package", `Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- publish: Upload a file to the package registry. Provide either file_path or content_base64, not both. Params: project_id (required), package_name (required), package_version (required), file_name (required), file_path or content_base64 (one required), status (optional: default/hidden)
-- download: Download a package file to a local path. Params: project_id (required), package_name (required), package_version (required), file_name (required), output_path (required)
-- list: List packages in a project with optional filtering. Params: project_id (required), package_name, package_version, package_type (generic/npm/maven/etc.), order_by (name/created_at/version/type), sort (asc/desc), page, per_page
-- file_list: List files within a specific package. Params: project_id (required), package_id (required), page, per_page
-- delete: Delete an entire package and all its files. Params: project_id (required), package_id (required)
-- file_delete: Delete a single file from a package. Params: project_id (required), package_id (required), package_file_id (required)
-- publish_and_link: Publish a file and create a release link pointing to it. Params: project_id (required), package_name (required), package_version (required), file_name (required), file_path or content_base64 (one required), tag_name (required), link_name (optional), link_type (optional: package/runbook/image/other), status (optional)
-- publish_directory: Publish all matching files from a directory. Params: project_id (required), package_name (required), package_version (required), directory_path (required), include_pattern (optional glob), status (optional)
-- registry_list_project: List project container registry repos. Params: project_id (required), tags (bool), tags_count (bool), page, per_page
-- registry_list_group: List group container registry repos. Params: group_id (required), page, per_page
-- registry_get: Get single container registry repo. Params: repository_id (required, int), tags (bool), tags_count (bool)
-- registry_delete: Delete container registry repo. Params: project_id (required), repository_id (required, int)
-- registry_tag_list: List tags for a container registry repo. Params: project_id (required), repository_id (required, int), page, per_page
-- registry_tag_get: Get tag details. Params: project_id (required), repository_id (required, int), tag_name (required)
-- registry_tag_delete: Delete a single tag. Params: project_id (required), repository_id (required, int), tag_name (required)
-- registry_tag_delete_bulk: Bulk delete tags by regex. Params: project_id (required), repository_id (required, int), name_regex_delete, name_regex_keep, keep_n (int), older_than
-- registry_rule_list: List container registry protection rules. Params: project_id (required)
-- registry_rule_create: Create protection rule. Params: project_id (required), repository_path_pattern (required), minimum_access_level_for_push, minimum_access_level_for_delete
-- registry_rule_update: Update protection rule. Params: project_id (required), rule_id (required, int), repository_path_pattern, minimum_access_level_for_push, minimum_access_level_for_delete
-- registry_rule_delete: Delete protection rule. Params: project_id (required), rule_id (required, int)
-- protection_rule_list: List package protection rules. Params: project_id (required), page, per_page
-- protection_rule_create: Create package protection rule. Params: project_id (required), package_name_pattern (required), package_type (required), minimum_access_level_for_push (maintainer/owner/admin), minimum_access_level_for_delete (maintainer/owner/admin)
-- protection_rule_update: Update package protection rule. Params: project_id (required), rule_id (required, int), package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
-- protection_rule_delete: Delete package protection rule. Params: project_id (required), rule_id (required, int)
+When to use: package upload/download, container registry browsing, protection rules. NOT for: release asset links (use gitlab_release).
+
+Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
+
+Packages:
+- publish: project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), status (default/hidden)
+- download: project_id*, package_name*, package_version*, file_name*, output_path*
+- list: project_id*, package_name, package_version, package_type (generic/npm/maven/etc.), order_by, sort
+- file_list: project_id*, package_id*
+- delete: project_id*, package_id*. Deletes package and all files.
+- file_delete: project_id*, package_id*, package_file_id*
+- publish_and_link: publish + create release link. project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), tag_name*, link_name, link_type
+- publish_directory: project_id*, package_name*, package_version*, directory_path*, include_pattern (glob), status
+
+Container registry:
+- registry_list_project: project_id*, tags, tags_count
+- registry_list_group: group_id*
+- registry_get: repository_id*, tags, tags_count
+- registry_delete: project_id*, repository_id*
+- registry_tag_list / registry_tag_get / registry_tag_delete: project_id*, repository_id*, tag_name* (for get/delete)
+- registry_tag_delete_bulk: project_id*, repository_id*, name_regex_delete, name_regex_keep, keep_n, older_than
+
+Container registry protection rules:
+- registry_rule_list: project_id*
+- registry_rule_create: project_id*, repository_path_pattern*, minimum_access_level_for_push, minimum_access_level_for_delete
+- registry_rule_update: project_id*, rule_id*, repository_path_pattern, minimum_access_level_for_push, minimum_access_level_for_delete
+- registry_rule_delete: project_id*, rule_id*
+
+Package protection rules:
+- protection_rule_list: project_id*
+- protection_rule_create: project_id*, package_name_pattern*, package_type*, minimum_access_level_for_push, minimum_access_level_for_delete
+- protection_rule_update: project_id*, rule_id*, package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
+- protection_rule_delete: project_id*, rule_id*
 
 See also: gitlab_release (release asset links), gitlab_project`, routes, toolutil.IconPackage)
 }
@@ -2422,44 +2453,47 @@ func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"emoji_snippet_note_create": routeAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
 		"emoji_snippet_note_delete": destructiveVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
 	}
-	addMetaTool(server, "gitlab_snippet", `Create, list, get, update, and delete GitLab snippets (project and personal). Also manages raw content, user files, discussions, notes, and award emoji.
+	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets (personal and project-scoped): CRUD, raw content, file content, discussions, notes, and award emoji. Delete actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List current user's snippets. Params: page, per_page
-- list_all: List all public snippets. Params: page, per_page
-- get: Get a snippet. Params: snippet_id (required)
-- content: Get raw snippet content. Params: snippet_id (required)
-- file_content: Get a specific file from a snippet. Params: snippet_id (required), file_path (required)
-- create: Create a snippet. Params: title (required), file_name (required), content (required), visibility, description
-- update: Update a snippet. Params: snippet_id (required), title, file_name, content, visibility, description
-- delete: Delete a snippet. Params: snippet_id (required)
-- explore: List all public snippets. Params: page, per_page
-- project_list: List project snippets. Params: project_id (required), page, per_page
-- project_get: Get a project snippet. Params: project_id (required), snippet_id (required)
-- project_content: Get raw project snippet content. Params: project_id (required), snippet_id (required)
-- project_create: Create a project snippet. Params: project_id (required), title (required), file_name (required), content (required), visibility
-- project_update: Update a project snippet. Params: project_id (required), snippet_id (required), title, file_name, content, visibility
-- project_delete: Delete a project snippet. Params: project_id (required), snippet_id (required)
-- discussion_list: List snippet discussions. Params: snippet_id (required), page, per_page
-- discussion_get: Get a snippet discussion. Params: snippet_id (required), discussion_id (required)
-- discussion_create: Create a snippet discussion. Params: snippet_id (required), body (required)
-- discussion_add_note: Add note to snippet discussion. Params: snippet_id (required), discussion_id (required), body (required)
-- discussion_update_note: Update note in snippet discussion. Params: snippet_id (required), discussion_id (required), note_id (required), body (required)
-- discussion_delete_note: Delete note from snippet discussion. Params: snippet_id (required), discussion_id (required), note_id (required)
-- note_list: List snippet notes. Params: project_id (required), snippet_id (required), order_by, sort, page, per_page
-- note_get: Get a snippet note. Params: project_id (required), snippet_id (required), note_id (required)
-- note_create: Add a note to a snippet. Params: project_id (required), snippet_id (required), body (required)
-- note_update: Update a snippet note. Params: project_id (required), snippet_id (required), note_id (required), body (required)
-- note_delete: Delete a snippet note. Params: project_id (required), snippet_id (required), note_id (required)
-- emoji_snippet_list: List award emoji on a snippet. Params: project_id (required), iid (required), page, per_page
-- emoji_snippet_get: Get an award emoji on a snippet. Params: project_id (required), iid (required), award_id (required)
-- emoji_snippet_create: Add award emoji to a snippet. Params: project_id (required), iid (required), name (required)
-- emoji_snippet_delete: Remove award emoji from a snippet. Params: project_id (required), iid (required), award_id (required)
-- emoji_snippet_note_list: List award emoji on a snippet note. Params: project_id (required), iid (required), note_id (required), page, per_page
-- emoji_snippet_note_get: Get an award emoji on a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
-- emoji_snippet_note_create: Add award emoji to a snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
-- emoji_snippet_note_delete: Delete award emoji from a snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
+When to use: snippet CRUD, reading snippet content, discussions/notes on snippets. NOT for: project files (use gitlab_repository).
+
+Param conventions: * = required. List actions accept page, per_page.
+
+Personal snippets:
+- list / list_all / explore: no required params
+- get / content: snippet_id*
+- file_content: snippet_id*, file_path*
+- create: title*, file_name*, content*, visibility, description
+- update: snippet_id*, title, file_name, content, visibility, description
+- delete: snippet_id*
+
+Project snippets:
+- project_list: project_id*
+- project_get / project_content: project_id*, snippet_id*
+- project_create: project_id*, title*, file_name*, content*, visibility
+- project_update: project_id*, snippet_id*, title, file_name, content, visibility
+- project_delete: project_id*, snippet_id*
+
+Discussions:
+- discussion_list: snippet_id*
+- discussion_get: snippet_id*, discussion_id*
+- discussion_create: snippet_id*, body*
+- discussion_add_note: snippet_id*, discussion_id*, body*
+- discussion_update_note: snippet_id*, discussion_id*, note_id*, body*
+- discussion_delete_note: snippet_id*, discussion_id*, note_id*
+
+Notes (project-scoped):
+- note_list: project_id*, snippet_id*, order_by, sort
+- note_get / note_delete: project_id*, snippet_id*, note_id*
+- note_create: project_id*, snippet_id*, body*
+- note_update: project_id*, snippet_id*, note_id*, body*
+
+Award emoji:
+- emoji_snippet_list / emoji_snippet_create / emoji_snippet_delete: project_id*, iid*, name* (create), award_id* (get/delete)
+- emoji_snippet_get: project_id*, iid*, award_id*
+- emoji_snippet_note_list / emoji_snippet_note_create / emoji_snippet_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_snippet_note_get: project_id*, iid*, note_id*, award_id*
 
 See also: gitlab_project, gitlab_user`, routes, toolutil.IconSnippet)
 }
@@ -2480,20 +2514,22 @@ func registerFeatureFlagsMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"ff_user_list_update": routeAction(client, ffuserlists.UpdateUserList),
 		"ff_user_list_delete": destructiveVoidAction(client, ffuserlists.DeleteUserList),
 	}
-	addMetaTool(server, "gitlab_feature_flags", `Manage GitLab feature flags and feature flag user lists (named sets of user IDs).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_feature_flags", `CRUD GitLab feature flags and feature flag user lists (named sets of user IDs).
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- feature_flag_list: List feature flags. Params: project_id (required), scope (enabled/disabled), page, per_page
-- feature_flag_get: Get a feature flag. Params: project_id (required), name (required)
-- feature_flag_create: Create a feature flag. Params: project_id (required), name (required), version (required), description, active, strategies
-- feature_flag_update: Update a feature flag. Params: project_id (required), name (required), description, active, strategies
-- feature_flag_delete: Delete a feature flag. Params: project_id (required), name (required)
-- ff_user_list_list: List feature flag user lists (named sets of user IDs). Params: project_id (required), page, per_page
-- ff_user_list_get: Get a feature flag user list by IID. Params: project_id (required), iid (required)
-- ff_user_list_create: Create a feature flag user list. Params: project_id (required), name (required), user_xids (required, comma-separated user identifiers)
-- ff_user_list_update: Update a feature flag user list. Params: project_id (required), iid (required), name, user_xids
-- ff_user_list_delete: Delete a feature flag user list. Params: project_id (required), iid (required)
+Param conventions: * = required. All actions need project_id*.
+
+Feature flags (feature_flag_*):
+- feature_flag_list: project_id*, scope (enabled/disabled), page, per_page
+- feature_flag_get / feature_flag_delete: project_id*, name*
+- feature_flag_create: project_id*, name*, version*, description, active, strategies
+- feature_flag_update: project_id*, name*, description, active, strategies
+
+User lists (ff_user_list_*): Named sets of user IDs for targeting.
+- ff_user_list_list: project_id*, page, per_page
+- ff_user_list_get / ff_user_list_delete: project_id*, iid*
+- ff_user_list_create: project_id*, name*, user_xids* (comma-separated)
+- ff_user_list_update: project_id*, iid*, name, user_xids
 
 See also: gitlab_project, gitlab_environment`, routes, toolutil.IconConfig)
 }
@@ -2507,14 +2543,15 @@ func registerMergeTrainMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"get":          routeAction(client, mergetrains.GetMergeRequestOnMergeTrain),
 		"add":          routeAction(client, mergetrains.AddMergeRequestToMergeTrain),
 	}
-	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues). List, get, and add merge requests to merge trains.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_merge_train", `Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list_project: List all merge trains for a project. Params: project_id (required), scope (active/complete), sort (asc/desc), page, per_page
-- list_branch: List merge requests in a merge train for a specific branch. Params: project_id (required), target_branch (required), scope, sort, page, per_page
-- get: Get the status of a merge request in a merge train. Params: project_id (required), merge_request_id (required)
-- add: Add a merge request to a merge train. Params: project_id (required), merge_request_id (required), auto_merge (bool), sha (string), squash (bool)
+Param conventions: * = required. All actions need project_id*.
+
+- list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
+- list_branch: project_id*, target_branch*, scope, sort, page, per_page
+- get: project_id*, merge_request_id*
+- add: project_id*, merge_request_id*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline`, routes, toolutil.IconMR)
 }
@@ -2530,18 +2567,19 @@ func registerAuditEventMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list_project":  routeAction(client, auditevents.ListProject),
 		"get_project":   routeAction(client, auditevents.GetProject),
 	}
-	addMetaTool(server, "gitlab_audit_event", `List and get GitLab audit events at instance, group, and project levels. Track who did what and when for compliance.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_audit_event", `List and get GitLab audit events at instance, group, and project levels for compliance tracking.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list_instance: List instance-level audit events (admin only). Params: created_after (YYYY-MM-DD), created_before (YYYY-MM-DD), page, per_page
-- get_instance: Get a single instance audit event. Params: event_id (required)
-- list_group: List group audit events. Params: group_id (required), created_after, created_before, page, per_page
-- get_group: Get a single group audit event. Params: group_id (required), event_id (required)
-- list_project: List project audit events. Params: project_id (required), created_after, created_before, page, per_page
-- get_project: Get a single project audit event. Params: project_id (required), event_id (required)
+Common optional params: created_after (YYYY-MM-DD), created_before, page, per_page.
 
-See also: gitlab_admin (instance administration)`, routes, toolutil.IconEvent)
+- list_instance: (admin only) created_after, created_before
+- get_instance: event_id*
+- list_group: group_id*, created_after, created_before
+- get_group: group_id*, event_id*
+- list_project: project_id*, created_after, created_before
+- get_project: project_id*, event_id*
+
+See also: gitlab_admin`, routes, toolutil.IconEvent)
 }
 
 // registerDORAMetricsMeta registers the gitlab_dora_metrics meta-tool with actions
@@ -2551,12 +2589,13 @@ func registerDORAMetricsMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"project": routeAction(client, dorametrics.GetProjectMetrics),
 		"group":   routeAction(client, dorametrics.GetGroupMetrics),
 	}
-	addMetaTool(server, "gitlab_dora_metrics", `Get GitLab DORA metrics (deployment frequency, lead time, MTTR, change failure rate).
-Use "action" to specify the scope. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_dora_metrics", `Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- project: Get DORA metrics for a project. Params: project_id (required), metric (required: deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), interval (daily|monthly|all), environment_tiers (array)
-- group: Get DORA metrics for a group. Params: group_id (required), metric (required), start_date, end_date, interval, environment_tiers
+Common params: metric* (deployment_frequency|lead_time_for_changes|time_to_restore_service|change_failure_rate), start_date (YYYY-MM-DD), end_date, interval (daily/monthly/all), environment_tiers (array).
+
+- project: project_id*, metric*, start_date, end_date, interval, environment_tiers
+- group: group_id*, metric*, start_date, end_date, interval, environment_tiers
 
 See also: gitlab_environment, gitlab_pipeline`, routes, toolutil.IconAnalytics)
 }
@@ -2570,16 +2609,15 @@ func registerDependencyMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"export_get":      routeAction(client, dependencies.GetExport),
 		"export_download": routeAction(client, dependencies.DownloadExport),
 	}
-	addMetaTool(server, "gitlab_dependency", `List GitLab project dependencies and create/download SBOM exports (CycloneDX).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_dependency", `List project dependencies and create/download SBOM exports (CycloneDX).
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List project dependencies. Params: project_id (required), package_manager (optional filter), page, per_page
-- export_create: Create a dependency list export (SBOM) from a pipeline. Params: pipeline_id (required), export_type (default: sbom)
-- export_get: Check status of a dependency list export. Params: export_id (required)
-- export_download: Download a completed export (CycloneDX JSON, max 1MB). Params: export_id (required)
+- list: project_id*, package_manager, page, per_page
+- export_create: pipeline_id*, export_type (default: sbom)
+- export_get: export_id*
+- export_download: export_id*. CycloneDX JSON, max 1MB.
 
-See also: gitlab_project, gitlab_vulnerability (security vulnerabilities)`, routes, toolutil.IconPackage)
+See also: gitlab_project, gitlab_vulnerability`, routes, toolutil.IconPackage)
 }
 
 // registerExternalStatusCheckMeta registers the gitlab_external_status_check meta-tool with actions
@@ -2601,26 +2639,28 @@ func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Cl
 		"retry_project":          routeVoidAction(client, externalstatuschecks.RetryFailedExternalStatusCheckForProjectMR),
 		"set_project_mr_status":  routeVoidAction(client, externalstatuschecks.SetProjectMRExternalStatusCheckStatus),
 	}
-	addMetaTool(server, "gitlab_external_status_check", `Manage GitLab external status checks for merge requests and projects. Create, list, update, delete checks and set/retry check status.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_external_status_check", `Manage external status checks for MRs and projects. CRUD checks and set/retry status.
+Valid actions: `+validActionsString(routes)+`
 
-Actions (legacy):
-- list_mr_checks: List status checks for an MR. Params: project_id, mr_iid (required), page, per_page
-- set_status: Set status of an external status check for an MR. Params: project_id, mr_iid, sha, external_status_check_id, status (required)
-- list_project_checks: List external status checks for a project. Params: project_id (required), page, per_page
-- create: Create an external status check. Params: project_id, name, external_url (required), protected_branch_ids
-- delete: Delete an external status check. Params: project_id, check_id (required)
-- update: Update an external status check. Params: project_id, check_id (required), name, external_url, protected_branch_ids
-- retry: Retry a failed status check for an MR. Params: project_id, mr_iid, check_id (required)
+Param conventions: * = required.
 
-Actions (project-scoped, preferred):
-- list_project_mr_checks: List status checks for a project MR. Params: project_id, mr_iid (required), page, per_page
-- list_project: List external status checks for a project. Params: project_id (required), page, per_page
-- create_project: Create an external status check (returns created object). Params: project_id, name, external_url (required), shared_secret, protected_branch_ids
-- delete_project: Delete an external status check. Params: project_id, check_id (required)
-- update_project: Update an external status check (returns updated object). Params: project_id, check_id (required), name, external_url, shared_secret, protected_branch_ids
-- retry_project: Retry a failed status check for a project MR. Params: project_id, mr_iid, check_id (required)
-- set_project_mr_status: Set status of an external status check. Params: project_id, mr_iid, sha, external_status_check_id, status (required)
+Legacy API:
+- list_mr_checks: project_id*, mr_iid*, page, per_page
+- set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
+- list_project_checks: project_id*, page, per_page
+- create: project_id*, name*, external_url*, protected_branch_ids
+- delete: project_id*, check_id*
+- update: project_id*, check_id*, name, external_url, protected_branch_ids
+- retry: project_id*, mr_iid*, check_id*
+
+Project-scoped API (preferred):
+- list_project_mr_checks: project_id*, mr_iid*, page, per_page
+- list_project: project_id*, page, per_page
+- create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids
+- delete_project: project_id*, check_id*
+- update_project: project_id*, check_id*, name, external_url, shared_secret, protected_branch_ids
+- retry_project: project_id*, mr_iid*, check_id*
+- set_project_mr_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
 
 See also: gitlab_merge_request`, routes, toolutil.IconSecurity)
 }
@@ -2634,14 +2674,14 @@ func registerGroupSCIMMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"update": routeVoidAction(client, groupscim.Update),
 		"delete": destructiveVoidAction(client, groupscim.Delete),
 	}
-	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning (list, get, update, delete).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List SCIM identities for a group. Params: group_id (required)
-- get: Get a single SCIM identity. Params: group_id (required), uid (required)
-- update: Update a SCIM identity's external UID. Params: group_id (required), uid (required), extern_uid (required)
-- delete: Delete a SCIM identity. Params: group_id (required), uid (required)
+All actions need group_id*.
+
+- list: group_id*
+- get / delete: group_id*, uid*
+- update: group_id*, uid*, extern_uid*
 
 See also: gitlab_group, gitlab_user`, routes, toolutil.IconSecurity)
 }
@@ -2657,16 +2697,18 @@ func registerMemberRoleMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create_group":    routeAction(client, memberroles.CreateGroup),
 		"delete_group":    destructiveVoidAction(client, memberroles.DeleteGroup),
 	}
-	addMetaTool(server, "gitlab_member_role", `Manage custom member roles in GitLab at instance or group level. Define fine-grained permissions beyond standard access levels.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_member_role", `Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list_instance: List all instance-level member roles. No params required.
-- create_instance: Create an instance-level member role. Params: name (required), base_access_level (required, 10/20/30/40/50), description, permissions (object with bool fields)
-- delete_instance: Delete an instance-level member role. Params: member_role_id (required)
-- list_group: List member roles for a group. Params: group_id (required)
-- create_group: Create a group-level member role. Params: group_id (required), name (required), base_access_level (required), description, permissions
-- delete_group: Delete a group-level member role. Params: group_id (required), member_role_id (required)
+Instance-level:
+- list_instance: no params
+- create_instance: name*, base_access_level* (10/20/30/40/50), description, permissions (object)
+- delete_instance: member_role_id*
+
+Group-level:
+- list_group: group_id*
+- create_group: group_id*, name*, base_access_level*, description, permissions
+- delete_group: group_id*, member_role_id*
 
 See also: gitlab_group, gitlab_user`, routes, toolutil.IconSecurity)
 }
@@ -2680,14 +2722,15 @@ func registerEnterpriseUserMeta(server *mcp.Server, client *gitlabclient.Client)
 		"disable_2fa": destructiveVoidAction(client, enterpriseusers.Disable2FA),
 		"delete":      destructiveVoidAction(client, enterpriseusers.Delete),
 	}
-	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group: list, get, disable 2FA, and delete.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_enterprise_user", `Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List enterprise users. Params: group_id (required), username, search, active, blocked, created_after, created_before, two_factor, page, per_page
-- get: Get details of a specific enterprise user. Params: group_id (required), user_id (required)
-- disable_2fa: Disable two-factor authentication for an enterprise user. Params: group_id (required), user_id (required)
-- delete: Delete an enterprise user. Params: group_id (required), user_id (required), hard_delete (optional)
+All actions need group_id*.
+
+- list: group_id*, username, search, active, blocked, created_after, created_before, two_factor, page, per_page
+- get: group_id*, user_id*
+- disable_2fa: group_id*, user_id*
+- delete: group_id*, user_id*, hard_delete
 
 See also: gitlab_group, gitlab_user`, routes, toolutil.IconUser)
 }
@@ -2699,12 +2742,11 @@ func registerAttestationMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list":     routeAction(client, attestations.List),
 		"download": routeAction(client, attestations.Download),
 	}
-	addReadOnlyMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for GitLab project artifacts.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addReadOnlyMetaTool(server, "gitlab_attestation", `List and download build attestations (SLSA provenance) for project artifacts.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List attestations for a project matching a subject digest. Params: project_id (required), subject_digest (required)
-- download: Download a specific attestation. Params: project_id (required), attestation_iid (required)
+- list: project_id*, subject_digest*
+- download: project_id*, attestation_iid*
 
 See also: gitlab_pipeline, gitlab_package`, routes, toolutil.IconSecurity)
 }
@@ -2717,11 +2759,10 @@ func registerCompliancePolicyMeta(server *mcp.Server, client *gitlabclient.Clien
 		"update": routeAction(client, compliancepolicy.Update),
 	}
 	addMetaTool(server, "gitlab_compliance_policy", `Get and update admin compliance policy settings (CSP namespace configuration).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- get: Get current compliance policy settings (admin). No params required.
-- update: Update compliance policy settings (admin). Params: csp_namespace_id (optional, int64)
+- get: no params
+- update: csp_namespace_id (int64)
 
 See also: gitlab_admin`, routes, toolutil.IconSecurity)
 }
@@ -2735,14 +2776,12 @@ func registerProjectAliasMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create": routeAction(client, projectaliases.Create),
 		"delete": destructiveVoidAction(client, projectaliases.Delete),
 	}
-	addMetaTool(server, "gitlab_project_alias", `Manage GitLab project aliases: create short names that redirect to projects (admin, Premium/Ultimate).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_project_alias", `CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List all project aliases. No params required.
-- get: Get a project alias by name. Params: name (required)
-- create: Create a project alias. Params: name (required), project_id (required, int64)
-- delete: Delete a project alias. Params: name (required)
+- list: no params
+- get / delete: name*
+- create: name*, project_id* (int64)
 
 See also: gitlab_project`, routes, toolutil.IconProject)
 }
@@ -2760,18 +2799,15 @@ func registerGeoMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list_status": routeAction(client, geo.ListStatus),
 		"get_status":  routeAction(client, geo.GetStatus),
 	}
-	addMetaTool(server, "gitlab_geo", `Manage GitLab Geo replication sites: create, list, get, edit, delete, repair, and check status (admin, Premium/Ultimate).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_geo", `Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- create: Create a Geo site. Params: name, url, primary, enabled, internal_url, files_max_capacity, repos_max_capacity, verification_max_capacity, container_repositories_max_capacity, sync_object_storage, selective_sync_type, selective_sync_shards, selective_sync_namespace_ids, minimum_reverification_interval
-- list: List all Geo sites. Pagination: page, per_page
-- get: Get a Geo site. Params: id (required)
-- edit: Edit a Geo site. Params: id (required), plus any fields from create (except primary, sync_object_storage)
-- delete: Delete a Geo site. Params: id (required)
-- repair: Repair OAuth for a Geo site. Params: id (required)
-- list_status: List replication status of all Geo sites. Pagination: page, per_page
-- get_status: Get replication status of a Geo site. Params: id (required)
+Param conventions: * = required.
+
+- list / list_status: page, per_page
+- get / get_status / delete / repair: id*
+- create: name, url, primary, enabled, internal_url, files_max_capacity, repos_max_capacity, verification_max_capacity, container_repositories_max_capacity, sync_object_storage, selective_sync_type, selective_sync_shards, selective_sync_namespace_ids, minimum_reverification_interval
+- edit: id*, plus create params (except primary, sync_object_storage)
 
 See also: gitlab_admin`, routes, toolutil.IconServer)
 }
@@ -2782,13 +2818,14 @@ func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) 
 	routes := actionMap{
 		"download": routeAction(client, modelregistry.Download),
 	}
-	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate). Returns base64-encoded binary content — responses can be large depending on model file size.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- download: Download a ML model package file. Params: project_id (required), model_version_id (required), path (required), filename (required). Returns base64-encoded content.
+When to use: download ML model artifacts from the GitLab Model Registry. NOT for: generic packages (use gitlab_package), container images, or model training.
 
-See also: gitlab_package`, routes, toolutil.IconPackage)
+- download: project_id*, model_version_id*, path*, filename*. Returns base64-encoded file content.
+
+See also: gitlab_package (generic package registry)`, routes, toolutil.IconPackage)
 }
 
 // registerStorageMoveMeta registers the gitlab_storage_move enterprise meta-tool
@@ -2814,32 +2851,34 @@ func registerStorageMoveMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"schedule_snippet":        routeAction(client, snippetstoragemoves.Schedule),
 		"schedule_all_snippet":    routeAction(client, snippetstoragemoves.ScheduleAll),
 	}
-	addMetaTool(server, "gitlab_storage_move", `Manage GitLab repository storage moves across projects, groups, and snippets (admin only).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_storage_move", `Manage repository storage moves for projects, groups, and snippets (admin only).
+Valid actions: `+validActionsString(routes)+`
 
-Actions (Project):
-- retrieve_all_project: List all project storage moves. Pagination: page, per_page
-- retrieve_project: List storage moves for a project. Params: project_id (required). Pagination: page, per_page
-- get_project: Get a project storage move by ID. Params: id (required)
-- get_project_for_project: Get a storage move for a specific project. Params: project_id (required), id (required)
-- schedule_project: Schedule a storage move for a project. Params: project_id (required), destination_storage_name (optional)
-- schedule_all_project: Schedule storage moves for all projects. Params: source_storage_name (optional), destination_storage_name (optional)
+Param conventions: * = required. retrieve_all/list actions accept page, per_page. Each resource type (project/group/snippet) has the same action pattern.
 
-Actions (Group):
-- retrieve_all_group: List all group storage moves. Pagination: page, per_page
-- retrieve_group: List storage moves for a group. Params: group_id (required). Pagination: page, per_page
-- get_group: Get a group storage move by ID. Params: id (required)
-- get_group_for_group: Get a storage move for a specific group. Params: group_id (required), id (required)
-- schedule_group: Schedule a storage move for a group. Params: group_id (required), destination_storage_name (optional)
-- schedule_all_group: Schedule storage moves for all groups. Params: source_storage_name (optional), destination_storage_name (optional)
+Project storage moves:
+- retrieve_all_project: page, per_page
+- retrieve_project: project_id*, page, per_page
+- get_project: id*
+- get_project_for_project: project_id*, id*
+- schedule_project: project_id*, destination_storage_name
+- schedule_all_project: source_storage_name, destination_storage_name
 
-Actions (Snippet):
-- retrieve_all_snippet: List all snippet storage moves. Pagination: page, per_page
-- retrieve_snippet: List storage moves for a snippet. Params: snippet_id (required). Pagination: page, per_page
-- get_snippet: Get a snippet storage move by ID. Params: id (required)
-- get_snippet_for_snippet: Get a storage move for a specific snippet. Params: snippet_id (required), id (required)
-- schedule_snippet: Schedule a storage move for a snippet. Params: snippet_id (required), destination_storage_name (optional)
-- schedule_all_snippet: Schedule storage moves for all snippets. Params: source_storage_name (optional), destination_storage_name (optional)
+Group storage moves:
+- retrieve_all_group: page, per_page
+- retrieve_group: group_id*, page, per_page
+- get_group: id*
+- get_group_for_group: group_id*, id*
+- schedule_group: group_id*, destination_storage_name
+- schedule_all_group: source_storage_name, destination_storage_name
+
+Snippet storage moves:
+- retrieve_all_snippet: page, per_page
+- retrieve_snippet: snippet_id*, page, per_page
+- get_snippet: id*
+- get_snippet_for_snippet: snippet_id*, id*
+- schedule_snippet: snippet_id*, destination_storage_name
+- schedule_all_snippet: source_storage_name, destination_storage_name
 
 See also: gitlab_admin`, routes, toolutil.IconServer)
 }
@@ -2857,20 +2896,18 @@ func registerVulnerabilityMeta(server *mcp.Server, client *gitlabclient.Client) 
 		"severity_count":            routeAction(client, vulnerabilities.SeverityCount),
 		"pipeline_security_summary": routeAction(client, vulnerabilities.PipelineSecuritySummary),
 	}
-	addMetaTool(server, "gitlab_vulnerability", `List, get, dismiss, confirm, resolve, and revert GitLab project vulnerabilities. Get severity counts and pipeline security summaries (Premium/Ultimate, GraphQL).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_vulnerability", `List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List project vulnerabilities. Params: project_path (required), severity (optional, array), state (optional, array), scanner (optional, array), report_type (optional, array), has_issues (optional, bool), has_resolution (optional, bool), sort (optional). Pagination: first, after
-- get: Get a single vulnerability by GID. Params: id (required, GID string e.g. gid://gitlab/Vulnerability/42)
-- dismiss: Dismiss a vulnerability. Params: id (required, GID), comment (optional), dismissal_reason (optional: ACCEPTABLE_RISK, FALSE_POSITIVE, MITIGATING_CONTROL, USED_IN_TESTS, NOT_APPLICABLE)
-- confirm: Confirm a detected vulnerability. Params: id (required, GID)
-- resolve: Resolve a vulnerability. Params: id (required, GID)
-- revert: Revert a vulnerability to detected state. Params: id (required, GID)
-- severity_count: Get vulnerability severity counts for a project. Params: project_path (required)
-- pipeline_security_summary: Get security report summary for a pipeline. Params: project_path (required), pipeline_iid (required)
+Param conventions: * = required. GID format: gid://gitlab/Vulnerability/42.
 
-See also: gitlab_security_finding (pipeline security report), gitlab_pipeline`, routes, toolutil.IconSecurity)
+- list: project_path*, severity, state, scanner, report_type (arrays), has_issues, has_resolution, sort, first, after
+- get / confirm / resolve / revert: id* (GID)
+- dismiss: id* (GID), comment, dismissal_reason (ACCEPTABLE_RISK/FALSE_POSITIVE/MITIGATING_CONTROL/USED_IN_TESTS/NOT_APPLICABLE)
+- severity_count: project_path*
+- pipeline_security_summary: project_path*, pipeline_iid*
+
+See also: gitlab_security_finding, gitlab_pipeline`, routes, toolutil.IconSecurity)
 }
 
 // registerSecurityFindingsMeta registers the gitlab_security_finding meta-tool with actions: list.
@@ -2878,13 +2915,12 @@ func registerSecurityFindingsMeta(server *mcp.Server, client *gitlabclient.Clien
 	routes := actionMap{
 		"list": routeAction(client, securityfindings.List),
 	}
-	addReadOnlyMetaTool(server, "gitlab_security_finding", `List pipeline security report findings via GraphQL API (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addReadOnlyMetaTool(server, "gitlab_security_finding", `List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List security report findings for a pipeline. Params: project_path (required), pipeline_iid (required), severity (optional, array), confidence (optional, array), scanner (optional, array), report_type (optional, array). Pagination: first, after
+- list: project_path*, pipeline_iid*, severity, confidence, scanner, report_type (arrays), first, after
 
-See also: gitlab_vulnerability (project vulnerabilities), gitlab_pipeline`, routes, toolutil.IconSecurity)
+See also: gitlab_vulnerability, gitlab_pipeline`, routes, toolutil.IconSecurity)
 }
 
 // registerCICatalogMeta registers the gitlab_ci_catalog meta-tool with actions: list, get.
@@ -2894,13 +2930,12 @@ func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"get":  routeAction(client, cicatalog.Get),
 	}
 	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List CI/CD Catalog resources. Params: search (optional), scope (optional: ALL, NAMESPACED), sort (optional: NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC). Pagination: first, after
-- get: Get a CI/CD Catalog resource by GID or project full path. Params: id (optional, GID e.g. gid://gitlab/Ci::CatalogResource/1), full_path (optional, e.g. my-group/my-components). One of id or full_path is required.
+- list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first, after
+- get: id (GID) or full_path* (one required)
 
-See also: gitlab_pipeline, gitlab_template (standard templates)`, routes, toolutil.IconPackage)
+See also: gitlab_pipeline, gitlab_template`, routes, toolutil.IconPackage)
 }
 
 // registerCustomEmojiMeta registers the gitlab_custom_emoji meta-tool with actions: list, create, delete.
@@ -2910,13 +2945,12 @@ func registerCustomEmojiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create": routeAction(client, customemoji.Create),
 		"delete": destructiveVoidAction(client, customemoji.Delete),
 	}
-	addMetaTool(server, "gitlab_custom_emoji", `Manage group-level custom emoji via GraphQL API (Premium/Ultimate). Custom emoji are group-level assets with custom images, distinct from award emoji (reactions).
-Use "action" to specify the operation. Valid actions: `+validActionsString(routes)+`
+	addMetaTool(server, "gitlab_custom_emoji", `CRUD group-level custom emoji via GraphQL (Premium/Ultimate). Distinct from award emoji (reactions).
+Valid actions: `+validActionsString(routes)+`
 
-Actions:
-- list: List custom emoji for a group. Params: group_path (required). Pagination: first, after
-- create: Create a custom emoji. Params: group_path (required), name (required, without colons), url (required, image URL)
-- delete: Delete a custom emoji. Params: id (required, GID e.g. gid://gitlab/CustomEmoji/1)
+- list: group_path*, first, after
+- create: group_path*, name* (without colons), url* (image URL)
+- delete: id* (GID e.g. gid://gitlab/CustomEmoji/1)
 
 See also: gitlab_group`, routes, toolutil.IconLabel)
 }
