@@ -38,7 +38,16 @@ func installBinaryImpl(destDir string) (string, error) {
 		return "", fmt.Errorf("resolving executable path: %w", err)
 	}
 
-	destPath := filepath.Join(destDir, DefaultBinaryName())
+	// Sanitize destDir to prevent path traversal.
+	cleanDir := filepath.Clean(destDir)
+	if !filepath.IsAbs(cleanDir) {
+		cleanDir, err = filepath.Abs(cleanDir)
+		if err != nil {
+			return "", fmt.Errorf("resolving absolute path for %s: %w", destDir, err)
+		}
+	}
+
+	destPath := filepath.Join(cleanDir, DefaultBinaryName())
 	destResolved, _ := filepath.EvalSymlinks(destPath)
 	if destResolved == "" {
 		destResolved = destPath
@@ -48,8 +57,8 @@ func installBinaryImpl(destDir string) (string, error) {
 		return destPath, nil
 	}
 
-	if err = os.MkdirAll(destDir, 0o755); err != nil { // #nosec G301 -- install dir needs execute permission
-		return "", fmt.Errorf("creating directory %s: %w", destDir, err)
+	if err = os.MkdirAll(cleanDir, 0o755); err != nil { // #nosec G301 -- install dir needs execute permission
+		return "", fmt.Errorf("creating directory %s: %w", cleanDir, err)
 	}
 
 	if err = copyFile(srcPath, destPath); err != nil {
@@ -66,13 +75,16 @@ func installBinaryImpl(destDir string) (string, error) {
 }
 
 func copyFile(src, dst string) error {
-	in, err := os.Open(src) // #nosec G304 -- src is the running binary path, not user input
+	cleanSrc := filepath.Clean(src)
+	cleanDst := filepath.Clean(dst)
+
+	in, err := os.Open(cleanSrc) // #nosec G304 -- src is the running binary path resolved via os.Executable
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst) // #nosec G304 -- dst is a constructed path within the install directory
+	out, err := os.Create(cleanDst) // #nosec G304 -- dst is a constructed path within the sanitized install directory
 	if err != nil {
 		return err
 	}
