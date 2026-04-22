@@ -589,3 +589,171 @@ func TestDefaultFormatResult_Unmarshalable(t *testing.T) {
 		t.Error("expected non-empty fallback text")
 	}
 }
+
+// IsDestructiveAction.
+
+// TestIsDestructiveAction verifies that action names matching destructive
+// patterns (delete, remove, revoke, etc.) are correctly identified, while
+// non-destructive actions like list, get, create, and update are not.
+func TestIsDestructiveAction(t *testing.T) {
+	tests := []struct {
+		action string
+		want   bool
+	}{
+		// Substring matches: delete
+		{"delete", true},
+		{"delete_merged", true},
+		{"hook_delete", true},
+		{"deploy_token_delete_project", true},
+		{"file_delete", true},
+		// Substring matches: remove
+		{"remove", true},
+		{"group_member_remove", true},
+		{"token_scope_remove_project", true},
+		// Substring matches: revoke
+		{"revoke", true},
+		{"token_project_revoke", true},
+		{"revoke_impersonation_token", true},
+		// Substring matches: unprotect
+		{"unprotect", true},
+		{"protected_unprotect", true},
+		{"protected_branch_unprotect", true},
+		// Substring matches: unpublish
+		{"pages_unpublish", true},
+		// Substring matches: purge
+		{"purge", true},
+		// Substring matches: deny
+		{"deny_project", true},
+		{"deny_group", true},
+		// Exact matches
+		{"merge", true},
+		{"erase", true},
+		{"stop", true},
+		{"ban", true},
+		{"block", true},
+		{"deactivate", true},
+		{"reject", true},
+		{"unapprove", true},
+		{"approval_reset", true},
+		{"disable_two_factor", true},
+		// Non-destructive actions
+		{"list", false},
+		{"get", false},
+		{"create", false},
+		{"update", false},
+		{"search", false},
+		{"list_branches", false},
+		{"get_status", false},
+		{"create_issue", false},
+		{"approve", false},
+		{"protect", false},
+		{"activate", false},
+		{"unblock", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.action, func(t *testing.T) {
+			if got := IsDestructiveAction(tt.action); got != tt.want {
+				t.Errorf("IsDestructiveAction(%q) = %v, want %v", tt.action, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMakeMetaHandler_DestructiveActionConfirmBypass verifies that
+// MakeMetaHandler intercepts destructive actions with confirmation,
+// and that the "confirm" param bypasses the prompt.
+func TestMakeMetaHandler_DestructiveActionConfirmBypass(t *testing.T) {
+	called := false
+	routes := map[string]ActionFunc{
+		"delete": func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return map[string]string{"status": "deleted"}, nil
+		},
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	// With "confirm": true, the action should proceed without elicitation.
+	input := MetaToolInput{
+		Action: "delete",
+		Params: map[string]any{"id": float64(1), "confirm": true},
+	}
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
+	result, _, err := handler(context.Background(), req, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called — confirmation should have been bypassed")
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+// TestMakeMetaHandler_DestructiveActionYOLOMode verifies that YOLO_MODE
+// bypasses confirmation for destructive meta-tool actions.
+func TestMakeMetaHandler_DestructiveActionYOLOMode(t *testing.T) {
+	t.Setenv("YOLO_MODE", "true")
+
+	called := false
+	routes := map[string]ActionFunc{
+		"token_revoke": func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return map[string]string{"status": "revoked"}, nil
+		},
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	input := MetaToolInput{Action: "token_revoke", Params: map[string]any{}}
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
+	_, _, err := handler(context.Background(), req, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called — YOLO_MODE should bypass confirmation")
+	}
+}
+
+// TestMakeMetaHandler_NonDestructiveSkipsConfirm verifies that non-destructive
+// actions are dispatched without any confirmation prompt.
+func TestMakeMetaHandler_NonDestructiveSkipsConfirm(t *testing.T) {
+	called := false
+	routes := map[string]ActionFunc{
+		"list": func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return []string{"a", "b"}, nil
+		},
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	input := MetaToolInput{Action: "list", Params: map[string]any{}}
+	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called")
+	}
+}
+
+// TestMakeMetaHandler_DestructiveNoElicitation verifies that when the client
+// does not support elicitation (nil request), destructive actions proceed
+// without blocking — backward compatibility.
+func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
+	called := false
+	routes := map[string]ActionFunc{
+		"delete": func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return map[string]string{"status": "deleted"}, nil
+		},
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	input := MetaToolInput{Action: "delete", Params: map[string]any{}}
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
+	_, _, err := handler(context.Background(), req, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called — should proceed when elicitation unsupported")
+	}
+}
