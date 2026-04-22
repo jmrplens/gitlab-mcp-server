@@ -750,3 +750,27 @@ func TestHandleDefaults_InstalledVersion(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleDefaults_VersionTrimPrefix verifies that the server version
+// has the "v" prefix stripped before being returned in the JSON response.
+func TestHandleDefaults_VersionTrimPrefix(t *testing.T) {
+	stubLoadExistingConfig(t)
+	stubGetInstalledVersion(t, "")
+	handler := handleDefaults("v2.0.0")
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/api/defaults", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var resp defaultsResponse
+	if err = json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+
+	if resp.Version != "2.0.0" {
+		t.Errorf("Version = %q, want %q (v prefix should be stripped)", resp.Version, "2.0.0")
+	}
+}

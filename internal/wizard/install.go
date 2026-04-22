@@ -88,7 +88,12 @@ func copyFile(src, dst string) error {
 // -version and parses the output ("gitlab-mcp-server X.Y.Z (commit: ...)").
 // Returns empty string if the binary does not exist or cannot be executed.
 func getInstalledVersionImpl() string {
-	binPath := filepath.Join(DefaultInstallDir(), DefaultBinaryName())
+	return getVersionFromBinary(filepath.Join(DefaultInstallDir(), DefaultBinaryName()))
+}
+
+// getVersionFromBinary runs the binary at binPath with -version and parses the
+// output. Returns empty string if the binary does not exist or fails.
+func getVersionFromBinary(binPath string) string {
 	if _, err := os.Stat(binPath); err != nil {
 		return ""
 	}
@@ -105,7 +110,7 @@ func getInstalledVersionImpl() string {
 	line := strings.TrimSpace(string(out))
 	parts := strings.Fields(line)
 	if len(parts) >= 2 {
-		return parts[1]
+		return strings.TrimPrefix(parts[1], "v")
 	}
 	return ""
 }

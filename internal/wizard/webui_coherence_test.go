@@ -1,11 +1,29 @@
 package wizard
 
 import (
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
 )
+
+// jsonTagsFromStruct extracts all JSON field names from a struct type using
+// reflection. It strips ",omitempty" and other tag options.
+func jsonTagsFromStruct(t *testing.T, v any) map[string]bool {
+	t.Helper()
+	rt := reflect.TypeOf(v)
+	tags := make(map[string]bool)
+	for i := range rt.NumField() {
+		tag := rt.Field(i).Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		tags[name] = true
+	}
+	return tags
+}
 
 // loadEmbeddedHTML returns the embedded index.html content as a string.
 // Fails the test if the asset cannot be read.
@@ -133,23 +151,11 @@ func TestWebUI_DefaultsJSONFields_UsedInJS(t *testing.T) {
 		jsFields[m[1]] = true
 	}
 
-	// JSON field names from defaultsResponse struct tags.
-	// clientResponse sub-fields accessed as c.X are also included.
-	goFields := map[string]bool{
-		// defaultsResponse fields
-		"version":           true,
-		"installed_version": true,
-		"install_path":      true,
-		"gitlab_url":        true,
-		"has_existing":      true,
-		"masked_token":      true,
-		"skip_tls_verify":   true,
-		"clients":           true,
-		// clientResponse fields (accessed via c.X in forEach)
-		"name":             true,
-		"config_path":      true,
-		"display_only":     true,
-		"default_selected": true,
+	// JSON field names extracted via reflection from defaultsResponse and
+	// clientResponse structs. This ensures the test stays in sync with Go code.
+	goFields := jsonTagsFromStruct(t, defaultsResponse{})
+	for k, v := range jsonTagsFromStruct(t, clientResponse{}) {
+		goFields[k] = v
 	}
 
 	var unknown []string
@@ -213,18 +219,8 @@ func TestWebUI_ConfigureRequestFields_InJS_MatchGoStruct(t *testing.T) {
 		jsFields[m[1]] = true
 	}
 
-	// Expected fields from configureRequest struct JSON tags
-	goFields := map[string]bool{
-		"install_path":     true,
-		"gitlab_url":       true,
-		"gitlab_token":     true,
-		"skip_tls_verify":  true,
-		"meta_tools":       true,
-		"auto_update":      true,
-		"yolo_mode":        true,
-		"log_level":        true,
-		"selected_clients": true,
-	}
+	// JSON field names extracted via reflection from configureRequest struct.
+	goFields := jsonTagsFromStruct(t, configureRequest{})
 
 	// Fields in JS but not in Go
 	var jsOnly []string

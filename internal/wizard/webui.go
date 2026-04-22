@@ -123,7 +123,7 @@ func handleDefaults(version string) http.HandlerFunc {
 
 		clients := allClientsFn()
 		resp := defaultsResponse{
-			Version:          version,
+			Version:          strings.TrimPrefix(version, "v"),
 			InstalledVersion: getInstalledVersionFn(),
 			InstallPath:      filepath.Join(DefaultInstallDir(), DefaultBinaryName()),
 			GitLabURL:        gitlabURL,

@@ -141,3 +141,98 @@ func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
 		t.Errorf("error = %v, want to contain 'creating directory'", err)
 	}
 }
+
+// TestGetVersionFromBinary validates the version parsing logic across
+// multiple scenarios: non-existent binary, non-executable file, expected
+// output format, v-prefixed version, single-word output, and error exit.
+func TestGetVersionFromBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script fake binaries not supported on Windows")
+	}
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string // returns path to fake binary
+		want  string
+	}{
+		{
+			name: "returns empty for non-existent binary",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "no-such-binary")
+			},
+			want: "",
+		},
+		{
+			name: "returns empty for non-executable file",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "notexec")
+				if err := os.WriteFile(p, []byte("not a binary"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return p
+			},
+			want: "",
+		},
+		{
+			name: "parses standard version output",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeFakeVersionBinary(t, "gitlab-mcp-server 1.2.3 (commit: abc1234)")
+			},
+			want: "1.2.3",
+		},
+		{
+			name: "strips v prefix from version",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeFakeVersionBinary(t, "gitlab-mcp-server v1.0.2 (commit: def5678)")
+			},
+			want: "1.0.2",
+		},
+		{
+			name: "returns empty for single-word output",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeFakeVersionBinary(t, "unknown")
+			},
+			want: "",
+		},
+		{
+			name: "returns empty when binary exits with error",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				p := filepath.Join(t.TempDir(), "fail")
+				script := "#!/bin/sh\nexit 1\n"
+				if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				return p
+			},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binPath := tt.setup(t)
+			got := getVersionFromBinary(binPath)
+			if got != tt.want {
+				t.Errorf("getVersionFromBinary() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// writeFakeVersionBinary creates a shell script in a temp directory that
+// prints the given output to stdout, simulating -version output.
+func writeFakeVersionBinary(t *testing.T, output string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "fake-binary")
+	script := "#!/bin/sh\necho '" + output + "'\n"
+	if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}

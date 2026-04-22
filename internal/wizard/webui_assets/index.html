@@ -451,6 +451,11 @@ try {
   console.error('Failed to load defaults:', e);
 }
 
+document.getElementById('installPath').addEventListener('input', function() {
+  const el = document.getElementById('installedVersion');
+  el.style.display = 'none';
+  el.textContent = '';
+});
 document.getElementById('browseBtn').addEventListener('click', pickDirectory);
 document.getElementById('selectAllBtn').addEventListener('click', toggleAll);
 document.getElementById('configureBtn').addEventListener('click', configure);
