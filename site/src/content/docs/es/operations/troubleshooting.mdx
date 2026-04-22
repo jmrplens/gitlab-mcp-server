@@ -34,7 +34,7 @@ Para la referencia técnica completa, consulta [`docs/troubleshooting.md`](https
 | ------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | El cliente MCP muestra 1006 herramientas en lugar de 42 | Meta-herramientas desactivadas          | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio          |
 | Herramienta no encontrada en `tools/list`               | Desajuste del modo de meta-herramientas | El modo individual usa `gitlab_create_issue`, el modo meta usa `gitlab_issue` con `action: create` |
-| `unknown action` en llamada a meta-herramienta          | Parámetro de acción inválido            | Verifica las acciones válidas en [Resumen de Herramientas](/gitlab-mcp-server/es/tools/overview/)                     |
+| `unknown action` en llamada a meta-herramienta          | Parámetro de acción inválido            | Verifica las acciones válidas en [Resumen de Herramientas](/gitlab-mcp-server/tools/overview/)                     |
 | Herramientas enterprise faltantes                       | Modo enterprise desactivado             | Establece `GITLAB_ENTERPRISE=true` para habilitar 15 meta-herramientas enterprise adicionales      |
 
 ## Actualización automática
@@ -63,7 +63,7 @@ Para la referencia técnica completa, consulta [`docs/troubleshooting.md`](https
 | `404` en `/.well-known/oauth-protected-resource`            | Modo OAuth no habilitado                          | Inicia el servidor con `--auth-mode=oauth`                                                                                     |
 | El cliente no inicia el flujo OAuth                         | El cliente no soporta OAuth 2.1                   | Usa la cabecera `PRIVATE-TOKEN` en su lugar — funciona en modo OAuth mediante normalización automática                         |
 | La cabecera `PRIVATE-TOKEN` no funciona en modo OAuth       | Debería funcionar                                 | El middleware normaliza `PRIVATE-TOKEN` a Bearer — verifica la validez del token                                               |
-| Operaciones fallan con scope `mcp` insuficiente             | DCR fallback asignó scope `mcp` en lugar de `api` | Configura `clientId` explícitamente en la configuración del cliente MCP. Ver [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) |
+| Operaciones fallan con scope `mcp` insuficiente             | DCR fallback asignó scope `mcp` en lugar de `api` | Configura `clientId` explícitamente en la configuración del cliente MCP. Ver [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) |
 
 ## Paginación
 

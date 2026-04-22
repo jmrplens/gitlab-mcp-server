@@ -307,7 +307,7 @@ GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
-El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para el orden de carga completo.
+El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/configuration/) para el orden de carga completo.
 
 ## Modo HTTP
 
@@ -317,7 +317,7 @@ Para despliegues en equipo, puedes ejecutar el servidor en modo HTTP donde cada 
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
 ```
 
-Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para más detalles.
+Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para más detalles.
 
 ### Modo OAuth (recomendado para producción)
 
@@ -330,7 +330,7 @@ Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuari
 Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
-Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de GitLab y el scope `api`. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
+Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de GitLab y el scope `api`. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para ejemplos por cliente.
 :::
 
 ## GitLab autoalojado
@@ -396,7 +396,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, habilita el modo enterprise con `GITLAB_ENTERPRISE=true`. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
+Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, habilita el modo enterprise con `GITLAB_ENTERPRISE=true`. Consulta [Configuración](/gitlab-mcp-server/configuration/) para todas las opciones disponibles.
 
 ## Verificar la configuración
 
@@ -446,12 +446,12 @@ Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_cr
 Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automáticamente. Solo pregunta de forma natural: _"crea un issue para el bug del login"_ y el LLM selecciona la meta-herramienta y acción correctas.
 
 :::tip
-Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
+Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) para la referencia completa.
 :::
 
 ## Próximos pasos
 
-- [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
-- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
-- [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
-- [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
+- [Configuración](/gitlab-mcp-server/configuration/) — Ajusta las variables de entorno y funciones opcionales
+- [Meta-herramientas](/gitlab-mcp-server/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
+- [Arquitectura](/gitlab-mcp-server/architecture/) — Comprende cómo funciona el servidor internamente
+- [Referencia de herramientas](/gitlab-mcp-server/tools/overview/) — Explora todas las herramientas disponibles por dominio
