@@ -334,13 +334,11 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
 		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
 	}
-	if cfg.AutoUpdateTimeout > 0 {
-		if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
-			return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
-		}
-		if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
-			return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
-		}
+	if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
+		return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
+	}
+	if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
+		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)

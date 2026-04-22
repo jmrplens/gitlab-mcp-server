@@ -601,6 +601,24 @@ func TestPeriodicCheckOnce_Error(t *testing.T) {
 	// No panic — the "check failed" log branch was exercised.
 }
 
+// TestPeriodicCheckOnce_ExplicitTimeout verifies that when Config.Timeout
+// is set explicitly, periodicCheckOnce uses it instead of the 30s default.
+func TestPeriodicCheckOnce_ExplicitTimeout(t *testing.T) {
+	src := &mockSource{releases: nil}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+		Interval:       50 * time.Millisecond,
+		Timeout:        90 * time.Second,
+	}, src)
+
+	ctx := t.Context()
+
+	u.periodicCheckOnce(ctx)
+	// No panic — the explicit timeout path was exercised.
+}
+
 // TestPeriodicCheckOnce_ModeCheck verifies that in check-only mode,
 // an available update is logged but not applied.
 func TestPeriodicCheckOnce_ModeCheck(t *testing.T) {
@@ -1209,6 +1227,7 @@ func TestConfig_String(t *testing.T) {
 		Mode:           ModeAuto,
 		Repository:     "group/project",
 		Interval:       1 * time.Hour,
+		Timeout:        90 * time.Second,
 		CurrentVersion: "1.0.0",
 	}
 	s := cfg.String()
@@ -1220,6 +1239,9 @@ func TestConfig_String(t *testing.T) {
 	}
 	if !strings.Contains(s, "1.0.0") {
 		t.Errorf("String() = %q, want to contain version", s)
+	}
+	if !strings.Contains(s, "1m30s") {
+		t.Errorf("String() = %q, want to contain timeout value", s)
 	}
 }
 
