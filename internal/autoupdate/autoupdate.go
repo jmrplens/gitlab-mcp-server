@@ -67,14 +67,15 @@ type Config struct {
 	Mode           Mode          // Update behavior (auto, check, disabled)
 	Repository     string        // GitHub repository slug (e.g. "jmrplens/gitlab-mcp-server")
 	Interval       time.Duration // Check interval for HTTP mode periodic checks
+	Timeout        time.Duration // Timeout for individual update checks (default 30s if zero)
 	CurrentVersion string        // Running binary version (semver without "v" prefix)
 }
 
 // String returns a redacted representation of Config to prevent accidental
 // token leakage via fmt.Print, log, or %v formatting.
 func (c Config) String() string {
-	return fmt.Sprintf("Config{Mode:%s Repository:%s Interval:%s CurrentVersion:%s}",
-		c.Mode, c.Repository, c.Interval, c.CurrentVersion)
+	return fmt.Sprintf("Config{Mode:%s Repository:%s Interval:%s Timeout:%s CurrentVersion:%s}",
+		c.Mode, c.Repository, c.Interval, c.Timeout, c.CurrentVersion)
 }
 
 // GoString implements [fmt.GoStringer] to prevent token leakage via %#v formatting.
@@ -273,7 +274,11 @@ func (u *Updater) safePeriodicCheckOnce(ctx context.Context) {
 
 // periodicCheckOnce performs a single update check cycle, logging the result.
 func (u *Updater) periodicCheckOnce(ctx context.Context) {
-	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	timeout := u.cfg.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	info, available, err := u.CheckForUpdate(checkCtx)

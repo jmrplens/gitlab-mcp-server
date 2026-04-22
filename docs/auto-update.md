@@ -341,7 +341,7 @@ The Makefile `release` target generates all of these automatically.
 | `autoupdate: repository is required` | `AUTO_UPDATE_REPO` is empty | Set `AUTO_UPDATE_REPO` or use the default |
 | `autoupdate: creating GitHub source` | Network error reaching GitHub API | Verify network connectivity to `github.com` |
 | `autoupdate: detecting latest release` | No releases in repository, or token lacks permissions | Create a release or check token permissions |
-| `autoupdate: startup check failed` | Network timeout (10s limit at startup) | Check network connectivity; the server starts anyway |
+| `autoupdate: startup check failed` | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s) | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
 | `autoupdate: could not initialize periodic updater` | Missing required config in HTTP mode | Verify `--auto-update-repo` flag and network connectivity |
 | Update detected but not applied | Mode is `check` | Set `AUTO_UPDATE=true` to enable automatic application |
 | Server still runs old version after update (Windows) | Binary replaced but process not restarted | Restart the server process (Windows only — Unix re-execs automatically) |

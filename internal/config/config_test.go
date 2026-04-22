@@ -762,6 +762,41 @@ func TestValidate_OAuthCacheTTL(t *testing.T) {
 	}
 }
 
+// TestValidate_AutoUpdateTimeout verifies that validate enforces min/max bounds
+// on AutoUpdateTimeout when it is non-zero (covers HTTP-mode direct construction).
+func TestValidate_AutoUpdateTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		wantErr bool
+	}{
+		{name: "zero is valid (uses default)", timeout: 0, wantErr: false},
+		{name: "at minimum", timeout: MinAutoUpdateTimeout, wantErr: false},
+		{name: "at maximum", timeout: MaxAutoUpdateTimeout, wantErr: false},
+		{name: "between bounds", timeout: 2 * time.Minute, wantErr: false},
+		{name: "below minimum", timeout: 1 * time.Second, wantErr: true},
+		{name: "above maximum", timeout: 15 * time.Minute, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				GitLabURL:         "https://gitlab.example.com",
+				GitLabToken:       "test-token",
+				MaxHTTPClients:    1,
+				AutoUpdateTimeout: tt.timeout,
+			}
+			err := cfg.validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("validate() for AutoUpdateTimeout %v expected error, got nil", tt.timeout)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validate() for AutoUpdateTimeout %v unexpected error: %v", tt.timeout, err)
+			}
+		})
+	}
+}
+
 // TestLoad_AuthMode verifies AUTH_MODE env var parsing and defaults.
 func TestLoad_AuthMode(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)

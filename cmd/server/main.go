@@ -105,7 +105,7 @@ func main() {
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
 	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
-	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for pre-start update download (default 60s)")
+	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for pre-start update download (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
@@ -333,6 +333,14 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
 		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
+	}
+	if cfg.AutoUpdateTimeout > 0 {
+		if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
+			return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
+		}
+		if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
+			return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
+		}
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -826,6 +834,7 @@ func startAutoUpdate(ctx context.Context, cfg *config.Config) {
 		Mode:           mode,
 		Repository:     cfg.AutoUpdateRepo,
 		Interval:       cfg.AutoUpdateInterval,
+		Timeout:        cfg.AutoUpdateTimeout,
 		CurrentVersion: version,
 	})
 	if err != nil {

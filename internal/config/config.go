@@ -153,12 +153,6 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
 	}
-	if autoUpdateTimeout < MinAutoUpdateTimeout {
-		return nil, fmt.Errorf("AUTO_UPDATE_TIMEOUT %s is below minimum of %s", autoUpdateTimeout, MinAutoUpdateTimeout)
-	}
-	if autoUpdateTimeout > MaxAutoUpdateTimeout {
-		return nil, fmt.Errorf("AUTO_UPDATE_TIMEOUT %s exceeds maximum of %s", autoUpdateTimeout, MaxAutoUpdateTimeout)
-	}
 
 	autoUpdate := os.Getenv("AUTO_UPDATE")
 	if autoUpdate == "" {
@@ -238,6 +232,14 @@ func (c *Config) validate() error {
 		}
 		if c.OAuthCacheTTL > MaxOAuthCacheTTL {
 			return fmt.Errorf("OAUTH_CACHE_TTL %s exceeds maximum of %s", c.OAuthCacheTTL, MaxOAuthCacheTTL)
+		}
+	}
+	if c.AutoUpdateTimeout != 0 {
+		if c.AutoUpdateTimeout < MinAutoUpdateTimeout {
+			return fmt.Errorf("AUTO_UPDATE_TIMEOUT %s is below minimum of %s", c.AutoUpdateTimeout, MinAutoUpdateTimeout)
+		}
+		if c.AutoUpdateTimeout > MaxAutoUpdateTimeout {
+			return fmt.Errorf("AUTO_UPDATE_TIMEOUT %s exceeds maximum of %s", c.AutoUpdateTimeout, MaxAutoUpdateTimeout)
 		}
 	}
 	return nil
