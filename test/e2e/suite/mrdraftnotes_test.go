@@ -14,7 +14,7 @@ import (
 )
 
 // TestIndividual_MRDraftNotes exercises the MR draft note lifecycle using individual tools:
-// create → list → get → update → publish all.
+// create → list → get → update → delete (2nd note) → publish all.
 func TestIndividual_MRDraftNotes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -71,6 +71,32 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 		requireTrue(t, out.Note == "E2E draft note updated", "expected updated note, got %q", out.Note)
 	})
 
+	// Create a second draft note and delete it to exercise the destructive delete path.
+	var deleteNoteID int64
+
+	t.Run("CreateForDelete", func(t *testing.T) {
+		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.individual, "gitlab_mr_draft_note_create", mrdraftnotes.CreateInput{
+			ProjectID: proj.pidOf(),
+			MRIID:     mr.IID,
+			Note:      "E2E draft note to delete",
+		})
+		requireNoError(t, err, "create draft note for delete")
+		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		deleteNoteID = out.ID
+		t.Logf("Created draft note %d (for deletion)", deleteNoteID)
+	})
+
+	t.Run("Delete", func(t *testing.T) {
+		requireTrue(t, deleteNoteID > 0, "deleteNoteID not set")
+		err := callToolVoidOn(ctx, sess.individual, "gitlab_mr_draft_note_delete", mrdraftnotes.DeleteInput{
+			ProjectID: proj.pidOf(),
+			MRIID:     mr.IID,
+			NoteID:    deleteNoteID,
+		})
+		requireNoError(t, err, "delete draft note")
+		t.Logf("Deleted draft note %d", deleteNoteID)
+	})
+
 	t.Run("PublishAll", func(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_mr_draft_note_publish_all", mrdraftnotes.PublishAllInput{
 			ProjectID: proj.pidOf(),
@@ -81,6 +107,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 }
 
 // TestMeta_MRDraftNotes exercises the same MR draft note lifecycle via the gitlab_mr_review meta-tool.
+// Includes: create → list → get → update → delete (2nd note) → publish all.
 func TestMeta_MRDraftNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -147,6 +174,38 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		})
 		requireNoError(t, err, "update draft note meta")
 		requireTrue(t, out.Note == "E2E draft meta updated", "expected updated note, got %q", out.Note)
+	})
+
+	// Create a second draft note and delete it to exercise the destructive delete path.
+	var deleteNoteID int64
+
+	t.Run("CreateForDelete", func(t *testing.T) {
+		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
+			"action": "draft_note_create",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"mr_iid":     mr.IID,
+				"note":       "E2E draft note meta to delete",
+			},
+		})
+		requireNoError(t, err, "create draft note meta for delete")
+		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		deleteNoteID = out.ID
+		t.Logf("Created draft note (meta) %d (for deletion)", deleteNoteID)
+	})
+
+	t.Run("Delete", func(t *testing.T) {
+		requireTrue(t, deleteNoteID > 0, "deleteNoteID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
+			"action": "draft_note_delete",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"mr_iid":     mr.IID,
+				"note_id":    deleteNoteID,
+			},
+		})
+		requireNoError(t, err, "delete draft note meta")
+		t.Logf("Deleted draft note (meta) %d", deleteNoteID)
 	})
 
 	t.Run("PublishAll", func(t *testing.T) {

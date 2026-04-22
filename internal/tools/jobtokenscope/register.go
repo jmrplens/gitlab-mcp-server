@@ -136,15 +136,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_job_token_scope meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get_access_settings":            toolutil.WrapAction(client, GetAccessSettings),
-		"patch_access_settings":          toolutil.WrapAction(client, PatchAccessSettings),
-		"list_inbound_project_allowlist": toolutil.WrapAction(client, ListInboundAllowlist),
-		"add_project_allowlist":          toolutil.WrapAction(client, AddProjectAllowlist),
-		"remove_project_allowlist":       toolutil.WrapVoidAction(client, RemoveProjectAllowlist),
-		"list_group_allowlist":           toolutil.WrapAction(client, ListGroupAllowlist),
-		"add_group_allowlist":            toolutil.WrapAction(client, AddGroupAllowlist),
-		"remove_group_allowlist":         toolutil.WrapVoidAction(client, RemoveGroupAllowlist),
+	routes := toolutil.ActionMap{
+		"get_access_settings":            toolutil.RouteAction(client, GetAccessSettings),
+		"patch_access_settings":          toolutil.RouteAction(client, PatchAccessSettings),
+		"list_inbound_project_allowlist": toolutil.RouteAction(client, ListInboundAllowlist),
+		"add_project_allowlist":          toolutil.RouteAction(client, AddProjectAllowlist),
+		"remove_project_allowlist":       toolutil.DestructiveVoidAction(client, RemoveProjectAllowlist),
+		"list_group_allowlist":           toolutil.RouteAction(client, ListGroupAllowlist),
+		"add_group_allowlist":            toolutil.RouteAction(client, AddGroupAllowlist),
+		"remove_group_allowlist":         toolutil.DestructiveVoidAction(client, RemoveGroupAllowlist),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -161,7 +161,8 @@ Actions:
 - list_group_allowlist: List groups in allowlist. Params: project_id (required), page, per_page
 - add_group_allowlist: Add a group to allowlist. Params: project_id (required), target_group_id (required, int)
 - remove_group_allowlist: Remove a group from allowlist. Params: project_id (required), target_group_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconToken,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_job_token_scope", routes, nil))
 }

@@ -82,12 +82,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_project_import_export meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"schedule_export":  toolutil.WrapAction(client, ScheduleExport),
-		"export_status":    toolutil.WrapAction(client, GetExportStatus),
-		"export_download":  toolutil.WrapAction(client, ExportDownload),
-		"import_from_file": toolutil.WrapAction(client, ImportFromFile),
-		"import_status":    toolutil.WrapAction(client, GetImportStatus),
+	routes := toolutil.ActionMap{
+		"schedule_export":  toolutil.RouteAction(client, ScheduleExport),
+		"export_status":    toolutil.RouteAction(client, GetExportStatus),
+		"export_download":  toolutil.RouteAction(client, ExportDownload),
+		"import_from_file": toolutil.DestructiveAction(client, ImportFromFile),
+		"import_status":    toolutil.RouteAction(client, GetImportStatus),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -101,7 +101,8 @@ Actions:
 - export_download: Download finished export archive as base64. Params: project_id (required)
 - import_from_file: Import project from archive. Params: file_path or content_base64 (required), namespace, name, path, overwrite
 - import_status: Get import status. Params: project_id (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconImport,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_project_import_export", routes, nil))
 }

@@ -86,11 +86,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_alert_management meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_metric_images":  toolutil.WrapAction(client, ListMetricImages),
-		"upload_metric_image": toolutil.WrapAction(client, UploadMetricImage),
-		"update_metric_image": toolutil.WrapAction(client, UpdateMetricImage),
-		"delete_metric_image": toolutil.WrapVoidAction(client, DeleteMetricImage),
+	routes := toolutil.ActionMap{
+		"list_metric_images":  toolutil.RouteAction(client, ListMetricImages),
+		"upload_metric_image": toolutil.RouteAction(client, UploadMetricImage),
+		"update_metric_image": toolutil.RouteAction(client, UpdateMetricImage),
+		"delete_metric_image": toolutil.DestructiveVoidAction(client, DeleteMetricImage),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -100,10 +100,11 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 Actions:
 - list_metric_images: List metric images for an alert. Params: project_id (required), alert_iid (required, int)
-- upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), content (required, base64), url, url_text
+- upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), file_path or content_base64 (one required), url, url_text
 - update_metric_image: Update a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int), filename, url, url_text
 - delete_metric_image: Delete a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconAlert,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_alert_management", routes, nil))
 }

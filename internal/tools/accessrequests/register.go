@@ -134,15 +134,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_access_request meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_project":    toolutil.WrapAction(client, ListProject),
-		"list_group":      toolutil.WrapAction(client, ListGroup),
-		"request_project": toolutil.WrapAction(client, RequestProject),
-		"request_group":   toolutil.WrapAction(client, RequestGroup),
-		"approve_project": toolutil.WrapAction(client, ApproveProject),
-		"approve_group":   toolutil.WrapAction(client, ApproveGroup),
-		"deny_project":    toolutil.WrapVoidAction(client, DenyProject),
-		"deny_group":      toolutil.WrapVoidAction(client, DenyGroup),
+	routes := toolutil.ActionMap{
+		"list_project":    toolutil.RouteAction(client, ListProject),
+		"list_group":      toolutil.RouteAction(client, ListGroup),
+		"request_project": toolutil.RouteAction(client, RequestProject),
+		"request_group":   toolutil.RouteAction(client, RequestGroup),
+		"approve_project": toolutil.RouteAction(client, ApproveProject),
+		"approve_group":   toolutil.RouteAction(client, ApproveGroup),
+		"deny_project":    toolutil.DestructiveVoidAction(client, DenyProject),
+		"deny_group":      toolutil.DestructiveVoidAction(client, DenyGroup),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -159,7 +159,8 @@ Actions:
 - approve_group: Approve group access request. Params: group_id (required), user_id (required, int), access_level (optional, int)
 - deny_project: Deny project access request. Params: project_id (required), user_id (required, int)
 - deny_group: Deny group access request. Params: group_id (required), user_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_access_request", routes, nil))
 }

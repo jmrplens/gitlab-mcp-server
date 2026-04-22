@@ -149,16 +149,16 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_page meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get_pages":        toolutil.WrapAction(client, GetPages),
-		"update_pages":     toolutil.WrapAction(client, UpdatePages),
-		"unpublish_pages":  toolutil.WrapVoidAction(client, UnpublishPages),
-		"list_all_domains": toolutil.WrapAction(client, ListAllDomains),
-		"list_domains":     toolutil.WrapAction(client, ListDomains),
-		"get_domain":       toolutil.WrapAction(client, GetDomain),
-		"create_domain":    toolutil.WrapAction(client, CreateDomain),
-		"update_domain":    toolutil.WrapAction(client, UpdateDomain),
-		"delete_domain":    toolutil.WrapVoidAction(client, DeleteDomain),
+	routes := toolutil.ActionMap{
+		"get_pages":        toolutil.RouteAction(client, GetPages),
+		"update_pages":     toolutil.RouteAction(client, UpdatePages),
+		"unpublish_pages":  toolutil.DestructiveVoidAction(client, UnpublishPages),
+		"list_all_domains": toolutil.RouteAction(client, ListAllDomains),
+		"list_domains":     toolutil.RouteAction(client, ListDomains),
+		"get_domain":       toolutil.RouteAction(client, GetDomain),
+		"create_domain":    toolutil.RouteAction(client, CreateDomain),
+		"update_domain":    toolutil.RouteAction(client, UpdateDomain),
+		"delete_domain":    toolutil.DestructiveVoidAction(client, DeleteDomain),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -176,7 +176,8 @@ Actions:
 - create_domain: Create a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
 - update_domain: Update a Pages domain. Params: project_id (required), domain (required), auto_ssl_enabled, certificate, key
 - delete_domain: Delete a Pages domain. Params: project_id (required), domain (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconFile,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_page", routes, nil))
 }

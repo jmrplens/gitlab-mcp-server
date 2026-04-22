@@ -65,10 +65,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_issue_statistics meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get":         toolutil.WrapAction(client, Get),
-		"get_group":   toolutil.WrapAction(client, GetGroup),
-		"get_project": toolutil.WrapAction(client, GetProject),
+	routes := toolutil.ActionMap{
+		"get":         toolutil.RouteAction(client, Get),
+		"get_group":   toolutil.RouteAction(client, GetGroup),
+		"get_project": toolutil.RouteAction(client, GetProject),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -80,7 +80,8 @@ Actions:
 - get: Get global issue statistics. Params: labels, milestone, scope, author_id, assignee_id, search, confidential
 - get_group: Get group issue statistics. Params: group_id (required), labels, milestone, scope, author_id, assignee_id, search, confidential
 - get_project: Get project issue statistics. Params: project_id (required), labels, milestone, scope, author_id, assignee_id, search, confidential`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconAnalytics,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_issue_statistics", routes, nil))
 }

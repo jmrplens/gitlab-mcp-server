@@ -74,7 +74,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconSchedule,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, "delete freeze period")
+		if r := toolutil.ConfirmAction(ctx, req, "delete freeze period"); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := Delete(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_delete_freeze_period", start, err)
 		if err != nil {
@@ -86,12 +88,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_freeze_period meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_freeze_periods":  toolutil.WrapAction(client, List),
-		"get_freeze_period":    toolutil.WrapAction(client, Get),
-		"create_freeze_period": toolutil.WrapAction(client, Create),
-		"update_freeze_period": toolutil.WrapAction(client, Update),
-		"delete_freeze_period": toolutil.WrapVoidAction(client, Delete),
+	routes := toolutil.ActionMap{
+		"list_freeze_periods":  toolutil.RouteAction(client, List),
+		"get_freeze_period":    toolutil.RouteAction(client, Get),
+		"create_freeze_period": toolutil.RouteAction(client, Create),
+		"update_freeze_period": toolutil.RouteAction(client, Update),
+		"delete_freeze_period": toolutil.DestructiveVoidAction(client, Delete),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -105,7 +107,8 @@ Actions:
 - create_freeze_period: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
 - update_freeze_period: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
 - delete_freeze_period: Delete a freeze period. Params: project_id (required), freeze_period_id (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconSchedule,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_freeze_period", routes, nil))
 }

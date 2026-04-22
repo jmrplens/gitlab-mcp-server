@@ -87,7 +87,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteNoteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
 		start := time.Now()
-		toolutil.ConfirmAction(ctx, req, "delete epic discussion note")
+		if r := toolutil.ConfirmAction(ctx, req, "delete epic discussion note"); r != nil {
+			return r, toolutil.DeleteOutput{}, nil
+		}
 		err := DeleteNote(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_delete_epic_discussion_note", start, err)
 		if err != nil {
@@ -99,13 +101,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_epic_discussion meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":        toolutil.WrapAction(client, List),
-		"get":         toolutil.WrapAction(client, Get),
-		"create":      toolutil.WrapAction(client, Create),
-		"add_note":    toolutil.WrapAction(client, AddNote),
-		"update_note": toolutil.WrapAction(client, UpdateNote),
-		"delete_note": toolutil.WrapVoidAction(client, DeleteNote),
+	routes := toolutil.ActionMap{
+		"list":        toolutil.RouteAction(client, List),
+		"get":         toolutil.RouteAction(client, Get),
+		"create":      toolutil.RouteAction(client, Create),
+		"add_note":    toolutil.RouteAction(client, AddNote),
+		"update_note": toolutil.RouteAction(client, UpdateNote),
+		"delete_note": toolutil.DestructiveVoidAction(client, DeleteNote),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -120,7 +122,8 @@ Actions:
 - add_note: Reply to an existing discussion. Params: full_path, iid, discussion_id, body (required)
 - update_note: Update a discussion note. Params: full_path, iid, note_id, body (required)
 - delete_note: Delete a discussion note. Params: full_path, iid, note_id (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconDiscussion,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_epic_discussion", routes, nil))
 }

@@ -141,16 +141,16 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_deploy_key meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_project":      toolutil.WrapAction(client, ListProject),
-		"get":               toolutil.WrapAction(client, Get),
-		"add":               toolutil.WrapAction(client, Add),
-		"update":            toolutil.WrapAction(client, Update),
-		"delete":            toolutil.WrapVoidAction(client, Delete),
-		"enable":            toolutil.WrapAction(client, Enable),
-		"list_all":          toolutil.WrapAction(client, ListAll),
-		"add_instance":      toolutil.WrapAction(client, AddInstance),
-		"list_user_project": toolutil.WrapAction(client, ListUserProject),
+	routes := toolutil.ActionMap{
+		"list_project":      toolutil.RouteAction(client, ListProject),
+		"get":               toolutil.RouteAction(client, Get),
+		"add":               toolutil.RouteAction(client, Add),
+		"update":            toolutil.RouteAction(client, Update),
+		"delete":            toolutil.DestructiveVoidAction(client, Delete),
+		"enable":            toolutil.RouteAction(client, Enable),
+		"list_all":          toolutil.RouteAction(client, ListAll),
+		"add_instance":      toolutil.RouteAction(client, AddInstance),
+		"list_user_project": toolutil.RouteAction(client, ListUserProject),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -168,7 +168,8 @@ Actions:
 - list_all: List all instance-level deploy keys (admin). Params: public (bool), page, per_page
 - add_instance: Create instance-level deploy key (admin). Params: title (required), key (required), expires_at (YYYY-MM-DD)
 - list_user_project: List deploy keys for a user's projects. Params: user_id (required), page, per_page`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconKey,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_deploy_key", routes, nil))
 }

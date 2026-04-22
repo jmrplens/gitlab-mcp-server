@@ -172,7 +172,7 @@ The largest package — contains 1006 MCP tool implementations organized across 
 | ------------------ | ------------------------------------------------------------- |
 | `register.go`      | `RegisterAll()` — delegates to sub-package `RegisterTools()`  |
 | `register_meta.go` | `RegisterAllMeta()` — 24 inline + 3 delegated + 1 standalone (+ 15 enterprise inline) |
-| `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `wrapAction`   |
+| `metatool.go`      | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`   |
 | `markdown.go`      | `markdownForResult` dispatcher — type-switch over all outputs |
 | `pagination.go`    | Shared pagination type aliases                                |
 | `errors.go`        | Error helpers (`wrapErr`, `handleGitLabError`)                |
@@ -200,7 +200,7 @@ Infrastructure shared by all tool sub-packages:
 
 | File               | Purpose                                                        |
 | ------------------ | -------------------------------------------------------------- |
-| `metatool.go`      | `MetaToolInput`, `ActionFunc`, `MakeMetaHandler`, `WrapAction` |
+| `metatool.go`      | `MetaToolInput`, `ActionRoute`, `ActionMap`, `MakeMetaHandler`, `DeriveAnnotations`, `Route`, `DestructiveRoute` |
 | `annotations.go`   | Tool annotations (`ReadAnnotations`, `DeleteAnnotations`) and content annotations (`ContentList`, `ContentDetail`, `ContentMutate`) |
 | `hints.go`         | Next-step hints: `WriteHints`, `ExtractHints`, `HintPreserveLinks` |
 | `addtool.go`       | `AddTool` wrapper — suppresses structuredContent for individual tools |
@@ -358,20 +358,21 @@ This pattern provides:
 The meta-tool pattern applies the **Strategy pattern** — a single endpoint dispatches to different handler functions based on the `action` parameter:
 
 ```go
-routes := map[string]toolutil.ActionFunc{
-    "create": toolutil.WrapAction(client, Create),
-    "get":    toolutil.WrapAction(client, Get),
-    "list":   toolutil.WrapAction(client, List),
-    "delete": toolutil.WrapVoidAction(client, Delete),
+routes := toolutil.ActionMap{
+    "create": toolutil.RouteAction(client, Create),
+    "get":    toolutil.RouteAction(client, Get),
+    "list":   toolutil.RouteAction(client, List),
+    "delete": toolutil.DestructiveVoidAction(client, Delete),
 }
 ```
 
-The `WrapAction` generic function bridges between typed handler functions and the untyped `map[string]any` params:
+The `ActionRoute` type pairs each handler with a `Destructive bool` field. `DeriveAnnotations(routes)` auto-computes tool-level annotations from route metadata:
 
 ```mermaid
 graph TD
     REQ["MetaToolInput<br/>{action, params}"] --> DISPATCH["MakeMetaHandler<br/>(route lookup)"]
-    DISPATCH --> WRAP["WrapAction[I, O]<br/>(generic adapter)"]
+    DISPATCH --> ROUTE["ActionRoute<br/>{Handler, Destructive}"]
+    ROUTE --> WRAP["RouteAction[I, O]<br/>(generic adapter)"]
     WRAP --> UNMARSHAL["JSON unmarshal<br/>params → InputStruct"]
     UNMARSHAL --> HANDLER["Typed handler<br/>func(ctx, client, input)"]
     HANDLER --> MARKDOWN["markdownForResult<br/>(format output)"]

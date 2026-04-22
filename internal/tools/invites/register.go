@@ -69,11 +69,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_invite meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_pending_project": toolutil.WrapAction(client, ListPendingProjectInvitations),
-		"list_pending_group":   toolutil.WrapAction(client, ListPendingGroupInvitations),
-		"project":              toolutil.WrapAction(client, ProjectInvites),
-		"group":                toolutil.WrapAction(client, GroupInvites),
+	routes := toolutil.ActionMap{
+		"list_pending_project": toolutil.RouteAction(client, ListPendingProjectInvitations),
+		"list_pending_group":   toolutil.RouteAction(client, ListPendingGroupInvitations),
+		"project":              toolutil.RouteAction(client, ProjectInvites),
+		"group":                toolutil.RouteAction(client, GroupInvites),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -86,7 +86,8 @@ Actions:
 - list_pending_group: List pending group invitations. Params: group_id (required), query, page, per_page
 - project: Invite user to a project. Params: project_id (required), email or user_id (required), access_level (required), expires_at
 - group: Invite user to a group. Params: group_id (required), email or user_id (required), access_level (required), expires_at`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_invite", routes, nil))
 }

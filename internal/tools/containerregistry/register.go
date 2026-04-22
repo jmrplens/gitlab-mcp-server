@@ -200,15 +200,15 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_registry and gitlab_registry_protection meta-tools.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_project":      toolutil.WrapAction(client, ListProject),
-		"list_group":        toolutil.WrapAction(client, ListGroup),
-		"get_repository":    toolutil.WrapAction(client, GetRepository),
-		"delete_repository": toolutil.WrapVoidAction(client, DeleteRepository),
-		"list_tags":         toolutil.WrapAction(client, ListTags),
-		"get_tag":           toolutil.WrapAction(client, GetTag),
-		"delete_tag":        toolutil.WrapVoidAction(client, DeleteTag),
-		"delete_tags_bulk":  toolutil.WrapVoidAction(client, DeleteTagsBulk),
+	routes := toolutil.ActionMap{
+		"list_project":      toolutil.RouteAction(client, ListProject),
+		"list_group":        toolutil.RouteAction(client, ListGroup),
+		"get_repository":    toolutil.RouteAction(client, GetRepository),
+		"delete_repository": toolutil.DestructiveVoidAction(client, DeleteRepository),
+		"list_tags":         toolutil.RouteAction(client, ListTags),
+		"get_tag":           toolutil.RouteAction(client, GetTag),
+		"delete_tag":        toolutil.DestructiveVoidAction(client, DeleteTag),
+		"delete_tags_bulk":  toolutil.DestructiveVoidAction(client, DeleteTagsBulk),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -225,16 +225,17 @@ Actions:
 - get_tag: Get tag details. Params: project_id (required), repository_id (required, int), tag_name (required)
 - delete_tag: Delete a single tag. Params: project_id (required), repository_id (required, int), tag_name (required)
 - delete_tags_bulk: Bulk delete tags by regex. Params: project_id (required), repository_id (required, int), name_regex_delete, name_regex_keep, keep_n (int), older_than`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconContainer,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_registry", routes, nil))
 
 	// Protection rules meta-tool
-	protRoutes := map[string]toolutil.ActionFunc{
-		"list":   toolutil.WrapAction(client, ListProtectionRules),
-		"create": toolutil.WrapAction(client, CreateProtectionRule),
-		"update": toolutil.WrapAction(client, UpdateProtectionRule),
-		"delete": toolutil.WrapVoidAction(client, DeleteProtectionRule),
+	protRoutes := toolutil.ActionMap{
+		"list":   toolutil.RouteAction(client, ListProtectionRules),
+		"create": toolutil.RouteAction(client, CreateProtectionRule),
+		"update": toolutil.RouteAction(client, UpdateProtectionRule),
+		"delete": toolutil.DestructiveVoidAction(client, DeleteProtectionRule),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -247,7 +248,8 @@ Actions:
 - create: Create protection rule. Params: project_id (required), repository_path_pattern (required), minimum_access_level_for_push (maintainer/owner/admin), minimum_access_level_for_delete (maintainer/owner/admin)
 - update: Update protection rule. Params: project_id (required), rule_id (required, int), repository_path_pattern, minimum_access_level_for_push, minimum_access_level_for_delete
 - delete: Delete protection rule. Params: project_id (required), rule_id (required, int)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(protRoutes),
 		Icons:       toolutil.IconContainer,
+		InputSchema: toolutil.MetaToolSchema(protRoutes),
 	}, toolutil.MakeMetaHandler("gitlab_registry_protection", protRoutes, nil))
 }

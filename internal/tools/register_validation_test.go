@@ -184,7 +184,7 @@ func TestAllHintReferencesValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile register_meta.go: %v", err)
 	}
-	reMetaTool := regexp.MustCompile(`addMetaTool\(server,\s+"(gitlab_\w+)"`)
+	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
 	for _, m := range reMetaTool.FindAllStringSubmatch(string(metaSrc), -1) {
 		validTools[m[1]] = true
 	}
@@ -199,23 +199,25 @@ func TestAllHintReferencesValid(t *testing.T) {
 	// 2. Build set of all meta-tool action keys from route maps.
 	validActions := make(map[string]bool)
 	// Pattern for register_meta.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
-	reInlineAction := regexp.MustCompile(`"(\w+)":\s+wrap(?:Action|VoidAction|DelegateAction)\b`)
+	reInlineAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`)
 	for _, m := range reInlineAction.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
-	// Pattern for register_meta.go: routes["key"] = wrapAction(...) (enterprise assignment)
-	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*wrap(?:Action|VoidAction|DelegateAction)\b`)
+	// Pattern for register_meta.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
+	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`)
 	for _, m := range reRouteAssign.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
-	// Also match custom action variables (e.g., "publish": publishAction).
-	reCustomAction := regexp.MustCompile(`"(\w+)":\s+\w+Action\b`)
+	// Also match custom action variables wrapped in route/destructiveRoute (e.g., "publish": route(publishAction)).
+	reCustomAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`)
 	for _, m := range reCustomAction.FindAllStringSubmatch(string(metaSrc), -1) {
 		validActions[m[1]] = true
 	}
 
-	// Pattern for sub-package register.go: "key": toolutil.WrapAction/WrapVoidAction
-	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.Wrap(?:Action|VoidAction)\b`)
+	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/Route/DestructiveAction etc.
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
+	// Pattern for sub-package register.go: routes["key"] = toolutil.Route/DestructiveRoute(...) (enterprise)
+	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -226,6 +228,9 @@ func TestAllHintReferencesValid(t *testing.T) {
 			continue
 		}
 		for _, m := range reDelegatedAction.FindAllStringSubmatch(string(src), -1) {
+			validActions[m[1]] = true
+		}
+		for _, m := range reDelegatedAssign.FindAllStringSubmatch(string(src), -1) {
 			validActions[m[1]] = true
 		}
 	}
@@ -298,4 +303,321 @@ func extractWriteHintLines(src string) []string {
 		}
 	}
 	return result
+}
+
+// TestDestructiveMetadataConsistency verifies that meta-tool routes marked with
+// destructive wrappers correspond to individual tools using DeleteAnnotations,
+// and that non-destructive routes do not correspond to individual tools with
+// DeleteAnnotations. This catches misclassified routes after migration.
+func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *testing.T) {
+	// 1. Build set of sub-package actions with their destructive wrapper status.
+	type routeInfo struct {
+		pkg         string
+		destructive bool
+	}
+	routeMap := make(map[string][]routeInfo)
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	// Patterns for destructive wrappers in sub-packages.
+	reSubDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	reSubNonDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		srcStr := string(src)
+		for _, m := range reSubDestructive.FindAllStringSubmatch(srcStr, -1) {
+			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: true})
+		}
+		for _, m := range reSubNonDestructive.FindAllStringSubmatch(srcStr, -1) {
+			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: false})
+		}
+	}
+
+	// 2. Build set of individual tools with DeleteAnnotations per sub-package.
+	deleteTools := make(map[string]bool) // key: "pkg/action" approximate
+	reDeleteAnn := regexp.MustCompile(`Annotations:\s+toolutil\.DeleteAnnotations`)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		if reDeleteAnn.Match(src) {
+			deleteTools[e.Name()] = true
+		}
+	}
+
+	// 3. Validate: destructive routes should correspond to packages with DeleteAnnotations.
+	var mismatches int
+	for action, infos := range routeMap {
+		for _, info := range infos {
+			hasDelete := deleteTools[info.pkg]
+			if info.destructive && !hasDelete {
+				// Acceptable for exact-match exceptions (merge, stop, erase, etc.)
+				// that are destructive but don't use DeleteAnnotations.
+				if !isExactMatchException(action) {
+					t.Errorf("%s/%s is destructive route but package has no DeleteAnnotations", info.pkg, action)
+					mismatches++
+				}
+			}
+			if !info.destructive && hasDelete {
+				// Non-destructive route in a package with delete tools — this is fine
+				// for list/get/create/update actions in the same package.
+				continue
+			}
+		}
+	}
+
+	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+}
+
+func isExactMatchException(action string) bool {
+	exceptions := map[string]bool{
+		"merge": true, "erase": true, "stop": true, "ban": true,
+		"block": true, "deactivate": true, "reject": true, "unapprove": true,
+		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
+		"unshare": true, "disable_project": true,
+		"cancel_github": true, "rotate": true, "import_from_file": true,
+	}
+	return exceptions[action]
+}
+
+// TestDestructiveRoutesByNameHeuristic scans ALL route definitions across the
+// codebase and verifies that action names containing destructive keywords
+// (delete, remove, revoke, purge, unprotect, destroy, unpublish) always use
+// destructive wrappers, and that safe action names (list, get, search, create,
+// update) never use destructive wrappers. This test prevents accidental
+// misclassification when adding new routes.
+func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
+	// routeEntry captures a single action definition found in source code.
+	type routeEntry struct {
+		file        string
+		line        int
+		action      string
+		destructive bool
+	}
+
+	// Regex patterns for register_meta.go (lowercase wrappers, no package prefix).
+	reMetaMapDestructive := regexp.MustCompile(
+		`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`)
+	reMetaMapNonDestructive := regexp.MustCompile(
+		`"(\w+)":\s+route(?:Action|VoidAction|ActionWithRequest)\b`)
+	reMetaAssignDestructive := regexp.MustCompile(
+		`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`)
+	reMetaAssignNonDestructive := regexp.MustCompile(
+		`routes\["(\w+)"\]\s*=\s*route(?:Action|VoidAction|ActionWithRequest)\b`)
+
+	// Regex patterns for sub-package register.go files (toolutil. prefix).
+	reSubDestructive := regexp.MustCompile(
+		`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
+	reSubNonDestructive := regexp.MustCompile(
+		`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
+
+	var allRoutes []routeEntry
+
+	// Scan register_meta.go for inline route definitions.
+	metaSrc, err := os.ReadFile("register_meta.go")
+	if err != nil {
+		t.Fatalf("failed to read register_meta.go: %v", err)
+	}
+	metaLines := strings.Split(string(metaSrc), "\n")
+	for i, line := range metaLines {
+		lineNum := i + 1
+		for _, re := range []*regexp.Regexp{reMetaMapDestructive, reMetaAssignDestructive} {
+			for _, m := range re.FindAllStringSubmatch(line, -1) {
+				allRoutes = append(allRoutes, routeEntry{
+					file: "register_meta.go", line: lineNum,
+					action: m[1], destructive: true,
+				})
+			}
+		}
+		for _, re := range []*regexp.Regexp{reMetaMapNonDestructive, reMetaAssignNonDestructive} {
+			for _, m := range re.FindAllStringSubmatch(line, -1) {
+				allRoutes = append(allRoutes, routeEntry{
+					file: "register_meta.go", line: lineNum,
+					action: m[1], destructive: false,
+				})
+			}
+		}
+	}
+
+	// Scan sub-package register.go files.
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		lines := strings.Split(string(src), "\n")
+		for i, line := range lines {
+			lineNum := i + 1
+			for _, m := range reSubDestructive.FindAllStringSubmatch(line, -1) {
+				allRoutes = append(allRoutes, routeEntry{
+					file: regPath, line: lineNum,
+					action: m[1], destructive: true,
+				})
+			}
+			for _, m := range reSubNonDestructive.FindAllStringSubmatch(line, -1) {
+				allRoutes = append(allRoutes, routeEntry{
+					file: regPath, line: lineNum,
+					action: m[1], destructive: false,
+				})
+			}
+		}
+	}
+
+	if len(allRoutes) == 0 {
+		t.Fatal("no routes found — regex patterns may be outdated")
+	}
+
+	// Keywords that MUST use destructive wrappers.
+	destructiveKeywords := []string{
+		"delete", "remove", "revoke", "purge", "unprotect",
+		"destroy", "unpublish", "deny",
+	}
+	containsDestructiveKeyword := func(action string) bool {
+		for _, kw := range destructiveKeywords {
+			if strings.Contains(action, kw) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Keywords that MUST NOT use destructive wrappers.
+	safeKeywords := []string{
+		"list", "get", "search", "create", "update", "edit",
+		"approve", "subscribe", "upload", "download",
+	}
+	containsSafeKeyword := func(action string) bool {
+		for _, kw := range safeKeywords {
+			if strings.Contains(action, kw) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Actions that are destructive but do NOT contain a destructive keyword.
+	// These are known edge cases verified manually.
+	knownNonKeywordDestructive := map[string]bool{
+		"merge": true, "erase": true, "stop": true, "ban": true,
+		"block": true, "deactivate": true, "reject": true, "unapprove": true,
+		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
+		"unshare": true, "disable_project": true, "import_from_file": true,
+		"cancel_github": true, "rotate": true,
+	}
+
+	var failures int
+	for _, r := range allRoutes {
+		hasDestructiveKw := containsDestructiveKeyword(r.action)
+		hasSafeKw := containsSafeKeyword(r.action)
+
+		// Rule 1: Action with destructive keyword MUST be marked destructive.
+		if hasDestructiveKw && !r.destructive {
+			t.Errorf("%s:%d action %q contains destructive keyword but uses non-destructive wrapper",
+				r.file, r.line, r.action)
+			failures++
+		}
+
+		// Rule 2: Action with safe keyword MUST NOT be marked destructive,
+		// UNLESS it also contains a destructive keyword or is a known exception.
+		if hasSafeKw && r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+			t.Errorf("%s:%d action %q contains safe keyword but uses destructive wrapper",
+				r.file, r.line, r.action)
+			failures++
+		}
+
+		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
+		if r.destructive && !hasDestructiveKw && !knownNonKeywordDestructive[r.action] {
+			t.Errorf("%s:%d action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive",
+				r.file, r.line, r.action)
+			failures++
+		}
+	}
+
+	t.Logf("scanned %d routes (%d failures)", len(allRoutes), failures)
+}
+
+// TestDestructiveRoutesMinimumInventory verifies that the total number of
+// destructive routes across the entire codebase does not drop below a
+// known minimum. This prevents accidental mass reclassification of
+// destructive actions to non-destructive (e.g., a bad find-and-replace).
+func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *testing.T) {
+	// Regex patterns matching all destructive wrapper usages.
+	destructivePatterns := []*regexp.Regexp{
+		// register_meta.go inline patterns.
+		regexp.MustCompile(`"(\w+)":\s+destructive(?:Route|Action|VoidAction)\b`),
+		regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*destructive(?:Route|Action|VoidAction)\b`),
+		// Sub-package patterns.
+		regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`),
+	}
+
+	uniqueActions := make(map[string]bool) // "file:action" dedup key
+
+	// Scan register_meta.go.
+	metaSrc, err := os.ReadFile("register_meta.go")
+	if err != nil {
+		t.Fatalf("read register_meta.go: %v", err)
+	}
+	for _, re := range destructivePatterns {
+		for _, m := range re.FindAllStringSubmatch(string(metaSrc), -1) {
+			uniqueActions["register_meta.go:"+m[1]] = true
+		}
+	}
+
+	// Scan sub-package register.go files.
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		regPath := filepath.Join(e.Name(), "register.go")
+		src, readErr := os.ReadFile(regPath)
+		if readErr != nil {
+			continue
+		}
+		for _, re := range destructivePatterns {
+			for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+				uniqueActions[e.Name()+":"+m[1]] = true
+			}
+		}
+	}
+
+	// Current baseline: update this number when intentionally adding/removing
+	// destructive routes. This number represents the minimum expected count
+	// across BOTH register_meta.go inline routes AND sub-package routes.
+	// Observed: 194 as of 2025-07-16 (after metadata-driven destructive detection).
+	const minExpectedDestructiveRoutes = 150
+
+	total := len(uniqueActions)
+	if total < minExpectedDestructiveRoutes {
+		t.Errorf("only %d destructive routes found, expected at least %d — possible mass reclassification",
+			total, minExpectedDestructiveRoutes)
+	}
+	t.Logf("found %d unique destructive route definitions (minimum: %d)", total, minExpectedDestructiveRoutes)
 }

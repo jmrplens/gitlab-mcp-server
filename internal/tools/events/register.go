@@ -43,9 +43,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_event meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list_project":            toolutil.WrapAction(client, ListProjectEvents),
-		"list_user_contributions": toolutil.WrapAction(client, ListCurrentUserContributionEvents),
+	routes := toolutil.ActionMap{
+		"list_project":            toolutil.RouteAction(client, ListProjectEvents),
+		"list_user_contributions": toolutil.RouteAction(client, ListCurrentUserContributionEvents),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -56,7 +56,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 Actions:
 - list_project: List visible events for a project. Params: project_id (required), action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, page, per_page
 - list_user_contributions: List contribution events for the authenticated user. Params: action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, scope, page, per_page`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconEvent,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_event", routes, nil))
 }

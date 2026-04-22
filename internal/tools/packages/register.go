@@ -179,15 +179,15 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		return PublishDirectory(ctx, nil, client, input)
 	}
 
-	routes := map[string]toolutil.ActionFunc{
-		"publish":           publishAction,
-		"download":          downloadAction,
-		"list":              toolutil.WrapAction(client, List),
-		"file_list":         toolutil.WrapAction(client, FileList),
-		"delete":            deleteAction,
-		"file_delete":       fileDeleteAction,
-		"publish_and_link":  publishAndLinkAction,
-		"publish_directory": publishDirAction,
+	routes := toolutil.ActionMap{
+		"publish":           toolutil.Route(publishAction),
+		"download":          toolutil.Route(downloadAction),
+		"list":              toolutil.RouteAction(client, List),
+		"file_list":         toolutil.RouteAction(client, FileList),
+		"delete":            toolutil.DestructiveRoute(deleteAction),
+		"file_delete":       toolutil.DestructiveRoute(fileDeleteAction),
+		"publish_and_link":  toolutil.Route(publishAndLinkAction),
+		"publish_directory": toolutil.Route(publishDirAction),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -210,7 +210,8 @@ Delete actions:
 - file_delete: Delete a single file from a package (irreversible). Params: project_id (required), package_id (required), package_file_id (required)
 
 Common workflow: list → publish_directory → publish_and_link (for release binaries)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconPackage,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_package", routes, nil))
 }

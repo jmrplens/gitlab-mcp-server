@@ -19,9 +19,9 @@ import (
 // health/status and update operations. If updater is nil, only the status
 // action is available.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
-	routes := map[string]actionFunc{
-		"status":       wrapAction(client, health.Check),
-		"health_check": wrapAction(client, health.Check),
+	routes := actionMap{
+		"status":       routeAction(client, health.Check),
+		"health_check": routeAction(client, health.Check),
 	}
 
 	desc := `MCP server operations: health check, version info, and update management.
@@ -35,11 +35,9 @@ Actions:
 
 See also: gitlab_discover_project (resolve git remote URL to project ID)`
 
-	annotations := readOnlyMetaAnnotations
-
 	if updater != nil {
-		routes["check_update"] = wrapUpdaterAction(updater, serverupdate.Check)
-		routes["apply_update"] = wrapUpdaterAction(updater, serverupdate.Apply)
+		routes["check_update"] = route(wrapUpdaterAction(updater, serverupdate.Check))
+		routes["apply_update"] = destructiveRoute(wrapUpdaterAction(updater, serverupdate.Apply))
 
 		desc = `MCP server operations: health check, version info, and update management.
 Use this tool to verify GitLab connectivity, check server version, or manage updates.
@@ -53,11 +51,8 @@ Actions:
 - apply_update: Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script. Params: (none required)
 
 See also: gitlab_discover_project (resolve git remote URL to project ID)`
-
-		annotations = metaAnnotations
 	}
-
-	addMetaTool(server, "gitlab_server", desc, routes, annotations, toolutil.IconHealth)
+	addMetaTool(server, "gitlab_server", desc, routes, toolutil.IconHealth)
 }
 
 // wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead

@@ -33,8 +33,8 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_avatar meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"get": toolutil.WrapAction(client, Get),
+	routes := toolutil.ActionMap{
+		"get": toolutil.RouteAction(client, Get),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -44,7 +44,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 Actions:
 - get: Get avatar URL for an email address. Params: email (required), size (int, optional)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_avatar", routes, nil))
 }

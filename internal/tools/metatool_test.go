@@ -24,10 +24,10 @@ const (
 // TestMakeMetaHandler_EmptyAction verifies that makeMetaHandler returns a
 // descriptive error when the action field is empty.
 func TestMakeMetaHandler_EmptyAction(t *testing.T) {
-	routes := map[string]actionFunc{
-		"create": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := actionMap{
+		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
 			return "created", nil
-		},
+		}),
 	}
 
 	handler := makeMetaHandler("test_tool", routes)
@@ -45,13 +45,13 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 // TestMakeMetaHandler_UnknownAction verifies that makeMetaHandler returns a
 // descriptive error listing valid actions when an unknown action is provided.
 func TestMakeMetaHandler_UnknownAction(t *testing.T) {
-	routes := map[string]actionFunc{
-		"create": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := actionMap{
+		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
 			return "created", nil
-		},
-		"list": func(_ context.Context, _ map[string]any) (any, error) {
+		}),
+		"list": route(func(_ context.Context, _ map[string]any) (any, error) {
 			return "listed", nil
-		},
+		}),
 	}
 
 	handler := makeMetaHandler("test_tool", routes)
@@ -69,10 +69,10 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 // TestMakeMetaHandler_ValidAction verifies that makeMetaHandler dispatches
 // to the correct handler and returns its result.
 func TestMakeMetaHandler_ValidAction(t *testing.T) {
-	routes := map[string]actionFunc{
-		"get": func(_ context.Context, params map[string]any) (any, error) {
+	routes := actionMap{
+		"get": route(func(_ context.Context, params map[string]any) (any, error) {
 			return params["id"], nil
-		},
+		}),
 	}
 
 	handler := makeMetaHandler("test_tool", routes)
@@ -184,10 +184,10 @@ func TestWrapVoidAction_Integration(t *testing.T) {
 // TestValidActions_StringSorted verifies that validActionsString returns
 // action names in alphabetical order, separated by commas.
 func TestValidActions_StringSorted(t *testing.T) {
-	routes := map[string]actionFunc{
-		"delete": nil,
-		"create": nil,
-		"list":   nil,
+	routes := actionMap{
+		"delete": route(nil),
+		"create": route(nil),
+		"list":   route(nil),
 	}
 
 	got := validActionsString(routes)

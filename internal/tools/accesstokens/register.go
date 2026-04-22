@@ -288,25 +288,25 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_access_token meta-tool with all access token actions.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"project_list":         toolutil.WrapAction(client, ProjectList),
-		"project_get":          toolutil.WrapAction(client, ProjectGet),
-		"project_create":       toolutil.WrapAction(client, ProjectCreate),
-		"project_rotate":       toolutil.WrapAction(client, ProjectRotate),
-		"project_rotate_self":  toolutil.WrapAction(client, ProjectRotateSelf),
-		"project_revoke":       toolutil.WrapVoidAction(client, ProjectRevoke),
-		"group_list":           toolutil.WrapAction(client, GroupList),
-		"group_get":            toolutil.WrapAction(client, GroupGet),
-		"group_create":         toolutil.WrapAction(client, GroupCreate),
-		"group_rotate":         toolutil.WrapAction(client, GroupRotate),
-		"group_rotate_self":    toolutil.WrapAction(client, GroupRotateSelf),
-		"group_revoke":         toolutil.WrapVoidAction(client, GroupRevoke),
-		"personal_list":        toolutil.WrapAction(client, PersonalList),
-		"personal_get":         toolutil.WrapAction(client, PersonalGet),
-		"personal_rotate":      toolutil.WrapAction(client, PersonalRotate),
-		"personal_rotate_self": toolutil.WrapAction(client, PersonalRotateSelf),
-		"personal_revoke":      toolutil.WrapVoidAction(client, PersonalRevoke),
-		"personal_revoke_self": toolutil.WrapVoidAction(client, PersonalRevokeSelf),
+	routes := toolutil.ActionMap{
+		"project_list":         toolutil.RouteAction(client, ProjectList),
+		"project_get":          toolutil.RouteAction(client, ProjectGet),
+		"project_create":       toolutil.RouteAction(client, ProjectCreate),
+		"project_rotate":       toolutil.RouteAction(client, ProjectRotate),
+		"project_rotate_self":  toolutil.RouteAction(client, ProjectRotateSelf),
+		"project_revoke":       toolutil.DestructiveVoidAction(client, ProjectRevoke),
+		"group_list":           toolutil.RouteAction(client, GroupList),
+		"group_get":            toolutil.RouteAction(client, GroupGet),
+		"group_create":         toolutil.RouteAction(client, GroupCreate),
+		"group_rotate":         toolutil.RouteAction(client, GroupRotate),
+		"group_rotate_self":    toolutil.RouteAction(client, GroupRotateSelf),
+		"group_revoke":         toolutil.DestructiveVoidAction(client, GroupRevoke),
+		"personal_list":        toolutil.RouteAction(client, PersonalList),
+		"personal_get":         toolutil.RouteAction(client, PersonalGet),
+		"personal_rotate":      toolutil.RouteAction(client, PersonalRotate),
+		"personal_rotate_self": toolutil.RouteAction(client, PersonalRotateSelf),
+		"personal_revoke":      toolutil.DestructiveVoidAction(client, PersonalRevoke),
+		"personal_revoke_self": toolutil.DestructiveVoidAction(client, PersonalRevokeSelf),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -333,7 +333,8 @@ Actions:
 - personal_rotate_self: Rotate the personal access token used for auth. Params: expires_at (YYYY-MM-DD)
 - personal_revoke: Revoke personal access token. Params: token_id (required, int)
 - personal_revoke_self: Revoke the personal access token used for auth. No params`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconToken,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_access_token", routes, nil))
 }

@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-21.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2025-07-18.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,11 +14,11 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,627   |
-| Unit test functions         | 8,426   |
-| E2E test functions          | 201     |
+| Total test functions        | 8,669   |
+| Unit test functions         | 8,399   |
+| E2E test functions          | 206     |
 | cmd test functions          | 64      |
-| Test files (internal/)      | 393     |
+| Test files (internal/)      | 395     |
 | Tool sub-packages tested    | 162     |
 | Core packages tested        | 16      |
 | Average coverage            | ~98.1%  |
@@ -27,9 +27,9 @@
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 7,782 | 90.2% |
-| `TestFunc` (no-underscore)     |   658 |  7.6% |
-| `TestFunc_Sc_Exp` (3-part)     |   187 |  2.2% |
+| `TestFunc_Scenario` (2-part)   | 7,806 | 90.1% |
+| `TestFunc` (no-underscore)     |   663 |  7.7% |
+| `TestFunc_Sc_Exp` (3+ part)   |   195 |  2.3% |
 
 ## Test Distribution
 
@@ -37,12 +37,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,224 |         73 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            211 |         15 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (162)  |          6,927 |        305 | Domain-specific tool handlers        |
-| E2E integration          |            201 |         92 | Full workflow against real GitLab    |
+| Core packages            |          1,248 |         74 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (162)  |          6,937 |        306 | Domain-specific tool handlers        |
+| E2E integration          |            206 |         94 | Full workflow against real GitLab    |
 | cmd/server               |             64 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,627** |    **486** |                                      |
+| **Total**                |      **8,669** |    **490** |                                      |
 
 ### Core Packages
 
@@ -60,11 +60,11 @@
 | roots          |    16 |  100.0%  | MCP roots capability                 |
 | sampling       |    74 |   99.3%  | MCP sampling capability              |
 | serverpool     |    33 |   99.3%  | HTTP mode server pool                |
-| testutil       |    19 |   94.7%  | Shared test helpers                  |
-| toolutil       |   230 |   95.9%  | Shared tool utilities                |
-| wizard         |   196 |   83.0%  | Setup wizard (Web UI, TUI, CLI)      |
+| testutil       |    21 |   95.5%  | Shared test helpers                  |
+| toolutil       |   243 |   95.9%  | Shared tool utilities                |
+| wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,224**|        |                                      |
+| **Subtotal**   |**1,248**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -74,12 +74,12 @@
 | mergerequests        |   209 |   97.2%  |    30 |
 | issues               |   195 |   98.6%  |    21 |
 | users                |   185 |  100.0%  |    28 |
-| samplingtools        |   152 |  100.0%  |    11 |
+| samplingtools        |   162 |  100.0%  |    11 |
 | groups               |   121 |   99.0%  |    18 |
 | search               |   106 |  100.0%  |    11 |
-| awardemoji           |   106 |   97.5%  |    25 |
+| awardemoji           |   106 |   96.2%  |    25 |
 | packages             |   104 |   95.2%  |     9 |
-| jobs                 |   119 |   97.7%  |    17 |
+| jobs                 |   117 |   97.7%  |    17 |
 | resourceevents       |    99 |  100.0%  |    16 |
 | runners              |    97 |   96.8%  |    20 |
 | commits              |    96 |   97.1%  |    13 |
@@ -187,7 +187,7 @@
 | issuenotes               |    38 |
 | issues                   |   195 |
 | issuestatistics          |    41 |
-| jobs                     |   119 |
+| jobs                     |   117 |
 | jobtokenscope            |    49 |
 | keys                     |    21 |
 | labels                   |    54 |
@@ -237,7 +237,7 @@
 | runnercontrollerscopes   |    30 |
 | runnercontrollertokens   |    33 |
 | runners                  |    97 |
-| samplingtools            |   152 |
+| samplingtools            |   162 |
 | search                   |   106 |
 | securefiles              |    27 |
 | securityfindings         |    15 |
@@ -261,8 +261,8 @@
 | users                    |   185 |
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
-| workitems                |    55 |
-| **Total**                | **6,927** |
+| workitems                |    66 |
+| **Total**                | **6,937** |
 
 </details>
 
@@ -284,9 +284,9 @@
 | roots          |  100.0%  |
 | sampling       |   99.3%  |
 | serverpool     |   99.3%  |
-| testutil       |   94.7%  |
+| testutil       |   95.5%  |
 | toolutil       |   95.9%  |
-| wizard         |   83.0%  |
+| wizard         |   83.1%  |
 
 ### Tool Sub-Packages
 
@@ -302,7 +302,7 @@
 | attestations             |  100.0%  |
 | auditevents              |  100.0%  |
 | avatar                   |   95.2%  |
-| awardemoji               |   97.5%  |
+| awardemoji               |   96.2%  |
 | badges                   |  100.0%  |
 | boards                   |  100.0%  |
 | branches                 |   97.4%  |
@@ -314,7 +314,7 @@
 | civariables              |  100.0%  |
 | ciyamltemplates          |  100.0%  |
 | clusteragents            |   97.0%  |
-| commitdiscussions        |  100.0%  |
+| commitdiscussions        |   99.2%  |
 | commits                  |   97.1%  |
 | compliancepolicy         |  100.0%  |
 | containerregistry        |  100.0%  |
@@ -332,7 +332,7 @@
 | elicitationtools         |  100.0%  |
 | enterpriseusers          |  100.0%  |
 | environments             |  100.0%  |
-| epicdiscussions          |   93.4%  |
+| epicdiscussions          |   93.0%  |
 | epicissues               |   96.4%  |
 | epicnotes                |   96.0%  |
 | epics                    |   99.3%  |
@@ -343,7 +343,7 @@
 | features                 |   97.6%  |
 | ffuserlists              |  100.0%  |
 | files                    |   92.9%  |
-| freezeperiods            |  100.0%  |
+| freezeperiods            |   99.1%  |
 | geo                      |  100.0%  |
 | gitignoretemplates       |  100.0%  |
 | groupanalytics           |  100.0%  |
@@ -375,7 +375,7 @@
 | instancevariables        |  100.0%  |
 | integrations             |  100.0%  |
 | invites                  |  100.0%  |
-| issuediscussions         |  100.0%  |
+| issuediscussions         |   99.4%  |
 | issuelinks               |   99.1%  |
 | issuenotes               |  100.0%  |
 | issues                   |   98.6%  |
@@ -438,7 +438,7 @@
 | serverupdate             |   90.9%  |
 | settings                 |   92.3%  |
 | sidekiq                  |  100.0%  |
-| snippetdiscussions       |  100.0%  |
+| snippetdiscussions       |   99.3%  |
 | snippetnotes             |  100.0%  |
 | snippets                 |   98.7%  |
 | snippetstoragemoves      |  100.0%  |
@@ -462,7 +462,7 @@ Coverage target: **>90%** per package. Exceptions:
   replacement, Windows-gated binary rename, signal handling) cannot be
   unit tested without integration infrastructure. The `ExecSelf` function
   replaces the current process, making it untestable in-process.
-- **wizard** (83.0%) — Interactive UI code (Bubble Tea TUI, Web UI server,
+- **wizard** (83.1%) — Interactive UI code (Bubble Tea TUI, Web UI server,
   OS directory picker, browser launch) requires heavy stubbing. Package-level
   function variables (`allClientsFn`, `openBrowserFn`, `pickDirectoryFn`)
   enable test isolation; see [Wizard Test Helpers](#wizard-test-helpers) below.
@@ -610,6 +610,7 @@ Meta-tool tests verify the action-dispatch layer that consolidates 1006 individu
 - **Action routing**: Each meta-tool correctly dispatches to the underlying sub-package handler based on the `action` parameter
 - **Invalid action**: Requests with unknown actions return an error listing valid actions
 - **Metadata audit**: `TestMetadataAudit_*` tests enforce naming conventions, annotations, and tool count invariants across all 1006 tools
+- **Destructive metadata consistency**: `TestDestructiveMetadataConsistency` cross-checks `ActionRoute.Destructive` metadata against `toolutil.DeleteAnnotations` on individual tools — ensures meta-tool routes and individual tools agree on which actions are destructive
 - **Markdown formatting**: `markdownForResult` delegates to the type-based registry (`toolutil.MarkdownForResult`) which invokes the formatter registered by the sub-package `init()` function
 - **next_steps enrichment**: `enrichWithHints()` correctly extracts hints from Markdown and injects them into JSON `structuredContent`
 
@@ -772,7 +773,7 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (88 test files)
+└── suite/                    # Go test package (94 test files)
     ├── setup_test.go         # MCP server setup, helpers, shared state
     ├── fixture_test.go       # Self-contained GitLab resource builders
     └── *_test.go             # Domain-specific test files

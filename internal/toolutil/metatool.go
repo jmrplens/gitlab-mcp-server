@@ -35,6 +35,28 @@ type MetaToolInput struct {
 // ActionFunc is a handler that receives raw params and returns a result or error.
 type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 
+// ActionRoute pairs an action handler with metadata about its behavior.
+// Used by meta-tools to carry per-route destructive classification
+// without string parsing.
+type ActionRoute struct {
+	Handler     ActionFunc
+	Destructive bool
+}
+
+// ActionMap maps action names to their route definitions (handler + metadata).
+type ActionMap map[string]ActionRoute
+
+// Route creates a non-destructive ActionRoute.
+func Route(fn ActionFunc) ActionRoute {
+	return ActionRoute{Handler: fn, Destructive: false}
+}
+
+// DestructiveRoute creates a destructive ActionRoute that will trigger
+// user confirmation before execution.
+func DestructiveRoute(fn ActionFunc) ActionRoute {
+	return ActionRoute{Handler: fn, Destructive: true}
+}
+
 // requestContextKey is the context key for storing the MCP request in
 // action handler contexts. Used by WrapActionWithRequest to pass the
 // CallToolRequest to handlers that need it (e.g., for progress tracking).
@@ -136,6 +158,36 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 	}
 }
 
+// RouteAction wraps a typed function as a non-destructive ActionRoute.
+func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+	return Route(WrapAction(client, fn))
+}
+
+// RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
+func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
+	return Route(WrapVoidAction(client, fn))
+}
+
+// RouteActionWithRequest wraps a typed function that needs the MCP request as a non-destructive ActionRoute.
+func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+	return Route(WrapActionWithRequest(client, fn))
+}
+
+// DestructiveAction wraps a typed function as a destructive ActionRoute.
+func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+	return DestructiveRoute(WrapAction(client, fn))
+}
+
+// DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
+func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
+	return DestructiveRoute(WrapVoidAction(client, fn))
+}
+
+// DestructiveActionWithRequest wraps a typed function that needs the MCP request as a destructive ActionRoute.
+func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+	return DestructiveRoute(WrapActionWithRequest(client, fn))
+}
+
 // FormatResultFunc converts an action result into an MCP call tool result.
 type FormatResultFunc func(any) *mcp.CallToolResult
 
@@ -147,7 +199,7 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // intercepted with a user confirmation prompt via MCP elicitation before execution.
 // Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
-func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
+func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 	if formatResult == nil {
 		formatResult = defaultFormatResult
 	}
@@ -156,13 +208,13 @@ func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult
 			return nil, nil, fmt.Errorf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))
 		}
 
-		handler, ok := routes[input.Action]
+		route, ok := routes[input.Action]
 		if !ok {
 			return nil, nil, fmt.Errorf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))
 		}
 
-		// Confirm destructive actions before execution.
-		if IsDestructiveAction(input.Action) {
+		// Confirm destructive actions before execution using route metadata.
+		if route.Destructive {
 			msg := fmt.Sprintf("Confirm %s/%s? This action may be irreversible.", toolName, input.Action)
 			if result := ConfirmDestructiveAction(ctx, req, input.Params, msg); result != nil {
 				return result, nil, nil
@@ -173,40 +225,12 @@ func MakeMetaHandler(toolName string, routes map[string]ActionFunc, formatResult
 		actionCtx := ContextWithRequest(ctx, req)
 
 		start := time.Now()
-		result, err := handler(actionCtx, input.Params)
+		result, err := route.Handler(actionCtx, input.Params)
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		callResult := formatResult(result)
 		return callResult, enrichWithHints(result, callResult), err
 	}
-}
-
-// destructiveVerbs lists substrings that indicate a destructive action.
-var destructiveVerbs = []string{
-	"delete", "remove", "revoke", "unprotect", "unpublish", "purge", "deny",
-}
-
-// destructiveExact lists action names that are destructive but don't
-// match any substring pattern from destructiveVerbs.
-var destructiveExact = map[string]bool{
-	"merge": true, "erase": true, "stop": true,
-	"ban": true, "block": true, "deactivate": true,
-	"reject": true, "unapprove": true, "approval_reset": true,
-	"disable_two_factor": true,
-}
-
-// IsDestructiveAction reports whether the given meta-tool action name
-// indicates a destructive operation that warrants user confirmation.
-func IsDestructiveAction(action string) bool {
-	if destructiveExact[action] {
-		return true
-	}
-	for _, verb := range destructiveVerbs {
-		if strings.Contains(action, verb) {
-			return true
-		}
-	}
-	return false
 }
 
 // enrichWithHints extracts next-step hints from the Markdown content in
@@ -279,7 +303,7 @@ func defaultFormatResult(result any) *mcp.CallToolResult {
 }
 
 // ValidActionsString returns a sorted, comma-separated list of action names.
-func ValidActionsString(routes map[string]ActionFunc) string {
+func ValidActionsString(routes ActionMap) string {
 	actions := make([]string, 0, len(routes))
 	for k := range routes {
 		actions = append(actions, k)
@@ -292,7 +316,7 @@ func ValidActionsString(routes map[string]ActionFunc) string {
 // constrained to an enum of valid action names extracted from the routes map.
 // Setting this as Tool.InputSchema ensures the LLM sees the exact list of
 // valid actions in the schema, enabling first-try action selection.
-func MetaToolSchema(routes map[string]ActionFunc) map[string]any {
+func MetaToolSchema(routes ActionMap) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
 		actions = append(actions, name)
@@ -316,4 +340,19 @@ func MetaToolSchema(routes map[string]ActionFunc) map[string]any {
 		"required":             []any{"action"},
 		"additionalProperties": false,
 	}
+}
+
+// DeriveAnnotations computes tool-level MCP annotations from the route map.
+// If any route is destructive, returns a copy of MetaAnnotations (DestructiveHint: true).
+// If all routes are non-destructive, returns a copy of NonDestructiveMetaAnnotations.
+// Each call returns a fresh copy to avoid aliasing the shared singletons.
+func DeriveAnnotations(routes ActionMap) *mcp.ToolAnnotations {
+	for _, r := range routes {
+		if r.Destructive {
+			cp := *MetaAnnotations
+			return &cp
+		}
+	}
+	cp := *NonDestructiveMetaAnnotations
+	return &cp
 }

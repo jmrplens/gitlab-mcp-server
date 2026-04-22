@@ -98,12 +98,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_import meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"from_github":           toolutil.WrapAction(client, ImportFromGitHub),
-		"cancel_github":         toolutil.WrapAction(client, CancelGitHubImport),
-		"github_gists":          toolutil.WrapVoidAction(client, ImportGists),
-		"from_bitbucket_cloud":  toolutil.WrapAction(client, ImportFromBitbucketCloud),
-		"from_bitbucket_server": toolutil.WrapAction(client, ImportFromBitbucketServer),
+	routes := toolutil.ActionMap{
+		"from_github":           toolutil.RouteAction(client, ImportFromGitHub),
+		"cancel_github":         toolutil.DestructiveAction(client, CancelGitHubImport),
+		"github_gists":          toolutil.RouteVoidAction(client, ImportGists),
+		"from_bitbucket_cloud":  toolutil.RouteAction(client, ImportFromBitbucketCloud),
+		"from_bitbucket_server": toolutil.RouteAction(client, ImportFromBitbucketServer),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -117,7 +117,8 @@ Actions:
 - github_gists: Import GitHub gists as GitLab snippets. Params: personal_access_token (required)
 - from_bitbucket_cloud: Import from Bitbucket Cloud. Params: bitbucket_username (required), bitbucket_app_password (required), repo_path (required), target_namespace (required), new_name
 - from_bitbucket_server: Import from Bitbucket Server. Params: bitbucket_server_url (required), bitbucket_server_username (required), personal_access_token (required), bitbucket_server_project (required), bitbucket_server_repo (required), new_name, new_namespace, timeout_strategy`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconImport,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_import", routes, nil))
 }

@@ -122,13 +122,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 
 // RegisterMeta registers the gitlab_terraform_state meta-tool.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
-	routes := map[string]toolutil.ActionFunc{
-		"list":           toolutil.WrapAction(client, List),
-		"get":            toolutil.WrapAction(client, Get),
-		"delete":         toolutil.WrapVoidAction(client, Delete),
-		"delete_version": toolutil.WrapVoidAction(client, DeleteVersion),
-		"lock":           toolutil.WrapAction(client, Lock),
-		"unlock":         toolutil.WrapAction(client, Unlock),
+	routes := toolutil.ActionMap{
+		"list":           toolutil.RouteAction(client, List),
+		"get":            toolutil.RouteAction(client, Get),
+		"delete":         toolutil.DestructiveVoidAction(client, Delete),
+		"delete_version": toolutil.DestructiveVoidAction(client, DeleteVersion),
+		"lock":           toolutil.RouteAction(client, Lock),
+		"unlock":         toolutil.RouteAction(client, Unlock),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -143,7 +143,8 @@ Actions:
 - delete_version: Delete a specific Terraform state version. Params: project_id (required), name (required), serial (required, int)
 - lock: Lock a Terraform state. Params: project_id (required), name (required)
 - unlock: Unlock a Terraform state. Params: project_id (required), name (required)`,
-		Annotations: toolutil.MetaAnnotations,
+		Annotations: toolutil.DeriveAnnotations(routes),
 		Icons:       toolutil.IconInfra,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_terraform_state", routes, nil))
 }

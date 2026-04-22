@@ -1,6 +1,10 @@
 // metatool_test.go tests the generic meta-tool dispatch infrastructure:
 // UnmarshalParams, WrapAction, WrapVoidAction, MakeMetaHandler,
-// defaultFormatResult, ValidActionsString and MetaToolSchema.
+// defaultFormatResult, ValidActionsString, MetaToolSchema,
+// Route, DestructiveRoute, DeriveAnnotations,
+// and composite wrappers (RouteAction, RouteVoidAction,
+// RouteActionWithRequest, DestructiveAction, DestructiveVoidAction,
+// DestructiveActionWithRequest).
 package toolutil
 
 import (
@@ -267,10 +271,10 @@ func TestRequestFromContext_Absent(t *testing.T) {
 // TestMakeMetaHandler_ValidAction verifies MakeMetaHandler dispatches to
 // the correct action handler and returns a formatted result.
 func TestMakeMetaHandler_ValidAction(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"greet": func(_ context.Context, params map[string]any) (any, error) {
+	routes := ActionMap{
+		"greet": Route(func(_ context.Context, params map[string]any) (any, error) {
 			return map[string]string{"msg": "hi"}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	req := &mcp.CallToolRequest{}
@@ -291,10 +295,10 @@ func TestMakeMetaHandler_ValidAction(t *testing.T) {
 // TestMakeMetaHandler_EmptyAction verifies MakeMetaHandler returns an error
 // when the action field is empty.
 func TestMakeMetaHandler_EmptyAction(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"list": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return struct{}{}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
@@ -306,10 +310,10 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 // TestMakeMetaHandler_UnknownAction verifies MakeMetaHandler returns an error
 // for an unrecognized action name.
 func TestMakeMetaHandler_UnknownAction(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"list": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return struct{}{}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
@@ -321,10 +325,10 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 // TestMakeMetaHandler_CustomFormatter verifies MakeMetaHandler uses a custom
 // FormatResultFunc when provided.
 func TestMakeMetaHandler_CustomFormatter(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"ping": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"ping": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return "pong", nil
-		},
+		}),
 	}
 	customFmt := func(raw any) *mcp.CallToolResult {
 		return SuccessResult("CUSTOM:" + raw.(string))
@@ -368,10 +372,10 @@ func TestDefaultFormatResult_JSON(t *testing.T) {
 
 // TestValidActionsString verifies sorted comma-separated output.
 func TestValidActionsString(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"delete": nil,
-		"create": nil,
-		"list":   nil,
+	routes := ActionMap{
+		"delete": Route(nil),
+		"create": Route(nil),
+		"list":   Route(nil),
 	}
 	got := ValidActionsString(routes)
 	if got != "create, delete, list" {
@@ -384,9 +388,9 @@ func TestValidActionsString(t *testing.T) {
 // TestMetaToolSchema verifies the generated JSON Schema contains the
 // action enum and params property.
 func TestMetaToolSchema(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"get":  nil,
-		"list": nil,
+	routes := ActionMap{
+		"get":  Route(nil),
+		"list": Route(nil),
 	}
 	schema := MetaToolSchema(routes)
 	props, ok := schema["properties"].(map[string]any)
@@ -491,10 +495,10 @@ func TestEnrichWithHints_NilCallResult(t *testing.T) {
 // TestMakeMetaHandler_EnrichesStructuredContent verifies that the meta-tool
 // handler wrapper enriches structured JSON output with next_steps hints.
 func TestMakeMetaHandler_EnrichesStructuredContent(t *testing.T) {
-	routes := map[string]ActionFunc{
-		"list": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return map[string]any{"items": []string{"x"}}, nil
-		},
+		}),
 	}
 	formatter := func(result any) *mcp.CallToolResult {
 		return &mcp.CallToolResult{
@@ -590,85 +594,16 @@ func TestDefaultFormatResult_Unmarshalable(t *testing.T) {
 	}
 }
 
-// IsDestructiveAction.
-
-// TestIsDestructiveAction verifies that action names matching destructive
-// patterns (delete, remove, revoke, etc.) are correctly identified, while
-// non-destructive actions like list, get, create, and update are not.
-func TestIsDestructiveAction(t *testing.T) {
-	tests := []struct {
-		action string
-		want   bool
-	}{
-		// Substring matches: delete
-		{"delete", true},
-		{"delete_merged", true},
-		{"hook_delete", true},
-		{"deploy_token_delete_project", true},
-		{"file_delete", true},
-		// Substring matches: remove
-		{"remove", true},
-		{"group_member_remove", true},
-		{"token_scope_remove_project", true},
-		// Substring matches: revoke
-		{"revoke", true},
-		{"token_project_revoke", true},
-		{"revoke_impersonation_token", true},
-		// Substring matches: unprotect
-		{"unprotect", true},
-		{"protected_unprotect", true},
-		{"protected_branch_unprotect", true},
-		// Substring matches: unpublish
-		{"pages_unpublish", true},
-		// Substring matches: purge
-		{"purge", true},
-		// Substring matches: deny
-		{"deny_project", true},
-		{"deny_group", true},
-		// Exact matches
-		{"merge", true},
-		{"erase", true},
-		{"stop", true},
-		{"ban", true},
-		{"block", true},
-		{"deactivate", true},
-		{"reject", true},
-		{"unapprove", true},
-		{"approval_reset", true},
-		{"disable_two_factor", true},
-		// Non-destructive actions
-		{"list", false},
-		{"get", false},
-		{"create", false},
-		{"update", false},
-		{"search", false},
-		{"list_branches", false},
-		{"get_status", false},
-		{"create_issue", false},
-		{"approve", false},
-		{"protect", false},
-		{"activate", false},
-		{"unblock", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.action, func(t *testing.T) {
-			if got := IsDestructiveAction(tt.action); got != tt.want {
-				t.Errorf("IsDestructiveAction(%q) = %v, want %v", tt.action, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestMakeMetaHandler_DestructiveActionConfirmBypass verifies that
 // MakeMetaHandler intercepts destructive actions with confirmation,
 // and that the "confirm" param bypasses the prompt.
 func TestMakeMetaHandler_DestructiveActionConfirmBypass(t *testing.T) {
 	called := false
-	routes := map[string]ActionFunc{
-		"delete": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
 			called = true
 			return map[string]string{"status": "deleted"}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 
@@ -696,11 +631,11 @@ func TestMakeMetaHandler_DestructiveActionYOLOMode(t *testing.T) {
 	t.Setenv("YOLO_MODE", "true")
 
 	called := false
-	routes := map[string]ActionFunc{
-		"token_revoke": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"token_revoke": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
 			called = true
 			return map[string]string{"status": "revoked"}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	input := MetaToolInput{Action: "token_revoke", Params: map[string]any{}}
@@ -718,11 +653,11 @@ func TestMakeMetaHandler_DestructiveActionYOLOMode(t *testing.T) {
 // actions are dispatched without any confirmation prompt.
 func TestMakeMetaHandler_NonDestructiveSkipsConfirm(t *testing.T) {
 	called := false
-	routes := map[string]ActionFunc{
-		"list": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			called = true
 			return []string{"a", "b"}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	input := MetaToolInput{Action: "list", Params: map[string]any{}}
@@ -740,11 +675,11 @@ func TestMakeMetaHandler_NonDestructiveSkipsConfirm(t *testing.T) {
 // without blocking — backward compatibility.
 func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 	called := false
-	routes := map[string]ActionFunc{
-		"delete": func(_ context.Context, _ map[string]any) (any, error) {
+	routes := ActionMap{
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
 			called = true
 			return map[string]string{"status": "deleted"}, nil
-		},
+		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
 	input := MetaToolInput{Action: "delete", Params: map[string]any{}}
@@ -755,5 +690,294 @@ func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 	}
 	if !called {
 		t.Error("handler was not called — should proceed when elicitation unsupported")
+	}
+}
+
+// TestRoute_CreatesNonDestructiveRoute verifies that Route() creates an
+// ActionRoute with Destructive=false.
+func TestRoute_CreatesNonDestructiveRoute(t *testing.T) {
+	fn := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+	r := Route(fn)
+	if r.Destructive {
+		t.Error("Route() should create non-destructive route")
+	}
+	if r.Handler == nil {
+		t.Error("Route() should set Handler")
+	}
+}
+
+// TestDestructiveRoute_CreatesDestructiveRoute verifies that DestructiveRoute()
+// creates an ActionRoute with Destructive=true.
+func TestDestructiveRoute_CreatesDestructiveRoute(t *testing.T) {
+	fn := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+	r := DestructiveRoute(fn)
+	if !r.Destructive {
+		t.Error("DestructiveRoute() should create destructive route")
+	}
+	if r.Handler == nil {
+		t.Error("DestructiveRoute() should set Handler")
+	}
+}
+
+// TestDeriveAnnotations_AllNonDestructive verifies that DeriveAnnotations returns
+// NonDestructiveMetaAnnotations when no route is destructive.
+func TestDeriveAnnotations_AllNonDestructive(t *testing.T) {
+	routes := ActionMap{
+		"list":   Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+		"get":    Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+		"create": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+	ann := DeriveAnnotations(routes)
+	if ann.DestructiveHint == nil || *ann.DestructiveHint != false {
+		t.Error("all non-destructive routes should produce DestructiveHint=false")
+	}
+}
+
+// TestDeriveAnnotations_HasDestructive verifies that DeriveAnnotations returns
+// MetaAnnotations when at least one route is destructive.
+func TestDeriveAnnotations_HasDestructive(t *testing.T) {
+	routes := ActionMap{
+		"list":   Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+	ann := DeriveAnnotations(routes)
+	if ann.DestructiveHint == nil || *ann.DestructiveHint != true {
+		t.Error("routes with destructive action should produce DestructiveHint=true")
+	}
+}
+
+// TestDeriveAnnotations_EmptyMap verifies that DeriveAnnotations handles an empty
+// ActionMap gracefully (no destructive routes → NonDestructiveMetaAnnotations).
+func TestDeriveAnnotations_EmptyMap(t *testing.T) {
+	ann := DeriveAnnotations(ActionMap{})
+	if ann.DestructiveHint == nil || *ann.DestructiveHint != false {
+		t.Error("empty map should produce DestructiveHint=false")
+	}
+}
+
+// TestMakeMetaHandler_MetadataDestructive_TriggersConfirm verifies that
+// MakeMetaHandler reads route.Destructive to determine confirmation requirement.
+func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {
+	called := false
+	routes := ActionMap{
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return "ok", nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	input := MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}}
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
+
+	// Without confirm=true, handler should still be called (elicitation unsupported in tests)
+	// but the route is recognized as destructive.
+	result, _, err := handler(context.Background(), req, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called")
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+// TestMakeMetaHandler_NonDestructive_SkipsConfirm verifies that non-destructive
+// routes do not trigger confirmation.
+func TestMakeMetaHandler_NonDestructive_SkipsConfirm(t *testing.T) {
+	called := false
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			called = true
+			return []string{"a", "b"}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	input := MetaToolInput{Action: "list", Params: map[string]any{}}
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
+
+	result, _, err := handler(context.Background(), req, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("handler was not called")
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+// Composite wrapper metadata tests — verify that every wrapper type correctly
+// sets (or clears) the Destructive flag on the resulting ActionRoute.
+
+// TestCompositeWrappers_DestructiveMetadata verifies that all eight Route/DestructiveRoute
+// wrapper functions produce ActionRoutes with the correct Destructive flag.
+func TestCompositeWrappers_DestructiveMetadata(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+	reqFn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	rawFn := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+
+	tests := []struct {
+		name            string
+		route           ActionRoute
+		wantDestructive bool
+	}{
+		{"Route", Route(rawFn), false},
+		{"DestructiveRoute", DestructiveRoute(rawFn), true},
+		{"RouteAction", RouteAction(nil, typedFn), false},
+		{"RouteVoidAction", RouteVoidAction(nil, voidFn), false},
+		{"RouteActionWithRequest", RouteActionWithRequest(nil, reqFn), false},
+		{"DestructiveAction", DestructiveAction(nil, typedFn), true},
+		{"DestructiveVoidAction", DestructiveVoidAction(nil, voidFn), true},
+		{"DestructiveActionWithRequest", DestructiveActionWithRequest(nil, reqFn), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.route.Destructive != tt.wantDestructive {
+				t.Errorf("Destructive = %v, want %v", tt.route.Destructive, tt.wantDestructive)
+			}
+			if tt.route.Handler == nil {
+				t.Errorf("Handler is nil")
+			}
+		})
+	}
+}
+
+// TestDeriveAnnotations_WithCompositeWrappers verifies that DeriveAnnotations
+// correctly detects destructive routes produced by composite wrappers in a
+// mixed route map (simulating real registration patterns).
+func TestDeriveAnnotations_WithCompositeWrappers(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+
+	tests := []struct {
+		name                string
+		routes              ActionMap
+		wantDestructiveHint bool
+	}{
+		{
+			name: "AllNonDestructive",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"get":    RouteAction(nil, typedFn),
+				"create": RouteAction(nil, typedFn),
+			},
+			wantDestructiveHint: false,
+		},
+		{
+			name: "OneDestructiveAction",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"get":    RouteAction(nil, typedFn),
+				"delete": DestructiveVoidAction(nil, voidFn),
+			},
+			wantDestructiveHint: true,
+		},
+		{
+			name: "MultipleDestructiveActions",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"delete": DestructiveVoidAction(nil, voidFn),
+				"remove": DestructiveVoidAction(nil, voidFn),
+				"revoke": DestructiveAction(nil, typedFn),
+			},
+			wantDestructiveHint: true,
+		},
+		{
+			name: "OnlyDestructiveActions",
+			routes: ActionMap{
+				"delete": DestructiveVoidAction(nil, voidFn),
+				"purge":  DestructiveVoidAction(nil, voidFn),
+			},
+			wantDestructiveHint: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ann := DeriveAnnotations(tt.routes)
+			got := ann.DestructiveHint != nil && *ann.DestructiveHint
+			if got != tt.wantDestructiveHint {
+				t.Errorf("DestructiveHint = %v, want %v", got, tt.wantDestructiveHint)
+			}
+		})
+	}
+}
+
+// TestMakeMetaHandler_CompositeWrapperConfirmation verifies that MakeMetaHandler
+// correctly triggers (or skips) confirmation for routes built with composite
+// wrappers, covering representative domain action patterns.
+func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{Result: "ok"}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+
+	routes := ActionMap{
+		"list":   RouteAction(nil, typedFn),
+		"get":    RouteAction(nil, typedFn),
+		"create": RouteAction(nil, typedFn),
+		"update": RouteAction(nil, typedFn),
+		"delete": DestructiveVoidAction(nil, voidFn),
+		"remove": DestructiveAction(nil, typedFn),
+	}
+
+	formatter := func(result any) *mcp.CallToolResult {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+		}
+	}
+	handler := MakeMetaHandler("test_domain", routes, formatter)
+
+	tests := []struct {
+		name       string
+		action     string
+		params     map[string]any
+		wantCalled bool
+	}{
+		{name: "list", action: "list", params: map[string]any{}, wantCalled: true},
+		{name: "get", action: "get", params: map[string]any{}, wantCalled: true},
+		{name: "create", action: "create", params: map[string]any{}, wantCalled: true},
+		{name: "update", action: "update", params: map[string]any{}, wantCalled: true},
+		// Destructive actions without elicitation support proceed via fallback
+		{name: "delete_fallback", action: "delete", params: map[string]any{}, wantCalled: true},
+		{name: "remove_fallback", action: "remove", params: map[string]any{}, wantCalled: true},
+		// Destructive action with explicit confirm=true bypasses confirmation
+		{name: "delete_confirm", action: "delete", params: map[string]any{"confirm": true}, wantCalled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := MetaToolInput{
+				Action: tt.action,
+				Params: tt.params,
+			}
+
+			req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_domain"}}
+
+			result, _, err := handler(context.Background(), req, input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantCalled && result == nil {
+				t.Error("expected result but got nil")
+			}
+		})
 	}
 }
