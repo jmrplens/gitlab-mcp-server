@@ -25,10 +25,10 @@
     "astro": "^6.1.8",
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.14.0",
-    "sharp": "^0.34.5",
-    "starlight-links-validator": "^0.23.0"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "starlight-links-validator": "^0.23.0",
     "@astrojs/check": "^0.9.8",
     "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/parser": "^8.59.0",
