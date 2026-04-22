@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,12 +40,13 @@ func installBinaryImpl(destDir string) (string, error) {
 	}
 
 	// Sanitize destDir to prevent path traversal.
-	cleanDir := filepath.Clean(destDir)
-	if !filepath.IsAbs(cleanDir) {
-		cleanDir, err = filepath.Abs(cleanDir)
-		if err != nil {
-			return "", fmt.Errorf("resolving absolute path for %s: %w", destDir, err)
-		}
+	cleanDir, err := filepath.Abs(filepath.Clean(destDir)) // #nosec G304 -- wizard install dir chosen by local user via setup UI
+	if err != nil {
+		return "", fmt.Errorf("resolving absolute path for %s: %w", destDir, err)
+	}
+	// Reject paths containing ".." components after cleaning to prevent traversal.
+	if slices.Contains(strings.Split(filepath.ToSlash(cleanDir), "/"), "..") {
+		return "", fmt.Errorf("invalid install directory (contains path traversal): %s", destDir)
 	}
 
 	destPath := filepath.Join(cleanDir, DefaultBinaryName())

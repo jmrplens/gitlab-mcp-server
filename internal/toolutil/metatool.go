@@ -204,13 +204,14 @@ func enrichWithHints(result any, callResult *mcp.CallToolResult) any {
 	}
 	// Build JSON with next_steps as the first field so LLMs see guidance early.
 	overhead := len(`"next_steps":,`)
-	capacity := overhead
-	if len(data) > 0 && capacity <= maxInt-len(data) {
-		capacity += len(data)
+	if len(data) > maxInt-overhead {
+		return result
 	}
-	if len(hintsData) > 0 && capacity <= maxInt-len(hintsData) {
-		capacity += len(hintsData)
+	capacity := overhead + len(data)
+	if len(hintsData) > maxInt-capacity {
+		return result
 	}
+	capacity += len(hintsData)
 	buf := make([]byte, 0, capacity)
 	buf = append(buf, '{')
 	buf = append(buf, `"next_steps":`...)
