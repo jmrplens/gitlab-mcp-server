@@ -804,3 +804,176 @@ func TestMakeMetaHandler_NonDestructive_SkipsConfirm(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 }
+
+// Composite wrapper metadata tests — verify that every wrapper type correctly
+// sets (or clears) the Destructive flag on the resulting ActionRoute.
+
+// TestCompositeWrappers_DestructiveMetadata verifies that all eight Route/DestructiveRoute
+// wrapper functions produce ActionRoutes with the correct Destructive flag.
+func TestCompositeWrappers_DestructiveMetadata(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+	reqFn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	rawFn := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+
+	tests := []struct {
+		name            string
+		route           ActionRoute
+		wantDestructive bool
+	}{
+		{"Route", Route(rawFn), false},
+		{"DestructiveRoute", DestructiveRoute(rawFn), true},
+		{"RouteAction", RouteAction(nil, typedFn), false},
+		{"RouteVoidAction", RouteVoidAction(nil, voidFn), false},
+		{"RouteActionWithRequest", RouteActionWithRequest(nil, reqFn), false},
+		{"DestructiveAction", DestructiveAction(nil, typedFn), true},
+		{"DestructiveVoidAction", DestructiveVoidAction(nil, voidFn), true},
+		{"DestructiveActionWithRequest", DestructiveActionWithRequest(nil, reqFn), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.route.Destructive != tt.wantDestructive {
+				t.Errorf("Destructive = %v, want %v", tt.route.Destructive, tt.wantDestructive)
+			}
+			if tt.route.Handler == nil {
+				t.Errorf("Handler is nil")
+			}
+		})
+	}
+}
+
+// TestDeriveAnnotations_WithCompositeWrappers verifies that DeriveAnnotations
+// correctly detects destructive routes produced by composite wrappers in a
+// mixed route map (simulating real registration patterns).
+func TestDeriveAnnotations_WithCompositeWrappers(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+
+	tests := []struct {
+		name                string
+		routes              ActionMap
+		wantDestructiveHint bool
+	}{
+		{
+			name: "AllNonDestructive",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"get":    RouteAction(nil, typedFn),
+				"create": RouteAction(nil, typedFn),
+			},
+			wantDestructiveHint: false,
+		},
+		{
+			name: "OneDestructiveAction",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"get":    RouteAction(nil, typedFn),
+				"delete": DestructiveVoidAction(nil, voidFn),
+			},
+			wantDestructiveHint: true,
+		},
+		{
+			name: "MultipleDestructiveActions",
+			routes: ActionMap{
+				"list":   RouteAction(nil, typedFn),
+				"delete": DestructiveVoidAction(nil, voidFn),
+				"remove": DestructiveVoidAction(nil, voidFn),
+				"revoke": DestructiveAction(nil, typedFn),
+			},
+			wantDestructiveHint: true,
+		},
+		{
+			name: "OnlyDestructiveActions",
+			routes: ActionMap{
+				"delete": DestructiveVoidAction(nil, voidFn),
+				"purge":  DestructiveVoidAction(nil, voidFn),
+			},
+			wantDestructiveHint: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ann := DeriveAnnotations(tt.routes)
+			got := ann.DestructiveHint != nil && *ann.DestructiveHint
+			if got != tt.wantDestructiveHint {
+				t.Errorf("DestructiveHint = %v, want %v", got, tt.wantDestructiveHint)
+			}
+		})
+	}
+}
+
+// TestMakeMetaHandler_CompositeWrapperConfirmation verifies that MakeMetaHandler
+// correctly triggers (or skips) confirmation for routes built with composite
+// wrappers, covering representative domain action patterns.
+func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
+	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{Result: "ok"}, nil
+	}
+	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	}
+
+	routes := ActionMap{
+		"list":   RouteAction(nil, typedFn),
+		"get":    RouteAction(nil, typedFn),
+		"create": RouteAction(nil, typedFn),
+		"update": RouteAction(nil, typedFn),
+		"delete": DestructiveVoidAction(nil, voidFn),
+		"remove": DestructiveAction(nil, typedFn),
+	}
+
+	formatter := func(result any) *mcp.CallToolResult {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+		}
+	}
+	handler := MakeMetaHandler("test_domain", routes, formatter)
+
+	tests := []struct {
+		name       string
+		action     string
+		params     map[string]any
+		wantCalled bool
+	}{
+		{name: "list", action: "list", params: map[string]any{}, wantCalled: true},
+		{name: "get", action: "get", params: map[string]any{}, wantCalled: true},
+		{name: "create", action: "create", params: map[string]any{}, wantCalled: true},
+		{name: "update", action: "update", params: map[string]any{}, wantCalled: true},
+		// Destructive actions without elicitation support proceed via fallback
+		{name: "delete_fallback", action: "delete", params: map[string]any{}, wantCalled: true},
+		{name: "remove_fallback", action: "remove", params: map[string]any{}, wantCalled: true},
+		// Destructive action with explicit confirm=true bypasses confirmation
+		{name: "delete_confirm", action: "delete", params: map[string]any{"confirm": true}, wantCalled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := MetaToolInput{
+				Action: tt.action,
+				Params: tt.params,
+			}
+
+			req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_domain"}}
+
+			result, _, err := handler(context.Background(), req, input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantCalled && result == nil {
+				t.Error("expected result but got nil")
+			}
+		})
+	}
+}
