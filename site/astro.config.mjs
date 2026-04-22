@@ -1,6 +1,50 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLinksValidator from "starlight-links-validator";
 import mermaid from "astro-mermaid";
+
+// Auto-injects locale prefix into internal links for translated content files.
+// ES files write links as /gitlab-mcp-server/path/ (same as EN); this plugin
+// transforms them to /gitlab-mcp-server/es/path/ at build time, preventing
+// locale-stripping bugs and keeping MDX source DRY across languages.
+function remarkLocaleLinks() {
+	return (tree, file) => {
+		const filePath = file.history?.[0] || "";
+		if (!filePath.includes("/docs/es/")) return;
+
+		const prefix = `${basePath}/`;
+		const esPrefix = `${basePath}/es/`;
+
+		(function visitNode(node) {
+			// Markdown links: [text](/gitlab-mcp-server/path/)
+			if (
+				node.type === "link" &&
+				node.url?.startsWith(prefix) &&
+				!node.url?.startsWith(esPrefix)
+			) {
+				node.url = node.url.replace(prefix, esPrefix);
+			}
+			// MDX JSX elements: <LinkCard href="/gitlab-mcp-server/path/" />
+			if (
+				(node.type === "mdxJsxFlowElement" ||
+					node.type === "mdxJsxTextElement") &&
+				node.attributes
+			) {
+				for (const attr of node.attributes) {
+					if (
+						attr.name === "href" &&
+						typeof attr.value === "string" &&
+						attr.value.startsWith(prefix) &&
+						!attr.value.startsWith(esPrefix)
+					) {
+						attr.value = attr.value.replace(prefix, esPrefix);
+					}
+				}
+			}
+			if (node.children) node.children.forEach(visitNode);
+		})(tree);
+	};
+}
 
 // Converts deprecated HTML align attributes to CSS text-align (WCAG2AA compliance)
 function rehypeTableAlign() {
@@ -85,6 +129,12 @@ export default defineConfig({
 		}),
 		starlight({
 			title: "GitLab MCP Server",
+			plugins: [
+				starlightLinksValidator({
+					errorOnRelativeLinks: false,
+					errorOnFallbackPages: false,
+				}),
+			],
 			description:
 				"A Model Context Protocol (MCP) server exposing 1000+ GitLab operations as AI-accessible tools. Written in Go.",
 			logo: {
@@ -388,6 +438,7 @@ export default defineConfig({
 		}),
 	],
 	markdown: {
+		remarkPlugins: [remarkLocaleLinks],
 		rehypePlugins: [rehypeTableAlign],
 	},
 });
