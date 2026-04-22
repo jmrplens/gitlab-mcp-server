@@ -57,7 +57,7 @@ gitlab-mcp-server/
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
 │   │   ├── register_meta.go     # RegisterAllMeta() — delegates to sub-package RegisterMeta()
 │   │   ├── markdown.go          # Thin delegator to type-based markdown registry (toolutil.MarkdownForResult)
-│   │   ├── metatool.go          # Meta-tool registration infrastructure
+│   │   ├── metatool.go          # Meta-tool registration: addMetaTool (DeriveAnnotations), addReadOnlyMetaTool, route wrappers
 │   │   ├── errors.go            # Error helpers (WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage)
 │   │   ├── logging.go           # logToolCall helper
 │   │   ├── pagination.go        # Pagination type aliases

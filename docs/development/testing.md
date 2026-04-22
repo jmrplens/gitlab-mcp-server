@@ -610,6 +610,7 @@ Meta-tool tests verify the action-dispatch layer that consolidates 1006 individu
 - **Action routing**: Each meta-tool correctly dispatches to the underlying sub-package handler based on the `action` parameter
 - **Invalid action**: Requests with unknown actions return an error listing valid actions
 - **Metadata audit**: `TestMetadataAudit_*` tests enforce naming conventions, annotations, and tool count invariants across all 1006 tools
+- **Destructive metadata consistency**: `TestDestructiveMetadataConsistency` cross-checks `ActionRoute.Destructive` metadata against `toolutil.DeleteAnnotations` on individual tools — ensures meta-tool routes and individual tools agree on which actions are destructive
 - **Markdown formatting**: `markdownForResult` delegates to the type-based registry (`toolutil.MarkdownForResult`) which invokes the formatter registered by the sub-package `init()` function
 - **next_steps enrichment**: `enrichWithHints()` correctly extracts hints from Markdown and injects them into JSON `structuredContent`
 

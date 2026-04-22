@@ -129,21 +129,25 @@ The base mode provides a ~53% reduction from v3.0, with enterprise features gate
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
+- `ActionRoute` — pairs a handler with a `Destructive bool` field for metadata-driven classification
+- `ActionMap` — `map[string]ActionRoute` mapping action names to route definitions
+- `Route(fn)` / `DestructiveRoute(fn)` — constructors for non-destructive and destructive routes
+- `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
 - `MakeMetaHandler()` — creates action-dispatch handlers from route maps; automatically enriches `structuredContent` with `next_steps` hints extracted from Markdown
 - `MetaToolInput` — common input struct with `action` and `params` fields
-- `MetaAnnotations` — shared annotations (destructiveHint: true) for meta-tools with delete actions
+- `MetaAnnotations` — shared annotations (destructiveHint: true) for meta-tools with destructive actions
 - `ReadOnlyMetaAnnotations` — for meta-tools with only read operations (e.g., `gitlab_template`, `gitlab_search`)
-- `NonDestructiveMetaAnnotations` — for meta-tools without delete actions (e.g., `gitlab_user`)
-- `wrapAction()` / `wrapVoidAction()` — adapters for sub-package handler signatures
+- `NonDestructiveMetaAnnotations` — for meta-tools without destructive actions (e.g., `gitlab_user`)
+- `RouteAction()` / `RouteVoidAction()` / `DestructiveAction()` / `DestructiveVoidAction()` — composite wrappers that combine handler adaption with route classification
 
 ### How Actions Are Routed
 
 ```text
 User: gitlab_project { action: "board_create", params: { project_id: "42", name: "Sprint Board" } }
   │
-  ├─ MakeMetaHandler looks up "board_create" in routes map
+  ├─ MakeMetaHandler looks up "board_create" in ActionMap routes
   │
-  ├─ Routes to: wrapAction(client, boards.Create)
+  ├─ Routes to: ActionRoute{Handler: wrapAction(client, boards.Create), Destructive: false}
   │
   ├─ boards.Create unmarshals params, calls GitLab API
   │
