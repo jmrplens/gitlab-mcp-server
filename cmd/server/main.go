@@ -568,9 +568,9 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 
 	// Build server-card JSON once at startup using an ephemeral MCP server
 	// so that /.well-known/mcp/server-card.json is served without authentication.
-	serverCardJSON, err := buildServerCard(cfg)
-	if err != nil {
-		slog.Warn("failed to build server-card.json, endpoint will return 503", "error", err)
+	serverCardJSON, serverCardErr := buildServerCard(cfg)
+	if serverCardErr != nil {
+		slog.Warn("failed to build server-card.json, endpoint will return 503", "error", serverCardErr)
 	}
 
 	mux := http.NewServeMux()
@@ -814,7 +814,7 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 
 // buildServerCard creates a Smithery-compatible server-card JSON by spinning up
 // an ephemeral MCP server with a dummy GitLab client, listing all registered
-// tools, and marshalling the result. The dummy client is never used for API
+// tools, and marshaling the result. The dummy client is never used for API
 // calls — it only satisfies createServer's non-nil requirement so that tool
 // registration can proceed.
 func buildServerCard(cfg *config.Config) ([]byte, error) {

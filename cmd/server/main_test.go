@@ -480,20 +480,28 @@ func TestRunWithContext_ClientCreationError(t *testing.T) {
 	}
 }
 
-// TestRunWithContext_HTTPMissingURL verifies that HTTP mode returns an error
-// when --gitlab-url is not provided.
+// TestRunWithContext_HTTPMissingURL verifies that HTTP mode starts correctly
+// when --gitlab-url is omitted and the request-level GITLAB-URL header is
+// expected instead.
 func TestRunWithContext_HTTPMissingURL(t *testing.T) {
-	err := runWithContext(context.Background(), &httpConfig{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		// Give the HTTP server a brief moment to start, then stop it to avoid
+		// waiting on the global test timeout.
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	err := runWithContext(ctx, &httpConfig{
 		addr:           ":0",
 		gitlabURL:      "",
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
-	if err == nil {
-		t.Fatal("expected error when --gitlab-url is missing")
-	}
-	if !strings.Contains(err.Error(), "--gitlab-url") {
-		t.Errorf("expected error about --gitlab-url, got: %v", err)
+	if err != nil {
+		t.Fatalf("expected nil error when --gitlab-url is missing, got: %v", err)
 	}
 }
 
@@ -863,8 +871,7 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
 
-	// Wait for server to start.
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 
 	// Send initialize request with token.
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -883,6 +890,175 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_RequestWithTokenAndGitLabURLHeader verifies that HTTP mode
+// accepts request-level GitLab instance selection when --gitlab-url is omitted.
+func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	req.Header.Set("GITLAB-URL", mockGL.URL)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_MissingGitLabURLHeader verifies that requests are rejected in
+// HTTP mode when no default --gitlab-url is configured and GITLAB-URL is absent.
+func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		t.Error("expected non-200 when GITLAB-URL header is missing and no default gitlab-url is configured")
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_InvalidGitLabURLHeader verifies that requests are rejected
+// when GITLAB-URL has an invalid scheme.
+func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	req.Header.Set("GITLAB-URL", "ftp://gitlab.example.com")
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		t.Error("expected non-200 for invalid GITLAB-URL header")
 	}
 
 	cancel()
@@ -954,7 +1130,7 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
 
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 
 	// Send request WITHOUT token.
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -1181,8 +1357,41 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 	go func() {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 	return addr, errCh
+}
+
+// waitForHTTPServerReady polls /health until the HTTP server is reachable,
+// or fails fast if serveHTTP exits early with an error.
+func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("serveHTTP exited before accepting requests: %v", err)
+			}
+			t.Fatal("serveHTTP exited before accepting requests")
+		default:
+		}
+
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+		if reqErr != nil {
+			t.Fatalf("failed to build readiness request: %v", reqErr)
+		}
+
+		resp, doErr := testHTTPClient.Do(req)
+		if doErr == nil {
+			resp.Body.Close()
+			return
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	t.Fatalf("HTTP server at %s was not ready within timeout", addr)
 }
 
 // TestServeHTTP_OAuthMode_MetadataEndpoint verifies that OAuth mode serves
@@ -1572,16 +1781,24 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 	}
 }
 
-// TestRunHTTP_MissingGitLabURL verifies that runHTTP returns an error when
-// --gitlab-url is empty.
+// TestRunHTTP_MissingGitLabURL verifies that runHTTP accepts an empty
+// --gitlab-url and relies on per-request GITLAB-URL headers.
 func TestRunHTTP_MissingGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := runHTTP(ctx, &httpConfig{
 		gitlabURL:      "",
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
-	if err == nil {
-		t.Fatal("expected error for empty gitlab-url")
+	if err != nil {
+		t.Fatalf("expected nil error for empty gitlab-url, got: %v", err)
 	}
 }
 
