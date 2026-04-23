@@ -2,7 +2,7 @@
        lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
-       analyze analyze-fix analyze-report install-tools audit-output gen-llms \
+       analyze analyze-fix analyze-report install-tools audit-output audit-tokens gen-llms gen-readme \
        docker-build docker-push docker-run \
        inspector inspector-stop help
 
@@ -104,6 +104,8 @@ test-e2e:
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
 test-e2e-docker:
+	@echo "=== Cleaning up previous containers (if any) ==="
+	docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
 	@echo "=== Starting ephemeral GitLab CE ==="
 	docker compose -f test/e2e/docker-compose.yml up -d
 	@echo "=== Waiting for GitLab readiness ==="
@@ -389,6 +391,10 @@ endif
 gen-llms:
 	go run ./cmd/gen_llms/
 
+## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
+gen-readme:
+	go run ./cmd/gen_readme/
+
 # ─── Output Quality Audit ────────────────────────────────────────────────────
 
 ## audit-output: run MCP output quality audit on all tools.
@@ -396,6 +402,11 @@ gen-llms:
 ## Fails on regressions (non-zero findings).
 audit-output:
 	go run ./cmd/audit_output/
+
+## audit-tokens: measure LLM context window overhead of all tool definitions.
+## Reports per-tool token counts, domain totals, and mode comparison.
+audit-tokens:
+	go run ./cmd/audit_tokens/
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Prefer 'make goimports' over 'make fmt' — goimports is a superset of gofmt.

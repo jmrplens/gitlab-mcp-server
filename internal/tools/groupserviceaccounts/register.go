@@ -15,7 +15,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_list",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_list"),
-		Description: "List all service accounts for a GitLab group.\n\nReturns: paginated list of service accounts with ID, name, username, and email.",
+		Description: "List all service accounts for a GitLab group.\n\nReturns: paginated list of service accounts with ID, name, username, and email. See also: gitlab_group_service_account_create, gitlab_group_service_account_pat_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -28,7 +28,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_create",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_create"),
-		Description: "Create a service account in a GitLab group (top-level only).\n\nReturns: created service account details.",
+		Description: "Create a service account in a GitLab group (top-level only).\n\nReturns: created service account details. See also: gitlab_group_service_account_list, gitlab_group_service_account_pat_create.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
@@ -41,7 +41,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_update",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_update"),
-		Description: "Update a service account in a GitLab group (top-level only).\n\nReturns: updated service account details.",
+		Description: "Update a service account in a GitLab group (top-level only).\n\nReturns: updated service account details. See also: gitlab_group_service_account_list, gitlab_group_service_account_delete.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
@@ -54,7 +54,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_delete",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_delete"),
-		Description: "Delete a service account from a GitLab group (top-level only).\n\nReturns: confirmation of deletion.",
+		Description: "Delete a service account from a GitLab group (top-level only).\n\nReturns: confirmation of deletion. See also: gitlab_group_service_account_list, gitlab_group_service_account_create.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, DeleteOutput, error) {
@@ -70,7 +70,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_pat_list",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_pat_list"),
-		Description: "List personal access tokens for a group service account.\n\nReturns: paginated list of PATs with ID, name, scopes, and status.",
+		Description: "List personal access tokens for a group service account.\n\nReturns: paginated list of PATs with ID, name, scopes, and status. See also: gitlab_group_service_account_pat_create, gitlab_group_service_account_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListPATInput) (*mcp.CallToolResult, ListPATOutput, error) {
@@ -83,7 +83,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_pat_create",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_pat_create"),
-		Description: "Create a personal access token for a group service account.\n\nReturns: created PAT details including the token value (shown only once).",
+		Description: "Create a personal access token for a group service account.\n\nReturns: created PAT details including the token value (shown only once). See also: gitlab_group_service_account_pat_list, gitlab_group_service_account_pat_revoke.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreatePATInput) (*mcp.CallToolResult, PATOutput, error) {
@@ -96,7 +96,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_service_account_pat_revoke",
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_pat_revoke"),
-		Description: "Revoke a personal access token for a group service account.\n\nReturns: confirmation of revocation.",
+		Description: "Revoke a personal access token for a group service account.\n\nReturns: confirmation of revocation. See also: gitlab_group_service_account_pat_list, gitlab_group_service_account_pat_create.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RevokePATInput) (*mcp.CallToolResult, DeleteOutput, error) {

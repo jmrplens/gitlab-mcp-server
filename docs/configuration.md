@@ -31,6 +31,8 @@ These are the settings every user needs to get started.
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
+| `EXCLUDE_TOOLS` | *(empty)* | Comma-separated list of tool names to exclude from registration |
+| `GITLAB_IGNORE_SCOPES` | `false` | Skip PAT scope detection and register all tools regardless of token permissions |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 
 ### .env File Example
@@ -202,9 +204,9 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--http` | _(off)_ | Enable HTTP transport mode |
-| `--http-addr` | `localhost:8080` | HTTP listen address |
-| `--gitlab-url` | _(required)_ | GitLab instance URL |
+| `--http` | *(off)* | Enable HTTP transport mode |
+| `--http-addr` | `:8080` | HTTP listen address |
+| `--gitlab-url` | *(required)* | GitLab instance URL |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools |
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
@@ -215,6 +217,10 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--auto-update` | `true` | Enable automatic binary updates |
 | `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Interval between periodic update checks |
+| `--read-only` | `false` | Expose only read-only tools |
+| `--safe-mode` | `false` | Intercept mutating tools, return preview |
+| `--exclude-tools` | *(empty)* | Comma-separated tool names to exclude |
+| `--ignore-scopes` | `false` | Skip PAT scope detection |
 
 No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`.
 

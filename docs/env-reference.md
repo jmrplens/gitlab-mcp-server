@@ -34,6 +34,8 @@
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a structured JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence (`true`/`false`) |
+| `EXCLUDE_TOOLS` | *(empty)* | Comma-separated list of tool names to exclude from registration (e.g. `gitlab_admin,gitlab_runner`) |
+| `GITLAB_IGNORE_SCOPES` | `false` | Skip PAT scope detection and register all tools regardless of token permissions (`true`/`false`) |
 
 ---
 
@@ -121,7 +123,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | Environment Variable | CLI Flag | Notes |
 | --- | --- | --- |
 | `GITLAB_URL` | `--gitlab-url` | Required in both modes |
-| `GITLAB_TOKEN` | _(none)_ | Not needed in HTTP mode — clients provide tokens per-request |
+| `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
 | `META_TOOLS` | `--meta-tools` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |
@@ -133,6 +135,11 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |
 | `AUTO_UPDATE_INTERVAL` | `--auto-update-interval` | |
 | `AUTO_UPDATE_TIMEOUT` | `--auto-update-timeout` | |
+| `GITLAB_ENTERPRISE` | `--enterprise` | |
+| `GITLAB_READ_ONLY` | `--read-only` | |
+| `GITLAB_SAFE_MODE` | `--safe-mode` | |
+| `EXCLUDE_TOOLS` | `--exclude-tools` | Comma-separated list |
+| `GITLAB_IGNORE_SCOPES` | `--ignore-scopes` | |
 
 ---
 

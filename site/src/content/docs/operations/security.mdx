@@ -89,6 +89,28 @@ Use the minimum required scopes for your workflow:
 If you only need read operations, use `read_api` scope and enable `GITLAB_READ_ONLY=true` for defense-in-depth.
 :::
 
+### Scope-based tool filtering
+
+On startup, the server detects your token's scopes via the GitLab API and automatically disables tools that require scopes your token does not have. For example, a token without `admin_mode` scope will not see `gitlab_admin` tools.
+
+This prevents the AI from attempting operations that would fail with permission errors and keeps the tool list focused on what your token can actually do.
+
+To disable scope detection and register all tools regardless of token permissions:
+
+```bash
+GITLAB_IGNORE_SCOPES=true
+```
+
+Or in HTTP mode:
+
+```bash
+./gitlab-mcp-server --http --ignore-scopes
+```
+
+:::note
+When scope detection is disabled, tools are still registered but API calls may fail with `403 Forbidden` if the token lacks required permissions.
+:::
+
 ## Credential stripping in sampling
 
 When analysis tools use MCP sampling to send data to the client's LLM, the server applies **automatic credential stripping** before any data leaves the process. This is a critical defense-in-depth measure that prevents accidental token leakage through LLM context.

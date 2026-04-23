@@ -176,9 +176,12 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 }
 
 // countResources registers all MCP resources and returns static and template counts.
+// This includes resources from Register() and RegisterWorkflowGuides().
+// Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
 	resources.Register(server, client)
+	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

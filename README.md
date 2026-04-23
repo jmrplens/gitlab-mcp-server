@@ -258,26 +258,57 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 
 Meta-tool summary:
 
-| Meta-Tool | Domain |
-|-----------|--------|
-| `gitlab_project` | Projects, uploads, hooks, badges, boards, import/export, pages |
-| `gitlab_branch` | Branches, protected branches |
-| `gitlab_tag` | Tags, protected tags |
-| `gitlab_release` | Releases, release links |
-| `gitlab_merge_request` | MR CRUD, approvals, context-commits |
-| `gitlab_mr_review` | MR notes, discussions, drafts, changes |
-| `gitlab_repository` | Repository tree/compare, commit discussions, files |
-| `gitlab_group` | Groups, members, labels, milestones, boards, uploads |
-| `gitlab_issue` | Issues, notes, discussions, links, statistics, emoji, events |
-| `gitlab_pipeline` | Pipelines, pipeline triggers, pipeline schedules |
-| `gitlab_job` | Jobs, job token scope |
-| `gitlab_user` | Users, events, notifications, keys, namespaces |
-| `gitlab_wiki` | Project/group wikis |
-| `gitlab_environment` | Environments, protected envs, freeze periods, deployments |
-| `gitlab_ci_variable` | CI/CD variables (project, group, instance) |
-| `gitlab_search` | Global, project, group search |
+<!-- START TOOLS -->
 
-Plus `gitlab_analyze` (11 LLM-assisted sampling actions), 4 elicitation tools, and additional domain tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
+| Meta-Tool | Actions | Description |
+|-----------|:-------:|-------------|
+| `gitlab_access` | 48 | Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. |
+| `gitlab_admin` | 82 | GitLab instance administration: topics, settings, appearance, broadcast messages, features, licenses, system hooks, Sidekiq metrics, plan limits, usage data, migrations, OAuth apps, metadata, custom attributes, error tracking, secure files, Terraform states, cluster agents, dependency proxy, and imports. |
+| `gitlab_analyze` | 11 | LLM-assisted analysis of GitLab data via MCP sampling. |
+| `gitlab_branch` | 11 | CRUD and protect Git branches. |
+| `gitlab_ci_catalog` | 2 | Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL). |
+| `gitlab_ci_variable` | 15 | Manage GitLab CI/CD variables at instance, group, and project scope. |
+| `gitlab_custom_emoji` | 3 | CRUD group-level custom emoji via GraphQL (Premium/Ultimate). |
+| `gitlab_discover_project` | 0 | Resolve a git remote URL to a GitLab project. |
+| `gitlab_environment` | 23 | Manage GitLab environments, protected environments, deployment freeze periods, and deployment records. |
+| `gitlab_feature_flags` | 10 | CRUD GitLab feature flags and feature flag user lists (named sets of user IDs). |
+| `gitlab_group` | 130 | Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export. |
+| `gitlab_issue` | 63 | Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events. |
+| `gitlab_job` | 25 | Manage GitLab CI/CD jobs: list, get, retry, cancel, erase, play manual jobs, wait for completion, download artifacts/logs, and manage CI/CD job token scope. |
+| `gitlab_merge_request` | 53 | Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. |
+| `gitlab_model_registry` | 1 | Download ML model package files from GitLab Model Registry (Premium/Ultimate). |
+| `gitlab_mr_review` | 22 | Review and comment on GitLab merge requests: notes, threaded discussions, code diffs, draft notes (batch review), and diff versions. |
+| `gitlab_package` | 24 | Manage GitLab package registry, container registry, and protection rules. |
+| `gitlab_pipeline` | 33 | Manage GitLab CI/CD pipelines: list, get, create, retry, cancel, delete, and wait for completion. |
+| `gitlab_project` | 122 | Manage GitLab projects: CRUD, settings, members, labels, milestones, webhooks, badges, boards, integrations, uploads, Pages, avatars, approval rules, mirrors, and import/export. |
+| `gitlab_release` | 12 | CRUD GitLab releases and release asset links (binaries, downloads). |
+| `gitlab_repository` | 40 | Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. |
+| `gitlab_runner` | 34 | Manage CI/CD runners: CRUD, project/group assignment, registration, token resets, and runner controllers (admin, experimental). |
+| `gitlab_search` | 10 | Search GitLab by scope. |
+| `gitlab_snippet` | 34 | Manage GitLab snippets (personal and project-scoped): CRUD, raw content, file content, discussions, notes, and award emoji. |
+| `gitlab_tag` | 9 | Manage Git tags: create, list, get, delete, verify GPG signatures, and protect/unprotect tags. |
+| `gitlab_template` | 12 | Browse GitLab templates (gitignores, CI/CD YAML, Dockerfiles, licenses, project templates) and lint CI configuration. |
+| `gitlab_user` | 74 | Manage GitLab users: CRUD, SSH/GPG keys, emails, PATs, impersonation tokens, status, todos, events, notifications, namespaces, and avatars. |
+| `gitlab_wiki` | 6 | CRUD and upload attachments to GitLab project wiki pages. |
+| `gitlab_attestation` 🏢 | 2 | List and download build attestations (SLSA provenance) for project artifacts. |
+| `gitlab_audit_event` 🏢 | 6 | List and get GitLab audit events at instance, group, and project levels for compliance tracking. |
+| `gitlab_compliance_policy` 🏢 | 2 | Get and update admin compliance policy settings (CSP namespace configuration). |
+| `gitlab_dependency` 🏢 | 4 | List project dependencies and create/download SBOM exports (CycloneDX). |
+| `gitlab_dora_metrics` 🏢 | 2 | Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate. |
+| `gitlab_enterprise_user` 🏢 | 4 | Manage enterprise users for a GitLab group: list, get, disable 2FA, delete. |
+| `gitlab_external_status_check` 🏢 | 14 | Manage external status checks for MRs and projects. |
+| `gitlab_geo` 🏢 | 8 | Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate). |
+| `gitlab_group_scim` 🏢 | 4 | Manage SCIM identities for GitLab group provisioning. |
+| `gitlab_member_role` 🏢 | 6 | Manage custom member roles at instance or group level. |
+| `gitlab_merge_train` 🏢 | 4 | Manage GitLab merge trains (automated merge queues). |
+| `gitlab_project_alias` 🏢 | 4 | CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate). |
+| `gitlab_security_finding` 🏢 | 1 | List pipeline security report findings via GraphQL (Premium/Ultimate). |
+| `gitlab_storage_move` 🏢 | 18 | Manage repository storage moves for projects, groups, and snippets (admin only). |
+| `gitlab_vulnerability` 🏢 | 8 | List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). |
+
+**28 base** / **43 with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
+
+<!-- END TOOLS -->
 
 ## Compatibility
 

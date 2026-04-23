@@ -22,7 +22,7 @@ func FormatOutputMarkdown(out Output) string {
 		fmt.Fprintf(&b, "- **Discussion**: %s\n", out.DiscussionID)
 	}
 	fmt.Fprintf(&b, "- **Resolve Discussion**: %v\n", out.ResolveDiscussion)
-	fmt.Fprintf(&b, "\n### Body\n\n%s\n", out.Note)
+	fmt.Fprintf(&b, "\n### Body\n\n%s\n", toolutil.WrapGFMBody(out.Note))
 	toolutil.WriteHints(&b,
 		"Use action 'draft_note_publish' with draft_note_id to publish this note",
 		"Use action 'draft_note_update' to modify before publishing",

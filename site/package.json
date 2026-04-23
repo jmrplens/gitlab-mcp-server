@@ -22,13 +22,12 @@
   "type": "module",
   "dependencies": {
     "@astrojs/starlight": "^0.38.3",
-    "astro": "^6.1.8",
+    "astro": "^6.1.9",
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.14.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "starlight-links-validator": "^0.23.0",
     "@astrojs/check": "^0.9.8",
     "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/parser": "^8.59.0",
@@ -40,6 +39,7 @@
     "pa11y-ci": "^4.1.0",
     "prettier": "^3.8.3",
     "serve": "^14.2.6",
+    "starlight-links-validator": "^0.23.0",
     "typescript": "^6.0.3"
   },
   "pnpm": {

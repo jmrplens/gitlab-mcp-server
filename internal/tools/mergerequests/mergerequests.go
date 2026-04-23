@@ -1701,7 +1701,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 
 // mergeStatusHints maps GitLab detailed_merge_status values to human-readable
 // explanations with actionable next steps for the LLM.
-var mergeStatusHints = map[string]string{ //nolint:gosec // not credentials, these are GitLab merge status values
+var mergeStatusHints = map[string]string{ // #nosec G101 -- not credentials, these are GitLab merge status values
 	"blocked_status":           "merge is blocked by another merge request that must be merged first",
 	"broken_status":            "the source branch is broken (e.g. failed to compile). Fix the branch and push again",
 	"checking":                 "GitLab is still checking mergeability. Wait a moment and retry",

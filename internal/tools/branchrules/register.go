@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_branch_rules",
 		Title:       toolutil.TitleFromName("gitlab_list_branch_rules"),
-		Description: "List branch rules for a project via GraphQL API. Provides an aggregated read-only view of branch protections, approval rules, and external status checks. Returns: paginated list with name, protection status, force push, code owner approval, approval rules, and external status checks.",
+		Description: "List branch rules for a project via GraphQL API. Provides an aggregated read-only view of branch protections, approval rules, and external status checks. Returns: paginated list with name, protection status, force push, code owner approval, approval rules, and external status checks. See also: gitlab_branch_protect, gitlab_branch_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

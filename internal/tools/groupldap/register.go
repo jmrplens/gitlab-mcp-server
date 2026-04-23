@@ -15,7 +15,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_ldap_link_list",
 		Title:       toolutil.TitleFromName("gitlab_group_ldap_link_list"),
-		Description: "List all LDAP group links for a GitLab group.\n\nReturns: list of LDAP links with CN, filter, access level, and provider.",
+		Description: "List all LDAP group links for a GitLab group.\n\nReturns: list of LDAP links with CN, filter, access level, and provider. See also: gitlab_group_ldap_link_add, gitlab_group_saml_link_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -28,7 +28,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_ldap_link_add",
 		Title:       toolutil.TitleFromName("gitlab_group_ldap_link_add"),
-		Description: "Add an LDAP group link to a GitLab group (by CN or filter).\n\nReturns: created LDAP link details.",
+		Description: "Add an LDAP group link to a GitLab group (by CN or filter).\n\nReturns: created LDAP link details. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_delete.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AddInput) (*mcp.CallToolResult, Output, error) {
@@ -41,7 +41,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_ldap_link_delete",
 		Title:       toolutil.TitleFromName("gitlab_group_ldap_link_delete"),
-		Description: "Delete a group LDAP link by CN or filter.\n\nReturns: confirmation of deletion.",
+		Description: "Delete a group LDAP link by CN or filter.\n\nReturns: confirmation of deletion. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_delete_for_provider.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteWithCNOrFilterInput) (*mcp.CallToolResult, DeleteOutput, error) {
@@ -57,7 +57,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_ldap_link_delete_for_provider",
 		Title:       toolutil.TitleFromName("gitlab_group_ldap_link_delete_for_provider"),
-		Description: "Delete a group LDAP link for a specific provider.\n\nReturns: confirmation of deletion.",
+		Description: "Delete a group LDAP link for a specific provider.\n\nReturns: confirmation of deletion. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_delete.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteForProviderInput) (*mcp.CallToolResult, DeleteOutput, error) {

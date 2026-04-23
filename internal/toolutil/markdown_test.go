@@ -2,6 +2,7 @@
 package toolutil
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -280,6 +281,101 @@ func TestToolResultAnnotated(t *testing.T) {
 			t.Error("expected nil result for empty string")
 		}
 	})
+}
+
+// TestToolResultWithImage verifies that ToolResultWithImage creates a
+// CallToolResult containing both a TextContent with metadata and an
+// ImageContent with raw image bytes and MIME type. Covers valid inputs,
+// nil annotations, and empty image data to ensure all branches produce
+// the expected two-element Content slice.
+func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
+	tests := []struct {
+		name      string
+		md        string
+		ann       *mcp.Annotations
+		imageData []byte
+		mimeType  string
+		wantText  string
+		wantMIME  string
+		wantAnn   bool
+	}{
+		{
+			name:      "valid image with annotations",
+			md:        "## Avatar\n\n| Field | Value |\n",
+			ann:       ContentDetail,
+			imageData: []byte{0x89, 0x50, 0x4E, 0x47},
+			mimeType:  "image/png",
+			wantText:  "## Avatar\n\n| Field | Value |\n",
+			wantMIME:  "image/png",
+			wantAnn:   true,
+		},
+		{
+			name:      "nil annotations",
+			md:        "# Image",
+			ann:       nil,
+			imageData: []byte{0xFF, 0xD8, 0xFF},
+			mimeType:  "image/jpeg",
+			wantText:  "# Image",
+			wantMIME:  "image/jpeg",
+			wantAnn:   false,
+		},
+		{
+			name:      "empty image data",
+			md:        "# Empty",
+			ann:       ContentAssistant,
+			imageData: []byte{},
+			mimeType:  "image/svg+xml",
+			wantText:  "# Empty",
+			wantMIME:  "image/svg+xml",
+			wantAnn:   true,
+		},
+		{
+			name:      "empty markdown text",
+			md:        "",
+			ann:       ContentBoth,
+			imageData: []byte{0x47, 0x49, 0x46},
+			mimeType:  "image/gif",
+			wantText:  "",
+			wantMIME:  "image/gif",
+			wantAnn:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ToolResultWithImage(tt.md, tt.ann, tt.imageData, tt.mimeType)
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			if len(result.Content) != 2 {
+				t.Fatalf("expected 2 content items, got %d", len(result.Content))
+			}
+
+			tc, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatal("first content item should be TextContent")
+			}
+			if tc.Text != tt.wantText {
+				t.Errorf("TextContent.Text = %q, want %q", tc.Text, tt.wantText)
+			}
+			if tt.wantAnn && tc.Annotations == nil {
+				t.Error("expected annotations to be set")
+			}
+			if !tt.wantAnn && tc.Annotations != nil {
+				t.Errorf("expected nil annotations, got %v", tc.Annotations)
+			}
+
+			ic, ok := result.Content[1].(*mcp.ImageContent)
+			if !ok {
+				t.Fatal("second content item should be ImageContent")
+			}
+			if ic.MIMEType != tt.wantMIME {
+				t.Errorf("ImageContent.MIMEType = %q, want %q", ic.MIMEType, tt.wantMIME)
+			}
+			if !bytes.Equal(ic.Data, tt.imageData) {
+				t.Errorf("ImageContent.Data mismatch: got %v, want %v", ic.Data, tt.imageData)
+			}
+		})
+	}
 }
 
 // TestAppendResourceLink_NoOp verifies that AppendResourceLink is a no-op

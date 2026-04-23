@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -203,9 +204,7 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
 	for _, t := range metaBase {
 		desc := firstSentence(t.Description)
-		if len(desc) > 80 {
-			desc = desc[:80] + "..."
-		}
+		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
 	}
 	b.WriteString("\n")
@@ -225,9 +224,7 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	fmt.Fprintf(&b, "%d prompts:\n\n", len(prm))
 	for _, p := range prm {
 		desc := firstSentence(p.Description)
-		if len(desc) > 80 {
-			desc = desc[:80] + "..."
-		}
+		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", p.Name, desc)
 	}
 	b.WriteString("\n")
@@ -316,10 +313,7 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		fmt.Fprintf(&b, "### %s (%d tools)\n\n", domain, len(tls))
 		for _, t := range tls {
 			fmt.Fprintf(&b, "#### %s\n\n", t.Name)
-			desc := t.Description
-			if len(desc) > 300 {
-				desc = desc[:300] + "..."
-			}
+			desc := truncateRunes(t.Description, 300)
 			b.WriteString(desc)
 			b.WriteString("\n\n")
 			writeInputSchema(&b, t.InputSchema)
@@ -445,9 +439,7 @@ func writeInputSchema(b *strings.Builder, schema any) {
 			req = " (required)"
 		}
 		if desc != "" {
-			if len(desc) > 120 {
-				desc = desc[:120] + "..."
-			}
+			desc = truncateRunes(desc, 120)
 			fmt.Fprintf(b, "- `%s` (%s)%s: %s\n", name, typ, req, desc)
 		} else {
 			fmt.Fprintf(b, "- `%s` (%s)%s\n", name, typ, req)
@@ -515,16 +507,57 @@ func capitalizeWords(s string) string {
 	return strings.Join(parts, " ")
 }
 
-// firstSentence returns text up to the first period or newline.
+// truncateRunes truncates s to at most maxRunes runes, appending "..." if truncated.
+func truncateRunes(s string, maxRunes int) string {
+	if utf8.RuneCountInString(s) <= maxRunes {
+		return s
+	}
+	var size int
+	for range maxRunes {
+		_, w := utf8.DecodeRuneInString(s[size:])
+		size += w
+	}
+	return s[:size] + "..."
+}
+
+// firstSentence returns text up to the first sentence-ending period or newline.
+// It skips common abbreviations (e.g., i.e., etc., vs.) to avoid false splits.
 func firstSentence(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	if i := strings.Index(s, ". "); i >= 0 {
+	if i := findSentenceEnd(s); i >= 0 {
 		return s[:i+1]
 	}
 	return s
+}
+
+// abbreviations that should not be treated as sentence boundaries.
+var abbreviations = []string{"e.g.", "i.e.", "etc.", "vs.", "approx.", "dept.", "est.", "govt.", "incl."}
+
+// findSentenceEnd returns the index of the first ". " that is NOT part of a
+// common abbreviation, or -1 if none found.
+func findSentenceEnd(s string) int {
+	offset := 0
+	for {
+		i := strings.Index(s[offset:], ". ")
+		if i < 0 {
+			return -1
+		}
+		pos := offset + i
+		isAbbrev := false
+		for _, abbr := range abbreviations {
+			if len(abbr) <= pos+1 && s[pos+1-len(abbr):pos+1] == abbr {
+				isAbbrev = true
+				break
+			}
+		}
+		if !isAbbrev {
+			return pos
+		}
+		offset = pos + 2
+	}
 }
 
 // writeFile writes content to a file in the project root.

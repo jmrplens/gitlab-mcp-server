@@ -860,3 +860,155 @@ func TestLoad_OAuthCacheTTL(t *testing.T) {
 		}
 	})
 }
+
+// TestLoad_InvalidSafeMode verifies that Load returns an error when
+// GITLAB_SAFE_MODE has an invalid boolean value.
+func TestLoad_InvalidSafeMode(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("GITLAB_SAFE_MODE", "notabool")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid GITLAB_SAFE_MODE")
+	}
+}
+
+// TestLoad_InvalidIgnoreScopes verifies that Load returns an error when
+// GITLAB_IGNORE_SCOPES has an invalid boolean value.
+func TestLoad_InvalidIgnoreScopes(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("META_TOOLS", "true")
+	t.Setenv("GITLAB_ENTERPRISE", "false")
+	t.Setenv("GITLAB_READ_ONLY", "false")
+	t.Setenv("GITLAB_SAFE_MODE", "false")
+	t.Setenv("GITLAB_IGNORE_SCOPES", "notabool")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid GITLAB_IGNORE_SCOPES")
+	}
+}
+
+// TestLoad_SessionTimeoutExceedsMax verifies that Load rejects a SESSION_TIMEOUT
+// value that exceeds the maximum allowed duration.
+func TestLoad_SessionTimeoutExceedsMax(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("SESSION_TIMEOUT", "25h")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for SESSION_TIMEOUT exceeding maximum")
+	}
+}
+
+// TestLoad_RevalidateInterval verifies SESSION_REVALIDATE_INTERVAL env var
+// parsing: default, custom, invalid, and exceeds-max scenarios.
+func TestLoad_RevalidateInterval(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run(subtestDefault, func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", "")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.RevalidateInterval != DefaultRevalidateInterval {
+			t.Errorf("RevalidateInterval = %v, want %v", cfg.RevalidateInterval, DefaultRevalidateInterval)
+		}
+	})
+
+	t.Run(subtestCustom, func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", "5m")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.RevalidateInterval != 5*time.Minute {
+			t.Errorf("RevalidateInterval = %v, want 5m", cfg.RevalidateInterval)
+		}
+	})
+
+	t.Run(subtestInvalid, func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", "notaduration")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for invalid SESSION_REVALIDATE_INTERVAL")
+		}
+	})
+
+	t.Run("exceeds maximum", func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", "25h")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected error for SESSION_REVALIDATE_INTERVAL exceeding maximum")
+		}
+	})
+}
+
+// TestParseCSV_Scenarios verifies ParseCSV handles various input patterns
+// including empty strings, single values, multiple values, and whitespace.
+func TestParseCSV_Scenarios(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{name: "empty string", input: "", want: nil},
+		{name: "single value", input: "tool_a", want: []string{"tool_a"}},
+		{name: "multiple values", input: "tool_a,tool_b,tool_c", want: []string{"tool_a", "tool_b", "tool_c"}},
+		{name: "whitespace trimmed", input: " tool_a , tool_b ", want: []string{"tool_a", "tool_b"}},
+		{name: "empty tokens filtered", input: "tool_a,,tool_b,", want: []string{"tool_a", "tool_b"}},
+		{name: "only commas", input: ",,,", want: []string{}},
+		{name: "spaces only tokens", input: " , , ", want: []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseCSV(tt.input)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("ParseCSV(%q) = %v, want nil", tt.input, got)
+				}
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("ParseCSV(%q) returned %d items, want %d", tt.input, len(got), len(tt.want))
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("ParseCSV(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestLoad_ExcludeTools verifies that EXCLUDE_TOOLS is parsed into
+// Config.ExcludeTools via ParseCSV.
+func TestLoad_ExcludeTools(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("EXCLUDE_TOOLS", "gitlab_create_issue, gitlab_delete_project")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadErr, err)
+	}
+	if len(cfg.ExcludeTools) != 2 {
+		t.Fatalf("ExcludeTools has %d items, want 2", len(cfg.ExcludeTools))
+	}
+	if cfg.ExcludeTools[0] != "gitlab_create_issue" {
+		t.Errorf("ExcludeTools[0] = %q, want %q", cfg.ExcludeTools[0], "gitlab_create_issue")
+	}
+	if cfg.ExcludeTools[1] != "gitlab_delete_project" {
+		t.Errorf("ExcludeTools[1] = %q, want %q", cfg.ExcludeTools[1], "gitlab_delete_project")
+	}
+}

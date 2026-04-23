@@ -21,7 +21,7 @@ func FormatOutputMarkdownString(w Output) string {
 		fmt.Fprintf(&b, "- **Encoding**: %s\n", w.Encoding)
 	}
 	if w.Content != "" {
-		fmt.Fprintf(&b, "\n### Content\n\n%s\n", w.Content)
+		fmt.Fprintf(&b, "\n### Content\n\n%s\n", toolutil.WrapGFMBody(w.Content))
 	}
 	toolutil.WriteHints(&b,
 		"Use action 'update' to edit this wiki page",

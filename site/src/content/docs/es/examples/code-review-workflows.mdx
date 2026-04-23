@@ -1,0 +1,189 @@
+---
+title: Ejemplos de revisión de código
+description: Ejemplos de revisión de merge requests y análisis de código con GitLab MCP Server
+---
+
+Ejemplos paso a paso para flujos de revisión de merge requests. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
+
+## Flujo de revisión de MRs
+
+### Listar MRs pendientes de revisión
+
+**Prompt**: "Muéstrame todos los merge requests asignados a mí para revisión en el proyecto backend"
+
+```
+gitlab_merge_request → action: list, project_id: "my-group/backend",
+  reviewer_username: "johndoe", state: "opened"
+```
+
+Devuelve: títulos de MRs, autores, ramas, etiquetas y estado de revisión.
+
+### Ver cambios de un MR
+
+**Prompt**: "Muéstrame los cambios de archivos en el MR !42"
+
+```
+gitlab_merge_request → action: changes, project_id: "my-group/backend", merge_request_iid: 42
+```
+
+Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs completos.
+
+### Verificar estado de aprobación
+
+**Prompt**: "¿Quién ha aprobado el MR !42 y quién falta por aprobar?"
+
+```
+gitlab_merge_request → action: approval_state, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+Devuelve: reglas de aprobación, aprobaciones requeridas, aprobaciones actuales y aprobadores elegibles.
+
+### Aprobar un MR
+
+**Prompt**: "Aprueba el merge request !42 en el proyecto backend"
+
+```
+gitlab_merge_request → action: approve, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+---
+
+## Revisión de código con IA
+
+### Revisión completa de código
+
+**Prompt**: "Revisa los cambios de código en el MR !42 buscando bugs, problemas de seguridad y mejores prácticas"
+
+```
+gitlab_analyze_mr_changes (sampling) → obtiene diff, envía al LLM para revisión completa
+```
+
+Devuelve: hallazgos estructurados organizados por severidad (crítico, advertencia, sugerencia) con ubicaciones de archivos y correcciones recomendadas.
+
+### Revisión enfocada en seguridad
+
+**Prompt**: "Haz una revisión de seguridad del MR !78 en el proyecto backend"
+
+```
+gitlab_review_mr_security (sampling) → examina diff buscando vulnerabilidades de seguridad
+```
+
+Verifica: inyección SQL, XSS, secretos hardcodeados, bypasses de autenticación, deserialización insegura y problemas OWASP Top 10.
+
+### Resumen de revisión
+
+**Prompt**: "Resume todos los comentarios de revisión del MR !42"
+
+```
+gitlab_summarize_mr_review (sampling) → consolida hilos de revisión en resumen
+```
+
+Devuelve: puntos clave de discusión, hilos sin resolver, elementos de acción y sentimiento general de la revisión.
+
+---
+
+## Discusiones y notas de MR
+
+### Añadir un comentario de revisión
+
+**Prompt**: "Añade un comentario al MR !42 diciendo 'El manejo de errores en auth.go necesita un mecanismo de reintento'"
+
+```
+gitlab_merge_request → action: note_create, project_id: "my-group/backend",
+  merge_request_iid: 42, body: "El manejo de errores en auth.go necesita un mecanismo de reintento"
+```
+
+### Crear un hilo de discusión
+
+**Prompt**: "Inicia una discusión en el MR !42 sobre la estrategia de migración de base de datos"
+
+```
+gitlab_merge_request → action: discussion_create, project_id: "my-group/backend",
+  merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..."
+```
+
+### Listar hilos sin resolver
+
+**Prompt**: "Muéstrame todos los hilos de discusión sin resolver en el MR !42"
+
+```
+gitlab_merge_request → action: discussion_list, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+Filtra los resultados por hilos donde `resolved: false` para encontrar elementos pendientes de revisión.
+
+### Usar notas borrador
+
+**Prompt**: "Crea una nota de revisión en borrador en el MR !42 — publicaré todos mis comentarios juntos"
+
+```
+gitlab_merge_request → action: draft_note_create, project_id: "my-group/backend",
+  merge_request_iid: 42, note: "Considera usar un context timeout aquí..."
+```
+
+Las notas borrador solo son visibles para ti hasta que las publiques todas a la vez con `action: draft_note_publish_all`.
+
+---
+
+## Ciclo de vida del MR
+
+### Crear un MR
+
+**Prompt**: "Crea un merge request de la rama feature/auth-refactor a main en el proyecto backend"
+
+```
+gitlab_merge_request → action: create, project_id: "my-group/backend",
+  source_branch: "feature/auth-refactor", target_branch: "main",
+  title: "Refactorizar módulo de autenticación"
+```
+
+### Fusionar tras aprobación
+
+**Prompt**: "Fusiona el MR !42 usando squash commit"
+
+```
+gitlab_merge_request → action: merge, project_id: "my-group/backend",
+  merge_request_iid: 42, squash: true
+```
+
+### Rebase antes de fusionar
+
+**Prompt**: "Haz rebase del MR !42 contra la última rama main"
+
+```
+gitlab_merge_request → action: rebase, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+### Cerrar sin fusionar
+
+**Prompt**: "Cierra el MR !99 — el enfoque fue reemplazado por el MR !105"
+
+```
+gitlab_merge_request → action: update, project_id: "my-group/backend",
+  merge_request_iid: 99, state_event: "close"
+```
+
+---
+
+## Comparar ramas
+
+### Diff entre ramas
+
+**Prompt**: "Compara la rama develop con main en el proyecto backend"
+
+```
+gitlab_repository → action: compare, project_id: "my-group/backend",
+  from: "main", to: "develop"
+```
+
+Devuelve: lista de commits, archivos modificados y estadísticas del diff entre las dos ramas.
+
+---
+
+:::tip
+Para la mejor experiencia de revisión, combina varios prompts en secuencia: primero lista los MRs, luego lee los cambios y después solicita análisis con IA. El asistente de IA mantiene el contexto entre prompts.
+:::

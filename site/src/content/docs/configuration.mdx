@@ -29,6 +29,8 @@ These must be set for the server to start in stdio mode:
 | `GITLAB_ENTERPRISE`      | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY`       | `false` | Disable all mutating tools (create, update, delete)                                         |
 | `GITLAB_SAFE_MODE`       | `false` | Return structured JSON preview instead of executing mutating tools (dry-run mode)           |
+| `EXCLUDE_TOOLS`          | —       | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)  |
+| `GITLAB_IGNORE_SCOPES`   | `false` | Skip automatic PAT scope detection — register all tools regardless of token scopes          |
 | `LOG_LEVEL`              | `info`  | Log verbosity: `debug`, `info`, `warn`, `error`                                             |
 
 :::tip
@@ -74,6 +76,8 @@ META_TOOLS=true
 GITLAB_ENTERPRISE=false
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
+EXCLUDE_TOOLS=
+GITLAB_IGNORE_SCOPES=false
 LOG_LEVEL=info
 
 # Optional components
@@ -212,6 +216,8 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--meta-tools`           | `true`                       | Enable meta-tool mode                    |
 | `--enterprise`           | `false`                      | Enable Enterprise/Premium tools          |
 | `--read-only`            | `false`                      | Read-only mode                           |
+| `--exclude-tools`        | —                            | Comma-separated tool names to exclude    |
+| `--ignore-scopes`        | `false`                      | Skip PAT scope detection                 |
 | `--max-http-clients`     | `100`                        | Maximum concurrent client sessions       |
 | `--session-timeout`      | `30m`                        | Idle session timeout                     |
 | `--auto-update`          | `true`                       | Auto-update mode                         |

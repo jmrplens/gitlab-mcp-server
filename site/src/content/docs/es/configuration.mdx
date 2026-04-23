@@ -29,6 +29,8 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 | `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) para GitLab Premium/Ultimate  |
 | `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                              |
 | `GITLAB_SAFE_MODE`       | `false`        | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)     |
+| `EXCLUDE_TOOLS`          | —              | Lista de herramientas a excluir separadas por comas (ej., `gitlab_delete_project,gitlab_admin`)           |
+| `GITLAB_IGNORE_SCOPES`   | `false`        | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes  |
 | `LOG_LEVEL`              | `info`         | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                             |
 
 :::tip
@@ -53,7 +55,7 @@ Estos controlan qué capacidades MCP están habilitadas:
 | `AUTO_UPDATE`          | `true`                       | Comportamiento de autoactualización: `true` (aplicar al iniciar), `check` (solo notificar), `false` (deshabilitado) |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release                                                                    |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de comprobación periódica (solo modo HTTP)                                                                |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                                                     |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                                                      |
 
 ## Opciones de administración
 
@@ -74,6 +76,8 @@ META_TOOLS=true
 GITLAB_ENTERPRISE=false
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
+EXCLUDE_TOOLS=
+GITLAB_IGNORE_SCOPES=false
 LOG_LEVEL=info
 
 # Componentes opcionales
@@ -212,12 +216,14 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                       |
 | `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium              |
 | `--read-only`            | `false`                      | Modo solo lectura                                      |
+| `--exclude-tools`        | —                            | Herramientas a excluir separadas por comas             |
+| `--ignore-scopes`        | `false`                      | Omitir detección de scopes del PAT                     |
 | `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas             |
 | `--session-timeout`      | `30m`                        | Tiempo de espera de sesión inactiva                    |
 | `--auto-update`          | `true`                       | Modo de autoactualización                              |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                    |
 | `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones |
-| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de descarga pre-inicio (5s–10m)      |
+| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de descarga pre-inicio (5s–10m)       |
 | `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`              |
 | `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                |
 

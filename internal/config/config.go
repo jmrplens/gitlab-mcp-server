@@ -69,6 +69,10 @@ type Config struct {
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
+
+	ExcludeTools []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
+	IgnoreScopes bool     // When true, skip PAT scope detection and register all tools
+	TokenScopes  []string // Detected PAT scopes (populated at runtime, not from env)
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
@@ -111,6 +115,11 @@ func Load() (*Config, error) {
 	safeMode, err := parseBool(os.Getenv("GITLAB_SAFE_MODE"), false)
 	if err != nil {
 		return nil, fmt.Errorf("invalid GITLAB_SAFE_MODE value: %w", err)
+	}
+
+	ignoreScopes, err := parseBool(os.Getenv("GITLAB_IGNORE_SCOPES"), false)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GITLAB_IGNORE_SCOPES value: %w", err)
 	}
 
 	maxFileSize, err := parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
@@ -187,6 +196,8 @@ func Load() (*Config, error) {
 		AutoUpdateTimeout:  autoUpdateTimeout,
 		AuthMode:           authMode,
 		OAuthCacheTTL:      oauthCacheTTL,
+		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
+		IgnoreScopes:       ignoreScopes,
 	}
 
 	if err = cfg.validate(); err != nil {
@@ -319,4 +330,20 @@ func parseDuration(s string, defaultValue time.Duration) (time.Duration, error) 
 		return 0, fmt.Errorf("duration must be positive, got %s", d)
 	}
 	return d, nil
+}
+
+// ParseCSV splits a comma-separated string into trimmed, non-empty tokens.
+func ParseCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }

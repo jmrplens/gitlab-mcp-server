@@ -89,6 +89,28 @@ Usa los scopes mínimos requeridos para tu flujo de trabajo:
 Si solo necesitas operaciones de lectura, usa el scope `read_api` y habilita `GITLAB_READ_ONLY=true` como defensa en profundidad.
 :::
 
+### Filtrado de herramientas por scopes
+
+Al iniciar, el servidor detecta los scopes de tu token mediante la API de GitLab y desactiva automáticamente las herramientas que requieren scopes que tu token no posee. Por ejemplo, un token sin el scope `admin_mode` no mostrará las herramientas `gitlab_admin`.
+
+Esto evita que la IA intente operaciones que fallarían con errores de permisos y mantiene la lista de herramientas enfocada en lo que tu token puede hacer realmente.
+
+Para desactivar la detección de scopes y registrar todas las herramientas independientemente de los permisos del token:
+
+```bash
+GITLAB_IGNORE_SCOPES=true
+```
+
+O en modo HTTP:
+
+```bash
+./gitlab-mcp-server --http --ignore-scopes
+```
+
+:::note
+Cuando la detección de scopes está desactivada, las herramientas se registran igualmente pero las llamadas a la API pueden fallar con `403 Forbidden` si el token no tiene los permisos necesarios.
+:::
+
 ## Eliminación de credenciales en sampling
 
 Cuando las herramientas de análisis usan sampling MCP para enviar datos al LLM del cliente, el servidor aplica **eliminación automática de credenciales** antes de que cualquier dato salga del proceso. Esta es una medida crítica de defensa en profundidad que previene la fuga accidental de tokens a través del contexto del LLM.

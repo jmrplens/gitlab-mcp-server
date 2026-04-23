@@ -1,0 +1,189 @@
+---
+title: Code Review Workflow Examples
+description: Merge request review and code analysis examples using GitLab MCP Server
+---
+
+Step-by-step examples for merge request review workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
+
+## MR review workflow
+
+### List MRs awaiting review
+
+**Prompt**: "Show me all merge requests assigned to me for review in the backend project"
+
+```
+gitlab_merge_request → action: list, project_id: "my-group/backend",
+  reviewer_username: "johndoe", state: "opened"
+```
+
+Returns: MR titles, authors, branches, labels, and review status.
+
+### Read MR changes
+
+**Prompt**: "Show me the file changes in MR !42"
+
+```
+gitlab_merge_request → action: changes, project_id: "my-group/backend", merge_request_iid: 42
+```
+
+Returns: list of changed files with additions, deletions, and full diffs.
+
+### Check MR approval status
+
+**Prompt**: "Who has approved MR !42 and who still needs to approve?"
+
+```
+gitlab_merge_request → action: approval_state, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+Returns: approval rules, required approvals, current approvals, and eligible approvers.
+
+### Approve an MR
+
+**Prompt**: "Approve merge request !42 in the backend project"
+
+```
+gitlab_merge_request → action: approve, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+---
+
+## AI-powered code review
+
+### Full code review
+
+**Prompt**: "Review the code changes in MR !42 for bugs, security issues, and best practices"
+
+```
+gitlab_analyze_mr_changes (sampling) → fetches diff, sends to LLM for comprehensive review
+```
+
+Returns: structured findings organized by severity (critical, warning, suggestion) with file locations and recommended fixes.
+
+### Security-focused review
+
+**Prompt**: "Do a security review of MR !78 in the backend project"
+
+```
+gitlab_review_mr_security (sampling) → examines diff for security vulnerabilities
+```
+
+Checks for: SQL injection, XSS, hardcoded secrets, authentication bypasses, insecure deserialization, and OWASP Top 10 issues.
+
+### Review summary
+
+**Prompt**: "Summarize all review comments on MR !42"
+
+```
+gitlab_summarize_mr_review (sampling) → consolidates review threads into summary
+```
+
+Returns: key discussion points, unresolved threads, action items, and overall review sentiment.
+
+---
+
+## MR discussions and notes
+
+### Add a review comment
+
+**Prompt**: "Add a comment to MR !42 saying 'The error handling in auth.go needs a retry mechanism'"
+
+```
+gitlab_merge_request → action: note_create, project_id: "my-group/backend",
+  merge_request_iid: 42, body: "The error handling in auth.go needs a retry mechanism"
+```
+
+### Create a discussion thread
+
+**Prompt**: "Start a discussion on MR !42 about the database migration strategy"
+
+```
+gitlab_merge_request → action: discussion_create, project_id: "my-group/backend",
+  merge_request_iid: 42, body: "Let's discuss the database migration strategy..."
+```
+
+### List unresolved threads
+
+**Prompt**: "Show me all unresolved discussion threads in MR !42"
+
+```
+gitlab_merge_request → action: discussion_list, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+Filter the results for threads where `resolved: false` to find outstanding review items.
+
+### Use draft notes
+
+**Prompt**: "Create a draft review note on MR !42 — I'll publish all my comments together"
+
+```
+gitlab_merge_request → action: draft_note_create, project_id: "my-group/backend",
+  merge_request_iid: 42, note: "Consider using a context timeout here..."
+```
+
+Draft notes are only visible to you until you publish them all at once with `action: draft_note_publish_all`.
+
+---
+
+## MR lifecycle
+
+### Create an MR
+
+**Prompt**: "Create a merge request from branch feature/auth-refactor to main in the backend project"
+
+```
+gitlab_merge_request → action: create, project_id: "my-group/backend",
+  source_branch: "feature/auth-refactor", target_branch: "main",
+  title: "Refactor authentication module"
+```
+
+### Merge after approval
+
+**Prompt**: "Merge MR !42 using squash commit"
+
+```
+gitlab_merge_request → action: merge, project_id: "my-group/backend",
+  merge_request_iid: 42, squash: true
+```
+
+### Rebase before merge
+
+**Prompt**: "Rebase MR !42 against the latest main branch"
+
+```
+gitlab_merge_request → action: rebase, project_id: "my-group/backend",
+  merge_request_iid: 42
+```
+
+### Close without merging
+
+**Prompt**: "Close MR !99 — the approach was superseded by MR !105"
+
+```
+gitlab_merge_request → action: update, project_id: "my-group/backend",
+  merge_request_iid: 99, state_event: "close"
+```
+
+---
+
+## Compare branches
+
+### Diff between branches
+
+**Prompt**: "Compare the develop branch with main in the backend project"
+
+```
+gitlab_repository → action: compare, project_id: "my-group/backend",
+  from: "main", to: "develop"
+```
+
+Returns: list of commits, changed files, and diff statistics between the two branches.
+
+---
+
+:::tip
+For the best review experience, combine several prompts in sequence: first list MRs, then read changes, then ask for AI analysis. The AI assistant maintains context across prompts.
+:::
