@@ -5,7 +5,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - GITLAB_URL=${GITLAB_URL:?Set GITLAB_URL in .env}
+      - GITLAB_URL=${GITLAB_URL:-}
       - GITLAB_SKIP_TLS_VERIFY=${GITLAB_SKIP_TLS_VERIFY:-false}
       - META_TOOLS=${META_TOOLS:-true}
       - GITLAB_ENTERPRISE=${GITLAB_ENTERPRISE:-false}
@@ -13,7 +13,9 @@ services:
     command:
       - "--http"
       - "--http-addr=0.0.0.0:8080"
-      - "--gitlab-url=${GITLAB_URL}"
+      # Single-instance: set GITLAB_URL in .env to use --gitlab-url as default for all clients
+      # Multi-instance: leave GITLAB_URL empty; clients send GITLAB-URL header per request
+      - "--gitlab-url=${GITLAB_URL:-}"
       - "--meta-tools=${META_TOOLS:-true}"
       - "--enterprise=${GITLAB_ENTERPRISE:-false}"
       - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"

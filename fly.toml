@@ -1,0 +1,64 @@
+# fly.toml — Fly.io deployment configuration for gitlab-mcp-server
+#
+# Deploy: fly deploy
+# Logs:   fly logs
+# Status: fly status
+# Health: curl https://<app-name>.fly.dev/health
+# MCP:    https://<app-name>.fly.dev/
+#
+# Each user provides their own GitLab token via:
+#   - PRIVATE-TOKEN header (Personal Access Token)
+#   - Authorization: Bearer header (OAuth)
+#
+# Each user provides their GitLab instance URL via:
+#   - GITLAB-URL header (e.g., https://gitlab.com, https://gitlab.example.com)
+#
+# Alternatively, set a default instance with --gitlab-url in [experimental] cmd.
+
+app = "gitlab-mcp-server"
+primary_region = "cdg"
+
+kill_signal = "SIGTERM"
+kill_timeout = 10
+
+[build]
+  dockerfile = "Dockerfile"
+  [build.args]
+    VERSION = "1.0.6"
+
+# Override Dockerfile CMD for HTTP mode.
+# No --gitlab-url: each client provides it via the GITLAB-URL header.
+# Auto-update disabled: use `fly deploy` with new image tags instead.
+[experimental]
+  cmd = [
+    "--http",
+    "--http-addr", "0.0.0.0:8080",
+    "--meta-tools",
+    "--auto-update=false"
+  ]
+
+[env]
+  LOG_LEVEL = "info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 100
+    hard_limit = 200
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

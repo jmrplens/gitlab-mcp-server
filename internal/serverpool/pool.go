@@ -122,15 +122,20 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 	return p
 }
 
-// GetOrCreate returns the [*mcp.Server] for the given token, creating one
-// if it doesn't exist. It is safe for concurrent use. Returns an error if
-// the GitLab client cannot be created (e.g., invalid URL).
-func (p *ServerPool) GetOrCreate(token string) (*mcp.Server, error) {
+// GetOrCreate returns the [*mcp.Server] for the given token and GitLab URL,
+// creating one if it doesn't exist. The pool key is derived from both the
+// token and gitlabURL, so the same token against different GitLab instances
+// gets separate server entries. It is safe for concurrent use.
+// Returns an error if the GitLab client cannot be created.
+func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	if token == "" {
 		return nil, errors.New("empty token: authentication required")
 	}
+	if gitlabURL == "" {
+		return nil, errors.New("empty GitLab URL: set --gitlab-url or send GITLAB-URL header")
+	}
 
-	key := tokenHash(token)
+	key := sessionKey(token, gitlabURL)
 
 	// Fast path: read lock to check existing entry.
 	p.mu.RLock()
@@ -162,7 +167,7 @@ func (p *ServerPool) GetOrCreate(token string) (*mcp.Server, error) {
 	}
 
 	client, err := gitlabclient.NewClientWithToken(
-		p.cfg.GitLabURL, token, p.cfg.SkipTLSVerify,
+		gitlabURL, token, p.cfg.SkipTLSVerify,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client for pool: %w", err)
@@ -245,6 +250,14 @@ func (p *ServerPool) evictLRU() {
 // tokenHash returns a hex-encoded SHA-256 hash of the token.
 func tokenHash(token string) string {
 	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+// sessionKey returns a hex-encoded SHA-256 hash of the token combined with
+// the GitLab URL. This ensures the same token against different GitLab
+// instances results in separate pool entries.
+func sessionKey(token, gitlabURL string) string {
+	h := sha256.Sum256([]byte(token + "\x00" + gitlabURL))
 	return hex.EncodeToString(h[:])
 }
 

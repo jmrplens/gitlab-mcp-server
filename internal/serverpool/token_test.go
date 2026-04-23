@@ -67,3 +67,85 @@ func TestExtractToken(t *testing.T) {
 		})
 	}
 }
+
+// TestExtractGitLabURL validates GitLab URL extraction from GITLAB-URL header.
+func TestExtractGitLabURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		header     string
+		defaultURL string
+		wantURL    string
+		wantErr    bool
+	}{
+		{
+			name:       "no header returns default",
+			header:     "",
+			defaultURL: "https://gitlab.com",
+			wantURL:    "https://gitlab.com",
+		},
+		{
+			name:       "valid HTTPS URL",
+			header:     "https://gitlab.example.com",
+			defaultURL: "https://gitlab.com",
+			wantURL:    "https://gitlab.example.com",
+		},
+		{
+			name:       "valid HTTP URL",
+			header:     "http://gitlab.local:8080",
+			defaultURL: "https://gitlab.com",
+			wantURL:    "http://gitlab.local:8080",
+		},
+		{
+			name:       "trailing slash stripped",
+			header:     "https://gitlab.example.com/",
+			defaultURL: "https://gitlab.com",
+			wantURL:    "https://gitlab.example.com",
+		},
+		{
+			name:       "whitespace trimmed",
+			header:     "  https://gitlab.example.com  ",
+			defaultURL: "https://gitlab.com",
+			wantURL:    "https://gitlab.example.com",
+		},
+		{
+			name:       "invalid scheme rejected",
+			header:     "ftp://gitlab.example.com",
+			defaultURL: "https://gitlab.com",
+			wantErr:    true,
+		},
+		{
+			name:       "missing host rejected",
+			header:     "https://",
+			defaultURL: "https://gitlab.com",
+			wantErr:    true,
+		},
+		{
+			name:       "no header and no default returns empty",
+			header:     "",
+			defaultURL: "",
+			wantURL:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+			if tt.header != "" {
+				req.Header.Set("GITLAB-URL", tt.header)
+			}
+			got, err := ExtractGitLabURL(req, tt.defaultURL)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.wantURL {
+				t.Errorf("ExtractGitLabURL() = %q, want %q", got, tt.wantURL)
+			}
+		})
+	}
+}

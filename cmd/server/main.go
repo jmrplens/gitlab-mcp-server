@@ -98,7 +98,7 @@ func main() {
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
-	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "GitLab instance URL (required for HTTP mode)")
+	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Default GitLab instance URL (can be overridden per-request via GITLAB-URL header)")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Enable meta-tools for tool discovery")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Enable Enterprise/Premium meta-tools")
@@ -199,7 +199,7 @@ FLAGS
   -tool-search string       Search tools by name/description and exit
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         HTTP listen address (default ":8080")
-  -gitlab-url string        GitLab instance URL (required for HTTP mode)
+  -gitlab-url string        Default GitLab URL (per-request override via GITLAB-URL header)
   -skip-tls-verify          Skip TLS certificate verification (default false)
   -meta-tools               Enable meta-tools for tool discovery (default true)
   -enterprise               Enable Enterprise/Premium meta-tools (default false)
@@ -261,8 +261,11 @@ JSON CONFIGURATION EXAMPLES
     }
   }
 
-  HTTP mode:
+  HTTP mode (single GitLab instance):
   gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
+
+  HTTP mode (per-request GitLab URL via GITLAB-URL header):
+  gitlab-mcp-server --http --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
@@ -294,20 +297,20 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 // runHTTP validates HTTP flags, builds a [config.Config] from them, and
 // starts the HTTP server. No GITLAB_TOKEN is needed; each client provides
 // its own token per-request via PRIVATE-TOKEN or Authorization: Bearer headers.
+// The GitLab URL can be set globally via --gitlab-url or per-request via the
+// GITLAB-URL header. At least one must be provided for each request.
 func runHTTP(ctx context.Context, hcfg *httpConfig) error {
-	if hcfg.gitlabURL == "" {
-		return errors.New("--gitlab-url is required for HTTP mode")
-	}
-
-	u, err := url.Parse(hcfg.gitlabURL)
-	if err != nil {
-		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("--gitlab-url must use http:// or https:// scheme, got %q", u.Scheme)
-	}
-	if u.Host == "" {
-		return errors.New("--gitlab-url must include a host")
+	if hcfg.gitlabURL != "" {
+		u, err := url.Parse(hcfg.gitlabURL)
+		if err != nil {
+			return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return fmt.Errorf("--gitlab-url must use http:// or https:// scheme, got %q", u.Scheme)
+		}
+		if u.Host == "" {
+			return errors.New("--gitlab-url must include a host")
+		}
 	}
 
 	cfg := &config.Config{
@@ -563,8 +566,24 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 
 	pool.StartRevalidation(ctx)
 
+	// Build server-card JSON once at startup using an ephemeral MCP server
+	// so that /.well-known/mcp/server-card.json is served without authentication.
+	serverCardJSON, err := buildServerCard(cfg)
+	if err != nil {
+		slog.Warn("failed to build server-card.json, endpoint will return 503", "error", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, _ *http.Request) {
+		if serverCardJSON == nil {
+			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write(serverCardJSON)
+	})
 
 	if cfg.AuthMode == "oauth" {
 		// In OAuth mode, auth.RequireBearerToken middleware rejects invalid
@@ -577,7 +596,12 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 				slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
 				return nil
 			}
-			server, err := pool.GetOrCreate(token)
+			gitlabURL, err := serverpool.ExtractGitLabURL(r, cfg.GitLabURL)
+			if err != nil {
+				slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
+				return nil
+			}
+			server, err := pool.GetOrCreate(token, gitlabURL)
 			if err != nil {
 				slog.Error("failed to create server for token", "error", err)
 				return nil
@@ -644,7 +668,12 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 				slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 				return nil
 			}
-			server, err := pool.GetOrCreate(token)
+			gitlabURL, err := serverpool.ExtractGitLabURL(r, cfg.GitLabURL)
+			if err != nil {
+				slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
+				return nil
+			}
+			server, err := pool.GetOrCreate(token, gitlabURL)
 			if err != nil {
 				authLimiter.RecordFailure(ip)
 				slog.Error("failed to create server for token", "error", err)
@@ -781,6 +810,80 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 		Version: version,
 		Commit:  commit,
 	})
+}
+
+// buildServerCard creates a Smithery-compatible server-card JSON by spinning up
+// an ephemeral MCP server with a dummy GitLab client, listing all registered
+// tools, and marshalling the result. The dummy client is never used for API
+// calls — it only satisfies createServer's non-nil requirement so that tool
+// registration can proceed.
+func buildServerCard(cfg *config.Config) ([]byte, error) {
+	// Use configured URL or a placeholder — the dummy client only needs a
+	// parseable URL to register tools; it never makes real API calls.
+	gitlabURL := cfg.GitLabURL
+	if gitlabURL == "" {
+		gitlabURL = "https://gitlab.com"
+	}
+
+	dummyClient, err := gitlabclient.NewClientWithToken(gitlabURL, "dummy-token-for-tool-discovery", cfg.SkipTLSVerify)
+	if err != nil {
+		return nil, fmt.Errorf("creating dummy client: %w", err)
+	}
+
+	srv := createServer(dummyClient, cfg, nil)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	serverSession, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, fmt.Errorf("server connect: %w", err)
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "server-card-builder", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return nil, fmt.Errorf("client connect: %w", err)
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list tools: %w", err)
+	}
+
+	type serverCardTool struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		InputSchema any    `json:"inputSchema,omitempty"`
+	}
+
+	cardTools := make([]serverCardTool, 0, len(result.Tools))
+	for _, t := range result.Tools {
+		cardTools = append(cardTools, serverCardTool{
+			Name:        t.Name,
+			Description: t.Description,
+			InputSchema: t.InputSchema,
+		})
+	}
+
+	card := map[string]any{
+		"serverInfo": map[string]any{
+			"name":    "gitlab-mcp-server",
+			"version": version,
+		},
+		"authentication": map[string]any{
+			"required": true,
+			"schemes":  []string{"header-token"},
+		},
+		"tools":     cardTools,
+		"resources": []any{},
+		"prompts":   []any{},
+	}
+
+	return json.Marshal(card)
 }
 
 // serveStdio starts the MCP server using stdio transport.
