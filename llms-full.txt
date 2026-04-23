@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.0.6 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
+> Version 1.1.0 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 

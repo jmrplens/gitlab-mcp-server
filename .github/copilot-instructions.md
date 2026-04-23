@@ -37,7 +37,7 @@ gitlab-mcp-server/
 ├── internal/
 │   ├── config/             # Configuration loading (.env, flags)
 │   ├── gitlab/             # GitLab API client wrapper
-│   ├── serverpool/         # HTTP mode: per-token server pool & LRU cache
+│   ├── serverpool/         # HTTP mode: per-token+URL server pool & LRU cache
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/              # Tool orchestration layer + 162 domain sub-packages
@@ -182,7 +182,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 | Variable                 | Description                       | Example            |
 | ------------------------ | --------------------------------- | ------------------ |
-| `GITLAB_URL`             | GitLab instance URL               | `https://gitlab.example.com` |
+| `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url` (per-request override via `GITLAB-URL` header) | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
@@ -197,6 +197,12 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
 | `AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
+
+**HTTP-only flags** (no environment variable equivalent):
+
+| Flag                       | Description                                                    | Default            |
+| -------------------------- | -------------------------------------------------------------- | ------------------ |
+| `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) | _(empty)_          |
 
 **General flags** (both stdio and HTTP modes):
 

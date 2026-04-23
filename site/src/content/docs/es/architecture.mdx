@@ -71,15 +71,15 @@ sequenceDiagram
     participant P as Pool de servidores
     participant GL as API GitLab
 
-    U1->>S: Petición MCP + Token A
-    S->>P: Obtener/crear sesión para Token A
+    U1->>S: Petición MCP + Token A + URL X
+    S->>P: Obtener/crear sesión para (Token A, URL X)
     P->>GL: Llamada API con Token A
     GL-->>P: Respuesta
     P-->>S: Resultado
     S-->>U1: Respuesta MCP
 
-    U2->>S: Petición MCP + Token B
-    S->>P: Obtener/crear sesión para Token B
+    U2->>S: Petición MCP + Token B + URL Y
+    S->>P: Obtener/crear sesión para (Token B, URL Y)
     P->>GL: Llamada API con Token B
     GL-->>P: Respuesta
     P-->>S: Resultado
@@ -89,7 +89,7 @@ sequenceDiagram
 **Características:**
 
 - Un único proceso de servidor atiende a múltiples usuarios
-- Aislamiento de sesión por token mediante pool LRU
+- Aislamiento de sesión por token+URL mediante pool LRU
 - Límites de sesión y tiempos de espera configurables
 - Adecuado para despliegues de equipo/organización
 
@@ -97,6 +97,8 @@ Inicia el modo HTTP con:
 
 ```bash
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
+# O sin --gitlab-url (los clientes envían la cabecera GITLAB-URL por solicitud)
+./gitlab-mcp-server --http --http-addr=0.0.0.0:8080
 ```
 
 Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para la configuración detallada.

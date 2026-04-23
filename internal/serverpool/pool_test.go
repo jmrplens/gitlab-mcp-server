@@ -41,7 +41,7 @@ func TestGetOrCreate_EmptyToken(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	srv, err := pool.GetOrCreate("")
+	srv, err := pool.GetOrCreate("", "http://localhost")
 	if err == nil {
 		t.Fatal("expected error for empty token, got nil")
 	}
@@ -55,7 +55,7 @@ func TestGetOrCreate_NewToken(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	srv, err := pool.GetOrCreate("glpat-token1")
+	srv, err := pool.GetOrCreate("glpat-token1", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate() unexpected error: %v", err)
 	}
@@ -72,12 +72,12 @@ func TestGetOrCreate_SameToken(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	srv1, err := pool.GetOrCreate("glpat-same")
+	srv1, err := pool.GetOrCreate("glpat-same", "http://localhost")
 	if err != nil {
 		t.Fatalf("first GetOrCreate() error: %v", err)
 	}
 
-	srv2, err := pool.GetOrCreate("glpat-same")
+	srv2, err := pool.GetOrCreate("glpat-same", "http://localhost")
 	if err != nil {
 		t.Fatalf("second GetOrCreate() error: %v", err)
 	}
@@ -95,12 +95,12 @@ func TestGetOrCreate_DifferentTokens(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	srv1, err := pool.GetOrCreate("glpat-token-a")
+	srv1, err := pool.GetOrCreate("glpat-token-a", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-a) error: %v", err)
 	}
 
-	srv2, err := pool.GetOrCreate("glpat-token-b")
+	srv2, err := pool.GetOrCreate("glpat-token-b", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-b) error: %v", err)
 	}
@@ -119,17 +119,17 @@ func TestGetOrCreate_LRUEviction(t *testing.T) {
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
 	// fill the pool
-	_, err := pool.GetOrCreate("token-1")
+	_, err := pool.GetOrCreate("token-1", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-1) error: %v", err)
 	}
-	_, err = pool.GetOrCreate("token-2")
+	_, err = pool.GetOrCreate("token-2", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-2) error: %v", err)
 	}
 
 	// this should evict token-1 (LRU)
-	_, err = pool.GetOrCreate("token-3")
+	_, err = pool.GetOrCreate("token-3", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-3) error: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestGetOrCreate_LRUEviction(t *testing.T) {
 	}
 
 	// token-1 should have been evicted — re-requesting creates a new entry
-	srv1, err := pool.GetOrCreate("token-1")
+	srv1, err := pool.GetOrCreate("token-1", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-1) re-create error: %v", err)
 	}
@@ -157,22 +157,22 @@ func TestGetOrCreate_LRUPromotes(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
-	_, _ = pool.GetOrCreate("token-a")
-	_, _ = pool.GetOrCreate("token-b")
+	_, _ = pool.GetOrCreate("token-a", "http://localhost")
+	_, _ = pool.GetOrCreate("token-b", "http://localhost")
 
 	// Re-access token-a to promote it in LRU
-	_, _ = pool.GetOrCreate("token-a")
+	_, _ = pool.GetOrCreate("token-a", "http://localhost")
 
 	// Adding token-c should evict token-b (now LRU), not token-a
-	_, _ = pool.GetOrCreate("token-c")
+	_, _ = pool.GetOrCreate("token-c", "http://localhost")
 
 	if pool.Size() != 2 {
 		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
 	}
 
 	// Verify token-a still returns the same cached entry (not evicted)
-	srvA1, _ := pool.GetOrCreate("token-a")
-	srvA2, _ := pool.GetOrCreate("token-a")
+	srvA1, _ := pool.GetOrCreate("token-a", "http://localhost")
+	srvA2, _ := pool.GetOrCreate("token-a", "http://localhost")
 	if srvA1 != srvA2 {
 		t.Error("token-a should still be in pool after LRU promotion")
 	}
@@ -194,7 +194,7 @@ func TestGetOrCreate_Concurrent(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := tokens[idx%len(tokens)]
-			srv, err := pool.GetOrCreate(token)
+			srv, err := pool.GetOrCreate(token, "http://localhost")
 			if err != nil {
 				t.Errorf("concurrent GetOrCreate() error: %v", err)
 				return
@@ -216,8 +216,8 @@ func TestClose(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("token-1")
-	_, _ = pool.GetOrCreate("token-2")
+	_, _ = pool.GetOrCreate("token-1", "http://localhost")
+	_, _ = pool.GetOrCreate("token-2", "http://localhost")
 
 	pool.Close()
 
@@ -312,13 +312,13 @@ func TestPoolEntry_TimestampFields(t *testing.T) {
 	pool := New(cfg, testFactory())
 
 	before := time.Now()
-	_, err := pool.GetOrCreate("token-time")
+	_, err := pool.GetOrCreate("token-time", "http://localhost")
 	if err != nil {
 		t.Fatalf("GetOrCreate() error: %v", err)
 	}
 	after := time.Now()
 
-	key := tokenHash("token-time")
+	key := sessionKey("token-time", "http://localhost")
 	pool.mu.RLock()
 	entry := pool.entries[key]
 	pool.mu.RUnlock()
@@ -377,14 +377,14 @@ func TestEvictByKey(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("token-keep")
-	_, _ = pool.GetOrCreate("token-evict")
+	_, _ = pool.GetOrCreate("token-keep", "http://localhost")
+	_, _ = pool.GetOrCreate("token-evict", "http://localhost")
 
 	if pool.Size() != 2 {
 		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
 	}
 
-	key := tokenHash("token-evict")
+	key := sessionKey("token-evict", "http://localhost")
 	pool.evictByKey(key)
 
 	if pool.Size() != 1 {
@@ -414,7 +414,7 @@ func TestStats_HitsAndMisses(t *testing.T) {
 	pool := New(cfg, testFactory())
 
 	// First call → miss
-	_, _ = pool.GetOrCreate("token-a")
+	_, _ = pool.GetOrCreate("token-a", "http://localhost")
 	s := pool.Stats()
 	if s.Misses != 1 {
 		t.Errorf("Misses = %d after first GetOrCreate, want 1", s.Misses)
@@ -424,7 +424,7 @@ func TestStats_HitsAndMisses(t *testing.T) {
 	}
 
 	// Second call with same token → hit
-	_, _ = pool.GetOrCreate("token-a")
+	_, _ = pool.GetOrCreate("token-a", "http://localhost")
 	s = pool.Stats()
 	if s.Hits != 1 {
 		t.Errorf("Hits = %d after second GetOrCreate, want 1", s.Hits)
@@ -434,7 +434,7 @@ func TestStats_HitsAndMisses(t *testing.T) {
 	}
 
 	// Third call with different token → another miss
-	_, _ = pool.GetOrCreate("token-b")
+	_, _ = pool.GetOrCreate("token-b", "http://localhost")
 	s = pool.Stats()
 	if s.Hits != 1 {
 		t.Errorf("Hits = %d, want 1", s.Hits)
@@ -449,16 +449,16 @@ func TestStats_Evictions(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
-	_, _ = pool.GetOrCreate("tok-1")
-	_, _ = pool.GetOrCreate("tok-2")
-	_, _ = pool.GetOrCreate("tok-3") // evicts tok-1
+	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-2", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-3", "http://localhost") // evicts tok-1
 
 	s := pool.Stats()
 	if s.Evictions != 1 {
 		t.Errorf("Evictions = %d after 1 LRU eviction, want 1", s.Evictions)
 	}
 
-	_, _ = pool.GetOrCreate("tok-4") // evicts tok-2
+	_, _ = pool.GetOrCreate("tok-4", "http://localhost") // evicts tok-2
 	s = pool.Stats()
 	if s.Evictions != 2 {
 		t.Errorf("Evictions = %d after 2 LRU evictions, want 2", s.Evictions)
@@ -470,8 +470,8 @@ func TestStats_EvictByKey(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("tok-evict")
-	key := tokenHash("tok-evict")
+	_, _ = pool.GetOrCreate("tok-evict", "http://localhost")
+	key := sessionKey("tok-evict", "http://localhost")
 	pool.evictByKey(key)
 
 	s := pool.Stats()
@@ -493,8 +493,8 @@ func TestStats_SnapshotFields(t *testing.T) {
 	before := time.Now()
 	pool := New(cfg, testFactory(), WithMaxSize(50))
 
-	_, _ = pool.GetOrCreate("tok-1")
-	_, _ = pool.GetOrCreate("tok-2")
+	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-2", "http://localhost")
 
 	s := pool.Stats()
 	if s.CurrentSize != 2 {
@@ -587,7 +587,7 @@ func TestRevalidateAll_CancelledContext(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("tok-1")
+	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -649,7 +649,7 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := "tok-" + string(rune('a'+idx%5))
-			_, _ = pool.GetOrCreate(token)
+			_, _ = pool.GetOrCreate(token, "http://localhost")
 			_ = pool.Stats()
 		}(i)
 	}
@@ -665,10 +665,10 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 // TestGetOrCreate_InvalidGitLabURL verifies that GetOrCreate returns an error
 // when the GitLab URL is invalid and NewClientWithToken fails to create a client.
 func TestGetOrCreate_InvalidGitLabURL(t *testing.T) {
-	cfg := testConfig("://invalid")
+	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory())
 
-	srv, err := pool.GetOrCreate("glpat-token1")
+	srv, err := pool.GetOrCreate("glpat-token1", "://invalid")
 	if err == nil {
 		t.Fatal("expected error for invalid GitLab URL, got nil")
 	}
@@ -693,5 +693,66 @@ func TestEvictLRU_EmptyList(t *testing.T) {
 
 	if pool.Size() != 0 {
 		t.Errorf("pool.Size() = %d, want 0", pool.Size())
+	}
+}
+
+// TestGetOrCreate_EmptyGitLabURL verifies that GetOrCreate rejects an empty
+// GitLab URL to prevent sessions without a target instance.
+func TestGetOrCreate_EmptyGitLabURL(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv, err := pool.GetOrCreate("glpat-token1", "")
+	if err == nil {
+		t.Fatal("expected error for empty GitLab URL, got nil")
+	}
+	if srv != nil {
+		t.Fatal("expected nil server for empty GitLab URL")
+	}
+}
+
+// TestGetOrCreate_DifferentURLsSameToken verifies that the same token
+// against different GitLab instances gets separate pool entries.
+func TestGetOrCreate_DifferentURLsSameToken(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory())
+
+	srv1, err := pool.GetOrCreate("glpat-same-token", "http://gitlab-a.example.com")
+	if err != nil {
+		t.Fatalf("GetOrCreate(gitlab-a) error: %v", err)
+	}
+
+	srv2, err := pool.GetOrCreate("glpat-same-token", "http://gitlab-b.example.com")
+	if err != nil {
+		t.Fatalf("GetOrCreate(gitlab-b) error: %v", err)
+	}
+
+	if srv1 == srv2 {
+		t.Error("expected different *mcp.Server pointers for same token with different GitLab URLs")
+	}
+	if pool.Size() != 2 {
+		t.Errorf("pool.Size() = %d, want 2", pool.Size())
+	}
+}
+
+// TestSessionKey verifies that sessionKey produces different hashes for
+// different token+URL combinations.
+func TestSessionKey(t *testing.T) {
+	k1 := sessionKey("token-a", "http://gitlab.example.com")
+	k2 := sessionKey("token-a", "http://gitlab.example.com")
+	k3 := sessionKey("token-a", "http://other.example.com")
+	k4 := sessionKey("token-b", "http://gitlab.example.com")
+
+	if k1 != k2 {
+		t.Error("same token+URL should produce same key")
+	}
+	if k1 == k3 {
+		t.Error("same token with different URL should produce different key")
+	}
+	if k1 == k4 {
+		t.Error("different token with same URL should produce different key")
+	}
+	if len(k1) != 64 {
+		t.Errorf("key length = %d, want 64 (SHA-256 hex)", len(k1))
 	}
 }

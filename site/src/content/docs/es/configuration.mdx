@@ -207,25 +207,28 @@ O usa un archivo `.env` en el directorio de trabajo.
 
 Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar de variables de entorno:
 
-| Flag                     | Predeterminado               | Descripción                                            |
-| ------------------------ | ---------------------------- | ------------------------------------------------------ |
-| `--http`                 | `false`                      | Habilitar modo de transporte HTTP                      |
-| `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                          |
-| `--gitlab-url`           | —                            | URL de la instancia de GitLab (requerida)              |
-| `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                |
-| `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                       |
-| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium              |
-| `--read-only`            | `false`                      | Modo solo lectura                                      |
-| `--exclude-tools`        | —                            | Herramientas a excluir separadas por comas             |
-| `--ignore-scopes`        | `false`                      | Omitir detección de scopes del PAT                     |
-| `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas             |
-| `--session-timeout`      | `30m`                        | Tiempo de espera de sesión inactiva                    |
-| `--auto-update`          | `true`                       | Modo de autoactualización                              |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                    |
-| `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones |
-| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de descarga pre-inicio (5s–10m)       |
-| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`              |
-| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                |
+| Flag                     | Predeterminado               | Descripción                                                                                                            |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--http`                 | `false`                      | Habilitar modo de transporte HTTP                                                                                      |
+| `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                                                                                          |
+| `--gitlab-url`           | —                            | URL por defecto de la instancia de GitLab. Se puede sobreescribir por solicitud mediante la cabecera `GITLAB-URL`      |
+| `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                                                                                |
+| `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                                                                                       |
+| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium                                                                              |
+| `--read-only`            | `false`                      | Modo solo lectura                                                                                                      |
+| `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                          |
+| `--exclude-tools`        | —                            | Herramientas a excluir separadas por comas                                                                             |
+| `--ignore-scopes`        | `false`                      | Omitir detección de scopes del PAT                                                                                     |
+| `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas                                                                             |
+| `--session-timeout`      | `30m`                        | Tiempo de espera de sesión inactiva                                                                                    |
+| `--auto-update`          | `true`                       | Modo de autoactualización                                                                                              |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                                                                                    |
+| `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones                                                                 |
+| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de descarga pre-inicio (5s–10m)                                                                       |
+| `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`                                                                              |
+| `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                                                                                |
+| `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                  |
+| `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 **Flags generales** (modos stdio y HTTP):
 
@@ -236,12 +239,18 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 Ejemplo:
 
 ```bash
+# Instancia única de GitLab (URL por defecto para todos los clientes)
 ./gitlab-mcp-server \
   --http \
   --http-addr=0.0.0.0:8080 \
   --gitlab-url=https://gitlab.example.com \
   --max-http-clients=200 \
   --session-timeout=1h
+
+# Multi-instancia (cada cliente especifica su URL de GitLab mediante la cabecera GITLAB-URL)
+./gitlab-mcp-server \
+  --http \
+  --http-addr=0.0.0.0:8080
 ```
 
 ## Orden de carga de la configuración
@@ -254,7 +263,7 @@ El servidor carga la configuración en el siguiente orden (las fuentes posterior
 4. **Flags de CLI** — Argumentos de línea de comandos (prioridad más alta)
 
 :::note
-En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP.
+En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. Los clientes también pueden enviar una cabecera `GITLAB-URL` para dirigirse a una instancia de GitLab específica.
 :::
 
 ## Certificados autofirmados

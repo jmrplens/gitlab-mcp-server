@@ -36,7 +36,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | --- | --- | --- | --- |
 | `-http` | bool | `false` | Enable HTTP transport mode (default is stdio) |
 | `-http-addr` | string | `:8080` | HTTP listen address (e.g. `localhost:8080`, `:9090`) |
-| `-gitlab-url` | string | _(required)_ | GitLab instance URL (e.g. `https://gitlab.example.com`) |
+| `-gitlab-url` | string | _(optional)_ | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools (28 base / 43 enterprise instead of 1006) |
 | `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
@@ -47,6 +47,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-revalidate-interval` | duration | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 | `-auth-mode` | string | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) |
 | `-oauth-cache-ttl` | duration | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth` |
+| `-trusted-proxy-header` | string | _(empty)_ | HTTP header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Forwarded-For`, `X-Real-IP`). Required for accurate rate limiting behind proxies |
 
 ### Auto-Update
 
@@ -79,13 +80,17 @@ gitlab-mcp-server
 
 ### HTTP Mode
 
-The server listens on an HTTP endpoint. Each client provides its own GitLab token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. No `GITLAB_TOKEN` is needed at startup.
+The server listens on an HTTP endpoint. Each client provides its own GitLab token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. Clients can also specify a `GITLAB-URL` header to target a specific GitLab instance per-request. No `GITLAB_TOKEN` is needed at startup.
 
 ```bash
+# Single GitLab instance (all clients use the same default)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=localhost:9090
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --max-http-clients=50 --session-timeout=1h
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth --oauth-cache-ttl=15m
+
+# Multi-instance (each client specifies their GitLab URL via GITLAB-URL header)
+gitlab-mcp-server --http --http-addr=:8080
 ```
 
 ### Setup Wizard
@@ -140,6 +145,9 @@ gitlab-mcp-server
 
 # Start HTTP server with custom address
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:9090
+
+# Start HTTP server without default URL (clients must send GITLAB-URL header)
+gitlab-mcp-server --http --http-addr=:8080
 
 # Start HTTP server with TLS skip and custom session timeout
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --skip-tls-verify --session-timeout=2h

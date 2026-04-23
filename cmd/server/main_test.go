@@ -42,6 +42,27 @@ const (
 // servers cannot hang the entire test suite indefinitely.
 var testHTTPClient = &http.Client{Timeout: 10 * time.Second} //nolint:gochecknoglobals // test-only
 
+// closeMCPSession sends an HTTP DELETE to properly terminate an MCP session
+// on the server side, preventing goroutine leaks from StreamableHTTPHandler.
+// Without this, the server's readIncoming goroutine blocks indefinitely on
+// streamableServerConn.Read waiting for c.done to close.
+func closeMCPSession(t *testing.T, serverURL, sessionID string) {
+	t.Helper()
+	if sessionID == "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, serverURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set(hdrMCPSessionID, sessionID)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+}
+
 // newMockGitLabClient is an internal helper for the main package.
 func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
@@ -133,7 +154,7 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
@@ -148,6 +169,9 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -179,7 +203,7 @@ func TestHTTPHandler_ToolsList_ReturnsAllTools(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	// Step 1: Initialize session
 	initBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -192,6 +216,7 @@ func TestHTTPHandler_ToolsList_ReturnsAllTools(t *testing.T) {
 		t.Fatalf("initialize request failed: %v", err)
 	}
 	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 	initResp.Body.Close()
 
 	// Step 2: Send initialized notification
@@ -480,20 +505,28 @@ func TestRunWithContext_ClientCreationError(t *testing.T) {
 	}
 }
 
-// TestRunWithContext_HTTPMissingURL verifies that HTTP mode returns an error
-// when --gitlab-url is not provided.
+// TestRunWithContext_HTTPMissingURL verifies that HTTP mode starts correctly
+// when --gitlab-url is omitted and the request-level GITLAB-URL header is
+// expected instead.
 func TestRunWithContext_HTTPMissingURL(t *testing.T) {
-	err := runWithContext(context.Background(), &httpConfig{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		// Give the HTTP server a brief moment to start, then stop it to avoid
+		// waiting on the global test timeout.
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	err := runWithContext(ctx, &httpConfig{
 		addr:           ":0",
 		gitlabURL:      "",
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
-	if err == nil {
-		t.Fatal("expected error when --gitlab-url is missing")
-	}
-	if !strings.Contains(err.Error(), "--gitlab-url") {
-		t.Errorf("expected error about --gitlab-url, got: %v", err)
+	if err != nil {
+		t.Fatalf("expected nil error when --gitlab-url is missing, got: %v", err)
 	}
 }
 
@@ -536,7 +569,7 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
@@ -548,6 +581,9 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -660,7 +696,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
@@ -672,6 +708,9 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -863,8 +902,7 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
 
-	// Wait for server to start.
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 
 	// Send initialize request with token.
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -883,6 +921,177 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_RequestWithTokenAndGitLabURLHeader verifies that HTTP mode
+// accepts request-level GitLab instance selection when --gitlab-url is omitted.
+func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	req.Header.Set("GITLAB-URL", mockGL.URL)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_MissingGitLabURLHeader verifies that requests are rejected in
+// HTTP mode when no default --gitlab-url is configured and GITLAB-URL is absent.
+func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		t.Error("expected non-200 when GITLAB-URL header is missing and no default gitlab-url is configured")
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_InvalidGitLabURLHeader verifies that requests are rejected
+// when GITLAB-URL has an invalid scheme.
+func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
+	cfg := &config.Config{
+		GitLabURL:      "",
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	req.Header.Set("GITLAB-URL", "ftp://gitlab.example.com")
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		t.Error("expected non-200 for invalid GITLAB-URL header")
 	}
 
 	cancel()
@@ -954,7 +1163,7 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
 
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 
 	// Send request WITHOUT token.
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -1181,8 +1390,41 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 	go func() {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
-	time.Sleep(300 * time.Millisecond)
+	waitForHTTPServerReady(t, addr, errCh)
 	return addr, errCh
+}
+
+// waitForHTTPServerReady polls /health until the HTTP server is reachable,
+// or fails fast if serveHTTP exits early with an error.
+func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("serveHTTP exited before accepting requests: %v", err)
+			}
+			t.Fatal("serveHTTP exited before accepting requests")
+		default:
+		}
+
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/health", nil)
+		if reqErr != nil {
+			t.Fatalf("failed to build readiness request: %v", reqErr)
+		}
+
+		resp, doErr := testHTTPClient.Do(req)
+		if doErr == nil {
+			resp.Body.Close()
+			return
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	t.Fatalf("HTTP server at %s was not ready within timeout", addr)
 }
 
 // TestServeHTTP_OAuthMode_MetadataEndpoint verifies that OAuth mode serves
@@ -1335,6 +1577,7 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -1382,6 +1625,7 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -1572,16 +1816,24 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 	}
 }
 
-// TestRunHTTP_MissingGitLabURL verifies that runHTTP returns an error when
-// --gitlab-url is empty.
+// TestRunHTTP_MissingGitLabURL verifies that runHTTP accepts an empty
+// --gitlab-url and relies on per-request GITLAB-URL headers.
 func TestRunHTTP_MissingGitLabURL(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := runHTTP(ctx, &httpConfig{
 		gitlabURL:      "",
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
-	if err == nil {
-		t.Fatal("expected error for empty gitlab-url")
+	if err != nil {
+		t.Fatalf("expected nil error for empty gitlab-url, got: %v", err)
 	}
 }
 
@@ -1751,9 +2003,15 @@ func TestAutoUpdateRedactHandler_WithGroup(t *testing.T) {
 // TestSetupAutoUpdateRedaction_WithURL verifies that setupAutoUpdateRedaction
 // installs a redacting handler when given a non-empty URL.
 func TestSetupAutoUpdateRedaction_WithURL(t *testing.T) {
-	// Save and restore the default logger to avoid affecting other tests.
-	orig := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(orig) })
+	// Use a concrete handler (not the initial defaultHandler) to mirror
+	// production, where main() sets a JSONHandler before calling
+	// setupAutoUpdateRedaction.  Restoring Go's initial defaultHandler via
+	// slog.SetDefault creates a recursive deadlock because SetDefault
+	// bridges to log.SetOutput, forming a cycle:
+	//   defaultHandler → log.output → handlerWriter → defaultHandler.
+	safe := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	slog.SetDefault(safe)
+	t.Cleanup(func() { slog.SetDefault(safe) })
 
 	setupAutoUpdateRedaction("https://private-gitlab.example.com")
 
@@ -1838,5 +2096,252 @@ func TestAllowedHosts_EmptyHost(t *testing.T) {
 	hosts := allowedHosts(":8080")
 	if hosts != nil {
 		t.Error("expected nil hosts for empty host")
+	}
+}
+
+func TestClientIP_RemoteAddr(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{RemoteAddr: "203.0.113.1:12345"}
+	if got := clientIP(r, ""); got != "203.0.113.1" {
+		t.Errorf("clientIP() = %q, want 203.0.113.1", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Real-Ip": {"203.0.113.42"}},
+	}
+	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.42" {
+		t.Errorf("clientIP() = %q, want 203.0.113.42", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
+	t.Parallel()
+	// For comma-separated proxy-appended headers, clientIP returns the
+	// rightmost IP because the leftmost entry is client-supplied and
+	// therefore spoofable.
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Forwarded-For": {"203.0.113.1, 10.0.0.2, 10.0.0.77"}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.77" {
+		t.Errorf("clientIP() = %q, want 10.0.0.77 (rightmost entry, non-spoofable)", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_SpoofResistant(t *testing.T) {
+	t.Parallel()
+	// An attacker-controlled client prepends a fake IP. The rightmost entry
+	// (added by the real trusted proxy) must be returned.
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Forwarded-For": {"1.2.3.4, 203.0.113.55"}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "203.0.113.55" {
+		t.Errorf("clientIP() = %q, want 203.0.113.55 (ignores leftmost spoofed value)", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_Empty(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "203.0.113.99:12345",
+		Header:     http.Header{},
+	}
+	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.99" {
+		t.Errorf("clientIP() = %q, want 203.0.113.99 (fallback to RemoteAddr)", got)
+	}
+}
+
+// TestClientIP_TrustedProxyHeader_TrailingCommas verifies that clientIP skips
+// empty entries produced by trailing commas and returns the rightmost non-empty IP.
+func TestClientIP_TrustedProxyHeader_TrailingCommas(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "203.0.113.99:12345",
+		Header:     http.Header{"X-Forwarded-For": {"10.0.0.1, "}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.1" {
+		t.Errorf("clientIP() = %q, want 10.0.0.1 (skip empty trailing entry)", got)
+	}
+}
+
+// TestBuildServerCard_ReturnsValidJSON verifies that [buildServerCard] produces
+// valid JSON containing serverInfo, authentication, and a non-empty tools array
+// with meta-tools when MetaTools=true.
+func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:     "", // empty — buildServerCard falls back to https://gitlab.com
+		SkipTLSVerify: true,
+		MetaTools:     true,
+		Enterprise:    false,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("buildServerCard() returned invalid JSON: %v", unmarshalErr)
+	}
+
+	// Verify serverInfo
+	serverInfo, siOK := card["serverInfo"].(map[string]any)
+	if !siOK {
+		t.Fatal("card missing 'serverInfo' object")
+	}
+	if name := serverInfo["name"]; name != "gitlab-mcp-server" {
+		t.Errorf("serverInfo.name = %q, want %q", name, "gitlab-mcp-server")
+	}
+
+	// Verify authentication
+	auth, authOK := card["authentication"].(map[string]any)
+	if !authOK {
+		t.Fatal("card missing 'authentication' object")
+	}
+	if required, reqOK := auth["required"].(bool); !reqOK || !required {
+		t.Error("authentication.required should be true")
+	}
+
+	// Verify tools is a non-empty array
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK {
+		t.Fatal("card missing 'tools' array")
+	}
+	if len(toolsRaw) == 0 {
+		t.Fatal("tools array is empty, expected registered tools")
+	}
+
+	// Spot-check first tool has name and description
+	firstRaw := toolsRaw[0]
+	tool, toolOK := firstRaw.(map[string]any)
+	if !toolOK {
+		t.Fatal("tools[0] is not an object")
+	}
+	if name, nameOK := tool["name"].(string); !nameOK || name == "" {
+		t.Error("tools[0] missing or empty 'name'")
+	}
+	if desc, descOK := tool["description"].(string); !descOK || desc == "" {
+		t.Error("tools[0] missing or empty 'description'")
+	}
+}
+
+// TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
+// individual tools (not meta-tools) when MetaTools=false.
+func TestBuildServerCard_IndividualMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:     "",
+		SkipTLSVerify: true,
+		MetaTools:     false,
+		Enterprise:    false,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON: %v", unmarshalErr)
+	}
+
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) == 0 {
+		t.Fatal("tools array missing or empty")
+	}
+
+	// Individual mode should have many more tools than meta-tool mode
+	const minIndividualTools = 700
+	if len(toolsRaw) < minIndividualTools {
+		t.Errorf("individual mode tools count = %d, want at least %d", len(toolsRaw), minIndividualTools)
+	}
+}
+
+// TestServeHTTP_ServerCardEndpoint_ReturnsToolList verifies that the
+// /.well-known/mcp/server-card.json endpoint returns a valid server card
+// with tools, and is accessible without authentication.
+func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	// GET /.well-known/mcp/server-card.json — no auth headers
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+		"http://"+addr+"/.well-known/mcp/server-card.json", nil)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	if ct := resp.Header.Get(hdrContentType); ct != mimeJSON {
+		t.Errorf("Content-Type = %q, want %q", ct, mimeJSON)
+	}
+	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "public") {
+		t.Errorf("Cache-Control = %q, want to contain 'public'", cc)
+	}
+
+	var card map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if unmarshalErr := json.Unmarshal(body, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON response: %v\nbody: %s", unmarshalErr, string(body))
+	}
+
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) == 0 {
+		t.Fatal("server card 'tools' array missing or empty")
+	}
+
+	// Verify serverInfo presence
+	if _, siOK := card["serverInfo"].(map[string]any); !siOK {
+		t.Error("server card missing 'serverInfo'")
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
 	}
 }

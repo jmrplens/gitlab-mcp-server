@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.0.6                                               |
+| Version       | 1.1.0                                               |
 
 ### Scale
 
@@ -50,7 +50,7 @@ gitlab-mcp-server/
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
-│   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token MCP servers (with observability metrics)
+│   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.0.6)
+└── VERSION                      # Semantic version (1.1.0)
 ```
 
 ## Key Development Patterns
@@ -233,7 +233,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`) |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url` (per-request override via `GITLAB-URL` header) |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
@@ -252,7 +252,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | GitLab instance URL (required)                           |
+| `--gitlab-url`        | —       | Default GitLab instance URL (optional; per-request override via `GITLAB-URL` header) |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--enterprise`        | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
@@ -263,6 +263,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--http-addr`         | `:8080` | HTTP listen address                                      |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
+| `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
+| `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |

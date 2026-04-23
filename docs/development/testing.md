@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2025-07-18.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-23.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,10 +14,10 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,669   |
+| Total test functions        | 8,675   |
 | Unit test functions         | 8,399   |
 | E2E test functions          | 206     |
-| cmd test functions          | 64      |
+| cmd test functions          | 70      |
 | Test files (internal/)      | 395     |
 | Tool sub-packages tested    | 162     |
 | Core packages tested        | 16      |
@@ -41,8 +41,8 @@
 | Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
 | Tool sub-packages (162)  |          6,937 |        306 | Domain-specific tool handlers        |
 | E2E integration          |            206 |         94 | Full workflow against real GitLab    |
-| cmd/server               |             64 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,669** |    **490** |                                      |
+| cmd/server               |             70 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,675** |    **490** |                                      |
 
 ### Core Packages
 
@@ -267,6 +267,12 @@
 </details>
 
 ## Coverage Report
+
+### cmd Package Snapshot
+
+| Package    | Coverage |
+| ---------- | -------: |
+| cmd/server |   55.3%  |
 
 ### Core Packages
 

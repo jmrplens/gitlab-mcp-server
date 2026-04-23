@@ -70,9 +70,10 @@ type Config struct {
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
 
-	ExcludeTools []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
-	IgnoreScopes bool     // When true, skip PAT scope detection and register all tools
-	TokenScopes  []string // Detected PAT scopes (populated at runtime, not from env)
+	TrustedProxyHeader string   // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+	ExcludeTools       []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
+	IgnoreScopes       bool     // When true, skip PAT scope detection and register all tools
+	TokenScopes        []string // Detected PAT scopes (populated at runtime, not from env)
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
