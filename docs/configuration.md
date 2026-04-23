@@ -205,7 +205,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--http` | *(off)* | Enable HTTP transport mode |
-| `--http-addr` | `localhost:8080` | HTTP listen address |
+| `--http-addr` | `:8080` | HTTP listen address |
 | `--gitlab-url` | *(required)* | GitLab instance URL |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools |
@@ -217,6 +217,10 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--auto-update` | `true` | Enable automatic binary updates |
 | `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Interval between periodic update checks |
+| `--read-only` | `false` | Expose only read-only tools |
+| `--safe-mode` | `false` | Intercept mutating tools, return preview |
+| `--exclude-tools` | *(empty)* | Comma-separated tool names to exclude |
+| `--ignore-scopes` | `false` | Skip PAT scope detection |
 
 No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`.
 

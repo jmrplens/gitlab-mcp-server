@@ -1070,8 +1070,8 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 	fmt.Println(strings.Repeat("-", 120))
 	for _, t := range matches {
 		desc := t.Description
-		if len(desc) > 80 {
-			desc = desc[:77] + "..."
+		if len([]rune(desc)) > 80 {
+			desc = string([]rune(desc)[:77]) + "..."
 		}
 		fmt.Printf("%-45s %s\n", t.Name, desc)
 	}

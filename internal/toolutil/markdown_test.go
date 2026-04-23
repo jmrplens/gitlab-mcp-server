@@ -2,6 +2,7 @@
 package toolutil
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -287,7 +288,7 @@ func TestToolResultAnnotated(t *testing.T) {
 // ImageContent with raw image bytes and MIME type. Covers valid inputs,
 // nil annotations, and empty image data to ensure all branches produce
 // the expected two-element Content slice.
-func TestToolResultWithImage(t *testing.T) {
+func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
 	tests := []struct {
 		name      string
 		md        string
@@ -370,8 +371,8 @@ func TestToolResultWithImage(t *testing.T) {
 			if ic.MIMEType != tt.wantMIME {
 				t.Errorf("ImageContent.MIMEType = %q, want %q", ic.MIMEType, tt.wantMIME)
 			}
-			if len(ic.Data) != len(tt.imageData) {
-				t.Errorf("ImageContent.Data length = %d, want %d", len(ic.Data), len(tt.imageData))
+			if !bytes.Equal(ic.Data, tt.imageData) {
+				t.Errorf("ImageContent.Data mismatch: got %v, want %v", ic.Data, tt.imageData)
 			}
 		})
 	}

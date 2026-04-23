@@ -38,7 +38,7 @@ func TestToolSnapshots_Individual(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 
-	snapshots := buildSnapshots(result.Tools)
+	snapshots := buildSnapshots(t, result.Tools)
 	goldenPath := filepath.Join("testdata", "tools_individual.json")
 	compareOrUpdate(t, goldenPath, snapshots)
 }
@@ -56,14 +56,15 @@ func TestToolSnapshots_Meta(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 
-	snapshots := buildSnapshots(result.Tools)
+	snapshots := buildSnapshots(t, result.Tools)
 	goldenPath := filepath.Join("testdata", "tools_meta.json")
 	compareOrUpdate(t, goldenPath, snapshots)
 }
 
 // buildSnapshots extracts snapshot data from MCP tool definitions,
 // sorted alphabetically by name for deterministic output.
-func buildSnapshots(tools []*mcp.Tool) []toolSnapshot {
+func buildSnapshots(t *testing.T, tools []*mcp.Tool) []toolSnapshot {
+	t.Helper()
 	snaps := make([]toolSnapshot, 0, len(tools))
 	for _, tool := range tools {
 		s := toolSnapshot{
@@ -72,11 +73,17 @@ func buildSnapshots(tools []*mcp.Tool) []toolSnapshot {
 			Annotations: tool.Annotations,
 		}
 		if tool.InputSchema != nil {
-			raw, _ := json.Marshal(tool.InputSchema)
+			raw, err := json.Marshal(tool.InputSchema)
+			if err != nil {
+				t.Fatalf("marshal InputSchema for %s: %v", tool.Name, err)
+			}
 			s.InputSchema = raw
 		}
 		if tool.OutputSchema != nil {
-			raw, _ := json.Marshal(tool.OutputSchema)
+			raw, err := json.Marshal(tool.OutputSchema)
+			if err != nil {
+				t.Fatalf("marshal OutputSchema for %s: %v", tool.Name, err)
+			}
 			s.OutputSchema = raw
 		}
 		snaps = append(snaps, s)

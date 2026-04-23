@@ -52,7 +52,7 @@ func TestDetectScopes_EndpointNotAvailable(t *testing.T) {
 	}
 }
 
-func TestScopeSatisfied(t *testing.T) {
+func TestScopeSatisfied_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {
 		name     string
 		token    []string

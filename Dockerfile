@@ -31,7 +31,7 @@ USER appuser
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-	CMD ["wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+	CMD ["wget", "-q", "--spider", "-O", "/dev/null", "http://localhost:8080/health"]
 
 ENTRYPOINT ["gitlab-mcp-server"]
 CMD ["--http", "--http-addr", "0.0.0.0:8080"]

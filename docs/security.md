@@ -90,7 +90,7 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 - **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
 
-Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope. Tools requiring `api` (most write operations) are filtered for read-only tokens.
+Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
 
 ## Prompt Injection Protection
 

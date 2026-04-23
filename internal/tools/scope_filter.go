@@ -12,8 +12,8 @@ import (
 
 // MetaToolScopes maps meta-tool names to the PAT scopes required for that
 // tool. Tools not listed here have no scope requirement and are always
-// registered. A tool is removed only when ALL its required scopes are missing
-// from the detected token scopes.
+// registered. A tool is removed when ANY of its required scopes is missing
+// from the detected token scopes (i.e. all listed scopes must be present).
 //
 // Scope reference (GitLab PAT scopes):
 //

@@ -135,6 +135,11 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |
 | `AUTO_UPDATE_INTERVAL` | `--auto-update-interval` | |
 | `AUTO_UPDATE_TIMEOUT` | `--auto-update-timeout` | |
+| `GITLAB_ENTERPRISE` | `--enterprise` | |
+| `GITLAB_READ_ONLY` | `--read-only` | |
+| `GITLAB_SAFE_MODE` | `--safe-mode` | |
+| `EXCLUDE_TOOLS` | `--exclude-tools` | Comma-separated list |
+| `GITLAB_IGNORE_SCOPES` | `--ignore-scopes` | |
 
 ---
 

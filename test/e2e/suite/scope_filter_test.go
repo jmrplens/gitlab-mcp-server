@@ -127,13 +127,13 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		Name:    "e2e-scope-client",
 		Version: "test",
 	}, nil)
-	scopeSession, err := scopeClient.Connect(ctx, ct, nil)
+	scopeSession, err := scopeClient.Connect(scopeCtx, ct, nil)
 	if err != nil {
 		t.Fatalf("connect scope client: %v", err)
 	}
 	defer scopeSession.Close()
 
-	result, err := scopeSession.ListTools(ctx, nil)
+	result, err := scopeSession.ListTools(scopeCtx, nil)
 	requireNoError(t, err, "ListTools on scope-filtered server")
 
 	toolSet := make(map[string]struct{}, len(result.Tools))
@@ -144,12 +144,14 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 	// ── Assertions ───────────────────────────────────────────────────────
 
 	// Admin-only tools must be removed.
-	adminOnlyTools := []string{
-		"gitlab_admin",
-		"gitlab_enterprise_user",
-		"gitlab_project_alias",
-		"gitlab_geo",
-		"gitlab_storage_move",
+	var adminOnlyTools []string
+	for name, scopes := range tools.MetaToolScopes {
+		for _, s := range scopes {
+			if s == "admin_mode" {
+				adminOnlyTools = append(adminOnlyTools, name)
+				break
+			}
+		}
 	}
 	for _, name := range adminOnlyTools {
 		if _, ok := toolSet[name]; ok {

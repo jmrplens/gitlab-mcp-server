@@ -85,8 +85,8 @@ func TestRemoveScopeFilteredTools_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestAllScopesPresent tests the allScopesPresent helper.
-func TestAllScopesPresent(t *testing.T) {
+// TestAllScopesPresent_Scenarios_CorrectResult tests the allScopesPresent helper.
+func TestAllScopesPresent_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {
 		name     string
 		scopes   map[string]struct{}
@@ -155,10 +155,11 @@ func toolNames(t *testing.T, server *mcp.Server) []string {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	_, err := server.Connect(ctx, st, nil)
+	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
+	defer serverSession.Close()
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
