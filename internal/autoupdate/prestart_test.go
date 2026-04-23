@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/creativeprojects/go-selfupdate"
@@ -441,5 +442,288 @@ func TestPreStartUpdate_CheckForUpdateFails(t *testing.T) {
 	})
 	if result.Updated {
 		t.Error("expected no update when context is cancelled")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PreStartUpdate deep-path coverage (requires stubNewGitHubSource)
+// ---------------------------------------------------------------------------
+
+// TestPreStartUpdate_UpToDate verifies PreStartUpdate returns an empty result
+// when the server is already running the latest version (CheckForUpdate
+// returns available=false).
+func TestPreStartUpdate_UpToDate(t *testing.T) {
+	rel := newMockReleaseForPlatform("v1.0.0", "", "")
+	stubNewGitHubSource(t, &mockSource{releases: []selfupdate.SourceRelease{rel}})
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when already up to date")
+	}
+	if result.NewVersion != "" {
+		t.Errorf("NewVersion = %q, want empty", result.NewVersion)
+	}
+}
+
+// TestPreStartUpdate_CheckMode_ReportsNewVersion verifies that in check-only
+// mode, PreStartUpdate reports the available version without downloading or
+// applying the update.
+func TestPreStartUpdate_CheckMode_ReportsNewVersion(t *testing.T) {
+	rel := newMockReleaseForPlatform("v2.0.0", "notes", "")
+	stubNewGitHubSource(t, &mockSource{releases: []selfupdate.SourceRelease{rel}})
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeCheck,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("check mode should not apply update")
+	}
+	if result.NewVersion != "2.0.0" {
+		t.Errorf("NewVersion = %q, want %q", result.NewVersion, "2.0.0")
+	}
+}
+
+// TestPreStartUpdate_DownloadError verifies PreStartUpdate returns an empty
+// result when downloadToStaging fails (e.g. asset download error).
+func TestPreStartUpdate_DownloadError(t *testing.T) {
+	stubExecutablePath(t)
+	rel := newMockReleaseForPlatform("v3.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:    []selfupdate.SourceRelease{rel},
+		downloadErr: errors.New("download failed"),
+	}
+	stubNewGitHubSource(t, src)
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when download fails")
+	}
+	if result.NewVersion != "" {
+		t.Errorf("NewVersion = %q, want empty", result.NewVersion)
+	}
+}
+
+// TestPreStartUpdate_ReplaceError verifies PreStartUpdate returns an empty
+// result when replaceExecutable fails. This is triggered by making
+// resolveExecutable return an error during the replace step (after download
+// succeeds).
+func TestPreStartUpdate_ReplaceError(t *testing.T) {
+	rel := newMockReleaseForPlatform("v3.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{rel},
+		downloadData: fakeBinary(),
+	}
+	stubNewGitHubSource(t, src)
+	stubExecSelf(t, errors.New("should not be reached"))
+
+	// First call (downloadToStaging) succeeds; second call
+	// (replaceExecutable) fails, preventing the rename.
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "gitlab-mcp-server")
+	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	callCount := 0
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) {
+		callCount++
+		if callCount <= 1 {
+			return fakeBin, nil
+		}
+		return "", errors.New("cannot resolve for replace")
+	}
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when replace fails")
+	}
+}
+
+// TestPreStartUpdate_ExecSelfFails_Full verifies the complete PreStartUpdate
+// flow on Unix when execSelf fails: the binary is updated on disk but
+// ExecFailed is set to true.
+func TestPreStartUpdate_ExecSelfFails_Full(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ExecFailed path unreachable on Windows")
+	}
+
+	// Stub execSelf (fail), resolveExecutable (temp dir), and source.
+	stubExecutablePath(t)
+	stubExecSelf(t, errors.New("simulated exec failure"))
+
+	rel := newMockReleaseForPlatform("v3.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{rel},
+		downloadData: fakeBinary(),
+	}
+	stubNewGitHubSource(t, src)
+
+	t.Cleanup(func() { os.Unsetenv(envJustUpdated) })
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if !result.Updated {
+		t.Error("expected Updated=true after successful replace")
+	}
+	if result.NewVersion != "3.0.0" {
+		t.Errorf("NewVersion = %q, want %q", result.NewVersion, "3.0.0")
+	}
+	if !result.ExecFailed {
+		t.Error("expected ExecFailed=true when execSelf returns error")
+	}
+	// JustUpdated should be cleared after exec failure.
+	if JustUpdated() {
+		t.Error("JustUpdated should be cleared after exec failure")
+	}
+}
+
+// TestPreStartUpdate_SetJustUpdatedError verifies that when SetJustUpdated
+// fails (e.g. os.Setenv error scenario), PreStartUpdate still returns
+// Updated=true with the new version but does not attempt execSelf.
+// We simulate this by making os.Setenv fail via a read-only env var hack;
+// since that's not portable, we instead verify the code path by overriding
+// the env var name temporarily. Actually, SetJustUpdated always uses
+// os.Setenv which doesn't fail in practice; this test exercises the guard
+// where SetJustUpdated succeeds but execSelf fails (already covered above).
+// Instead, let's test the successful Unix update path where execSelf
+// "succeeds" (returns nil = process replaced, function doesn't return).
+func TestPreStartUpdate_UnixExecSuccess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("exec path not taken on Windows")
+	}
+
+	// Stub resolveExecutable (temp dir) and execSelf (nil = simulated
+	// successful exec that normally doesn't return). PreStartUpdate will
+	// fall through to the Windows return path.
+	stubExecutablePath(t)
+	stubExecSelf(t, nil)
+
+	rel := newMockReleaseForPlatform("v4.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{rel},
+		downloadData: fakeBinary(),
+	}
+	stubNewGitHubSource(t, src)
+
+	t.Cleanup(func() { os.Unsetenv(envJustUpdated) })
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	// When execSelf returns nil, the function falls through to the
+	// "update will take effect on next restart" return.
+	if !result.Updated {
+		t.Error("expected Updated=true")
+	}
+	if result.NewVersion != "4.0.0" {
+		t.Errorf("NewVersion = %q, want %q", result.NewVersion, "4.0.0")
+	}
+	if result.ExecFailed {
+		t.Error("expected ExecFailed=false when execSelf succeeds")
+	}
+}
+
+// TestPreStartUpdate_PanicRecovery verifies that a panic inside the update
+// logic is caught by the deferred recover and PreStartUpdate returns an
+// empty result instead of crashing.
+func TestPreStartUpdate_PanicRecovery(t *testing.T) {
+	// Override newGitHubSource to panic, triggering the recovery path.
+	orig := newGitHubSource
+	newGitHubSource = func() (selfupdate.Source, error) {
+		panic("simulated panic in source creation")
+	}
+	t.Cleanup(func() { newGitHubSource = orig })
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result == nil {
+		t.Fatal("expected non-nil result after panic recovery")
+	}
+	if result.Updated {
+		t.Error("expected Updated=false after panic recovery")
+	}
+}
+
+// TestPreStartUpdate_SourceError verifies PreStartUpdate returns an empty
+// result when the source returns an error during CheckForUpdate (network
+// failure, API rate limit, etc.).
+func TestPreStartUpdate_SourceError(t *testing.T) {
+	stubNewGitHubSource(t, &mockSource{err: errors.New("API rate limited")})
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when source errors")
+	}
+}
+
+// TestPreStartUpdate_NoReleases verifies PreStartUpdate returns an empty
+// result when the source has no releases at all.
+func TestPreStartUpdate_NoReleases(t *testing.T) {
+	stubNewGitHubSource(t, &mockSource{releases: nil})
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if result.Updated {
+		t.Error("expected no update when no releases found")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// replaceExecutable additional coverage
+// ---------------------------------------------------------------------------
+
+// TestReplaceExecutable_FirstRenameFails verifies replaceExecutable returns
+// an error when the first os.Rename (exe → .old) fails because the
+// executable no longer exists on disk.
+func TestReplaceExecutable_FirstRenameFails(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "nonexistent-binary")
+
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	tmpPath := filepath.Join(dir, "staged.tmp")
+	if err := os.WriteFile(tmpPath, fakeBinary(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := replaceExecutable(tmpPath)
+	if err == nil {
+		t.Fatal("expected error when exe does not exist for first rename")
+	}
+	if !strings.Contains(err.Error(), "renaming current binary") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "renaming current binary")
 	}
 }

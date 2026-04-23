@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/creativeprojects/go-selfupdate"
 )
 
 // stubExecutablePath overrides resolveExecutable to return a fake binary
@@ -33,4 +35,14 @@ func stubExecSelf(t *testing.T, err error) string {
 	execSelf = func() error { return err }
 	t.Cleanup(func() { execSelf = orig })
 	return exe
+}
+
+// stubNewGitHubSource overrides newGitHubSource to return the given source,
+// allowing tests to inject mock sources into NewUpdater and PreStartUpdate
+// without requiring network access.
+func stubNewGitHubSource(t *testing.T, src selfupdate.Source) {
+	t.Helper()
+	orig := newGitHubSource
+	newGitHubSource = func() (selfupdate.Source, error) { return src, nil }
+	t.Cleanup(func() { newGitHubSource = orig })
 }
