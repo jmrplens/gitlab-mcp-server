@@ -44,7 +44,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)                                                      |
 | `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools)                                            |
 | `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                 |
-| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                                                                   |
+| `--max-http-clients`     | `100`                        | Maximum unique token+URL entries in the server pool                                                        |
 | `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                                                   |
 | `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                                                              |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                       |

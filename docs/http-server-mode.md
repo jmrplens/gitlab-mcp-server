@@ -50,7 +50,7 @@ gitlab-mcp-server --http \
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
 | `--meta-tools` | `true` | Enable domain-level meta-tools (28, or 43 with --enterprise) instead of individual tools (1006) |
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional domain tools) |
-| `--max-http-clients` | `100` | Maximum unique tokens in the server pool |
+| `--max-http-clients` | `100` | Maximum unique token+URL entries in the server pool |
 | `--session-timeout` | `30m` | Idle MCP session timeout |
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API) |
 | `--oauth-cache-ttl` | `15m` | How long verified OAuth tokens are cached before re-validation (1m–2h) |
@@ -380,16 +380,16 @@ sequenceDiagram
 
 ## Shared Configuration
 
-The following settings are **server-wide** — they apply to all clients regardless of their token:
+The following settings are **server-wide** — they apply to all clients regardless of their token or GitLab URL:
 
 | Setting | Source | Description |
 | --- | --- | --- |
-| GitLab URL | `--gitlab-url` | All clients connect to the same GitLab instance |
+| Default GitLab URL | `--gitlab-url` | Fallback when the client does not send a `GITLAB-URL` header |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
 | Meta-tools mode | `--meta-tools` | Same tool set for all clients |
 | Upload limits | Compile-time defaults | Max file size |
 
-Only the **GitLab token** varies per client.
+Both the **GitLab token** and **GitLab URL** can vary per client. Each unique `(token, URL)` pair creates a separate server-pool entry.
 
 ## Comparison with Stdio Mode
 

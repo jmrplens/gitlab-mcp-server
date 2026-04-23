@@ -44,7 +44,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (28 o 43 con --enterprise)                                                      |
 | `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools)                                            |
 | `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                      |
-| `--max-http-clients`     | `100`                        | Máximo de tokens únicos en el pool del servidor                                                                        |
+| `--max-http-clients`     | `100`                        | Máximo de entradas únicas token+URL en el pool del servidor                                                            |
 | `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                                                                         |
 | `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                                                            |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                                                                          |

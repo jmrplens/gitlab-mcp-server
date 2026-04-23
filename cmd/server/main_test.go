@@ -154,7 +154,7 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
@@ -203,7 +203,7 @@ func TestHTTPHandler_ToolsList_ReturnsAllTools(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	// Step 1: Initialize session
 	initBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -569,7 +569,7 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
@@ -696,7 +696,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 		return server
 	}, nil)
 	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
