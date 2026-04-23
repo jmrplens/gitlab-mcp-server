@@ -83,7 +83,7 @@ graph TD
         SRV[MCP Server<br/>go-sdk/mcp v1.5.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
-        POOL[serverpool<br/>Per-token server pool & LRU cache]
+        POOL[serverpool<br/>Per-token+URL server pool & LRU cache]
     end
 
     MAIN --> CFG
@@ -91,7 +91,7 @@ graph TD
     MAIN --> SRV
     SRV --> STDIO
     HTTP --> POOL
-    POOL -->|one server per token| SRV
+    POOL -->|one server per token+URL| SRV
     TOOLS --> GL
     META --> TOOLS
     SAMP --> GL
@@ -134,8 +134,8 @@ The `main()` function supports two runtime modes:
 
 1. Parses CLI flags (`--http`, `--gitlab-url`, `--http-addr`, `--max-http-clients`, `--session-timeout`, etc.)
 2. Creates a `serverpool.ServerPool` with a factory function
-3. On each request, extracts the token from headers, calls `pool.GetOrCreate(token)` to get or create a per-token MCP server
-4. The pool factory creates a GitLab client + MCP server + registers all tools for that token
+3. On each request, extracts the token and GitLab URL from headers, calls `pool.GetOrCreate(token, gitlabURL)` to get or create a per-token+URL MCP server
+4. The pool factory creates a GitLab client + MCP server + registers all tools for that token and GitLab instance
 5. LRU eviction closes the oldest session when `--max-http-clients` is reached
 6. Starts `StreamableHTTPHandler` and blocks until SIGINT/SIGTERM
 
@@ -220,19 +220,19 @@ Infrastructure shared by all tool sub-packages:
 
 ### Server Pool (`internal/serverpool`)
 
-Manages a bounded pool of per-token MCP server instances in HTTP mode. Each unique GitLab Personal Access Token gets its own isolated MCP server and GitLab client.
+Manages a bounded pool of per-token+URL MCP server instances in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own isolated MCP server and GitLab client.
 
 | File         | Purpose                                                          |
 | ------------ | ---------------------------------------------------------------- |
 | `pool.go`    | `ServerPool` with LRU eviction, `GetOrCreate()`, `Close()`      |
-| `token.go`   | `ExtractToken()` — reads token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers |
+| `token.go`   | `ExtractToken()` — reads token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers. `ExtractGitLabURL()` — reads GitLab URL from `GITLAB-URL` header with fallback to default |
 | `doc.go`     | Package documentation                                            |
 
 Key characteristics:
 
 - **Bounded size** — `--max-http-clients` limits the pool (default: 100)
 - **LRU eviction** — least recently used entry is closed when pool is full
-- **SHA-256 token hashing** — tokens are hashed for safe map keys and logging
+- **SHA-256 session key** — `SHA-256(token + "\x00" + gitlabURL)` for safe map keys and logging
 - **Thread-safe** — `sync.RWMutex` with double-check locking
 - **Clean shutdown** — `Close()` stops all servers and releases resources
 

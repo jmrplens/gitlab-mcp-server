@@ -14,7 +14,7 @@ Common issues and solutions for gitlab-mcp-server.
 | Symptom | Cause | Solution |
 | --- | --- | --- |
 | `GITLAB_TOKEN is required` at startup | Token not set | Set `GITLAB_TOKEN` in `.env` or environment |
-| `GITLAB_URL is required` at startup | URL not set | Set `GITLAB_URL` in `.env` or use `--gitlab-url` flag |
+| `GITLAB_URL is required` at startup | URL not set | Set `GITLAB_URL` in `.env` or use `--gitlab-url` flag. In HTTP mode, `--gitlab-url` is optional if clients send the `GITLAB-URL` header |
 | `401 Unauthorized` from GitLab API | Invalid or expired PAT | Generate a new token with `api` scope in GitLab → User Settings → Access Tokens |
 | `403 Forbidden` on specific operations | Token lacks required scope | Ensure the token has `api` scope (not just `read_api`) |
 | Connection refused or timeout | GitLab instance unreachable | Verify `GITLAB_URL` is reachable: `curl -s $GITLAB_URL/api/v4/version` |

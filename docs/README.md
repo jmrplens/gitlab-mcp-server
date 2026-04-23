@@ -12,7 +12,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Configuration](configuration.md) | Environment variables, transport modes, and `.env` setup |
 | [Error Handling](error-handling.md) | Error types, classification, Markdown formatting, and issue reporting |
 | [Security](security.md) | Authentication, TLS, input validation, and transport security |
-| [HTTP Server Mode](http-server-mode.md) | Multi-user HTTP transport with per-token server pool |
+| [HTTP Server Mode](http-server-mode.md) | Multi-user HTTP transport with per-token+URL server pool |
 | [OAuth App Setup](oauth-app-setup.md) | Creating GitLab OAuth applications for MCP clients |
 | [IDE Configuration](ide-configuration.md) | Per-IDE MCP JSON configuration (stdio, HTTP legacy, HTTP OAuth) |
 | [CI/CD Usage](ci-cd.md) | Using gitlab-mcp-server in CI/CD pipelines (with or without LLM) |

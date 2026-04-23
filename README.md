@@ -369,13 +369,18 @@ See the [Development Guide](docs/development/development.md) for cross-compilati
 ```bash
 docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 
+# Single-instance mode (default GitLab URL for all clients)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
   -e GITLAB_URL=https://gitlab.example.com \
   -e GITLAB_SKIP_TLS_VERIFY=true \
   ghcr.io/jmrplens/gitlab-mcp-server:latest
+
+# Multi-instance mode (clients send GITLAB-URL header per request)
+docker run -d --name gitlab-mcp-server -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
+Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers, and can optionally send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
 
 ## FAQ
 

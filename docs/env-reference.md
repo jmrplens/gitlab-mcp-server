@@ -122,7 +122,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 | Environment Variable | CLI Flag | Notes |
 | --- | --- | --- |
-| `GITLAB_URL` | `--gitlab-url` | Required in both modes |
+| `GITLAB_URL` | `--gitlab-url` | Required in stdio mode. Optional in HTTP mode (per-request override via `GITLAB-URL` header) |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
 | `META_TOOLS` | `--meta-tools` | |

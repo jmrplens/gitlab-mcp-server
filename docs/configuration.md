@@ -206,7 +206,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | --- | --- | --- |
 | `--http` | *(off)* | Enable HTTP transport mode |
 | `--http-addr` | `:8080` | HTTP listen address |
-| `--gitlab-url` | *(required)* | GitLab instance URL |
+| `--gitlab-url` | *(optional)* | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools |
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
@@ -222,7 +222,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--exclude-tools` | *(empty)* | Comma-separated tool names to exclude |
 | `--ignore-scopes` | `false` | Skip PAT scope detection |
 
-No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`.
+No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. Clients can also specify a `GITLAB-URL` header to target a specific GitLab instance, overriding the `--gitlab-url` default.
 
 ### OAuth Mode Configuration
 
@@ -270,4 +270,4 @@ Configuration is loaded by `internal/config/` in this order:
 
 > **Note**: `godotenv` does not overwrite existing variables, so values from step 1 take precedence over step 2, and explicit environment variables (step 3) override both.
 
-The `config.Load()` function validates that `GITLAB_URL` and `GITLAB_TOKEN` are set (used by stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)).
+The `config.Load()` function validates that `GITLAB_URL` and `GITLAB_TOKEN` are set (used by stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers, and optionally a `GITLAB-URL` header to target a specific GitLab instance. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)).

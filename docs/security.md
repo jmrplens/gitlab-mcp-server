@@ -60,6 +60,7 @@ When running with `--http`:
 - Binds to `localhost` by default — not exposed to the network
 - No built-in authentication on the HTTP endpoint
 - For production use, place behind a reverse proxy with proper TLS and auth
+- **`GITLAB-URL` header validation** — When clients send a `GITLAB-URL` header, the server validates that the URL uses `http://` or `https://` scheme and contains a valid host. Malformed URLs are rejected with HTTP 400
 
 ### OAuth Mode (`--auth-mode=oauth`)
 

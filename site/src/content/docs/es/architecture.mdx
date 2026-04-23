@@ -89,7 +89,7 @@ sequenceDiagram
 **Características:**
 
 - Un único proceso de servidor atiende a múltiples usuarios
-- Aislamiento de sesión por token mediante pool LRU
+- Aislamiento de sesión por token+URL mediante pool LRU
 - Límites de sesión y tiempos de espera configurables
 - Adecuado para despliegues de equipo/organización
 
@@ -97,6 +97,8 @@ Inicia el modo HTTP con:
 
 ```bash
 ./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
+# O sin --gitlab-url (los clientes envían la cabecera GITLAB-URL por solicitud)
+./gitlab-mcp-server --http --http-addr=0.0.0.0:8080
 ```
 
 Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para la configuración detallada.

@@ -24,37 +24,49 @@ By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns i
 ## Starting the server
 
 ```bash
+# Single GitLab instance (default URL for all clients)
 gitlab-mcp-server --http --gitlab-url=https://your-gitlab.example.com
+
+# Multi-instance (each client specifies their GitLab URL via GITLAB-URL header)
+gitlab-mcp-server --http --http-addr=:8080
 ```
 
 The server starts listening on port 8080 by default. The MCP endpoint is available at `/mcp`.
 
 ## CLI flags
 
-| Flag                     | Default                      | Description                                                     |
-| ------------------------ | ---------------------------- | --------------------------------------------------------------- |
-| `--http`                 | _(off)_                      | Enable HTTP transport mode                                      |
-| `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                               |
-| `--gitlab-url`           | _(required)_                 | GitLab instance base URL                                        |
-| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs         |
-| `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)           |
-| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
-| `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                      |
-| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                        |
-| `--session-timeout`      | `30m`                        | Idle MCP session timeout                                        |
-| `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                   |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                            |
-| `--auto-update-interval` | `1h`                         | Periodic update check interval                                  |
-| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)             |
-| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                   |
+| Flag                     | Default                      | Description                                                               |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------------------- |
+| `--http`                 | _(off)_                      | Enable HTTP transport mode                                                |
+| `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                         |
+| `--gitlab-url`           | _(optional)_                 | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
+| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                   |
+| `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)                     |
+| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools)           |
+| `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                |
+| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                                  |
+| `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                  |
+| `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                             |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                      |
+| `--auto-update-interval` | `1h`                         | Periodic update check interval                                            |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                       |
+| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                             |
 
 :::note
-`--gitlab-url` is the only required flag. All others have sensible defaults.
+`--gitlab-url` is optional. When set, it serves as the default for clients that don't send the `GITLAB-URL` header. When omitted, each client must provide the `GITLAB-URL` header.
 :::
 
 ## Authentication
 
-Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers:
+Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers.
+
+Optionally, clients can also specify which GitLab instance to target using the `GITLAB-URL` header:
+
+```
+GITLAB-URL: https://gitlab.example.com
+```
+
+If omitted, the server uses the default `--gitlab-url` value. If `--gitlab-url` was also not set at startup, the request is rejected.
 
 ### Private-token header (recommended)
 
@@ -142,35 +154,37 @@ The `PRIVATE-TOKEN` header still works in OAuth mode — the middleware normaliz
 
 ### Server pool architecture
 
-The core of HTTP mode is a **bounded LRU pool** of MCP server instances, keyed by the SHA-256 hash of each client's token.
+The core of HTTP mode is a **bounded LRU pool** of MCP server instances, keyed by the SHA-256 hash of each client's token **and** GitLab URL.
 
 ```mermaid
 graph TD
     subgraph "HTTP Mode Architecture"
-        REQ1["Client A<br/>Token: glpat-aaa"] --> HANDLER[StreamableHTTPHandler]
-        REQ2["Client B<br/>Token: glpat-bbb"] --> HANDLER
-        REQ3["Client C<br/>Token: glpat-aaa"] --> HANDLER
+        REQ1["Client A<br/>Token: glpat-aaa<br/>URL: gitlab.com"] --> HANDLER[StreamableHTTPHandler]
+        REQ2["Client B<br/>Token: glpat-bbb<br/>URL: gitlab.com"] --> HANDLER
+        REQ3["Client C<br/>Token: glpat-aaa<br/>URL: self-hosted.example.com"] --> HANDLER
 
         HANDLER --> POOL[Server Pool]
 
-        POOL --> ENTRY1["hash(glpat-aaa)<br/>MCP Server + GitLab Client"]
-        POOL --> ENTRY2["hash(glpat-bbb)<br/>MCP Server + GitLab Client"]
+        POOL --> ENTRY1["hash(glpat-aaa + gitlab.com)<br/>MCP Server + GitLab Client"]
+        POOL --> ENTRY2["hash(glpat-bbb + gitlab.com)<br/>MCP Server + GitLab Client"]
+        POOL --> ENTRY3["hash(glpat-aaa + self-hosted)<br/>MCP Server + GitLab Client"]
     end
 
-    ENTRY1 --> GL1["GitLab API<br/>as user A"]
-    ENTRY2 --> GL2["GitLab API<br/>as user B"]
+    ENTRY1 --> GL1["GitLab API<br/>as user A @ gitlab.com"]
+    ENTRY2 --> GL2["GitLab API<br/>as user B @ gitlab.com"]
+    ENTRY3 --> GL3["GitLab API<br/>as user A @ self-hosted"]
 ```
 
 **Key properties:**
 
-- Clients with the **same token** share the same MCP server instance
-- Clients with **different tokens** get completely isolated instances
-- Raw tokens are **never stored** — only SHA-256 hashes are kept in memory
+- Clients with the **same token and same GitLab URL** share the same MCP server instance
+- Clients with **different tokens** or **different GitLab URLs** get completely isolated instances
+- Raw tokens are **never stored** — only SHA-256 hashes of token+URL are kept in memory
 - When the pool reaches `--max-http-clients`, the least recently used entry is evicted
 
 ### Session lifecycle
 
-1. **First request**: Token is extracted, hashed, and a new MCP server + GitLab client is created
+1. **First request**: Token and GitLab URL are extracted, combined and hashed, and a new MCP server + GitLab client is created
 2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
 4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
@@ -234,11 +248,13 @@ services:
     ports:
       - "8080:8080"
     command:
+      # Single instance mode (default URL for all clients):
       - "--http"
       - "--gitlab-url=https://gitlab.example.com"
       - "--http-addr=:8080"
       - "--max-http-clients=200"
       - "--session-timeout=1h"
+      # Or multi-instance mode (remove --gitlab-url, clients send GITLAB-URL header)
     restart: unless-stopped
 ```
 

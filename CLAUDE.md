@@ -50,7 +50,7 @@ gitlab-mcp-server/
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
-│   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token MCP servers (with observability metrics)
+│   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
@@ -233,7 +233,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`) |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url` (per-request override via `GITLAB-URL` header) |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
@@ -252,7 +252,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | GitLab instance URL (required)                           |
+| `--gitlab-url`        | —       | Default GitLab instance URL (optional; per-request override via `GITLAB-URL` header) |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--enterprise`        | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
