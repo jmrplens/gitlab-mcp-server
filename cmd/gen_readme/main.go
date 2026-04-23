@@ -112,7 +112,8 @@ func actionCount(tool *mcp.Tool) int {
 			Enum []string `json:"enum"`
 		} `json:"properties"`
 	}
-	if unmarshalErr := json.Unmarshal(raw, &schema); unmarshalErr != nil {
+	err = json.Unmarshal(raw, &schema)
+	if err != nil {
 		return 0
 	}
 	if action, ok := schema.Properties["action"]; ok {
