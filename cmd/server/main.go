@@ -77,6 +77,7 @@ type httpConfig struct {
 	revalidateInterval time.Duration
 	authMode           string
 	oauthCacheTTL      time.Duration
+	trustedProxyHeader string
 }
 
 // main is an internal helper for the main package.
@@ -115,6 +116,7 @@ func main() {
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
+	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
 	flag.Parse()
 
 	if showHelp {
@@ -214,6 +216,7 @@ FLAGS
   -auto-update-timeout dur  Timeout for pre-start update download (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
+  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (e.g. https://gitlab.example.com)
@@ -332,6 +335,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		AutoUpdateTimeout:  hcfg.autoUpdateTimeout,
 		AuthMode:           hcfg.authMode,
 		OAuthCacheTTL:      hcfg.oauthCacheTTL,
+		TrustedProxyHeader: hcfg.trustedProxyHeader,
 	}
 
 	if cfg.AuthMode == "" {
@@ -554,6 +558,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
 		"session_timeout", cfg.SessionTimeout,
+		"trusted_proxy_header", cfg.TrustedProxyHeader,
 		"version", version,
 		"commit", commit,
 	)
@@ -656,7 +661,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		}()
 
 		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-			ip := clientIP(r)
+			ip := clientIP(r, cfg.TrustedProxyHeader)
 			if authLimiter.IsBlocked(ip) {
 				slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
 				return nil
@@ -733,7 +738,20 @@ type healthResponse struct {
 
 // clientIP extracts the client IP address from an HTTP request.
 // Uses RemoteAddr only — does not trust X-Forwarded-For to prevent spoofing.
-func clientIP(r *http.Request) string {
+// clientIP extracts the real client IP from the request. When a trusted
+// proxy header is configured (e.g. X-Forwarded-For, X-Real-IP), its value
+// is used instead of RemoteAddr. For X-Forwarded-For, only the first
+// (leftmost) IP is returned — it represents the original client.
+func clientIP(r *http.Request, trustedHeader string) string {
+	if trustedHeader != "" {
+		if val := r.Header.Get(trustedHeader); val != "" {
+			// X-Forwarded-For may contain "client, proxy1, proxy2" — take the first.
+			if ip, _, ok := strings.Cut(val, ","); ok {
+				return strings.TrimSpace(ip)
+			}
+			return strings.TrimSpace(val)
+		}
+	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return host
 }

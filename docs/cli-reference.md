@@ -47,6 +47,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-revalidate-interval` | duration | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 | `-auth-mode` | string | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) |
 | `-oauth-cache-ttl` | duration | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth` |
+| `-trusted-proxy-header` | string | _(empty)_ | HTTP header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Forwarded-For`, `X-Real-IP`). Required for accurate rate limiting behind proxies |
 
 ### Auto-Update
 

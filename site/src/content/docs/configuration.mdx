@@ -207,25 +207,27 @@ Or use a `.env` file in the working directory.
 
 When running in HTTP mode (`--http`), configuration uses CLI flags instead of environment variables:
 
-| Flag                     | Default                      | Description                                                               |
-| ------------------------ | ---------------------------- | ------------------------------------------------------------------------- |
-| `--http`                 | `false`                      | Enable HTTP transport mode                                                |
-| `--http-addr`            | `:8080`                      | Listen address and port                                                   |
-| `--gitlab-url`           | —                            | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
-| `--skip-tls-verify`      | `false`                      | Skip TLS verification                                                     |
-| `--meta-tools`           | `true`                       | Enable meta-tool mode                                                     |
-| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools                                           |
-| `--read-only`            | `false`                      | Read-only mode                                                            |
-| `--exclude-tools`        | —                            | Comma-separated tool names to exclude                                     |
-| `--ignore-scopes`        | `false`                      | Skip PAT scope detection                                                  |
-| `--max-http-clients`     | `100`                        | Maximum concurrent client sessions                                        |
-| `--session-timeout`      | `30m`                        | Idle session timeout                                                      |
-| `--auto-update`          | `true`                       | Auto-update mode                                                          |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub release repository                                                 |
-| `--auto-update-interval` | `1h`                         | Periodic update check interval                                            |
-| `--auto-update-timeout`  | `60s`                        | Pre-start download timeout (5s–10m)                                       |
-| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth`                                  |
-| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (1m–2h)                                    |
+| Flag                     | Default                      | Description                                                                                                |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--http`                 | `false`                      | Enable HTTP transport mode                                                                                 |
+| `--http-addr`            | `:8080`                      | Listen address and port                                                                                    |
+| `--gitlab-url`           | —                            | Default GitLab instance URL. Per-request override via `GITLAB-URL` header                                  |
+| `--skip-tls-verify`      | `false`                      | Skip TLS verification                                                                                      |
+| `--meta-tools`           | `true`                       | Enable meta-tool mode                                                                                      |
+| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools                                                                            |
+| `--read-only`            | `false`                      | Read-only mode                                                                                             |
+| `--exclude-tools`        | —                            | Comma-separated tool names to exclude                                                                      |
+| `--ignore-scopes`        | `false`                      | Skip PAT scope detection                                                                                   |
+| `--max-http-clients`     | `100`                        | Maximum concurrent client sessions                                                                         |
+| `--session-timeout`      | `30m`                        | Idle session timeout                                                                                       |
+| `--auto-update`          | `true`                       | Auto-update mode                                                                                           |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub release repository                                                                                  |
+| `--auto-update-interval` | `1h`                         | Periodic update check interval                                                                             |
+| `--auto-update-timeout`  | `60s`                        | Pre-start download timeout (5s–10m)                                                                        |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth`                                                                   |
+| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (1m–2h)                                                                     |
+| `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                            |
+| `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 **General flags** (both stdio and HTTP modes):
 

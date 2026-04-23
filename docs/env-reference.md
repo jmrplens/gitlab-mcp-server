@@ -131,6 +131,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `SESSION_REVALIDATE_INTERVAL` | `--revalidate-interval` | |
 | `AUTH_MODE` | `--auth-mode` | |
 | `OAUTH_CACHE_TTL` | `--oauth-cache-ttl` | |
+| *(none)* | `--trusted-proxy-header` | CLI-only; HTTP header with real client IP for rate limiting behind proxies |
 | `AUTO_UPDATE` | `--auto-update` | |
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |
 | `AUTO_UPDATE_INTERVAL` | `--auto-update-interval` | |

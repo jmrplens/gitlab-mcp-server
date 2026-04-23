@@ -55,6 +55,7 @@ gitlab-mcp-server --http \
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API) |
 | `--oauth-cache-ttl` | `15m` | How long verified OAuth tokens are cached before re-validation (1m–2h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
+| `--trusted-proxy-header` | _(empty)_ | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies |
 
 > **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it serves as the default for clients that don't send the header.
 
@@ -435,7 +436,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 - **Tokens at rest**: Only SHA-256 hashes are stored in the pool; raw tokens are never persisted
 - **Token logging**: Only the last 4 characters appear in logs
 - **Pool isolation**: Each token gets a completely independent `*mcp.Server` — no shared state
-- **Rate limiting**: Each client's GitLab token has its own rate limit bucket on the GitLab side (typically 300 req/min)
+- **Rate limiting**: Each client's GitLab token has its own rate limit bucket on the GitLab side (typically 300 req/min). The server also includes a per-IP authentication failure rate limiter (10 failures/min). When running behind a reverse proxy, configure `--trusted-proxy-header` so the rate limiter sees real client IPs instead of the proxy IP
 - **No fallback token**: If a request has no token, it is rejected — there is no server-level default
 
 ## Troubleshooting
@@ -447,6 +448,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 | Tool errors after connecting | Invalid or expired token | Verify the token has `api` scope and is not expired |
 | Pool eviction too frequent | Too many unique tokens | Increase `--max-http-clients` |
 | Sessions expiring | Idle timeout | Increase `--session-timeout` |
+| Rate limiter blocks all clients | Behind reverse proxy, all requests share proxy IP | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`) |
 
 ---
 

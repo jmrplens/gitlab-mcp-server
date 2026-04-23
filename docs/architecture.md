@@ -132,7 +132,7 @@ The `main()` function supports two runtime modes:
 
 **HTTP mode** (`--http` flag):
 
-1. Parses CLI flags (`--http`, `--gitlab-url`, `--http-addr`, `--max-http-clients`, `--session-timeout`, etc.)
+1. Parses CLI flags (`--http`, `--gitlab-url`, `--http-addr`, `--max-http-clients`, `--session-timeout`, `--trusted-proxy-header`, etc.)
 2. Creates a `serverpool.ServerPool` with a factory function
 3. On each request, extracts the token and GitLab URL from headers, calls `pool.GetOrCreate(token, gitlabURL)` to get or create a per-token+URL MCP server
 4. The pool factory creates a GitLab client + MCP server + registers all tools for that token and GitLab instance

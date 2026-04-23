@@ -198,6 +198,12 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
+**HTTP-only flags** (no environment variable equivalent):
+
+| Flag                       | Description                                                    | Default            |
+| -------------------------- | -------------------------------------------------------------- | ------------------ |
+| `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) | _(empty)_          |
+
 **General flags** (both stdio and HTTP modes):
 
 | Flag           | Default | Description                                                    |

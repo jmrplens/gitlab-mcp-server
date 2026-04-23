@@ -35,22 +35,24 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 
 ## CLI flags
 
-| Flag                     | Default                      | Description                                                               |
-| ------------------------ | ---------------------------- | ------------------------------------------------------------------------- |
-| `--http`                 | _(off)_                      | Enable HTTP transport mode                                                |
-| `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                         |
-| `--gitlab-url`           | _(optional)_                 | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
-| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                   |
-| `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)                     |
-| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools)           |
-| `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                |
-| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                                  |
-| `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                  |
-| `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                             |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                      |
-| `--auto-update-interval` | `1h`                         | Periodic update check interval                                            |
-| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                       |
-| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                             |
+| Flag                     | Default                      | Description                                                                                                |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--http`                 | _(off)_                      | Enable HTTP transport mode                                                                                 |
+| `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                                                          |
+| `--gitlab-url`           | _(optional)_                 | Default GitLab instance URL. Per-request override via `GITLAB-URL` header                                  |
+| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                                                    |
+| `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)                                                      |
+| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools)                                            |
+| `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                 |
+| `--max-http-clients`     | `100`                        | Maximum unique tokens in the server pool                                                                   |
+| `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                                                   |
+| `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                                                              |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                       |
+| `--auto-update-interval` | `1h`                         | Periodic update check interval                                                                             |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                                                        |
+| `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                                                              |
+| `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                            |
+| `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
 `--gitlab-url` is optional. When set, it serves as the default for clients that don't send the `GITLAB-URL` header. When omitted, each client must provide the `GITLAB-URL` header.

@@ -207,6 +207,7 @@ El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 ### Recomendaciones para modo HTTP
 
 - Despliega detrás de un proxy inverso con terminación TLS
+- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `Fly-Client-IP`, `X-Forwarded-For`) para que el rate limiter integrado vea las IPs reales de los clientes
 - Habilita limitación de velocidad a nivel del proxy
 - Restringe el acceso a redes de confianza
 - Monitoriza las métricas de sesiones para detectar patrones inusuales
@@ -242,6 +243,7 @@ Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-serv
 ### Modo HTTP
 
 - ☐ Despliega detrás de un proxy inverso con terminación TLS
+- ☐ Configura `--trusted-proxy-header` para un rate limiting preciso
 - ☐ Configura apropiadamente `--session-timeout` y `--max-http-clients`
 - ☐ Habilita limitación de velocidad
 - ☐ Restringe el acceso de red a clientes de confianza

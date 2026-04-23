@@ -61,6 +61,7 @@ When running with `--http`:
 - No built-in authentication on the HTTP endpoint
 - For production use, place behind a reverse proxy with proper TLS and auth
 - **`GITLAB-URL` header validation** — When clients send a `GITLAB-URL` header, the server validates that the URL uses `http://` or `https://` scheme and contains a valid host. Malformed URLs are rejected with HTTP 400
+- **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `Fly-Client-IP`, `X-Forwarded-For`) so the rate limiter sees real client IPs
 
 ### OAuth Mode (`--auth-mode=oauth`)
 

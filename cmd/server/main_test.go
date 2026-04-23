@@ -42,6 +42,27 @@ const (
 // servers cannot hang the entire test suite indefinitely.
 var testHTTPClient = &http.Client{Timeout: 10 * time.Second} //nolint:gochecknoglobals // test-only
 
+// closeMCPSession sends an HTTP DELETE to properly terminate an MCP session
+// on the server side, preventing goroutine leaks from StreamableHTTPHandler.
+// Without this, the server's readIncoming goroutine blocks indefinitely on
+// streamableServerConn.Read waiting for c.done to close.
+func closeMCPSession(t *testing.T, serverURL, sessionID string) {
+	t.Helper()
+	if sessionID == "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, serverURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set(hdrMCPSessionID, sessionID)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+}
+
 // newMockGitLabClient is an internal helper for the main package.
 func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
@@ -149,6 +170,9 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
+
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
@@ -192,6 +216,7 @@ func TestHTTPHandler_ToolsList_ReturnsAllTools(t *testing.T) {
 		t.Fatalf("initialize request failed: %v", err)
 	}
 	sessionID := initResp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 	initResp.Body.Close()
 
 	// Step 2: Send initialized notification
@@ -557,6 +582,9 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
+
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -680,6 +708,9 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -892,6 +923,7 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case err = <-errCh:
@@ -950,6 +982,7 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case err = <-errCh:
@@ -1544,6 +1577,7 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -1591,6 +1625,7 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -1968,9 +2003,15 @@ func TestAutoUpdateRedactHandler_WithGroup(t *testing.T) {
 // TestSetupAutoUpdateRedaction_WithURL verifies that setupAutoUpdateRedaction
 // installs a redacting handler when given a non-empty URL.
 func TestSetupAutoUpdateRedaction_WithURL(t *testing.T) {
-	// Save and restore the default logger to avoid affecting other tests.
-	orig := slog.Default()
-	t.Cleanup(func() { slog.SetDefault(orig) })
+	// Use a concrete handler (not the initial defaultHandler) to mirror
+	// production, where main() sets a JSONHandler before calling
+	// setupAutoUpdateRedaction.  Restoring Go's initial defaultHandler via
+	// slog.SetDefault creates a recursive deadlock because SetDefault
+	// bridges to log.SetOutput, forming a cycle:
+	//   defaultHandler → log.output → handlerWriter → defaultHandler.
+	safe := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	slog.SetDefault(safe)
+	t.Cleanup(func() { slog.SetDefault(safe) })
 
 	setupAutoUpdateRedaction("https://private-gitlab.example.com")
 
@@ -2055,5 +2096,225 @@ func TestAllowedHosts_EmptyHost(t *testing.T) {
 	hosts := allowedHosts(":8080")
 	if hosts != nil {
 		t.Error("expected nil hosts for empty host")
+	}
+}
+
+func TestClientIP_RemoteAddr(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{RemoteAddr: "203.0.113.1:12345"}
+	if got := clientIP(r, ""); got != "203.0.113.1" {
+		t.Errorf("clientIP() = %q, want 203.0.113.1", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Real-Ip": {"203.0.113.42"}},
+	}
+	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.42" {
+		t.Errorf("clientIP() = %q, want 203.0.113.42", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Forwarded-For": {"203.0.113.1, 10.0.0.2, 10.0.0.1"}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "203.0.113.1" {
+		t.Errorf("clientIP() = %q, want 203.0.113.1 (first entry)", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_Empty(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "203.0.113.99:12345",
+		Header:     http.Header{},
+	}
+	if got := clientIP(r, "X-Real-IP"); got != "203.0.113.99" {
+		t.Errorf("clientIP() = %q, want 203.0.113.99 (fallback to RemoteAddr)", got)
+	}
+}
+
+// TestBuildServerCard_ReturnsValidJSON verifies that [buildServerCard] produces
+// valid JSON containing serverInfo, authentication, and a non-empty tools array
+// with meta-tools when MetaTools=true.
+func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:     "", // empty — buildServerCard falls back to https://gitlab.com
+		SkipTLSVerify: true,
+		MetaTools:     true,
+		Enterprise:    false,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if err := json.Unmarshal(data, &card); err != nil {
+		t.Fatalf("buildServerCard() returned invalid JSON: %v", err)
+	}
+
+	// Verify serverInfo
+	serverInfo, ok := card["serverInfo"].(map[string]any)
+	if !ok {
+		t.Fatal("card missing 'serverInfo' object")
+	}
+	if name := serverInfo["name"]; name != "gitlab-mcp-server" {
+		t.Errorf("serverInfo.name = %q, want %q", name, "gitlab-mcp-server")
+	}
+
+	// Verify authentication
+	auth, ok := card["authentication"].(map[string]any)
+	if !ok {
+		t.Fatal("card missing 'authentication' object")
+	}
+	if required, ok := auth["required"].(bool); !ok || !required {
+		t.Error("authentication.required should be true")
+	}
+
+	// Verify tools is a non-empty array
+	toolsRaw, ok := card["tools"].([]any)
+	if !ok {
+		t.Fatal("card missing 'tools' array")
+	}
+	if len(toolsRaw) == 0 {
+		t.Fatal("tools array is empty, expected registered tools")
+	}
+
+	// Verify each tool has at least name and description
+	for i, raw := range toolsRaw {
+		tool, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("tools[%d] is not an object", i)
+		}
+		if name, ok := tool["name"].(string); !ok || name == "" {
+			t.Errorf("tools[%d] missing or empty 'name'", i)
+		}
+		if desc, ok := tool["description"].(string); !ok || desc == "" {
+			t.Errorf("tools[%d] missing or empty 'description'", i)
+		}
+		break // spot-check first tool only
+	}
+}
+
+// TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
+// individual tools (not meta-tools) when MetaTools=false.
+func TestBuildServerCard_IndividualMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		GitLabURL:     "",
+		SkipTLSVerify: true,
+		MetaTools:     false,
+		Enterprise:    false,
+	}
+
+	data, err := buildServerCard(cfg)
+	if err != nil {
+		t.Fatalf("buildServerCard() returned error: %v", err)
+	}
+
+	var card map[string]any
+	if err := json.Unmarshal(data, &card); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	toolsRaw, ok := card["tools"].([]any)
+	if !ok || len(toolsRaw) == 0 {
+		t.Fatal("tools array missing or empty")
+	}
+
+	// Individual mode should have many more tools than meta-tool mode
+	const minIndividualTools = 700
+	if len(toolsRaw) < minIndividualTools {
+		t.Errorf("individual mode tools count = %d, want at least %d", len(toolsRaw), minIndividualTools)
+	}
+}
+
+// TestServeHTTP_ServerCardEndpoint_ReturnsToolList verifies that the
+// /.well-known/mcp/server-card.json endpoint returns a valid server card
+// with tools, and is accessible without authentication.
+func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr)
+	}()
+
+	waitForHTTPServerReady(t, addr, errCh)
+
+	// GET /.well-known/mcp/server-card.json — no auth headers
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+		"http://"+addr+"/.well-known/mcp/server-card.json", nil)
+
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		cancel()
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	if ct := resp.Header.Get(hdrContentType); ct != mimeJSON {
+		t.Errorf("Content-Type = %q, want %q", ct, mimeJSON)
+	}
+	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "public") {
+		t.Errorf("Cache-Control = %q, want to contain 'public'", cc)
+	}
+
+	var card map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &card); err != nil {
+		t.Fatalf("invalid JSON response: %v\nbody: %s", err, string(body))
+	}
+
+	toolsRaw, ok := card["tools"].([]any)
+	if !ok || len(toolsRaw) == 0 {
+		t.Fatal("server card 'tools' array missing or empty")
+	}
+
+	// Verify serverInfo presence
+	if _, ok := card["serverInfo"].(map[string]any); !ok {
+		t.Error("server card missing 'serverInfo'")
+	}
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveHTTP did not shut down in time")
 	}
 }

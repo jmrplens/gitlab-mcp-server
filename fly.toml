@@ -34,7 +34,11 @@ kill_timeout = 10
     "--http",
     "--http-addr", "0.0.0.0:8080",
     "--meta-tools",
-    "--auto-update=false"
+    "--auto-update=false",
+    "--auth-mode", "oauth",
+    "--oauth-cache-ttl", "5m",
+    "--revalidate-interval", "5m",
+    "--trusted-proxy-header", "Fly-Client-IP"
   ]
 
 [env]

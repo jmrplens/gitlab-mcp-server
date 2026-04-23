@@ -207,6 +207,7 @@ The server maintains a **bounded LRU pool** of client sessions:
 ### HTTP mode recommendations
 
 - Deploy behind a reverse proxy with TLS termination
+- Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `Fly-Client-IP`, `X-Forwarded-For`) so the built-in rate limiter sees real client IPs
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
 - Monitor session metrics for unusual patterns
@@ -242,6 +243,7 @@ See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/bl
 ### HTTP mode
 
 - ☐ Deploy behind TLS-terminating reverse proxy
+- ☐ Configure `--trusted-proxy-header` for accurate rate limiting
 - ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
 - ☐ Enable rate limiting
 - ☐ Restrict network access to trusted clients
