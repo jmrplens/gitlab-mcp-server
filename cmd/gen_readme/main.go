@@ -129,20 +129,47 @@ type toolInfo struct {
 	Enterprise  bool
 }
 
-// firstSentence returns the first sentence (up to the first period followed
-// by a space or newline) or the first line, whichever is shorter.
+// firstSentence returns the first sentence (up to the first sentence-ending
+// period or newline), whichever is shorter. Skips common abbreviations.
 func firstSentence(s string) string {
 	// Take the first line.
 	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
 		s = s[:idx]
 	}
-	// Trim to first sentence boundary (". " or end of string).
-	if idx := strings.Index(s, ". "); idx >= 0 {
+	// Trim to first real sentence boundary, skipping abbreviations.
+	if idx := findSentenceEnd(s); idx >= 0 {
 		s = s[:idx+1]
 	}
 	// Escape pipe characters for Markdown tables.
 	s = strings.ReplaceAll(s, "|", "\\|")
 	return strings.TrimSpace(s)
+}
+
+// abbreviations that should not be treated as sentence boundaries.
+var abbreviations = []string{"e.g.", "i.e.", "etc.", "vs.", "approx.", "dept.", "est.", "govt.", "incl."}
+
+// findSentenceEnd returns the index of the first ". " that is NOT part of a
+// common abbreviation, or -1 if none found.
+func findSentenceEnd(s string) int {
+	offset := 0
+	for {
+		i := strings.Index(s[offset:], ". ")
+		if i < 0 {
+			return -1
+		}
+		pos := offset + i
+		isAbbrev := false
+		for _, abbr := range abbreviations {
+			if len(abbr) <= pos+1 && s[pos+1-len(abbr):pos+1] == abbr {
+				isAbbrev = true
+				break
+			}
+		}
+		if !isAbbrev {
+			return pos
+		}
+		offset = pos + 2
+	}
 }
 
 func buildTable(baseTools, allTools []*mcp.Tool) string {
