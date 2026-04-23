@@ -207,7 +207,7 @@ El servidor mantiene un **pool LRU limitado** de sesiones de cliente:
 ### Recomendaciones para modo HTTP
 
 - Despliega detrás de un proxy inverso con terminación TLS
-- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `Fly-Client-IP`, `X-Forwarded-For`) para que el rate limiter integrado vea las IPs reales de los clientes
+- Configura `--trusted-proxy-header` con la cabecera que tu proxy establece (ej. `Fly-Client-IP`, `X-Real-IP`, `X-Forwarded-For`) para que el rate limiter integrado vea las IPs reales de los clientes. **Habílita esto solo cuando el servidor sea accesible únicamente a través de un proxy de confianza** que sobrescriba (o elimine las copias entrantes de) la cabecera configurada; de lo contrario los clientes pueden falsificarla y evadir el rate limiting por IP. Para `X-Forwarded-For`, el servidor usa la entrada más a la derecha — el último salto añadido por el proxy de confianza — para no confiar en valores suministrados por el cliente.
 - Habilita limitación de velocidad a nivel del proxy
 - Restringe el acceso a redes de confianza
 - Monitoriza las métricas de sesiones para detectar patrones inusuales

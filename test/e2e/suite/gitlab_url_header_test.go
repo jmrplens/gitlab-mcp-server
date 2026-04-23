@@ -62,7 +62,12 @@ func mockGitLabServer(t *testing.T, userID int, username string) *httptest.Serve
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/user" {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"id": %d, "username": %q}`, userID, username)
+			// json.Encoder properly escapes special characters; %q would emit
+			// Go-quoted output that is not strictly valid JSON for some runes.
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":       userID,
+				"username": username,
+			})
 			return
 		}
 		// Return 200 with empty JSON for any other API call to avoid client errors.
@@ -281,11 +286,12 @@ func testGitLabURLInvalidHeader(t *testing.T) {
 			defer resp.Body.Close()
 
 			// When the selector returns nil, the MCP handler rejects the
-			// request. The exact status depends on the SDK but it should
-			// NOT be 200 OK.
-			if resp.StatusCode == http.StatusOK {
+			// request. Assert a 4xx client error — not just "not 200" — so a
+			// future regression that turns a handler panic into 500 would fail
+			// this test instead of silently satisfying it.
+			if resp.StatusCode < 400 || resp.StatusCode >= 500 {
 				b, _ := io.ReadAll(resp.Body)
-				t.Errorf("expected non-200 for invalid GITLAB-URL %q, got 200: %s", invalidURL, string(b))
+				t.Errorf("expected 4xx for invalid GITLAB-URL %q, got %d: %s", invalidURL, resp.StatusCode, string(b))
 			}
 		})
 	}

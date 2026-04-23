@@ -71,15 +71,15 @@ sequenceDiagram
     participant P as Server Pool
     participant GL as GitLab API
 
-    U1->>S: MCP request + Token A
-    S->>P: Get/create session for Token A
+    U1->>S: MCP request + Token A + URL X
+    S->>P: Get/create session for (Token A, URL X)
     P->>GL: API call with Token A
     GL-->>P: Response
     P-->>S: Result
     S-->>U1: MCP response
 
-    U2->>S: MCP request + Token B
-    S->>P: Get/create session for Token B
+    U2->>S: MCP request + Token B + URL Y
+    S->>P: Get/create session for (Token B, URL Y)
     P->>GL: API call with Token B
     GL-->>P: Response
     P-->>S: Result

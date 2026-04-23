@@ -314,6 +314,9 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		if u.Host == "" {
 			return errors.New("--gitlab-url must include a host")
 		}
+		// Normalize so that --gitlab-url=https://x.com/ and a header value
+		// of https://x.com hash to the same server-pool session key.
+		hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	}
 
 	cfg := &config.Config{
@@ -343,6 +346,13 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
+	}
+	// OAuth mode requires a fixed --gitlab-url because the RFC 9728
+	// protected-resource metadata and token verifier are initialized at
+	// startup and tied to one GitLab instance. Without it, token
+	// verification and discovery would be misconfigured.
+	if cfg.AuthMode == "oauth" && cfg.GitLabURL == "" {
+		return errors.New("--auth-mode=oauth requires --gitlab-url")
 	}
 	if cfg.AuthMode == "oauth" && cfg.OAuthCacheTTL > 0 {
 		if cfg.OAuthCacheTTL < config.MinOAuthCacheTTL {
@@ -606,6 +616,15 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 				slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
 				return nil
 			}
+			// In OAuth mode the bearer token is verified against cfg.GitLabURL
+			// by the auth middleware. Refuse to route the request to a
+			// different GitLab instance supplied via GITLAB-URL, otherwise a
+			// token issued for instance A would be used to call instance B.
+			if gitlabURL != cfg.GitLabURL {
+				slog.Error("request rejected: GITLAB-URL header does not match --gitlab-url in OAuth mode",
+					"expected", cfg.GitLabURL)
+				return nil
+			}
 			server, err := pool.GetOrCreate(token, gitlabURL)
 			if err != nil {
 				slog.Error("failed to create server for token", "error", err)
@@ -736,18 +755,24 @@ type healthResponse struct {
 	Commit  string `json:"commit"`
 }
 
-// clientIP extracts the client IP address from an HTTP request.
-// Uses RemoteAddr only — does not trust X-Forwarded-For to prevent spoofing.
 // clientIP extracts the real client IP from the request. When a trusted
-// proxy header is configured (e.g. X-Forwarded-For, X-Real-IP), its value
-// is used instead of RemoteAddr. For X-Forwarded-For, only the first
-// (leftmost) IP is returned — it represents the original client.
+// proxy header is configured (e.g. Fly-Client-IP, X-Real-IP, X-Forwarded-For),
+// its value is used instead of RemoteAddr.
+//
+// For multi-value headers like X-Forwarded-For — where well-behaved proxies
+// *append* to an existing header — the rightmost value is returned because
+// the leftmost entry is client-supplied and therefore spoofable. Operators
+// who configure this flag must ensure the trusted proxy is the only ingress
+// path to the server; otherwise any client can set the header directly and
+// bypass per-IP rate limiting.
 func clientIP(r *http.Request, trustedHeader string) string {
 	if trustedHeader != "" {
 		if val := r.Header.Get(trustedHeader); val != "" {
-			// X-Forwarded-For may contain "client, proxy1, proxy2" — take the first.
-			if ip, _, ok := strings.Cut(val, ","); ok {
-				return strings.TrimSpace(ip)
+			// For comma-separated values (X-Forwarded-For style), take the
+			// rightmost non-empty IP — it is the most recent proxy-appended
+			// hop and cannot be spoofed by an untrusted upstream client.
+			if idx := strings.LastIndex(val, ","); idx >= 0 {
+				return strings.TrimSpace(val[idx+1:])
 			}
 			return strings.TrimSpace(val)
 		}

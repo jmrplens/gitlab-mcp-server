@@ -28,34 +28,50 @@ func ExtractToken(r *http.Request) string {
 }
 
 // ExtractGitLabURL retrieves the per-request GitLab instance URL from the
-// GITLAB-URL header. Returns defaultURL if the header is absent or empty.
-// Returns an error if the header value is not a valid HTTP(S) URL.
+// GITLAB-URL header. Returns defaultURL (normalized) if the header is absent
+// or empty. Returns an error if either the header or the defaultURL is not a
+// valid HTTP(S) URL. Both the header and the default are normalized the same
+// way (whitespace trimmed, trailing slashes removed) so that equivalent URLs
+// hash to the same server-pool session key.
 func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
 	header := strings.TrimSpace(r.Header.Get("GITLAB-URL"))
 	if header == "" {
-		return defaultURL, nil
+		trimmed := strings.TrimSpace(defaultURL)
+		if trimmed == "" {
+			return "", nil
+		}
+		return normalizeGitLabURL(trimmed)
 	}
+	return normalizeGitLabURL(header)
+}
 
-	u, err := url.Parse(header)
+// normalizeGitLabURL validates and canonicalizes a GitLab base URL. The
+// returned string has trailing slashes stripped and a guaranteed http/https
+// scheme and non-empty host.
+func normalizeGitLabURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
 	if err != nil {
-		return "", &InvalidGitLabURLError{URL: header, Reason: "malformed URL"}
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "malformed URL"}
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return "", &InvalidGitLabURLError{URL: header, Reason: "scheme must be http or https"}
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "scheme must be http or https"}
 	}
 	if u.Host == "" {
-		return "", &InvalidGitLabURLError{URL: header, Reason: "missing host"}
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "missing host"}
 	}
-
-	return strings.TrimRight(header, "/"), nil
+	return strings.TrimRight(raw, "/"), nil
 }
 
 // InvalidGitLabURLError is returned when the GITLAB-URL header contains an invalid URL.
+// The raw URL value is intentionally not included in the error message to avoid
+// leaking embedded credentials or sensitive query parameters into server logs.
 type InvalidGitLabURLError struct {
+	// URL is the offending URL value. It is retained for programmatic
+	// inspection by callers but is deliberately omitted from [Error] output.
 	URL    string
 	Reason string
 }
 
 func (e *InvalidGitLabURLError) Error() string {
-	return "invalid GITLAB-URL header " + e.URL + ": " + e.Reason
+	return "invalid GITLAB-URL header: " + e.Reason
 }

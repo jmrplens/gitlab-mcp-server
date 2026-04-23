@@ -2120,12 +2120,28 @@ func TestClientIP_TrustedProxyHeader(t *testing.T) {
 
 func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
 	t.Parallel()
+	// For comma-separated proxy-appended headers, clientIP returns the
+	// rightmost IP because the leftmost entry is client-supplied and
+	// therefore spoofable.
 	r := &http.Request{
 		RemoteAddr: "10.0.0.1:12345",
-		Header:     http.Header{"X-Forwarded-For": {"203.0.113.1, 10.0.0.2, 10.0.0.1"}},
+		Header:     http.Header{"X-Forwarded-For": {"203.0.113.1, 10.0.0.2, 10.0.0.77"}},
 	}
-	if got := clientIP(r, "X-Forwarded-For"); got != "203.0.113.1" {
-		t.Errorf("clientIP() = %q, want 203.0.113.1 (first entry)", got)
+	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.77" {
+		t.Errorf("clientIP() = %q, want 10.0.0.77 (rightmost entry, non-spoofable)", got)
+	}
+}
+
+func TestClientIP_TrustedProxyHeader_SpoofResistant(t *testing.T) {
+	t.Parallel()
+	// An attacker-controlled client prepends a fake IP. The rightmost entry
+	// (added by the real trusted proxy) must be returned.
+	r := &http.Request{
+		RemoteAddr: "10.0.0.1:12345",
+		Header:     http.Header{"X-Forwarded-For": {"1.2.3.4, 203.0.113.55"}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "203.0.113.55" {
+		t.Errorf("clientIP() = %q, want 203.0.113.55 (ignores leftmost spoofed value)", got)
 	}
 }
 
@@ -2159,13 +2175,13 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	}
 
 	var card map[string]any
-	if err := json.Unmarshal(data, &card); err != nil {
-		t.Fatalf("buildServerCard() returned invalid JSON: %v", err)
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("buildServerCard() returned invalid JSON: %v", unmarshalErr)
 	}
 
 	// Verify serverInfo
-	serverInfo, ok := card["serverInfo"].(map[string]any)
-	if !ok {
+	serverInfo, siOK := card["serverInfo"].(map[string]any)
+	if !siOK {
 		t.Fatal("card missing 'serverInfo' object")
 	}
 	if name := serverInfo["name"]; name != "gitlab-mcp-server" {
@@ -2173,36 +2189,34 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	}
 
 	// Verify authentication
-	auth, ok := card["authentication"].(map[string]any)
-	if !ok {
+	auth, authOK := card["authentication"].(map[string]any)
+	if !authOK {
 		t.Fatal("card missing 'authentication' object")
 	}
-	if required, ok := auth["required"].(bool); !ok || !required {
+	if required, reqOK := auth["required"].(bool); !reqOK || !required {
 		t.Error("authentication.required should be true")
 	}
 
 	// Verify tools is a non-empty array
-	toolsRaw, ok := card["tools"].([]any)
-	if !ok {
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK {
 		t.Fatal("card missing 'tools' array")
 	}
 	if len(toolsRaw) == 0 {
 		t.Fatal("tools array is empty, expected registered tools")
 	}
 
-	// Verify each tool has at least name and description
-	for i, raw := range toolsRaw {
-		tool, ok := raw.(map[string]any)
-		if !ok {
-			t.Fatalf("tools[%d] is not an object", i)
-		}
-		if name, ok := tool["name"].(string); !ok || name == "" {
-			t.Errorf("tools[%d] missing or empty 'name'", i)
-		}
-		if desc, ok := tool["description"].(string); !ok || desc == "" {
-			t.Errorf("tools[%d] missing or empty 'description'", i)
-		}
-		break // spot-check first tool only
+	// Spot-check first tool has name and description
+	firstRaw := toolsRaw[0]
+	tool, toolOK := firstRaw.(map[string]any)
+	if !toolOK {
+		t.Fatal("tools[0] is not an object")
+	}
+	if name, nameOK := tool["name"].(string); !nameOK || name == "" {
+		t.Error("tools[0] missing or empty 'name'")
+	}
+	if desc, descOK := tool["description"].(string); !descOK || desc == "" {
+		t.Error("tools[0] missing or empty 'description'")
 	}
 }
 
@@ -2224,12 +2238,12 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 	}
 
 	var card map[string]any
-	if err := json.Unmarshal(data, &card); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
+	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON: %v", unmarshalErr)
 	}
 
-	toolsRaw, ok := card["tools"].([]any)
-	if !ok || len(toolsRaw) == 0 {
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) == 0 {
 		t.Fatal("tools array missing or empty")
 	}
 
@@ -2294,17 +2308,17 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 
 	var card map[string]any
 	body, _ := io.ReadAll(resp.Body)
-	if err := json.Unmarshal(body, &card); err != nil {
-		t.Fatalf("invalid JSON response: %v\nbody: %s", err, string(body))
+	if unmarshalErr := json.Unmarshal(body, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON response: %v\nbody: %s", unmarshalErr, string(body))
 	}
 
-	toolsRaw, ok := card["tools"].([]any)
-	if !ok || len(toolsRaw) == 0 {
+	toolsRaw, toolsOK := card["tools"].([]any)
+	if !toolsOK || len(toolsRaw) == 0 {
 		t.Fatal("server card 'tools' array missing or empty")
 	}
 
 	// Verify serverInfo presence
-	if _, ok := card["serverInfo"].(map[string]any); !ok {
+	if _, siOK := card["serverInfo"].(map[string]any); !siOK {
 		t.Error("server card missing 'serverInfo'")
 	}
 

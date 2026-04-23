@@ -8,12 +8,14 @@
 #
 # Each user provides their own GitLab token via:
 #   - PRIVATE-TOKEN header (Personal Access Token)
-#   - Authorization: Bearer header (OAuth)
+#   - Authorization: Bearer header (treated as PAT in legacy mode)
 #
 # Each user provides their GitLab instance URL via:
 #   - GITLAB-URL header (e.g., https://gitlab.com, https://gitlab.example.com)
 #
-# Alternatively, set a default instance with --gitlab-url in [experimental] cmd.
+# Auth mode: legacy. OAuth is not enabled here because the OAuth discovery
+# endpoints require a public base URL known at startup, and in legacy mode
+# each client independently supplies (token, GitLab URL) per request.
 
 app = "gitlab-mcp-server"
 primary_region = "cdg"
@@ -28,6 +30,7 @@ kill_timeout = 10
 
 # Override Dockerfile CMD for HTTP mode.
 # No --gitlab-url: each client provides it via the GITLAB-URL header.
+# Auth mode: legacy (per-request PAT + GitLab URL from the client).
 # Auto-update disabled: use `fly deploy` with new image tags instead.
 [experimental]
   cmd = [
@@ -35,9 +38,6 @@ kill_timeout = 10
     "--http-addr", "0.0.0.0:8080",
     "--meta-tools",
     "--auto-update=false",
-    "--auth-mode", "oauth",
-    "--oauth-cache-ttl", "5m",
-    "--revalidate-interval", "5m",
     "--trusted-proxy-header", "Fly-Client-IP"
   ]
 

@@ -14,7 +14,7 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,669   |
+| Total test functions        | 8,675   |
 | Unit test functions         | 8,399   |
 | E2E test functions          | 206     |
 | cmd test functions          | 70      |
@@ -42,7 +42,7 @@
 | Tool sub-packages (162)  |          6,937 |        306 | Domain-specific tool handlers        |
 | E2E integration          |            206 |         94 | Full workflow against real GitLab    |
 | cmd/server               |             70 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,669** |    **490** |                                      |
+| **Total**                |      **8,675** |    **490** |                                      |
 
 ### Core Packages
 

@@ -318,17 +318,17 @@ curl -X POST http://localhost:8080/mcp \
 When a client sends its first HTTP POST to `/mcp`:
 
 1. `StreamableHTTPHandler` calls the `getServer` callback
-2. `ExtractToken()` reads the token from request headers
-3. `ServerPool.GetOrCreate()` hashes the token and checks the pool
-4. If the token is new: creates a GitLab client + MCP server, registers all tools/resources/prompts
-5. Returns the `*mcp.Server` for that token
+2. `ExtractToken()` reads the token and `ExtractGitLabURL()` resolves the GitLab URL (from the `GITLAB-URL` header or the `--gitlab-url` default)
+3. `ServerPool.GetOrCreate(token, gitlabURL)` hashes `(token, url)` and checks the pool
+4. If the `(token, url)` pair is new: creates a GitLab client + MCP server, registers all tools/resources/prompts
+5. Returns the `*mcp.Server` for that `(token, url)` pair
 6. SDK establishes an MCP session and returns a `Mcp-Session-Id` header
 
 ### 2. Subsequent Requests
 
-Subsequent requests with the same token:
+Subsequent requests with the same `(token, GitLab URL)` pair:
 
-1. Token is extracted and hashed
+1. Token and URL are extracted and hashed into a composite key
 2. Pool finds the existing entry and promotes it in the LRU list
 3. Same `*mcp.Server` is returned — session state is preserved
 
@@ -338,15 +338,15 @@ If a client is idle for longer than `--session-timeout` (default: 30 minutes):
 
 1. The MCP SDK closes the idle session (HTTP transport level)
 2. The pool entry (server + client) **remains** in the pool
-3. Next request from the same token creates a new MCP session on the existing server
+3. Next request from the same `(token, url)` pair creates a new MCP session on the existing server
 
 ### 4. Pool Eviction
 
-When the pool is full (`--max-http-clients` reached) and a new token arrives:
+When the pool is full (`--max-http-clients` reached) and a new `(token, url)` pair arrives:
 
 1. The **least recently used** pool entry is evicted
 2. The evicted server and GitLab client are removed from the pool
-3. A new entry is created for the new token
+3. A new entry is created for the new `(token, url)` pair
 4. If the evicted client reconnects, a fresh server is created
 
 ```mermaid
@@ -357,17 +357,18 @@ sequenceDiagram
     participant Pool as ServerPool
     participant GL as GitLab API
 
-    Client->>Handler: POST /mcp<br/>PRIVATE-TOKEN: glpat-abc123
+    Client->>Handler: POST /mcp<br/>PRIVATE-TOKEN: glpat-abc123<br/>GITLAB-URL: https://gitlab.example.com
     Handler->>GS: getServer(req)
     GS->>GS: ExtractToken(req) → "glpat-abc123"
-    GS->>Pool: GetOrCreate("glpat-abc123")
+    GS->>GS: ExtractGitLabURL(req, default) → "https://gitlab.example.com"
+    GS->>Pool: GetOrCreate("glpat-abc123", "https://gitlab.example.com")
 
-    alt Token not in pool
+    alt (token, url) not in pool
         Pool->>Pool: Check maxSize, evict LRU if full
         Pool->>Pool: NewClientWithToken(url, token, skipTLS)
         Pool->>Pool: factory(client) → *mcp.Server
         Pool-->>GS: *mcp.Server (new)
-    else Token already in pool
+    else (token, url) already in pool
         Pool->>Pool: Move to front of LRU
         Pool-->>GS: *mcp.Server (cached)
     end

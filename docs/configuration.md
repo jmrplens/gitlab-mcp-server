@@ -214,6 +214,8 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--session-timeout` | `30m` | Idle session timeout |
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
 | `--oauth-cache-ttl` | `15m` | TTL for verified OAuth token cache (1m–2h) |
+| `--revalidate-interval` | `15m` | Interval for OAuth token re-validation against GitLab (`0` disables; upper bound 24h) |
+| `--trusted-proxy-header` | *(empty)* | Header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Real-IP`, `X-Forwarded-For`). Used by the per-IP auth rate limiter |
 | `--auto-update` | `true` | Enable automatic binary updates |
 | `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Interval between periodic update checks |
