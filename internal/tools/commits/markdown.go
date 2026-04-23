@@ -63,7 +63,7 @@ func FormatDetailMarkdown(c DetailOutput) string {
 		fmt.Fprintf(&b, "- **Stats**: +%d -%d (%d total)\n", c.Stats.Additions, c.Stats.Deletions, c.Stats.Total)
 	}
 	if c.Message != "" && c.Message != c.Title {
-		fmt.Fprintf(&b, "\n### Message\n\n%s\n", c.Message)
+		fmt.Fprintf(&b, "\n### Message\n\n%s\n", toolutil.WrapGFMBody(c.Message))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, c.WebURL)
 	toolutil.WriteHints(&b,
@@ -157,7 +157,7 @@ func FormatCommentMarkdown(c CommentOutput) string {
 	var b strings.Builder
 	b.WriteString("## Commit Comment\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdAuthor, c.Author)
-	fmt.Fprintf(&b, "- **Note**: %s\n", c.Note)
+	fmt.Fprintf(&b, "- **Note**: %s\n", toolutil.EscapeMdTableCell(c.Note))
 	if c.Path != "" {
 		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", c.Path, c.Line)
 	}

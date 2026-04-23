@@ -66,6 +66,8 @@ type httpConfig struct {
 	enterprise         bool
 	readOnly           bool
 	safeMode           bool
+	excludeTools       string
+	ignoreScopes       bool
 	maxHTTPClients     int
 	sessionTimeout     time.Duration
 	autoUpdate         string
@@ -85,6 +87,7 @@ func main() {
 	var useHTTP bool
 	var forceSetup bool
 	var setupMode string
+	var toolSearch string
 	var hcfg httpConfig
 
 	flag.BoolVar(&showHelp, "h", false, "Show full help with flags, env vars, and examples")
@@ -92,6 +95,7 @@ func main() {
 	flag.BoolVar(&forceSetup, "setup", false, "Run interactive setup wizard")
 	flag.StringVar(&setupMode, "setup-mode", "auto", "Setup UI mode: auto, web, tui, cli")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
+	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "GitLab instance URL (required for HTTP mode)")
@@ -100,6 +104,8 @@ func main() {
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Enable Enterprise/Premium meta-tools")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
+	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated list of tool names to exclude from registration")
+	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum concurrent client sessions")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle session timeout")
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
@@ -123,6 +129,11 @@ func main() {
 
 	if shutdownPeers {
 		os.Exit(runShutdown())
+	}
+
+	if toolSearch != "" {
+		runToolSearch(toolSearch, hcfg.metaTools, hcfg.enterprise)
+		return
 	}
 
 	if forceSetup || (!useHTTP && !showHelp && !showVersion && wizard.IsInteractiveTerminal()) {
@@ -185,6 +196,7 @@ FLAGS
   -shutdown                 Terminate all running instances and exit
   -setup                    Run interactive setup wizard
   -setup-mode string        Setup UI mode: auto|web|tui|cli (default "auto")
+  -tool-search string       Search tools by name/description and exit
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        GitLab instance URL (required for HTTP mode)
@@ -192,6 +204,8 @@ FLAGS
   -meta-tools               Enable meta-tools for tool discovery (default true)
   -enterprise               Enable Enterprise/Premium meta-tools (default false)
   -read-only                Expose only read-only tools (default false)
+  -exclude-tools string     Comma-separated tool names to exclude from registration
+  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
   -auto-update string       Auto-update mode: true|check|false (default "true")
@@ -208,6 +222,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   META_TOOLS                Enable meta-tools: true/false (default true)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
+  EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
+  GITLAB_IGNORE_SCOPES      Skip PAT scope detection: true/false (default false)
   AUTO_UPDATE               Auto-update mode: true/check/false (default true)
   AUTO_UPDATE_REPO          GitLab project for updates (default %s)
   AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
@@ -301,6 +317,8 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		Enterprise:         hcfg.enterprise,
 		ReadOnly:           hcfg.readOnly,
 		SafeMode:           hcfg.safeMode,
+		ExcludeTools:       config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:       hcfg.ignoreScopes,
 		MaxHTTPClients:     hcfg.maxHTTPClients,
 		SessionTimeout:     hcfg.sessionTimeout,
 		RevalidateInterval: hcfg.revalidateInterval,
@@ -397,6 +415,16 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
+	// Detect PAT scopes for scope-based tool filtering.
+	if !cfg.IgnoreScopes {
+		cfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
+		if cfg.TokenScopes != nil {
+			slog.Info("detected PAT scopes", "scopes", cfg.TokenScopes)
+		} else {
+			slog.Debug("PAT scope detection unavailable — all tools will be registered")
+		}
+	}
+
 	updater := newUpdaterForTools(cfg)
 	server := createServer(client, cfg, updater)
 	return serveStdio(ctx, server)
@@ -472,6 +500,18 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	} else {
 		tools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
+	}
+
+	if len(cfg.ExcludeTools) > 0 {
+		removed := removeExcludedTools(server, cfg.ExcludeTools)
+		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
+	}
+
+	if cfg.TokenScopes != nil {
+		removed := tools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
+		if removed > 0 {
+			slog.Info("scope-filtered tools", "removed", removed)
+		}
 	}
 
 	if cfg.ReadOnly {
@@ -908,6 +948,134 @@ func removeNonReadOnlyTools(server *mcp.Server) int {
 		server.RemoveTools(toRemove...)
 	}
 	return len(toRemove)
+}
+
+// removeExcludedTools lists all registered tools and removes those whose name
+// matches any entry in the exclusion list. Matching is exact by tool name.
+// Returns the number of tools removed.
+func removeExcludedTools(server *mcp.Server, exclude []string) int {
+	if len(exclude) == 0 {
+		return 0
+	}
+
+	excludeSet := make(map[string]struct{}, len(exclude))
+	for _, name := range exclude {
+		excludeSet[name] = struct{}{}
+	}
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		slog.Error("removeExcludedTools: server connect failed", "error", err)
+		return 0
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "exclude-filter", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		slog.Error("removeExcludedTools: client connect failed", "error", err)
+		return 0
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		slog.Error("removeExcludedTools: list tools failed", "error", err)
+		return 0
+	}
+
+	var toRemove []string
+	for _, t := range result.Tools {
+		if _, ok := excludeSet[t.Name]; ok {
+			toRemove = append(toRemove, t.Name)
+		}
+	}
+
+	if len(toRemove) > 0 {
+		server.RemoveTools(toRemove...)
+	}
+	return len(toRemove)
+}
+
+// runToolSearch creates an in-memory MCP server, lists all tools, and
+// prints those matching every space-separated search term (AND logic,
+// case-insensitive match on name + description). Then it exits.
+func runToolSearch(query string, metaTools, enterprise bool) {
+	if err := doToolSearch(query, metaTools, enterprise); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func doToolSearch(query string, metaTools, enterprise bool) error {
+	terms := strings.Fields(strings.ToLower(query))
+	if len(terms) == 0 {
+		return nil
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
+
+	if metaTools {
+		tools.RegisterAllMeta(server, nil, enterprise)
+	} else {
+		tools.RegisterAll(server, nil, enterprise)
+	}
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return fmt.Errorf("connect error: %w", err)
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "search-client", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return fmt.Errorf("connect error: %w", err)
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("list tools error: %w", err)
+	}
+
+	var matches []*mcp.Tool
+	for _, t := range result.Tools {
+		haystack := strings.ToLower(t.Name + " " + t.Description)
+		allMatch := true
+		for _, term := range terms {
+			if !strings.Contains(haystack, term) {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			matches = append(matches, t)
+		}
+	}
+
+	if len(matches) == 0 {
+		fmt.Printf("No tools found matching %q\n", query)
+		return nil
+	}
+
+	fmt.Printf("Found %d tool(s) matching %q:\n\n", len(matches), query)
+	fmt.Printf("%-45s %s\n", "NAME", "DESCRIPTION")
+	fmt.Println(strings.Repeat("-", 120))
+	for _, t := range matches {
+		desc := t.Description
+		if len(desc) > 80 {
+			desc = desc[:77] + "..."
+		}
+		fmt.Printf("%-45s %s\n", t.Name, desc)
+	}
+	return nil
 }
 
 // setupAutoUpdateRedaction wraps the current global slog handler with a

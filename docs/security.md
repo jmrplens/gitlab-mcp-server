@@ -81,6 +81,49 @@ See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the fu
 | Brute force | GitLab API rate limiting applies to verification requests |
 | Memory dump | Only SHA-256 hashes and user metadata stored; no raw tokens in cache |
 
+## PAT Scope-Based Tool Filtering
+
+The server automatically detects the scopes of the Personal Access Token (PAT) at startup and removes tools that require scopes the token does not have. This follows the principle of least privilege — only tools the token can actually execute are exposed to the LLM.
+
+- **Detection**: Uses the GitLab `GET /personal_access_tokens/self` endpoint
+- **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
+- **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
+- **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
+
+Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope. Tools requiring `api` (most write operations) are filtered for read-only tokens.
+
+## Prompt Injection Protection
+
+MCP tool output contains user-generated content (UGC) from GitLab — issue descriptions, commit messages, wiki pages, MR notes, labels, etc. Malicious UGC could attempt to manipulate LLM behavior through prompt injection.
+
+### Escaping Strategy
+
+All Markdown formatters apply context-appropriate escaping to UGC fields:
+
+| Context | Escape Function | Purpose |
+| --- | --- | --- |
+| Table cells | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure |
+| Headings | `EscapeMdHeading()` | Prevents `#` injection that would break heading hierarchy |
+| Multi-line body content | `WrapGFMBody()` | Wraps in blockquote (`>`) to contain structural Markdown |
+| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values |
+
+### UGC Boundary Markers
+
+Explicit boundary markers (e.g., `<user_content>...</user_content>`) were evaluated and deemed unnecessary because:
+
+1. **MCP protocol separation** — Tool results are delivered as structured JSON with `content` arrays, providing inherent boundary isolation between tool output and system/user prompts
+2. **Escaping is sufficient** — The three escape functions above neutralize structural Markdown injection without needing delimiter tokens
+3. **No cross-tool contamination** — Each tool result is a separate `CallToolResult` object; content cannot leak between tool calls
+
+### Coverage
+
+Escaping is applied to all UGC fields across 162 domain sub-packages. Key field types:
+
+- **Titles/names**: `EscapeMdTableCell()` in table contexts, `EscapeMdHeading()` in heading contexts
+- **Descriptions/bodies**: `WrapGFMBody()` for multi-line GFM content
+- **Author names**: `EscapeMdHeading()` when interpolated into headings, `EscapeMdTableCell()` in tables
+- **Notes/comments**: `WrapGFMBody()` for standalone display, `EscapeMdTableCell()` in table summaries
+
 ## Error Information Disclosure
 
 The error handling system is designed to be informative for LLMs while avoiding information leakage:

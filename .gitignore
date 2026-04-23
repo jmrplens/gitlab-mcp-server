@@ -8,7 +8,11 @@ keys/*.secret.asc
 bin/
 dist/
 /server
+/server_bin
 /add_docs
+/audit_metrics
+/audit_tokens
+/gen_readme
 *.exe
 *.exe~
 *.dll

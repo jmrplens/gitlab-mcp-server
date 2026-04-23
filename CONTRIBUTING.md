@@ -203,6 +203,31 @@ go test -tags e2e -timeout 300s ./test/e2e/suite/
 
 ## Documentation
 
+### AI-Assisted Development
+
+This project ships with **7 AI agents** and **18 skills** for GitHub Copilot and compatible assistants. Key workflows for contributors:
+
+- **Adding new tools**: Use the `create-mcp-tool` skill — it scaffolds the full tool lifecycle (struct, handler, registration, tests, docs).
+- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach 90%+ coverage.
+- **Code quality reviews**: Use the `review-and-refactor` skill for code quality + OWASP security + MCP pattern checks.
+
+See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instruction files.
+
+### Snapshot Testing (Golden Files)
+
+Tool definitions are snapshot-tested to detect unintentional changes. Golden files live in `internal/tools/testdata/`:
+
+- `tools_individual.json` — all individual tool definitions
+- `tools_meta.json` — all meta-tool definitions
+
+When you intentionally change a tool definition (name, description, schema, annotations), update the golden files:
+
+```bash
+UPDATE_TOOLSNAPS=true go test ./internal/tools/ -run TestToolSnapshots -count=1
+```
+
+Then commit the updated golden files alongside your code changes. The CI will fail if snapshots are out of date.
+
 ### When to Update
 
 - Adding a new tool → update the relevant `docs/tools/<domain>.md` and `docs/tools/README.md`

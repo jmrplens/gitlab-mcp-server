@@ -32,7 +32,7 @@ func FormatOutputMarkdown(d Output) string {
 	fmt.Fprintf(&b, "- **Notes**: %d\n", len(d.Notes))
 	fmt.Fprintf(&b, "- **Individual Note**: %v\n", d.IndividualNote)
 	for i, n := range d.Notes {
-		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, n.Author, toolutil.WrapGFMBody(n.Body))
+		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(n.Author), toolutil.WrapGFMBody(n.Body))
 	}
 	toolutil.WriteHints(&b,
 		"Use action 'discussion_reply' to reply to this discussion",

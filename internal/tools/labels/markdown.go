@@ -18,7 +18,7 @@ func FormatMarkdown(l Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdID, l.ID)
 	fmt.Fprintf(&b, "- **Color**: %s\n", l.Color)
 	if l.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, l.Description)
+		fmt.Fprintf(&b, toolutil.FmtMdDescription, toolutil.EscapeMdTableCell(l.Description))
 	}
 	if l.Priority > 0 {
 		fmt.Fprintf(&b, "- **Priority**: %d\n", l.Priority)

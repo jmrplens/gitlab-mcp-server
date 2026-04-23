@@ -77,7 +77,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 | `AUTO_UPDATE`          | `true`                       | Modo de actualización: `true`, `check` o `false`                                  |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release       |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de verificación (usado por las verificaciones periódicas del modo HTTP) |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                   |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                    |
 
 ### Flags de CLI (modo http)
 
@@ -86,7 +86,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 | `--auto-update`          | `true`                       | Modo de actualización: `true`, `check` o `false`                            |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release |
 | `--auto-update-interval` | `1h`                         | Intervalo entre verificaciones periódicas de actualización                  |
-| `--auto-update-timeout`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                             |
+| `--auto-update-timeout`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                              |
 
 :::note
 La actualización automática usa la **API de GitHub Releases** — es completamente independiente de tu configuración de GitLab. Tus ajustes de `GITLAB_URL`, `GITLAB_TOKEN` y `GITLAB_SKIP_TLS_VERIFY` no afectan a la actualización automática.
