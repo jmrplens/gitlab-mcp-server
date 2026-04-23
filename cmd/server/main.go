@@ -418,9 +418,7 @@ func runStdio(ctx context.Context) error {
 	// Detect PAT scopes for scope-based tool filtering.
 	if !cfg.IgnoreScopes {
 		cfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
-		if cfg.TokenScopes != nil {
-			slog.Info("detected PAT scopes", "scopes", cfg.TokenScopes)
-		} else {
+		if cfg.TokenScopes == nil {
 			slog.Debug("PAT scope detection unavailable — all tools will be registered")
 		}
 	}

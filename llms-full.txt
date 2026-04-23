@@ -1,6 +1,6 @@
 # gitlab-mcp-server â€” Full Reference
 
-> Version 1.0.4 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
+> Version 1.0.6 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -11378,7 +11378,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_merge
 
-Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them â€...
+Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them ï¿½...
 
 **Parameters:**
 

@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "MCP server exposing 1006 GitLab REST API operations as tools for AI assistants.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
