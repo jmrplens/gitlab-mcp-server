@@ -431,6 +431,21 @@ export default defineConfig({
 							label: "Usage Examples",
 							translations: { es: "Ejemplos de uso" },
 						},
+						{
+							slug: "examples/ci-cd-workflows",
+							label: "CI/CD Workflows",
+							translations: { es: "Flujos CI/CD" },
+						},
+						{
+							slug: "examples/code-review-workflows",
+							label: "Code Review",
+							translations: { es: "Revisión de código" },
+						},
+						{
+							slug: "examples/issue-management",
+							label: "Issue Management",
+							translations: { es: "Gestión de issues" },
+						},
 					],
 				},
 			],
