@@ -103,15 +103,36 @@ func TestIndividual_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "unprotect branch")
 
-		// Verify not in protected list anymore.
-		out, err := callToolOn[branches.ProtectedListOutput](ctx, sess.individual, "gitlab_protected_branches_list", branches.ProtectedListInput{
-			ProjectID: proj.pidOf(),
-		})
-		requireNoError(t, err, "list protected after unprotect")
-		for _, b := range out.Branches {
-			if b.Name == featureBranch {
-				t.Fatalf("branch %q still appears in protected list after unprotect", featureBranch)
+		// Verify not in protected list anymore (may need a few seconds to propagate).
+		var stillProtected bool
+		var lastListErr error
+		for attempt := range 5 {
+			out, listErr := callToolOn[branches.ProtectedListOutput](ctx, sess.individual, "gitlab_protected_branches_list", branches.ProtectedListInput{
+				ProjectID: proj.pidOf(),
+			})
+			if listErr != nil {
+				lastListErr = listErr
+				t.Logf("unprotect verify: attempt %d/5 — list error (retrying): %v", attempt+1, listErr)
+				time.Sleep(time.Duration(attempt+1) * time.Second)
+				continue
 			}
+			lastListErr = nil
+			stillProtected = false
+			for _, b := range out.Branches {
+				if b.Name == featureBranch {
+					stillProtected = true
+					break
+				}
+			}
+			if !stillProtected {
+				break
+			}
+			t.Logf("unprotect verify: attempt %d/5 — branch still protected, retrying", attempt+1)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+		requireNoError(t, lastListErr, "list protected after unprotect")
+		if stillProtected {
+			t.Fatalf("branch %q still appears in protected list after unprotect", featureBranch)
 		}
 		t.Log("Unprotected branch (verified)")
 	})
@@ -264,17 +285,39 @@ func TestMeta_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "meta branch unprotect")
 
-		out, err := callToolOn[branches.ProtectedListOutput](ctx, sess.meta, "gitlab_branch", map[string]any{
-			"action": "list_protected",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
-		})
-		requireNoError(t, err, "meta list protected after unprotect")
-		for _, b := range out.Branches {
-			if b.Name == featureBranch {
-				t.Fatalf("branch %q still appears in protected list after unprotect", featureBranch)
+		// Verify not in protected list anymore (may need a few seconds to propagate).
+		var stillProtected bool
+		var lastListErr error
+		for attempt := range 5 {
+			out, listErr := callToolOn[branches.ProtectedListOutput](ctx, sess.meta, "gitlab_branch", map[string]any{
+				"action": "list_protected",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+				},
+			})
+			if listErr != nil {
+				lastListErr = listErr
+				t.Logf("meta unprotect verify: attempt %d/5 — list error (retrying): %v", attempt+1, listErr)
+				time.Sleep(time.Duration(attempt+1) * time.Second)
+				continue
 			}
+			lastListErr = nil
+			stillProtected = false
+			for _, b := range out.Branches {
+				if b.Name == featureBranch {
+					stillProtected = true
+					break
+				}
+			}
+			if !stillProtected {
+				break
+			}
+			t.Logf("meta unprotect verify: attempt %d/5 — branch still protected, retrying", attempt+1)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+		requireNoError(t, lastListErr, "meta list protected after unprotect")
+		if stillProtected {
+			t.Fatalf("branch %q still appears in protected list after unprotect", featureBranch)
 		}
 		t.Log("Unprotected branch (verified)")
 	})

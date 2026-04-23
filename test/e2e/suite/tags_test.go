@@ -41,9 +41,11 @@ func TestIndividual_Tags(t *testing.T) {
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[tags.Output](ctx, sess.individual, "gitlab_tag_get", tags.GetInput{
-			ProjectID: proj.pidOf(),
-			TagName:   tagName,
+		out, err := retryOnTransient(ctx, t, "get tag", 5, func() (tags.Output, error) {
+			return callToolOn[tags.Output](ctx, sess.individual, "gitlab_tag_get", tags.GetInput{
+				ProjectID: proj.pidOf(),
+				TagName:   tagName,
+			})
 		})
 		requireNoError(t, err, "get tag")
 		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
@@ -52,8 +54,10 @@ func TestIndividual_Tags(t *testing.T) {
 	})
 
 	t.Run("List", func(t *testing.T) {
-		out, err := callToolOn[tags.ListOutput](ctx, sess.individual, "gitlab_tag_list", tags.ListInput{
-			ProjectID: proj.pidOf(),
+		out, err := retryOnTransient(ctx, t, "list tags", 5, func() (tags.ListOutput, error) {
+			return callToolOn[tags.ListOutput](ctx, sess.individual, "gitlab_tag_list", tags.ListInput{
+				ProjectID: proj.pidOf(),
+			})
 		})
 		requireNoError(t, err, "list tags")
 		requireTrue(t, len(out.Tags) >= 1, "expected at least 1 tag, got %d", len(out.Tags))
@@ -110,12 +114,14 @@ func TestMeta_Tags(t *testing.T) {
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
-			"action": "get",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"tag_name":   tagName,
-			},
+		out, err := retryOnTransient(ctx, t, "meta tag get", 5, func() (tags.Output, error) {
+			return callToolOn[tags.Output](ctx, sess.meta, "gitlab_tag", map[string]any{
+				"action": "get",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+					"tag_name":   tagName,
+				},
+			})
 		})
 		requireNoError(t, err, "meta tag get")
 		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
@@ -124,11 +130,13 @@ func TestMeta_Tags(t *testing.T) {
 	})
 
 	t.Run("List", func(t *testing.T) {
-		out, err := callToolOn[tags.ListOutput](ctx, sess.meta, "gitlab_tag", map[string]any{
-			"action": "list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
+		out, err := retryOnTransient(ctx, t, "meta tag list", 5, func() (tags.ListOutput, error) {
+			return callToolOn[tags.ListOutput](ctx, sess.meta, "gitlab_tag", map[string]any{
+				"action": "list",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+				},
+			})
 		})
 		requireNoError(t, err, "meta tag list")
 		requireTrue(t, len(out.Tags) >= 1, "expected at least 1 tag")
