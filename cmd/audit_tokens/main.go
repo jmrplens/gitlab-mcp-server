@@ -90,7 +90,7 @@ func main() {
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t%s\t%s\n", len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%s\t%s\n", len(metaBaseInfo), fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%s\t%s\n", len(metaEnterpriseInfo), fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	tw.Flush()
+	_ = tw.Flush()
 	fmt.Println()
 
 	if indTotal > 0 {
@@ -285,7 +285,7 @@ func printTopTools(infos []toolTokenInfo, n int) {
 	for i := range n {
 		fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\n", i+1, fmtNum(infos[i].Tokens), fmtNum(infos[i].Bytes), infos[i].Name)
 	}
-	tw.Flush()
+	_ = tw.Flush()
 	fmt.Println()
 }
 
@@ -320,7 +320,7 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 	for i := range n {
 		fmt.Fprintf(tw, "  %d\t%s\t%d\t%s\n", i+1, entries[i].Domain, entries[i].Count, fmtNum(entries[i].Tokens))
 	}
-	tw.Flush()
+	_ = tw.Flush()
 	fmt.Println()
 }
 

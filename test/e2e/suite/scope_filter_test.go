@@ -10,6 +10,7 @@ package suite
 import (
 	"context"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -146,11 +147,8 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 	// Admin-only tools must be removed.
 	var adminOnlyTools []string
 	for name, scopes := range tools.MetaToolScopes {
-		for _, s := range scopes {
-			if s == "admin_mode" {
-				adminOnlyTools = append(adminOnlyTools, name)
-				break
-			}
+		if slices.Contains(scopes, "admin_mode") {
+			adminOnlyTools = append(adminOnlyTools, name)
 		}
 	}
 	for _, name := range adminOnlyTools {
