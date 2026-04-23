@@ -771,10 +771,12 @@ func clientIP(r *http.Request, trustedHeader string) string {
 			// For comma-separated values (X-Forwarded-For style), take the
 			// rightmost non-empty IP — it is the most recent proxy-appended
 			// hop and cannot be spoofed by an untrusted upstream client.
-			if idx := strings.LastIndex(val, ","); idx >= 0 {
-				return strings.TrimSpace(val[idx+1:])
+			parts := strings.Split(val, ",")
+			for i := len(parts) - 1; i >= 0; i-- {
+				if ip := strings.TrimSpace(parts[i]); ip != "" {
+					return ip
+				}
 			}
-			return strings.TrimSpace(val)
 		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)

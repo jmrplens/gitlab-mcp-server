@@ -139,7 +139,7 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "uppercase scheme accepted (url.Parse lowercases it)",
+			name:       "uppercase scheme accepted and case preserved",
 			header:     "HTTPS://gitlab.example.com",
 			defaultURL: "https://gitlab.com",
 			wantURL:    "HTTPS://gitlab.example.com",

@@ -2156,6 +2156,19 @@ func TestClientIP_TrustedProxyHeader_Empty(t *testing.T) {
 	}
 }
 
+// TestClientIP_TrustedProxyHeader_TrailingCommas verifies that clientIP skips
+// empty entries produced by trailing commas and returns the rightmost non-empty IP.
+func TestClientIP_TrustedProxyHeader_TrailingCommas(t *testing.T) {
+	t.Parallel()
+	r := &http.Request{
+		RemoteAddr: "203.0.113.99:12345",
+		Header:     http.Header{"X-Forwarded-For": {"10.0.0.1, "}},
+	}
+	if got := clientIP(r, "X-Forwarded-For"); got != "10.0.0.1" {
+		t.Errorf("clientIP() = %q, want 10.0.0.1 (skip empty trailing entry)", got)
+	}
+}
+
 // TestBuildServerCard_ReturnsValidJSON verifies that [buildServerCard] produces
 // valid JSON containing serverInfo, authentication, and a non-empty tools array
 // with meta-tools when MetaTools=true.
