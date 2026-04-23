@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -772,8 +773,8 @@ func clientIP(r *http.Request, trustedHeader string) string {
 			// rightmost non-empty IP — it is the most recent proxy-appended
 			// hop and cannot be spoofed by an untrusted upstream client.
 			parts := strings.Split(val, ",")
-			for i := len(parts) - 1; i >= 0; i-- {
-				if ip := strings.TrimSpace(parts[i]); ip != "" {
+			for _, part := range slices.Backward(parts) {
+				if ip := strings.TrimSpace(part); ip != "" {
 					return ip
 				}
 			}
