@@ -1,3 +1,6 @@
+// register_test.go contains integration tests for the CI job tool closures
+// in register.go. Tests cover ConfirmAction early-return branches and
+// error propagation for job operations via an in-memory MCP session.
 package jobs
 
 import (
