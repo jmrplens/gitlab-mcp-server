@@ -33,7 +33,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-linux-amd64",
       "version": "1.2.0",
-      "fileSha256": "108826af33198a84ac851744970cab4f1b0d55871893592c0e1213d7c15f36bd",
+      "fileSha256": "b42bdc66675e9428140eb15284f8fc8c3e32e9e4895856140305e74383e61091",
       "transport": {
         "type": "stdio"
       },
@@ -139,7 +139,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-linux-arm64",
       "version": "1.2.0",
-      "fileSha256": "a0da47ed70a6c87484faef02df67254b00a7af0e7c7e134b0b519bb2b9924171",
+      "fileSha256": "f82aa83b5d03cebc0711cf375bf50291e779de872c00da59ce3c4868aa2842e3",
       "transport": {
         "type": "stdio"
       },
@@ -245,7 +245,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-darwin-amd64",
       "version": "1.2.0",
-      "fileSha256": "ef1b6a0108a14e394e976912cf1be14a824096cbd67e1039343022968a067e94",
+      "fileSha256": "87cc50db7006cc229c82db57010f13c65d61d775f7d57ff4910d4e1f2a0c75ab",
       "transport": {
         "type": "stdio"
       },
@@ -351,7 +351,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-darwin-arm64",
       "version": "1.2.0",
-      "fileSha256": "2a9f4b279878258d09485d8699dc25448ecd1e02814ffedb57aa24b7c8658b16",
+      "fileSha256": "3057f3dd137a8f2851dc139781e014cce93a934e11f80ca76dee1a8fe530cbc5",
       "transport": {
         "type": "stdio"
       },
@@ -457,7 +457,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-windows-amd64.exe",
       "version": "1.2.0",
-      "fileSha256": "61f0152fa3534573f01bb00762d87b5997ac94c096a3620875ac2851975ba4dc",
+      "fileSha256": "a5c5a85f987c0ca0dcf6cf10f331f834e7f5853024b4ef3901fccf97bcd7edc1",
       "transport": {
         "type": "stdio"
       },
@@ -563,7 +563,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-windows-arm64.exe",
       "version": "1.2.0",
-      "fileSha256": "3a1d22fc3d3dc01ddb7139212749e54dd45c7021b5c3ed2de143c4227d72ae14",
+      "fileSha256": "9497d17e90e2aa60cb8077ca9018810c759943de1706744790c5f841a4d0e653",
       "transport": {
         "type": "stdio"
       },
