@@ -1,3 +1,5 @@
+// markdown.go registers Markdown formatting functions for sampling MCP tool output.
+
 package samplingtools
 
 import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"

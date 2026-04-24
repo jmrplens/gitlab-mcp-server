@@ -1,3 +1,5 @@
+// user_crud_test.go contains unit tests for GitLab user create, read, update,
+// and delete operations. Tests use httptest to mock the GitLab Users API.
 package users
 
 import (
