@@ -1,4 +1,4 @@
-// Package toolutil documents and enforces the standard MCP tool output pattern.
+// output.go documents and enforces the standard MCP tool output pattern.
 //
 // All tool handlers in this project follow the triple-return pattern:
 //

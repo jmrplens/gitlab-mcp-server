@@ -1,3 +1,7 @@
+// graphql_test.go contains unit tests for GraphQL shared utilities:
+// FormatGID and ParseGID round-tripping, GraphQLPaginationInput methods
+// (EffectiveFirst, Variables), PageInfoToOutput conversion, and
+// FormatGraphQLPagination Markdown rendering.
 package toolutil
 
 import (
@@ -5,7 +9,11 @@ import (
 	"testing"
 )
 
-// TestFormatGID verifies GID construction for various types.
+// TestFormatGID verifies that FormatGID produces correctly formatted
+// GitLab Global IDs for a variety of type names and numeric IDs.
+// The test uses table-driven subtests covering simple types, nested
+// type paths (e.g. "WorkItems::Type"), and zero IDs, and asserts that
+// the returned string matches the expected "gid://gitlab/{type}/{id}" format.
 func TestFormatGID(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -29,7 +37,11 @@ func TestFormatGID(t *testing.T) {
 	}
 }
 
-// TestParseGID_Valid verifies parsing of well-formed GIDs.
+// TestParseGID_Valid verifies that ParseGID correctly extracts the type name
+// and numeric ID from well-formed GitLab GID strings. Table-driven subtests
+// cover simple types, large IDs, and nested type paths such as
+// "WorkItems::Type". Each subtest asserts that the returned type name and ID
+// match the expected values and that no error is returned.
 func TestParseGID_Valid(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -57,7 +69,11 @@ func TestParseGID_Valid(t *testing.T) {
 	}
 }
 
-// TestParseGID_Invalid verifies that malformed GIDs produce errors.
+// TestParseGID_Invalid verifies that ParseGID returns a non-nil error for
+// every malformed GID variant. Table-driven subtests cover: empty string,
+// missing "gid://gitlab/" prefix, wrong namespace, missing ID segment,
+// missing type segment, missing slash separator, and non-numeric ID.
+// Each subtest asserts that the returned error is non-nil.
 func TestParseGID_Invalid(t *testing.T) {
 	tests := []struct {
 		name string
@@ -81,7 +97,10 @@ func TestParseGID_Invalid(t *testing.T) {
 	}
 }
 
-// TestParseGID_Roundtrip verifies FormatGID → ParseGID roundtrip.
+// TestParseGID_Roundtrip verifies that FormatGID followed by ParseGID
+// preserves both the type name and the numeric ID without loss. It asserts
+// that no error is returned and that the recovered type name and ID are
+// identical to the original inputs.
 func TestParseGID_Roundtrip(t *testing.T) {
 	typeName := "Vulnerability"
 	id := int64(42)
@@ -98,7 +117,11 @@ func TestParseGID_Roundtrip(t *testing.T) {
 	}
 }
 
-// TestGraphQLPaginationInput_EffectiveFirst verifies page size defaults and clamping.
+// TestGraphQLPaginationInput_EffectiveFirst verifies that EffectiveFirst applies
+// the correct default, minimum, and maximum bounds to the page size. Table-driven
+// subtests cover: nil First (returns GraphQLDefaultFirst), explicit value within
+// range, value exceeding GraphQLMaxFirst (clamped), zero (clamped to 1), and
+// negative (clamped to 1).
 func TestGraphQLPaginationInput_EffectiveFirst(t *testing.T) {
 	intPtr := func(n int) *int { return new(n) }
 	tests := []struct {
@@ -122,7 +145,11 @@ func TestGraphQLPaginationInput_EffectiveFirst(t *testing.T) {
 	}
 }
 
-// TestGraphQLPaginationInput_Variables verifies variable map construction.
+// TestGraphQLPaginationInput_Variables verifies that Variables builds the
+// correct GraphQL variable map from a GraphQLPaginationInput. Subtests cover:
+// default-only (no After cursor), forward pagination with cursor, and backward
+// pagination using Last/Before. Each subtest asserts the presence and value of
+// the expected variable keys.
 func TestGraphQLPaginationInput_Variables(t *testing.T) {
 	intPtr := func(n int) *int { return new(n) }
 
@@ -157,7 +184,10 @@ func TestGraphQLPaginationInput_Variables(t *testing.T) {
 	})
 }
 
-// TestPageInfoToOutput verifies raw-to-output conversion.
+// TestPageInfoToOutput verifies that PageInfoToOutput maps all fields from a
+// GraphQLRawPageInfo to a GraphQLPaginationOutput correctly. It asserts that
+// HasNextPage, HasPreviousPage, EndCursor, and StartCursor are transferred
+// without modification.
 func TestPageInfoToOutput(t *testing.T) {
 	raw := GraphQLRawPageInfo{
 		HasNextPage:     true,
@@ -180,7 +210,11 @@ func TestPageInfoToOutput(t *testing.T) {
 	}
 }
 
-// TestFormatGraphQLPagination verifies Markdown pagination summary rendering.
+// TestFormatGraphQLPagination verifies that FormatGraphQLPagination produces
+// correct Markdown pagination summaries. Table-driven subtests cover: has-next
+// page (EndCursor shown), has-previous page (StartCursor shown), last page
+// (no cursors), and empty pagination. Each subtest asserts that the output
+// contains the expected substring.
 func TestFormatGraphQLPagination(t *testing.T) {
 	tests := []struct {
 		name    string
