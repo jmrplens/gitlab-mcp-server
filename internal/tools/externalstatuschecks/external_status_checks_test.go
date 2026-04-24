@@ -46,52 +46,6 @@ const projectStatusCheckJSON = `{
 
 const projectStatusCheckListJSON = `[` + projectStatusCheckJSON + `]`
 
-// TestListMergeStatusChecks_Success verifies listing merge status checks returns items and pagination.
-func TestListMergeStatusChecks_Success(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK, mergeStatusCheckListJSON, testutil.PaginationHeaders{
-			Page: "1", NextPage: "", TotalPages: "1", PerPage: "20", Total: "1",
-		})
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	out, err := ListMergeStatusChecks(context.Background(), client, ListMergeStatusChecksInput{
-		ProjectID: "1",
-		MRIID:     10,
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if len(out.Items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(out.Items))
-	}
-	if out.Items[0].Name != "CI Check" {
-		t.Errorf("expected name 'CI Check', got %q", out.Items[0].Name)
-	}
-	if out.Items[0].Status != "passed" {
-		t.Errorf("expected status 'passed', got %q", out.Items[0].Status)
-	}
-}
-
-// TestListMergeStatusChecks_MissingProjectID verifies validation rejects empty project_id.
-func TestListMergeStatusChecks_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	_, err := ListMergeStatusChecks(context.Background(), client, ListMergeStatusChecksInput{MRIID: 10})
-	if err == nil {
-		t.Fatal("expected error for missing project_id")
-	}
-}
-
-// TestListMergeStatusChecks_MissingMRIID verifies validation rejects zero mr_iid.
-func TestListMergeStatusChecks_MissingMRIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	_, err := ListMergeStatusChecks(context.Background(), client, ListMergeStatusChecksInput{ProjectID: "1"})
-	if err == nil {
-		t.Fatal("expected error for missing mr_iid")
-	}
-}
-
 // TestSetExternalStatusCheckStatus_Success verifies setting status succeeds.
 func TestSetExternalStatusCheckStatus_Success(t *testing.T) {
 	mux := http.NewServeMux()
@@ -731,55 +685,6 @@ func TestToProjectStatusCheckOutput_NoBranches(t *testing.T) {
 	out := toProjectStatusCheckOutput(check)
 	if len(out.ProtectedBranches) != 0 {
 		t.Errorf("expected 0 branches, got %d", len(out.ProtectedBranches))
-	}
-}
-
-// TestListMergeStatusChecks_ContextCancelled verifies that a cancelled context
-// returns an error before making an API call.
-func TestListMergeStatusChecks_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	ctx := testutil.CancelledCtx(t)
-	_, err := ListMergeStatusChecks(ctx, client, ListMergeStatusChecksInput{ProjectID: "1", MRIID: 10})
-	if err == nil {
-		t.Fatal("expected error for cancelled context, got nil")
-	}
-}
-
-// TestListMergeStatusChecks_APIError verifies that a 500 API response is propagated as an error.
-func TestListMergeStatusChecks_APIError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	})
-	client := testutil.NewTestClient(t, mux)
-	_, err := ListMergeStatusChecks(context.Background(), client, ListMergeStatusChecksInput{ProjectID: "1", MRIID: 10})
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-}
-
-// TestListMergeStatusChecks_WithPagination verifies that Page and PerPage options
-// are forwarded as query parameters to the GitLab API.
-func TestListMergeStatusChecks_WithPagination(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertQueryParam(t, r, "page", "2")
-		testutil.AssertQueryParam(t, r, "per_page", "5")
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{
-			Page: "2", TotalPages: "3", PerPage: "5", Total: "12",
-		})
-	})
-	client := testutil.NewTestClient(t, mux)
-	out, err := ListMergeStatusChecks(context.Background(), client, ListMergeStatusChecksInput{
-		ProjectID:       "1",
-		MRIID:           10,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.Pagination.Page != 2 {
-		t.Errorf("expected page 2, got %d", out.Pagination.Page)
 	}
 }
 

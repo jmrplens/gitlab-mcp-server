@@ -81,42 +81,6 @@ func toProjectStatusCheckOutput(c *gl.ProjectStatusCheck) ProjectStatusCheckOutp
 	return out
 }
 
-// ListMergeStatusChecksInput defines parameters for the deprecated ListMergeStatusChecks action.
-type ListMergeStatusChecksInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
-	toolutil.PaginationInput
-}
-
-// ListMergeStatusChecks lists merge status checks for a merge request (deprecated).
-func ListMergeStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListMergeStatusChecksInput) (ListMergeStatusCheckOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListMergeStatusCheckOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return ListMergeStatusCheckOutput{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if input.MRIID <= 0 {
-		return ListMergeStatusCheckOutput{}, toolutil.ErrRequiredInt64("listMergeStatusChecks", "mr_iid")
-	}
-	opts := &gl.ListOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	checks, resp, err := client.GL().ExternalStatusChecks.ListMergeStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithMessage("listMergeStatusChecks", err)
-	}
-	items := make([]MergeStatusCheckOutput, len(checks))
-	for i, c := range checks {
-		items[i] = toMergeStatusCheckOutput(c)
-	}
-	return ListMergeStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
-}
-
 // SetStatusInput defines parameters for the deprecated SetExternalStatusCheckStatus action.
 type SetStatusInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`

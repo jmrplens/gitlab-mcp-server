@@ -40,7 +40,7 @@ In HTTP mode, a single process serves all clients. The base process uses ~50 MB 
 | --- | --- |
 | `*mcp.Server` instance (struct + options + session map) | ~40 KB |
 | `*gitlabclient.Client` via `gl.NewClient()` (HTTP client + auth) | ~8 KB |
-| Tool registrations (1006 individual or 28/43 meta) | ~80 KB |
+| Tool registrations (1005 individual or 28/43 meta) | ~80 KB |
 | Resource registrations (24) | ~5 KB |
 | Prompt registrations (38) | ~5 KB |
 | **Total per unique token** | **~130 KB** |

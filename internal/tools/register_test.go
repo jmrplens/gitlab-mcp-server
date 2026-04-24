@@ -88,7 +88,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1006
+		const expectedTools = 1005
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -712,7 +712,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_list_job_token_inbound_allowlist":       true,
 		"gitlab_list_license_templates":                 true,
 		"gitlab_list_merge_request_in_merge_train":      true,
-		"gitlab_list_merge_status_checks":               true,
 		"gitlab_list_mr_context_commits":                true,
 		"gitlab_list_package_protection_rules":          true,
 		"gitlab_list_project_aliases":                   true,

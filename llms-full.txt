@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.1.0 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
+> Version 1.1.0 | 1005 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -1475,14 +1475,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 **External Status Check**
 
 Manage external status checks for MRs and projects. CRUD checks and set/retry status.
-Valid actions: create, create_project, delete, delete_project, list_mr_checks, list_project, list_project_checks, list_project_mr_checks, retry, retry_project, set_project_mr_status, set_status, update, update_project
+Valid actions: create, create_project, delete, delete_project, list_project, list_project_checks, list_project_mr_checks, retry, retry_project, set_project_mr_status, set_status, update, update_project
 
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required.
 
 Legacy API:
-- list_mr_checks: project_id*, mr_iid*, page, per_page
 - set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
 - list_project_checks: project_id*, page, per_page
 - create: project_id*, name*, external_url*, protected_branch_ids
@@ -1679,7 +1678,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When META_TOOLS=false, all 1006 individual tools are registered.
+When META_TOOLS=false, all 1005 individual tools are registered.
 Grouped by domain:
 
 ### access (8 tools)
@@ -9417,7 +9416,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (76 tools)
+### list (75 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -10091,21 +10090,6 @@ See also: gitlab_list_project_merge_trains, gitlab_add_merge_request_to_merge_tr
 - `scope` (string): Filter by scope: active, complete
 - `sort` (string): Sort order: asc or desc
 - `target_branch` (string) (required): Target branch name,required
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_list_merge_status_checks
-
-[DEPRECATED — scheduled for removal in v2.0.0] List external status checks for a merge request. Use gitlab_list_project_mr_external_status_checks instead. Returns: paginated list with ID, name, external URL, status.
-
-See also: gitlab_list_project_mr_external_status_checks, gitlab_set_external_status...
-
-**Parameters:**
-
-- `mr_iid` (integer) (required): Merge request internal ID,required
-- `page` (integer): Page number (default 1)
-- `per_page` (integer): Items per page (default 20, max 100)
-- `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15265,7 +15249,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 [DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.
 
-Returns: confirmation message. See also: gitlab_list_merge_status_checks.
+Returns: confirmation message. See also: gitlab_list_project_mr_external_status_c...
 
 **Parameters:**
 

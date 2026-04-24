@@ -71,7 +71,6 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_list_merge_status_checks", map[string]any{"project_id": "42", "mr_iid": 1}},
 		{"gitlab_set_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc123", "external_status_check_id": 1, "status": "passed"}},
 		{"gitlab_list_project_status_checks", map[string]any{"project_id": "42"}},
 		{"gitlab_create_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
-> **Individual tools**: 54
+> **Individual tools**: 53
 > **Meta-tool**: `gitlab_merge_request` (when `META_TOOLS=true`, default)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -443,13 +443,6 @@ Add a merge request to a merge train. Supports auto-merge, SHA verification, and
 
 ## External Status Checks
 
-### `gitlab_list_merge_status_checks`
-
-List external status checks for a merge request. Returns paginated list with ID, name, external URL, and status.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
 ### `gitlab_set_external_status_check_status`
 
 Set the status of an external status check for a merge request. Requires SHA and status check ID.
@@ -541,12 +534,11 @@ Delete an external status check from a project.
 | 46 | `gitlab_list_merge_request_in_merge_train` | Merge Trains | Read |
 | 47 | `gitlab_get_merge_request_on_merge_train` | Merge Trains | Read |
 | 48 | `gitlab_add_merge_request_to_merge_train` | Merge Trains | Create |
-| 49 | `gitlab_list_merge_status_checks` | External Status Checks | Read |
-| 50 | `gitlab_set_external_status_check_status` | External Status Checks | Update |
-| 51 | `gitlab_list_project_status_checks` | External Status Checks | Read |
-| 52 | `gitlab_create_external_status_check` | External Status Checks | Create |
-| 53 | `gitlab_update_external_status_check` | External Status Checks | Update |
-| 54 | `gitlab_delete_external_status_check` | External Status Checks | Delete |
+| 49 | `gitlab_set_external_status_check_status` | External Status Checks | Update |
+| 50 | `gitlab_list_project_status_checks` | External Status Checks | Read |
+| 51 | `gitlab_create_external_status_check` | External Status Checks | Create |
+| 52 | `gitlab_update_external_status_check` | External Status Checks | Update |
+| 53 | `gitlab_delete_external_status_check` | External Status Checks | Delete |
 
 ### Destructive Tools (Require Confirmation)
 

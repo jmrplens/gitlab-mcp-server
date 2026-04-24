@@ -16,22 +16,9 @@ import (
 // RegisterTools registers all external status check tools on the given MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_merge_status_checks",
-		Title:       toolutil.TitleFromName("gitlab_list_merge_status_checks"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] List external status checks for a merge request. Use gitlab_list_project_mr_external_status_checks instead. Returns: paginated list with ID, name, external URL, status.\n\nSee also: gitlab_list_project_mr_external_status_checks, gitlab_set_external_status_check_status.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListMergeStatusChecksInput) (*mcp.CallToolResult, ListMergeStatusCheckOutput, error) {
-		start := time.Now()
-		out, err := ListMergeStatusChecks(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_list_merge_status_checks", start, err)
-		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatListMergeMarkdown(out), toolutil.ContentList), out, err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_set_external_status_check_status",
 		Title:       toolutil.TitleFromName("gitlab_set_external_status_check_status"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Set the status of an external status check for a merge request. Use gitlab_set_project_mr_external_status_check_status instead. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
+		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Set the status of an external status check for a merge request. Use gitlab_set_project_mr_external_status_check_status instead. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SetStatusInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -108,7 +95,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_retry_failed_status_check_for_mr",
 		Title:       toolutil.TitleFromName("gitlab_retry_failed_status_check_for_mr"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
+		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RetryLegacyInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

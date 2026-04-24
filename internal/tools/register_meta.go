@@ -2662,7 +2662,6 @@ See also: gitlab_project, gitlab_vulnerability`, routes, toolutil.IconPackage)
 // for managing external status checks on merge requests and projects (legacy + project-scoped APIs).
 func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := actionMap{
-		"list_mr_checks":         routeAction(client, externalstatuschecks.ListMergeStatusChecks),
 		"set_status":             routeVoidAction(client, externalstatuschecks.SetExternalStatusCheckStatus),
 		"list_project_checks":    routeAction(client, externalstatuschecks.ListProjectStatusChecks),
 		"create":                 routeVoidAction(client, externalstatuschecks.CreateExternalStatusCheck),
@@ -2685,7 +2684,6 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 Param conventions: * = required.
 
 Legacy API:
-- list_mr_checks: project_id*, mr_iid*, page, per_page
 - set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
 - list_project_checks: project_id*, page, per_page
 - create: project_id*, name*, external_url*, protected_branch_ids
