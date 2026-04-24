@@ -311,10 +311,14 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_analyze",
 		Title: toolutil.TitleFromName("gitlab_analyze"),
-		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Requires client sampling capability (human-in-the-loop).
+		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarise / analyse / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+When to use: ask an LLM to interpret GitLab artefacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
+NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a `+"`SamplingUnsupportedResult`"+`).
+
+Returns: each action returns its own structured object plus a Markdown summary suitable for direct display. Common shape: {summary, sections, prompts_used, model, finish_reason}. Specific extras: release_notes → {categories: [{name, entries: [...]}]}; pipeline_failure → {root_cause, suggested_fix, related_jobs}; mr_security → {findings: [{severity, owasp, file, line, recommendation}]}; technical_debt → {markers: [{type, file, line, snippet}]}.
+Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), `+"`SamplingUnsupportedResult`"+` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
 - mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
@@ -329,8 +333,7 @@ All actions need project_id*. Additional params per action:
 - technical_debt: ref. Find TODO/FIXME/HACK markers.
 - deployment_history: environment. Frequency, success rate, patterns.
 
-NOT for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline.
-See also: gitlab_merge_request, gitlab_issue, gitlab_pipeline, gitlab_release`,
+See also: gitlab_merge_request (MR lifecycle), gitlab_issue (issue CRUD), gitlab_pipeline (raw pipelines and test reports), gitlab_release (release CRUD).`,
 		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
 		Icons:       toolutil.IconAnalytics,
 		InputSchema: toolutil.MetaToolSchema(routes),

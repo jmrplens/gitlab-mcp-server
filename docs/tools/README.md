@@ -2,6 +2,10 @@
 
 Per-domain tool reference for gitlab-mcp-server. Each document covers one logical domain, listing all individual MCP tools with their descriptions, parameter tables, and annotation types.
 
+## Server scope rationale
+
+The server exposes its 1000+ individual tools through a curated set of meta-tools, each consolidating a non-overlapping GitLab REST/GraphQL surface area. The meta-tool boundary maps 1:1 to GitLab's resource taxonomy (project, group, merge_request, issue, pipeline, etc.), so domains never duplicate functionality: lifecycle CRUD lives in the resource's own meta-tool (`gitlab_merge_request` for MR open/merge/close), peripheral concerns ship as siblings (`gitlab_mr_review` for diffs, comments, draft notes; `gitlab_pipeline` for CI runs, never MR pipelines). Read-only LLM-assisted analysis is isolated in `gitlab_analyze`, project discovery in `gitlab_discover_project`, and infrastructure self-management in `gitlab_server`. Enterprise/Premium-only domains (epics, audit events, DORA metrics, vulnerabilities, compliance, etc.) are gated by `GITLAB_ENTERPRISE` and either ship as dedicated meta-tools or attach as additional actions on the relevant base meta-tool, never as duplicate alternatives. This keeps every meta-tool independently invokable, free of overlap with its siblings, and minimal in surface area for LLM tool selection.
+
 ## Domains
 
 | Domain | Tools | Meta-tool | Document |

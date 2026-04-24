@@ -388,6 +388,12 @@ Valid actions: ` + validActionsString(routes) + `
 
 When to use: project-level CRUD, settings, members, labels, milestones, webhooks, boards, integrations, Pages, mirrors, approval rules. NOT for: file content/commits (use gitlab_repository), branches (use gitlab_branch), wiki pages (use gitlab_wiki), issues (use gitlab_issue), MRs (use gitlab_merge_request).
 
+Returns:
+- list / list_* / *_list / members / list_forks / list_starrers / list_groups / hook_list / label_list / milestone_list / badge_list / board_list / board_list_list / integration_list / pages_domain_list / pages_domain_list_all / approval_rule_list / mirror_list / list_invited_groups / upload_list: arrays with pagination {page, per_page, total, next_page}.
+- get / create / update / fork / transfer / star / unstar / archive / unarchive / restore / member_get / member_inherited / member_add / member_edit / hook_get / hook_add / hook_edit / hook_test / label_* / milestone_* (non-list) / badge_get / badge_add / badge_edit / badge_preview / board_get / board_create / board_update / board_list_get / board_list_create / board_list_update / integration_get / integration_set_jira / pages_get / pages_update / pages_domain_get / pages_domain_create / pages_domain_update / approval_config_get / approval_config_change / approval_rule_get / approval_rule_create / approval_rule_update / pull_mirror_get / pull_mirror_configure / mirror_get / mirror_get_public_key / mirror_add / mirror_edit / repository_storage_get / statistics_get / languages / share_with_group / upload / upload_avatar / download_avatar / create_for_user / create_fork_relation / export_status / export_download / import_from_file / import_status / export_schedule: resource object.
+- delete / hook_delete / hook_set_*/hook_delete_* / label_delete / label_subscribe / label_unsubscribe / label_promote / milestone_delete / badge_delete / board_delete / board_list_delete / integration_delete / pages_unpublish / pages_domain_delete / approval_rule_delete / mirror_delete / mirror_force_push / delete_shared_group / delete_fork_relation / start_mirroring / start_housekeeping / upload_delete: {success, message}.
+Errors: 404 (hint: project_id may be a numeric ID or URL-encoded path like 'group%2Frepo'), 403 (hint: most mutations require Maintainer+, settings/transfers require Owner, instance-level require admin), 400 (hint: visibility ∈ private/internal/public; merge_method ∈ merge/rebase_merge/ff; namespace_id must be writable by the caller).
+
 Param conventions: * = required. Most actions need project_id* (numeric ID or URL-encoded path like 'group/repo'). List actions accept page, per_page. Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.
 
 Project CRUD:
@@ -548,27 +554,32 @@ func registerBranchMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"rule_list":        routeAction(client, branchrules.List),
 	}
 
-	addMetaTool(server, "gitlab_branch", `CRUD and protect Git branches. Query branch rules (aggregated view via GraphQL).
+	addMetaTool(server, "gitlab_branch", `Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
+NOT for: file contents on a branch (use gitlab_repository file_get/file_create/...), commit operations (use gitlab_repository commit_*), tags (use gitlab_tag), opening MRs against a branch (use gitlab_merge_request).
 
-Param conventions: * = required. All actions need project_id* except rule_list.
+Returns:
+- list / list_protected: array of {name, default, protected, merged, commit, ...} with pagination.
+- get / get_protected / create / protect / update_protected: branch or protection object.
+- delete / delete_merged / unprotect: {success: bool, message: string}.
+- rule_list: GraphQL aggregated view {nodes: [{name, branch_protection, approval_rules, external_status_checks}], page_info}.
+Errors: 404 not found, 403 forbidden (hint: requires Maintainer+ to protect/unprotect), 400 invalid params (hint: cannot delete default or protected branches — unprotect first).
+
+Param conventions: * = required. All actions need project_id* (numeric or url-encoded path) except rule_list which uses project_path*. Access levels: 0 = no one, 30 = Developer, 40 = Maintainer.
 
 - create: project_id*, branch_name*, ref* (branch/tag/SHA)
-- get: project_id*, branch_name*
+- get / delete: project_id*, branch_name*
 - list: project_id*, search, page, per_page
-- delete: Cannot delete default/protected branches. project_id*, branch_name*
-- delete_merged: Delete all merged branches (default/protected excluded). project_id*
-- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push
+- delete_merged: project_id* — deletes all merged branches except default/protected
+- protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push (bool)
 - unprotect: project_id*, branch_name*
-- list_protected: project_id*, page, per_page
-- get_protected: project_id*, branch_name*
-- update_protected: project_id*, branch_name*, allow_force_push, code_owner_approval_required
-- rule_list: Aggregated protections/approval rules/status checks (GraphQL). project_path* (e.g. my-group/my-project), first, after
+- list_protected / get_protected: project_id*, branch_name* (get)
+- update_protected: project_id*, branch_name*, allow_force_push (bool), code_owner_approval_required (bool)
+- rule_list: project_path* (e.g. my-group/my-project), first (max 100), after (cursor)
 
-NOT for: file operations on branches (use gitlab_repository).
-See also: gitlab_repository, gitlab_merge_request`, routes, toolutil.IconBranch)
+See also: gitlab_repository (file/commit operations on a branch), gitlab_merge_request (open MRs against a branch), gitlab_tag (tag CRUD/protection).`, routes, toolutil.IconBranch)
 }
 
 // registerTagMeta registers the gitlab_tag meta-tool with actions:
@@ -587,22 +598,30 @@ func registerTagMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"unprotect":      destructiveVoidAction(client, tags.UnprotectTag),
 	}
 
-	addMetaTool(server, "gitlab_tag", `Manage Git tags: create, list, get, delete, verify GPG signatures, and protect/unprotect tags. Delete removes the tag and any associated release.
+	addMetaTool(server, "gitlab_tag", `Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: tag CRUD, tag protection, signature verification. NOT for: releases (use gitlab_release), branches (use gitlab_branch).
+When to use: create/list/delete tags, protect or unprotect tag patterns, verify a tag's GPG/X.509 signature.
+NOT for: releases (use gitlab_release — a release wraps a tag with notes/assets), branches (use gitlab_branch), repository file/commit operations (use gitlab_repository).
 
-Param conventions: * = required. All actions need project_id*.
+Returns:
+- list / list_protected: array of {name, target, message, protected, ...} with pagination.
+- get / create / get_protected / protect: tag or protection object.
+- get_signature: {signature_type, gpg_key_id, verification_status, ...} or X.509 equivalent.
+- delete / unprotect: {success: bool, message: string}.
+Errors: 404 not found, 403 forbidden (hint: requires Maintainer+ to protect/unprotect), 400 invalid params (hint: tag name must not exist for create).
 
-- create: project_id*, tag_name*, ref* (branch/tag/SHA), message (annotation)
+Param conventions: * = required. All actions need project_id*. Access levels: 0 = no one, 30 = Developer, 40 = Maintainer.
+
+- create: project_id*, tag_name*, ref* (branch/tag/SHA), message (annotated tag if non-empty)
 - get / delete: project_id*, tag_name*
 - list: project_id*, search, order_by (name/updated/version), sort (asc/desc)
-- get_signature: project_id*, tag_name*. Returns X.509 signature.
+- get_signature: project_id*, tag_name*
 - list_protected: project_id*
 - get_protected / unprotect: project_id*, tag_name*
-- protect: project_id*, tag_name* (name or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id, group_id, deploy_key_id, access_level})
+- protect: project_id*, tag_name* (literal or wildcard e.g. 'v*'), create_access_level (0/30/40), allowed_to_create (array of {user_id|group_id|deploy_key_id|access_level})
 
-See also: gitlab_release, gitlab_repository`, routes, toolutil.IconTag)
+See also: gitlab_release (releases use tags as anchors), gitlab_repository (commits referenced by tags), gitlab_branch (branches).`, routes, toolutil.IconTag)
 }
 
 // registerReleaseMeta registers the gitlab_release meta-tool with actions:
@@ -624,30 +643,39 @@ func registerReleaseMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"link_delete":       destructiveAction(client, releaselinks.Delete),
 	}
 
-	addMetaTool(server, "gitlab_release", `CRUD GitLab releases and release asset links (binaries, downloads).
+	addMetaTool(server, "gitlab_release", `Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: publish a release for a tag, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
+NOT for: creating tags (use gitlab_tag create first — release_create requires an existing tag_name), uploading binaries to the package registry (use gitlab_package), milestones (use gitlab_project milestone_*).
 
-Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except create/list).
+Returns:
+- list: array of releases with pagination.
+- get / get_latest / create / update: release object {name, tag_name, description, released_at, assets: {sources, links}, evidences, milestones}.
+- link_list: array of {id, name, url, link_type, direct_asset_path}.
+- link_create / link_create_batch / link_get / link_update: link object(s).
+- delete / link_delete: {success: bool, message: string}.
+Errors: 404 not found (hint: tag_name must exist), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
 
-Release operations:
-- create: project_id*, tag_name*, name, description (Markdown), released_at (ISO 8601)
+Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except link_create / link_create_batch / link_list).
+
+Releases:
+- create: project_id*, tag_name* (must exist), name, description (Markdown), released_at (ISO 8601), milestones ([]string)
 - get: project_id*, tag_name*
 - get_latest: project_id*
 - list: project_id*, order_by (released_at/created_at), sort (asc/desc), page, per_page
-- update: project_id*, tag_name*, name, description, released_at, milestones ([]string)
-- delete: Tag preserved. project_id*, tag_name*
+- update: project_id*, tag_name*, name, description, released_at, milestones
+- delete: project_id*, tag_name*
 
-Asset link operations:
-- link_create: project_id*, tag_name*, name*, url*, link_type (runbook/package/image/other)
-- link_create_batch: Batch add links. project_id*, tag_name*, links* (array of {name, url, link_type})
+Asset links:
+- link_create: project_id*, tag_name*, name*, url*, link_type (runbook/package/image/other), filepath, direct_asset_path
+- link_create_batch: project_id*, tag_name*, links* (array of {name, url, link_type, filepath, direct_asset_path})
 - link_get: project_id*, tag_name*, link_id*
 - link_list: project_id*, tag_name*, page, per_page
 - link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type
 - link_delete: project_id*, tag_name*, link_id*
 
-See also: gitlab_tag (create tags first), gitlab_package (package registry)`, routes, toolutil.IconRelease)
+See also: gitlab_tag (create the tag before the release), gitlab_package (upload binaries; link_create can point at the package URL), gitlab_project (milestones referenced by releases).`, routes, toolutil.IconRelease)
 }
 
 // registerMergeRequestMeta registers the gitlab_merge_request meta-tool with actions:
@@ -720,9 +748,16 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. Also manages approval rules/settings, time tracking, subscriptions, context commits, award emoji, and resource events. Delete permanently removes an MR.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: MR lifecycle, approvals, time tracking, resource events. NOT for: reviewing/commenting (use gitlab_mr_review).
+When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, award emoji, MR resource events.
+NOT for: comments, discussions, diffs, draft notes (use gitlab_mr_review), CI pipelines (use gitlab_pipeline; use action 'pipelines' here only to LIST MR pipelines), branches/tags (use gitlab_branch / gitlab_tag), commits in the repo (use gitlab_repository).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- list / list_global / list_group / commits / pipelines / participants / reviewers / issues_closed / approval_rules / context_commits_list / event_*_list / emoji_*_list: arrays with pagination {page, per_page, total, next_page}.
+- get / create / update / approve / merge / rebase / approval_state / approval_config / approval_rule_create / approval_rule_update / approval_settings_*: MR or settings object.
+- time_estimate_set / spent_time_add / time_stats / time_estimate_reset / spent_time_reset: {time_estimate, total_time_spent, human_time_estimate, human_total_time_spent}.
+- subscribe / unsubscribe / cancel_auto_merge / create_pipeline: updated MR or pipeline object.
+- delete / unapprove / approval_reset / approval_rule_delete / context_commits_delete / emoji_*_delete: {success, message}.
+Errors: 404 (hint: confirm project_id and mr_iid — mr_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
 
 Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
 
@@ -803,47 +838,52 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"diff_version_get":       routeAction(client, mrchanges.GetDiffVersion),
 	}
 
-	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions, code diffs, draft notes (batch review), and diff versions.
+	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
 Valid actions: `+validActionsString(routes)+`
 
-IMPORTANT — Batch review: use draft_note_create for EACH comment (with position for inline, or in_reply_to_discussion_id for replies), then draft_note_publish_all ONCE. This sends a single notification. Only use discussion_create for standalone questions needing immediate visibility.
+When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review.
+NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
 
-When to use: code review, comments, discussions, diffs. NOT for: MR lifecycle (create/merge/approve — use gitlab_merge_request).
+IMPORTANT — batch review pattern: call draft_note_create once per comment (with `+"`position`"+` for inline comments, or `+"`in_reply_to_discussion_id`"+` for replies), then draft_note_publish_all ONCE to send a single notification. Use discussion_create only for standalone questions that need immediate visibility.
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- *_list: array with pagination (page, per_page, total, next_page).
+- note_*, discussion_*, draft_note_*, diff_*: resource object(s) with id, body/note, author, position (when inline).
+- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get.
+- *_delete / *_publish: {success: bool, message: string}.
+Errors: 404 not found (hint: check note_id/discussion_id and mr_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
 
-Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page.
+Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
 
-Notes (comments):
-- note_create: body*
+Notes (general comments):
 - note_list: order_by (created_at/updated_at), sort
-- note_get: note_id*
+- note_get / note_delete: note_id*
+- note_create: body*
 - note_update: note_id*, body*
-- note_delete: note_id*
 
-Discussions (threaded):
-- discussion_create: body*, position (optional: base_sha, start_sha, head_sha, new_path, old_path, new_line/old_line — use new_line for added/modified, old_line for removed, both for unchanged context)
+Discussions (threaded, can be inline via position):
 - discussion_list
 - discussion_get: discussion_id*
+- discussion_create: body*, position (inline)
 - discussion_reply: discussion_id*, body*
-- discussion_resolve: discussion_id*, resolved*
+- discussion_resolve: discussion_id*, resolved* (bool)
 - discussion_note_update: discussion_id*, note_id*, body, resolved
 - discussion_note_delete: discussion_id*, note_id*
 
-Changes/diffs:
-- changes_get: file diffs. Large diffs may be truncated — check truncated_files and use diff_versions_list + diff_version_get for full content.
-- diff_versions_list
-- diff_version_get: version_id*, unidiff
+Changes and diff versions:
+- changes_get: returns file diffs; check truncated_files
+- diff_versions_list: list MR diff revisions
+- diff_version_get: version_id*, unidiff (bool)
 
 Draft notes (batch review):
 - draft_note_list: order_by, sort
 - draft_note_get: note_id*
-- draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion, position (same format as discussion_create)
+- draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion (bool), position
 - draft_note_update: note_id*, note, position
 - draft_note_delete / draft_note_publish: note_id*
-- draft_note_publish_all: publishes all drafts (single notification)
+- draft_note_publish_all: publishes ALL pending drafts as a single review notification
 
-See also: gitlab_merge_request (MR lifecycle, approvals, merge), gitlab_pipeline`, routes, toolutil.IconDiscussion)
+See also: gitlab_merge_request (MR lifecycle, approvals, merge, time tracking, reactions), gitlab_pipeline (MR pipelines), gitlab_repository (file blame for context).`, routes, toolutil.IconDiscussion)
 }
 
 // registerRepositoryMeta registers the gitlab_repository meta-tool with actions:
@@ -1455,7 +1495,13 @@ Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
 
 	desc += `
 
-See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings/files), gitlab_label (label CRUD), gitlab_milestone (milestone CRUD), gitlab_pipeline (CI/CD)`
+See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings/files), gitlab_label (label CRUD), gitlab_milestone (milestone CRUD), gitlab_pipeline (CI/CD)
+
+Returns:
+- list / list_global / list_group / list_assigned / list_authored / list_assigned_or_authored / participants / closed_by / related_mrs / closing_mrs / link_list / discussion_list / note_list / time_logs / iteration_list / iteration_list_group / award_*_list / event_*_list: arrays with pagination {page, per_page, total, next_page}.
+- get / create / update / move / clone / promote / reorder / subscribe / unsubscribe / link_create / discussion_get / discussion_create / discussion_reply / discussion_resolve / discussion_note_update / note_get / note_create / note_update / time_estimate_set / spent_time_add / time_stats / award_*_create / award_*_get / metric_image_*: issue or sub-resource object.
+- delete / link_delete / note_delete / discussion_note_delete / time_estimate_reset / spent_time_reset / award_*_delete: {success, message}.
+Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_global use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move/clone, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).`
 
 	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
 }
@@ -1502,9 +1548,14 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_pipeline", `Manage GitLab CI/CD pipelines: list, get, create, retry, cancel, delete, and wait for completion. Also manages trigger tokens, resource groups, test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: pipeline CRUD, test reports, triggers, resource groups, schedules. NOT for: job-level operations (use gitlab_job).
+When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
+NOT for: jobs, logs, artifacts, manual play actions (use gitlab_job), MR-specific pipelines (use gitlab_merge_request 'pipelines' / 'create_pipeline'), CI lint or includes (use gitlab_template).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- list / latest / variables / test_report / test_report_summary / trigger_list / resource_group_list / resource_group_upcoming_jobs / schedule_list / schedule_list_triggered_pipelines: array(s) or aggregated payloads with pagination where applicable.
+- get / create / cancel / retry / update_metadata / wait / trigger_get / trigger_create / trigger_update / trigger_run / resource_group_get / resource_group_edit / schedule_get / schedule_create / schedule_update / schedule_run / schedule_take_ownership / schedule_create_variable / schedule_edit_variable: pipeline / trigger / resource group / schedule object.
+- delete / trigger_delete / schedule_delete / schedule_delete_variable: {success, message}.
+Errors: 404 (hint: pipeline_id and trigger/schedule IDs are project-scoped), 403 (hint: requires Maintainer+ to delete pipelines or manage triggers/schedules), 400 (hint: cron expressions must use 5 fields; cron_timezone must be a valid TZ name; create requires 'ref').
 
 Param conventions: * = required. All pipeline actions need project_id*. List actions accept page, per_page.
 
@@ -1820,21 +1871,29 @@ func registerWikiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"upload_attachment": routeAction(client, wikis.UploadAttachment),
 	}
 
-	addMetaTool(server, "gitlab_wiki", `CRUD and upload attachments to GitLab project wiki pages.
+	addMetaTool(server, "gitlab_wiki", `CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: read, write, or delete wiki pages of a project; attach images or files referenced from wiki content.
+NOT for: repository files or commits (use gitlab_repository), code snippets (use gitlab_snippet), group-level wikis (Enterprise/Premium — use gitlab_group when GITLAB_ENTERPRISE=true), issues or MR descriptions (use gitlab_issue / gitlab_merge_request).
 
-Param conventions: * = required. All actions need project_id*.
+Returns:
+- get / create / update: {slug, title, format, content, encoding}.
+- list: array of {slug, title, format} (content omitted unless with_content=true).
+- delete: {success: bool, message: string}.
+- upload_attachment: {file_name, url, alt, markdown} — embed `+"`markdown`"+` directly in a page.
+Errors: 404 not found (hint: check slug or project_id), 403 forbidden (hint: wiki disabled or insufficient role), 400 invalid params (hint: title/content required, slug must be URL-encoded).
+
+Param conventions: * = required. All actions need project_id* (numeric ID or url-encoded path). slug is the URL-encoded page path (e.g. `+"`docs/setup`"+`). format default = markdown. content max ~1 MB.
 
 - list: project_id*, with_content (bool)
-- get: project_id*, slug*, render_html (bool), version (SHA)
+- get: project_id*, slug*, render_html (bool), version (commit SHA)
 - create: project_id*, title*, content*, format (markdown/rdoc/asciidoc/org)
 - update: project_id*, slug*, title, content, format
 - delete: project_id*, slug*
-- upload_attachment: project_id*, filename*, content_base64 or file_path (one required), branch
+- upload_attachment: project_id*, filename*, content_base64 OR file_path (exactly one), branch
 
-See also: gitlab_project`, routes, toolutil.IconWiki)
+See also: gitlab_project (settings/membership), gitlab_repository (file commits), gitlab_snippet (standalone code snippets).`, routes, toolutil.IconWiki)
 }
 
 // registerEnvironmentMeta registers the gitlab_environment meta-tool with actions:
@@ -1866,40 +1925,49 @@ func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"deployment_merge_requests":    routeAction(client, deploymentmergerequests.List),
 	}
 
-	addMetaTool(server, "gitlab_environment", `Manage GitLab environments, protected environments, deployment freeze periods, and deployment records.
+	addMetaTool(server, "gitlab_environment", `Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
+NOT for: CI/CD variables scoped to environments (use gitlab_ci_variable), pipelines/jobs (use gitlab_pipeline / gitlab_job), feature flag rollout strategies (use gitlab_feature_flags).
 
-Param conventions: * = required. All actions need project_id*.
+Returns:
+- *_list: array with pagination.
+- *_get / *_create / *_update / *_protect: environment / protection / freeze / deployment object.
+- deployment_approve_or_reject: updated deployment with approval state.
+- deployment_merge_requests: MRs included in a given deployment.
+- *_delete / *_unprotect / stop: {success: bool, message: string}.
+Errors: 404 not found, 403 forbidden (hint: protect/unprotect require Maintainer+), 400 invalid params (hint: tier ∈ production/staging/testing/development/other; freeze cron timezone must be valid TZ name).
 
-Environment CRUD:
-- list: project_id*, name, search, states, page, per_page
-- get / delete: project_id*, environment_id* (int)
-- create: project_id*, name*, description, external_url, tier
-- update: project_id*, environment_id* (int), name, description, external_url, tier
-- stop: project_id*, environment_id* (int), force (bool)
+Param conventions: * = required. All actions need project_id*. environment_id is the numeric ID returned by list/create.
 
-Protected environments (protected_*):
+Environments:
+- list: project_id*, name, search, states (available/stopped/stopping), page, per_page
+- get / delete: project_id*, environment_id*
+- create: project_id*, name*, description, external_url, tier (production/staging/testing/development/other)
+- update: project_id*, environment_id*, name, description, external_url, tier
+- stop: project_id*, environment_id*, force (bool) — force skips on-stop jobs
+
+Protected environments:
 - protected_list: project_id*, page, per_page
 - protected_get / protected_unprotect: project_id*, name*
 - protected_protect / protected_update: project_id*, name*, deploy_access_levels, approval_rules
 
-Freeze periods (freeze_*):
+Freeze periods (cron expressions):
 - freeze_list: project_id*, page, per_page
 - freeze_get / freeze_delete: project_id*, freeze_period_id*
-- freeze_create: project_id*, freeze_start* (cron), freeze_end* (cron), cron_timezone
+- freeze_create: project_id*, freeze_start* (cron, e.g. '0 23 * * 5'), freeze_end* (cron), cron_timezone
 - freeze_update: project_id*, freeze_period_id*, freeze_start, freeze_end, cron_timezone
 
-Deployments (deployment_*):
+Deployments (immutable history records):
 - deployment_list: project_id*, order_by, sort, environment, status, page, per_page
-- deployment_get / deployment_delete: project_id*, deployment_id* (int)
-- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status
-- deployment_update: project_id*, deployment_id* (int), status*
-- deployment_approve_or_reject: project_id*, deployment_id* (int), status* (approved/rejected), comment
-- deployment_merge_requests: project_id*, deployment_id* (int), state, order_by, sort, page, per_page
+- deployment_get / deployment_delete: project_id*, deployment_id*
+- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (created/running/success/failed/canceled)
+- deployment_update: project_id*, deployment_id*, status*
+- deployment_approve_or_reject: project_id*, deployment_id*, status* (approved/rejected), comment
+- deployment_merge_requests: project_id*, deployment_id*, state, order_by, sort, page, per_page
 
-See also: gitlab_pipeline`, routes, toolutil.IconEnvironment)
+See also: gitlab_pipeline / gitlab_job (CI runs deploying to environments), gitlab_ci_variable (env-scoped variables), gitlab_feature_flags (env-scoped strategies).`, routes, toolutil.IconEnvironment)
 }
 
 // registerCIVariableMeta registers the gitlab_ci_variable meta-tool with actions:
@@ -1926,9 +1994,14 @@ func registerCIVariableMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: CRUD CI/CD variables at project, group, or instance level. NOT for: pipeline configuration (use gitlab_template for CI lint), secrets management outside GitLab.
+When to use: define / rotate / unmask / scope CI/CD variables at project, group, or instance level, both regular and secret (masked / masked_and_hidden), with environment scoping for per-env values.
+NOT for: linting CI YAML or browsing CI templates (use gitlab_template), pipeline runs or schedules (use gitlab_pipeline), feature flags (use gitlab_feature_flags), per-deployment env metadata (use gitlab_environment), GitLab instance settings (use gitlab_admin).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- list / group_list / instance_list: arrays of variable objects {key, value (or hidden), variable_type, protected, masked, raw, environment_scope, description} with pagination.
+- get / create / update / group_get / group_create / group_update / instance_get / instance_create / instance_update: single variable object.
+- delete / group_delete / instance_delete: {success, message}.
+Errors: 404 (hint: a (key, environment_scope) pair must exist for get/update/delete — supply environment_scope when the variable is env-scoped), 403 (hint: project requires Maintainer+, group requires Owner, instance requires admin), 400 (hint: variable_type ∈ env_var/file; masked requires single-line non-empty value matching GitLab's masking rules).
 
 Param conventions: * = required. Project-scoped actions need project_id*, group-scoped need group_id*, instance-scoped need no ID. Common optional params: variable_type, protected, masked, raw, environment_scope.
 
@@ -1972,18 +2045,25 @@ func registerTemplateMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"project_template_get":  routeAction(client, projecttemplates.Get),
 	}
 
-	addReadOnlyMetaTool(server, "gitlab_template", `Browse GitLab templates (gitignores, CI/CD YAML, Dockerfiles, licenses, project templates) and lint CI configuration.
+	addReadOnlyMetaTool(server, "gitlab_template", `Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration. Read-only; ci_lint may resolve `+"`include:`"+` directives that fetch remote URLs.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: discover available built-in templates, fetch a template body to commit into a project, validate a .gitlab-ci.yml before pushing, or list project scaffolds.
+NOT for: reusable Catalog components published by groups (use gitlab_ci_catalog), running pipelines (use gitlab_pipeline), CI/CD variables (use gitlab_ci_variable), repository files (use gitlab_repository).
 
-Param conventions: * = required.
+Returns:
+- *_list: [{key, name}] with pagination (page, per_page, total, next_page).
+- *_get: {name, content} — paste `+"`content`"+` into the target file.
+- lint / lint_project: {valid (bool), errors: [string], warnings: [string], merged_yaml (string), jobs: [...] when include_jobs=true}.
+Errors: 404 not found (hint: check key or template_type), 403 forbidden, 400 invalid params (hint: content required for lint, project_id required for project_template_*).
+
+Param conventions: * = required. template_type ∈ {dockerfiles, gitignores, gitlab_ci_ymls, licenses}.
 
 CI lint:
-- lint: Validate YAML content. project_id*, content*, dry_run (bool), include_jobs (bool), ref
-- lint_project: Validate existing .gitlab-ci.yml. project_id*, content_ref, dry_run (bool), dry_run_ref, include_jobs (bool), ref
+- lint: project_id*, content*, dry_run (bool), include_jobs (bool), ref
+- lint_project: project_id*, content_ref, dry_run (bool), dry_run_ref, include_jobs (bool), ref
 
-Global templates ({type}_list / {type}_get):
+Global templates:
 - ci_yml_list / dockerfile_list / gitignore_list: page, per_page
 - ci_yml_get / dockerfile_get / gitignore_get: key*
 - license_list: page, per_page, popular (bool)
@@ -1993,7 +2073,7 @@ Project templates:
 - project_template_list: project_id*, template_type*, page, per_page
 - project_template_get: project_id*, template_type*, key*
 
-See also: gitlab_pipeline, gitlab_project, gitlab_ci_catalog`, routes, toolutil.IconTemplate)
+See also: gitlab_ci_catalog (reusable Catalog components), gitlab_pipeline (run pipelines), gitlab_project (project membership/settings).`, routes, toolutil.IconTemplate)
 }
 
 // registerAdminMeta registers the gitlab_admin meta-tool with actions:
@@ -2085,12 +2165,18 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `GitLab instance administration: topics, settings, appearance, broadcast messages, features, licenses, system hooks, Sidekiq metrics, plan limits, usage data, migrations, OAuth apps, metadata, custom attributes, error tracking, secure files, Terraform states, cluster agents, dependency proxy, and imports. Delete/purge actions are destructive.
+	addMetaTool(server, "gitlab_admin", `GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: instance-level admin operations, Sidekiq monitoring, settings, license management, bulk imports. NOT for: user CRUD (use gitlab_user), MCP server ops (use gitlab_server).
+When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports from GitHub/Bitbucket).
+NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- *_list: array with pagination.
+- *_get / *_create / *_update / *_set / *_add: resource object.
+- Sidekiq / usage_data / app_statistics / metadata: metrics objects.
+- *_delete / *_revoke / *_purge / *_unlock: {success: bool, message: string}.
+Errors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded; system hook url must be https).
 
 Param conventions: * = required. List actions accept page, per_page.
 
@@ -2100,52 +2186,51 @@ Topics:
 - topic_create: name*, title, description
 - topic_update: topic_id*, name, title, description
 
-Settings and appearance:
-- settings_get / appearance_get: no params
+Settings & appearance:
+- settings_get / appearance_get: (no params)
 - settings_update: settings (map of setting_name to value)
 - appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
 
 Broadcast messages:
-- broadcast_message_list: no params
+- broadcast_message_list: (no params)
 - broadcast_message_get / broadcast_message_delete: id*
-- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable, target_path, target_access_levels
+- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels
 - broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable
 
-Features:
-- feature_list / feature_list_definitions: no params
-- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force
+Instance feature flags:
+- feature_list / feature_list_definitions: (no params)
+- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force (bool)
 - feature_delete: name*
 
 License:
-- license_get: no params
+- license_get: (no params)
 - license_add: license* (Base64-encoded)
 - license_delete: id*
 
 System hooks:
-- system_hook_list: no params
+- system_hook_list: (no params)
 - system_hook_get / system_hook_test / system_hook_delete: id*
 - system_hook_add: url*, token, push_events, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification
 
-Sidekiq:
-- sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics: no params
+Sidekiq metrics: sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics (no params).
 
 Plan limits:
 - plan_limits_get: plan_name
 - plan_limits_change: plan_name*, conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size
 
 Usage data:
-- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: no params
-- usage_data_track_event: event*, send_to_snowplow, namespace_id, project_id
+- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: (no params)
+- usage_data_track_event: event*, send_to_snowplow (bool), namespace_id, project_id
 - usage_data_track_events: events* (array)
 
 OAuth applications:
-- application_list: no params
-- application_create: name*, redirect_uri*, scopes*, confidential
+- application_list: (no params)
+- application_create: name*, redirect_uri*, scopes*, confidential (bool)
 - application_delete: id*
 
-Misc admin:
+Misc:
 - db_migration_mark: version*, database
-- app_statistics_get / metadata_get: no params
+- app_statistics_get / metadata_get: (no params)
 
 Custom attributes:
 - custom_attr_list: resource_type* (user/group/project), resource_id*
@@ -2153,14 +2238,14 @@ Custom attributes:
 - custom_attr_set: resource_type*, resource_id*, key*, value*
 
 Bulk import:
-- bulk_import_start: url* (source GitLab URL), access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects, migrate_memberships})
+- bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})
 
 Error tracking:
 - error_tracking_list: project_id*
 - error_tracking_create: project_id*
 - error_tracking_delete: project_id*, key_id*
 - error_tracking_get_settings: project_id*
-- error_tracking_update_settings: project_id*, active, integrated
+- error_tracking_update_settings: project_id*, active (bool), integrated (bool)
 
 Alert metric images:
 - alert_metric_image_list: project_id*, alert_iid*
@@ -2174,7 +2259,7 @@ Secure files:
 - secure_file_create: project_id*, name*, content* (base64-encoded)
 
 Terraform states:
-- terraform_state_list: project_path* (e.g. group/project)
+- terraform_state_list: project_path*
 - terraform_state_get: project_path*, name*
 - terraform_state_delete / terraform_state_lock / terraform_state_unlock: project_id*, name*
 - terraform_version_delete: project_id*, name*, serial*
@@ -2187,15 +2272,15 @@ Cluster agents:
 - cluster_agent_token_get / cluster_agent_token_revoke: project_id*, agent_id*, token_id*
 - cluster_agent_token_create: project_id*, agent_id*, name*
 
-Import:
+Imports:
 - import_github: personal_access_token*, repo_id*, target_namespace*, new_name
 - import_bitbucket: bitbucket_username*, bitbucket_app_password*, repo_path*, target_namespace*, new_name
 - import_bitbucket_server: bitbucket_server_url*, bitbucket_server_username*, personal_access_token*, bitbucket_server_project*, bitbucket_server_repo*, new_namespace, new_name
 - import_cancel_github: project_id*
 - import_gists: personal_access_token*
-- dependency_proxy_delete: group_id*. Purges cache.
+- dependency_proxy_delete: group_id* — purges the group's dependency proxy cache
 
-See also: gitlab_user (user management), gitlab_server (server health)`, routes, toolutil.IconServer)
+See also: gitlab_user (user CRUD), gitlab_server (MCP server health and updates), gitlab_group / gitlab_project (group/project admin), gitlab_access (tokens, deploy keys, access requests).`, routes, toolutil.IconServer)
 }
 
 // registerAccessMeta registers the gitlab_access meta-tool with actions:
@@ -2266,9 +2351,14 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: manage deploy keys, deploy tokens, access tokens (project/group/personal), access requests, and invitations. NOT for: SSH/GPG keys or user-scoped PATs (use gitlab_user), instance admin tokens (use gitlab_admin), project settings (use gitlab_project).
+When to use: manage deploy keys, deploy tokens, access tokens (project / group / personal), access requests, and invitations.
+NOT for: SSH/GPG keys or user-scoped PATs created from the user profile (use gitlab_user), instance admin tokens or impersonation tokens (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA / MFA flows.
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.
+- token_*_get / token_*_create / token_*_rotate / deploy_token_get_* / deploy_token_create_* / deploy_key_get / deploy_key_add / deploy_key_update / deploy_key_enable / approve_* / request_*: token / key / request / invitation object. Create / rotate include the cleartext token only ONCE — store it securely; subsequent reads return only the metadata.
+- token_*_revoke / deploy_token_delete_* / deploy_key_delete / deny_* : {success, message}.
+Errors: 401/403 (hint: requires Maintainer+ to manage project tokens, Owner for group, admin for instance / deploy_token_list_all / deploy_key_list_all / deploy_key_add_instance), 404 (hint: token_id and deploy_key_id are scoped to the project/group), 400 (hint: scopes must be a subset of {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future ISO date).
 
 Param conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.
 
@@ -2397,9 +2487,15 @@ func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_package", `Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: package upload/download, container registry browsing, protection rules. NOT for: release asset links (use gitlab_release).
+When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
+NOT for: release asset links — these are managed by gitlab_release link_*; secure files (use gitlab_admin secure_file_*); ML model registry artifacts (use gitlab_model_registry); upload general project attachments (use gitlab_project upload).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- list / file_list / registry_list_project / registry_list_group / registry_tag_list / registry_rule_list / protection_rule_list: arrays with pagination.
+- publish / publish_and_link / publish_directory / registry_get / registry_tag_get / registry_rule_create / registry_rule_update / protection_rule_create / protection_rule_update: package / image / rule object. publish_and_link also returns the created release link.
+- download: {file_name, content_base64 (or saved_to)} — large files are streamed to disk when output_path is set.
+- delete / file_delete / registry_delete / registry_tag_delete / registry_tag_delete_bulk / registry_rule_delete / protection_rule_delete: {success, message}.
+Errors: 404 (hint: package_id, repository_id and tag_name are project-scoped), 403 (hint: requires Maintainer+ to delete; protection rules may block delete with a 'forbidden by protection rule' message), 400 (hint: file_path must exist locally; content_base64 must be valid base64; package_type must be one of GitLab's supported types).
 
 Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
 
@@ -2479,17 +2575,26 @@ func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"emoji_snippet_note_create": routeAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
 		"emoji_snippet_note_delete": destructiveVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
 	}
-	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets (personal and project-scoped): CRUD, raw content, file content, discussions, notes, and award emoji. Delete actions are destructive.
+	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: snippet CRUD, reading snippet content, discussions/notes on snippets. NOT for: project files (use gitlab_repository).
+When to use: store/share standalone code or text outside a repo, comment on existing snippets, react with emoji on a snippet or snippet note, browse public snippets via explore.
+NOT for: files in a repository (use gitlab_repository), wiki pages (use gitlab_wiki), MR/issue notes (use gitlab_mr_review or gitlab_issue), custom group emoji (use gitlab_custom_emoji — enterprise).
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns:
+- *_list / list_all / explore: array with pagination.
+- *_get / *_create / *_update: snippet object {id, title, file_name, files, visibility, author, web_url, raw_url}.
+- content / project_content: raw snippet body as text.
+- file_content: raw content of a single file in a multi-file snippet.
+- discussion_* / note_*: discussion or note object.
+- emoji_*: award emoji object.
+- *_delete: {success: bool, message: string}.
+Errors: 404 not found, 403 forbidden (hint: requires Reporter+ for project snippets; private snippets require ownership), 400 invalid params (hint: visibility ∈ private/internal/public).
 
-Param conventions: * = required. List actions accept page, per_page.
+Param conventions: * = required. List actions accept page, per_page. visibility ∈ private/internal/public.
 
 Personal snippets:
-- list / list_all / explore: no required params
+- list / list_all / explore: (no required params)
 - get / content: snippet_id*
 - file_content: snippet_id*, file_path*
 - create: title*, file_name*, content*, visibility, description
@@ -2503,7 +2608,7 @@ Project snippets:
 - project_update: project_id*, snippet_id*, title, file_name, content, visibility
 - project_delete: project_id*, snippet_id*
 
-Discussions:
+Discussions (threaded):
 - discussion_list: snippet_id*
 - discussion_get: snippet_id*, discussion_id*
 - discussion_create: snippet_id*, body*
@@ -2511,19 +2616,19 @@ Discussions:
 - discussion_update_note: snippet_id*, discussion_id*, note_id*, body*
 - discussion_delete_note: snippet_id*, discussion_id*, note_id*
 
-Notes (project-scoped):
+Notes (project snippets only):
 - note_list: project_id*, snippet_id*, order_by, sort
 - note_get / note_delete: project_id*, snippet_id*, note_id*
 - note_create: project_id*, snippet_id*, body*
 - note_update: project_id*, snippet_id*, note_id*, body*
 
 Award emoji:
-- emoji_snippet_list / emoji_snippet_create / emoji_snippet_delete: project_id*, iid*, name* (create), award_id* (get/delete)
+- emoji_snippet_list / emoji_snippet_create / emoji_snippet_delete: project_id*, iid*, name* (create), award_id* (delete)
 - emoji_snippet_get: project_id*, iid*, award_id*
-- emoji_snippet_note_list / emoji_snippet_note_create / emoji_snippet_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_snippet_note_list / emoji_snippet_note_create / emoji_snippet_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (delete)
 - emoji_snippet_note_get: project_id*, iid*, note_id*, award_id*
 
-See also: gitlab_project, gitlab_user`, routes, toolutil.IconSnippet)
+See also: gitlab_repository (project files and commits), gitlab_wiki (long-form project docs), gitlab_project (project membership and visibility), gitlab_custom_emoji (define group-level custom emoji).`, routes, toolutil.IconSnippet)
 }
 
 // registerFeatureFlagsMeta registers the gitlab_feature_flags meta-tool with actions:
@@ -2542,26 +2647,35 @@ func registerFeatureFlagsMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"ff_user_list_update": routeAction(client, ffuserlists.UpdateUserList),
 		"ff_user_list_delete": destructiveVoidAction(client, ffuserlists.DeleteUserList),
 	}
-	addMetaTool(server, "gitlab_feature_flags", `CRUD GitLab feature flags and feature flag user lists (named sets of user IDs).
+	addMetaTool(server, "gitlab_feature_flags", `Manage project feature flags and feature-flag user lists for gradual rollouts. Delete is destructive; setting active=false disables the flag but preserves history.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: define rollout strategies (percentage, user-targeted, environment-scoped) for a project's feature flags, and manage the user lists referenced by `+"`gitlabUserList`"+` strategies.
+NOT for: GitLab instance-level feature flags (admin only — use gitlab_admin), environment definitions or protection (use gitlab_environment), code branching (use gitlab_branch), CI/CD variables (use gitlab_ci_variable).
 
-Param conventions: * = required. All actions need project_id*.
+Returns:
+- *_list: array with pagination (page, per_page, total, next_page).
+- *_get / *_create / *_update: the resource object (flag includes strategies and scopes; user list includes user_xids).
+- *_delete: {success: bool, message: string}.
+Errors: 404 not found, 403 forbidden (hint: requires Developer+ role), 400 invalid params (hint: strategies/scopes JSON shape).
+
+Param conventions: * = required. All actions need project_id*. version = `+"`new_version_flag`"+` (legacy `+"`legacy_flag`"+` deprecated).
+
+strategies shape: [{name, parameters, scopes: [{environment_scope}]}] where name ∈ {default, gradualRolloutUserId, userWithId, flexibleRollout, gitlabUserList}. parameters per strategy: gradualRolloutUserId={groupId, percentage}; userWithId={userIds}; flexibleRollout={groupId, rollout, stickiness}; gitlabUserList={userListId}.
 
 Feature flags (feature_flag_*):
 - feature_flag_list: project_id*, scope (enabled/disabled), page, per_page
 - feature_flag_get / feature_flag_delete: project_id*, name*
-- feature_flag_create: project_id*, name*, version*, description, active, strategies
-- feature_flag_update: project_id*, name*, description, active, strategies
+- feature_flag_create: project_id*, name*, version*, description, active (bool), strategies
+- feature_flag_update: project_id*, name*, description, active (bool), strategies
 
-User lists (ff_user_list_*): Named sets of user IDs for targeting.
+User lists (ff_user_list_*) — named sets of user IDs referenced by gitlabUserList strategies:
 - ff_user_list_list: project_id*, page, per_page
 - ff_user_list_get / ff_user_list_delete: project_id*, iid*
-- ff_user_list_create: project_id*, name*, user_xids* (comma-separated)
+- ff_user_list_create: project_id*, name*, user_xids* (comma-separated user IDs)
 - ff_user_list_update: project_id*, iid*, name, user_xids
 
-See also: gitlab_project, gitlab_environment`, routes, toolutil.IconConfig)
+See also: gitlab_environment (environment scopes referenced by strategies), gitlab_admin (instance-level feature flags), gitlab_project (project membership and settings).`, routes, toolutil.IconConfig)
 }
 
 // registerMergeTrainMeta registers the gitlab_merge_train meta-tool with actions
@@ -2857,14 +2971,19 @@ func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) 
 	routes := actionMap{
 		"download": routeAction(client, modelregistry.Download),
 	}
-	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from GitLab Model Registry (Premium/Ultimate). Returns base64-encoded binary content — responses can be large depending on model file size.
+	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from the GitLab Model Registry (Premium/Ultimate). Read-only — cannot publish or delete model versions through this tool.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: download ML model artifacts from the GitLab Model Registry. NOT for: generic packages (use gitlab_package), container images, or model training.
+When to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.
+NOT for: generic packages (use gitlab_package), container images (use gitlab_package registry_*), release attachments (use gitlab_release link_*), training jobs or experiment tracking, model publishing or versioning (not yet exposed through MCP).
+
+Returns:
+- download: {file_name, model_version_id, size, content_base64} — binary content is base64-encoded; large models can produce very large responses.
+Errors: 404 (hint: project_id, model_version_id and path are model-registry-scoped; verify in the GitLab UI under Deploy → Model registry), 403 (hint: requires Reporter+ on the project and a Premium/Ultimate plan), 400 (hint: filename must match an asset attached to the version).
 
 - download: project_id*, model_version_id*, path*, filename*. Returns base64-encoded file content.
 
-See also: gitlab_package (generic package registry)`, routes, toolutil.IconPackage)
+See also: gitlab_package (generic / npm / maven / conan / pypi / nuget / container packages), gitlab_release (asset links per release), gitlab_repository (raw files in the repo).`, routes, toolutil.IconPackage)
 }
 
 // registerStorageMoveMeta registers the gitlab_storage_move enterprise meta-tool
@@ -2974,15 +3093,23 @@ func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list": routeAction(client, cicatalog.List),
 		"get":  routeAction(client, cicatalog.Get),
 	}
-	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources: reusable pipeline components and templates (Premium/Ultimate, GraphQL).
+	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint; requires Premium/Ultimate.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
+When to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `+"`include:component`"+`, or audit which Catalog resources a publisher group exposes.
+NOT for: running pipelines or pipeline definitions (use gitlab_pipeline), built-in GitLab templates such as gitignore/Dockerfile/license (use gitlab_template), CI YAML linting (use gitlab_template action=lint).
 
-- list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first, after
-- get: id (GID) or full_path* (one required)
+Returns:
+- list: {nodes: [{id, full_path, name, description, latest_version, star_count}], page_info: {end_cursor, has_next_page}}.
+- get: {id, full_path, name, description, latest_version, star_count, versions: [{version, released_at, tag_name}]}.
+Errors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requires Premium/Ultimate or Catalog read access), 400 invalid params (hint: provide id OR full_path).
 
-See also: gitlab_pipeline, gitlab_template`, routes, toolutil.IconPackage)
+Param conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).
+
+- list: search, scope (ALL/NAMESPACED), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC), first (max 100), after (cursor)
+- get: id OR full_path* (exactly one)
+
+See also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).`, routes, toolutil.IconPackage)
 }
 
 // registerCustomEmojiMeta registers the gitlab_custom_emoji meta-tool with actions: list, create, delete.
@@ -2992,14 +3119,23 @@ func registerCustomEmojiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create": routeAction(client, customemoji.Create),
 		"delete": destructiveVoidAction(client, customemoji.Delete),
 	}
-	addMetaTool(server, "gitlab_custom_emoji", `CRUD group-level custom emoji via GraphQL (Premium/Ultimate). Distinct from award emoji (reactions).
+	addMetaTool(server, "gitlab_custom_emoji", `Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. Requires Premium/Ultimate.
 Valid actions: `+validActionsString(routes)+`
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: list, add, or remove the custom emoji available to a group's projects (e.g. company logos, team mascots) used as reactions on issues/MRs/notes.
+NOT for: posting or removing a reaction on an issue/MR/snippet/commit/note (use the `+"`award_emoji_*`"+` actions on gitlab_issue, gitlab_merge_request, or gitlab_snippet), Unicode emoji (built-in, no action required), instance-level emoji (not supported by GitLab).
 
-- list: group_path*, first, after
-- create: group_path*, name* (without colons), url* (image URL)
-- delete: id* (GID e.g. gid://gitlab/CustomEmoji/1)
+Returns:
+- list: {nodes: [{id, name, url, external (bool), created_at, user_permissions: {delete}}], page_info: {end_cursor, has_next_page}}.
+- create: the created node {id, name, url, external, created_at}.
+- delete: {success: bool, message: string}.
+Errors: 404 not found (hint: check group_path or id GID), 403 forbidden (hint: requires Maintainer+ on the group and Premium/Ultimate), 400 invalid params (hint: name must not contain colons; url must be a publicly reachable image).
 
-See also: gitlab_group`, routes, toolutil.IconLabel)
+Param conventions: * = required. id format = GID (gid://gitlab/CustomEmoji/123). group_path = full namespace path (e.g. mygroup or mygroup/subgroup).
+
+- list: group_path*, first (max 100), after (cursor)
+- create: group_path*, name* (no colons), url* (HTTPS image URL)
+- delete: id*
+
+See also: gitlab_group (group settings and membership), gitlab_issue / gitlab_merge_request / gitlab_snippet (post reactions using the emoji).`, routes, toolutil.IconLabel)
 }

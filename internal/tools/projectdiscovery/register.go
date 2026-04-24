@@ -17,14 +17,21 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_discover_project",
 		Title: toolutil.TitleFromName("gitlab_discover_project"),
-		Description: "Resolve a git remote URL to a GitLab project. " +
-			"Extract the FULL remote URL from the workspace .git/config file (look for [remote \"origin\"] url = ...) " +
-			"or from 'git remote -v' output, and pass it here to discover the project_id needed for all other GitLab operations. " +
-			"IMPORTANT: Pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. " +
-			"Supported formats: HTTPS (https://gitlab.example.com/group/project.git), " +
-			"SSH shorthand (git@gitlab.example.com:group/project.git), " +
-			"SSH protocol (ssh://git@gitlab.example.com/group/project.git)." +
-			"\n\nReturns: JSON with the resolved project ID and details.\n\nSee also: gitlab_project, gitlab_server",
+		Description: "Resolve a git remote URL to a GitLab project and return its project_id and metadata. " +
+			"Read-only; performs at most one authenticated GET /projects/:path lookup; no side effects.\n\n" +
+			"When to use: at the start of a workspace session, to obtain the project_id required by most other gitlab_* tools. " +
+			"Extract the FULL remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'.\n" +
+			"NOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_user action=list_projects), " +
+			"verifying GitLab connectivity or authentication (use gitlab_server action=health_check).\n\n" +
+			"IMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. " +
+			"Supported formats:\n" +
+			"- HTTPS: https://gitlab.example.com/group/project.git\n" +
+			"- SSH shorthand: git@gitlab.example.com:group/project.git\n" +
+			"- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n" +
+			"- Bare path: gitlab.example.com/group/project\n\n" +
+			"Returns: {id, name, path_with_namespace, web_url, description, default_branch, visibility, archived}. " +
+			"Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\n" +
+			"See also: gitlab_project (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query).",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ResolveInput) (*mcp.CallToolResult, ResolveOutput, error) {

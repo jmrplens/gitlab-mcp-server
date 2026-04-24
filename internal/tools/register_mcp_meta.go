@@ -24,31 +24,41 @@ func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *a
 		"health_check": routeAction(client, health.Check),
 	}
 
-	desc := `MCP server health, version, and GitLab connectivity check. Read-only, no params required.
+	desc := `MCP server self-diagnostics: GitLab connectivity probe, server/GitLab version, and authenticated user identity. Read-only; no required params.
 Valid actions: ` + validActionsString(routes) + `
 
-When to use: verify GitLab connectivity, check server/GitLab version, diagnose auth issues. NOT for: GitLab resource operations (use domain-specific tools).
+When to use: at session start to confirm the GitLab token works, when diagnosing 401/403 errors from other tools, or to record server/GitLab versions for support tickets.
+NOT for: resolving a git remote URL to a project (use gitlab_discover_project), GitLab instance admin (use gitlab_admin), per-project membership/permissions (use gitlab_project / gitlab_user), CI runner health (use gitlab_runner).
 
-- status: Returns server version, GitLab version, auth status, current user, response time. No params.
-- health_check: Alias for status. No params.
+Returns: {server_version, gitlab_version, gitlab_url, authenticated (bool), current_user: {id, username, name}, response_time_ms}.
+Errors: 401 unauthorized (hint: GITLAB_TOKEN missing or expired), network errors with the GitLab URL surfaced verbatim.
 
-See also: gitlab_discover_project (resolve git remote URL to project ID)`
+- status: (no params) — returns the diagnostics object above.
+- health_check: alias for status. (no params)
+
+See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (instance admin), gitlab_user (current user details and impersonation tokens).`
 
 	if updater != nil {
 		routes["check_update"] = route(wrapUpdaterAction(updater, serverupdate.Check))
 		routes["apply_update"] = destructiveRoute(wrapUpdaterAction(updater, serverupdate.Apply))
 
-		desc = `MCP server health, version, update management, and GitLab connectivity check. apply_update replaces the server binary (destructive on Linux/macOS, staged on Windows).
+		desc = `MCP server self-diagnostics, version, GitLab connectivity probe, and self-update. apply_update REPLACES the running binary on disk; on Linux/macOS the replacement is atomic, on Windows it is staged via a script. Read-only except apply_update (destructive).
 Valid actions: ` + validActionsString(routes) + `
 
-When to use: verify GitLab connectivity, check server/GitLab version, manage server updates. NOT for: GitLab resource operations (use domain-specific tools).
+When to use: confirm the GitLab token works, check whether a newer server release is available, apply that update without leaving the editor.
+NOT for: GitLab instance admin (use gitlab_admin), git remote resolution (use gitlab_discover_project), CI runner health (use gitlab_runner).
 
-- status: Returns server version, GitLab version, auth status, current user, response time. No params.
-- health_check: Alias for status. No params.
-- check_update: Check if newer server version is available. Returns current/latest version, release URL, notes. No params.
-- apply_update: Download and apply latest server update. Linux/macOS: atomic binary replace. Windows: staged download with update script. No params.
+Returns:
+- status / health_check: {server_version, gitlab_version, gitlab_url, authenticated, current_user, response_time_ms}.
+- check_update: {current_version, latest_version, update_available (bool), release_url, release_notes}.
+- apply_update: {success, message, restart_required, new_version}.
+Errors: 401 unauthorized (hint: GITLAB_TOKEN missing/expired), update channel errors include release fetch URL.
 
-See also: gitlab_discover_project (resolve git remote URL to project ID)`
+- status / health_check: (no params)
+- check_update: (no params) — compares current binary version against the configured release feed.
+- apply_update: (no params) — downloads and applies the latest server release.
+
+See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (GitLab instance admin), gitlab_user (current user identity).`
 	}
 	addMetaTool(server, "gitlab_server", desc, routes, toolutil.IconHealth)
 }
