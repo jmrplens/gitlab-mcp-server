@@ -170,10 +170,15 @@ func newTUIModel(version string, w io.Writer) tuiModel {
 	}
 }
 
+// Init implements [tea.Model] by starting the cursor blink and clearing the
+// screen on wizard launch.
 func (m tuiModel) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, tea.ClearScreen)
 }
 
+// Update implements [tea.Model] by routing the incoming message to the
+// per-step handler (install, GitLab credentials, options, clients) and
+// handling global quit shortcuts (Ctrl+C, Esc).
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -396,6 +401,8 @@ func (m *tuiModel) buildResult() {
 	}
 }
 
+// View implements [tea.Model] by rendering the current wizard step (header,
+// progress bar, step-specific UI, and footer) into a styled bubbletea view.
 func (m tuiModel) View() tea.View {
 	var b strings.Builder
 	const panelWidth = 64
