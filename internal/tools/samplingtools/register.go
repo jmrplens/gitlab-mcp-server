@@ -331,7 +331,7 @@ All actions need project_id*. Additional params per action:
 
 NOT for raw data retrieval — use gitlab_merge_request, gitlab_issue, gitlab_pipeline.
 See also: gitlab_merge_request, gitlab_issue, gitlab_pipeline, gitlab_release`,
-		Annotations: toolutil.ReadOnlyMetaAnnotations,
+		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
 		Icons:       toolutil.IconAnalytics,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_analyze", routes, metaMarkdownForResult))

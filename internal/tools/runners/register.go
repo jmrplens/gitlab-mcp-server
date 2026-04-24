@@ -387,7 +387,7 @@ Controller tokens:
 - controller_token_create: controller_id*, description
 
 See also: gitlab_pipeline, gitlab_job`,
-		Annotations: toolutil.DeriveAnnotations(routes),
+		Annotations: toolutil.DeriveAnnotationsWithTitle("gitlab_runner", routes),
 		Icons:       toolutil.IconRunner,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_runner", routes, nil))

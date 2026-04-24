@@ -755,6 +755,63 @@ func TestDeriveAnnotations_EmptyMap(t *testing.T) {
 	}
 }
 
+// TestDeriveAnnotationsWithTitle verifies that DeriveAnnotationsWithTitle
+// delegates to DeriveAnnotations and sets Title from the tool name.
+// Covers both destructive and non-destructive route maps.
+func TestDeriveAnnotationsWithTitle(t *testing.T) {
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
+
+	t.Run("non-destructive routes set title and DestructiveHint=false", func(t *testing.T) {
+		routes := ActionMap{"list": Route(noop), "get": Route(noop)}
+		ann := DeriveAnnotationsWithTitle("gitlab_branch", routes)
+		if ann.Title != "Branch" {
+			t.Errorf("Title = %q, want %q", ann.Title, "Branch")
+		}
+		if ann.DestructiveHint == nil || *ann.DestructiveHint != false {
+			t.Error("non-destructive routes should produce DestructiveHint=false")
+		}
+	})
+
+	t.Run("destructive routes set title and DestructiveHint=true", func(t *testing.T) {
+		routes := ActionMap{"list": Route(noop), "delete": DestructiveRoute(noop)}
+		ann := DeriveAnnotationsWithTitle("gitlab_merge_request", routes)
+		if ann.Title != "Merge Request" {
+			t.Errorf("Title = %q, want %q", ann.Title, "Merge Request")
+		}
+		if ann.DestructiveHint == nil || *ann.DestructiveHint != true {
+			t.Error("destructive routes should produce DestructiveHint=true")
+		}
+	})
+}
+
+// TestReadOnlyMetaAnnotationsWithTitle verifies that ReadOnlyMetaAnnotationsWithTitle
+// returns a copy of ReadOnlyMetaAnnotations with the Title set and all read-only
+// fields preserved. Also verifies the shared singleton is not mutated.
+func TestReadOnlyMetaAnnotationsWithTitle(t *testing.T) {
+	ann := ReadOnlyMetaAnnotationsWithTitle("gitlab_search")
+
+	if ann.Title != "Search" {
+		t.Errorf("Title = %q, want %q", ann.Title, "Search")
+	}
+	if !ann.ReadOnlyHint {
+		t.Error("ReadOnlyHint should be true")
+	}
+	if !ann.IdempotentHint {
+		t.Error("IdempotentHint should be true")
+	}
+	if ann.DestructiveHint == nil || *ann.DestructiveHint != false {
+		t.Error("DestructiveHint should be false")
+	}
+	if ann.OpenWorldHint == nil || *ann.OpenWorldHint != true {
+		t.Error("OpenWorldHint should be true")
+	}
+
+	// Verify the shared singleton was not mutated.
+	if ReadOnlyMetaAnnotations.Title != "" {
+		t.Errorf("singleton Title mutated to %q, want empty", ReadOnlyMetaAnnotations.Title)
+	}
+}
+
 // TestMakeMetaHandler_MetadataDestructive_TriggersConfirm verifies that
 // MakeMetaHandler reads route.Destructive to determine confirmation requirement.
 func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {

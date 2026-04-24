@@ -74,9 +74,6 @@ func destructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 	return toolutil.DestructiveVoidAction(client, fn)
 }
 
-// readOnlyMetaAnnotations are for meta-tools with only list/get/search actions.
-var readOnlyMetaAnnotations = toolutil.ReadOnlyMetaAnnotations
-
 // makeMetaHandler creates a meta-tool handler using markdownForResult as the formatter.
 func makeMetaHandler(toolName string, routes actionMap) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 	return toolutil.MakeMetaHandler(toolName, routes, markdownForResult)
@@ -90,7 +87,7 @@ func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons 
 		Name:        name,
 		Title:       toolutil.TitleFromName(name),
 		Description: desc,
-		Annotations: toolutil.DeriveAnnotations(routes),
+		Annotations: toolutil.DeriveAnnotationsWithTitle(name, routes),
 		Icons:       icons,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, makeMetaHandler(name, routes))
@@ -103,7 +100,7 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 		Name:        name,
 		Title:       toolutil.TitleFromName(name),
 		Description: desc,
-		Annotations: readOnlyMetaAnnotations,
+		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
 		Icons:       icons,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, makeMetaHandler(name, routes))
