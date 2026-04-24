@@ -48,7 +48,7 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Default GitLab instance URL. Can be overridden per-request via `GITLAB-URL` header |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--meta-tools` | `true` | Enable domain-level meta-tools (28, or 43 with --enterprise) instead of individual tools (1005) |
+| `--meta-tools` | `true` | Enable domain-level meta-tools (28, or 43 with --enterprise) instead of individual tools (1000) |
 | `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional domain tools) |
 | `--max-http-clients` | `100` | Maximum unique token+URL entries in the server pool |
 | `--session-timeout` | `30m` | Idle MCP session timeout |

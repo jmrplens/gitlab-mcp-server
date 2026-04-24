@@ -2,7 +2,6 @@
 // files that are missing documentation. It uses go/ast to parse files,
 // identify undocumented symbols (functions, types, methods), and inserts
 // context-aware doc comments based on naming conventions.
-
 package main
 
 import (

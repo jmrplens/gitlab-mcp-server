@@ -2,7 +2,6 @@
 // In stdio mode, configuration comes from environment variables (.env / exports).
 // In HTTP mode, configuration comes from CLI flags; no GITLAB_TOKEN is required
 // at startup — each client provides its own token per-request.
-
 package main
 
 import (

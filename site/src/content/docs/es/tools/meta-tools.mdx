@@ -11,18 +11,18 @@ Las meta-herramientas son el modo de operación predeterminado de GitLab MCP Ser
 
 ## ¿Por qué meta-herramientas?
 
-Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra 1005 herramientas individuales, solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
+Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra 1000 herramientas individuales, solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
 
 | Modo              | Nº de herramientas | Overhead de tokens | Funcionalidad               |
 | ----------------- | ------------------ | ------------------ | --------------------------- |
-| Individual        | 1005               | Muy alto           | Completa                    |
+| Individual        | 1000               | Muy alto           | Completa                    |
 | Meta (base)       | 28                 | Bajo               | Completa                    |
 | Meta (enterprise) | 43                 | Bajo               | Completa + Premium/Ultimate |
 
 Las meta-herramientas reducen el recuento de herramientas en un **97%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
 :::note[Compatibilidad con clientes]
-Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas (28 herramientas) funciona dentro de estas restricciones. Si desactivas las meta-herramientas (`META_TOOLS=false`), los clientes con dichos límites solo verán un subconjunto de las 1005 herramientas individuales.
+Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas (28 herramientas) funciona dentro de estas restricciones. Si desactivas las meta-herramientas (`META_TOOLS=false`), los clientes con dichos límites solo verán un subconjunto de las 1000 herramientas individuales.
 :::
 
 ## Cómo funcionan las meta-herramientas

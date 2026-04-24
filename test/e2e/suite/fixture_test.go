@@ -125,6 +125,11 @@ func isRetryableError(err error) bool {
 		strings.Contains(msg, "503 service unavailable") {
 		return true
 	}
+	// GitLab NotificationSetting race: first_or_initialize_by collides with
+	// concurrent upsert producing a UniqueConstraint on user_id.
+	if strings.Contains(msg, "already exists in source") {
+		return true
+	}
 	return false
 }
 

@@ -5,9 +5,11 @@
 # Usage: update-server-json-sha.sh <checksums-file> <version>
 #
 # Steps:
-#   1. Sets .version to the given version
-#   2. Replaces /releases/latest/download/ with /releases/download/v<version>/
-#   3. Sets .fileSha256 for each package matching a checksum entry
+#   1. Sets top-level .version to the given version
+#   2. Sets .packages[].version to the given version
+#   3. Pins .packages[].identifier URLs to /releases/download/v<version>/,
+#      handling both /releases/latest/download/ and prior /releases/download/vX.Y.Z/
+#   4. Sets .fileSha256 for each package matching a checksum entry
 
 set -euo pipefail
 
@@ -30,17 +32,26 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
-# 1. Update version
+# 1. Update top-level version
 jq --arg v "$VERSION" '.version = $v' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
-echo "Version set to $VERSION"
+echo "Top-level version set to $VERSION"
 
-# 2. Pin download URLs to this release version
+# 2. Update per-package version field (only for packages that already declare one)
 jq --arg v "$VERSION" \
-  '(.packages[].identifier) |= gsub("releases/latest/download"; "releases/download/v" + $v)' \
+  '.packages |= map(if has("version") then .version = $v else . end)' \
   "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
+echo "Per-package version fields set to $VERSION"
+
+# 3. Pin identifier URLs to this release version.
+# Handles both /releases/latest/download/ and previously-pinned /releases/download/vX.Y.Z/
+jq --arg v "$VERSION" '
+  (.packages[].identifier) |=
+    (sub("releases/latest/download"; "releases/download/v" + $v)
+     | sub("releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+"; "releases/download/v" + $v))
+' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
 echo "Identifiers pinned to v$VERSION"
 
-# 3. Update fileSha256 for each entry in checksums
+# 4. Update fileSha256 for each entry in checksums
 updated=0
 while read -r hash filename; do
   [[ -z "${hash:-}" || -z "${filename:-}" ]] && continue

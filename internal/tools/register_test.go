@@ -88,7 +88,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1005
+		const expectedTools = 1000
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -249,7 +249,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_create_dependency_list_export":        true,
 		"gitlab_create_epic_discussion":               true,
 		"gitlab_create_error_tracking_client_key":     true,
-		"gitlab_create_external_status_check":         true,
 		"gitlab_create_freeze_period":                 true,
 		"gitlab_create_geo_site":                      true,
 		"gitlab_create_group_member_role":             true,
@@ -284,7 +283,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_delete_enterprise_user":                 true,
 		"gitlab_delete_epic_discussion_note":            true,
 		"gitlab_delete_error_tracking_client_key":       true,
-		"gitlab_delete_external_status_check":           true,
 		"gitlab_delete_feature_flag":                    true,
 		"gitlab_delete_freeze_period":                   true,
 		"gitlab_delete_geo_site":                        true,
@@ -1031,7 +1029,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_retrieve_project_storage_moves":                    true,
 		"gitlab_retrieve_snippet_storage_moves":                    true,
 		"gitlab_retry_failed_external_status_check_for_project_mr": true,
-		"gitlab_retry_failed_status_check_for_mr":                  true,
 		"gitlab_revert_vulnerability":                              true,
 		"gitlab_review_mr_security":                                true,
 		"gitlab_revoke_cluster_agent_token":                        true,
@@ -1091,7 +1088,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_search_users":                                      true,
 		"gitlab_search_wiki":                                       true,
 		"gitlab_set_custom_attribute":                              true,
-		"gitlab_set_external_status_check_status":                  true,
 		"gitlab_set_feature_flag":                                  true,
 		"gitlab_set_jira_integration":                              true,
 		"gitlab_set_project_mr_external_status_check_status":       true,
@@ -1147,7 +1143,6 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_update_commit_discussion_note":                     true,
 		"gitlab_update_compliance_policy_settings":                 true,
 		"gitlab_update_epic_discussion_note":                       true,
-		"gitlab_update_external_status_check":                      true,
 		"gitlab_update_freeze_period":                              true,
 		"gitlab_update_group_mr_approval_settings":                 true,
 		"gitlab_update_group_scim_identity":                        true,

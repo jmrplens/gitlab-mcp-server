@@ -111,7 +111,18 @@ test-e2e-docker:
 	@echo "=== Waiting for GitLab readiness ==="
 	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
 	@echo "=== Setting up test user and token ==="
-	./test/e2e/scripts/setup-gitlab.sh http://localhost:8929
+	@set -e; \
+	for attempt in 1 2 3; do \
+		if ./test/e2e/scripts/setup-gitlab.sh http://localhost:8929; then \
+			break; \
+		fi; \
+		if [ "$$attempt" -eq 3 ]; then \
+			echo "ERROR: setup-gitlab.sh failed after 3 attempts"; \
+			exit 1; \
+		fi; \
+		echo "WARN: setup-gitlab.sh failed (attempt $$attempt/3), retrying in 5s..."; \
+		sleep 5; \
+	done
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running E2E tests ==="

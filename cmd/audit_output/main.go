@@ -6,7 +6,6 @@
 // Usage:
 //
 //	go run ./cmd/audit_output/
-
 package main
 
 import (

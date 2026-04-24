@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        TOOLS[tools<br/>1005 individual tool handlers<br/>in 162 domain sub-packages]
+        TOOLS[tools<br/>1000 individual tool handlers<br/>in 162 domain sub-packages]
         META[metatool<br/>28 base / 43 enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
@@ -164,7 +164,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1005 MCP tool implementations organized across 162 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
+The largest package — contains 1000 MCP tool implementations organized across 162 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and registration functions.
 
 **Orchestration files** in `internal/tools/`:
 

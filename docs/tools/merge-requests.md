@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
-> **Individual tools**: 53
+> **Individual tools**: 56
 > **Meta-tool**: `gitlab_merge_request` (when `META_TOOLS=true`, default)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -443,13 +443,6 @@ Add a merge request to a merge train. Supports auto-merge, SHA verification, and
 
 ## External Status Checks
 
-### `gitlab_set_external_status_check_status`
-
-Set the status of an external status check for a merge request. Requires SHA and status check ID.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
 ### `gitlab_list_project_status_checks`
 
 List project-level external status checks. Returns paginated list with ID, name, external URL, HMAC, and protected branches.
@@ -457,21 +450,35 @@ List project-level external status checks. Returns paginated list with ID, name,
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_create_external_status_check`
+### `gitlab_list_project_mr_external_status_checks`
+
+List external status checks for a project merge request.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_list_project_external_status_checks`
+
+List external status checks configured for a project.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_create_project_external_status_check`
 
 Create an external status check for a project. Requires name and external URL.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-### `gitlab_update_external_status_check`
+### `gitlab_update_project_external_status_check`
 
 Update an external status check for a project.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-### `gitlab_delete_external_status_check`
+### `gitlab_delete_project_external_status_check`
 
 Delete an external status check from a project.
 
@@ -479,6 +486,20 @@ Delete an external status check from a project.
 | ---------- | ---------- |
 
 > **Destructive**: Protected by confirmation prompt.
+
+### `gitlab_retry_failed_external_status_check_for_project_mr`
+
+Retry a failed external status check for a project merge request.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_set_project_mr_external_status_check_status`
+
+Set the status of an external status check for a project merge request.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
 
 ---
 
@@ -534,11 +555,14 @@ Delete an external status check from a project.
 | 46 | `gitlab_list_merge_request_in_merge_train` | Merge Trains | Read |
 | 47 | `gitlab_get_merge_request_on_merge_train` | Merge Trains | Read |
 | 48 | `gitlab_add_merge_request_to_merge_train` | Merge Trains | Create |
-| 49 | `gitlab_set_external_status_check_status` | External Status Checks | Update |
-| 50 | `gitlab_list_project_status_checks` | External Status Checks | Read |
-| 51 | `gitlab_create_external_status_check` | External Status Checks | Create |
-| 52 | `gitlab_update_external_status_check` | External Status Checks | Update |
-| 53 | `gitlab_delete_external_status_check` | External Status Checks | Delete |
+| 49 | `gitlab_list_project_status_checks` | External Status Checks | Read |
+| 50 | `gitlab_list_project_mr_external_status_checks` | External Status Checks | Read |
+| 51 | `gitlab_list_project_external_status_checks` | External Status Checks | Read |
+| 52 | `gitlab_create_project_external_status_check` | External Status Checks | Create |
+| 53 | `gitlab_update_project_external_status_check` | External Status Checks | Update |
+| 54 | `gitlab_delete_project_external_status_check` | External Status Checks | Delete |
+| 55 | `gitlab_retry_failed_external_status_check_for_project_mr` | External Status Checks | Update |
+| 56 | `gitlab_set_project_mr_external_status_check_status` | External Status Checks | Update |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -549,7 +573,7 @@ The following tools are annotated with `DestructiveHint: true` or require user c
 - `gitlab_mr_dependency_delete` — removes a merge request dependency
 - `gitlab_mr_approval_rule_delete` — deletes an approval rule from a merge request
 - `gitlab_delete_mr_context_commits` — removes context commits from a merge request
-- `gitlab_delete_external_status_check` — deletes an external status check
+- `gitlab_delete_project_external_status_check` — deletes an external status check
 
 ---
 

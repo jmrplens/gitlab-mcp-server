@@ -291,7 +291,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestAdd_WithOptions verifies that Add serialises optional fields in the request body.
+// TestAdd_WithOptions verifies that Add serializes optional fields in the request body.
 func TestAdd_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMirrors {

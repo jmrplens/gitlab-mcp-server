@@ -4887,7 +4887,7 @@ func TestSetCustomHeader_APIError(t *testing.T) {
 	}
 }
 
-// TestSetCustomHeader_ContextCancelled verifies SetCustomHeader honours a cancelled context and returns an error.
+// TestSetCustomHeader_ContextCancelled verifies SetCustomHeader honors a cancelled context and returns an error.
 func TestSetCustomHeader_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5068,7 +5068,7 @@ func TestDeleteWebhookURLVariable_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteWebhookURLVariable_ContextCancelled verifies DeleteURLVariable honours a cancelled context and returns an error.
+// TestDeleteWebhookURLVariable_ContextCancelled verifies DeleteURLVariable honors a cancelled context and returns an error.
 func TestDeleteWebhookURLVariable_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5180,7 +5180,7 @@ func TestDeleteForkRelation_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteForkRelation_ContextCancelled verifies DeleteForkRelation honours a cancelled context and returns an error.
+// TestDeleteForkRelation_ContextCancelled verifies DeleteForkRelation honors a cancelled context and returns an error.
 func TestDeleteForkRelation_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5329,7 +5329,7 @@ func TestUploadAvatar_APIError(t *testing.T) {
 	}
 }
 
-// TestUploadAvatar_ContextCancelled verifies UploadAvatar honours a cancelled context and returns an error.
+// TestUploadAvatar_ContextCancelled verifies UploadAvatar honors a cancelled context and returns an error.
 func TestUploadAvatar_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5428,7 +5428,7 @@ func TestStartHousekeeping_APIError(t *testing.T) {
 	}
 }
 
-// TestStartHousekeeping_ContextCancelled verifies StartHousekeeping honours a cancelled context and returns an error.
+// TestStartHousekeeping_ContextCancelled verifies StartHousekeeping honors a cancelled context and returns an error.
 func TestStartHousekeeping_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5489,7 +5489,7 @@ func TestGetRepositoryStorage_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRepositoryStorage_ContextCancelled verifies GetRepositoryStorage honours a cancelled context and returns an error.
+// TestGetRepositoryStorage_ContextCancelled verifies GetRepositoryStorage honors a cancelled context and returns an error.
 func TestGetRepositoryStorage_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5559,7 +5559,7 @@ func TestCreateForUser_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateForUser_ContextCancelled verifies CreateForUser honours a cancelled context and returns an error.
+// TestCreateForUser_ContextCancelled verifies CreateForUser honors a cancelled context and returns an error.
 func TestCreateForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

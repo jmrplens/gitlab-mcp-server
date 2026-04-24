@@ -15,17 +15,58 @@ ENV_FILE="test/e2e/.env.docker"
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"
 
+# Extract object field from JSON safely. Returns empty string on invalid JSON.
+json_field() {
+    local json_input="$1"
+    local field="$2"
+    JSON_INPUT="$json_input" FIELD="$field" python3 -c 'import json, os
+data = os.environ.get("JSON_INPUT", "")
+field = os.environ.get("FIELD", "")
+try:
+    obj = json.loads(data)
+    if isinstance(obj, dict):
+        value = obj.get(field, "")
+        print("" if value is None else value)
+    else:
+        print("")
+except Exception:
+    print("")
+' 2>/dev/null || true
+}
+
+# Extract field from first element in JSON array safely.
+# Returns empty string on invalid JSON, non-array payloads, or empty arrays.
+json_first_array_field() {
+    local json_input="$1"
+    local field="$2"
+    JSON_INPUT="$json_input" FIELD="$field" python3 -c 'import json, os
+data = os.environ.get("JSON_INPUT", "")
+field = os.environ.get("FIELD", "")
+try:
+    arr = json.loads(data)
+    if isinstance(arr, list) and arr and isinstance(arr[0], dict):
+        value = arr[0].get(field, "")
+        print("" if value is None else value)
+    else:
+        print("")
+except Exception:
+    print("")
+' 2>/dev/null || true
+}
+
 # 1. Get root OAuth token (with retry — GitLab may still be warming up)
 echo "  [1/4] Authenticating as root..."
 ROOT_TOKEN=""
 for attempt in 1 2 3 4 5; do
-    OAUTH_RESPONSE=$(curl -sf "${GITLAB_URL}/oauth/token" \
+    OAUTH_RESPONSE=$(curl -sS "${GITLAB_URL}/oauth/token" \
         --data-urlencode "grant_type=password" \
         --data-urlencode "username=root" \
-        --data-urlencode "password=${ROOT_PASSWORD}" 2>/dev/null || true)
+        --data-urlencode "password=${ROOT_PASSWORD}" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
 
     if [ -n "$OAUTH_RESPONSE" ]; then
-        ROOT_TOKEN=$(echo "$OAUTH_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+        ROOT_TOKEN=$(json_field "$OAUTH_RESPONSE" "access_token")
     fi
 
     if [ -n "$ROOT_TOKEN" ]; then
@@ -63,43 +104,66 @@ echo "    Default branch protection disabled, deletion_adjourned_period=1, rate 
 
 # 2. Create test user
 echo "  [2/4] Creating test user '${TEST_USER}'..."
-USER_RESPONSE=$(curl -sf "${GITLAB_URL}/api/v4/users" \
-    -H "Authorization: Bearer ${ROOT_TOKEN}" \
-    -d "email=${TEST_EMAIL}" \
-    -d "username=${TEST_USER}" \
-    -d "name=E2E Test User" \
-    -d "password=${TEST_PASSWORD}" \
-    -d "skip_confirmation=true" \
-    -d "admin=true" 2>/dev/null || true)
+USER_ID=""
+USER_CREATED="false"
+for attempt in 1 2 3 4 5 6; do
+    USER_RESPONSE=$(curl -sS "${GITLAB_URL}/api/v4/users" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        -d "email=${TEST_EMAIL}" \
+        -d "username=${TEST_USER}" \
+        -d "name=E2E Test User" \
+        -d "password=${TEST_PASSWORD}" \
+        -d "skip_confirmation=true" \
+        -d "admin=true" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
 
-USER_ID=$(echo "$USER_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+    USER_ID=$(json_field "$USER_RESPONSE" "id")
+    if [ -n "$USER_ID" ]; then
+        USER_CREATED="true"
+        break
+    fi
+
+    # User may already exist from a previous run. Query and parse defensively.
+    LOOKUP_RESPONSE=$(curl -sS "${GITLAB_URL}/api/v4/users?username=${TEST_USER}" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
+    USER_ID=$(json_first_array_field "$LOOKUP_RESPONSE" "id")
+    if [ -n "$USER_ID" ]; then
+        break
+    fi
+
+    echo "    Attempt ${attempt}/6: user not available yet, retrying in 3s..."
+    sleep 3
+done
 
 if [ -z "$USER_ID" ]; then
-    # User may already exist from a previous run
-    USER_ID=$(curl -sf "${GITLAB_URL}/api/v4/users?username=${TEST_USER}" \
-        -H "Authorization: Bearer ${ROOT_TOKEN}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-    if [ -z "$USER_ID" ]; then
-        echo "ERROR: Failed to create or find test user"
-        exit 1
-    fi
-    echo "    User already exists (ID: ${USER_ID})"
-else
+    echo "ERROR: Failed to create or find test user after 6 attempts"
+    exit 1
+fi
+
+if [ "$USER_CREATED" = "true" ]; then
     echo "    User created (ID: ${USER_ID})"
+else
+    echo "    User already exists (ID: ${USER_ID})"
 fi
 
 # 3. Create Personal Access Token for test user (with retry for timing issues)
 echo "  [3/4] Creating Personal Access Token..."
 PAT=""
 for attempt in 1 2 3; do
-    TOKEN_RESPONSE=$(curl -sf "${GITLAB_URL}/api/v4/users/${USER_ID}/personal_access_tokens" \
+    TOKEN_RESPONSE=$(curl -sS "${GITLAB_URL}/api/v4/users/${USER_ID}/personal_access_tokens" \
         -H "Authorization: Bearer ${ROOT_TOKEN}" \
         -d "name=e2e-token" \
         -d "scopes[]=api" \
         -d "scopes[]=read_user" \
         -d "scopes[]=read_repository" \
-        -d "scopes[]=write_repository" 2>/dev/null || true)
+        -d "scopes[]=write_repository" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
 
-    PAT=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)
+    PAT=$(json_field "$TOKEN_RESPONSE" "token")
 
     if [ -n "$PAT" ]; then
         break

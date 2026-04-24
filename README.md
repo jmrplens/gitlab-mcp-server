@@ -27,7 +27,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 ## Highlights
 
-- **1005 MCP tools** — complete GitLab REST API v4 coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
+- **1000 MCP tools** — complete GitLab REST API v4 coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
 - **28 meta-tools** (43 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -254,7 +254,7 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Meta-Tools** (default) | 28 base / 43 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
-| **Individual** | 1005 | Every GitLab operation as a separate MCP tool. |
+| **Individual** | 1000 | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:
 
@@ -296,7 +296,7 @@ Meta-tool summary:
 | `gitlab_dependency` 🏢 | 4 | List project dependencies and create/download SBOM exports (CycloneDX). |
 | `gitlab_dora_metrics` 🏢 | 2 | Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate. |
 | `gitlab_enterprise_user` 🏢 | 4 | Manage enterprise users for a GitLab group: list, get, disable 2FA, delete. |
-| `gitlab_external_status_check` 🏢 | 14 | Manage external status checks for MRs and projects. |
+| `gitlab_external_status_check` 🏢 | 8 | Manage external status checks for MRs and projects. |
 | `gitlab_geo` 🏢 | 8 | Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate). |
 | `gitlab_group_scim` 🏢 | 4 | Manage SCIM identities for GitLab group provisioning. |
 | `gitlab_member_role` 🏢 | 6 | Manage custom member roles at instance or group level. |
@@ -314,7 +314,7 @@ Meta-tool summary:
 
 | MCP Capability | Support |
 |----------------|---------|
-| **Tools** | 1005 individual / 28–43 meta |
+| **Tools** | 1000 individual / 28–43 meta |
 | **Resources** | 24 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
@@ -336,7 +336,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 |----------|-------------|
 | [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
-| [Tools Reference](docs/tools/README.md) | All 1005 individual tools with input/output schemas |
+| [Tools Reference](docs/tools/README.md) | All 1000 individual tools with input/output schemas |
 | [Meta-Tools](docs/meta-tools.md) | 28/43 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 24 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
