@@ -210,7 +210,7 @@ Delete actions:
 - file_delete: Delete a single file from a package (irreversible). Params: project_id (required), package_id (required), package_file_id (required)
 
 Common workflow: list → publish_directory → publish_and_link (for release binaries)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
+		Annotations: toolutil.DeriveAnnotationsWithTitle("gitlab_package", routes),
 		Icons:       toolutil.IconPackage,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_package", routes, nil))

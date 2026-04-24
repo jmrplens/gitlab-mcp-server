@@ -356,3 +356,17 @@ func DeriveAnnotations(routes ActionMap) *mcp.ToolAnnotations {
 	cp := *NonDestructiveMetaAnnotations
 	return &cp
 }
+
+// DeriveAnnotationsWithTitle returns route-derived annotations with Title set from the tool name.
+func DeriveAnnotationsWithTitle(name string, routes ActionMap) *mcp.ToolAnnotations {
+	a := DeriveAnnotations(routes)
+	a.Title = TitleFromName(name)
+	return a
+}
+
+// ReadOnlyMetaAnnotationsWithTitle returns a copy of ReadOnlyMetaAnnotations with Title set.
+func ReadOnlyMetaAnnotationsWithTitle(name string) *mcp.ToolAnnotations {
+	a := *ReadOnlyMetaAnnotations
+	a.Title = TitleFromName(name)
+	return &a
+}

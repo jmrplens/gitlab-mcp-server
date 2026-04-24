@@ -204,7 +204,7 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 - snippets: query* (global only)
 
 See also: gitlab_project, gitlab_merge_request, gitlab_issue`,
-		Annotations: toolutil.ReadOnlyMetaAnnotations,
+		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_search"),
 		Icons:       toolutil.IconSearch,
 		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_search", routes, markdownForResult))
