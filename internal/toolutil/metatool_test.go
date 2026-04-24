@@ -759,7 +759,7 @@ func TestDeriveAnnotations_EmptyMap(t *testing.T) {
 // delegates to DeriveAnnotations and sets Title from the tool name.
 // Covers both destructive and non-destructive route maps.
 func TestDeriveAnnotationsWithTitle(t *testing.T) {
-	noop := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil }
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
 
 	t.Run("non-destructive routes set title and DestructiveHint=false", func(t *testing.T) {
 		routes := ActionMap{"list": Route(noop), "get": Route(noop)}
