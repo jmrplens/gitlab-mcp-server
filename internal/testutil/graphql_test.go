@@ -1,3 +1,5 @@
+// graphql_test.go contains unit tests for the GraphQL test helper utilities
+// in graphql.go.
 package testutil
 
 import (

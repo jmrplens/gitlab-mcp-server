@@ -1,3 +1,5 @@
+// metadata_test.go contains unit tests for the RFC 9728 Protected Resource
+// Metadata endpoint handler.
 package oauth
 
 import (

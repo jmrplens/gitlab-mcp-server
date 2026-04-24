@@ -1,3 +1,5 @@
+// run_test.go contains unit tests for the wizard run entry point and
+// UI mode dispatch logic.
 package wizard
 
 import (

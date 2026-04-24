@@ -1,3 +1,5 @@
+// verifier_test.go contains unit tests for the OAuth Bearer token verifier,
+// covering cache hits, misses, TTL expiration, and GitLab API error handling.
 package oauth
 
 import (

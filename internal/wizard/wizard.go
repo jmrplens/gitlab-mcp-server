@@ -1,3 +1,5 @@
+// wizard.go defines core wizard types, shared state, and the configuration
+// model used across all wizard UI modes.
 package wizard
 
 import (

@@ -1,3 +1,5 @@
+// install_test.go contains unit tests for MCP server installation into
+// IDE configuration files.
 package wizard
 
 import (

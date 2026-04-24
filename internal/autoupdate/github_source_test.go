@@ -1,3 +1,5 @@
+// github_source_test.go contains unit tests for the GitHub-backed update
+// source constructor.
 package autoupdate
 
 import "testing"

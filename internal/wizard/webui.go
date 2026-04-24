@@ -1,3 +1,5 @@
+// webui.go implements the browser-based wizard UI, serving a local HTTP
+// server with embedded assets for graphical MCP server configuration.
 package wizard
 
 import (

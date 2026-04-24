@@ -1,3 +1,5 @@
+// testhelpers_test.go provides shared test helpers for the wizard package
+// tests, including temporary directory setup and fixture creation.
 package wizard
 
 import (

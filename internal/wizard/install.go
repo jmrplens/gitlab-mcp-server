@@ -1,3 +1,5 @@
+// install.go installs or updates the MCP server entry in IDE configuration
+// files, merging the server JSON block with existing client config.
 package wizard
 
 import (

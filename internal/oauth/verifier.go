@@ -1,3 +1,5 @@
+// verifier.go implements OAuth Bearer token verification against GitLab's
+// userinfo endpoint, with a configurable identity cache and re-validation.
 package oauth
 
 import (

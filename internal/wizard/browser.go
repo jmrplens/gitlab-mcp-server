@@ -1,3 +1,5 @@
+// browser.go opens the system default browser to the wizard web UI URL,
+// enabling the graphical setup flow.
 package wizard
 
 import (

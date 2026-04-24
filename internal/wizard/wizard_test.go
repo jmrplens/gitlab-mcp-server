@@ -1,3 +1,5 @@
+// wizard_test.go contains unit tests for core wizard types and shared
+// configuration model functionality.
 package wizard
 
 import (
