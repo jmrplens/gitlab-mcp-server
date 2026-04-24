@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "MCP server exposing 1000 GitLab REST API and GraphQL operations as tools for AI assistants.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -31,8 +31,8 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-linux-amd64",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-linux-amd64",
+      "version": "1.2.0",
       "fileSha256": "108826af33198a84ac851744970cab4f1b0d55871893592c0e1213d7c15f36bd",
       "transport": {
         "type": "stdio"
@@ -137,8 +137,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-linux-arm64",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-linux-arm64",
+      "version": "1.2.0",
       "fileSha256": "a0da47ed70a6c87484faef02df67254b00a7af0e7c7e134b0b519bb2b9924171",
       "transport": {
         "type": "stdio"
@@ -243,8 +243,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-darwin-amd64",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-darwin-amd64",
+      "version": "1.2.0",
       "fileSha256": "ef1b6a0108a14e394e976912cf1be14a824096cbd67e1039343022968a067e94",
       "transport": {
         "type": "stdio"
@@ -349,8 +349,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-darwin-arm64",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-darwin-arm64",
+      "version": "1.2.0",
       "fileSha256": "2a9f4b279878258d09485d8699dc25448ecd1e02814ffedb57aa24b7c8658b16",
       "transport": {
         "type": "stdio"
@@ -455,8 +455,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-windows-amd64.exe",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-windows-amd64.exe",
+      "version": "1.2.0",
       "fileSha256": "61f0152fa3534573f01bb00762d87b5997ac94c096a3620875ac2851975ba4dc",
       "transport": {
         "type": "stdio"
@@ -561,8 +561,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.1.0/gitlab-mcp-server-windows-arm64.exe",
-      "version": "1.1.0",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.2.0/gitlab-mcp-server-windows-arm64.exe",
+      "version": "1.2.0",
       "fileSha256": "3a1d22fc3d3dc01ddb7139212749e54dd45c7021b5c3ed2de143c4227d72ae14",
       "transport": {
         "type": "stdio"
@@ -703,53 +703,7 @@
           "isRequired": false,
           "placeholder": "https://gitlab.example.com"
         }
-      ],jrequena@PEEPORSOFDEB052:/mnt/build/GIT/pe-mcp-gitlab$ make test-e2e-docker
-=== Cleaning up previous containers (if any) ===
-docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
-=== Starting ephemeral GitLab CE ===
-docker compose -f test/e2e/docker-compose.yml up -d
-[+] up 7/7
- ✔ Network e2e_default           Created                                         0.0sss
- ✔ Volume e2e_gitlab-config      Created                                         0.0sss
- ✔ Volume e2e_gitlab-logs        Created                                         0.0sss
- ✔ Volume e2e_gitlab-data        Created                                         0.0sss
- ✔ Volume e2e_runner-config      Created                                         0.0sss
- ✔ Container e2e-gitlab-1        Healthy                                         101.7s
- ✔ Container e2e-gitlab-runner-1 Started                                         101.8s
-=== Waiting for GitLab readiness ===
-./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
-Waiting for GitLab at http://localhost:8929 (timeout: 600s)...
-GitLab readiness probe OK after 0s
-Verifying API endpoint responds (timeout: 60s)...
-API verified after 0s (HTTP 401) — GitLab is ready
-=== Setting up test user and token ===
-./test/e2e/scripts/setup-gitlab.sh http://localhost:8929
-=== Setting up GitLab E2E test environment ===
-GitLab URL: http://localhost:8929
-  [1/4] Authenticating as root...
-    Root OAuth token obtained
-    Default branch protection disabled, deletion_adjourned_period=1, rate limiting disabled
-  [2/4] Creating test user 'e2e-tester'...
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-    import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')
-                       ~~~~~~~~~^^^^^^^^^^^
-  File "/home/jrequena/.pyenv/versions/3.13.5/lib/python3.13/json/__init__.py", line 293, in load
-    return loads(fp.read(),
-        cls=cls, object_hook=object_hook,
-        parse_float=parse_float, parse_int=parse_int,
-        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
-  File "/home/jrequena/.pyenv/versions/3.13.5/lib/python3.13/json/__init__.py", line 346, in loads
-    return _default_decoder.decode(s)
-           ~~~~~~~~~~~~~~~~~~~~~~~^^^
-  File "/home/jrequena/.pyenv/versions/3.13.5/lib/python3.13/json/decoder.py", line 345, in decode
-    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
-               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jrequena/.pyenv/versions/3.13.5/lib/python3.13/json/decoder.py", line 363, in raw_decode
-    raise JSONDecodeError("Expecting value", s, err.value) from None
-json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
-make: *** [Makefile:114: test-e2e-docker] Error 1
-jrequena@PEEPORSOFDEB052:/mnt/build/GIT/pe-mcp-gitlab$
+      ],
       "variables": {
         "host": {
           "description": "Hostname of the self-hosted GitLab MCP Server HTTP instance",
