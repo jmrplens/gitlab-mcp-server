@@ -1,3 +1,5 @@
+// markdown.go provides Markdown formatting functions for security settings
+// MCP tool output.
 package securitysettings
 
 import (

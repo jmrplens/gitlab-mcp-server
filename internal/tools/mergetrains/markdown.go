@@ -1,3 +1,5 @@
+// markdown.go provides Markdown formatting functions for merge train
+// MCP tool output.
 package mergetrains
 
 import (

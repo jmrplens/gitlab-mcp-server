@@ -1,3 +1,5 @@
+// markdown.go provides Markdown formatting functions for enterprise user
+// MCP tool output.
 package enterpriseusers
 
 import (

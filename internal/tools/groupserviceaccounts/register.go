@@ -1,3 +1,4 @@
+// register.go wires group service account MCP tools to the MCP server.
 package groupserviceaccounts
 
 import (

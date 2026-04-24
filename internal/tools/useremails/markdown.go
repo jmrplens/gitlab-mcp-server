@@ -1,3 +1,5 @@
+// markdown.go provides Markdown formatting functions for user email
+// MCP tool output.
 package useremails
 
 import (

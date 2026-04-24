@@ -1,3 +1,5 @@
+// markdown_test.go contains unit tests for enterprise user Markdown
+// formatting functions.
 package enterpriseusers
 
 import (

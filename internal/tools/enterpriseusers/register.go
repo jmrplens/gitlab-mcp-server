@@ -1,3 +1,4 @@
+// register.go wires enterprise user MCP tools to the MCP server.
 package enterpriseusers
 
 import (

@@ -1,3 +1,5 @@
+// model_registry_test.go contains unit tests for GitLab ML model registry
+// operations. Tests use httptest to mock the GitLab Model Registry API.
 package modelregistry
 
 import (

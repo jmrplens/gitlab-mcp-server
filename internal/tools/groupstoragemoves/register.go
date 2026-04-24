@@ -1,3 +1,4 @@
+// register.go wires group storage move MCP tools to the MCP server.
 package groupstoragemoves
 
 import (

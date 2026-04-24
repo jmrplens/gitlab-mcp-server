@@ -1,3 +1,4 @@
+// register.go wires security settings MCP tools to the MCP server.
 package securitysettings
 
 import (

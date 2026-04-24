@@ -1,3 +1,5 @@
+// project_mirrors_test.go contains unit tests for GitLab project mirror
+// operations. Tests use httptest to mock the GitLab Project Mirrors API.
 package projectmirrors
 
 import (

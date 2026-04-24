@@ -1,3 +1,5 @@
+// markdown_test.go contains unit tests for group SSH certificate Markdown
+// formatting functions.
 package groupsshcerts
 
 import (

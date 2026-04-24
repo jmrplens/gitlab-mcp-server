@@ -1,3 +1,4 @@
+// register.go wires group protected branch MCP tools to the MCP server.
 package groupprotectedbranches
 
 import (

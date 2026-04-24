@@ -1,3 +1,4 @@
+// markdown.go provides Markdown formatting functions for group SAML MCP tool output.
 package groupsaml
 
 import (

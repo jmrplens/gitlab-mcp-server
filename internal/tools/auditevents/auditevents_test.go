@@ -1,3 +1,5 @@
+// auditevents_test.go contains unit tests for GitLab audit event listing
+// operations. Tests use httptest to mock the GitLab Audit Events API.
 package auditevents
 
 import (

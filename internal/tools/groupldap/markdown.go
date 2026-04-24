@@ -1,3 +1,4 @@
+// markdown.go provides Markdown formatting functions for group LDAP MCP tool output.
 package groupldap
 
 import (

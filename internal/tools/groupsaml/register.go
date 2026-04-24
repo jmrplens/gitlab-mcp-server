@@ -1,3 +1,4 @@
+// register.go wires group SAML MCP tools to the MCP server.
 package groupsaml
 
 import (
