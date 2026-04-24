@@ -1,3 +1,6 @@
+// register_test.go contains integration tests for the group member tool
+// closures in register.go. Tests exercise error paths for delete and
+// unshare operations via an in-memory MCP session.
 package groupmembers
 
 import (

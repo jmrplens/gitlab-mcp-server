@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the project member tool
+// closures in register.go. Tests exercise error paths (500) for all mutating
+// operations (add, edit, delete) and list operations via an in-memory MCP
+// session.
 package members
 
 import (
