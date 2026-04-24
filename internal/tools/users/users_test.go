@@ -1,4 +1,5 @@
 // users_test.go contains unit tests for GitLab user operations.
+
 package users
 
 import (

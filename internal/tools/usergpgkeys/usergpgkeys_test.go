@@ -1,5 +1,6 @@
 // usergpgkeys_test.go contains unit tests for GitLab user GPG key operations.
 // Tests use httptest to mock the GitLab User GPG Keys API.
+
 package usergpgkeys
 
 import (

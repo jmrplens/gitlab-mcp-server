@@ -1,5 +1,6 @@
 // protected_packages_test.go contains unit tests for GitLab protected package
 // operations. Tests use httptest to mock the GitLab Protected Packages API.
+
 package protectedpackages
 
 import (

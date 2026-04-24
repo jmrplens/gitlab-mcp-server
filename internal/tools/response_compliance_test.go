@@ -4,6 +4,7 @@
 // non-empty text. Tests exercise real MCP round-trips through in-memory transport.
 //
 // Run with: go test ./internal/tools/ -run TestResponseCompliance -count=1 -v.
+
 package tools
 
 import (

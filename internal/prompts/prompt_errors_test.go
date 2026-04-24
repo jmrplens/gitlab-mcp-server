@@ -2,6 +2,7 @@
 // MCP prompt handlers. It covers two categories: API error responses (404,
 // 403, 401, 500) and missing required arguments. It also tests the
 // changeType helper and additional branch coverage for specific prompts.
+
 package prompts
 
 import (

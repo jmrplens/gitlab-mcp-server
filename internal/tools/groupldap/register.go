@@ -1,4 +1,5 @@
 // register.go wires group LDAP MCP tools to the MCP server.
+
 package groupldap
 
 import (

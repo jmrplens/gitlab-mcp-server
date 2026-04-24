@@ -1,5 +1,6 @@
 // outputschema_check_test.go verifies that every registered MCP tool declares
 // an OutputSchema for structured content support.
+
 package tools
 
 import (

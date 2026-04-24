@@ -2,6 +2,7 @@
 // closures in register.go. Tests exercise error paths (500) for all mutating
 // operations (add, edit, delete) and list operations via an in-memory MCP
 // session.
+
 package members
 
 import (

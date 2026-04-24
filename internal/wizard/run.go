@@ -1,5 +1,6 @@
 // run.go is the entry point for the setup wizard, dispatching to the
 // appropriate UI mode (TUI, web, or CLI) based on the environment.
+
 package wizard
 
 import (

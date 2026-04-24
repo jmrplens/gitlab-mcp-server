@@ -1,5 +1,6 @@
 // groupsaml_extra_test.go contains additional unit tests for GitLab group SAML
 // operations, covering edge cases not addressed in groupsaml_test.go.
+
 package groupsaml
 
 import (

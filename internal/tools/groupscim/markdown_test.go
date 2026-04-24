@@ -1,4 +1,5 @@
 // markdown_test.go contains unit tests for group SCIM Markdown formatting functions.
+
 package groupscim
 
 import (

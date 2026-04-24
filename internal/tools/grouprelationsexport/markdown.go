@@ -1,5 +1,6 @@
 // markdown.go provides Markdown formatting functions for group relations
 // export MCP tool output.
+
 package grouprelationsexport
 
 import (

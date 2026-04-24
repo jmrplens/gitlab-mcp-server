@@ -1,5 +1,6 @@
 // user_service_accounts_test.go contains unit tests for GitLab service account
 // operations. Tests use httptest to mock the GitLab Users API.
+
 package users
 
 import (

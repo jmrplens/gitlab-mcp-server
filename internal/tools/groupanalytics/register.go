@@ -1,4 +1,5 @@
 // register.go wires group activity analytics MCP tools to the MCP server.
+
 package groupanalytics
 
 import (

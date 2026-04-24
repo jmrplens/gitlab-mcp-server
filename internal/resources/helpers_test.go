@@ -1,6 +1,7 @@
 // helpers_test.go provides shared test utilities for the resources package.
 // It includes factory functions that create mock GitLab clients, JSON
 // responders, and in-memory MCP sessions used by all resource test files.
+
 package resources
 
 import (

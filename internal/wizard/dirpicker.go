@@ -1,5 +1,6 @@
 // dirpicker.go provides an interactive directory picker for selecting
 // IDE configuration paths during wizard setup.
+
 package wizard
 
 import (

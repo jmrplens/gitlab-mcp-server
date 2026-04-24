@@ -2,6 +2,7 @@
 // get, list, update, delete). Tests use httptest to mock the GitLab API
 // and verify success paths, error handling, filtering, pagination, and
 // context cancellation.
+
 package issues
 
 import (

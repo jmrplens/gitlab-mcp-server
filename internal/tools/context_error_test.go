@@ -2,6 +2,7 @@
 // correctly propagates context cancellation errors and GitLab API error
 // responses. Each domain section tests both canceled-context and HTTP
 // error code scenarios.
+
 package tools
 
 import (

@@ -1,4 +1,5 @@
 // scope_filter_test.go contains unit tests for PAT scope-based tool filtering.
+
 package tools
 
 import (

@@ -1,5 +1,6 @@
 // snippet_notes_test.go contains unit tests for GitLab snippet note operations.
 // Tests use httptest to mock the GitLab Snippet Notes API.
+
 package snippetnotes
 
 import (

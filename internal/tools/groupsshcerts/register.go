@@ -1,4 +1,5 @@
 // register.go wires group SSH certificate MCP tools to the MCP server.
+
 package groupsshcerts
 
 import (

@@ -5,6 +5,7 @@
 // Usage:
 //
 //	go run ./cmd/audit_test_names/ <dir>...
+
 package main
 
 import (

@@ -1,6 +1,7 @@
 // register_test.go contains unit tests for tool registration via RegisterAll
 // and RegisterAllMeta. Tests verify tool counts, tool names, annotation
 // presence, and end-to-end MCP call flow using in-memory transports.
+
 package tools
 
 import (

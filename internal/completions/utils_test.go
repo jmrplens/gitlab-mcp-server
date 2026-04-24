@@ -1,6 +1,7 @@
 // utils_test.go contains unit tests for completion utility functions:
 // [toResult], [emptyResult], format* helpers, [truncate], [filterByPrefix],
 // and [resolvedArguments].
+
 package completions
 
 import (

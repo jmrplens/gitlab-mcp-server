@@ -1,4 +1,5 @@
 // markdown.go provides Markdown formatting functions for group SCIM MCP tool output.
+
 package groupscim
 
 import (

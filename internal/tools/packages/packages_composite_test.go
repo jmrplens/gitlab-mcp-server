@@ -1,5 +1,6 @@
 // packages_composite_test.go contains unit tests for composite package
 // operations: publish-and-link and publish-directory.
+
 package packages
 
 import (

@@ -1,5 +1,6 @@
 // user_admin_test.go contains unit tests for GitLab user administration
 // operations. Tests use httptest to mock the GitLab Users API.
+
 package users
 
 import (

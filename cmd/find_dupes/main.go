@@ -6,6 +6,7 @@
 // Usage:
 //
 //	go run ./cmd/find_dupes/ <dir|file>...
+
 package main
 
 import (

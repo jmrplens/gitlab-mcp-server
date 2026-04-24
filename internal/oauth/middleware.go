@@ -1,5 +1,6 @@
 // middleware.go provides HTTP middleware for normalizing GitLab authentication
 // headers, converting PRIVATE-TOKEN and Bearer tokens for downstream handlers.
+
 package oauth
 
 import "net/http"

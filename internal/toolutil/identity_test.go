@@ -1,6 +1,7 @@
 // identity_test.go contains unit tests for user identity resolution helpers:
 // UserIdentity.IsAuthenticated, IdentityToContext/IdentityFromContext
 // round-tripping, and ResolveIdentity priority (OAuth TokenInfo > context).
+
 package toolutil_test
 
 import (

@@ -1,6 +1,7 @@
 // optional_params_test.go contains unit tests that exercise optional parameter
 // branches in tool handlers. Each test provides all optional fields to ensure
 // full code path coverage for parameter handling logic.
+
 package tools
 
 import (

@@ -1,5 +1,6 @@
 // cicatalog_test.go contains unit tests for GitLab CI catalog component
 // operations. Tests use httptest to mock the GitLab CI Catalog API.
+
 package cicatalog
 
 import (

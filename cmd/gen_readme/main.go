@@ -6,6 +6,7 @@
 // Usage:
 //
 //	go run ./cmd/gen_readme/
+
 package main
 
 import (

@@ -1,5 +1,6 @@
 // diffposition_test.go contains unit tests for unified diff parsing and
 // position validation helpers.
+
 package toolutil
 
 import (

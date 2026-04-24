@@ -1,6 +1,7 @@
 // helpers_test.go provides shared test utilities for the prompts package,
 // including mock GitLab client construction, JSON response helpers, and
 // in-memory MCP session setup used across all prompt test files.
+
 package prompts
 
 import (

@@ -1,4 +1,5 @@
 // markdown_test.go contains unit tests for group release Markdown formatting functions.
+
 package groupreleases
 
 import (

@@ -1,4 +1,5 @@
 // prompt_cross_project_test.go contains unit tests for cross-project MCP prompts.
+
 package prompts
 
 import (

@@ -2,6 +2,7 @@
 // registry: RegisterMarkdown, RegisterMarkdownResult, MarkdownForResult dispatch,
 // result formatter priority over string formatters, concurrent-safety of
 // RegisterMarkdown, and stripTrailingLineWhitespace.
+
 package toolutil
 
 import (

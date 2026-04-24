@@ -1,5 +1,6 @@
 // middleware_test.go contains unit tests for the OAuth authentication
 // header normalization middleware.
+
 package oauth
 
 import (

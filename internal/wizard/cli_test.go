@@ -1,5 +1,6 @@
 // cli_test.go contains unit tests for the CLI wizard mode, verifying
 // flag parsing and configuration collection.
+
 package wizard
 
 import (

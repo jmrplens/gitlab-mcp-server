@@ -1,5 +1,6 @@
 // polling_test.go contains unit tests for the polling helper functions
 // ClampPollInterval, ClampPollTimeout, and IsTerminalStatus.
+
 package toolutil
 
 import "testing"

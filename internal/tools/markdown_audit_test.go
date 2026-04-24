@@ -6,6 +6,7 @@
 //   - No extra pipe characters that indicate unescaped cell data
 //
 // Run with: go test ./internal/tools/ -run TestMarkdownAudit -count=1 -v.
+
 package tools
 
 import (

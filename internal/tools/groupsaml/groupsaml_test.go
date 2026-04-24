@@ -1,5 +1,6 @@
 // groupsaml_test.go contains unit tests for GitLab group SAML configuration
 // operations. Tests use httptest to mock the GitLab Groups SAML API.
+
 package groupsaml
 
 import (

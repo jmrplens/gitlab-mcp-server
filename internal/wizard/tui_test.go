@@ -1,5 +1,6 @@
 // tui_test.go contains unit tests for the TUI wizard mode, verifying
 // state transitions and user input handling.
+
 package wizard
 
 import (

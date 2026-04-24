@@ -1,4 +1,5 @@
 // register.go wires group protected environment MCP tools to the MCP server.
+
 package groupprotectedenvs
 
 import (

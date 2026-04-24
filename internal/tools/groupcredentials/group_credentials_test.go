@@ -1,5 +1,6 @@
 // group_credentials_test.go contains unit tests for GitLab group credential
 // storage operations. Tests use httptest to mock the GitLab API.
+
 package groupcredentials
 
 import (

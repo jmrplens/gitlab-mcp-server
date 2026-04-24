@@ -1,5 +1,6 @@
 // attestations_test.go contains unit tests for GitLab build attestation
 // operations. Tests use httptest to mock the GitLab Attestations API.
+
 package attestations
 
 import (

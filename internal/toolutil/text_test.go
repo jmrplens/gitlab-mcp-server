@@ -1,5 +1,6 @@
 // text_test.go contains table-driven tests for the NormalizeText function,
 // verifying that literal escape sequences are converted to real characters.
+
 package toolutil
 
 import "testing"

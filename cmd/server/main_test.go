@@ -2,6 +2,7 @@
 // Tests cover configuration validation, GitLab connectivity checks, HTTP and
 // stdio transport modes, graceful shutdown, and end-to-end MCP protocol
 // interactions (initialize, tools/list) via httptest.
+
 package main
 
 import (

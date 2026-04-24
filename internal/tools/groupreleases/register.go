@@ -1,4 +1,5 @@
 // register.go wires group release MCP tools to the MCP server.
+
 package groupreleases
 
 import (

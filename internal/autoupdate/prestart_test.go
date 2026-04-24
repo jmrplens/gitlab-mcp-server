@@ -1,4 +1,5 @@
 // prestart_test.go contains unit tests for the pre-start update check.
+
 package autoupdate
 
 import (

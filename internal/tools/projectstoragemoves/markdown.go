@@ -1,5 +1,6 @@
 // markdown.go provides Markdown formatting functions for project storage move
 // MCP tool output.
+
 package projectstoragemoves
 
 import (

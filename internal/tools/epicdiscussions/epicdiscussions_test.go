@@ -1,6 +1,7 @@
 // epicdiscussions_test.go contains unit tests for the epic discussion MCP tool handlers.
 // Tests use httptest to mock GitLab GraphQL API responses and verify success, error,
 // and edge-case paths.
+
 package epicdiscussions
 
 import (
