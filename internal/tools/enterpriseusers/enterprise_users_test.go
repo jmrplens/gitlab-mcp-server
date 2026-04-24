@@ -14,6 +14,8 @@ import (
 
 // --- List ---.
 
+// TestList_Success verifies that List fetches /api/v4/groups/:id/enterprise_users
+// and returns all enterprise users with fields like username, state and 2FA flag.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -46,6 +48,8 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_WithFilters verifies that List forwards the username, search,
+// active and two_factor filter parameters to the GitLab API.
 func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -74,6 +78,8 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
+// TestList_MissingGroupID verifies that List returns a validation error
+// when the required group_id input is empty.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -85,6 +91,8 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when
+// invoked with an already-cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -98,6 +106,8 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List returns an error when the GitLab
+// enterprise users endpoint responds with 403 Forbidden.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -113,6 +123,8 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_InvalidCreatedAfter verifies that List rejects a malformed
+// created_after value before making an API call.
 func TestList_InvalidCreatedAfter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -127,6 +139,8 @@ func TestList_InvalidCreatedAfter(t *testing.T) {
 	}
 }
 
+// TestList_InvalidCreatedBefore verifies that List rejects a malformed
+// created_before value before making an API call.
 func TestList_InvalidCreatedBefore(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -225,6 +239,8 @@ func TestToOutput_NilUser(t *testing.T) {
 
 // --- Get ---.
 
+// TestGet_Success verifies that Get retrieves a single enterprise user by
+// group and user ID, returning all expected fields including created_at.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -261,6 +277,8 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingGroupID verifies that Get returns a validation error
+// when the required group_id input is empty.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -272,6 +290,8 @@ func TestGet_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestGet_MissingUserID verifies that Get returns a validation error
+// when the required user_id input is zero.
 func TestGet_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -283,6 +303,8 @@ func TestGet_MissingUserID(t *testing.T) {
 	}
 }
 
+// TestGet_CancelledContext verifies that Get returns an error when
+// invoked with an already-cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -296,6 +318,8 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestGet_APIError verifies that Get returns an error when the GitLab
+// enterprise users endpoint responds with 404 Not Found.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -316,6 +340,9 @@ func TestGet_APIError(t *testing.T) {
 
 // --- Disable2FA ---.
 
+// TestDisable2FA_Success verifies that Disable2FA issues PATCH
+// /api/v4/groups/:id/enterprise_users/:uid/disable_two_factor and returns
+// no error on 204 No Content.
 func TestDisable2FA_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == "/api/v4/groups/42/enterprise_users/10/disable_two_factor" {
@@ -334,6 +361,8 @@ func TestDisable2FA_Success(t *testing.T) {
 	}
 }
 
+// TestDisable2FA_MissingGroupID verifies that Disable2FA returns a
+// validation error when the required group_id input is empty.
 func TestDisable2FA_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -345,6 +374,8 @@ func TestDisable2FA_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestDisable2FA_MissingUserID verifies that Disable2FA returns a
+// validation error when the required user_id input is zero.
 func TestDisable2FA_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -356,6 +387,8 @@ func TestDisable2FA_MissingUserID(t *testing.T) {
 	}
 }
 
+// TestDisable2FA_CancelledContext verifies that Disable2FA returns an
+// error when invoked with an already-cancelled context.
 func TestDisable2FA_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -372,6 +405,8 @@ func TestDisable2FA_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDisable2FA_APIError verifies that Disable2FA returns an error when
+// the GitLab endpoint responds with 403 Forbidden.
 func TestDisable2FA_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10/disable_two_factor" {
@@ -392,6 +427,9 @@ func TestDisable2FA_APIError(t *testing.T) {
 
 // --- Delete ---.
 
+// TestDelete_Success verifies that Delete issues DELETE
+// /api/v4/groups/:id/enterprise_users/:uid and returns no error on 204
+// No Content.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -410,6 +448,8 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_HardDelete verifies that Delete forwards the hard_delete=true
+// query parameter to the GitLab API when the HardDelete flag is set.
 func TestDelete_HardDelete(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -431,6 +471,8 @@ func TestDelete_HardDelete(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingGroupID verifies that Delete returns a validation
+// error when the required group_id input is empty.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -442,6 +484,8 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingUserID verifies that Delete returns a validation
+// error when the required user_id input is zero.
 func TestDelete_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -453,6 +497,8 @@ func TestDelete_MissingUserID(t *testing.T) {
 	}
 }
 
+// TestDelete_CancelledContext verifies that Delete returns an error when
+// invoked with an already-cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -469,6 +515,8 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete returns an error when the
+// GitLab enterprise users endpoint responds with 403 Forbidden.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {

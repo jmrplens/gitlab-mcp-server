@@ -4821,6 +4821,7 @@ const (
 	extProjectJSON = `{"id":42,"name":"my-repo","path":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/jmrplens/my-repo","description":"","topics":[]}`
 )
 
+// TestSetCustomHeader_Success verifies SetCustomHeader succeeds when the GitLab API accepts the custom header write on a project webhook.
 func TestSetCustomHeader_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42CustomHeaders {
@@ -4840,6 +4841,7 @@ func TestSetCustomHeader_Success(t *testing.T) {
 	}
 }
 
+// TestSetCustomHeader_EmptyProjectID verifies SetCustomHeader returns an error when ProjectID is empty.
 func TestSetCustomHeader_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4850,6 +4852,7 @@ func TestSetCustomHeader_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestSetCustomHeader_EmptyHookID verifies SetCustomHeader returns an error when HookID is zero.
 func TestSetCustomHeader_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4860,6 +4863,7 @@ func TestSetCustomHeader_EmptyHookID(t *testing.T) {
 	}
 }
 
+// TestSetCustomHeader_EmptyKey verifies SetCustomHeader returns an error when Key is empty.
 func TestSetCustomHeader_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4870,6 +4874,7 @@ func TestSetCustomHeader_EmptyKey(t *testing.T) {
 	}
 }
 
+// TestSetCustomHeader_APIError verifies SetCustomHeader propagates errors returned by the GitLab API.
 func TestSetCustomHeader_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -4882,6 +4887,7 @@ func TestSetCustomHeader_APIError(t *testing.T) {
 	}
 }
 
+// TestSetCustomHeader_ContextCancelled verifies SetCustomHeader honours a cancelled context and returns an error.
 func TestSetCustomHeader_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4895,6 +4901,7 @@ func TestSetCustomHeader_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestDeleteCustomHeader_Success verifies DeleteCustomHeader succeeds when the GitLab API confirms deletion of a webhook custom header.
 func TestDeleteCustomHeader_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProject42CustomHeaders {
@@ -4911,6 +4918,7 @@ func TestDeleteCustomHeader_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteCustomHeader_EmptyProjectID verifies DeleteCustomHeader returns an error when ProjectID is empty.
 func TestDeleteCustomHeader_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4921,6 +4929,7 @@ func TestDeleteCustomHeader_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestDeleteCustomHeader_EmptyHookID verifies DeleteCustomHeader returns an error when HookID is zero.
 func TestDeleteCustomHeader_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4931,6 +4940,7 @@ func TestDeleteCustomHeader_EmptyHookID(t *testing.T) {
 	}
 }
 
+// TestDeleteCustomHeader_APIError verifies DeleteCustomHeader propagates errors returned by the GitLab API.
 func TestDeleteCustomHeader_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -4943,6 +4953,7 @@ func TestDeleteCustomHeader_APIError(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_Success verifies SetURLVariable succeeds when the GitLab API accepts the webhook URL variable write.
 func TestSetWebhookURLVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42URLVars {
@@ -4959,6 +4970,7 @@ func TestSetWebhookURLVariable_Success(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_EmptyProjectID verifies SetURLVariable returns an error when ProjectID is empty.
 func TestSetWebhookURLVariable_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4969,6 +4981,7 @@ func TestSetWebhookURLVariable_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_EmptyHookID verifies SetURLVariable returns an error when HookID is zero.
 func TestSetWebhookURLVariable_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4979,6 +4992,7 @@ func TestSetWebhookURLVariable_EmptyHookID(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_EmptyKey verifies SetURLVariable returns an error when Key is empty.
 func TestSetWebhookURLVariable_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -4989,6 +5003,7 @@ func TestSetWebhookURLVariable_EmptyKey(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_APIError verifies SetURLVariable propagates errors returned by the GitLab API.
 func TestSetWebhookURLVariable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5001,6 +5016,7 @@ func TestSetWebhookURLVariable_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteWebhookURLVariable_Success verifies DeleteURLVariable succeeds when the GitLab API confirms deletion of a webhook URL variable.
 func TestDeleteWebhookURLVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProject42URLVars {
@@ -5017,6 +5033,7 @@ func TestDeleteWebhookURLVariable_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteWebhookURLVariable_EmptyProjectID verifies DeleteURLVariable returns an error when ProjectID is empty.
 func TestDeleteWebhookURLVariable_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5027,6 +5044,7 @@ func TestDeleteWebhookURLVariable_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestDeleteWebhookURLVariable_EmptyHookID verifies DeleteURLVariable returns an error when HookID is zero.
 func TestDeleteWebhookURLVariable_EmptyHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5037,6 +5055,7 @@ func TestDeleteWebhookURLVariable_EmptyHookID(t *testing.T) {
 	}
 }
 
+// TestDeleteWebhookURLVariable_APIError verifies DeleteURLVariable propagates errors returned by the GitLab API.
 func TestDeleteWebhookURLVariable_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5049,6 +5068,7 @@ func TestDeleteWebhookURLVariable_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteWebhookURLVariable_ContextCancelled verifies DeleteURLVariable honours a cancelled context and returns an error.
 func TestDeleteWebhookURLVariable_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5062,6 +5082,7 @@ func TestDeleteWebhookURLVariable_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestCreateForkRelation_Success verifies CreateForkRelation succeeds when the GitLab API accepts the fork-from relationship creation.
 func TestCreateForkRelation_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathProject42ForkRelation) {
@@ -5087,6 +5108,7 @@ func TestCreateForkRelation_Success(t *testing.T) {
 	}
 }
 
+// TestCreateForkRelation_EmptyProjectID verifies CreateForkRelation returns an error when ProjectID is empty.
 func TestCreateForkRelation_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5097,6 +5119,7 @@ func TestCreateForkRelation_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestCreateForkRelation_EmptyForkedFromID verifies CreateForkRelation returns an error when ForkedFromID is empty.
 func TestCreateForkRelation_EmptyForkedFromID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5107,6 +5130,7 @@ func TestCreateForkRelation_EmptyForkedFromID(t *testing.T) {
 	}
 }
 
+// TestCreateForkRelation_APIError verifies CreateForkRelation propagates errors returned by the GitLab API.
 func TestCreateForkRelation_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5119,6 +5143,7 @@ func TestCreateForkRelation_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteForkRelation_Success verifies DeleteForkRelation succeeds when the GitLab API confirms removal of the fork relationship.
 func TestDeleteForkRelation_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProject42ForkRelation {
@@ -5133,6 +5158,7 @@ func TestDeleteForkRelation_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteForkRelation_EmptyProjectID verifies DeleteForkRelation returns an error when ProjectID is empty.
 func TestDeleteForkRelation_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5143,6 +5169,7 @@ func TestDeleteForkRelation_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestDeleteForkRelation_APIError verifies DeleteForkRelation propagates errors returned by the GitLab API.
 func TestDeleteForkRelation_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5153,6 +5180,7 @@ func TestDeleteForkRelation_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteForkRelation_ContextCancelled verifies DeleteForkRelation honours a cancelled context and returns an error.
 func TestDeleteForkRelation_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5164,6 +5192,7 @@ func TestDeleteForkRelation_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_Success verifies UploadAvatar succeeds when given a base64-encoded payload and the GitLab API returns the updated project.
 func TestUploadAvatar_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42 {
@@ -5184,6 +5213,7 @@ func TestUploadAvatar_Success(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_EmptyProjectID verifies UploadAvatar returns an error when ProjectID is empty.
 func TestUploadAvatar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5196,6 +5226,7 @@ func TestUploadAvatar_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_EmptyFilename verifies UploadAvatar returns an error when Filename is empty.
 func TestUploadAvatar_EmptyFilename(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5208,6 +5239,7 @@ func TestUploadAvatar_EmptyFilename(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_EmptyContentBase64 verifies UploadAvatar returns an error when neither ContentBase64 nor FilePath is provided.
 func TestUploadAvatar_EmptyContentBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5220,6 +5252,7 @@ func TestUploadAvatar_EmptyContentBase64(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_BothFilePathAndBase64 verifies UploadAvatar returns an error when both FilePath and ContentBase64 are provided (mutually exclusive).
 func TestUploadAvatar_BothFilePathAndBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5232,6 +5265,7 @@ func TestUploadAvatar_BothFilePathAndBase64(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_FilePath_Success verifies UploadAvatar reads an on-disk file via FilePath and uploads it successfully.
 func TestUploadAvatar_FilePath_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42 {
@@ -5255,6 +5289,7 @@ func TestUploadAvatar_FilePath_Success(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_FilePath_NotFound verifies UploadAvatar returns an error when the FilePath points to a non-existent file.
 func TestUploadAvatar_FilePath_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5267,6 +5302,7 @@ func TestUploadAvatar_FilePath_NotFound(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_InvalidBase64 verifies UploadAvatar returns an error when ContentBase64 contains invalid base64 data.
 func TestUploadAvatar_InvalidBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5279,6 +5315,7 @@ func TestUploadAvatar_InvalidBase64(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_APIError verifies UploadAvatar propagates errors returned by the GitLab API.
 func TestUploadAvatar_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5292,6 +5329,7 @@ func TestUploadAvatar_APIError(t *testing.T) {
 	}
 }
 
+// TestUploadAvatar_ContextCancelled verifies UploadAvatar honours a cancelled context and returns an error.
 func TestUploadAvatar_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5306,6 +5344,7 @@ func TestUploadAvatar_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestDownloadAvatar_Success verifies DownloadAvatar fetches the project avatar bytes and returns them base64-encoded alongside the content type.
 func TestDownloadAvatar_Success(t *testing.T) {
 	rawBytes := []byte("fake-png-image-bytes")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5330,6 +5369,7 @@ func TestDownloadAvatar_Success(t *testing.T) {
 	}
 }
 
+// TestDownloadAvatar_EmptyProjectID verifies DownloadAvatar returns an error when ProjectID is empty.
 func TestDownloadAvatar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5340,6 +5380,7 @@ func TestDownloadAvatar_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestDownloadAvatar_APIError verifies DownloadAvatar propagates errors returned by the GitLab API.
 func TestDownloadAvatar_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5350,6 +5391,7 @@ func TestDownloadAvatar_APIError(t *testing.T) {
 	}
 }
 
+// TestStartHousekeeping_Success verifies StartHousekeeping succeeds when the GitLab housekeeping endpoint returns 201.
 func TestStartHousekeeping_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Housekeeping {
@@ -5364,6 +5406,7 @@ func TestStartHousekeeping_Success(t *testing.T) {
 	}
 }
 
+// TestStartHousekeeping_EmptyProjectID verifies StartHousekeeping returns an error when ProjectID is empty.
 func TestStartHousekeeping_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5374,6 +5417,7 @@ func TestStartHousekeeping_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestStartHousekeeping_APIError verifies StartHousekeeping propagates errors returned by the GitLab API.
 func TestStartHousekeeping_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5384,6 +5428,7 @@ func TestStartHousekeeping_APIError(t *testing.T) {
 	}
 }
 
+// TestStartHousekeeping_ContextCancelled verifies StartHousekeeping honours a cancelled context and returns an error.
 func TestStartHousekeeping_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5395,6 +5440,7 @@ func TestStartHousekeeping_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestGetRepositoryStorage_Success verifies GetRepositoryStorage returns the storage shard metadata reported by the GitLab API.
 func TestGetRepositoryStorage_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42Storage {
@@ -5421,6 +5467,7 @@ func TestGetRepositoryStorage_Success(t *testing.T) {
 	}
 }
 
+// TestGetRepositoryStorage_EmptyProjectID verifies GetRepositoryStorage returns an error when ProjectID is empty.
 func TestGetRepositoryStorage_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5431,6 +5478,7 @@ func TestGetRepositoryStorage_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGetRepositoryStorage_APIError verifies GetRepositoryStorage propagates errors returned by the GitLab API.
 func TestGetRepositoryStorage_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5441,6 +5489,7 @@ func TestGetRepositoryStorage_APIError(t *testing.T) {
 	}
 }
 
+// TestGetRepositoryStorage_ContextCancelled verifies GetRepositoryStorage honours a cancelled context and returns an error.
 func TestGetRepositoryStorage_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5452,6 +5501,7 @@ func TestGetRepositoryStorage_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestCreateForUser_Success verifies CreateForUser succeeds when the admin API accepts creating a project on behalf of a user.
 func TestCreateForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectForUser5 {
@@ -5474,6 +5524,7 @@ func TestCreateForUser_Success(t *testing.T) {
 	}
 }
 
+// TestCreateForUser_EmptyUserID verifies CreateForUser returns an error when UserID is zero.
 func TestCreateForUser_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5484,6 +5535,7 @@ func TestCreateForUser_EmptyUserID(t *testing.T) {
 	}
 }
 
+// TestCreateForUser_EmptyName verifies CreateForUser returns an error when Name is empty.
 func TestCreateForUser_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5494,6 +5546,7 @@ func TestCreateForUser_EmptyName(t *testing.T) {
 	}
 }
 
+// TestCreateForUser_APIError verifies CreateForUser propagates errors returned by the GitLab API.
 func TestCreateForUser_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -5506,6 +5559,7 @@ func TestCreateForUser_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateForUser_ContextCancelled verifies CreateForUser honours a cancelled context and returns an error.
 func TestCreateForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -5519,6 +5573,7 @@ func TestCreateForUser_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestFormatForkRelationMarkdown_NonEmpty verifies the fork-relation markdown formatter produces non-empty output containing the expected fields.
 func TestFormatForkRelationMarkdown_NonEmpty(t *testing.T) {
 	md := FormatForkRelationMarkdown(ForkRelationOutput{
 		ID: 1, ForkedToProjectID: 42, ForkedFromProjectID: 99,
@@ -5532,6 +5587,7 @@ func TestFormatForkRelationMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestFormatDownloadAvatarMarkdown_NonEmpty verifies the download-avatar markdown formatter produces non-empty output containing the expected fields.
 func TestFormatDownloadAvatarMarkdown_NonEmpty(t *testing.T) {
 	md := FormatDownloadAvatarMarkdown(DownloadAvatarOutput{
 		ContentBase64: "dGVzdA==", SizeBytes: 4,
@@ -5544,6 +5600,7 @@ func TestFormatDownloadAvatarMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestFormatRepositoryStorageMarkdown_NonEmpty verifies the repository-storage markdown formatter produces non-empty output containing the expected fields.
 func TestFormatRepositoryStorageMarkdown_NonEmpty(t *testing.T) {
 	md := FormatRepositoryStorageMarkdown(RepositoryStorageOutput{
 		ProjectID: 42, DiskPath: "/data/repos", RepositoryStorage: "default",

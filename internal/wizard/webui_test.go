@@ -623,6 +623,9 @@ func TestServeIndex_ContainsHTML(t *testing.T) {
 	}
 }
 
+// TestHandleDefaults_WithExistingConfig verifies the /api/defaults handler
+// returns HasExisting=true, the saved GitLab URL, SkipTLSVerify flag, and a
+// masked token when a previous configuration is loaded.
 func TestHandleDefaults_WithExistingConfig(t *testing.T) {
 	stubLoadExistingConfigWith(t, ServerConfig{
 		GitLabURL:     "https://existing.example.com",

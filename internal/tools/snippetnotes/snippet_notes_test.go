@@ -45,6 +45,7 @@ const (
 
 // List tests.
 
+// TestList_Success verifies that List lists a snippet note on a successful GitLab API response.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSnippetNotes {
@@ -75,6 +76,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingProjectID verifies that List returns a validation error when project_id is missing.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -85,6 +87,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestList_MissingSnippetID verifies that List returns a validation error when snippet_id is missing.
 func TestList_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -95,6 +98,7 @@ func TestList_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is cancelled before the request completes.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -106,6 +110,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List propagates errors returned by the GitLab API.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -116,6 +121,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_Pagination verifies that List forwards pagination parameters (page, per_page) to the GitLab API.
 func TestList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -139,6 +145,7 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
+// TestList_OrderBySort verifies that List forwards order_by and sort query parameters to the GitLab API.
 func TestList_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("order_by") != "updated_at" {
@@ -162,6 +169,7 @@ func TestList_OrderBySort(t *testing.T) {
 
 // Get tests.
 
+// TestGet_Success verifies that Get retrieves a snippet note on a successful GitLab API response.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathSnippetNote100 {
@@ -183,6 +191,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingProjectID verifies that Get returns a validation error when project_id is missing.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -193,6 +202,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestGet_MissingSnippetID verifies that Get returns a validation error when snippet_id is missing.
 func TestGet_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -203,6 +213,7 @@ func TestGet_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestGet_MissingNoteID verifies that Get returns a validation error when note_id is missing.
 func TestGet_MissingNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -213,6 +224,7 @@ func TestGet_MissingNoteID(t *testing.T) {
 	}
 }
 
+// TestGet_APIError verifies that Get propagates errors returned by the GitLab API.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -223,6 +235,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
+// TestGet_CancelledContext verifies that Get returns an error when the context is cancelled before the request completes.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -236,6 +249,7 @@ func TestGet_CancelledContext(t *testing.T) {
 
 // Create tests.
 
+// TestCreate_Success verifies that Create creates a snippet note on a successful GitLab API response.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathSnippetNotes {
@@ -258,6 +272,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingProjectID verifies that Create returns a validation error when project_id is missing.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -268,6 +283,7 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingSnippetID verifies that Create returns a validation error when snippet_id is missing.
 func TestCreate_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -278,6 +294,7 @@ func TestCreate_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingBody verifies that Create returns a validation error when body is missing.
 func TestCreate_MissingBody(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -288,6 +305,7 @@ func TestCreate_MissingBody(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError verifies that Create propagates errors returned by the GitLab API.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -298,6 +316,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_CancelledContext verifies that Create returns an error when the context is cancelled before the request completes.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -311,6 +330,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 
 // Update tests.
 
+// TestUpdate_Success verifies that Update updates a snippet note on a successful GitLab API response.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathSnippetNote100 {
@@ -334,6 +354,7 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingProjectID verifies that Update returns a validation error when project_id is missing.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -344,6 +365,7 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingSnippetID verifies that Update returns a validation error when snippet_id is missing.
 func TestUpdate_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -354,6 +376,7 @@ func TestUpdate_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingNoteID verifies that Update returns a validation error when note_id is missing.
 func TestUpdate_MissingNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -364,6 +387,7 @@ func TestUpdate_MissingNoteID(t *testing.T) {
 	}
 }
 
+// TestUpdate_APIError verifies that Update propagates errors returned by the GitLab API.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -374,6 +398,7 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdate_CancelledContext verifies that Update returns an error when the context is cancelled before the request completes.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -387,6 +412,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 
 // Delete tests.
 
+// TestDelete_Success verifies that Delete deletes a snippet note on a successful GitLab API response.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathSnippetNote100 {
@@ -402,6 +428,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingProjectID verifies that Delete returns a validation error when project_id is missing.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -412,6 +439,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingSnippetID verifies that Delete returns a validation error when snippet_id is missing.
 func TestDelete_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -422,6 +450,7 @@ func TestDelete_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingNoteID verifies that Delete returns a validation error when note_id is missing.
 func TestDelete_MissingNoteID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -432,6 +461,7 @@ func TestDelete_MissingNoteID(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete propagates errors returned by the GitLab API.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -442,6 +472,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestDelete_CancelledContext verifies that Delete returns an error when the context is cancelled before the request completes.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -455,6 +486,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // Markdown tests.
 
+// TestFormatOutputMarkdown_Basic verifies the OutputMarkdown_Basic markdown formatter output.
 func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     100,
@@ -470,6 +502,7 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_SystemNote verifies the OutputMarkdown_SystemNote markdown formatter output.
 func TestFormatOutputMarkdown_SystemNote(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     101,
@@ -482,6 +515,7 @@ func TestFormatOutputMarkdown_SystemNote(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty markdown formatter output.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !contains(md, "No snippet notes found") {
@@ -489,6 +523,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_WithNotes verifies the ListMarkdown_WithNotes markdown formatter output.
 func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Notes: []Output{
@@ -506,6 +541,8 @@ func TestFormatListMarkdown_WithNotes(t *testing.T) {
 
 // RegisterTools tests.
 
+// TestRegisterTools_NoPanic verifies that RegisterTools registers all Snippet Notes tools
+// without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -514,6 +551,8 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterTools_CallAllThroughMCP uses table-driven subtests to exercise every registered
+// Snippet Notes tool through a round-trip MCP client call and asserts success.
 func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	session := newSnippetNotesMCPSession(t)
 	ctx := context.Background()
@@ -606,6 +645,8 @@ func containsSubstring(s, sub string) bool {
 
 // toOutput coverage tests.
 
+// TestToOutput_NilTimestamps verifies that toOutput handles edge cases in the
+// GitLab response (nil timestamps or optional fields) without panicking.
 func TestToOutput_NilTimestamps(t *testing.T) {
 	// Note with no created_at or updated_at (nil time pointers in the SDK).
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -637,6 +678,7 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 }
 
+// TestList_EmptyResult verifies that List returns an empty slice (not nil) when the GitLab API returns no items.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -650,6 +692,7 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_WithUpdatedAt verifies the OutputMarkdown_WithUpdatedAt markdown formatter output.
 func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:        100,

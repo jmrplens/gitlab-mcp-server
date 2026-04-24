@@ -41,6 +41,7 @@ const (
 	}`
 )
 
+// TestGetApprovalConfig_Success verifies GetApprovalConfig returns the project's approval configuration when the GitLab API returns HTTP 200, asserting key fields like ApprovalsBeforeMerge and SelectiveCodeOwnerRemovals.
 func TestGetApprovalConfig_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42Approvals {
@@ -67,6 +68,7 @@ func TestGetApprovalConfig_Success(t *testing.T) {
 	}
 }
 
+// TestGetApprovalConfig_EmptyProjectID verifies GetApprovalConfig returns an error when ProjectID is empty.
 func TestGetApprovalConfig_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -77,6 +79,7 @@ func TestGetApprovalConfig_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGetApprovalConfig_APIError verifies GetApprovalConfig returns an error when the GitLab API responds with HTTP 400.
 func TestGetApprovalConfig_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -87,6 +90,7 @@ func TestGetApprovalConfig_APIError(t *testing.T) {
 	}
 }
 
+// TestGetApprovalConfig_ContextCancelled verifies GetApprovalConfig returns an error when the request context is already cancelled.
 func TestGetApprovalConfig_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -98,6 +102,7 @@ func TestGetApprovalConfig_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestChangeApprovalConfig_Success verifies ChangeApprovalConfig updates approval settings via POST and returns the resulting configuration on HTTP 200.
 func TestChangeApprovalConfig_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Approvals {
@@ -118,6 +123,7 @@ func TestChangeApprovalConfig_Success(t *testing.T) {
 	}
 }
 
+// TestChangeApprovalConfig_EmptyProjectID verifies ChangeApprovalConfig returns an error when ProjectID is empty.
 func TestChangeApprovalConfig_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -128,6 +134,7 @@ func TestChangeApprovalConfig_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestChangeApprovalConfig_APIError verifies ChangeApprovalConfig returns an error when the GitLab API responds with HTTP 400.
 func TestChangeApprovalConfig_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -138,6 +145,7 @@ func TestChangeApprovalConfig_APIError(t *testing.T) {
 	}
 }
 
+// TestListApprovalRules_Success verifies ListApprovalRules returns the project's approval rules from HTTP 200, asserting rule ID, name, and required approvals.
 func TestListApprovalRules_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42ApprovalRules {
@@ -164,6 +172,7 @@ func TestListApprovalRules_Success(t *testing.T) {
 	}
 }
 
+// TestListApprovalRules_EmptyProjectID verifies ListApprovalRules returns an error when ProjectID is empty.
 func TestListApprovalRules_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -174,6 +183,7 @@ func TestListApprovalRules_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestListApprovalRules_APIError verifies ListApprovalRules returns an error when the GitLab API responds with HTTP 400.
 func TestListApprovalRules_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -184,6 +194,7 @@ func TestListApprovalRules_APIError(t *testing.T) {
 	}
 }
 
+// TestGetApprovalRule_Success verifies GetApprovalRule fetches a single approval rule by ID and asserts its name and AppliesToAllProtectedBranches flag.
 func TestGetApprovalRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42ApprovalRule10 {
@@ -209,6 +220,7 @@ func TestGetApprovalRule_Success(t *testing.T) {
 	}
 }
 
+// TestGetApprovalRule_EmptyProjectID verifies GetApprovalRule returns an error when ProjectID is empty.
 func TestGetApprovalRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -219,6 +231,7 @@ func TestGetApprovalRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGetApprovalRule_EmptyRuleID verifies GetApprovalRule returns an error when RuleID is zero.
 func TestGetApprovalRule_EmptyRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -229,6 +242,7 @@ func TestGetApprovalRule_EmptyRuleID(t *testing.T) {
 	}
 }
 
+// TestGetApprovalRule_APIError verifies GetApprovalRule returns an error when the GitLab API responds with HTTP 400.
 func TestGetApprovalRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -241,6 +255,7 @@ func TestGetApprovalRule_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateApprovalRule_Success verifies CreateApprovalRule issues POST to the approval rules endpoint and returns the created rule on HTTP 201.
 func TestCreateApprovalRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42ApprovalRules {
@@ -263,6 +278,7 @@ func TestCreateApprovalRule_Success(t *testing.T) {
 	}
 }
 
+// TestCreateApprovalRule_EmptyProjectID verifies CreateApprovalRule returns an error when ProjectID is empty.
 func TestCreateApprovalRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -273,6 +289,7 @@ func TestCreateApprovalRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestCreateApprovalRule_EmptyName verifies CreateApprovalRule returns an error when Name is empty.
 func TestCreateApprovalRule_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -283,6 +300,7 @@ func TestCreateApprovalRule_EmptyName(t *testing.T) {
 	}
 }
 
+// TestCreateApprovalRule_APIError verifies CreateApprovalRule returns an error when the GitLab API responds with HTTP 400.
 func TestCreateApprovalRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -295,6 +313,7 @@ func TestCreateApprovalRule_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateApprovalRule_ContextCancelled verifies CreateApprovalRule returns an error when the request context is already cancelled.
 func TestCreateApprovalRule_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -308,6 +327,7 @@ func TestCreateApprovalRule_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestUpdateApprovalRule_Success verifies UpdateApprovalRule issues PUT to the rule endpoint and returns the updated rule on HTTP 200.
 func TestUpdateApprovalRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42ApprovalRule10 {
@@ -327,6 +347,7 @@ func TestUpdateApprovalRule_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateApprovalRule_EmptyProjectID verifies UpdateApprovalRule returns an error when ProjectID is empty.
 func TestUpdateApprovalRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -337,6 +358,7 @@ func TestUpdateApprovalRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestUpdateApprovalRule_EmptyRuleID verifies UpdateApprovalRule returns an error when RuleID is zero.
 func TestUpdateApprovalRule_EmptyRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -347,6 +369,7 @@ func TestUpdateApprovalRule_EmptyRuleID(t *testing.T) {
 	}
 }
 
+// TestUpdateApprovalRule_APIError verifies UpdateApprovalRule returns an error when the GitLab API responds with HTTP 400.
 func TestUpdateApprovalRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -359,6 +382,7 @@ func TestUpdateApprovalRule_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteApprovalRule_Success verifies DeleteApprovalRule issues DELETE to the rule endpoint and succeeds on HTTP 204.
 func TestDeleteApprovalRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathProject42ApprovalRule10 {
@@ -375,6 +399,7 @@ func TestDeleteApprovalRule_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteApprovalRule_EmptyProjectID verifies DeleteApprovalRule returns an error when ProjectID is empty.
 func TestDeleteApprovalRule_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -385,6 +410,7 @@ func TestDeleteApprovalRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestDeleteApprovalRule_EmptyRuleID verifies DeleteApprovalRule returns an error when RuleID is zero.
 func TestDeleteApprovalRule_EmptyRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -395,6 +421,7 @@ func TestDeleteApprovalRule_EmptyRuleID(t *testing.T) {
 	}
 }
 
+// TestDeleteApprovalRule_APIError verifies DeleteApprovalRule returns an error when the GitLab API responds with HTTP 400.
 func TestDeleteApprovalRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -407,6 +434,7 @@ func TestDeleteApprovalRule_APIError(t *testing.T) {
 	}
 }
 
+// TestFormatApprovalConfigMarkdown_NonEmpty verifies FormatApprovalConfigMarkdown produces non-empty markdown containing the approvals count.
 func TestFormatApprovalConfigMarkdown_NonEmpty(t *testing.T) {
 	md := FormatApprovalConfigMarkdown(ApprovalConfigOutput{
 		ApprovalsBeforeMerge: 2, ResetApprovalsOnPush: true,
@@ -419,6 +447,7 @@ func TestFormatApprovalConfigMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestFormatApprovalRuleMarkdown_NonEmpty verifies FormatApprovalRuleMarkdown produces non-empty markdown containing the rule name.
 func TestFormatApprovalRuleMarkdown_NonEmpty(t *testing.T) {
 	md := FormatApprovalRuleMarkdown(ApprovalRuleOutput{
 		ID: 10, Name: "Security Review", ApprovalsRequired: 2,
@@ -431,6 +460,7 @@ func TestFormatApprovalRuleMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestFormatListApprovalRulesMarkdown_NonEmpty verifies FormatListApprovalRulesMarkdown produces non-empty markdown containing each rule's name.
 func TestFormatListApprovalRulesMarkdown_NonEmpty(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
 		Rules: []ApprovalRuleOutput{

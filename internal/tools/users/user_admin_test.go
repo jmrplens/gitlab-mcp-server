@@ -11,6 +11,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// TestBlockUser_Success verifies BlockUser returns Success=true and Action="blocked"
+// when POST /users/:id/block responds 201 Created.
 func TestBlockUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/block" {
@@ -32,6 +34,8 @@ func TestBlockUser_Success(t *testing.T) {
 	}
 }
 
+// TestBlockUser_InvalidUserID verifies BlockUser returns a validation error
+// when user_id=0, without hitting the API.
 func TestBlockUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -42,6 +46,8 @@ func TestBlockUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestUnblockUser_Success verifies UnblockUser returns Success=true when
+// POST /users/:id/unblock responds 201 Created.
 func TestUnblockUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/unblock" {
@@ -60,6 +66,8 @@ func TestUnblockUser_Success(t *testing.T) {
 	}
 }
 
+// TestBanUser_Success verifies BanUser returns Success=true when
+// POST /users/:id/ban responds 201 Created.
 func TestBanUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/ban" {
@@ -78,6 +86,8 @@ func TestBanUser_Success(t *testing.T) {
 	}
 }
 
+// TestActivateUser_Success verifies ActivateUser returns Success=true when
+// POST /users/:id/activate responds 201 Created.
 func TestActivateUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/activate" {
@@ -96,6 +106,8 @@ func TestActivateUser_Success(t *testing.T) {
 	}
 }
 
+// TestDeactivateUser_Success verifies DeactivateUser returns Success=true when
+// POST /users/:id/deactivate responds 201 Created.
 func TestDeactivateUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/deactivate" {
@@ -114,6 +126,8 @@ func TestDeactivateUser_Success(t *testing.T) {
 	}
 }
 
+// TestApproveUser_Success verifies ApproveUser returns Success=true when
+// POST /users/:id/approve responds 201 Created.
 func TestApproveUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/approve" {
@@ -132,6 +146,8 @@ func TestApproveUser_Success(t *testing.T) {
 	}
 }
 
+// TestRejectUser_Success verifies RejectUser returns Success=true when
+// POST /users/:id/reject responds 200 OK.
 func TestRejectUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users/42/reject" {
@@ -150,6 +166,8 @@ func TestRejectUser_Success(t *testing.T) {
 	}
 }
 
+// TestFormatAdminActionMarkdownString verifies FormatAdminActionMarkdownString
+// produces non-empty markdown for a successful admin action result.
 func TestFormatAdminActionMarkdownString(t *testing.T) {
 	md := FormatAdminActionMarkdownString(AdminActionOutput{UserID: 42, Action: "block", Success: true})
 	if md == "" {

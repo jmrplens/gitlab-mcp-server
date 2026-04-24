@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// TestPrompter_AskString_ValidInput verifies AskString returns the trimmed
+// input string when the user provides a non-empty answer.
 func TestPrompter_AskString_ValidInput(t *testing.T) {
 	r := strings.NewReader("hello world\n")
 	w := &bytes.Buffer{}
@@ -22,6 +24,9 @@ func TestPrompter_AskString_ValidInput(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskString_EmptyThenValid verifies AskString re-prompts on
+// empty input and prints a "cannot be empty" warning before returning the
+// first non-empty value.
 func TestPrompter_AskString_EmptyThenValid(t *testing.T) {
 	r := strings.NewReader("\n  \nhello\n")
 	w := &bytes.Buffer{}
@@ -39,6 +44,8 @@ func TestPrompter_AskString_EmptyThenValid(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskStringDefault_UsesDefault verifies AskStringDefault returns
+// the provided default value when the user presses Enter with no input.
 func TestPrompter_AskStringDefault_UsesDefault(t *testing.T) {
 	r := strings.NewReader("\n")
 	w := &bytes.Buffer{}
@@ -53,6 +60,8 @@ func TestPrompter_AskStringDefault_UsesDefault(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskStringDefault_OverridesDefault verifies AskStringDefault
+// returns the user-supplied value instead of the default when provided.
 func TestPrompter_AskStringDefault_OverridesDefault(t *testing.T) {
 	r := strings.NewReader("https://custom.dev\n")
 	w := &bytes.Buffer{}
@@ -67,6 +76,9 @@ func TestPrompter_AskStringDefault_OverridesDefault(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskYesNo_Defaults uses table-driven subtests to verify
+// AskYesNo accepts y/Y/yes, n/N/no, and honors the default when the user
+// presses Enter with no input.
 func TestPrompter_AskYesNo_Defaults(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -101,6 +113,8 @@ func TestPrompter_AskYesNo_Defaults(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskChoice_ValidSelection verifies AskChoice returns the
+// zero-based index corresponding to the 1-based user selection.
 func TestPrompter_AskChoice_ValidSelection(t *testing.T) {
 	r := strings.NewReader("2\n")
 	w := &bytes.Buffer{}
@@ -115,6 +129,8 @@ func TestPrompter_AskChoice_ValidSelection(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskChoice_InvalidThenValid verifies AskChoice rejects
+// out-of-range selections and re-prompts until a valid index is entered.
 func TestPrompter_AskChoice_InvalidThenValid(t *testing.T) {
 	r := strings.NewReader("0\n5\n1\n")
 	w := &bytes.Buffer{}
@@ -129,6 +145,8 @@ func TestPrompter_AskChoice_InvalidThenValid(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskMultiChoice_SpaceSeparated verifies AskMultiChoice parses
+// space-separated 1-based indices into a boolean selection slice.
 func TestPrompter_AskMultiChoice_SpaceSeparated(t *testing.T) {
 	r := strings.NewReader("1 3\n")
 	w := &bytes.Buffer{}
@@ -146,6 +164,8 @@ func TestPrompter_AskMultiChoice_SpaceSeparated(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskMultiChoice_All verifies AskMultiChoice interprets the
+// input "a" as selecting every option.
 func TestPrompter_AskMultiChoice_All(t *testing.T) {
 	r := strings.NewReader("a\n")
 	w := &bytes.Buffer{}
@@ -162,6 +182,8 @@ func TestPrompter_AskMultiChoice_All(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskPassword_ValidInput verifies AskPassword returns the
+// trimmed password string when the user provides non-empty input.
 func TestPrompter_AskPassword_ValidInput(t *testing.T) {
 	r := strings.NewReader("glpat-secret123\n")
 	w := &bytes.Buffer{}
@@ -342,6 +364,9 @@ func TestPrompter_AskMultiChoice_EOF(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskPasswordDefault_ReturnsDefaultOnEmpty verifies
+// AskPasswordDefault returns the provided default when the user presses
+// Enter with no input and prints the masked token as a hint.
 func TestPrompter_AskPasswordDefault_ReturnsDefaultOnEmpty(t *testing.T) {
 	r := strings.NewReader("\n")
 	w := &bytes.Buffer{}
@@ -359,6 +384,9 @@ func TestPrompter_AskPasswordDefault_ReturnsDefaultOnEmpty(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskPasswordDefault_OverridesDefault verifies
+// AskPasswordDefault returns a user-supplied password instead of the
+// default when provided.
 func TestPrompter_AskPasswordDefault_OverridesDefault(t *testing.T) {
 	r := strings.NewReader("glpat-newtoken789\n")
 	w := &bytes.Buffer{}
@@ -373,6 +401,8 @@ func TestPrompter_AskPasswordDefault_OverridesDefault(t *testing.T) {
 	}
 }
 
+// TestPrompter_AskPasswordDefault_ShortToken verifies AskPasswordDefault
+// handles short default tokens without panicking and prints a masked hint.
 func TestPrompter_AskPasswordDefault_ShortToken(t *testing.T) {
 	r := strings.NewReader("\n")
 	w := &bytes.Buffer{}

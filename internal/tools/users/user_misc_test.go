@@ -12,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// TestGetUserActivities_Success verifies GetUserActivities returns the activity
+// list when GET /user/activities responds 200 with a single record.
 func TestGetUserActivities_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/activities" {
@@ -30,6 +32,8 @@ func TestGetUserActivities_Success(t *testing.T) {
 	}
 }
 
+// TestGetUserMemberships_Success verifies GetUserMemberships returns membership
+// records when GET /users/:id/memberships responds 200 with project data.
 func TestGetUserMemberships_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/memberships" {
@@ -51,6 +55,8 @@ func TestGetUserMemberships_Success(t *testing.T) {
 	}
 }
 
+// TestGetUserMemberships_InvalidUserID verifies GetUserMemberships returns an
+// error when called with user_id=0 without hitting the API.
 func TestGetUserMemberships_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -61,6 +67,8 @@ func TestGetUserMemberships_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestDeleteUserIdentity_Success verifies DeleteUserIdentity reports Deleted=true
+// when DELETE /users/:id/identities/:provider responds 204 No Content.
 func TestDeleteUserIdentity_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/users/42/identities/ldap" {

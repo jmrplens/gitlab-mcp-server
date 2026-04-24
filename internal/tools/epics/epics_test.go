@@ -125,6 +125,8 @@ const (
 
 // --- List tests ---
 
+// TestList_Success verifies List returns one epic with Type="Epic" when the
+// GraphQL namespace.workItems query responds 200 with a single work item.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -147,6 +149,8 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingFullPath verifies List returns a validation error when
+// full_path is empty, without issuing any GraphQL request.
 func TestList_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -157,6 +161,8 @@ func TestList_MissingFullPath(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies List returns a context error when
+// invoked with an already-cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -168,6 +174,8 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies List propagates an error when the GraphQL
+// endpoint responds 403 Forbidden.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -180,6 +188,9 @@ func TestList_APIError(t *testing.T) {
 
 // --- Get tests ---
 
+// TestGet_Success verifies Get returns an epic with the expected ID, title,
+// author, and Type="Epic" when the GraphQL namespace.workItem query responds
+// 200 with a full work item payload.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -205,6 +216,8 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingIID verifies Get returns a validation error mentioning "iid"
+// when the iid field is zero, without issuing a GraphQL request.
 func TestGet_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -218,6 +231,8 @@ func TestGet_MissingIID(t *testing.T) {
 	}
 }
 
+// TestGet_MissingFullPath verifies Get returns a validation error when
+// full_path is empty.
 func TestGet_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -228,6 +243,8 @@ func TestGet_MissingFullPath(t *testing.T) {
 	}
 }
 
+// TestGet_APIError verifies Get propagates an error when the GraphQL endpoint
+// responds 404 Not Found.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -240,6 +257,8 @@ func TestGet_APIError(t *testing.T) {
 
 // --- GetLinks tests (REST) ---
 
+// TestGetLinks_Success verifies GetLinks returns the child epic list when
+// GET /groups/:path/epics/:iid/epics responds 200 with one linked epic.
 func TestGetLinks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/epics/1/epics") {
@@ -263,6 +282,8 @@ func TestGetLinks_Success(t *testing.T) {
 	}
 }
 
+// TestGetLinks_MissingIID verifies GetLinks returns a validation error when
+// iid is zero.
 func TestGetLinks_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -273,6 +294,8 @@ func TestGetLinks_MissingIID(t *testing.T) {
 	}
 }
 
+// TestGetLinks_MissingFullPath verifies GetLinks returns a validation error
+// when full_path is empty.
 func TestGetLinks_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -285,6 +308,8 @@ func TestGetLinks_MissingFullPath(t *testing.T) {
 
 // --- Create tests ---
 
+// TestCreate_Success verifies Create returns the new epic when the GraphQL
+// workItemCreate mutation responds 200 with a work item payload.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -307,6 +332,8 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingTitle verifies Create returns a validation error when
+// the title field is empty.
 func TestCreate_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -317,6 +344,8 @@ func TestCreate_MissingTitle(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingFullPath verifies Create returns a validation error when
+// full_path is empty.
 func TestCreate_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -327,6 +356,8 @@ func TestCreate_MissingFullPath(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError verifies Create propagates an error when the GraphQL
+// workItemCreate mutation responds 403 Forbidden.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -339,6 +370,9 @@ func TestCreate_APIError(t *testing.T) {
 
 // --- Update tests ---
 
+// TestUpdate_Success verifies Update succeeds across the two-step GraphQL
+// flow: first call resolves the IID to a work item global ID, second call
+// performs the workItemUpdate mutation with the new title and state.
 func TestUpdate_Success(t *testing.T) {
 	call := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -369,6 +403,8 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingIID verifies Update returns a validation error when
+// iid is zero.
 func TestUpdate_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -379,6 +415,8 @@ func TestUpdate_MissingIID(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingFullPath verifies Update returns a validation error when
+// full_path is empty.
 func TestUpdate_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -389,6 +427,8 @@ func TestUpdate_MissingFullPath(t *testing.T) {
 	}
 }
 
+// TestUpdate_APIError verifies Update propagates an error when the first
+// GraphQL call (GID resolution) responds 403 Forbidden.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -401,6 +441,9 @@ func TestUpdate_APIError(t *testing.T) {
 
 // --- Delete tests ---
 
+// TestDelete_Success verifies Delete succeeds across the two-step GraphQL
+// flow: first call resolves the IID to a work item global ID, second call
+// performs the workItemDelete mutation with no errors.
 func TestDelete_Success(t *testing.T) {
 	call := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -423,6 +466,8 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingIID verifies Delete returns a validation error when
+// iid is zero.
 func TestDelete_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -433,6 +478,8 @@ func TestDelete_MissingIID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingFullPath verifies Delete returns a validation error when
+// full_path is empty.
 func TestDelete_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -443,6 +490,8 @@ func TestDelete_MissingFullPath(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies Delete propagates an error when the first
+// GraphQL call (GID resolution) responds 403 Forbidden.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -455,6 +504,9 @@ func TestDelete_APIError(t *testing.T) {
 
 // --- toOutput converter tests ---
 
+// TestToOutput_Minimal verifies toOutput correctly handles a minimally
+// populated WorkItem, leaving optional fields (Author, Assignees) at their
+// zero values without panicking.
 func TestToOutput_Minimal(t *testing.T) {
 	out := toOutput(&testMinimalWorkItem)
 	if out.ID != 1 {
@@ -468,6 +520,9 @@ func TestToOutput_Minimal(t *testing.T) {
 	}
 }
 
+// TestMapStatusToID uses table-driven subtests to verify mapStatusToID returns
+// a non-empty status ID for every supported status (TODO, IN_PROGRESS, DONE,
+// WONT_DO, DUPLICATE) and falls back to CUSTOM for unknown values.
 func TestMapStatusToID(t *testing.T) {
 	tests := []struct {
 		name string
@@ -492,6 +547,8 @@ func TestMapStatusToID(t *testing.T) {
 
 // --- Markdown tests ---
 
+// TestFormatOutputMarkdown verifies FormatOutputMarkdown produces a non-empty
+// string for a minimally populated Output.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Epic", Type: "Epic", State: "OPEN", Author: "alice",
@@ -502,6 +559,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown produces a
+// non-empty string for a zero-value ListOutput (empty epic list).
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == "" {
@@ -509,6 +568,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatLinksMarkdown verifies FormatLinksMarkdown produces a non-empty
+// string for a LinksOutput containing one child epic.
 func TestFormatLinksMarkdown(t *testing.T) {
 	out := LinksOutput{
 		ChildEpics: []LinksItem{

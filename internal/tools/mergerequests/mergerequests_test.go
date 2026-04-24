@@ -3822,6 +3822,9 @@ func TestFormatMarkdown_MergedState(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown_ClosedState verifies that FormatMarkdown renders the
+// closed_by username and a bare pipeline ID (no URL) when the MR is in the
+// closed state with no pipeline web URL.
 func TestFormatMarkdown_ClosedState(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 6, Title: "closed MR", State: "closed",
@@ -3851,6 +3854,8 @@ func TestApprove_Forbidden(t *testing.T) {
 	}
 }
 
+// TestApprove_NotFound verifies that Approve surfaces a Premium-feature
+// hint in the error message when the GitLab API responds with 404.
 func TestApprove_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -3864,6 +3869,8 @@ func TestApprove_NotFound(t *testing.T) {
 	}
 }
 
+// TestApprove_GenericError verifies that Approve returns an error for an
+// unclassified 400 Bad Request response.
 func TestApprove_GenericError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -3894,6 +3901,8 @@ func TestSubscribe_EOF(t *testing.T) {
 	}
 }
 
+// TestSubscribe_APIError verifies that Subscribe returns an error when
+// the GitLab API responds with 403 Forbidden.
 func TestSubscribe_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3904,6 +3913,9 @@ func TestSubscribe_APIError(t *testing.T) {
 	}
 }
 
+// TestUnsubscribe_EOF verifies that Unsubscribe falls back to Get when
+// the subscribe endpoint responds with 304 Not Modified (already
+// unsubscribed), returning the current MR state.
 func TestUnsubscribe_EOF(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -3923,6 +3935,8 @@ func TestUnsubscribe_EOF(t *testing.T) {
 	}
 }
 
+// TestUnsubscribe_APIError verifies that Unsubscribe returns an error
+// when the GitLab API responds with 403 Forbidden.
 func TestUnsubscribe_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3933,6 +3947,8 @@ func TestUnsubscribe_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdate_NotFound verifies that Update returns an error containing a
+// gitlab_mr_list hint when the GitLab API responds with 404.
 func TestUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -3946,6 +3962,8 @@ func TestUpdate_NotFound(t *testing.T) {
 	}
 }
 
+// TestUpdate_GenericError verifies that Update returns an error when the
+// GitLab API responds with 403 Forbidden.
 func TestUpdate_GenericError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3956,6 +3974,8 @@ func TestUpdate_GenericError(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete returns an error when the
+// GitLab API responds with 403 Forbidden.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3966,6 +3986,8 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestRebase_APIError verifies that Rebase returns an error when the
+// GitLab API responds with 403 Forbidden.
 func TestRebase_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3976,6 +3998,8 @@ func TestRebase_APIError(t *testing.T) {
 	}
 }
 
+// TestCommits_APIError verifies that Commits returns an error when the
+// GitLab API responds with 403 Forbidden.
 func TestCommits_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3986,6 +4010,8 @@ func TestCommits_APIError(t *testing.T) {
 	}
 }
 
+// TestPipelines_APIError verifies that Pipelines returns an error when
+// the GitLab API responds with 403 Forbidden.
 func TestPipelines_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -3996,6 +4022,8 @@ func TestPipelines_APIError(t *testing.T) {
 	}
 }
 
+// TestUnapprove_APIError verifies that Unapprove returns an error when
+// the GitLab API responds with 403 Forbidden.
 func TestUnapprove_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4006,6 +4034,9 @@ func TestUnapprove_APIError(t *testing.T) {
 	}
 }
 
+// TestCancelAutoMerge_MethodNotAllowed verifies that CancelAutoMerge
+// surfaces an auto_merge_enabled hint in the error message when the
+// GitLab API responds with 405 Method Not Allowed.
 func TestCancelAutoMerge_MethodNotAllowed(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"405"}`)
@@ -4019,6 +4050,8 @@ func TestCancelAutoMerge_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError verifies that Create returns an error when the
+// GitLab API responds with 403 Forbidden.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4031,6 +4064,8 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestSetTimeEstimate_APIError verifies that SetTimeEstimate returns an
+// error when the GitLab API responds with 403 Forbidden.
 func TestSetTimeEstimate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4043,6 +4078,8 @@ func TestSetTimeEstimate_APIError(t *testing.T) {
 	}
 }
 
+// TestResetTimeEstimate_APIError verifies that ResetTimeEstimate returns
+// an error when the GitLab API responds with 403 Forbidden.
 func TestResetTimeEstimate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4053,6 +4090,8 @@ func TestResetTimeEstimate_APIError(t *testing.T) {
 	}
 }
 
+// TestAddSpentTime_APIError verifies that AddSpentTime returns an error
+// when the GitLab API responds with 403 Forbidden.
 func TestAddSpentTime_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4065,6 +4104,8 @@ func TestAddSpentTime_APIError(t *testing.T) {
 	}
 }
 
+// TestResetSpentTime_APIError verifies that ResetSpentTime returns an
+// error when the GitLab API responds with 403 Forbidden.
 func TestResetSpentTime_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4075,6 +4116,8 @@ func TestResetSpentTime_APIError(t *testing.T) {
 	}
 }
 
+// TestGetTimeStats_APIError verifies that GetTimeStats returns an error
+// when the GitLab API responds with 403 Forbidden.
 func TestGetTimeStats_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4085,6 +4128,8 @@ func TestGetTimeStats_APIError(t *testing.T) {
 	}
 }
 
+// TestParticipants_APIError verifies that Participants returns an error
+// when the GitLab API responds with 403 Forbidden.
 func TestParticipants_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4095,6 +4140,8 @@ func TestParticipants_APIError(t *testing.T) {
 	}
 }
 
+// TestReviewers_APIError verifies that Reviewers returns an error when
+// the GitLab API responds with 403 Forbidden.
 func TestReviewers_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4105,6 +4152,8 @@ func TestReviewers_APIError(t *testing.T) {
 	}
 }
 
+// TestCreatePipeline_APIError verifies that CreatePipeline returns an
+// error when the GitLab API responds with 403 Forbidden.
 func TestCreatePipeline_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4115,6 +4164,8 @@ func TestCreatePipeline_APIError(t *testing.T) {
 	}
 }
 
+// TestIssuesClosed_APIError verifies that IssuesClosed returns an error
+// when the GitLab API responds with 403 Forbidden.
 func TestIssuesClosed_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
@@ -4125,6 +4176,8 @@ func TestIssuesClosed_APIError(t *testing.T) {
 	}
 }
 
+// TestRelatedIssues_APIError_Forbidden verifies that RelatedIssues returns
+// an error when the GitLab API responds with 403 Forbidden.
 func TestRelatedIssues_APIError_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)

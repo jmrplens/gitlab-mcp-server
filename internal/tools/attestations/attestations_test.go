@@ -314,6 +314,7 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 
 // --- List ---.
 
+// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
@@ -347,6 +348,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingProjectID verifies that List returns a validation error when project_id is missing.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -358,6 +360,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestList_MissingSubjectDigest verifies that List returns a validation error when subject_digest is missing.
 func TestList_MissingSubjectDigest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -369,6 +372,7 @@ func TestList_MissingSubjectDigest(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -385,6 +389,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List returns an error when the GitLab API responds with a failure status.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
@@ -403,6 +408,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_EmptyResult verifies that List handles an empty API response and returns a non-nil empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:empty" {
@@ -426,6 +432,7 @@ func TestList_EmptyResult(t *testing.T) {
 
 // --- Download ---.
 
+// TestDownload_Success verifies that Download returns the expected output when the GitLab API responds successfully.
 func TestDownload_Success(t *testing.T) {
 	content := "attestation-binary-content"
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -460,6 +467,7 @@ func TestDownload_Success(t *testing.T) {
 	}
 }
 
+// TestDownload_MissingProjectID verifies that Download returns a validation error when project_id is missing.
 func TestDownload_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -471,6 +479,7 @@ func TestDownload_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestDownload_MissingAttestationIID verifies that Download returns a validation error when attestation_iid is missing.
 func TestDownload_MissingAttestationIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -482,6 +491,7 @@ func TestDownload_MissingAttestationIID(t *testing.T) {
 	}
 }
 
+// TestDownload_CancelledContext verifies that Download returns an error when the context is already cancelled.
 func TestDownload_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -498,6 +508,7 @@ func TestDownload_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDownload_APIError verifies that Download returns an error when the GitLab API responds with a failure status.
 func TestDownload_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/1/download" {

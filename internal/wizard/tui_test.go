@@ -52,6 +52,8 @@ func advanceToGitLab(m tuiModel) tuiModel {
 
 // Global key handling.
 
+// TestUpdate_CtrlC_Aborts verifies Ctrl+C sets aborted=true and returns a
+// tea.Quit command from any step.
 func TestUpdate_CtrlC_Aborts(t *testing.T) {
 	m := newTestModel(t)
 	result, cmd := m.Update(ctrlMsg('c'))
@@ -64,6 +66,8 @@ func TestUpdate_CtrlC_Aborts(t *testing.T) {
 	}
 }
 
+// TestUpdate_Esc_Aborts verifies Esc sets aborted=true and returns a
+// tea.Quit command from any step.
 func TestUpdate_Esc_Aborts(t *testing.T) {
 	m := newTestModel(t)
 	result, cmd := m.Update(keyMsg(tea.KeyEsc))
@@ -76,6 +80,9 @@ func TestUpdate_Esc_Aborts(t *testing.T) {
 	}
 }
 
+// TestUpdate_RoutesToCorrectStep uses table-driven subtests to verify the
+// top-level Update router does not change the current step when a harmless
+// rune is received in each of the install/gitlab/options/clients steps.
 func TestUpdate_RoutesToCorrectStep(t *testing.T) {
 	tests := []struct {
 		name string
@@ -100,6 +107,8 @@ func TestUpdate_RoutesToCorrectStep(t *testing.T) {
 	}
 }
 
+// TestUpdate_StepDone_Quits verifies Update returns a tea.Quit command on
+// any input once the model has reached tuiStepDone.
 func TestUpdate_StepDone_Quits(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepDone
@@ -111,6 +120,8 @@ func TestUpdate_StepDone_Quits(t *testing.T) {
 
 // Step Install.
 
+// TestUpdateInstall_Enter_AdvancesToGitLab verifies pressing Enter in the
+// install step advances to tuiStepGitLab with focus on the URL field.
 func TestUpdateInstall_Enter_AdvancesToGitLab(t *testing.T) {
 	m := newTestModel(t)
 	if m.step != tuiStepInstall {
@@ -126,6 +137,8 @@ func TestUpdateInstall_Enter_AdvancesToGitLab(t *testing.T) {
 	}
 }
 
+// TestUpdateInstall_Rune_UpdatesInput verifies typed runes are written into
+// the install path text input without changing the current step.
 func TestUpdateInstall_Rune_UpdatesInput(t *testing.T) {
 	m := newTestModel(t)
 	m.installInput.SetValue("")
@@ -139,6 +152,9 @@ func TestUpdateInstall_Rune_UpdatesInput(t *testing.T) {
 	}
 }
 
+// TestUpdateInstall_PastedEnter_DoesNotAdvance verifies a tea.PasteMsg
+// containing a newline does not advance past the install step (protects
+// against bracketed-paste triggering step transitions).
 func TestUpdateInstall_PastedEnter_DoesNotAdvance(t *testing.T) {
 	m := newTestModel(t)
 	// In v2, paste events are tea.PasteMsg — they won't match tea.KeyPressMsg
@@ -151,6 +167,8 @@ func TestUpdateInstall_PastedEnter_DoesNotAdvance(t *testing.T) {
 
 // Step GitLab.
 
+// TestUpdateGitLab_TabSwitchesFields verifies Tab moves focus from the URL
+// field to the Token field and Shift+Tab moves it back.
 func TestUpdateGitLab_TabSwitchesFields(t *testing.T) {
 	m := newTestModel(t)
 	m = advanceToGitLab(m)
@@ -173,6 +191,8 @@ func TestUpdateGitLab_TabSwitchesFields(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_EnterOnURL_MovesToToken verifies Enter on the URL field
+// moves focus to the Token field without advancing the step.
 func TestUpdateGitLab_EnterOnURL_MovesToToken(t *testing.T) {
 	m := newTestModel(t)
 	m = advanceToGitLab(m)
@@ -186,6 +206,10 @@ func TestUpdateGitLab_EnterOnURL_MovesToToken(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances uses table-driven
+// subtests to verify Enter on the token field validates URL and token and
+// advances to tuiStepClients only for valid input, setting error messages
+// for empty URL, invalid URL format, or empty token.
 func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -244,6 +268,10 @@ func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_CtrlO_OpensAdvancedOptions uses table-driven subtests to
+// verify Ctrl+O from the token field validates the URL/token and advances
+// to tuiStepOptions, or produces the appropriate error. From the URL field
+// Ctrl+O is ignored.
 func TestUpdateGitLab_CtrlO_OpensAdvancedOptions(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -303,6 +331,9 @@ func TestUpdateGitLab_CtrlO_OpensAdvancedOptions(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_PrintableO_DoesNotOpenAdvanced verifies typing a printable
+// lowercase 'o' into the token field does not trigger the advanced options
+// shortcut (which requires Ctrl+O).
 func TestUpdateGitLab_PrintableO_DoesNotOpenAdvanced(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -322,6 +353,9 @@ func TestUpdateGitLab_PrintableO_DoesNotOpenAdvanced(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_PastedText_DoesNotTriggerShortcuts verifies bracketed
+// paste of a token containing 'o' does not trigger advanced options nor
+// change the current step.
 func TestUpdateGitLab_PastedText_DoesNotTriggerShortcuts(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -341,6 +375,8 @@ func TestUpdateGitLab_PastedText_DoesNotTriggerShortcuts(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_PastedEnter_DoesNotAdvance verifies a pasted newline does
+// not advance past the GitLab step.
 func TestUpdateGitLab_PastedEnter_DoesNotAdvance(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -356,6 +392,8 @@ func TestUpdateGitLab_PastedEnter_DoesNotAdvance(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_Rune_UpdatesInput verifies typed runes are written into
+// the focused URL input.
 func TestUpdateGitLab_Rune_UpdatesInput(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -372,6 +410,8 @@ func TestUpdateGitLab_Rune_UpdatesInput(t *testing.T) {
 
 // Step Options.
 
+// TestUpdateOptions_Navigation verifies Up/Down arrows move optCursor
+// within bounds and Up at 0 stays at 0.
 func TestUpdateOptions_Navigation(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -399,6 +439,8 @@ func TestUpdateOptions_Navigation(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_ToggleAll uses table-driven subtests to verify Space
+// toggles each advanced option (skipTLS, meta-tools, auto-update, YOLO).
 func TestUpdateOptions_ToggleAll(t *testing.T) {
 	tests := []struct {
 		cursor int
@@ -425,6 +467,8 @@ func TestUpdateOptions_ToggleAll(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_LogLevelCycles verifies Space on the log level row
+// cycles optLogLevel to the next value.
 func TestUpdateOptions_LogLevelCycles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -438,6 +482,8 @@ func TestUpdateOptions_LogLevelCycles(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_Enter_AdvancesToClients verifies Enter in the options
+// step advances the model to tuiStepClients.
 func TestUpdateOptions_Enter_AdvancesToClients(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -448,6 +494,8 @@ func TestUpdateOptions_Enter_AdvancesToClients(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_KJ_NavigatesUpDown verifies vim-style 'j' and 'k' keys
+// move optCursor down and up respectively.
 func TestUpdateOptions_KJ_NavigatesUpDown(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -466,6 +514,8 @@ func TestUpdateOptions_KJ_NavigatesUpDown(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_X_Toggles verifies 'x' toggles the option under the
+// cursor (tested against the YOLO row).
 func TestUpdateOptions_X_Toggles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -479,6 +529,8 @@ func TestUpdateOptions_X_Toggles(t *testing.T) {
 	}
 }
 
+// TestUpdateOptions_DownAtMax_StaysAtMax verifies Down at the last option
+// row leaves optCursor clamped at its maximum value.
 func TestUpdateOptions_DownAtMax_StaysAtMax(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepOptions
@@ -493,6 +545,8 @@ func TestUpdateOptions_DownAtMax_StaysAtMax(t *testing.T) {
 
 // Step Clients.
 
+// TestUpdateClients_Navigation verifies Up/Down arrows move clientCursor
+// within bounds and Up at 0 stays at 0.
 func TestUpdateClients_Navigation(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -518,6 +572,8 @@ func TestUpdateClients_Navigation(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_DownAtMax_StaysAtMax verifies Down at the last client
+// row clamps clientCursor to the final index.
 func TestUpdateClients_DownAtMax_StaysAtMax(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -530,6 +586,8 @@ func TestUpdateClients_DownAtMax_StaysAtMax(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_SpaceToggles verifies Space toggles the selection of
+// the client under the cursor.
 func TestUpdateClients_SpaceToggles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -543,6 +601,8 @@ func TestUpdateClients_SpaceToggles(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_X_Toggles verifies 'x' toggles the selection of the
+// client under the cursor.
 func TestUpdateClients_X_Toggles(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -556,6 +616,8 @@ func TestUpdateClients_X_Toggles(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_A_SelectsAll verifies 'a' selects every client when
+// starting from a fully-deselected state.
 func TestUpdateClients_A_SelectsAll(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -573,6 +635,8 @@ func TestUpdateClients_A_SelectsAll(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_A_DeselectsAll_WhenAllSelected verifies 'a' deselects
+// every client when all are currently selected (toggle-all behavior).
 func TestUpdateClients_A_DeselectsAll_WhenAllSelected(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -589,6 +653,9 @@ func TestUpdateClients_A_DeselectsAll_WhenAllSelected(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_Enter_AdvancesToDone verifies Enter from the clients
+// step sets done=true, advances to tuiStepDone, and returns a tea.Quit
+// command. Uses stubInstallBinary to avoid touching the filesystem.
 func TestUpdateClients_Enter_AdvancesToDone(t *testing.T) {
 	stubInstallBinary(t)
 
@@ -610,6 +677,9 @@ func TestUpdateClients_Enter_AdvancesToDone(t *testing.T) {
 	}
 }
 
+// TestUpdateClients_PastedText_DoesNotTriggerShortcuts verifies pasted text
+// containing 'a', 'x', 'j', or 'k' does not toggle selections or move the
+// cursor (paste events must not fire keyboard shortcuts).
 func TestUpdateClients_PastedText_DoesNotTriggerShortcuts(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepClients
@@ -626,6 +696,9 @@ func TestUpdateClients_PastedText_DoesNotTriggerShortcuts(t *testing.T) {
 
 // View rendering.
 
+// TestView_ContainsStepContent uses table-driven subtests to verify the
+// rendered view for each step (install, gitlab, options, clients) contains
+// its expected header text.
 func TestView_ContainsStepContent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -649,6 +722,8 @@ func TestView_ContainsStepContent(t *testing.T) {
 	}
 }
 
+// TestViewGitLab_ShowsCtrlOHelp verifies the GitLab view advertises the
+// Ctrl+O shortcut for advanced options and does not suggest a plain 'o' key.
 func TestViewGitLab_ShowsCtrlOHelp(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -661,6 +736,8 @@ func TestViewGitLab_ShowsCtrlOHelp(t *testing.T) {
 	}
 }
 
+// TestViewGitLab_ShowsScopeAndCtrlT verifies the GitLab view displays the
+// required token scope (api) and the Ctrl+T shortcut hint.
 func TestViewGitLab_ShowsScopeAndCtrlT(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -673,6 +750,9 @@ func TestViewGitLab_ShowsScopeAndCtrlT(t *testing.T) {
 	}
 }
 
+// TestUpdateGitLab_CtrlT_OpensBrowser verifies Ctrl+T from the GitLab step
+// calls openBrowserFn with the GitLab personal access token creation URL
+// (including scopes=api) without changing the current step.
 func TestUpdateGitLab_CtrlT_OpensBrowser(t *testing.T) {
 	orig := openBrowserFn
 	var openedURL string
@@ -700,6 +780,8 @@ func TestUpdateGitLab_CtrlT_OpensBrowser(t *testing.T) {
 	}
 }
 
+// TestViewGitLab_ShowsError verifies a populated err field is rendered in
+// the GitLab view.
 func TestViewGitLab_ShowsError(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -710,6 +792,8 @@ func TestViewGitLab_ShowsError(t *testing.T) {
 	}
 }
 
+// TestView_ContainsHeader verifies every view includes the wizard header
+// "gitlab-mcp-server Setup Wizard".
 func TestView_ContainsHeader(t *testing.T) {
 	m := newTestModel(t)
 	view := m.View().Content
@@ -718,6 +802,8 @@ func TestView_ContainsHeader(t *testing.T) {
 	}
 }
 
+// TestView_ContainsVersion verifies the view renders the configured
+// version string (e.g. "v1.0.0").
 func TestView_ContainsVersion(t *testing.T) {
 	m := newTestModel(t)
 	view := m.View().Content
@@ -726,6 +812,8 @@ func TestView_ContainsVersion(t *testing.T) {
 	}
 }
 
+// TestView_ContainsCancelHelp verifies the footer includes the
+// "Esc/Ctrl+C to cancel" help text.
 func TestView_ContainsCancelHelp(t *testing.T) {
 	m := newTestModel(t)
 	view := m.View().Content
@@ -736,6 +824,8 @@ func TestView_ContainsCancelHelp(t *testing.T) {
 
 // Init.
 
+// TestInit_ReturnsBatchCmd verifies the model's Init method returns a
+// non-nil tea.Cmd (used to blink the initial text input).
 func TestInit_ReturnsBatchCmd(t *testing.T) {
 	m := newTestModel(t)
 	cmd := m.Init()
@@ -746,6 +836,10 @@ func TestInit_ReturnsBatchCmd(t *testing.T) {
 
 // Full flow: Install → GitLab → Clients.
 
+// TestFullFlow_InstallToGitLabToClients drives the TUI end-to-end through
+// install, GitLab, and clients steps with Tab/Enter key events, and verifies
+// the model reaches tuiStepDone with done=true, a non-nil result, and a
+// tea.Quit command.
 func TestFullFlow_InstallToGitLabToClients(t *testing.T) {
 	stubInstallBinary(t)
 
@@ -795,6 +889,9 @@ func TestFullFlow_InstallToGitLabToClients(t *testing.T) {
 
 // Full flow with advanced options.
 
+// TestFullFlow_WithAdvancedOptions drives the TUI end-to-end via Ctrl+O into
+// the options step, toggles YOLO mode, and continues through clients to
+// tuiStepDone, verifying the options branch is exercised.
 func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 	stubInstallBinary(t)
 
@@ -848,6 +945,9 @@ func TestFullFlow_WithAdvancedOptions(t *testing.T) {
 
 // Paste safety (regression tests for the reported bugs).
 
+// TestPasteSafety_TokenWithO_DoesNotOpenAdvanced is a regression test that
+// feeds a token containing 'o' rune-by-rune and verifies neither the step
+// nor the showAdvanced flag change mid-input.
 func TestPasteSafety_TokenWithO_DoesNotOpenAdvanced(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab
@@ -869,6 +969,9 @@ func TestPasteSafety_TokenWithO_DoesNotOpenAdvanced(t *testing.T) {
 	}
 }
 
+// TestPasteSafety_BracketedPaste_NoShortcuts verifies a bracketed paste
+// (tea.PasteMsg) of a token containing shortcut letters does not change
+// the current step.
 func TestPasteSafety_BracketedPaste_NoShortcuts(t *testing.T) {
 	m := newTestModel(t)
 	m.step = tuiStepGitLab

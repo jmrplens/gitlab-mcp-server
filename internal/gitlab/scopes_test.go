@@ -11,6 +11,7 @@ import (
 	"testing"
 )
 
+// TestDetectScopes_Success verifies that DetectScopes returns the scopes reported by the /personal_access_tokens/self endpoint.
 func TestDetectScopes_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
@@ -37,6 +38,7 @@ func TestDetectScopes_Success(t *testing.T) {
 	}
 }
 
+// TestDetectScopes_EndpointNotAvailable verifies that DetectScopes returns nil when the scope endpoint responds with 404.
 func TestDetectScopes_EndpointNotAvailable(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
@@ -55,6 +57,7 @@ func TestDetectScopes_EndpointNotAvailable(t *testing.T) {
 	}
 }
 
+// TestScopeSatisfied_Scenarios_CorrectResult uses table-driven subtests to verify that ScopeSatisfied correctly reports whether the token scopes cover the required scopes across nil, empty, exact, partial, and missing combinations.
 func TestScopeSatisfied_Scenarios_CorrectResult(t *testing.T) {
 	tests := []struct {
 		name     string

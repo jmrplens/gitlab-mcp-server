@@ -122,6 +122,7 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 // List
 // --------------------------------------------------------------------------
 
+// TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -244,6 +245,7 @@ func TestList(t *testing.T) {
 // Get
 // --------------------------------------------------------------------------
 
+// TestGet uses table-driven subtests to exercise Get across success, not-found, validation, and API-error scenarios.
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -343,6 +345,7 @@ func TestGet(t *testing.T) {
 // Create
 // --------------------------------------------------------------------------
 
+// TestCreate uses table-driven subtests to exercise Create across success, validation, mutation-error, and cancellation scenarios.
 func TestCreate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -447,6 +450,7 @@ func TestCreate(t *testing.T) {
 // AddNote
 // --------------------------------------------------------------------------
 
+// TestAddNote uses table-driven subtests to exercise AddNote across success, validation, mutation errors, and cancellation.
 func TestAddNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -554,6 +558,7 @@ func TestAddNote(t *testing.T) {
 // UpdateNote
 // --------------------------------------------------------------------------
 
+// TestUpdateNote uses table-driven subtests to exercise UpdateNote across success, validation, mutation errors, and cancellation.
 func TestUpdateNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -651,6 +656,7 @@ func TestUpdateNote(t *testing.T) {
 // DeleteNote
 // --------------------------------------------------------------------------
 
+// TestDeleteNote uses table-driven subtests to exercise DeleteNote across success, validation, mutation errors, and cancellation.
 func TestDeleteNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -729,6 +735,7 @@ func TestDeleteNote(t *testing.T) {
 // Formatters
 // --------------------------------------------------------------------------
 
+// TestFormatListMarkdown uses table-driven subtests to verify that FormatListMarkdown renders a table for populated inputs and an empty-state message otherwise.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -771,6 +778,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown uses table-driven subtests to verify that FormatMarkdown renders a discussion with notes and handles an empty discussion.
 func TestFormatMarkdown(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -803,6 +811,7 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatNoteMarkdown verifies that FormatNoteMarkdown renders a note with its author in the output.
 func TestFormatNoteMarkdown(t *testing.T) {
 	result := FormatNoteMarkdown(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
 	if result == nil {
@@ -818,6 +827,7 @@ func TestFormatNoteMarkdown(t *testing.T) {
 // RegisterTools + RegisterMeta — no panic
 // --------------------------------------------------------------------------
 
+// TestRegisterTools_NoPanic verifies that RegisterTools registers all tools on the MCP server without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -826,6 +836,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterMeta_NoPanic verifies that RegisterMeta registers the meta-tool on the MCP server without panicking.
 func TestRegisterMeta_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -838,6 +849,7 @@ func TestRegisterMeta_NoPanic(t *testing.T) {
 // MCP round-trip — all tools
 // --------------------------------------------------------------------------
 
+// TestMCPRoundTrip_AllTools uses table-driven subtests to invoke every individual tool via an in-memory MCP session and verify that none returns an error result.
 func TestMCPRoundTrip_AllTools(t *testing.T) {
 	session := newEpicDiscussionsMCPSession(t)
 	ctx := context.Background()
@@ -880,6 +892,7 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 // MCP round-trip — meta tool
 // --------------------------------------------------------------------------
 
+// TestMCPRoundTrip_MetaTool uses table-driven subtests to invoke each meta-tool action via an in-memory MCP session and verify successful dispatch.
 func TestMCPRoundTrip_MetaTool(t *testing.T) {
 	session := newEpicDiscussionsMetaMCPSession(t)
 	ctx := context.Background()

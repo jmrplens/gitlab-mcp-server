@@ -48,6 +48,8 @@ const geoSiteStatusJSON = `{
 	"updated_at": "2026-01-15T10:30:00Z"
 }`
 
+// TestCreate_Success verifies that Create posts to /api/v4/geo_sites and
+// returns the created Geo site with the expected ID, name and primary flag.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites" {
@@ -73,6 +75,8 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError verifies that Create returns an error when the GitLab
+// Geo API responds with 403 Forbidden.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -84,6 +88,8 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestList_Success verifies that List returns the Geo sites returned by
+// GET /api/v4/geo_sites, preserving site names and fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
@@ -105,6 +111,8 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_Empty verifies that List returns an empty slice when the Geo
+// API responds with an empty array.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites" {
@@ -123,6 +131,8 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List returns an error when the GitLab
+// Geo API responds with 400 Bad Request.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -134,6 +144,8 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get retrieves a single Geo site by ID and
+// returns the expected URL and identifier.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -155,6 +167,8 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingID verifies that Get returns a validation error when ID
+// is zero.
 func TestGet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -166,6 +180,8 @@ func TestGet_MissingID(t *testing.T) {
 	}
 }
 
+// TestGet_NotFound verifies that Get returns an error when the Geo API
+// responds with 404 for an unknown site ID.
 func TestGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -177,6 +193,8 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
+// TestEdit_Success verifies that Edit issues PUT /api/v4/geo_sites/:id and
+// returns the updated site.
 func TestEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -196,6 +214,8 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
+// TestEdit_MissingID verifies that Edit returns a validation error when
+// ID is zero.
 func TestEdit_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -207,6 +227,8 @@ func TestEdit_MissingID(t *testing.T) {
 	}
 }
 
+// TestEdit_APIError verifies that Edit returns an error when the Geo API
+// responds with 422 Unprocessable Entity.
 func TestEdit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -218,6 +240,8 @@ func TestEdit_APIError(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete issues DELETE /api/v4/geo_sites/:id
+// and returns no error on 204 No Content.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -233,6 +257,8 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingID verifies that Delete returns a validation error
+// when ID is zero.
 func TestDelete_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -244,6 +270,8 @@ func TestDelete_MissingID(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete returns an error when the Geo
+// API responds with 403 Forbidden.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -255,6 +283,8 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestRepair_Success verifies that Repair issues POST /api/v4/geo_sites/:id/repair
+// and returns the repaired site.
 func TestRepair_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites/1/repair" {
@@ -273,6 +303,8 @@ func TestRepair_Success(t *testing.T) {
 	}
 }
 
+// TestRepair_MissingID verifies that Repair returns a validation error
+// when ID is zero.
 func TestRepair_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -284,6 +316,8 @@ func TestRepair_MissingID(t *testing.T) {
 	}
 }
 
+// TestRepair_APIError verifies that Repair returns an error when the Geo
+// API responds with 400 Bad Request.
 func TestRepair_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -295,6 +329,8 @@ func TestRepair_APIError(t *testing.T) {
 	}
 }
 
+// TestListStatus_Success verifies that ListStatus returns the Geo site
+// statuses from /api/v4/geo_sites/status including health and version.
 func TestListStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
@@ -322,6 +358,8 @@ func TestListStatus_Success(t *testing.T) {
 	}
 }
 
+// TestListStatus_Empty verifies that ListStatus returns an empty slice
+// when the Geo status endpoint responds with an empty array.
 func TestListStatus_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites/status" {
@@ -340,6 +378,8 @@ func TestListStatus_Empty(t *testing.T) {
 	}
 }
 
+// TestListStatus_APIError verifies that ListStatus returns an error when
+// the Geo status endpoint responds with 403 Forbidden.
 func TestListStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -351,6 +391,8 @@ func TestListStatus_APIError(t *testing.T) {
 	}
 }
 
+// TestGetStatus_Success verifies that GetStatus retrieves the status for
+// a single Geo site including health, version and project count.
 func TestGetStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1/status" {
@@ -375,6 +417,8 @@ func TestGetStatus_Success(t *testing.T) {
 	}
 }
 
+// TestGetStatus_MissingID verifies that GetStatus returns a validation
+// error when ID is zero.
 func TestGetStatus_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -386,6 +430,8 @@ func TestGetStatus_MissingID(t *testing.T) {
 	}
 }
 
+// TestGetStatus_APIError verifies that GetStatus returns an error when
+// the Geo status endpoint responds with 404 Not Found.
 func TestGetStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -397,6 +443,8 @@ func TestGetStatus_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_CancelledContext verifies that Create returns an error when
+// invoked with an already-cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -410,6 +458,8 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when
+// invoked with an already-cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

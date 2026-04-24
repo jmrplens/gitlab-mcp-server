@@ -299,6 +299,7 @@ func TestExtractTwoParts_EmptySecondPart(t *testing.T) {
 // Empty URI tests for remaining template resources — each covers the
 // "extracted ID is empty" guard that returns mcp.ResourceNotFoundError.
 
+// TestProjectMembersResource_EmptyProjectID verifies that ProjectMembersResource returns a validation error when project_id is empty.
 func TestProjectMembersResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -309,6 +310,7 @@ func TestProjectMembersResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectLabelsResource_EmptyProjectID verifies that ProjectLabelsResource returns a validation error when project_id is empty.
 func TestProjectLabelsResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -319,6 +321,7 @@ func TestProjectLabelsResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectMilestonesResource_EmptyProjectID verifies that ProjectMilestonesResource returns a validation error when project_id is empty.
 func TestProjectMilestonesResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -329,6 +332,7 @@ func TestProjectMilestonesResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectBranchesResource_EmptyProjectID verifies that ProjectBranchesResource returns a validation error when project_id is empty.
 func TestProjectBranchesResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -339,6 +343,7 @@ func TestProjectBranchesResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGroupMembersResource_EmptyGroupID verifies that GroupMembersResource returns a validation error when group_id is empty.
 func TestGroupMembersResource_EmptyGroupID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty group ID")
@@ -349,6 +354,7 @@ func TestGroupMembersResource_EmptyGroupID(t *testing.T) {
 	}
 }
 
+// TestGroupProjectsResource_EmptyGroupID verifies that GroupProjectsResource returns a validation error when group_id is empty.
 func TestGroupProjectsResource_EmptyGroupID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty group ID")
@@ -359,6 +365,7 @@ func TestGroupProjectsResource_EmptyGroupID(t *testing.T) {
 	}
 }
 
+// TestProjectIssuesResource_EmptyProjectID verifies that ProjectIssuesResource returns a validation error when project_id is empty.
 func TestProjectIssuesResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -369,6 +376,7 @@ func TestProjectIssuesResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestIssueResource_EmptyProjectID verifies that IssueResource returns a validation error when project_id is empty.
 func TestIssueResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -379,6 +387,7 @@ func TestIssueResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectReleasesResource_EmptyProjectID verifies that ProjectReleasesResource returns a validation error when project_id is empty.
 func TestProjectReleasesResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -389,6 +398,7 @@ func TestProjectReleasesResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectTagsResource_EmptyProjectID verifies that ProjectTagsResource returns a validation error when project_id is empty.
 func TestProjectTagsResource_EmptyProjectID(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not call API for empty project ID")
@@ -399,6 +409,7 @@ func TestProjectTagsResource_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGroupResource_APIError verifies that GroupResource returns an error when the GitLab API responds with a failure status.
 func TestGroupResource_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusForbidden, `{"message":"403"}`)

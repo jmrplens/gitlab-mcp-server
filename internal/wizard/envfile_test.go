@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// TestWriteEnvFile_CreatesFile verifies writeEnvFileToPath creates the .env
+// file at the requested path and writes GITLAB_URL, GITLAB_TOKEN, and
+// GITLAB_SKIP_TLS_VERIFY lines when SkipTLSVerify is true.
 func TestWriteEnvFile_CreatesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -45,6 +48,8 @@ func TestWriteEnvFile_CreatesFile(t *testing.T) {
 	}
 }
 
+// TestWriteEnvFile_OmitsSkipTLS verifies writeEnvFileToPath does not emit
+// a GITLAB_SKIP_TLS_VERIFY line when SkipTLSVerify is false.
 func TestWriteEnvFile_OmitsSkipTLS(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -65,6 +70,8 @@ func TestWriteEnvFile_OmitsSkipTLS(t *testing.T) {
 	}
 }
 
+// TestEnvFilePath_InHome verifies EnvFilePath returns a path located inside
+// the user's home directory and ending with the EnvFileName suffix.
 func TestEnvFilePath_InHome(t *testing.T) {
 	path := EnvFilePath()
 	home, _ := os.UserHomeDir()
@@ -76,6 +83,9 @@ func TestEnvFilePath_InHome(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_ValidFile verifies loadExistingConfigFromPath
+// parses GITLAB_URL, GITLAB_TOKEN, and GITLAB_SKIP_TLS_VERIFY from a valid
+// env file and returns found=true.
 func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -104,6 +114,8 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_FileNotExists verifies loadExistingConfigFromPath
+// returns found=false when the target path does not exist.
 func TestLoadExistingConfigFromPath_FileNotExists(t *testing.T) {
 	_, found := loadExistingConfigFromPath(filepath.Join(t.TempDir(), "nonexistent.env"))
 	if found {
@@ -111,6 +123,8 @@ func TestLoadExistingConfigFromPath_FileNotExists(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_EmptyFile verifies loadExistingConfigFromPath
+// returns found=false when the file exists but is empty.
 func TestLoadExistingConfigFromPath_EmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -125,6 +139,8 @@ func TestLoadExistingConfigFromPath_EmptyFile(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_OnlyComments verifies loadExistingConfigFromPath
+// returns found=false when the file contains only comments and blank lines.
 func TestLoadExistingConfigFromPath_OnlyComments(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -140,6 +156,8 @@ func TestLoadExistingConfigFromPath_OnlyComments(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_SkipTLSFalse verifies loadExistingConfigFromPath
+// parses GITLAB_SKIP_TLS_VERIFY=false into SkipTLSVerify=false.
 func TestLoadExistingConfigFromPath_SkipTLSFalse(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
@@ -158,6 +176,9 @@ func TestLoadExistingConfigFromPath_SkipTLSFalse(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_SensibleDefaults verifies loadExistingConfigFromPath
+// applies default values (MetaTools=true, AutoUpdate=true, LogLevel="info") when
+// those fields are absent from the env file.
 func TestLoadExistingConfigFromPath_SensibleDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)

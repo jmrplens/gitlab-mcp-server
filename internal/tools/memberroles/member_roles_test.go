@@ -16,6 +16,8 @@ import (
 
 const memberRoleJSON = `{"id":1,"name":"custom-dev","description":"Custom developer","group_id":100,"base_access_level":30,"read_code":true,"admin_merge_request":false}`
 
+// TestListInstance_Success verifies ListInstance returns the role list when
+// GET /member_roles responds 200 with a single custom role.
 func TestListInstance_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/member_roles" {
@@ -40,6 +42,8 @@ func TestListInstance_Success(t *testing.T) {
 	}
 }
 
+// TestListInstance_CancelledContext verifies ListInstance returns an error when
+// invoked with an already-cancelled context, without contacting the API.
 func TestListInstance_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -53,6 +57,8 @@ func TestListInstance_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestListInstance_APIError verifies ListInstance propagates an error when
+// GET /member_roles responds 403 Forbidden.
 func TestListInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/member_roles" {
@@ -68,6 +74,8 @@ func TestListInstance_APIError(t *testing.T) {
 	}
 }
 
+// TestListGroup_Success verifies ListGroup returns the role list when
+// GET /groups/:id/member_roles responds 200 with one role.
 func TestListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
@@ -88,6 +96,8 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
+// TestListGroup_MissingGroupID verifies ListGroup returns a validation error
+// when group_id is empty, without hitting the API.
 func TestListGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -99,6 +109,8 @@ func TestListGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestListGroup_CancelledContext verifies ListGroup returns an error when
+// invoked with an already-cancelled context.
 func TestListGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -112,6 +124,8 @@ func TestListGroup_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestListGroup_APIError verifies ListGroup propagates an error when
+// GET /groups/:id/member_roles responds 400 Bad Request.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
@@ -129,6 +143,8 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateInstance_Success verifies CreateInstance returns the new role when
+// POST /member_roles responds 201 Created.
 func TestCreateInstance_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/member_roles" {
@@ -154,6 +170,8 @@ func TestCreateInstance_Success(t *testing.T) {
 	}
 }
 
+// TestCreateInstance_MissingName verifies CreateInstance returns a validation
+// error when the name field is empty, without hitting the API.
 func TestCreateInstance_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -167,6 +185,8 @@ func TestCreateInstance_MissingName(t *testing.T) {
 	}
 }
 
+// TestCreateInstance_MissingBaseAccessLevel verifies CreateInstance returns a
+// validation error when base_access_level is zero.
 func TestCreateInstance_MissingBaseAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -180,6 +200,8 @@ func TestCreateInstance_MissingBaseAccessLevel(t *testing.T) {
 	}
 }
 
+// TestCreateInstance_CancelledContext verifies CreateInstance returns an error
+// when invoked with an already-cancelled context.
 func TestCreateInstance_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -196,6 +218,8 @@ func TestCreateInstance_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestCreateInstance_APIError verifies CreateInstance propagates an error when
+// POST /member_roles responds 403 Forbidden.
 func TestCreateInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/member_roles" {
@@ -214,6 +238,8 @@ func TestCreateInstance_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_Success verifies CreateGroup returns the new role when
+// POST /groups/:id/member_roles responds 201 Created.
 func TestCreateGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
@@ -236,6 +262,8 @@ func TestCreateGroup_Success(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_MissingGroupID verifies CreateGroup returns a validation
+// error when group_id is empty.
 func TestCreateGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -250,6 +278,8 @@ func TestCreateGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_MissingName verifies CreateGroup returns a validation error
+// when the name field is empty.
 func TestCreateGroup_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -264,6 +294,8 @@ func TestCreateGroup_MissingName(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_MissingBaseAccessLevel verifies CreateGroup returns a
+// validation error when base_access_level is zero.
 func TestCreateGroup_MissingBaseAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -278,6 +310,8 @@ func TestCreateGroup_MissingBaseAccessLevel(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_CancelledContext verifies CreateGroup returns an error when
+// invoked with an already-cancelled context.
 func TestCreateGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -295,6 +329,8 @@ func TestCreateGroup_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_APIError verifies CreateGroup propagates an error when
+// POST /groups/:id/member_roles responds 400 Bad Request.
 func TestCreateGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
@@ -314,6 +350,8 @@ func TestCreateGroup_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteInstance_Success verifies DeleteInstance returns no error when
+// DELETE /member_roles/:id responds 204 No Content.
 func TestDeleteInstance_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/member_roles/1" {
@@ -329,6 +367,8 @@ func TestDeleteInstance_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteInstance_MissingMemberRoleID verifies DeleteInstance returns a
+// validation error when member_role_id is zero.
 func TestDeleteInstance_MissingMemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -340,6 +380,8 @@ func TestDeleteInstance_MissingMemberRoleID(t *testing.T) {
 	}
 }
 
+// TestDeleteInstance_CancelledContext verifies DeleteInstance returns an error
+// when invoked with an already-cancelled context.
 func TestDeleteInstance_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -353,6 +395,8 @@ func TestDeleteInstance_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDeleteInstance_APIError verifies DeleteInstance propagates an error when
+// DELETE /member_roles/:id responds 403 Forbidden.
 func TestDeleteInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/member_roles/1" {
@@ -368,6 +412,8 @@ func TestDeleteInstance_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_Success verifies DeleteGroup returns no error when
+// DELETE /groups/:id/member_roles/:role_id responds 204 No Content.
 func TestDeleteGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/member_roles/1" {
@@ -386,6 +432,8 @@ func TestDeleteGroup_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_MissingGroupID verifies DeleteGroup returns a validation
+// error when group_id is empty.
 func TestDeleteGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -397,6 +445,8 @@ func TestDeleteGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_MissingMemberRoleID verifies DeleteGroup returns a
+// validation error when member_role_id is zero.
 func TestDeleteGroup_MissingMemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -410,6 +460,8 @@ func TestDeleteGroup_MissingMemberRoleID(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_CancelledContext verifies DeleteGroup returns an error when
+// invoked with an already-cancelled context.
 func TestDeleteGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -426,6 +478,8 @@ func TestDeleteGroup_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_APIError verifies DeleteGroup propagates an error when
+// DELETE /groups/:id/member_roles/:role_id responds 400 Bad Request.
 func TestDeleteGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/member_roles/1" {

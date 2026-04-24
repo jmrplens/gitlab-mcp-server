@@ -16,6 +16,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
+// TestNewGitLabVerifier_ValidToken verifies that a successful GitLab /user
+// response produces a TokenInfo with the expected UserID, username, and
+// future expiration.
 func TestNewGitLabVerifier_ValidToken(t *testing.T) {
 	t.Parallel()
 
@@ -53,6 +56,8 @@ func TestNewGitLabVerifier_ValidToken(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_InvalidToken verifies that a 401 response from
+// GitLab is translated into an error wrapping auth.ErrInvalidToken.
 func TestNewGitLabVerifier_InvalidToken(t *testing.T) {
 	t.Parallel()
 
@@ -71,6 +76,8 @@ func TestNewGitLabVerifier_InvalidToken(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_ServerError verifies that a 5xx response surfaces
+// a generic error and does NOT wrap auth.ErrInvalidToken.
 func TestNewGitLabVerifier_ServerError(t *testing.T) {
 	t.Parallel()
 
@@ -89,6 +96,8 @@ func TestNewGitLabVerifier_ServerError(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_NetworkError verifies that a connection failure to
+// a closed server returns a non-nil error.
 func TestNewGitLabVerifier_NetworkError(t *testing.T) {
 	t.Parallel()
 
@@ -104,6 +113,8 @@ func TestNewGitLabVerifier_NetworkError(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_MalformedJSON verifies that a malformed JSON body
+// from the GitLab /user endpoint produces a decoding error.
 func TestNewGitLabVerifier_MalformedJSON(t *testing.T) {
 	t.Parallel()
 
@@ -120,6 +131,9 @@ func TestNewGitLabVerifier_MalformedJSON(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_SkipTLSVerify verifies that skipTLS=true allows
+// successful verification against an httptest TLS server with a self-signed
+// certificate.
 func TestNewGitLabVerifier_SkipTLSVerify(t *testing.T) {
 	t.Parallel()
 
@@ -139,6 +153,9 @@ func TestNewGitLabVerifier_SkipTLSVerify(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_CacheHit verifies that a second verification for
+// the same token within the TTL window is served from the cache without
+// calling the GitLab API again.
 func TestNewGitLabVerifier_CacheHit(t *testing.T) {
 	t.Parallel()
 
@@ -173,6 +190,9 @@ func TestNewGitLabVerifier_CacheHit(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_CacheExpiry verifies that once the cached entry's
+// TTL elapses, the next verification triggers a fresh call to the GitLab
+// API.
 func TestNewGitLabVerifier_CacheExpiry(t *testing.T) {
 	t.Parallel()
 
@@ -203,6 +223,9 @@ func TestNewGitLabVerifier_CacheExpiry(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_CacheInvalidationOnError verifies that when a
+// revoked token is re-validated and returns 401, the cache entry is
+// removed and the error wraps auth.ErrInvalidToken.
 func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 	t.Parallel()
 
@@ -242,6 +265,9 @@ func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_CacheDifferentTokens verifies that different
+// tokens are cached under separate keys and subsequent lookups hit the
+// cache without additional API calls.
 func TestNewGitLabVerifier_CacheDifferentTokens(t *testing.T) {
 	t.Parallel()
 
@@ -280,6 +306,8 @@ func TestNewGitLabVerifier_CacheDifferentTokens(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_InvalidURL verifies that a malformed base URL
+// (containing a control character) causes request construction to fail.
 func TestNewGitLabVerifier_InvalidURL(t *testing.T) {
 	t.Parallel()
 
@@ -291,6 +319,9 @@ func TestNewGitLabVerifier_InvalidURL(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_NetworkErrorWithCache verifies that a network
+// failure during re-validation removes the previously cached entry so a
+// stale identity is not served.
 func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	t.Parallel()
 
@@ -323,6 +354,9 @@ func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_ServerErrorWithCache verifies that a 5xx response
+// during re-validation removes the cached entry and surfaces a non-invalid
+// token error.
 func TestNewGitLabVerifier_ServerErrorWithCache(t *testing.T) {
 	t.Parallel()
 

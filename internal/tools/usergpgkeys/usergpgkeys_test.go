@@ -25,6 +25,7 @@ const (
 	gpgKeyNilCreatedJSON = `{"id":3,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----"}`
 )
 
+// TestList_Success verifies that List lists a user GPG key on a successful GitLab API response.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGPGKeys {
@@ -46,6 +47,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List propagates errors returned by the GitLab API.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -56,6 +58,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestListForUser_Success verifies that ListForUser lists (admin) for a specific user a user GPG key on a successful GitLab API response.
 func TestListForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGPGKeysUser {
@@ -74,6 +77,7 @@ func TestListForUser_Success(t *testing.T) {
 	}
 }
 
+// TestListForUser_InvalidUserID verifies that ListForUser returns a validation error when user_id is invalid.
 func TestListForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -84,6 +88,7 @@ func TestListForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get retrieves a user GPG key on a successful GitLab API response.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGPGKey {
@@ -102,6 +107,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_InvalidKeyID verifies that Get returns a validation error when key_id is invalid.
 func TestGet_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -112,6 +118,7 @@ func TestGet_InvalidKeyID(t *testing.T) {
 	}
 }
 
+// TestGetForUser_Success verifies that GetForUser retrieves (admin) for a specific user a user GPG key on a successful GitLab API response.
 func TestGetForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGPGKeyUser {
@@ -130,6 +137,7 @@ func TestGetForUser_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_Success verifies that Add creates a user GPG key on a successful GitLab API response.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGPGKeys {
@@ -148,6 +156,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_EmptyKey verifies that Add returns a validation error when the key field is empty.
 func TestAdd_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -158,6 +167,7 @@ func TestAdd_EmptyKey(t *testing.T) {
 	}
 }
 
+// TestAddForUser_Success verifies that AddForUser creates (admin) for a specific user a user GPG key on a successful GitLab API response.
 func TestAddForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGPGKeysUser {
@@ -176,6 +186,7 @@ func TestAddForUser_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete deletes a user GPG key on a successful GitLab API response.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGPGKey {
@@ -194,6 +205,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_InvalidKeyID verifies that Delete returns a validation error when key_id is invalid.
 func TestDelete_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -204,6 +216,7 @@ func TestDelete_InvalidKeyID(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_Success verifies that DeleteForUser deletes (admin) for a specific user a user GPG key on a successful GitLab API response.
 func TestDeleteForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGPGKeyUser {
@@ -222,6 +235,7 @@ func TestDeleteForUser_Success(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty markdown formatter output.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md == "" {
@@ -229,6 +243,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdownString verifies the MarkdownString markdown formatter output.
 func TestFormatMarkdownString(t *testing.T) {
 	md := FormatMarkdownString(Output{ID: 1, Key: "pgp-key", CreatedAt: "2026-01-15"})
 	if md == "" {
@@ -240,6 +255,7 @@ func TestFormatMarkdownString(t *testing.T) {
 // These tests verify every handler respects context cancellation and returns
 // an error instead of proceeding with the API call.
 
+// TestList_ContextCancelled verifies that List returns an error when the context is cancelled before the request completes.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -251,6 +267,7 @@ func TestList_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestListForUser_ContextCancelled verifies that ListForUser returns an error when the context is cancelled before the request completes.
 func TestListForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -262,6 +279,7 @@ func TestListForUser_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestGet_ContextCancelled verifies that Get returns an error when the context is cancelled before the request completes.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, gpgKeyJSON)
@@ -273,6 +291,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestGetForUser_ContextCancelled verifies that GetForUser returns an error when the context is cancelled before the request completes.
 func TestGetForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, gpgKeyJSON)
@@ -284,6 +303,7 @@ func TestGetForUser_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestAdd_ContextCancelled verifies that Add returns an error when the context is cancelled before the request completes.
 func TestAdd_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
@@ -295,6 +315,7 @@ func TestAdd_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestAddForUser_ContextCancelled verifies that AddForUser returns an error when the context is cancelled before the request completes.
 func TestAddForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
@@ -306,6 +327,7 @@ func TestAddForUser_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestDelete_ContextCancelled verifies that Delete returns an error when the context is cancelled before the request completes.
 func TestDelete_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -317,6 +339,7 @@ func TestDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_ContextCancelled verifies that DeleteForUser returns an error when the context is cancelled before the request completes.
 func TestDeleteForUser_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -331,6 +354,7 @@ func TestDeleteForUser_ContextCancelled(t *testing.T) {
 // --- Missing input validation tests ---
 // These tests verify validation branches not covered by existing tests.
 
+// TestGetForUser_InvalidUserID verifies that GetForUser returns a validation error when user_id is invalid.
 func TestGetForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -341,6 +365,7 @@ func TestGetForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestGetForUser_InvalidKeyID verifies that GetForUser returns a validation error when key_id is invalid.
 func TestGetForUser_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -351,6 +376,7 @@ func TestGetForUser_InvalidKeyID(t *testing.T) {
 	}
 }
 
+// TestAddForUser_InvalidUserID verifies that AddForUser returns a validation error when user_id is invalid.
 func TestAddForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -361,6 +387,7 @@ func TestAddForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestAddForUser_EmptyKey verifies that AddForUser returns a validation error when the key field is empty.
 func TestAddForUser_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -371,6 +398,7 @@ func TestAddForUser_EmptyKey(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_InvalidUserID verifies that DeleteForUser returns a validation error when user_id is invalid.
 func TestDeleteForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -381,6 +409,7 @@ func TestDeleteForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_InvalidKeyID verifies that DeleteForUser returns a validation error when key_id is invalid.
 func TestDeleteForUser_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -395,6 +424,7 @@ func TestDeleteForUser_InvalidKeyID(t *testing.T) {
 // These tests verify error propagation from the GitLab API for handlers
 // that did not yet have API error coverage.
 
+// TestListForUser_APIError verifies that ListForUser propagates errors returned by the GitLab API.
 func TestListForUser_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -405,6 +435,7 @@ func TestListForUser_APIError(t *testing.T) {
 	}
 }
 
+// TestGet_APIError verifies that Get propagates errors returned by the GitLab API.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -415,6 +446,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
+// TestGetForUser_APIError verifies that GetForUser propagates errors returned by the GitLab API.
 func TestGetForUser_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -425,6 +457,7 @@ func TestGetForUser_APIError(t *testing.T) {
 	}
 }
 
+// TestAdd_APIError verifies that Add propagates errors returned by the GitLab API.
 func TestAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -435,6 +468,7 @@ func TestAdd_APIError(t *testing.T) {
 	}
 }
 
+// TestAddForUser_APIError verifies that AddForUser propagates errors returned by the GitLab API.
 func TestAddForUser_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -445,6 +479,7 @@ func TestAddForUser_APIError(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete propagates errors returned by the GitLab API.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -455,6 +490,7 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_APIError verifies that DeleteForUser propagates errors returned by the GitLab API.
 func TestDeleteForUser_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -490,6 +526,7 @@ func TestList_EmptyResult(t *testing.T) {
 // These tests cover formatting branches for markdown renderers including
 // FormatDeleteMarkdownString, non-empty lists with long keys, and long single keys.
 
+// TestFormatDeleteMarkdownString verifies the DeleteMarkdownString markdown formatter output.
 func TestFormatDeleteMarkdownString(t *testing.T) {
 	tests := []struct {
 		name    string

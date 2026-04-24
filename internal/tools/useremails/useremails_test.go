@@ -25,6 +25,7 @@ const (
 	emailListJSON      = `[{"id":1,"email":"test@example.com","confirmed_at":"2026-01-15T10:00:00Z"},{"id":2,"email":"dev@example.com"}]`
 )
 
+// TestListForUser_Success verifies that ListForUser returns the expected output when the GitLab API responds successfully.
 func TestListForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathEmailsForUser {
@@ -46,6 +47,7 @@ func TestListForUser_Success(t *testing.T) {
 	}
 }
 
+// TestListForUser_InvalidUserID verifies that ListForUser returns a validation error when user_id is invalid.
 func TestListForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -56,6 +58,7 @@ func TestListForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetEmail {
@@ -77,6 +80,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_InvalidEmailID verifies that Get returns a validation error when email_id is invalid.
 func TestGet_InvalidEmailID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -87,6 +91,7 @@ func TestGet_InvalidEmailID(t *testing.T) {
 	}
 }
 
+// TestGet_APIError verifies that Get returns an error when the GitLab API responds with a failure status.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -97,6 +102,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
+// TestAdd_Success verifies that Add returns the expected output when the GitLab API responds successfully.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathAddEmail {
@@ -115,6 +121,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_EmptyEmail verifies that Add returns a validation error when email is empty.
 func TestAdd_EmptyEmail(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -125,6 +132,7 @@ func TestAdd_EmptyEmail(t *testing.T) {
 	}
 }
 
+// TestAddForUser_Success verifies that AddForUser returns the expected output when the GitLab API responds successfully.
 func TestAddForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathAddEmailUser {
@@ -143,6 +151,7 @@ func TestAddForUser_Success(t *testing.T) {
 	}
 }
 
+// TestAddForUser_InvalidUserID verifies that AddForUser returns a validation error when user_id is invalid.
 func TestAddForUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -153,6 +162,7 @@ func TestAddForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathDeleteEmail {
@@ -171,6 +181,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_InvalidEmailID verifies that Delete returns a validation error when email_id is invalid.
 func TestDelete_InvalidEmailID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -181,6 +192,7 @@ func TestDelete_InvalidEmailID(t *testing.T) {
 	}
 }
 
+// TestDeleteForUser_Success verifies that DeleteForUser returns the expected output when the GitLab API responds successfully.
 func TestDeleteForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathDeleteEmailUsr {
@@ -199,6 +211,7 @@ func TestDeleteForUser_Success(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdownString_Empty verifies that FormatListMarkdownString returns a non-empty markdown string for an empty list.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md == "" {
@@ -206,6 +219,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdownString verifies that FormatMarkdownString returns a non-empty markdown rendering of a token output.
 func TestFormatMarkdownString(t *testing.T) {
 	md := FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"})
 	if md == "" {

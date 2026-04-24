@@ -12,6 +12,10 @@ import (
 	"testing"
 )
 
+// TestWizard_FullFlow verifies RunCLI executes end-to-end with default
+// options: it scripts install path, GitLab URL, token, "n" to skip advanced
+// options, and "a" to select all clients, then asserts the banner and
+// Step 1/Step 2 headings appear in the output.
 func TestWizard_FullFlow(t *testing.T) {
 	useFakeClients(t)
 	stubWriteEnvFile(t)
@@ -62,6 +66,10 @@ func TestWizard_FullFlow(t *testing.T) {
 	}
 }
 
+// TestWizard_FullFlow_AdvancedOptions verifies RunCLI executes the advanced
+// options branch: it answers "y" to configure advanced options and supplies
+// values for skip-TLS, meta-tools, auto-update, YOLO mode, and log level,
+// then asserts the "Advanced Options" section is rendered.
 func TestWizard_FullFlow_AdvancedOptions(t *testing.T) {
 	useFakeClients(t)
 	stubWriteEnvFile(t)
@@ -103,6 +111,9 @@ func TestWizard_FullFlow_AdvancedOptions(t *testing.T) {
 	}
 }
 
+// TestMaskToken_Various uses table-driven cases to verify MaskToken returns
+// "****" for short tokens and preserves the first 8 characters while masking
+// the rest for longer tokens.
 func TestMaskToken_Various(t *testing.T) {
 	tests := []struct {
 		token string
@@ -120,6 +131,8 @@ func TestMaskToken_Various(t *testing.T) {
 	}
 }
 
+// TestRestartHint_AllClients verifies RestartHint returns a non-empty
+// restart instruction string for every client ID in AllClients.
 func TestRestartHint_AllClients(t *testing.T) {
 	clients := AllClients()
 	for _, c := range clients {

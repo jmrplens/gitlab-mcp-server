@@ -151,6 +151,8 @@ func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {
 	}
 }
 
+// TestStepGitLabConfig_URLError verifies stepGitLabConfig returns an
+// "invalid URL" error when the user enters a malformed URL.
 func TestStepGitLabConfig_URLError(t *testing.T) {
 	input := "not-a-valid-url\nglpat-xxx\n"
 	r := strings.NewReader(input)
