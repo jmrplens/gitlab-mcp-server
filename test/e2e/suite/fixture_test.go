@@ -89,6 +89,72 @@ func sanitizeTestName(name string) string {
 }
 
 // ---------------------------------------------------------------------------
+// Retry helpers for flaky E2E operations
+// ---------------------------------------------------------------------------
+
+// isRetryableError checks whether an error is likely transient and worth
+// retrying. Covers network-level failures, GitLab rate limits, server errors,
+// and known eventual-consistency conditions (e.g. newly created Git refs not
+// yet visible to subsequent API calls).
+//
+// Uses anchored patterns to avoid false positives from bare numeric substrings
+// like "404" appearing in project IDs, commit SHAs, or resource names.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isTransientNetworkError(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	// GitLab eventual-consistency: branch not yet visible after creation.
+	if strings.Contains(msg, "only create or edit files when you are on a branch") {
+		return true
+	}
+	// 404 — newly created ref not yet propagated (anchored to avoid matching IDs).
+	if strings.Contains(msg, "404 not found") {
+		return true
+	}
+	// Rate limiting.
+	if strings.Contains(msg, "429") {
+		return true
+	}
+	// Server errors (transient by nature).
+	if strings.Contains(msg, "500 internal server error") ||
+		strings.Contains(msg, "502 bad gateway") ||
+		strings.Contains(msg, "503 service unavailable") {
+		return true
+	}
+	return false
+}
+
+// retryOnTransient calls fn up to maxRetries times with progressive backoff
+// (1s, 2s, 3s…) when the returned error is retryable. Respects context
+// cancellation between attempts. Returns the first successful result or
+// the last error after all attempts are exhausted.
+func retryOnTransient[O any](ctx context.Context, t *testing.T, label string, maxRetries int, fn func() (O, error)) (O, error) {
+	t.Helper()
+	var out O
+	var err error
+	for attempt := range maxRetries {
+		out, err = fn()
+		if err == nil {
+			return out, nil
+		}
+		if attempt >= maxRetries-1 || !isRetryableError(err) {
+			break
+		}
+		t.Logf("%s: attempt %d/%d failed (retrying): %v", label, attempt+1, maxRetries, err)
+		select {
+		case <-ctx.Done():
+			return out, err
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
+	return out, err
+}
+
+// ---------------------------------------------------------------------------
 // Individual tool fixture builders (use sess.individual session)
 // ---------------------------------------------------------------------------
 

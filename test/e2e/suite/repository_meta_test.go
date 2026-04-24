@@ -273,10 +273,8 @@ func TestMeta_CommitExtended(t *testing.T) {
 	cpSHA := cpListOut.Commits[0].ID
 
 	t.Run("CommitCherryPick", func(t *testing.T) {
-		var out commits.Output
-		var err error
-		for attempt := range 3 {
-			out, err = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
+		out, err := retryOnTransient(ctx, t, "commit_cherry_pick", 5, func() (commits.Output, error) {
+			return callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
 				"action": "commit_cherry_pick",
 				"params": map[string]any{
 					"project_id": proj.pidStr(),
@@ -284,12 +282,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 					"branch":     "cherry-pick-target",
 				},
 			})
-			if err == nil {
-				break
-			}
-			t.Logf("commit_cherry_pick attempt %d/3 failed (branch may not be ready): %v", attempt+1, err)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-		}
+		})
 		requireNoError(t, err, "commit_cherry_pick")
 		requireTrue(t, out.ID != "", "cherry_pick: expected commit SHA")
 		t.Logf("Cherry-picked to: %s", out.ID)

@@ -55,9 +55,11 @@ func TestIndividual_Releases(t *testing.T) {
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[releases.Output](ctx, sess.individual, "gitlab_release_get", releases.GetInput{
-			ProjectID: proj.pidOf(),
-			TagName:   tagName,
+		out, err := retryOnTransient(ctx, t, "get release", 5, func() (releases.Output, error) {
+			return callToolOn[releases.Output](ctx, sess.individual, "gitlab_release_get", releases.GetInput{
+				ProjectID: proj.pidOf(),
+				TagName:   tagName,
+			})
 		})
 		requireNoError(t, err, "get release")
 		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
@@ -185,12 +187,14 @@ func TestMeta_Releases(t *testing.T) {
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		out, err := callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
-			"action": "get",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"tag_name":   tagName,
-			},
+		out, err := retryOnTransient(ctx, t, "meta release get", 5, func() (releases.Output, error) {
+			return callToolOn[releases.Output](ctx, sess.meta, "gitlab_release", map[string]any{
+				"action": "get",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+					"tag_name":   tagName,
+				},
+			})
 		})
 		requireNoError(t, err, "meta release get")
 		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
