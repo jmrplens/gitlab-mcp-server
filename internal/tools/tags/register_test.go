@@ -1,3 +1,7 @@
+// register_test.go contains integration tests that exercise the register.go
+// closures end-to-end through an in-memory MCP session. Tests cover
+// ConfirmAction early-return paths, NotFoundResult branches, and error
+// propagation from the GitLab Tags and ProtectedTags APIs.
 package tags
 
 import (
