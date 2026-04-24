@@ -1,4 +1,5 @@
 // prompt_audit_test.go contains unit tests for audit MCP prompts.
+
 package prompts
 
 import (

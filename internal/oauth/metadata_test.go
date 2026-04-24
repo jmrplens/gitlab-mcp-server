@@ -1,3 +1,6 @@
+// metadata_test.go contains unit tests for the RFC 9728 Protected Resource
+// Metadata endpoint handler.
+
 package oauth
 
 import (
@@ -7,6 +10,9 @@ import (
 	"testing"
 )
 
+// TestNewProtectedResourceHandler_ValidResponse verifies that the handler
+// returns a valid RFC 9728 Protected Resource Metadata JSON document with
+// the expected resource, authorization server, bearer methods and scopes.
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
@@ -51,6 +57,9 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	}
 }
 
+// TestNewProtectedResourceHandler_CORSHeaders verifies that the handler
+// sets Access-Control-Allow-Origin: * so browser-based clients can fetch
+// the metadata document cross-origin.
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
@@ -63,6 +72,8 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 	}
 }
 
+// TestNewProtectedResourceHandler_OptionsPreflightReturns204 verifies that
+// OPTIONS preflight requests receive 204 No Content for CORS compliance.
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
@@ -75,6 +86,8 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 	}
 }
 
+// TestNewProtectedResourceHandler_PostMethodNotAllowed verifies that POST
+// and other non-GET/OPTIONS methods return 405 Method Not Allowed.
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 

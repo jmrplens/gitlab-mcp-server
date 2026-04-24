@@ -1,7 +1,14 @@
+// polling_test.go contains unit tests for the polling helper functions
+// ClampPollInterval, ClampPollTimeout, and IsTerminalStatus.
+
 package toolutil
 
 import "testing"
 
+// TestClampPollInterval verifies that ClampPollInterval constrains a polling
+// interval to [PollMinInterval, PollMaxInterval] and returns PollDefaultInterval
+// when the input is below the minimum. Table-driven subtests cover values below,
+// at, within, and above the allowed range.
 func TestClampPollInterval(t *testing.T) {
 	tests := []struct {
 		name string
@@ -24,6 +31,10 @@ func TestClampPollInterval(t *testing.T) {
 	}
 }
 
+// TestClampPollTimeout verifies that ClampPollTimeout constrains a polling
+// timeout to [PollMinTimeout, PollMaxTimeout] and returns PollDefaultTimeout
+// when the input is zero or negative. Table-driven subtests cover zero,
+// negative, minimum, mid-range, maximum, and above-maximum values.
 func TestClampPollTimeout(t *testing.T) {
 	tests := []struct {
 		name string
@@ -46,6 +57,11 @@ func TestClampPollTimeout(t *testing.T) {
 	}
 }
 
+// TestIsTerminalStatus verifies that IsTerminalStatus correctly classifies
+// CI/CD pipeline statuses. Table-driven subtests assert that "success",
+// "failed", "canceled", "skipped", and "manual" are terminal, while
+// "running", "pending", "created", "waiting_for_resource", and empty
+// string are non-terminal.
 func TestIsTerminalStatus(t *testing.T) {
 	tests := []struct {
 		name   string

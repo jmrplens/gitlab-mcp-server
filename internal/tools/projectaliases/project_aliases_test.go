@@ -1,3 +1,6 @@
+// project_aliases_test.go contains unit tests for GitLab project alias
+// operations. Tests use httptest to mock the GitLab Project Aliases API.
+
 package projectaliases
 
 import (

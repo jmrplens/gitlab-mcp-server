@@ -1,3 +1,5 @@
+// register.go wires group iteration MCP tools to the MCP server.
+
 package groupiterations
 
 import (

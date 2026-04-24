@@ -2,6 +2,7 @@
 // of tool and formatter registrations. These tests prevent silent failures when
 // a new sub-package is added but not wired into RegisterAll or RegisterAllMeta,
 // or when a sub-package with Markdown formatters forgets to register them.
+
 package tools
 
 import (

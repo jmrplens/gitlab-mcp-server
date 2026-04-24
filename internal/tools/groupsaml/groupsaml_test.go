@@ -1,3 +1,6 @@
+// groupsaml_test.go contains unit tests for GitLab group SAML configuration
+// operations. Tests use httptest to mock the GitLab Groups SAML API.
+
 package groupsaml
 
 import (
@@ -13,6 +16,7 @@ const (
 	pathGroupSAMLOne = "/api/v4/groups/mygroup/saml_group_links/saml-devs"
 )
 
+// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupSAML {
@@ -36,6 +40,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingGroupID verifies that List returns a validation error when group_id is missing.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -46,6 +51,7 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupSAMLOne {
@@ -64,6 +70,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingSAMLGroupName verifies that Get returns a validation error when saml_group_name is missing.
 func TestGet_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -74,6 +81,7 @@ func TestGet_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
+// TestAdd_Success verifies that Add returns the expected output when the GitLab API responds successfully.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupSAML {
@@ -96,6 +104,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_MissingGroupID verifies that Add returns a validation error when group_id is missing.
 func TestAdd_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -106,6 +115,7 @@ func TestAdd_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestAdd_MissingSAMLGroupName verifies that Add returns a validation error when saml_group_name is missing.
 func TestAdd_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -116,6 +126,7 @@ func TestAdd_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupSAMLOne {
@@ -131,6 +142,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingSAMLGroupName verifies that Delete returns a validation error when saml_group_name is missing.
 func TestDelete_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

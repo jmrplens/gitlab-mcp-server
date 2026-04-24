@@ -1,3 +1,6 @@
+// group_ssh_certs_test.go contains unit tests for GitLab group SSH certificate
+// operations. Tests use httptest to mock the GitLab Group SSH Certificates API.
+
 package groupsshcerts
 
 import (
@@ -65,6 +68,7 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
+// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
@@ -94,6 +98,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingGroupID verifies that List returns a validation error when group_id is missing.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -105,6 +110,7 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -118,6 +124,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List returns an error when the GitLab API responds with a failure status.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
@@ -135,6 +142,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_Success verifies that Create returns the expected output when the GitLab API responds successfully.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
@@ -160,6 +168,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingGroupID verifies that Create returns a validation error when group_id is missing.
 func TestCreate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -171,6 +180,7 @@ func TestCreate_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingKey verifies that Create returns a validation error when key is missing.
 func TestCreate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -185,6 +195,7 @@ func TestCreate_MissingKey(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingTitle verifies that Create returns a validation error when title is missing.
 func TestCreate_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -199,6 +210,7 @@ func TestCreate_MissingTitle(t *testing.T) {
 	}
 }
 
+// TestCreate_CancelledContext verifies that Create returns an error when the context is already cancelled.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -216,6 +228,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestCreate_APIError verifies that Create returns an error when the GitLab API responds with a failure status.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates" {
@@ -235,6 +248,7 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates/10" {
@@ -253,6 +267,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingGroupID verifies that Delete returns a validation error when group_id is missing.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -264,6 +279,7 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingCertificateID verifies that Delete returns a validation error when certificate_id is missing.
 func TestDelete_MissingCertificateID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -275,6 +291,7 @@ func TestDelete_MissingCertificateID(t *testing.T) {
 	}
 }
 
+// TestDelete_CancelledContext verifies that Delete returns an error when the context is already cancelled.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -291,6 +308,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDelete_APIError verifies that Delete returns an error when the GitLab API responds with a failure status.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/ssh_certificates/10" {

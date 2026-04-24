@@ -1,3 +1,6 @@
+// customemoji_test.go contains unit tests for GitLab custom emoji operations.
+// Tests use httptest to mock the GitLab Custom Emoji API.
+
 package customemoji
 
 import (

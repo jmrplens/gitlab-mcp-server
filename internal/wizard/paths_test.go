@@ -1,3 +1,6 @@
+// paths_test.go contains unit tests for platform-specific path resolution
+// functions.
+
 package wizard
 
 import (
@@ -6,6 +9,8 @@ import (
 	"testing"
 )
 
+// TestDefaultInstallDir_NotEmpty verifies DefaultInstallDir returns a
+// non-empty platform-specific install directory.
 func TestDefaultInstallDir_NotEmpty(t *testing.T) {
 	dir := DefaultInstallDir()
 	if dir == "" {
@@ -13,6 +18,8 @@ func TestDefaultInstallDir_NotEmpty(t *testing.T) {
 	}
 }
 
+// TestDefaultBinaryName_Platform verifies DefaultBinaryName returns
+// "gitlab-mcp-server.exe" on Windows and "gitlab-mcp-server" elsewhere.
 func TestDefaultBinaryName_Platform(t *testing.T) {
 	name := DefaultBinaryName()
 	if runtime.GOOS == "windows" {
@@ -26,6 +33,8 @@ func TestDefaultBinaryName_Platform(t *testing.T) {
 	}
 }
 
+// TestExpandPath_Tilde verifies ExpandPath resolves a leading "~/" to
+// the user's home directory and returns a non-empty expanded path.
 func TestExpandPath_Tilde(t *testing.T) {
 	expanded, err := ExpandPath("~/test")
 	if err != nil {
@@ -39,6 +48,8 @@ func TestExpandPath_Tilde(t *testing.T) {
 	}
 }
 
+// TestExpandPath_AbsolutePassthrough verifies ExpandPath returns absolute
+// paths unchanged on both Windows and Unix-like systems.
 func TestExpandPath_AbsolutePassthrough(t *testing.T) {
 	var path string
 	if runtime.GOOS == "windows" {

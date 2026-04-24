@@ -1,4 +1,5 @@
 // register.go wires compliance policy MCP tools to the MCP server.
+
 package compliancepolicy
 
 import (

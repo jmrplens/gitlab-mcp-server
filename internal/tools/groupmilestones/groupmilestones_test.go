@@ -1,5 +1,6 @@
 // groupmilestones_test.go contains unit tests for GitLab group milestone operations.
 // Tests use httptest to mock the GitLab GroupMilestones API.
+
 package groupmilestones
 
 import (

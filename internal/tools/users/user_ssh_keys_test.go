@@ -1,3 +1,6 @@
+// user_ssh_keys_test.go contains unit tests for GitLab user SSH key
+// management operations. Tests use httptest to mock the GitLab Users API.
+
 package users
 
 import (
@@ -8,6 +11,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// TestListSSHKeysForUser_Success verifies ListSSHKeysForUser returns the key
+// list when GET /users/:id/keys responds 200 with one key.
 func TestListSSHKeysForUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/keys" {
@@ -26,6 +31,8 @@ func TestListSSHKeysForUser_Success(t *testing.T) {
 	}
 }
 
+// TestGetSSHKey_Success verifies GetSSHKey returns the key payload when
+// GET /user/keys/:id responds 200 OK.
 func TestGetSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/keys/1" {
@@ -44,6 +51,8 @@ func TestGetSSHKey_Success(t *testing.T) {
 	}
 }
 
+// TestAddSSHKey_Success verifies AddSSHKey returns the created key when
+// POST /user/keys responds 201 Created.
 func TestAddSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/user/keys" {
@@ -62,6 +71,8 @@ func TestAddSSHKey_Success(t *testing.T) {
 	}
 }
 
+// TestAddSSHKey_MissingTitle verifies AddSSHKey returns a validation error when
+// the title field is empty, without hitting the API.
 func TestAddSSHKey_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -72,6 +83,8 @@ func TestAddSSHKey_MissingTitle(t *testing.T) {
 	}
 }
 
+// TestDeleteSSHKey_Success verifies DeleteSSHKey reports Deleted=true when
+// DELETE /user/keys/:id responds 204 No Content.
 func TestDeleteSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/user/keys/1" {

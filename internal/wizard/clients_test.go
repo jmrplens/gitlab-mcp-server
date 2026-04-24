@@ -1,3 +1,6 @@
+// clients_test.go contains unit tests for MCP client detection and
+// configuration path resolution.
+
 package wizard
 
 import (
@@ -7,6 +10,9 @@ import (
 	"testing"
 )
 
+// TestGenerateEntry_VSCode verifies GenerateEntry for the VS Code client
+// produces a stdio entry with an envFile reference and preferences in env,
+// while excluding secrets (GITLAB_TOKEN, GITLAB_URL) from the env map.
 func TestGenerateEntry_VSCode(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:    "/usr/bin/gitlab-mcp-server",
@@ -44,6 +50,9 @@ func TestGenerateEntry_VSCode(t *testing.T) {
 	}
 }
 
+// TestGenerateEntry_CopilotCLI verifies GenerateEntry for the Copilot CLI
+// client produces a stdio entry with an empty args slice and a tools=["*"]
+// wildcard grant.
 func TestGenerateEntry_CopilotCLI(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
@@ -66,6 +75,9 @@ func TestGenerateEntry_CopilotCLI(t *testing.T) {
 	}
 }
 
+// TestGenerateEntry_OpenCode verifies GenerateEntry for the OpenCode client
+// produces a local-type entry with command as a string array, enabled=true,
+// and uses the "environment" key instead of "env".
 func TestGenerateEntry_OpenCode(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
@@ -93,6 +105,9 @@ func TestGenerateEntry_OpenCode(t *testing.T) {
 	}
 }
 
+// TestGenerateEntry_ClaudeDesktop verifies GenerateEntry for Claude Desktop
+// produces an entry without a "type" field and uses the configured binary
+// path as the command.
 func TestGenerateEntry_ClaudeDesktop(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
@@ -110,6 +125,9 @@ func TestGenerateEntry_ClaudeDesktop(t *testing.T) {
 	}
 }
 
+// TestRootKey_Mapping uses table-driven subtests to verify RootKey returns
+// the correct top-level JSON key for each supported client (servers, mcp,
+// context_servers, mcpServers).
 func TestRootKey_Mapping(t *testing.T) {
 	tests := []struct {
 		client ClientID
@@ -135,6 +153,8 @@ func TestRootKey_Mapping(t *testing.T) {
 	}
 }
 
+// TestAllClients_Count verifies AllClients returns exactly 10 supported
+// MCP client definitions.
 func TestAllClients_Count(t *testing.T) {
 	clients := AllClients()
 	if len(clients) != 10 {
@@ -142,6 +162,9 @@ func TestAllClients_Count(t *testing.T) {
 	}
 }
 
+// TestMergeServerEntry_NewFile verifies MergeServerEntry creates a new JSON
+// file with the expected root key and nested server entry when the target
+// file does not exist.
 func TestMergeServerEntry_NewFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp.json")
@@ -170,6 +193,9 @@ func TestMergeServerEntry_NewFile(t *testing.T) {
 	}
 }
 
+// TestMergeServerEntry_PreservesExisting verifies MergeServerEntry preserves
+// sibling root-level keys and unrelated server entries when adding a new
+// entry to an existing config file.
 func TestMergeServerEntry_PreservesExisting(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -203,6 +229,8 @@ func TestMergeServerEntry_PreservesExisting(t *testing.T) {
 	}
 }
 
+// TestMergeServerEntry_OverwritesExistingGitlab verifies MergeServerEntry
+// replaces a previously-written gitlab entry with the new configuration.
 func TestMergeServerEntry_OverwritesExistingGitlab(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -233,6 +261,9 @@ func TestMergeServerEntry_OverwritesExistingGitlab(t *testing.T) {
 	}
 }
 
+// TestMergeServerEntry_JSONC verifies MergeServerEntry successfully parses
+// VS Code-style JSONC input (with comments and trailing commas), preserves
+// existing entries, and writes valid JSON output.
 func TestMergeServerEntry_JSONC(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp.json")
@@ -271,6 +302,9 @@ func TestMergeServerEntry_JSONC(t *testing.T) {
 	}
 }
 
+// TestEnvMap_Defaults verifies envMap omits optional environment variables
+// (GITLAB_SKIP_TLS_VERIFY, META_TOOLS, YOLO_MODE, LOG_LEVEL) when their
+// values match the defaults.
 func TestEnvMap_Defaults(t *testing.T) {
 	cfg := ServerConfig{
 		GitLabURL:     "https://example.com",
@@ -299,6 +333,8 @@ func TestEnvMap_Defaults(t *testing.T) {
 	}
 }
 
+// TestEnvMap_YoloMode verifies envMap emits YOLO_MODE=true when YoloMode
+// is enabled in the ServerConfig.
 func TestEnvMap_YoloMode(t *testing.T) {
 	cfg := ServerConfig{
 		GitLabURL:   "https://example.com",
@@ -311,6 +347,8 @@ func TestEnvMap_YoloMode(t *testing.T) {
 	}
 }
 
+// TestAllClients_DefaultSelected verifies AllClients marks exactly two
+// clients with DefaultSelected=true.
 func TestAllClients_DefaultSelected(t *testing.T) {
 	clients := AllClients()
 	var defaultNames []string
@@ -324,6 +362,8 @@ func TestAllClients_DefaultSelected(t *testing.T) {
 	}
 }
 
+// TestGenerateEntry_Crush verifies GenerateEntry for the Crush client
+// produces a stdio entry with a string command and an env key present.
 func TestGenerateEntry_Crush(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",
@@ -344,6 +384,8 @@ func TestGenerateEntry_Crush(t *testing.T) {
 	}
 }
 
+// TestGenerateEntry_Zed verifies GenerateEntry for the Zed client produces
+// an entry without a "type" field as required by Zed's context_servers schema.
 func TestGenerateEntry_Zed(t *testing.T) {
 	cfg := ServerConfig{
 		BinaryPath:  "/usr/bin/gitlab-mcp-server",

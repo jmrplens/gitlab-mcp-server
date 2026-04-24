@@ -1,6 +1,7 @@
 // repository_test.go contains unit tests for GitLab repository operations
 // (tree listing and branch/tag comparison). Tests use httptest to mock the
 // GitLab API and verify both success and error paths.
+
 package repository
 
 import (

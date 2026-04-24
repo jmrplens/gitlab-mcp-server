@@ -1,5 +1,6 @@
 // grouplabels_test.go contains unit tests for GitLab group label operations.
 // Tests use httptest to mock the GitLab GroupLabels API.
+
 package grouplabels
 
 import (

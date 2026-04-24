@@ -170,7 +170,7 @@ You operate in different modes depending on the type of plan requested. Always i
 
 **Key questions to investigate**:
 
-- Are all 1006 tools documented in `docs/tools/`?
+- Are all 1000 tools documented in `docs/tools/`?
 - Does `docs/configuration.md` match current environment variables?
 - Are new capabilities reflected in `docs/capabilities.md`?
 - Do examples in `docs/examples/` still work?

@@ -2,6 +2,7 @@
 // GraphQL API: List, Assign, Remove, and UpdateOrder. Covers success paths,
 // input validation, API errors, mutation errors, context cancellation,
 // pagination, empty results, dual GID resolution, and markdown formatters.
+
 package epicissues
 
 import (
@@ -191,6 +192,7 @@ func resolveHandler(childPath string) http.HandlerFunc {
 // List
 // --------------------------------------------------------------------------
 
+// TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -342,6 +344,7 @@ func TestList(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -355,6 +358,7 @@ func TestList_CancelledContext(t *testing.T) {
 // Assign
 // --------------------------------------------------------------------------
 
+// TestAssign uses table-driven subtests to exercise Assign across success, validation, GID-resolution failure, mutation errors, and API errors.
 func TestAssign(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -463,6 +467,7 @@ func TestAssign(t *testing.T) {
 	}
 }
 
+// TestAssign_CancelledContext verifies that Assign returns an error when the context is already cancelled.
 func TestAssign_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -476,6 +481,7 @@ func TestAssign_CancelledContext(t *testing.T) {
 // Remove
 // --------------------------------------------------------------------------
 
+// TestRemove uses table-driven subtests to exercise Remove across success, validation, GID-resolution failure, and mutation errors.
 func TestRemove(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -581,6 +587,7 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+// TestRemove_CancelledContext verifies that Remove returns an error when the context is already cancelled.
 func TestRemove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -594,6 +601,7 @@ func TestRemove_CancelledContext(t *testing.T) {
 // UpdateOrder
 // --------------------------------------------------------------------------
 
+// TestUpdateOrder uses table-driven subtests to exercise UpdateOrder across BEFORE/AFTER positions, validation, mutation errors, and API errors.
 func TestUpdateOrder(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -761,6 +769,7 @@ func TestUpdateOrder(t *testing.T) {
 	}
 }
 
+// TestUpdateOrder_CancelledContext verifies that UpdateOrder returns an error when the context is already cancelled.
 func TestUpdateOrder_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -778,6 +787,7 @@ func TestUpdateOrder_CancelledContext(t *testing.T) {
 // normalizeState
 // --------------------------------------------------------------------------
 
+// TestNormalizeState uses table-driven subtests to verify that normalizeState maps GraphQL state strings to canonical lowercase forms and passes unknown values through unchanged.
 func TestNormalizeState(t *testing.T) {
 	tests := []struct {
 		input string
@@ -802,6 +812,7 @@ func TestNormalizeState(t *testing.T) {
 // Markdown formatters
 // --------------------------------------------------------------------------
 
+// TestFormatListMarkdown uses table-driven subtests to verify that FormatListMarkdown renders a table for populated inputs and an empty-state message otherwise.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -852,6 +863,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatAssignMarkdown uses table-driven subtests to verify that FormatAssignMarkdown renders assigned/removed actions and handles empty GIDs.
 func TestFormatAssignMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

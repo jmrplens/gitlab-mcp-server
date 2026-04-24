@@ -1,3 +1,6 @@
+// user_service_accounts_test.go contains unit tests for GitLab service account
+// operations. Tests use httptest to mock the GitLab Users API.
+
 package users
 
 import (
@@ -8,6 +11,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
+// TestCreateServiceAccount_Success verifies CreateServiceAccount returns the
+// new service account when POST /service_accounts responds 201 Created.
 func TestCreateServiceAccount_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/service_accounts" {
@@ -28,6 +33,8 @@ func TestCreateServiceAccount_Success(t *testing.T) {
 	}
 }
 
+// TestListServiceAccounts_Success verifies ListServiceAccounts returns the
+// account list when GET /service_accounts responds 200 with two entries.
 func TestListServiceAccounts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/service_accounts" {
@@ -46,6 +53,9 @@ func TestListServiceAccounts_Success(t *testing.T) {
 	}
 }
 
+// TestCreateCurrentUserPAT_Success verifies CreateCurrentUserPAT returns the
+// new token (including the plaintext token field) when
+// POST /user/personal_access_tokens responds 201 Created.
 func TestCreateCurrentUserPAT_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/user/personal_access_tokens" {
@@ -73,6 +83,8 @@ func TestCreateCurrentUserPAT_Success(t *testing.T) {
 	}
 }
 
+// TestCreateCurrentUserPAT_EmptyName verifies CreateCurrentUserPAT returns a
+// validation error when the name field is empty.
 func TestCreateCurrentUserPAT_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -83,6 +95,8 @@ func TestCreateCurrentUserPAT_EmptyName(t *testing.T) {
 	}
 }
 
+// TestCreateCurrentUserPAT_EmptyScopes verifies CreateCurrentUserPAT returns a
+// validation error when the scopes slice is empty.
 func TestCreateCurrentUserPAT_EmptyScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -93,6 +107,8 @@ func TestCreateCurrentUserPAT_EmptyScopes(t *testing.T) {
 	}
 }
 
+// TestFormatServiceAccountListMarkdownString_Empty verifies the markdown
+// formatter returns a non-empty string for an empty service account list.
 func TestFormatServiceAccountListMarkdownString_Empty(t *testing.T) {
 	md := FormatServiceAccountListMarkdownString(ServiceAccountListOutput{})
 	if md == "" {
@@ -100,6 +116,8 @@ func TestFormatServiceAccountListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatCurrentUserPATMarkdownString verifies FormatCurrentUserPATMarkdownString
+// produces non-empty markdown for a PAT output.
 func TestFormatCurrentUserPATMarkdownString(t *testing.T) {
 	md := FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
 		ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42,

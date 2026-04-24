@@ -1,3 +1,6 @@
+// auditevents_extra_test.go contains additional unit tests for GitLab audit event
+// operations, covering edge cases not addressed in auditevents_test.go.
+
 package auditevents
 
 import (

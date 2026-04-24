@@ -1,3 +1,6 @@
+// envfile.go reads and writes .env files for storing GitLab credentials
+// and server configuration used by the MCP server.
+
 package wizard
 
 import (

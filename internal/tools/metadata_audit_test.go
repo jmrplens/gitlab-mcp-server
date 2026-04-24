@@ -3,6 +3,7 @@
 // correctness, InputSchema structure, and action enum constraints.
 //
 // Run with: go test ./internal/tools/ -run TestMetadataAudit -count=1 -v.
+
 package tools
 
 import (

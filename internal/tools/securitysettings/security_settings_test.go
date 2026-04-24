@@ -1,3 +1,6 @@
+// security_settings_test.go contains unit tests for GitLab project security
+// settings operations. Tests use httptest to mock the GitLab API.
+
 package securitysettings
 
 import (
@@ -22,6 +25,7 @@ const projectSecurityJSON = `{
 	"secret_push_protection_enabled":true
 }`
 
+// TestGetProject_Success verifies that GetProject returns the expected output when the GitLab API responds successfully.
 func TestGetProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/security_settings" {
@@ -48,6 +52,7 @@ func TestGetProject_Success(t *testing.T) {
 	}
 }
 
+// TestGetProject_MissingProjectID verifies that GetProject returns a validation error when project_id is missing.
 func TestGetProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -59,6 +64,7 @@ func TestGetProject_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestGetProject_CancelledContext verifies that GetProject returns an error when the context is already cancelled.
 func TestGetProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -72,6 +78,7 @@ func TestGetProject_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestGetProject_APIError verifies that GetProject returns an error when the GitLab API responds with a failure status.
 func TestGetProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/security_settings" {
@@ -89,6 +96,7 @@ func TestGetProject_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdateProject_Success verifies that UpdateProject returns the expected output when the GitLab API responds successfully.
 func TestUpdateProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/security_settings" {
@@ -110,6 +118,7 @@ func TestUpdateProject_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateProject_MissingProjectID verifies that UpdateProject returns a validation error when project_id is missing.
 func TestUpdateProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -123,6 +132,7 @@ func TestUpdateProject_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestUpdateProject_CancelledContext verifies that UpdateProject returns an error when the context is already cancelled.
 func TestUpdateProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -139,6 +149,7 @@ func TestUpdateProject_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUpdateProject_APIError verifies that UpdateProject returns an error when the GitLab API responds with a failure status.
 func TestUpdateProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/security_settings" {
@@ -157,6 +168,7 @@ func TestUpdateProject_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdateGroup_Success verifies that UpdateGroup returns the expected output when the GitLab API responds successfully.
 func TestUpdateGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/mygroup/security_settings" {
@@ -178,6 +190,7 @@ func TestUpdateGroup_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateGroup_WithExclusions verifies that UpdateGroup forwards the exclusions parameters to the GitLab API.
 func TestUpdateGroup_WithExclusions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/mygroup/security_settings" {
@@ -200,6 +213,7 @@ func TestUpdateGroup_WithExclusions(t *testing.T) {
 	}
 }
 
+// TestUpdateGroup_MissingGroupID verifies that UpdateGroup returns a validation error when group_id is missing.
 func TestUpdateGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -213,6 +227,7 @@ func TestUpdateGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestUpdateGroup_CancelledContext verifies that UpdateGroup returns an error when the context is already cancelled.
 func TestUpdateGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -229,6 +244,7 @@ func TestUpdateGroup_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUpdateGroup_APIError verifies that UpdateGroup returns an error when the GitLab API responds with a failure status.
 func TestUpdateGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/security_settings" {

@@ -3,6 +3,8 @@
 
 package toolutil
 
+// Polling bounds and defaults (all values in seconds) for tools that wait on
+// a GitLab resource to reach a terminal state (pipelines, jobs, deployments).
 const (
 	PollMinInterval     = 5
 	PollMaxInterval     = 60

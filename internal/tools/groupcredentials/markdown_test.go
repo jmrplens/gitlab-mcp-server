@@ -1,3 +1,6 @@
+// markdown_test.go contains unit tests for group credential Markdown
+// formatting functions.
+
 package groupcredentials
 
 import (

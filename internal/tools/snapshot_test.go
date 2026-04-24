@@ -1,6 +1,7 @@
 // snapshot_test.go verifies that MCP tool definitions have not changed
 // unexpectedly. It serializes all tool metadata to deterministic JSON and
 // compares against golden files. Set UPDATE_TOOLSNAPS=true to regenerate.
+
 package tools
 
 import (

@@ -1,3 +1,6 @@
+// testsource.go provides an in-memory implementation of the update source
+// interface for use in autoupdate unit tests.
+
 package autoupdate
 
 import (

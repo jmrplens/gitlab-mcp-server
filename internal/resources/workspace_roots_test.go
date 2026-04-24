@@ -4,6 +4,7 @@
 // Tests use an in-memory MCP transport to register the resource, connect
 // a client, and read the resource. Coverage includes populated roots and
 // empty root lists.
+
 package resources
 
 import (

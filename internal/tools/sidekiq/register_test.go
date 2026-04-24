@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the Sidekiq tool closures
+// in register.go. Tests exercise read-only tool dispatch via an in-memory
+// MCP session with a mock GitLab API.
+
 package sidekiq
 
 import (

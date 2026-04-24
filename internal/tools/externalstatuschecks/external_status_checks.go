@@ -12,6 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// MergeStatusCheckOutput represents a single external status check attached to a merge request.
 type MergeStatusCheckOutput struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
@@ -19,6 +20,7 @@ type MergeStatusCheckOutput struct {
 	Status      string `json:"status"`
 }
 
+// ProjectStatusCheckOutput represents a project-level external status check including its HMAC and protected branch scope.
 type ProjectStatusCheckOutput struct {
 	toolutil.HintableOutput
 	ID                int64                   `json:"id"`
@@ -29,6 +31,7 @@ type ProjectStatusCheckOutput struct {
 	ProtectedBranches []ProtectedBranchOutput `json:"protected_branches,omitempty"`
 }
 
+// ProtectedBranchOutput represents a protected branch entry associated with a project external status check.
 type ProtectedBranchOutput struct {
 	ID                        int64  `json:"id"`
 	ProjectID                 int64  `json:"project_id"`
@@ -36,12 +39,14 @@ type ProtectedBranchOutput struct {
 	CodeOwnerApprovalRequired bool   `json:"code_owner_approval_required"`
 }
 
+// ListMergeStatusCheckOutput is the paginated result of listing merge request external status checks.
 type ListMergeStatusCheckOutput struct {
 	toolutil.HintableOutput
 	Items      []MergeStatusCheckOutput  `json:"items"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// ListProjectStatusCheckOutput is the paginated result of listing project external status checks.
 type ListProjectStatusCheckOutput struct {
 	toolutil.HintableOutput
 	Items      []ProjectStatusCheckOutput `json:"items"`
@@ -76,87 +81,13 @@ func toProjectStatusCheckOutput(c *gl.ProjectStatusCheck) ProjectStatusCheckOutp
 	return out
 }
 
-type ListMergeStatusChecksInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
-	toolutil.PaginationInput
-}
-
-// ListMergeStatusChecks lists merge status checks for a merge request (deprecated).
-func ListMergeStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListMergeStatusChecksInput) (ListMergeStatusCheckOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListMergeStatusCheckOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return ListMergeStatusCheckOutput{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if input.MRIID <= 0 {
-		return ListMergeStatusCheckOutput{}, toolutil.ErrRequiredInt64("listMergeStatusChecks", "mr_iid")
-	}
-	opts := &gl.ListOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	checks, resp, err := client.GL().ExternalStatusChecks.ListMergeStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithMessage("listMergeStatusChecks", err)
-	}
-	items := make([]MergeStatusCheckOutput, len(checks))
-	for i, c := range checks {
-		items[i] = toMergeStatusCheckOutput(c)
-	}
-	return ListMergeStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
-}
-
-type SetStatusInput struct {
-	ProjectID             toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                 int64                `json:"mr_iid"                    jsonschema:"Merge request internal ID,required"`
-	SHA                   string               `json:"sha"                       jsonschema:"Head SHA of the merge request source branch,required"`
-	ExternalStatusCheckID int64                `json:"external_status_check_id"  jsonschema:"External status check ID to update,required"`
-	Status                string               `json:"status"                    jsonschema:"Status value (e.g. passed, failed),required"`
-}
-
-// SetExternalStatusCheckStatus sets the status of an external status check (deprecated).
-func SetExternalStatusCheckStatus(ctx context.Context, client *gitlabclient.Client, input SetStatusInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.ProjectID == "" {
-		return toolutil.ErrFieldRequired("project_id")
-	}
-	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("setExternalStatusCheckStatus", "mr_iid")
-	}
-	if input.SHA == "" {
-		return toolutil.ErrFieldRequired("sha")
-	}
-	if input.ExternalStatusCheckID <= 0 {
-		return toolutil.ErrRequiredInt64("setExternalStatusCheckStatus", "external_status_check_id")
-	}
-	if input.Status == "" {
-		return toolutil.ErrFieldRequired("status")
-	}
-	opts := &gl.SetExternalStatusCheckStatusOptions{
-		SHA:                   new(input.SHA),
-		ExternalStatusCheckID: new(input.ExternalStatusCheckID),
-		Status:                new(input.Status),
-	}
-	_, err := client.GL().ExternalStatusChecks.SetExternalStatusCheckStatus(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithMessage("setExternalStatusCheckStatus", err)
-	}
-	return nil
-}
-
+// ListProjectStatusChecksInput defines parameters for the ListProjectStatusChecks action.
 type ListProjectStatusChecksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	toolutil.PaginationInput
 }
 
-// ListProjectStatusChecks lists project-level status checks (deprecated interface, not function).
+// ListProjectStatusChecks lists project-level external status checks.
 func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectStatusChecksInput) (ListProjectStatusCheckOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListProjectStatusCheckOutput{}, err
@@ -182,127 +113,7 @@ func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, i
 	return ListProjectStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-type CreateLegacyInput struct {
-	ProjectID          toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	Name               string               `json:"name"                  jsonschema:"Name of the external status check,required"`
-	ExternalURL        string               `json:"external_url"          jsonschema:"External URL for the status check,required"`
-	ProtectedBranchIDs []int64              `json:"protected_branch_ids,omitempty" jsonschema:"IDs of protected branches to scope the check to"`
-}
-
-// CreateExternalStatusCheck creates a project external status check (deprecated).
-func CreateExternalStatusCheck(ctx context.Context, client *gitlabclient.Client, input CreateLegacyInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.ProjectID == "" {
-		return toolutil.ErrFieldRequired("project_id")
-	}
-	if input.Name == "" {
-		return toolutil.ErrFieldRequired("name")
-	}
-	if input.ExternalURL == "" {
-		return toolutil.ErrFieldRequired("external_url")
-	}
-	opts := &gl.CreateExternalStatusCheckOptions{
-		Name:        new(input.Name),
-		ExternalURL: new(input.ExternalURL),
-	}
-	if len(input.ProtectedBranchIDs) > 0 {
-		opts.ProtectedBranchIDs = &input.ProtectedBranchIDs
-	}
-	_, err := client.GL().ExternalStatusChecks.CreateExternalStatusCheck(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithMessage("createExternalStatusCheck", err)
-	}
-	return nil
-}
-
-type DeleteLegacyInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	CheckID   int64                `json:"check_id"   jsonschema:"External status check ID to delete,required"`
-}
-
-// DeleteExternalStatusCheck deletes a project external status check (deprecated).
-func DeleteExternalStatusCheck(ctx context.Context, client *gitlabclient.Client, input DeleteLegacyInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.ProjectID == "" {
-		return toolutil.ErrFieldRequired("project_id")
-	}
-	if input.CheckID <= 0 {
-		return toolutil.ErrRequiredInt64("deleteExternalStatusCheck", "check_id")
-	}
-	_, err := client.GL().ExternalStatusChecks.DeleteExternalStatusCheck(string(input.ProjectID), input.CheckID, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithMessage("deleteExternalStatusCheck", err)
-	}
-	return nil
-}
-
-type UpdateLegacyInput struct {
-	ProjectID          toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	CheckID            int64                `json:"check_id"              jsonschema:"External status check ID to update,required"`
-	Name               string               `json:"name,omitempty"        jsonschema:"Updated name"`
-	ExternalURL        string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
-	ProtectedBranchIDs []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs"`
-}
-
-// UpdateExternalStatusCheck updates a project external status check (deprecated).
-func UpdateExternalStatusCheck(ctx context.Context, client *gitlabclient.Client, input UpdateLegacyInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.ProjectID == "" {
-		return toolutil.ErrFieldRequired("project_id")
-	}
-	if input.CheckID <= 0 {
-		return toolutil.ErrRequiredInt64("updateExternalStatusCheck", "check_id")
-	}
-	opts := &gl.UpdateExternalStatusCheckOptions{}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.ExternalURL != "" {
-		opts.ExternalURL = new(input.ExternalURL)
-	}
-	if len(input.ProtectedBranchIDs) > 0 {
-		opts.ProtectedBranchIDs = &input.ProtectedBranchIDs
-	}
-	_, err := client.GL().ExternalStatusChecks.UpdateExternalStatusCheck(string(input.ProjectID), input.CheckID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithMessage("updateExternalStatusCheck", err)
-	}
-	return nil
-}
-
-type RetryLegacyInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
-	CheckID   int64                `json:"check_id"   jsonschema:"External status check ID to retry,required"`
-}
-
-// RetryFailedStatusCheckForMR retries a failed external status check for a merge request (deprecated).
-func RetryFailedStatusCheckForMR(ctx context.Context, client *gitlabclient.Client, input RetryLegacyInput) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if input.ProjectID == "" {
-		return toolutil.ErrFieldRequired("project_id")
-	}
-	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("retryFailedStatusCheckForMR", "mr_iid")
-	}
-	if input.CheckID <= 0 {
-		return toolutil.ErrRequiredInt64("retryFailedStatusCheckForMR", "check_id")
-	}
-	_, err := client.GL().ExternalStatusChecks.RetryFailedStatusCheckForAMergeRequest(string(input.ProjectID), input.MRIID, input.CheckID, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithMessage("retryFailedStatusCheckForMR", err)
-	}
-	return nil
-}
-
+// ListProjectMRInput defines parameters for the ListProjectMRExternalStatusChecks action.
 type ListProjectMRInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
@@ -338,6 +149,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 	return ListMergeStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
+// ListProjectInput defines parameters for the ListProjectExternalStatusChecks action.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	toolutil.PaginationInput
@@ -369,6 +181,7 @@ func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.C
 	return ListProjectStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
+// CreateProjectInput defines parameters for the CreateProjectExternalStatusCheck action.
 type CreateProjectInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	Name               string               `json:"name"                  jsonschema:"Name of the external status check,required"`
@@ -408,6 +221,7 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	return toProjectStatusCheckOutput(check), nil
 }
 
+// DeleteProjectInput defines parameters for the DeleteProjectExternalStatusCheck action.
 type DeleteProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	CheckID   int64                `json:"check_id"   jsonschema:"External status check ID to delete,required"`
@@ -431,6 +245,7 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	return nil
 }
 
+// UpdateProjectInput defines parameters for the UpdateProjectExternalStatusCheck action.
 type UpdateProjectInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	CheckID            int64                `json:"check_id"              jsonschema:"External status check ID to update,required"`
@@ -471,6 +286,7 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	return toProjectStatusCheckOutput(check), nil
 }
 
+// RetryProjectInput defines parameters for the RetryFailedExternalStatusCheckForProjectMR action.
 type RetryProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
@@ -498,6 +314,7 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 	return nil
 }
 
+// SetProjectStatusInput defines parameters for the SetProjectMRExternalStatusCheckStatus action.
 type SetProjectStatusInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                 int64                `json:"mr_iid"                    jsonschema:"Merge request internal ID,required"`

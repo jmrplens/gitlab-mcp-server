@@ -1261,10 +1261,15 @@ type autoUpdateRedactHandler struct {
 	redactStrings []string
 }
 
+// Enabled implements [slog.Handler] by delegating to the wrapped base handler.
 func (h *autoUpdateRedactHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.base.Enabled(ctx, level)
 }
 
+// Handle implements [slog.Handler]. For records whose message starts with
+// "autoupdate:", it redacts the configured strings from string-valued
+// attributes before forwarding to the base handler. Other records pass through
+// unchanged.
 func (h *autoUpdateRedactHandler) Handle(ctx context.Context, r slog.Record) error {
 	if !strings.HasPrefix(r.Message, "autoupdate:") {
 		return h.base.Handle(ctx, r)
@@ -1277,10 +1282,14 @@ func (h *autoUpdateRedactHandler) Handle(ctx context.Context, r slog.Record) err
 	return h.base.Handle(ctx, nr)
 }
 
+// WithAttrs implements [slog.Handler] by returning a new redacting handler
+// wrapping the base handler with the additional attributes.
 func (h *autoUpdateRedactHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &autoUpdateRedactHandler{base: h.base.WithAttrs(attrs), redactStrings: h.redactStrings}
 }
 
+// WithGroup implements [slog.Handler] by returning a new redacting handler
+// wrapping the base handler with the named group.
 func (h *autoUpdateRedactHandler) WithGroup(name string) slog.Handler {
 	return &autoUpdateRedactHandler{base: h.base.WithGroup(name), redactStrings: h.redactStrings}
 }

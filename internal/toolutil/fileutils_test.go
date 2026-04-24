@@ -1,6 +1,7 @@
 // fileutils_test.go contains unit tests for shared file utility functions
 // including file validation, SHA-256 checksum computation, progress tracking,
 // and package name validation.
+
 package toolutil
 
 import (

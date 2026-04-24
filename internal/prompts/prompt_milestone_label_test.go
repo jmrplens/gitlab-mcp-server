@@ -1,4 +1,5 @@
 // prompt_milestone_label_test.go contains unit tests for milestone and label MCP prompts.
+
 package prompts
 
 import (

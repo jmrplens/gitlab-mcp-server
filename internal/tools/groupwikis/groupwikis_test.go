@@ -1,5 +1,6 @@
 // groupwikis_test.go contains unit tests for GitLab group wiki operations.
 // Tests use httptest to mock the GitLab Group Wikis API.
+
 package groupwikis
 
 import (
@@ -15,6 +16,7 @@ const (
 	pathGroupWikiSlug = "/api/v4/groups/mygroup/wikis/home"
 )
 
+// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikis {
@@ -39,6 +41,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_WithContent verifies that List forwards the content parameters to the GitLab API.
 func TestList_WithContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikis {
@@ -63,6 +66,7 @@ func TestList_WithContent(t *testing.T) {
 	}
 }
 
+// TestList_MissingGroupID verifies that List returns a validation error when group_id is missing.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -73,6 +77,7 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -84,6 +89,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikiSlug {
@@ -105,6 +111,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingFields verifies that Get returns a validation error when fields is missing.
 func TestGet_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -119,6 +126,7 @@ func TestGet_MissingFields(t *testing.T) {
 	}
 }
 
+// TestCreate_Success verifies that Create returns the expected output when the GitLab API responds successfully.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupWikis {
@@ -142,6 +150,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingFields verifies that Create returns a validation error when fields is missing.
 func TestCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -160,6 +169,7 @@ func TestCreate_MissingFields(t *testing.T) {
 	}
 }
 
+// TestEdit_Success verifies that Edit returns the expected output when the GitLab API responds successfully.
 func TestEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupWikiSlug {
@@ -183,6 +193,7 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
+// TestEdit_MissingFields verifies that Edit returns a validation error when fields is missing.
 func TestEdit_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -197,6 +208,7 @@ func TestEdit_MissingFields(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupWikiSlug {
@@ -212,6 +224,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingFields verifies that Delete returns a validation error when fields is missing.
 func TestDelete_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

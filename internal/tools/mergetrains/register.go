@@ -1,3 +1,5 @@
+// register.go wires merge train MCP tools to the MCP server.
+
 package mergetrains
 
 import (

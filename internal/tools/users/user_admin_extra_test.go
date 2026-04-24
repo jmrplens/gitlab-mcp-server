@@ -1,6 +1,7 @@
 // user_admin_extra_test.go covers admin action functions not exercised by the base
 // test file: UnbanUser, DisableTwoFactor success paths, API error paths, and
 // cancelled-context paths for every admin action.
+
 package users
 
 import (

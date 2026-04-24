@@ -1,3 +1,6 @@
+// resourceevents_iteration_weight_test.go contains unit tests for GitLab
+// resource event operations covering iteration and weight change events.
+
 package resourceevents
 
 import (

@@ -1,3 +1,6 @@
+// group_credentials_test.go contains unit tests for GitLab group credential
+// storage operations. Tests use httptest to mock the GitLab API.
+
 package groupcredentials
 
 import (
@@ -12,6 +15,7 @@ import (
 const patJSON = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2026-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2026-01-01"}]`
 const sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
 
+// TestListPATs_Success verifies that ListPATs returns the expected output when the GitLab API responds successfully.
 func TestListPATs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -41,6 +45,7 @@ func TestListPATs_Success(t *testing.T) {
 	}
 }
 
+// TestListPATs_WithPagination verifies that ListPATs forwards the pagination parameters to the GitLab API.
 func TestListPATs_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -61,6 +66,7 @@ func TestListPATs_WithPagination(t *testing.T) {
 	}
 }
 
+// TestListPATs_WithFilters verifies that ListPATs forwards the filters parameters to the GitLab API.
 func TestListPATs_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -82,6 +88,7 @@ func TestListPATs_WithFilters(t *testing.T) {
 	}
 }
 
+// TestListPATs_MissingGroupID verifies that ListPATs returns a validation error when group_id is missing.
 func TestListPATs_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -93,6 +100,7 @@ func TestListPATs_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestListPATs_CancelledContext verifies that ListPATs returns an error when the context is already cancelled.
 func TestListPATs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -106,6 +114,7 @@ func TestListPATs_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestListPATs_APIError verifies that ListPATs returns an error when the GitLab API responds with a failure status.
 func TestListPATs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -123,6 +132,7 @@ func TestListPATs_APIError(t *testing.T) {
 	}
 }
 
+// TestListSSHKeys_Success verifies that ListSSHKeys returns the expected output when the GitLab API responds successfully.
 func TestListSSHKeys_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
@@ -149,6 +159,7 @@ func TestListSSHKeys_Success(t *testing.T) {
 	}
 }
 
+// TestListSSHKeys_MissingGroupID verifies that ListSSHKeys returns a validation error when group_id is missing.
 func TestListSSHKeys_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -160,6 +171,7 @@ func TestListSSHKeys_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestListSSHKeys_CancelledContext verifies that ListSSHKeys returns an error when the context is already cancelled.
 func TestListSSHKeys_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -173,6 +185,7 @@ func TestListSSHKeys_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestListSSHKeys_APIError verifies that ListSSHKeys returns an error when the GitLab API responds with a failure status.
 func TestListSSHKeys_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
@@ -190,6 +203,7 @@ func TestListSSHKeys_APIError(t *testing.T) {
 	}
 }
 
+// TestRevokePAT_Success verifies that RevokePAT returns the expected output when the GitLab API responds successfully.
 func TestRevokePAT_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens/99" {
@@ -208,6 +222,7 @@ func TestRevokePAT_Success(t *testing.T) {
 	}
 }
 
+// TestRevokePAT_MissingGroupID verifies that RevokePAT returns a validation error when group_id is missing.
 func TestRevokePAT_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -219,6 +234,7 @@ func TestRevokePAT_MissingGroupID(t *testing.T) {
 	}
 }
 
+// TestRevokePAT_MissingTokenID verifies that RevokePAT returns a validation error when token_id is missing.
 func TestRevokePAT_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -232,6 +248,7 @@ func TestRevokePAT_MissingTokenID(t *testing.T) {
 	}
 }
 
+// TestRevokePAT_CancelledContext verifies that RevokePAT returns an error when the context is already cancelled.
 func TestRevokePAT_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -248,6 +265,7 @@ func TestRevokePAT_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestRevokePAT_APIError verifies that RevokePAT returns an error when the GitLab API responds with a failure status.
 func TestRevokePAT_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens/99" {
@@ -266,6 +284,7 @@ func TestRevokePAT_APIError(t *testing.T) {
 	}
 }
 
+// TestDeleteSSHKey_Success verifies that DeleteSSHKey returns the expected output when the GitLab API responds successfully.
 func TestDeleteSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys/5" {
@@ -284,6 +303,7 @@ func TestDeleteSSHKey_Success(t *testing.T) {
 	}
 }
 
+// TestDeleteSSHKey_MissingGroupID verifies that DeleteSSHKey returns a validation error when group_id is missing.
 func TestDeleteSSHKey_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

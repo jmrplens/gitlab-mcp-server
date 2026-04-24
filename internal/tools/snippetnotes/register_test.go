@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the snippet note tool
+// closures in register.go. Tests exercise mutation error paths via an
+// in-memory MCP session with a mock GitLab API.
+
 package snippetnotes
 
 import (

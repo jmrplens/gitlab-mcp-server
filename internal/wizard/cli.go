@@ -1,3 +1,6 @@
+// cli.go implements the non-interactive CLI wizard mode, collecting
+// configuration from command-line flags and stdin without a TUI or web UI.
+
 package wizard
 
 import (

@@ -1,5 +1,6 @@
 // wait_test.go contains unit tests for the job Wait polling tool.
 // Tests use httptest with staged responses to simulate job state transitions.
+
 package jobs
 
 import (

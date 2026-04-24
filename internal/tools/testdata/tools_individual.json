@@ -8111,72 +8111,6 @@
     }
   },
   {
-    "name": "gitlab_create_external_status_check",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] Create an external status check for a project. Use gitlab_create_project_external_status_check instead. Requires project_id, name, and external_url.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_update_external_status_check.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "external_url": {
-          "description": "External URL for the status check,required",
-          "type": "string"
-        },
-        "name": {
-          "description": "Name of the external status check,required",
-          "type": "string"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        },
-        "protected_branch_ids": {
-          "description": "IDs of protected branches to scope the check to",
-          "items": {
-            "type": "integer"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        }
-      },
-      "required": [
-        "project_id",
-        "name",
-        "external_url"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "status",
-        "message"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "openWorldHint": true
-    }
-  },
-  {
     "name": "gitlab_create_freeze_period",
     "description": "Create a deploy freeze period with cron-based start and end times.\n\nReturns: JSON with created freeze period including ID, cron schedule, and timezone.\n\nSee also: gitlab_list_freeze_periods, gitlab_list_deployments",
     "inputSchema": {
@@ -11481,58 +11415,6 @@
       "required": [
         "project_id",
         "key_id"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "status",
-        "message"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": true,
-      "idempotentHint": true,
-      "openWorldHint": true
-    }
-  },
-  {
-    "name": "gitlab_delete_external_status_check",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] Delete an external status check from a project. Use gitlab_delete_project_external_status_check instead. Requires project_id and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "check_id": {
-          "description": "External status check ID to delete,required",
-          "type": "integer"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        }
-      },
-      "required": [
-        "project_id",
-        "check_id"
       ],
       "type": "object"
     },
@@ -55294,123 +55176,6 @@
     }
   },
   {
-    "name": "gitlab_list_merge_status_checks",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] List external status checks for a merge request. Use gitlab_list_project_mr_external_status_checks instead. Returns: paginated list with ID, name, external URL, status.\n\nSee also: gitlab_list_project_mr_external_status_checks, gitlab_set_external_status_check_status.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "mr_iid": {
-          "description": "Merge request internal ID,required",
-          "type": "integer"
-        },
-        "page": {
-          "description": "Page number (default 1)",
-          "type": "integer"
-        },
-        "per_page": {
-          "description": "Items per page (default 20, max 100)",
-          "type": "integer"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        }
-      },
-      "required": [
-        "project_id",
-        "mr_iid"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "items": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "external_url": {
-                "type": "string"
-              },
-              "id": {
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "external_url",
-              "status"
-            ],
-            "type": "object"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "pagination": {
-          "additionalProperties": false,
-          "properties": {
-            "next_page": {
-              "type": "integer"
-            },
-            "page": {
-              "type": "integer"
-            },
-            "per_page": {
-              "type": "integer"
-            },
-            "prev_page": {
-              "type": "integer"
-            },
-            "total_items": {
-              "type": "integer"
-            },
-            "total_pages": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "page",
-            "per_page",
-            "total_items",
-            "total_pages",
-            "next_page",
-            "prev_page"
-          ],
-          "type": "object"
-        }
-      },
-      "required": [
-        "items",
-        "pagination"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": true,
-      "readOnlyHint": true
-    }
-  },
-  {
     "name": "gitlab_list_mr_context_commits",
     "description": "List context commits associated with a merge request. Context commits are additional commits relevant to the MR but not in the diff. Returns commit SHA, title, and author for each.\n\nReturns: JSON array of context commits.\n\nSee also: gitlab_mr_commits, gitlab_create_mr_context_commits",
     "inputSchema": {
@@ -56917,7 +56682,7 @@
   },
   {
     "name": "gitlab_list_project_status_checks",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] List project-level external status checks. Use gitlab_list_project_external_status_checks instead. Returns: paginated list with ID, name, external URL, HMAC, protected branches.\n\nSee also: gitlab_list_project_external_status_checks, gitlab_create_external_status_check.",
+    "description": "List project-level external status checks. Returns: paginated list with ID, name, external URL, HMAC, protected branches.\n\nSee also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -97041,63 +96806,6 @@
     }
   },
   {
-    "name": "gitlab_retry_failed_status_check_for_mr",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "check_id": {
-          "description": "External status check ID to retry,required",
-          "type": "integer"
-        },
-        "mr_iid": {
-          "description": "Merge request internal ID,required",
-          "type": "integer"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        }
-      },
-      "required": [
-        "project_id",
-        "mr_iid",
-        "check_id"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "status",
-        "message"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": true
-    }
-  },
-  {
     "name": "gitlab_revert_vulnerability",
     "description": "Revert a vulnerability to detected state (requires Ultimate/Premium). Changes state back to DETECTED. Returns: updated vulnerability state. See also: gitlab_get_vulnerability, gitlab_dismiss_vulnerability, gitlab_resolve_vulnerability.",
     "inputSchema": {
@@ -102943,73 +102651,6 @@
     }
   },
   {
-    "name": "gitlab_set_external_status_check_status",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] Set the status of an external status check for a merge request. Use gitlab_set_project_mr_external_status_check_status instead. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "external_status_check_id": {
-          "description": "External status check ID to update,required",
-          "type": "integer"
-        },
-        "mr_iid": {
-          "description": "Merge request internal ID,required",
-          "type": "integer"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        },
-        "sha": {
-          "description": "Head SHA of the merge request source branch,required",
-          "type": "string"
-        },
-        "status": {
-          "description": "Status value (e.g. passed, failed),required",
-          "type": "string"
-        }
-      },
-      "required": [
-        "project_id",
-        "mr_iid",
-        "sha",
-        "external_status_check_id",
-        "status"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "status",
-        "message"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": true
-    }
-  },
-  {
     "name": "gitlab_set_feature_flag",
     "description": "Set or create a feature flag (admin). Requires name and value. Supports scoping to user, group, project, namespace, or repository.\n\nReturns: JSON with the feature flag details.\n\nSee also: gitlab_list_features.",
     "inputSchema": {
@@ -108350,76 +107991,6 @@
         "author",
         "created_at",
         "system"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": true
-    }
-  },
-  {
-    "name": "gitlab_update_external_status_check",
-    "description": "[DEPRECATED — scheduled for removal in v2.0.0] Update an external status check for a project. Use gitlab_update_project_external_status_check instead. Requires project_id and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_create_external_status_check.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "check_id": {
-          "description": "External status check ID to update,required",
-          "type": "integer"
-        },
-        "external_url": {
-          "description": "Updated external URL",
-          "type": "string"
-        },
-        "name": {
-          "description": "Updated name",
-          "type": "string"
-        },
-        "project_id": {
-          "description": "Project ID or URL-encoded path,required",
-          "type": "string"
-        },
-        "protected_branch_ids": {
-          "description": "Updated protected branch IDs",
-          "items": {
-            "type": "integer"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        }
-      },
-      "required": [
-        "project_id",
-        "check_id"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "status",
-        "message"
       ],
       "type": "object"
     },

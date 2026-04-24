@@ -14,13 +14,13 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.1.0                                               |
+| Version       | 1.2.0                                               |
 
 ### Scale
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1006                                                                                                         |
+| MCP Tools (individual)    | 1000                                                                                                         |
 | Meta-mode tools           | 28 base / 43 enterprise (24 inline + 3 delegated + 1 standalone + 15 enterprise inline) |
 | MCP Resources             | 24                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.1.0)
+└── VERSION                      # Semantic version (1.2.0)
 ```
 
 ## Key Development Patterns
@@ -430,7 +430,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1006 tools)      |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1000 tools)      |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (5 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

@@ -1,5 +1,6 @@
 // graphql_context_test.go contains unit tests for the GraphQL context builders
 // that aggregate multiple REST calls into single GraphQL queries.
+
 package samplingtools
 
 import (

@@ -1,3 +1,5 @@
+// register.go wires attestation MCP tools to the MCP server.
+
 package attestations
 
 import (

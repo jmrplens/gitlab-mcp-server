@@ -1,4 +1,5 @@
 // prompt_team_test.go contains unit tests for team analysis MCP prompts.
+
 package prompts
 
 import (

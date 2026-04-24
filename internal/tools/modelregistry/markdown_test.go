@@ -1,3 +1,6 @@
+// markdown_test.go contains unit tests for model registry Markdown
+// formatting functions.
+
 package modelregistry
 
 import (

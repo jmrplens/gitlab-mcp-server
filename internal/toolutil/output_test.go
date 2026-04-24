@@ -1,4 +1,5 @@
 // output_test.go contains unit tests for MCP tool output helpers.
+
 package toolutil
 
 import (

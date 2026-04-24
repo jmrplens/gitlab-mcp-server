@@ -2,6 +2,7 @@
 // Tests cover configuration validation, GitLab connectivity checks, HTTP and
 // stdio transport modes, graceful shutdown, and end-to-end MCP protocol
 // interactions (initialize, tools/list) via httptest.
+
 package main
 
 import (
@@ -2099,6 +2100,8 @@ func TestAllowedHosts_EmptyHost(t *testing.T) {
 	}
 }
 
+// TestClientIP_RemoteAddr verifies that clientIP returns the RemoteAddr host
+// (without port) when no trusted proxy header is configured.
 func TestClientIP_RemoteAddr(t *testing.T) {
 	t.Parallel()
 	r := &http.Request{RemoteAddr: "203.0.113.1:12345"}
@@ -2107,6 +2110,8 @@ func TestClientIP_RemoteAddr(t *testing.T) {
 	}
 }
 
+// TestClientIP_TrustedProxyHeader verifies that clientIP returns the IP from
+// the configured trusted proxy header (e.g. X-Real-IP) instead of RemoteAddr.
 func TestClientIP_TrustedProxyHeader(t *testing.T) {
 	t.Parallel()
 	r := &http.Request{
@@ -2118,6 +2123,9 @@ func TestClientIP_TrustedProxyHeader(t *testing.T) {
 	}
 }
 
+// TestClientIP_TrustedProxyHeader_XForwardedFor verifies that for
+// comma-separated X-Forwarded-For values, clientIP returns the rightmost IP
+// (added by the real trusted proxy) rather than the leftmost (spoofable).
 func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
 	t.Parallel()
 	// For comma-separated proxy-appended headers, clientIP returns the
@@ -2132,6 +2140,9 @@ func TestClientIP_TrustedProxyHeader_XForwardedFor(t *testing.T) {
 	}
 }
 
+// TestClientIP_TrustedProxyHeader_SpoofResistant verifies that clientIP
+// ignores attacker-prepended IPs in X-Forwarded-For and returns the rightmost
+// (trusted-proxy-appended) entry to prevent IP spoofing.
 func TestClientIP_TrustedProxyHeader_SpoofResistant(t *testing.T) {
 	t.Parallel()
 	// An attacker-controlled client prepends a fake IP. The rightmost entry
@@ -2145,6 +2156,8 @@ func TestClientIP_TrustedProxyHeader_SpoofResistant(t *testing.T) {
 	}
 }
 
+// TestClientIP_TrustedProxyHeader_Empty verifies that clientIP falls back to
+// RemoteAddr when the configured trusted proxy header is absent or empty.
 func TestClientIP_TrustedProxyHeader_Empty(t *testing.T) {
 	t.Parallel()
 	r := &http.Request{

@@ -1,5 +1,6 @@
 // pipelines_test.go contains unit tests for GitLab pipeline listing operations.
 // Tests use httptest to mock the GitLab Pipelines API.
+
 package pipelines
 
 import (

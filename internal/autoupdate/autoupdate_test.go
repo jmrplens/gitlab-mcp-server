@@ -1,4 +1,5 @@
 // autoupdate_test.go contains unit tests for the core auto-update logic.
+
 package autoupdate
 
 import (

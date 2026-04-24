@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Output represents a single GitLab group wiki page returned by Get, Create, or Edit.
 type Output struct {
 	toolutil.HintableOutput
 	Title    string `json:"title"`
@@ -20,6 +21,7 @@ type Output struct {
 	Encoding string `json:"encoding,omitempty"`
 }
 
+// ListOutput is the result of the List action containing all wiki pages for a group.
 type ListOutput struct {
 	toolutil.HintableOutput
 	WikiPages []Output `json:"wiki_pages"`
@@ -35,11 +37,13 @@ func toOutput(w *gl.GroupWiki) Output {
 	}
 }
 
+// ListInput defines parameters for the List action which retrieves all group wiki pages.
 type ListInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"              jsonschema:"Group ID or URL-encoded path,required"`
 	WithContent bool                 `json:"with_content,omitempty" jsonschema:"Include page content in the response"`
 }
 
+// GetInput defines parameters for the Get action which retrieves a single group wiki page by slug.
 type GetInput struct {
 	GroupID    toolutil.StringOrInt `json:"group_id"             jsonschema:"Group ID or URL-encoded path,required"`
 	Slug       string               `json:"slug"                  jsonschema:"URL-encoded slug of the wiki page,required"`
@@ -47,6 +51,7 @@ type GetInput struct {
 	Version    string               `json:"version,omitempty"     jsonschema:"Wiki page version SHA"`
 }
 
+// CreateInput defines parameters for the Create action which creates a new group wiki page.
 type CreateInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Title   string               `json:"title"            jsonschema:"Title of the wiki page,required"`
@@ -54,6 +59,7 @@ type CreateInput struct {
 	Format  string               `json:"format,omitempty" jsonschema:"Content format: markdown (default), rdoc, asciidoc, or org"`
 }
 
+// EditInput defines parameters for the Edit action which updates an existing group wiki page.
 type EditInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Slug    string               `json:"slug"              jsonschema:"URL-encoded slug of the wiki page to edit,required"`
@@ -62,6 +68,7 @@ type EditInput struct {
 	Format  string               `json:"format,omitempty"  jsonschema:"Content format: markdown, rdoc, asciidoc, or org"`
 }
 
+// DeleteInput defines parameters for the Delete action which removes a group wiki page by slug.
 type DeleteInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Slug    string               `json:"slug"     jsonschema:"URL-encoded slug of the wiki page to delete,required"`

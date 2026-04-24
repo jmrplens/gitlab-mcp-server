@@ -1,5 +1,6 @@
 // markdown_quality_test.go validates transversal quality patterns across all
 // Markdown formatters: headers, timestamp formatting, and web URL presence.
+
 package tools
 
 import (

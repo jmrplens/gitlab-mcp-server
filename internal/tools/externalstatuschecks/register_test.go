@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the external status check
+// tool closures in register.go. Tests exercise mutation error paths via an
+// in-memory MCP session with a mock GitLab API.
+
 package externalstatuschecks
 
 import (
@@ -67,13 +71,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_list_merge_status_checks", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_set_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc123", "external_status_check_id": 1, "status": "passed"}},
 		{"gitlab_list_project_status_checks", map[string]any{"project_id": "42"}},
-		{"gitlab_create_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
-		{"gitlab_delete_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_update_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_retry_failed_status_check_for_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
 		{"gitlab_list_project_mr_external_status_checks", map[string]any{"project_id": "42", "mr_iid": 1}},
 		{"gitlab_list_project_external_status_checks", map[string]any{"project_id": "42"}},
 		{"gitlab_create_project_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
@@ -127,11 +125,6 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_set_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc", "external_status_check_id": 1, "status": "passed"}},
-		{"gitlab_create_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
-		{"gitlab_delete_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_update_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_retry_failed_status_check_for_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
 		{"gitlab_create_project_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
 		{"gitlab_delete_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
 		{"gitlab_update_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},

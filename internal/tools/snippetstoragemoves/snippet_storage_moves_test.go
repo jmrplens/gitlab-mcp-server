@@ -1,3 +1,6 @@
+// snippet_storage_moves_test.go contains unit tests for GitLab snippet storage
+// move operations. Tests use httptest to mock the GitLab Snippet Storage Moves API.
+
 package snippetstoragemoves
 
 import (
@@ -21,6 +24,7 @@ const storageMoveJSON = `{
 	}
 }`
 
+// TestRetrieveAll_Success verifies that RetrieveAll returns the expected output when the GitLab API responds successfully.
 func TestRetrieveAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/snippet_repository_storage_moves" {
@@ -45,6 +49,7 @@ func TestRetrieveAll_Success(t *testing.T) {
 	}
 }
 
+// TestRetrieveAll_Empty verifies that RetrieveAll handles an empty API response and returns a non-nil empty result.
 func TestRetrieveAll_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/snippet_repository_storage_moves" {
@@ -63,6 +68,7 @@ func TestRetrieveAll_Empty(t *testing.T) {
 	}
 }
 
+// TestRetrieveAll_APIError verifies that RetrieveAll returns an error when the GitLab API responds with a failure status.
 func TestRetrieveAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -74,6 +80,7 @@ func TestRetrieveAll_APIError(t *testing.T) {
 	}
 }
 
+// TestRetrieveForSnippet_Success verifies that RetrieveForSnippet returns the expected output when the GitLab API responds successfully.
 func TestRetrieveForSnippet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/snippets/55/repository_storage_moves" {
@@ -95,6 +102,7 @@ func TestRetrieveForSnippet_Success(t *testing.T) {
 	}
 }
 
+// TestRetrieveForSnippet_MissingSnippetID verifies that RetrieveForSnippet returns a validation error when snippet_id is missing.
 func TestRetrieveForSnippet_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -106,6 +114,7 @@ func TestRetrieveForSnippet_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/snippet_repository_storage_moves/1" {
@@ -130,6 +139,7 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
+// TestGet_MissingID verifies that Get returns a validation error when id is missing.
 func TestGet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -141,6 +151,7 @@ func TestGet_MissingID(t *testing.T) {
 	}
 }
 
+// TestGetForSnippet_Success verifies that GetForSnippet returns the expected output when the GitLab API responds successfully.
 func TestGetForSnippet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/snippets/55/repository_storage_moves/1" {
@@ -159,6 +170,7 @@ func TestGetForSnippet_Success(t *testing.T) {
 	}
 }
 
+// TestGetForSnippet_MissingSnippetID verifies that GetForSnippet returns a validation error when snippet_id is missing.
 func TestGetForSnippet_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -170,6 +182,7 @@ func TestGetForSnippet_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestGetForSnippet_MissingID verifies that GetForSnippet returns a validation error when id is missing.
 func TestGetForSnippet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -181,6 +194,7 @@ func TestGetForSnippet_MissingID(t *testing.T) {
 	}
 }
 
+// TestSchedule_Success verifies that Schedule returns the expected output when the GitLab API responds successfully.
 func TestSchedule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/snippets/55/repository_storage_moves" {
@@ -203,6 +217,7 @@ func TestSchedule_Success(t *testing.T) {
 	}
 }
 
+// TestSchedule_MissingSnippetID verifies that Schedule returns a validation error when snippet_id is missing.
 func TestSchedule_MissingSnippetID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -214,6 +229,7 @@ func TestSchedule_MissingSnippetID(t *testing.T) {
 	}
 }
 
+// TestScheduleAll_Success verifies that ScheduleAll returns the expected output when the GitLab API responds successfully.
 func TestScheduleAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/snippet_repository_storage_moves" {
@@ -234,6 +250,7 @@ func TestScheduleAll_Success(t *testing.T) {
 	}
 }
 
+// TestScheduleAll_APIError verifies that ScheduleAll returns an error when the GitLab API responds with a failure status.
 func TestScheduleAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -245,6 +262,7 @@ func TestScheduleAll_APIError(t *testing.T) {
 	}
 }
 
+// TestRetrieveAll_ContextCanceled verifies that RetrieveAll returns an error when the context is already cancelled.
 func TestRetrieveAll_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)

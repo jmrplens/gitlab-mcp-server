@@ -1,3 +1,6 @@
+// middleware_test.go contains unit tests for the OAuth authentication
+// header normalization middleware.
+
 package oauth
 
 import (
@@ -6,6 +9,9 @@ import (
 	"testing"
 )
 
+// TestNormalizeAuthHeader_ConvertsPrivateToken verifies that NormalizeAuthHeader
+// rewrites a PRIVATE-TOKEN header into an Authorization: Bearer header for the
+// downstream handler.
 func TestNormalizeAuthHeader_ConvertsPrivateToken(t *testing.T) {
 	var captured http.Header
 	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -23,6 +29,9 @@ func TestNormalizeAuthHeader_ConvertsPrivateToken(t *testing.T) {
 	}
 }
 
+// TestNormalizeAuthHeader_PreservesExistingBearer verifies that an existing
+// Authorization: Bearer header is preserved and the PRIVATE-TOKEN header is
+// ignored when both are present.
 func TestNormalizeAuthHeader_PreservesExistingBearer(t *testing.T) {
 	var captured http.Header
 	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -41,6 +50,8 @@ func TestNormalizeAuthHeader_PreservesExistingBearer(t *testing.T) {
 	}
 }
 
+// TestNormalizeAuthHeader_NoAuthHeaders verifies that requests without any
+// auth headers pass through unchanged with an empty Authorization header.
 func TestNormalizeAuthHeader_NoAuthHeaders(t *testing.T) {
 	var captured http.Header
 	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -57,6 +68,9 @@ func TestNormalizeAuthHeader_NoAuthHeaders(t *testing.T) {
 	}
 }
 
+// TestNormalizeAuthHeader_NonBearerAuth verifies that a non-Bearer
+// Authorization header (e.g. Basic) is preserved verbatim and PRIVATE-TOKEN
+// is ignored.
 func TestNormalizeAuthHeader_NonBearerAuth(t *testing.T) {
 	var captured http.Header
 	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {

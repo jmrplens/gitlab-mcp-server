@@ -1,6 +1,7 @@
 // groupboards_test.go contains unit tests for the group issue board MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.
+
 package groupboards
 
 import (

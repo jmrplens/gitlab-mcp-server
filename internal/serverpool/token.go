@@ -72,6 +72,9 @@ type InvalidGitLabURLError struct {
 	Reason string
 }
 
+// Error implements the [error] interface. The returned message contains only
+// the validation [InvalidGitLabURLError.Reason], never the raw URL, to avoid
+// leaking credentials in logs.
 func (e *InvalidGitLabURLError) Error() string {
 	return "invalid GITLAB-URL header: " + e.Reason
 }

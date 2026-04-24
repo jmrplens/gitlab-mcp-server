@@ -1,6 +1,7 @@
 // register_closure_test.go contains integration tests that verify every tool
 // closure in register.go works end-to-end through a full MCP session.
 // A route-aware mock HTTP handler serves responses for all GitLab API endpoints.
+
 package tools
 
 import (

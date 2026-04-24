@@ -1,3 +1,5 @@
+// jsonmerge_test.go contains unit tests for the deep JSON merge function.
+
 package wizard
 
 import (

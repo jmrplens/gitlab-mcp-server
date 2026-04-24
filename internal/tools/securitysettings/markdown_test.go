@@ -1,3 +1,6 @@
+// markdown_test.go contains unit tests for security settings Markdown
+// formatting functions.
+
 package securitysettings
 
 import (

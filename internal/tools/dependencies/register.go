@@ -1,4 +1,5 @@
 // register.go wires dependency MCP tools to the MCP server.
+
 package dependencies
 
 import (

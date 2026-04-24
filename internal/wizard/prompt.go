@@ -1,3 +1,6 @@
+// prompt.go handles interactive user input prompts for the wizard,
+// including validation and default value handling.
+
 package wizard
 
 import (

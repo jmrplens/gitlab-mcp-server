@@ -1,3 +1,5 @@
+// register.go wires project storage move MCP tools to the MCP server.
+
 package projectstoragemoves
 
 import (

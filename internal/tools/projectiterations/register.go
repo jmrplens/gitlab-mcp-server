@@ -1,3 +1,5 @@
+// register.go wires project iteration MCP tools to the MCP server.
+
 package projectiterations
 
 import (

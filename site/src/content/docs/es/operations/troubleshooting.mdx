@@ -32,7 +32,7 @@ Para la referencia técnica completa, consulta [`docs/troubleshooting.md`](https
 
 | Síntoma                                                 | Causa                                   | Solución                                                                                           |
 | ------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| El cliente MCP muestra 1006 herramientas en lugar de 28 | Meta-herramientas desactivadas          | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio          |
+| El cliente MCP muestra 1000 herramientas en lugar de 28 | Meta-herramientas desactivadas          | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio          |
 | Herramienta no encontrada en `tools/list`               | Desajuste del modo de meta-herramientas | El modo individual usa `gitlab_create_issue`, el modo meta usa `gitlab_issue` con `action: create` |
 | `unknown action` en llamada a meta-herramienta          | Parámetro de acción inválido            | Verifica las acciones válidas en [Resumen de Herramientas](/gitlab-mcp-server/tools/overview/)     |
 | Herramientas enterprise faltantes                       | Modo enterprise desactivado             | Establece `GITLAB_ENTERPRISE=true` para habilitar 15 meta-herramientas enterprise adicionales      |

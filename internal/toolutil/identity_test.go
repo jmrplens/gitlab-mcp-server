@@ -1,3 +1,7 @@
+// identity_test.go contains unit tests for user identity resolution helpers:
+// UserIdentity.IsAuthenticated, IdentityToContext/IdentityFromContext
+// round-tripping, and ResolveIdentity priority (OAuth TokenInfo > context).
+
 package toolutil_test
 
 import (
@@ -10,6 +14,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestUserIdentity_IsAuthenticated verifies that IsAuthenticated reports true
+// only when UserID is non-empty. Table-driven subtests cover an empty identity,
+// an identity with only UserID set, one with only Username set, and one with
+// both fields set. It asserts that the return value matches the expected bool.
 func TestUserIdentity_IsAuthenticated(t *testing.T) {
 	tests := []struct {
 		name string
@@ -30,6 +38,10 @@ func TestUserIdentity_IsAuthenticated(t *testing.T) {
 	}
 }
 
+// TestIdentityToContext_RoundTrip verifies that a UserIdentity stored in a
+// context via IdentityToContext can be retrieved unchanged by IdentityFromContext.
+// It asserts that all fields (UserID, Username) are preserved through the
+// context round-trip.
 func TestIdentityToContext_RoundTrip(t *testing.T) {
 	id := toolutil.UserIdentity{UserID: "42", Username: "admin"}
 	ctx := toolutil.IdentityToContext(context.Background(), id)
@@ -39,6 +51,9 @@ func TestIdentityToContext_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestIdentityFromContext_Empty verifies that IdentityFromContext returns an
+// unauthenticated zero-value UserIdentity when no identity has been stored
+// in the context.
 func TestIdentityFromContext_Empty(t *testing.T) {
 	got := toolutil.IdentityFromContext(context.Background())
 	if got.IsAuthenticated() {
@@ -46,6 +61,10 @@ func TestIdentityFromContext_Empty(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_TokenInfoPriority verifies that ResolveIdentity prefers
+// the OAuth TokenInfo from the MCP request over a context-stored identity.
+// The test injects a context identity (UserID "1") and a request with TokenInfo
+// (UserID "99") and asserts that the resolved identity matches the token.
 func TestResolveIdentity_TokenInfoPriority(t *testing.T) {
 	ctxID := toolutil.UserIdentity{UserID: "1", Username: "ctx-user"}
 	ctx := toolutil.IdentityToContext(context.Background(), ctxID)
@@ -65,6 +84,9 @@ func TestResolveIdentity_TokenInfoPriority(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_ContextFallback verifies that ResolveIdentity falls back
+// to the context-stored identity when the MCP request contains no TokenInfo.
+// It asserts that the returned identity matches the context value exactly.
 func TestResolveIdentity_ContextFallback(t *testing.T) {
 	ctxID := toolutil.UserIdentity{UserID: "1", Username: "stdio-user"}
 	ctx := toolutil.IdentityToContext(context.Background(), ctxID)
@@ -77,6 +99,8 @@ func TestResolveIdentity_ContextFallback(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_NilRequest verifies that ResolveIdentity handles a nil
+// request gracefully by falling back to the context-stored identity.
 func TestResolveIdentity_NilRequest(t *testing.T) {
 	ctxID := toolutil.UserIdentity{UserID: "5", Username: "from-ctx"}
 	ctx := toolutil.IdentityToContext(context.Background(), ctxID)
@@ -87,6 +111,9 @@ func TestResolveIdentity_NilRequest(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_NoIdentity verifies that ResolveIdentity returns an
+// unauthenticated zero-value identity when neither the context nor the request
+// carries any identity information.
 func TestResolveIdentity_NoIdentity(t *testing.T) {
 	got := toolutil.ResolveIdentity(context.Background(), &mcp.CallToolRequest{})
 	if got.IsAuthenticated() {
@@ -94,6 +121,10 @@ func TestResolveIdentity_NoIdentity(t *testing.T) {
 	}
 }
 
+// TestResolveIdentity_StdioScenario verifies the stdio mode identity path:
+// an identity injected into context at startup (no TokenInfo in request)
+// is resolved correctly. The test asserts that UserID, Username, and
+// IsAuthenticated all match the injected identity.
 func TestResolveIdentity_StdioScenario(t *testing.T) {
 	// Simulates stdio mode: identity injected into context at startup,
 	// tool handler receives a request without TokenInfo.

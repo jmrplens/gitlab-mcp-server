@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the epic tool closures
+// in register.go. Tests exercise mutation error paths via an in-memory MCP
+// session with a mock GitLab API.
+
 package epics
 
 import (
@@ -20,6 +24,8 @@ const registerUpdateJSON = `{"data":{"workItemUpdate":{"workItem":` + workItemEp
 const registerDeleteJSON = `{"data":{"workItemDelete":{"errors":[]}}}`
 const registerEpicLinksJSON = `[` + epicLinkJSON + `]`
 
+// TestRegisterTools_NoPanic verifies that RegisterTools wires all epic tools
+// onto a fresh MCP server without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -28,6 +34,10 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterTools_CallThroughMCP exercises every registered epic tool end-to-end
+// through an in-memory MCP transport. It uses table-driven subtests for list, get,
+// get_links, create, update, and delete, mocking both REST and GraphQL backends and
+// asserting each call succeeds without an error result.
 func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	var graphQLCalls atomic.Int32
 
@@ -111,6 +121,8 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 }
 
+// TestRegisterTools_DeleteError verifies that gitlab_epic_delete returns an
+// MCP error result when the GitLab backend responds with 403 Forbidden.
 func TestRegisterTools_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -144,6 +156,9 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 	}
 }
 
+// TestRegisterTools_DeleteConfirmDeclined verifies that gitlab_epic_delete
+// short-circuits with an error result when the caller supplies _confirm=no,
+// and that no HTTP request reaches the GitLab backend.
 func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")

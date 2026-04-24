@@ -126,16 +126,19 @@ type UpdateApprovalRuleInput struct {
 	Destroy               *bool  `json:"_destroy,omitempty"               jsonschema:"Set true to remove this rule"`
 }
 
+// ListInput defines parameters for the List action which retrieves group-level protected environments.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	toolutil.PaginationInput
 }
 
+// GetInput defines parameters for the Get action which retrieves a single group-level protected environment.
 type GetInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"    jsonschema:"Group ID or URL-encoded path,required"`
 	Environment string               `json:"environment" jsonschema:"Environment name,required"`
 }
 
+// ProtectInput defines parameters for the Protect action which creates a group-level protected environment.
 type ProtectInput struct {
 	GroupID               toolutil.StringOrInt     `json:"group_id"                          jsonschema:"Group ID or URL-encoded path,required"`
 	Name                  string                   `json:"name"                              jsonschema:"Environment name to protect,required"`
@@ -144,6 +147,7 @@ type ProtectInput struct {
 	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules"`
 }
 
+// UpdateInput defines parameters for the Update action which modifies a group-level protected environment.
 type UpdateInput struct {
 	GroupID               toolutil.StringOrInt           `json:"group_id"                          jsonschema:"Group ID or URL-encoded path,required"`
 	Environment           string                         `json:"environment"                       jsonschema:"Environment name,required"`
@@ -153,6 +157,7 @@ type UpdateInput struct {
 	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Updated approval rules"`
 }
 
+// UnprotectInput defines parameters for the Unprotect action which removes a group-level protected environment.
 type UnprotectInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"    jsonschema:"Group ID or URL-encoded path,required"`
 	Environment string               `json:"environment" jsonschema:"Environment name to unprotect,required"`

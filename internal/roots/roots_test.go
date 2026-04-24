@@ -3,6 +3,7 @@
 // heuristics, and [isGitRoot] pattern matching.
 // Integration tests use in-memory MCP transports to verify [Manager.Refresh]
 // and [ListClientRoots] against real client sessions.
+
 package roots
 
 import (

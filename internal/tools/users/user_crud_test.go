@@ -1,3 +1,6 @@
+// user_crud_test.go contains unit tests for GitLab user create, read, update,
+// and delete operations. Tests use httptest to mock the GitLab Users API.
+
 package users
 
 import (
@@ -14,6 +17,8 @@ const userJSON = `{
 	"is_admin":false
 }`
 
+// TestCreateUser_Success verifies Create returns the new user when POST /users
+// responds 201 Created with a user JSON body.
 func TestCreateUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users" {
@@ -34,6 +39,8 @@ func TestCreateUser_Success(t *testing.T) {
 	}
 }
 
+// TestCreateUser_MissingEmail verifies Create returns an input-validation error
+// when the email field is empty, without hitting the API.
 func TestCreateUser_MissingEmail(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -44,6 +51,8 @@ func TestCreateUser_MissingEmail(t *testing.T) {
 	}
 }
 
+// TestModifyUser_Success verifies Modify returns the updated user when
+// PUT /users/:id responds 200 OK.
 func TestModifyUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/users/42" {
@@ -62,6 +71,8 @@ func TestModifyUser_Success(t *testing.T) {
 	}
 }
 
+// TestModifyUser_InvalidUserID verifies Modify returns a validation error when
+// user_id=0, without hitting the API.
 func TestModifyUser_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -72,6 +83,8 @@ func TestModifyUser_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestDeleteUser_Success verifies Delete reports Deleted=true when
+// DELETE /users/:id responds 204 No Content.
 func TestDeleteUser_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/users/42" {

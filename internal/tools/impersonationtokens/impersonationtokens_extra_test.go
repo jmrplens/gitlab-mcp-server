@@ -1,3 +1,6 @@
+// impersonationtokens_extra_test.go contains additional unit tests for
+// GitLab impersonation token operations, covering edge cases.
+
 package impersonationtokens
 
 import (

@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the epic issue link tool
+// closures in register.go. Tests exercise mutation error paths via an
+// in-memory MCP session with a mock GitLab API.
+
 package epicissues
 
 import (
@@ -11,6 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestRegisterTools_NoPanic verifies that RegisterTools registers all tools on the MCP server without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -19,6 +24,7 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterTools_CallThroughMCP uses table-driven subtests to exercise each registered tool via an in-memory MCP session and verify no error result is returned.
 func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
@@ -79,6 +85,7 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}
 }
 
+// TestMarkdownInit_Registry verifies that markdown formatters for ListOutput and AssignOutput are registered in the shared markdown registry.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListOutput{})
 	if out == nil {

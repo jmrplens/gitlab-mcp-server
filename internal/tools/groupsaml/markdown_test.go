@@ -1,3 +1,5 @@
+// markdown_test.go contains unit tests for group SAML Markdown formatting functions.
+
 package groupsaml
 
 import (

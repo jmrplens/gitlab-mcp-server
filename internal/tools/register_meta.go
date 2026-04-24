@@ -2659,16 +2659,10 @@ See also: gitlab_project, gitlab_vulnerability`, routes, toolutil.IconPackage)
 }
 
 // registerExternalStatusCheckMeta registers the gitlab_external_status_check meta-tool with actions
-// for managing external status checks on merge requests and projects (legacy + project-scoped APIs).
+// for managing external status checks on merge requests and projects.
 func registerExternalStatusCheckMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := actionMap{
-		"list_mr_checks":         routeAction(client, externalstatuschecks.ListMergeStatusChecks),
-		"set_status":             routeVoidAction(client, externalstatuschecks.SetExternalStatusCheckStatus),
 		"list_project_checks":    routeAction(client, externalstatuschecks.ListProjectStatusChecks),
-		"create":                 routeVoidAction(client, externalstatuschecks.CreateExternalStatusCheck),
-		"delete":                 destructiveVoidAction(client, externalstatuschecks.DeleteExternalStatusCheck),
-		"update":                 routeVoidAction(client, externalstatuschecks.UpdateExternalStatusCheck),
-		"retry":                  routeVoidAction(client, externalstatuschecks.RetryFailedStatusCheckForMR),
 		"list_project_mr_checks": routeAction(client, externalstatuschecks.ListProjectMRExternalStatusChecks),
 		"list_project":           routeAction(client, externalstatuschecks.ListProjectExternalStatusChecks),
 		"create_project":         routeAction(client, externalstatuschecks.CreateProjectExternalStatusCheck),
@@ -2684,16 +2678,7 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 
 Param conventions: * = required.
 
-Legacy API:
-- list_mr_checks: project_id*, mr_iid*, page, per_page
-- set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
 - list_project_checks: project_id*, page, per_page
-- create: project_id*, name*, external_url*, protected_branch_ids
-- delete: project_id*, check_id*
-- update: project_id*, check_id*, name, external_url, protected_branch_ids
-- retry: project_id*, mr_iid*, check_id*
-
-Project-scoped API (preferred):
 - list_project_mr_checks: project_id*, mr_iid*, page, per_page
 - list_project: project_id*, page, per_page
 - create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids

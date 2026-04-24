@@ -1,6 +1,7 @@
 // errors_test.go contains unit tests for ToolError formatting, the WrapErr
 // helper, ClassifyError semantic classification, isConnectionRefused, and
 // ClassifyHTTPStatus.
+
 package toolutil
 
 import (

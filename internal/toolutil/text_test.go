@@ -1,5 +1,6 @@
 // text_test.go contains table-driven tests for the NormalizeText function,
 // verifying that literal escape sequences are converted to real characters.
+
 package toolutil
 
 import "testing"
@@ -337,6 +338,7 @@ func TestMdTitleLink(t *testing.T) {
 	}
 }
 
+// TestImageMIMEType uses table-driven subtests to verify that ImageMIMEType maps common image extensions to the correct MIME types and returns an empty string for non-image files.
 func TestImageMIMEType(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -367,6 +369,7 @@ func TestImageMIMEType(t *testing.T) {
 	}
 }
 
+// TestIsBinaryFile uses table-driven subtests to verify that IsBinaryFile detects known binary extensions and returns false for text files.
 func TestIsBinaryFile(t *testing.T) {
 	tests := []struct {
 		name     string

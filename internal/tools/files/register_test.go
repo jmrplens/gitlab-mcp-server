@@ -1,3 +1,7 @@
+// register_test.go contains integration tests for the repository file tool
+// closures in register.go. Tests cover the ConfirmAction early-return branch
+// for the delete handler and error paths via an in-memory MCP session.
+
 package files
 
 import (

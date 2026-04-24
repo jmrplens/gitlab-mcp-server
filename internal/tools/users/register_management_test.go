@@ -1,5 +1,6 @@
 // register_management_test.go tests MCP roundtrip for all management tools
 // (admin, CRUD, SSH keys, misc, service accounts) to cover the register_ closures.
+
 package users
 
 import (

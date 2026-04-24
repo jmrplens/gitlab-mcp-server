@@ -1,3 +1,6 @@
+// protected_packages_test.go contains unit tests for GitLab protected package
+// operations. Tests use httptest to mock the GitLab Protected Packages API.
+
 package protectedpackages
 
 import (
@@ -28,6 +31,8 @@ const (
 
 // List tests.
 
+// TestList_Success verifies List returns one rule when
+// GET /projects/:id/packages/protection/rules responds 200 with a single rule.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRules {
@@ -63,6 +68,8 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingProjectID verifies List returns a validation error when
+// project_id is empty, without hitting the API.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -73,6 +80,8 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies List returns a context error when invoked
+// with an already-cancelled context.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -84,6 +93,8 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies List propagates an error when the protection
+// rules endpoint responds 403 Forbidden.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -94,6 +105,8 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_Pagination verifies List forwards the page query parameter to the
+// GitLab API when pagination input is supplied.
 func TestList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -112,6 +125,8 @@ func TestList_Pagination(t *testing.T) {
 
 // Create tests.
 
+// TestCreate_Success verifies Create returns the new rule when
+// POST /projects/:id/packages/protection/rules responds 201 Created.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathRules {
@@ -138,6 +153,8 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingProjectID verifies Create returns a validation error when
+// project_id is empty.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -151,6 +168,8 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingPattern verifies Create returns a validation error when
+// package_name_pattern is empty.
 func TestCreate_MissingPattern(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -164,6 +183,8 @@ func TestCreate_MissingPattern(t *testing.T) {
 	}
 }
 
+// TestCreate_MissingPackageType verifies Create returns a validation error
+// when package_type is empty.
 func TestCreate_MissingPackageType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -177,6 +198,8 @@ func TestCreate_MissingPackageType(t *testing.T) {
 	}
 }
 
+// TestCreate_CancelledContext verifies Create returns a context error when
+// invoked with an already-cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -192,6 +215,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestCreate_WithoutAccessLevels verifies Create succeeds when optional
+// minimum_access_level_for_push/delete fields are omitted, leaving those
+// fields empty in the output.
 func TestCreate_WithoutAccessLevels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathRules {
@@ -223,6 +249,8 @@ func TestCreate_WithoutAccessLevels(t *testing.T) {
 
 // Update tests.
 
+// TestUpdate_Success verifies Update returns the updated rule when
+// PATCH /projects/:id/packages/protection/rules/:rule_id responds 200 OK.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathRule1 {
@@ -245,6 +273,8 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingProjectID verifies Update returns a validation error when
+// project_id is empty.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -255,6 +285,8 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestUpdate_MissingRuleID verifies Update returns a validation error when
+// rule_id is zero.
 func TestUpdate_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -265,6 +297,8 @@ func TestUpdate_MissingRuleID(t *testing.T) {
 	}
 }
 
+// TestUpdate_CancelledContext verifies Update returns a context error when
+// invoked with an already-cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -276,6 +310,8 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUpdate_PartialFields verifies Update succeeds when only a subset of
+// optional fields (package_name_pattern, package_type) are provided.
 func TestUpdate_PartialFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathRule1 {
@@ -300,6 +336,8 @@ func TestUpdate_PartialFields(t *testing.T) {
 
 // Delete tests.
 
+// TestDelete_Success verifies Delete returns no error when
+// DELETE /projects/:id/packages/protection/rules/:rule_id responds 204.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathRule1 {
@@ -314,6 +352,8 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingProjectID verifies Delete returns a validation error when
+// project_id is empty.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -324,6 +364,8 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingRuleID verifies Delete returns a validation error when
+// rule_id is zero.
 func TestDelete_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -334,6 +376,8 @@ func TestDelete_MissingRuleID(t *testing.T) {
 	}
 }
 
+// TestDelete_CancelledContext verifies Delete returns a context error when
+// invoked with an already-cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -347,6 +391,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // Markdown tests.
 
+// TestFormatOutputMarkdown_Basic verifies FormatOutputMarkdown produces a
+// rule header, the package pattern, and the push access level for a fully
+// populated Output.
 func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                          1,
@@ -369,6 +416,8 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown returns an
+// empty string for a zero-value Output (ID == 0).
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -376,6 +425,8 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_NoAccessLevels verifies FormatOutputMarkdown omits
+// the push/delete level rows when those fields are empty.
 func TestFormatOutputMarkdown_NoAccessLevels(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                 2,
@@ -393,6 +444,8 @@ func TestFormatOutputMarkdown_NoAccessLevels(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_Empty verifies FormatListMarkdown emits a
+// "No package protection rules found" message for an empty list.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !contains(md, "No package protection rules found") {
@@ -400,6 +453,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_WithRules verifies FormatListMarkdown produces a
+// table with one row per rule, including the package type column.
 func TestFormatListMarkdown_WithRules(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Rules: []Output{
@@ -420,6 +475,8 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 
 // RegisterTools tests.
 
+// TestRegisterTools_NoPanic verifies RegisterTools wires all protected-package
+// tools onto a fresh MCP server without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -428,6 +485,9 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterTools_CallAllThroughMCP exercises every registered protected
+// package tool (list, create, update, delete) end-to-end through an in-memory
+// MCP transport, using table-driven subtests and asserting no IsError result.
 func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	session := newProtectedPackagesMCPSession(t)
 	ctx := context.Background()

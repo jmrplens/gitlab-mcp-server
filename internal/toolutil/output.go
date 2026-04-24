@@ -1,4 +1,4 @@
-// Package toolutil documents and enforces the standard MCP tool output pattern.
+// output.go documents and enforces the standard MCP tool output pattern.
 //
 // All tool handlers in this project follow the triple-return pattern:
 //
@@ -19,6 +19,7 @@
 // Meta-tools use MakeMetaHandler with a FormatResultFunc that dispatches
 // to the appropriate sub-package Markdown formatter via the type-switch
 // in markdownForResult (internal/tools/markdown.go).
+
 package toolutil
 
 import (

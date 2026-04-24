@@ -1,3 +1,6 @@
+// securityfindings_test.go contains unit tests for GitLab security finding
+// operations. Tests use httptest to mock the GitLab Security Findings API.
+
 package securityfindings
 
 import (

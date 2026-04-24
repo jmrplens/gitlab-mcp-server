@@ -1,3 +1,6 @@
+// cache_test.go contains unit tests for the OAuth token identity cache,
+// verifying TTL expiration, concurrent access, and eviction behavior.
+
 package oauth
 
 import (
@@ -8,6 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
+// TestTokenCache_PutAndGet verifies that a token stored via Put is returned
+// by Get with the same UserID and Extra fields intact.
 func TestTokenCache_PutAndGet(t *testing.T) {
 	t.Parallel()
 
@@ -27,6 +32,8 @@ func TestTokenCache_PutAndGet(t *testing.T) {
 	}
 }
 
+// TestTokenCache_GetMiss verifies that Get returns ok=false for a token
+// that was never stored in the cache.
 func TestTokenCache_GetMiss(t *testing.T) {
 	t.Parallel()
 
@@ -38,6 +45,8 @@ func TestTokenCache_GetMiss(t *testing.T) {
 	}
 }
 
+// TestTokenCache_GetExpired verifies that Get returns a miss for an entry
+// whose TTL has elapsed and that the expired entry is lazily evicted.
 func TestTokenCache_GetExpired(t *testing.T) {
 	t.Parallel()
 
@@ -57,6 +66,8 @@ func TestTokenCache_GetExpired(t *testing.T) {
 	}
 }
 
+// TestTokenCache_Evict verifies that Evict removes a specific token entry
+// and subsequent Get calls for that token return a miss.
 func TestTokenCache_Evict(t *testing.T) {
 	t.Parallel()
 
@@ -71,6 +82,8 @@ func TestTokenCache_Evict(t *testing.T) {
 	}
 }
 
+// TestTokenCache_Cleanup verifies that Cleanup removes all expired entries
+// in a single pass while leaving still-valid entries untouched.
 func TestTokenCache_Cleanup(t *testing.T) {
 	t.Parallel()
 
@@ -91,6 +104,8 @@ func TestTokenCache_Cleanup(t *testing.T) {
 	}
 }
 
+// TestTokenCache_SHA256Isolation verifies that distinct token strings are
+// stored under distinct cache keys so their identities do not collide.
 func TestTokenCache_SHA256Isolation(t *testing.T) {
 	t.Parallel()
 
@@ -153,6 +168,8 @@ func TestTokenCache_Len_Empty(t *testing.T) {
 	}
 }
 
+// TestTokenCache_ConcurrentAccess exercises Put, Get, Evict and Cleanup
+// concurrently across many goroutines to surface data races under -race.
 func TestTokenCache_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
 

@@ -5,6 +5,7 @@
 // cover URL parsing (HTTPS, SSH shorthand, ssh:// protocol, edge cases),
 // project resolution via the API, markdown formatting of results, and
 // MCP round-trip registration via in-memory transports.
+
 package projectdiscovery
 
 import (

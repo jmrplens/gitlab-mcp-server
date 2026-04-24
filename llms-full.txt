@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.1.0 | 1006 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
+> Version 1.2.0 | 1000 tools | 28 meta-tools (43 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -1475,22 +1475,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 **External Status Check**
 
 Manage external status checks for MRs and projects. CRUD checks and set/retry status.
-Valid actions: create, create_project, delete, delete_project, list_mr_checks, list_project, list_project_checks, list_project_mr_checks, retry, retry_project, set_project_mr_status, set_status, update, update_project
+Valid actions: create_project, delete_project, list_project, list_project_checks, list_project_mr_checks, retry_project, set_project_mr_status, update_project
 
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required.
 
-Legacy API:
-- list_mr_checks: project_id*, mr_iid*, page, per_page
-- set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
 - list_project_checks: project_id*, page, per_page
-- create: project_id*, name*, external_url*, protected_branch_ids
-- delete: project_id*, check_id*
-- update: project_id*, check_id*, name, external_url, protected_branch_ids
-- retry: project_id*, mr_iid*, check_id*
-
-Project-scoped API (preferred):
 - list_project_mr_checks: project_id*, mr_iid*, page, per_page
 - list_project: project_id*, page, per_page
 - create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids
@@ -1679,7 +1670,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When META_TOOLS=false, all 1006 individual tools are registered.
+When META_TOOLS=false, all 1000 individual tools are registered.
 Grouped by domain:
 
 ### access (8 tools)
@@ -2873,7 +2864,7 @@ Confirm a detected vulnerability (requires Ultimate/Premium). Changes state from
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### create (29 tools)
+### create (28 tools)
 
 #### gitlab_create_application
 
@@ -3015,21 +3006,6 @@ See also: gitlab_list_error_tracking_client_keys, gitlab_delete_error_tracking_c
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or URL-encoded path,required
-
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
-
-#### gitlab_create_external_status_check
-
-[DEPRECATED — scheduled for removal in v2.0.0] Create an external status check for a project. Use gitlab_create_project_external_status_check instead. Requires project_id, name, and external_url.
-
-Returns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_update_external_stat...
-
-**Parameters:**
-
-- `external_url` (string) (required): External URL for the status check,required
-- `name` (string) (required): Name of the external status check,required
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-- `protected_branch_ids` (): IDs of protected branches to scope the check to
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -3444,7 +3420,7 @@ Returns: JSON with action confirmation.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### delete (45 tools)
+### delete (44 tools)
 
 #### gitlab_delete_alert_metric_image
 
@@ -3618,19 +3594,6 @@ See also: gitlab_list_error_tracking_client_keys, gitlab_create_error_tracking_c
 **Parameters:**
 
 - `key_id` (integer) (required): Client key ID,required
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-
-Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
-
-#### gitlab_delete_external_status_check
-
-[DEPRECATED — scheduled for removal in v2.0.0] Delete an external status check from a project. Use gitlab_delete_project_external_status_check instead. Requires project_id and check_id.
-
-Returns: confirmation message. See also: gitlab_list_project_status_checks.
-
-**Parameters:**
-
-- `check_id` (integer) (required): External status check ID to delete,required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -9417,7 +9380,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (76 tools)
+### list (75 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -10094,21 +10057,6 @@ See also: gitlab_list_project_merge_trains, gitlab_add_merge_request_to_merge_tr
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-#### gitlab_list_merge_status_checks
-
-[DEPRECATED — scheduled for removal in v2.0.0] List external status checks for a merge request. Use gitlab_list_project_mr_external_status_checks instead. Returns: paginated list with ID, name, external URL, status.
-
-See also: gitlab_list_project_mr_external_status_checks, gitlab_set_external_status...
-
-**Parameters:**
-
-- `mr_iid` (integer) (required): Merge request internal ID,required
-- `page` (integer): Page number (default 1)
-- `per_page` (integer): Items per page (default 20, max 100)
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
 #### gitlab_list_mr_context_commits
 
 List context commits associated with a merge request. Context commits are additional commits relevant to the MR but not in the diff. Returns commit SHA, title, and author for each.
@@ -10274,9 +10222,9 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_project_status_checks
 
-[DEPRECATED — scheduled for removal in v2.0.0] List project-level external status checks. Use gitlab_list_project_external_status_checks instead. Returns: paginated list with ID, name, external URL, HMAC, protected branches.
+List project-level external status checks. Returns: paginated list with ID, name, external URL, HMAC, protected branches.
 
-See also: gitlab_list_project_external_status_checks, gitlab_create_extern...
+See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check.
 
 **Parameters:**
 
@@ -15245,27 +15193,13 @@ See also: gitlab_retrieve_all_snippet_storage_moves
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### retry (2 tools)
+### retry (1 tools)
 
 #### gitlab_retry_failed_external_status_check_for_project_mr
 
 Retry a failed external status check for a project merge request. Requires project_id, mr_iid, and check_id.
 
 Returns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.
-
-**Parameters:**
-
-- `check_id` (integer) (required): External status check ID to retry,required
-- `mr_iid` (integer) (required): Merge request internal ID,required
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_retry_failed_status_check_for_mr
-
-[DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.
-
-Returns: confirmation message. See also: gitlab_list_merge_status_checks.
 
 **Parameters:**
 
@@ -16184,7 +16118,7 @@ See also: gitlab_s...
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### set (6 tools)
+### set (5 tools)
 
 #### gitlab_set_custom_attribute
 
@@ -16202,22 +16136,6 @@ See also: gitlab_list_custom_attributes, gitlab_delete_custom_attribute
 - `value` (string) (required): Attribute value,required
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
-
-#### gitlab_set_external_status_check_status
-
-[DEPRECATED — scheduled for removal in v2.0.0] Set the status of an external status check for a merge request. Use gitlab_set_project_mr_external_status_check_status instead. Requires project_id, mr_iid, sha, external_status_check_id, and status.
-
-Returns: confirmation message. See also: gitlab_list...
-
-**Parameters:**
-
-- `external_status_check_id` (integer) (required): External status check ID to update,required
-- `mr_iid` (integer) (required): Merge request internal ID,required
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-- `sha` (string) (required): Head SHA of the merge request source branch,required
-- `status` (string) (required): Status value (e.g. passed, failed),required
-
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_set_feature_flag
 
@@ -16994,7 +16912,7 @@ See also: gitlab_lock_terraform_state, gitlab_get_terraform_state
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### update (21 tools)
+### update (20 tools)
 
 #### gitlab_update_alert_metric_image
 
@@ -17109,22 +17027,6 @@ See also: gitlab_get_epic_discussion, gitlab_delete_epic_discussion_note
 - `full_path` (string) (required): Full path of the group (e.g. my-group),required
 - `iid` (integer) (required): Epic IID within the group,required
 - `note_id` (integer) (required): Note ID to update,required
-
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_update_external_status_check
-
-[DEPRECATED — scheduled for removal in v2.0.0] Update an external status check for a project. Use gitlab_update_project_external_status_check instead. Requires project_id and check_id.
-
-Returns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_create_external_status_check.
-
-**Parameters:**
-
-- `check_id` (integer) (required): External status check ID to update,required
-- `external_url` (string): Updated external URL
-- `name` (string): Updated name
-- `project_id` (string) (required): Project ID or URL-encoded path,required
-- `protected_branch_ids` (): Updated protected branch IDs
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

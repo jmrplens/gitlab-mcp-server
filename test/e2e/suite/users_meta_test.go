@@ -257,9 +257,11 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	})
 
 	t.Run("NotificationGlobalUpdate", func(t *testing.T) {
-		out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_global_update",
-			"params": map[string]any{"level": "participating"},
+		out, err := retryOnTransient(ctx, t, "notification_global_update", 3, func() (notifications.Output, error) {
+			return callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_global_update",
+				"params": map[string]any{"level": "participating"},
+			})
 		})
 		requireNoError(t, err, "notification_global_update")
 		t.Logf("Updated global notification level: %s", out.Level)

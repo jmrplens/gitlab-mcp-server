@@ -1,3 +1,6 @@
+// project_mirrors_test.go contains unit tests for GitLab project mirror
+// operations. Tests use httptest to mock the GitLab Project Mirrors API.
+
 package projectmirrors
 
 import (
@@ -54,6 +57,7 @@ const (
 
 // List tests.
 
+// TestList_Success verifies that List lists a project push mirror on a successful GitLab API response.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirrors {
@@ -80,6 +84,7 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_MissingProjectID verifies that List returns a validation error when project_id is missing.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -90,6 +95,7 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestList_CancelledContext verifies that List returns an error when the context is cancelled before the request completes.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -101,6 +107,7 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_APIError verifies that List propagates errors returned by the GitLab API.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -111,6 +118,7 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_Pagination verifies that List forwards pagination parameters (page, per_page) to the GitLab API.
 func TestList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -129,6 +137,7 @@ func TestList_Pagination(t *testing.T) {
 
 // Get tests.
 
+// TestGet_Success verifies that Get retrieves a project push mirror on a successful GitLab API response.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
@@ -170,6 +179,7 @@ func TestGet_WithHostKeys(t *testing.T) {
 	}
 }
 
+// TestGet_MissingProjectID verifies that Get returns a validation error when project_id is missing.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -180,6 +190,7 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestGet_MissingMirrorID verifies that Get returns a validation error when mirror_id is missing.
 func TestGet_MissingMirrorID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -190,6 +201,7 @@ func TestGet_MissingMirrorID(t *testing.T) {
 	}
 }
 
+// TestGet_CancelledContext verifies that Get returns an error when the context is cancelled before the request completes.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -203,6 +215,7 @@ func TestGet_CancelledContext(t *testing.T) {
 
 // GetPublicKey tests.
 
+// TestGetPublicKey_Success verifies that GetPublicKey retrieves the SSH public key for a project push mirror on a successful GitLab API response.
 func TestGetPublicKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirrorKey42 {
@@ -220,6 +233,7 @@ func TestGetPublicKey_Success(t *testing.T) {
 	}
 }
 
+// TestGetPublicKey_MissingProjectID verifies that GetPublicKey returns a validation error when project_id is missing.
 func TestGetPublicKey_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -230,6 +244,7 @@ func TestGetPublicKey_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestGetPublicKey_MissingMirrorID verifies that GetPublicKey returns a validation error when mirror_id is missing.
 func TestGetPublicKey_MissingMirrorID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -240,6 +255,7 @@ func TestGetPublicKey_MissingMirrorID(t *testing.T) {
 	}
 }
 
+// TestGetPublicKey_CancelledContext verifies that GetPublicKey returns an error when the context is cancelled before the request completes.
 func TestGetPublicKey_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -253,6 +269,7 @@ func TestGetPublicKey_CancelledContext(t *testing.T) {
 
 // Add tests.
 
+// TestAdd_Success verifies that Add creates a project push mirror on a successful GitLab API response.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMirrors {
@@ -274,6 +291,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_WithOptions verifies that Add serializes optional fields in the request body.
 func TestAdd_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMirrors {
@@ -328,6 +346,7 @@ func TestAdd_WithHostKeys(t *testing.T) {
 	}
 }
 
+// TestAdd_MissingProjectID verifies that Add returns a validation error when project_id is missing.
 func TestAdd_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -338,6 +357,7 @@ func TestAdd_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestAdd_MissingURL verifies that Add returns a validation error when url is missing.
 func TestAdd_MissingURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -348,6 +368,7 @@ func TestAdd_MissingURL(t *testing.T) {
 	}
 }
 
+// TestAdd_CancelledContext verifies that Add returns an error when the context is cancelled before the request completes.
 func TestAdd_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -361,6 +382,7 @@ func TestAdd_CancelledContext(t *testing.T) {
 
 // Edit tests.
 
+// TestEdit_Success verifies that Edit updates a project push mirror on a successful GitLab API response.
 func TestEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMirror42 {
@@ -385,6 +407,7 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
+// TestEdit_MissingProjectID verifies that Edit returns a validation error when project_id is missing.
 func TestEdit_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -395,6 +418,7 @@ func TestEdit_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestEdit_MissingMirrorID verifies that Edit returns a validation error when mirror_id is missing.
 func TestEdit_MissingMirrorID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -405,6 +429,7 @@ func TestEdit_MissingMirrorID(t *testing.T) {
 	}
 }
 
+// TestEdit_CancelledContext verifies that Edit returns an error when the context is cancelled before the request completes.
 func TestEdit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -418,6 +443,7 @@ func TestEdit_CancelledContext(t *testing.T) {
 
 // Delete tests.
 
+// TestDelete_Success verifies that Delete deletes a project push mirror on a successful GitLab API response.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathMirror42 {
@@ -432,6 +458,7 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingProjectID verifies that Delete returns a validation error when project_id is missing.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -442,6 +469,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestDelete_MissingMirrorID verifies that Delete returns a validation error when mirror_id is missing.
 func TestDelete_MissingMirrorID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -452,6 +480,7 @@ func TestDelete_MissingMirrorID(t *testing.T) {
 	}
 }
 
+// TestDelete_CancelledContext verifies that Delete returns an error when the context is cancelled before the request completes.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -465,6 +494,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // ForcePushUpdate tests.
 
+// TestForcePushUpdate_Success verifies that ForcePushUpdate triggers a force-push update on a project push mirror on a successful GitLab API response.
 func TestForcePushUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMirrorSync42 {
@@ -479,6 +509,7 @@ func TestForcePushUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestForcePushUpdate_MissingProjectID verifies that ForcePushUpdate returns a validation error when project_id is missing.
 func TestForcePushUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -489,6 +520,7 @@ func TestForcePushUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
+// TestForcePushUpdate_MissingMirrorID verifies that ForcePushUpdate returns a validation error when mirror_id is missing.
 func TestForcePushUpdate_MissingMirrorID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -499,6 +531,7 @@ func TestForcePushUpdate_MissingMirrorID(t *testing.T) {
 	}
 }
 
+// TestForcePushUpdate_CancelledContext verifies that ForcePushUpdate returns an error when the context is cancelled before the request completes.
 func TestForcePushUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -512,6 +545,7 @@ func TestForcePushUpdate_CancelledContext(t *testing.T) {
 
 // Markdown tests.
 
+// TestFormatOutputMarkdown_Basic verifies the OutputMarkdown_Basic markdown formatter output.
 func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:           42,
@@ -528,6 +562,7 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_WithTimestamps verifies the OutputMarkdown_WithTimestamps markdown formatter output.
 func TestFormatOutputMarkdown_WithTimestamps(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                     42,
@@ -549,6 +584,7 @@ func TestFormatOutputMarkdown_WithTimestamps(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_WithHostKeys verifies the OutputMarkdown_WithHostKeys markdown formatter output.
 func TestFormatOutputMarkdown_WithHostKeys(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:           42,
@@ -565,6 +601,7 @@ func TestFormatOutputMarkdown_WithHostKeys(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_Empty verifies the OutputMarkdown_Empty markdown formatter output.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -572,6 +609,7 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty markdown formatter output.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !contains(md, "No remote mirrors found") {
@@ -579,6 +617,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_WithMirrors verifies the ListMarkdown_WithMirrors markdown formatter output.
 func TestFormatListMarkdown_WithMirrors(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Mirrors: []Output{
@@ -594,6 +633,7 @@ func TestFormatListMarkdown_WithMirrors(t *testing.T) {
 	}
 }
 
+// TestFormatPublicKeyMarkdown_Success verifies the PublicKeyMarkdown_Success markdown formatter output.
 func TestFormatPublicKeyMarkdown_Success(t *testing.T) {
 	md := FormatPublicKeyMarkdown(PublicKeyOutput{PublicKey: "ssh-rsa AAAAB3..."})
 	if !contains(md, "ssh-rsa AAAAB3...") {
@@ -601,6 +641,7 @@ func TestFormatPublicKeyMarkdown_Success(t *testing.T) {
 	}
 }
 
+// TestFormatPublicKeyMarkdown_Empty verifies the PublicKeyMarkdown_Empty markdown formatter output.
 func TestFormatPublicKeyMarkdown_Empty(t *testing.T) {
 	md := FormatPublicKeyMarkdown(PublicKeyOutput{})
 	if !contains(md, "No public key available") {
@@ -610,6 +651,8 @@ func TestFormatPublicKeyMarkdown_Empty(t *testing.T) {
 
 // toOutput coverage tests.
 
+// TestToOutput_NilTimestamps verifies that toOutput handles edge cases in the
+// GitLab response (nil timestamps or optional fields) without panicking.
 func TestToOutput_NilTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
@@ -640,6 +683,8 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 
 // RegisterTools tests.
 
+// TestRegisterTools_NoPanic verifies that RegisterTools registers all Project Mirrors tools
+// without panicking.
 func TestRegisterTools_NoPanic(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -648,6 +693,8 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestRegisterTools_CallAllThroughMCP uses table-driven subtests to exercise every registered
+// Project Mirrors tool through a round-trip MCP client call and asserts success.
 func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 	session := newMirrorsMCPSession(t)
 	ctx := context.Background()

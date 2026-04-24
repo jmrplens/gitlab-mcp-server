@@ -2,6 +2,7 @@
 // Unit tests verify nil-safety and [buildLogData] behavior.
 // Integration tests use an in-memory MCP client/server pair to verify that
 // [SessionLogger] methods emit log entries at the correct level.
+
 package logging
 
 import (

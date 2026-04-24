@@ -710,26 +710,20 @@
   },
   {
     "name": "gitlab_external_status_check",
-    "description": "Manage external status checks for MRs and projects. CRUD checks and set/retry status.\nValid actions: create, create_project, delete, delete_project, list_mr_checks, list_project, list_project_checks, list_project_mr_checks, retry, retry_project, set_project_mr_status, set_status, update, update_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.\n\nParam conventions: * = required.\n\nLegacy API:\n- list_mr_checks: project_id*, mr_iid*, page, per_page\n- set_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*\n- list_project_checks: project_id*, page, per_page\n- create: project_id*, name*, external_url*, protected_branch_ids\n- delete: project_id*, check_id*\n- update: project_id*, check_id*, name, external_url, protected_branch_ids\n- retry: project_id*, mr_iid*, check_id*\n\nProject-scoped API (preferred):\n- list_project_mr_checks: project_id*, mr_iid*, page, per_page\n- list_project: project_id*, page, per_page\n- create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids\n- delete_project: project_id*, check_id*\n- update_project: project_id*, check_id*, name, external_url, shared_secret, protected_branch_ids\n- retry_project: project_id*, mr_iid*, check_id*\n- set_project_mr_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*\n\nSee also: gitlab_merge_request",
+    "description": "Manage external status checks for MRs and projects. CRUD checks and set/retry status.\nValid actions: create_project, delete_project, list_project, list_project_checks, list_project_mr_checks, retry_project, set_project_mr_status, update_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.\n\nParam conventions: * = required.\n\n- list_project_checks: project_id*, page, per_page\n- list_project_mr_checks: project_id*, mr_iid*, page, per_page\n- list_project: project_id*, page, per_page\n- create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids\n- delete_project: project_id*, check_id*\n- update_project: project_id*, check_id*, name, external_url, shared_secret, protected_branch_ids\n- retry_project: project_id*, mr_iid*, check_id*\n- set_project_mr_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*\n\nSee also: gitlab_merge_request",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "description": "Action to perform. See the tool description for available actions and their parameters.",
           "enum": [
-            "create",
             "create_project",
-            "delete",
             "delete_project",
-            "list_mr_checks",
             "list_project",
             "list_project_checks",
             "list_project_mr_checks",
-            "retry",
             "retry_project",
             "set_project_mr_status",
-            "set_status",
-            "update",
             "update_project"
           ],
           "type": "string"

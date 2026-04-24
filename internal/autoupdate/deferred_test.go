@@ -1,4 +1,5 @@
 // deferred_test.go contains unit tests for deferred auto-update file operations.
+
 package autoupdate
 
 import (

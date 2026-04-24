@@ -77,17 +77,20 @@ type BranchPermissionInput struct {
 	Destroy     *bool  `json:"_destroy,omitempty"     jsonschema:"Set true to remove this permission"`
 }
 
+// ListInput defines parameters for the List action which retrieves group-level protected branches.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Search  string               `json:"search,omitempty" jsonschema:"Search by branch name"`
 	toolutil.PaginationInput
 }
 
+// GetInput defines parameters for the Get action which retrieves a single group-level protected branch.
 type GetInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Branch  string               `json:"branch"   jsonschema:"Branch name or wildcard,required"`
 }
 
+// ProtectInput defines parameters for the Protect action which creates a group-level protected branch rule.
 type ProtectInput struct {
 	GroupID                   toolutil.StringOrInt    `json:"group_id"                            jsonschema:"Group ID or URL-encoded path,required"`
 	Name                      string                  `json:"name"                                jsonschema:"Branch name or wildcard to protect,required"`
@@ -101,6 +104,7 @@ type ProtectInput struct {
 	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users/groups allowed to unprotect"`
 }
 
+// UpdateInput defines parameters for the Update action which modifies a group-level protected branch rule.
 type UpdateInput struct {
 	GroupID                   toolutil.StringOrInt    `json:"group_id"                            jsonschema:"Group ID or URL-encoded path,required"`
 	Branch                    string                  `json:"branch"                              jsonschema:"Branch name or wildcard,required"`
@@ -112,6 +116,7 @@ type UpdateInput struct {
 	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Users/groups allowed to unprotect"`
 }
 
+// UnprotectInput defines parameters for the Unprotect action which removes a group-level protected branch rule.
 type UnprotectInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Branch  string               `json:"branch"   jsonschema:"Branch name or wildcard to unprotect,required"`

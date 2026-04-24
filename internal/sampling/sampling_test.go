@@ -5,6 +5,7 @@
 // Integration tests use in-memory MCP transports to verify end-to-end
 // sampling including credential redaction, system prompt injection resistance,
 // model hint propagation, and data truncation.
+
 package sampling
 
 import (

@@ -1,4 +1,5 @@
 // mirroring_test.go contains unit tests for project pull mirror operations.
+
 package projects
 
 import (
@@ -25,6 +26,7 @@ const (
 	}`
 )
 
+// TestGetPullMirror_Success verifies GetPullMirror returns the configured pull mirror for a project when the GitLab API responds with HTTP 200.
 func TestGetPullMirror_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProject42MirrorPull {
@@ -51,6 +53,7 @@ func TestGetPullMirror_Success(t *testing.T) {
 	}
 }
 
+// TestGetPullMirror_EmptyProjectID verifies GetPullMirror returns an error when ProjectID is empty.
 func TestGetPullMirror_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -61,6 +64,7 @@ func TestGetPullMirror_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestGetPullMirror_APIError verifies GetPullMirror returns an error when the GitLab API responds with HTTP 400.
 func TestGetPullMirror_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -71,6 +75,7 @@ func TestGetPullMirror_APIError(t *testing.T) {
 	}
 }
 
+// TestConfigurePullMirror_Success verifies ConfigurePullMirror issues PUT to the pull mirror endpoint and returns the updated configuration on HTTP 200.
 func TestConfigurePullMirror_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProject42MirrorPull {
@@ -94,6 +99,7 @@ func TestConfigurePullMirror_Success(t *testing.T) {
 	}
 }
 
+// TestConfigurePullMirror_EmptyProjectID verifies ConfigurePullMirror returns an error when ProjectID is empty.
 func TestConfigurePullMirror_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -104,6 +110,7 @@ func TestConfigurePullMirror_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestConfigurePullMirror_APIError verifies ConfigurePullMirror returns an error when the GitLab API responds with HTTP 400.
 func TestConfigurePullMirror_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -114,6 +121,7 @@ func TestConfigurePullMirror_APIError(t *testing.T) {
 	}
 }
 
+// TestConfigurePullMirror_ContextCancelled verifies ConfigurePullMirror returns an error when the request context is already cancelled.
 func TestConfigurePullMirror_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -125,6 +133,7 @@ func TestConfigurePullMirror_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestStartMirroring_Success verifies StartMirroring triggers an immediate pull mirror sync and succeeds on HTTP 200.
 func TestStartMirroring_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42MirrorPull {
@@ -139,6 +148,7 @@ func TestStartMirroring_Success(t *testing.T) {
 	}
 }
 
+// TestStartMirroring_EmptyProjectID verifies StartMirroring returns an error when ProjectID is empty.
 func TestStartMirroring_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -149,6 +159,7 @@ func TestStartMirroring_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestStartMirroring_APIError verifies StartMirroring returns an error when the GitLab API responds with HTTP 400.
 func TestStartMirroring_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -159,6 +170,7 @@ func TestStartMirroring_APIError(t *testing.T) {
 	}
 }
 
+// TestFormatPullMirrorMarkdown_NonEmpty verifies FormatPullMirrorMarkdown produces non-empty markdown describing the pull mirror configuration.
 func TestFormatPullMirrorMarkdown_NonEmpty(t *testing.T) {
 	md := FormatPullMirrorMarkdown(PullMirrorOutput{
 		ID: 5, Enabled: true, URL: "https://github.com/example/repo.git",

@@ -1,3 +1,7 @@
+// register_meta_test.go contains integration tests for the sampling meta-tool
+// closures in register_meta.go. Tests verify tool dispatch and error paths
+// via an in-memory MCP session with a mock GitLab API.
+
 package samplingtools
 
 import (
@@ -13,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// TestWrapSamplingAction_Success verifies that wrapSamplingAction invokes the wrapped handler and returns its typed output when no error occurs.
 func TestWrapSamplingAction_Success(t *testing.T) {
 	type testInput struct {
 		Value string `json:"value"`
@@ -41,6 +46,7 @@ func TestWrapSamplingAction_Success(t *testing.T) {
 	}
 }
 
+// TestWrapSamplingAction_SamplingUnsupported verifies that wrapSamplingAction converts ErrSamplingNotSupported into a samplingUnsupportedOutput instead of propagating the error.
 func TestWrapSamplingAction_SamplingUnsupported(t *testing.T) {
 	type testInput struct{}
 	type testOutput struct{}
@@ -61,6 +67,7 @@ func TestWrapSamplingAction_SamplingUnsupported(t *testing.T) {
 	}
 }
 
+// TestWrapSamplingAction_HandlerError verifies that wrapSamplingAction propagates arbitrary handler errors to the caller.
 func TestWrapSamplingAction_HandlerError(t *testing.T) {
 	type testInput struct{}
 	type testOutput struct{}
@@ -81,6 +88,7 @@ func TestWrapSamplingAction_HandlerError(t *testing.T) {
 	}
 }
 
+// TestWrapSamplingAction_InvalidParams verifies that wrapSamplingAction does not panic when the caller supplies arguments that fail unmarshaling.
 func TestWrapSamplingAction_InvalidParams(t *testing.T) {
 	type testInput struct {
 		Required int `json:"required"`
@@ -102,6 +110,7 @@ func TestWrapSamplingAction_InvalidParams(t *testing.T) {
 	}
 }
 
+// TestMetaMarkdownForResult_SamplingUnsupported verifies that metaMarkdownForResult renders a user-facing message when the sampling capability is unavailable.
 func TestMetaMarkdownForResult_SamplingUnsupported(t *testing.T) {
 	result := metaMarkdownForResult(samplingUnsupportedOutput{})
 	if result == nil {
@@ -113,6 +122,7 @@ func TestMetaMarkdownForResult_SamplingUnsupported(t *testing.T) {
 	}
 }
 
+// TestMetaMarkdownForResult_AllOutputTypes uses table-driven subtests to verify that metaMarkdownForResult produces non-empty content for every sampling output type.
 func TestMetaMarkdownForResult_AllOutputTypes(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -143,6 +153,7 @@ func TestMetaMarkdownForResult_AllOutputTypes(t *testing.T) {
 	}
 }
 
+// TestMetaMarkdownForResult_DefaultCase verifies that metaMarkdownForResult returns a fallback message for unknown output types.
 func TestMetaMarkdownForResult_DefaultCase(t *testing.T) {
 	result := metaMarkdownForResult("unexpected-type")
 	if result == nil {
@@ -154,6 +165,7 @@ func TestMetaMarkdownForResult_DefaultCase(t *testing.T) {
 	}
 }
 
+// TestRegisterMeta_RegistersTool verifies that RegisterMeta registers the gitlab_analyze meta-tool and it is discoverable via ListTools over an in-memory MCP session.
 func TestRegisterMeta_RegistersTool(t *testing.T) {
 	impl := &mcp.Implementation{Name: "test", Version: "1.0.0"}
 	server := mcp.NewServer(impl, nil)

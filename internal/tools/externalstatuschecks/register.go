@@ -16,38 +16,9 @@ import (
 // RegisterTools registers all external status check tools on the given MCP server.
 func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_list_merge_status_checks",
-		Title:       toolutil.TitleFromName("gitlab_list_merge_status_checks"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] List external status checks for a merge request. Use gitlab_list_project_mr_external_status_checks instead. Returns: paginated list with ID, name, external URL, status.\n\nSee also: gitlab_list_project_mr_external_status_checks, gitlab_set_external_status_check_status.",
-		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListMergeStatusChecksInput) (*mcp.CallToolResult, ListMergeStatusCheckOutput, error) {
-		start := time.Now()
-		out, err := ListMergeStatusChecks(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_list_merge_status_checks", start, err)
-		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatListMergeMarkdown(out), toolutil.ContentList), out, err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_set_external_status_check_status",
-		Title:       toolutil.TitleFromName("gitlab_set_external_status_check_status"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Set the status of an external status check for a merge request. Use gitlab_set_project_mr_external_status_check_status instead. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input SetStatusInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
-		start := time.Now()
-		err := SetExternalStatusCheckStatus(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_set_external_status_check_status", start, err)
-		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
-		}
-		return toolutil.DeleteResult(fmt.Sprintf("external status check %d status set to %q for MR %d in project %s", input.ExternalStatusCheckID, input.Status, input.MRIID, input.ProjectID))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_project_status_checks",
 		Title:       toolutil.TitleFromName("gitlab_list_project_status_checks"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] List project-level external status checks. Use gitlab_list_project_external_status_checks instead. Returns: paginated list with ID, name, external URL, HMAC, protected branches.\n\nSee also: gitlab_list_project_external_status_checks, gitlab_create_external_status_check.",
+		Description: "List project-level external status checks. Returns: paginated list with ID, name, external URL, HMAC, protected branches.\n\nSee also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListProjectStatusChecksInput) (*mcp.CallToolResult, ListProjectStatusCheckOutput, error) {
@@ -55,70 +26,6 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		out, err := ListProjectStatusChecks(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_list_project_status_checks", start, err)
 		return toolutil.WithHints(toolutil.ToolResultAnnotated(FormatListProjectMarkdown(out), toolutil.ContentList), out, err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_create_external_status_check",
-		Title:       toolutil.TitleFromName("gitlab_create_external_status_check"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Create an external status check for a project. Use gitlab_create_project_external_status_check instead. Requires project_id, name, and external_url.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_update_external_status_check.",
-		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateLegacyInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
-		start := time.Now()
-		err := CreateExternalStatusCheck(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_create_external_status_check", start, err)
-		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
-		}
-		return toolutil.DeleteResult(fmt.Sprintf("external status check %q created in project %s", input.Name, input.ProjectID))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_delete_external_status_check",
-		Title:       toolutil.TitleFromName("gitlab_delete_external_status_check"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Delete an external status check from a project. Use gitlab_delete_project_external_status_check instead. Requires project_id and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks.",
-		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteLegacyInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
-		start := time.Now()
-		err := DeleteExternalStatusCheck(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_delete_external_status_check", start, err)
-		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
-		}
-		return toolutil.DeleteResult(fmt.Sprintf("external status check %d from project %s", input.CheckID, input.ProjectID))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_update_external_status_check",
-		Title:       toolutil.TitleFromName("gitlab_update_external_status_check"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Update an external status check for a project. Use gitlab_update_project_external_status_check instead. Requires project_id and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_status_checks, gitlab_create_external_status_check.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateLegacyInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
-		start := time.Now()
-		err := UpdateExternalStatusCheck(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_update_external_status_check", start, err)
-		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
-		}
-		return toolutil.DeleteResult(fmt.Sprintf("external status check %d updated in project %s", input.CheckID, input.ProjectID))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_retry_failed_status_check_for_mr",
-		Title:       toolutil.TitleFromName("gitlab_retry_failed_status_check_for_mr"),
-		Description: "[DEPRECATED — scheduled for removal in v2.0.0] Retry a failed external status check for a merge request. Use gitlab_retry_failed_external_status_check_for_project_mr instead. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_merge_status_checks.",
-		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconSecurity,
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input RetryLegacyInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
-		start := time.Now()
-		err := RetryFailedStatusCheckForMR(ctx, client, input)
-		toolutil.LogToolCallAll(ctx, req, "gitlab_retry_failed_status_check_for_mr", start, err)
-		if err != nil {
-			return nil, toolutil.DeleteOutput{}, err
-		}
-		return toolutil.DeleteResult(fmt.Sprintf("external status check %d retried for MR %d in project %s", input.CheckID, input.MRIID, input.ProjectID))
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
