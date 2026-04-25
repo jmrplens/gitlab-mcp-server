@@ -392,7 +392,7 @@ Returns:
 - list / list_* / *_list / members / list_forks / list_starrers / list_groups / hook_list / label_list / milestone_list / badge_list / board_list / board_list_list / integration_list / pages_domain_list / pages_domain_list_all / approval_rule_list / mirror_list / list_invited_groups / upload_list: arrays with pagination {page, per_page, total, next_page}.
 - get / create / update / fork / transfer / star / unstar / archive / unarchive / restore / member_get / member_inherited / member_add / member_edit / hook_get / hook_add / hook_edit / hook_test / label_* / milestone_* (non-list) / badge_get / badge_add / badge_edit / badge_preview / board_get / board_create / board_update / board_list_get / board_list_create / board_list_update / integration_get / integration_set_jira / pages_get / pages_update / pages_domain_get / pages_domain_create / pages_domain_update / approval_config_get / approval_config_change / approval_rule_get / approval_rule_create / approval_rule_update / pull_mirror_get / pull_mirror_configure / mirror_get / mirror_get_public_key / mirror_add / mirror_edit / repository_storage_get / statistics_get / languages / share_with_group / upload / upload_avatar / download_avatar / create_for_user / create_fork_relation / export_status / export_download / import_from_file / import_status / export_schedule: resource object.
 - delete / hook_delete / hook_set_*/hook_delete_* / label_delete / label_subscribe / label_unsubscribe / label_promote / milestone_delete / badge_delete / board_delete / board_list_delete / integration_delete / pages_unpublish / pages_domain_delete / approval_rule_delete / mirror_delete / mirror_force_push / delete_shared_group / delete_fork_relation / start_mirroring / start_housekeeping / upload_delete: {success, message}.
-Errors: 404 (hint: project_id may be a numeric ID or URL-encoded path like 'group%2Frepo'), 403 (hint: most mutations require Maintainer+, settings/transfers require Owner, instance-level require admin), 400 (hint: visibility ∈ private/internal/public; merge_method ∈ merge/rebase_merge/ff; namespace_id must be writable by the caller).
+Errors: 404 (hint: project_id may be a numeric ID or URL-encoded path like 'group%2Frepo'), 403 (hint: most mutations require Maintainer+, settings/transfers require Owner, instance-level actions require admin), 400 (hint: visibility ∈ private/internal/public; merge_method ∈ merge/rebase_merge/ff; namespace_id must be writable by the caller).
 
 Param conventions: * = required. Most actions need project_id* (numeric ID or URL-encoded path like 'group/repo'). List actions accept page, per_page. Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.
 
@@ -575,7 +575,8 @@ Param conventions: * = required. All actions need project_id* (numeric or url-en
 - delete_merged: project_id* — deletes all merged branches except default/protected
 - protect: project_id*, branch_name*, push_access_level (0/30/40), merge_access_level (0/30/40), allow_force_push (bool)
 - unprotect: project_id*, branch_name*
-- list_protected / get_protected: project_id*, branch_name* (get)
+- list_protected: project_id*
+- get_protected: project_id*, branch_name*
 - update_protected: project_id*, branch_name*, allow_force_push (bool), code_owner_approval_required (bool)
 - rule_list: project_path* (e.g. my-group/my-project), first (max 100), after (cursor)
 
@@ -1498,10 +1499,10 @@ Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
 See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings/files), gitlab_label (label CRUD), gitlab_milestone (milestone CRUD), gitlab_pipeline (CI/CD)
 
 Returns:
-- list / list_global / list_group / list_assigned / list_authored / list_assigned_or_authored / participants / closed_by / related_mrs / closing_mrs / link_list / discussion_list / note_list / time_logs / iteration_list / iteration_list_group / award_*_list / event_*_list: arrays with pagination {page, per_page, total, next_page}.
-- get / create / update / move / clone / promote / reorder / subscribe / unsubscribe / link_create / discussion_get / discussion_create / discussion_reply / discussion_resolve / discussion_note_update / note_get / note_create / note_update / time_estimate_set / spent_time_add / time_stats / award_*_create / award_*_get / metric_image_*: issue or sub-resource object.
-- delete / link_delete / note_delete / discussion_note_delete / time_estimate_reset / spent_time_reset / award_*_delete: {success, message}.
-Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_global use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move/clone, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).`
+- list / list_all / list_group / participants / mrs_closing / mrs_related / link_list / discussion_list / note_list / work_item_list / emoji_issue_list / emoji_issue_note_list / event_issue_label_list / event_issue_milestone_list / event_issue_state_list / event_issue_iteration_list / event_issue_weight_list / iteration_list_project / iteration_list_group: arrays with pagination {page, per_page, total, next_page}.
+- get / get_by_id / create / update / move / reorder / subscribe / unsubscribe / create_todo / link_get / link_create / discussion_get / discussion_create / discussion_add_note / discussion_update_note / note_get / note_create / note_update / time_estimate_set / time_estimate_reset / spent_time_add / spent_time_reset / time_stats_get / work_item_get / work_item_create / work_item_update / emoji_issue_get / emoji_issue_create / emoji_issue_note_get / emoji_issue_note_create / event_issue_label_get / event_issue_milestone_get / event_issue_state_get / event_issue_iteration_get / statistics_get / statistics_get_group / statistics_get_project: issue or sub-resource object.
+- delete / link_delete / note_delete / discussion_delete_note / work_item_delete / emoji_issue_delete / emoji_issue_note_delete: {success, message}.
+Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).`
 
 	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
 }
@@ -1884,7 +1885,7 @@ Returns:
 - upload_attachment: {file_name, url, alt, markdown} — embed `+"`markdown`"+` directly in a page.
 Errors: 404 not found (hint: check slug or project_id), 403 forbidden (hint: wiki disabled or insufficient role), 400 invalid params (hint: title/content required, slug must be URL-encoded).
 
-Param conventions: * = required. All actions need project_id* (numeric ID or url-encoded path). slug is the URL-encoded page path (e.g. `+"`docs/setup`"+`). format default = markdown. content max ~1 MB.
+Param conventions: * = required. All actions need project_id* (numeric ID or url-encoded path). slug is the URL-encoded page path (e.g. `+"`docs%2Fsetup`"+`). format default = markdown. content max ~1 MB.
 
 - list: project_id*, with_content (bool)
 - get: project_id*, slug*, render_html (bool), version (commit SHA)

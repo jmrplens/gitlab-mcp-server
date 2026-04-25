@@ -311,14 +311,14 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_analyze",
 		Title: toolutil.TitleFromName("gitlab_analyze"),
-		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarise / analyse / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
+		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
-When to use: ask an LLM to interpret GitLab artefacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
-NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a `+"`SamplingUnsupportedResult`"+`).
+When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
+NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a ` + "`SamplingUnsupportedResult`" + `).
 
-Returns: each action returns its own structured object plus a Markdown summary suitable for direct display. Common shape: {summary, sections, prompts_used, model, finish_reason}. Specific extras: release_notes → {categories: [{name, entries: [...]}]}; pipeline_failure → {root_cause, suggested_fix, related_jobs}; mr_security → {findings: [{severity, owasp, file, line, recommendation}]}; technical_debt → {markers: [{type, file, line, snippet}]}.
-Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), `+"`SamplingUnsupportedResult`"+` when the client did not advertise sampling capability.
+Returns: each action returns action-specific JSON (typically identifiers + analysis/review/release_notes text plus model and truncated flags) and a Markdown summary suitable for direct display. Common keys: {analysis|review|release_notes, model, truncated} alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
+Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
 - mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.

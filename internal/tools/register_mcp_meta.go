@@ -30,8 +30,8 @@ Valid actions: ` + validActionsString(routes) + `
 When to use: at session start to confirm the GitLab token works, when diagnosing 401/403 errors from other tools, or to record server/GitLab versions for support tickets.
 NOT for: resolving a git remote URL to a project (use gitlab_discover_project), GitLab instance admin (use gitlab_admin), per-project membership/permissions (use gitlab_project / gitlab_user), CI runner health (use gitlab_runner).
 
-Returns: {server_version, gitlab_version, gitlab_url, authenticated (bool), current_user: {id, username, name}, response_time_ms}.
-Errors: 401 unauthorized (hint: GITLAB_TOKEN missing or expired), network errors with the GitLab URL surfaced verbatim.
+Returns: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated (bool), username, user_id, response_time_ms, error}. Authentication and connectivity failures are surfaced inside this diagnostics object (status / error fields), not as a tool-level JSON-RPC error.
+Errors: tool-level errors are rare — inspect the returned status / error fields. Network errors include the GitLab URL verbatim.
 
 - status: (no params) — returns the diagnostics object above.
 - health_check: alias for status. (no params)
@@ -49,10 +49,10 @@ When to use: confirm the GitLab token works, check whether a newer server releas
 NOT for: GitLab instance admin (use gitlab_admin), git remote resolution (use gitlab_discover_project), CI runner health (use gitlab_runner).
 
 Returns:
-- status / health_check: {server_version, gitlab_version, gitlab_url, authenticated, current_user, response_time_ms}.
-- check_update: {current_version, latest_version, update_available (bool), release_url, release_notes}.
-- apply_update: {success, message, restart_required, new_version}.
-Errors: 401 unauthorized (hint: GITLAB_TOKEN missing/expired), update channel errors include release fetch URL.
+- status / health_check: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated, username, user_id, response_time_ms, error}.
+- check_update: {update_available (bool), current_version, latest_version, release_url, release_notes, mode}.
+- apply_update: {applied (bool), deferred (bool), previous_version, new_version, staging_path, script_path, message}.
+Errors: connectivity / auth failures appear inside the diagnostics object (status / error). Update channel errors include the release fetch URL.
 
 - status / health_check: (no params)
 - check_update: (no params) — compares current binary version against the configured release feed.

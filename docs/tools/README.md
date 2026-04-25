@@ -35,8 +35,9 @@ The server exposes its 1000+ individual tools through a curated set of meta-tool
 | Admin & Instance | 77 | `gitlab_admin` | [admin.md](admin.md) |
 | Templates | 10 | `gitlab_template` | [templates.md](templates.md) |
 | Integrations & Misc | 34 | various | [integrations.md](integrations.md) |
-| MCP Capabilities | 16 | — | [capabilities.md](capabilities.md) |
-| Project Discovery | 1 | — | [project-discovery.md](project-discovery.md) |
+| MCP Capabilities | 16 | `gitlab_server` | [capabilities.md](capabilities.md) |
+| Project Discovery | 1 | `gitlab_discover_project` (individual tool) | [project-discovery.md](project-discovery.md) |
+| Analysis (LLM-assisted) | 11 | `gitlab_analyze` | [capabilities.md](capabilities.md) |
 | Identity & Security | 28 | `gitlab_group_scim`, `gitlab_member_role`, etc. | [identity-security.md](identity-security.md) |
 | Enterprise Users & Attestations | 6 | `gitlab_enterprise_user`, `gitlab_attestation` | [enterprise-attestations.md](enterprise-attestations.md) |
 | Analytics & Compliance | 12 | `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias` | [analytics-compliance.md](analytics-compliance.md) |

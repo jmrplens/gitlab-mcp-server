@@ -205,7 +205,7 @@ Returns:
 - merge_requests / issues: arrays of MR / issue objects.
 - commits: array of {id, short_id, title, author_name, committed_date, project_id}.
 - milestones / projects / snippets / users / wiki: arrays of resource summaries.
-- notes: array of {id, body, noteable_type, noteable_iid, project_id} entries.
+- notes: array of {id, body, notable_type, notable_id, notable_iid} entries.
 All lists paginate with {page, per_page, total, next_page}.
 Errors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hint: project_id / group_id wrong or no permission), 400 (hint: query must not be empty; some scopes only support global — e.g. snippets).
 

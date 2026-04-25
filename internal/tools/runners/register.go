@@ -346,8 +346,8 @@ NOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitla
 
 Returns:
 - list / list_all / list_project / list_group / list_managers / jobs / controller_list / controller_scope_list / controller_token_list: arrays with pagination {page, per_page, total, next_page}.
-- get / update / register / verify / reset_*_token / enable_project / list_managers (single) / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE — store it securely.
-- remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.
+- get / update / register / reset_*_token / enable_project / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE — store it securely.
+- verify / remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.
 Errors: 401/403 (hint: list_all / register with admin token / runner controller actions require admin), 404 (hint: runner_id and controller_id are global, project / group context only filters), 400 (hint: access_level ∈ not_protected / ref_protected; tag_list is a comma-separated string; deprecated reset_*_reg_token endpoints — prefer controller_token_create).
 
 Param conventions: * = required. List actions accept page, per_page. Runner IDs are integers.
