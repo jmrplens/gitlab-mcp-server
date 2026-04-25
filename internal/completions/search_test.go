@@ -645,6 +645,7 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 		{"labels", func() error { _, _, err := searchLabels(ctx, client, "42", "x"); return err }},
 		{"milestones", func() error { _, _, err := searchMilestones(ctx, client, "42", "x"); return err }},
 		{"jobs", func() error { _, err := searchJobs(ctx, client, "42", 10, "x"); return err }},
+		{"milestone titles", func() error { _, _, err := searchMilestoneTitles(ctx, client, "42", "x"); return err }},
 	}
 
 	for _, tt := range tests {
@@ -655,5 +656,78 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 				t.Errorf("expected context canceled error, got: %v", err)
 			}
 		})
+	}
+}
+
+// TestSearchMilestoneTitles verifies that [searchMilestoneTitles] returns
+// plain milestone titles (not "id: title") and that the query parameter is
+// forwarded to GitLab as the Search filter. The mock asserts the request URL
+// includes ?search=v1, then returns a single milestone whose title is read
+// from the response body.
+func TestSearchMilestoneTitles(t *testing.T) {
+	var gotSearch string
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/milestones" {
+			http.NotFound(w, r)
+			return
+		}
+		gotSearch = r.URL.Query().Get("search")
+		respondJSON(w, http.StatusOK, `[
+			{"id":1,"title":"v1.0","state":"active"},
+			{"id":2,"title":"v1.1","state":"active"}
+		]`)
+	}))
+
+	values, _, err := searchMilestoneTitles(context.Background(), client, "42", "v1")
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if gotSearch != "v1" {
+		t.Errorf("query param 'search' = %q, want %q (query branch not exercised)", gotSearch, "v1")
+	}
+	if len(values) != 2 {
+		t.Fatalf("expected 2 titles, got %d: %v", len(values), values)
+	}
+	if values[0] != "v1.0" || values[1] != "v1.1" {
+		t.Errorf("titles = %v, want [v1.0 v1.1]", values)
+	}
+}
+
+// TestSearchMilestoneTitles_EmptyQuery verifies that when query is empty,
+// the Search option is NOT set on the request (covers the false branch of
+// `if query != ""`).
+func TestSearchMilestoneTitles_EmptyQuery(t *testing.T) {
+	var hadSearch bool
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/milestones" {
+			http.NotFound(w, r)
+			return
+		}
+		_, hadSearch = r.URL.Query()["search"]
+		respondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	_, _, err := searchMilestoneTitles(context.Background(), client, "42", "")
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if hadSearch {
+		t.Error("expected no 'search' query param when query is empty")
+	}
+}
+
+// TestSearchMilestoneTitles_APIError verifies that an error from the GitLab
+// API is wrapped and returned. Uses 403 (not 5xx) to avoid client-go retries.
+func TestSearchMilestoneTitles_APIError(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	_, _, err := searchMilestoneTitles(context.Background(), client, "42", "v1")
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+	if !strings.Contains(err.Error(), "search milestone titles") {
+		t.Errorf("expected error to be wrapped with 'search milestone titles', got: %v", err)
 	}
 }

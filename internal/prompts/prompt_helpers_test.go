@@ -1214,4 +1214,14 @@ func TestProjectPathFromWebURL(t *testing.T) {
 			t.Errorf("expected empty for malformed URL, got %q", got)
 		}
 	})
+
+	// dash_at_path_root exercises the trailing `return ""` branch where the
+	// URL contains "/-/" but it appears immediately after the host (no group
+	// segment to extract).
+	t.Run("dash_at_path_root", func(t *testing.T) {
+		got := projectPathFromWebURL("https://gitlab.com/-/snippets/1")
+		if got != "" {
+			t.Errorf("expected empty for /-/ at path root, got %q", got)
+		}
+	})
 }
