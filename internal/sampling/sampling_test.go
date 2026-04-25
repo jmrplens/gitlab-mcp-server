@@ -1711,88 +1711,88 @@ func TestBuildModelPreferences_HintsAndPriorities(t *testing.T) {
 // propagated through to the MCP sampling request (covers the
 // `if cfg.hasTemperature` branch in [Client.Analyze]).
 func TestAnalyze_IntegrationWithTemperature(t *testing.T) {
-ctx := context.Background()
-server := mcp.NewServer(testImpl, nil)
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
 
-var receivedParams *mcp.CreateMessageParams
-client := mcp.NewClient(testImpl, &mcp.ClientOptions{
-CreateMessageHandler: func(_ context.Context, req *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-receivedParams = req.Params
-return &mcp.CreateMessageResult{
-Model:   testModelDefault,
-Content: &mcp.TextContent{Text: "ok"},
-}, nil
-},
-})
+	var receivedParams *mcp.CreateMessageParams
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageHandler: func(_ context.Context, req *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+			receivedParams = req.Params
+			return &mcp.CreateMessageResult{
+				Model:   testModelDefault,
+				Content: &mcp.TextContent{Text: "ok"},
+			}, nil
+		},
+	})
 
-st, ct := mcp.NewInMemoryTransports()
-ss, err := server.Connect(ctx, st, nil)
-if err != nil {
-t.Fatalf(fmtServerConnect, err)
-}
-defer ss.Close()
-cs, err := client.Connect(ctx, ct, nil)
-if err != nil {
-t.Fatalf(fmtClientConnect, err)
-}
-defer cs.Close()
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
 
-samplingClient := Client{session: ss}
-_, err = samplingClient.Analyze(ctx, "p", "d", WithTemperature(0.42))
-if err != nil {
-t.Fatalf(fmtAnalyzeUnexpected, err)
-}
-if receivedParams == nil {
-t.Fatal("CreateMessageHandler was not called")
-}
-if receivedParams.Temperature != 0.42 {
-t.Errorf("Temperature = %v, want 0.42 (option not propagated)", receivedParams.Temperature)
-}
+	samplingClient := Client{session: ss}
+	_, err = samplingClient.Analyze(ctx, "p", "d", WithTemperature(0.42))
+	if err != nil {
+		t.Fatalf(fmtAnalyzeUnexpected, err)
+	}
+	if receivedParams == nil {
+		t.Fatal("CreateMessageHandler was not called")
+	}
+	if receivedParams.Temperature != 0.42 {
+		t.Errorf("Temperature = %v, want 0.42 (option not propagated)", receivedParams.Temperature)
+	}
 }
 
 // TestAnalyze_IntegrationWithStopSequences verifies that [WithStopSequences]
 // is propagated through to the MCP sampling request (covers the
 // `if len(cfg.stopSequences) > 0` branch in [Client.Analyze]).
 func TestAnalyze_IntegrationWithStopSequences(t *testing.T) {
-ctx := context.Background()
-server := mcp.NewServer(testImpl, nil)
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
 
-var receivedParams *mcp.CreateMessageParams
-client := mcp.NewClient(testImpl, &mcp.ClientOptions{
-CreateMessageHandler: func(_ context.Context, req *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-receivedParams = req.Params
-return &mcp.CreateMessageResult{
-Model:   testModelDefault,
-Content: &mcp.TextContent{Text: "ok"},
-}, nil
-},
-})
+	var receivedParams *mcp.CreateMessageParams
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageHandler: func(_ context.Context, req *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+			receivedParams = req.Params
+			return &mcp.CreateMessageResult{
+				Model:   testModelDefault,
+				Content: &mcp.TextContent{Text: "ok"},
+			}, nil
+		},
+	})
 
-st, ct := mcp.NewInMemoryTransports()
-ss, err := server.Connect(ctx, st, nil)
-if err != nil {
-t.Fatalf(fmtServerConnect, err)
-}
-defer ss.Close()
-cs, err := client.Connect(ctx, ct, nil)
-if err != nil {
-t.Fatalf(fmtClientConnect, err)
-}
-defer cs.Close()
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
 
-samplingClient := Client{session: ss}
-_, err = samplingClient.Analyze(ctx, "p", "d", WithStopSequences("STOP", "END"))
-if err != nil {
-t.Fatalf(fmtAnalyzeUnexpected, err)
-}
-if receivedParams == nil {
-t.Fatal("CreateMessageHandler was not called")
-}
-if len(receivedParams.StopSequences) != 2 ||
-receivedParams.StopSequences[0] != "STOP" ||
-receivedParams.StopSequences[1] != "END" {
-t.Errorf("StopSequences = %v, want [STOP END] (option not propagated)", receivedParams.StopSequences)
-}
+	samplingClient := Client{session: ss}
+	_, err = samplingClient.Analyze(ctx, "p", "d", WithStopSequences("STOP", "END"))
+	if err != nil {
+		t.Fatalf(fmtAnalyzeUnexpected, err)
+	}
+	if receivedParams == nil {
+		t.Fatal("CreateMessageHandler was not called")
+	}
+	if len(receivedParams.StopSequences) != 2 ||
+		receivedParams.StopSequences[0] != "STOP" ||
+		receivedParams.StopSequences[1] != "END" {
+		t.Errorf("StopSequences = %v, want [STOP END] (option not propagated)", receivedParams.StopSequences)
+	}
 }
 
 // TestAnalyzeWithTools_IntegrationWithTemperatureAndStops verifies that
@@ -1800,49 +1800,49 @@ t.Errorf("StopSequences = %v, want [STOP END] (option not propagated)", received
 // MCP CreateMessageWithTools request inside the iteration loop. Covers the
 // matching branches in [Client.AnalyzeWithTools].
 func TestAnalyzeWithTools_IntegrationWithTemperatureAndStops(t *testing.T) {
-ctx := context.Background()
-server := mcp.NewServer(testImpl, nil)
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
 
-var receivedParams *mcp.CreateMessageWithToolsParams
-client := mcp.NewClient(testImpl, &mcp.ClientOptions{
-CreateMessageWithToolsHandler: func(_ context.Context, req *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
-receivedParams = req.Params
-return &mcp.CreateMessageWithToolsResult{
-Model:      testModelDefault,
-Content:    []mcp.Content{&mcp.TextContent{Text: "final"}},
-StopReason: "endTurn",
-}, nil
-},
-})
+	var receivedParams *mcp.CreateMessageWithToolsParams
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		CreateMessageWithToolsHandler: func(_ context.Context, req *mcp.CreateMessageWithToolsRequest) (*mcp.CreateMessageWithToolsResult, error) {
+			receivedParams = req.Params
+			return &mcp.CreateMessageWithToolsResult{
+				Model:      testModelDefault,
+				Content:    []mcp.Content{&mcp.TextContent{Text: "final"}},
+				StopReason: "endTurn",
+			}, nil
+		},
+	})
 
-st, ct := mcp.NewInMemoryTransports()
-ss, err := server.Connect(ctx, st, nil)
-if err != nil {
-t.Fatalf(fmtServerConnect, err)
-}
-defer ss.Close()
-cs, err := client.Connect(ctx, ct, nil)
-if err != nil {
-t.Fatalf(fmtClientConnect, err)
-}
-defer cs.Close()
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf(fmtServerConnect, err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf(fmtClientConnect, err)
+	}
+	defer cs.Close()
 
-samplingClient := Client{session: ss}
-executor := &mockToolExecutor{}
-_, err = samplingClient.AnalyzeWithTools(ctx, "p", "d", executor,
-WithTemperature(0.7),
-WithStopSequences("HALT"),
-)
-if err != nil {
-t.Fatalf("AnalyzeWithTools() unexpected error: %v", err)
-}
-if receivedParams == nil {
-t.Fatal("CreateMessageWithToolsHandler was not called")
-}
-if receivedParams.Temperature != 0.7 {
-t.Errorf("Temperature = %v, want 0.7", receivedParams.Temperature)
-}
-if len(receivedParams.StopSequences) != 1 || receivedParams.StopSequences[0] != "HALT" {
-t.Errorf("StopSequences = %v, want [HALT]", receivedParams.StopSequences)
-}
+	samplingClient := Client{session: ss}
+	executor := &mockToolExecutor{}
+	_, err = samplingClient.AnalyzeWithTools(ctx, "p", "d", executor,
+		WithTemperature(0.7),
+		WithStopSequences("HALT"),
+	)
+	if err != nil {
+		t.Fatalf("AnalyzeWithTools() unexpected error: %v", err)
+	}
+	if receivedParams == nil {
+		t.Fatal("CreateMessageWithToolsHandler was not called")
+	}
+	if receivedParams.Temperature != 0.7 {
+		t.Errorf("Temperature = %v, want 0.7", receivedParams.Temperature)
+	}
+	if len(receivedParams.StopSequences) != 1 || receivedParams.StopSequences[0] != "HALT" {
+		t.Errorf("StopSequences = %v, want [HALT]", receivedParams.StopSequences)
+	}
 }

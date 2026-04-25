@@ -409,42 +409,42 @@ func TestProjectContributors_RequiresProjectID(t *testing.T) {
 // wraps and propagates errors from ListMilestones (covers the
 // `if err != nil` branch at prompt_milestone_label.go:100).
 func TestMilestoneProgress_APIError(t *testing.T) {
-mux := http.NewServeMux()
-mux.HandleFunc("GET /api/v4/projects/{project}/milestones", func(w http.ResponseWriter, _ *http.Request) {
-w.WriteHeader(http.StatusForbidden)
-})
-session := newMCPSession(t, mux)
-_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-Name:      "milestone_progress",
-Arguments: map[string]string{"project_id": "myproject"},
-})
-if err == nil {
-t.Fatal("expected error when GitLab API returns 403")
-}
-if !strings.Contains(err.Error(), "milestone_progress") {
-t.Errorf("expected wrapped 'milestone_progress' error, got: %v", err)
-}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	session := newMCPSession(t, mux)
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name:      "milestone_progress",
+		Arguments: map[string]string{"project_id": "myproject"},
+	})
+	if err == nil {
+		t.Fatal("expected error when GitLab API returns 403")
+	}
+	if !strings.Contains(err.Error(), "milestone_progress") {
+		t.Errorf("expected wrapped 'milestone_progress' error, got: %v", err)
+	}
 }
 
 // TestLabelDistribution_APIError verifies that handleLabelDistribution
 // wraps and propagates errors from ListLabels (covers the
 // `if err != nil` branch at prompt_milestone_label.go:172).
 func TestLabelDistribution_APIError(t *testing.T) {
-mux := http.NewServeMux()
-mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
-w.WriteHeader(http.StatusForbidden)
-})
-session := newMCPSession(t, mux)
-_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-Name:      "label_distribution",
-Arguments: map[string]string{"project_id": "myproject"},
-})
-if err == nil {
-t.Fatal("expected error when GitLab API returns 403")
-}
-if !strings.Contains(err.Error(), "label_distribution") {
-t.Errorf("expected wrapped 'label_distribution' error, got: %v", err)
-}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/labels", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	session := newMCPSession(t, mux)
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name:      "label_distribution",
+		Arguments: map[string]string{"project_id": "myproject"},
+	})
+	if err == nil {
+		t.Fatal("expected error when GitLab API returns 403")
+	}
+	if !strings.Contains(err.Error(), "label_distribution") {
+		t.Errorf("expected wrapped 'label_distribution' error, got: %v", err)
+	}
 }
 
 // TestGroupMilestoneProgress_APIError verifies that
@@ -452,40 +452,40 @@ t.Errorf("expected wrapped 'label_distribution' error, got: %v", err)
 // ListGroupMilestones (covers the `if err != nil` branch at
 // prompt_milestone_label.go:253).
 func TestGroupMilestoneProgress_APIError(t *testing.T) {
-mux := http.NewServeMux()
-mux.HandleFunc("GET /api/v4/groups/{group}/milestones", func(w http.ResponseWriter, _ *http.Request) {
-w.WriteHeader(http.StatusForbidden)
-})
-session := newMCPSession(t, mux)
-_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-Name:      "group_milestone_progress",
-Arguments: map[string]string{"group_id": "mygroup"},
-})
-if err == nil {
-t.Fatal("expected error when GitLab API returns 403")
-}
-if !strings.Contains(err.Error(), "group_milestone_progress") {
-t.Errorf("expected wrapped 'group_milestone_progress' error, got: %v", err)
-}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/{group}/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	session := newMCPSession(t, mux)
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name:      "group_milestone_progress",
+		Arguments: map[string]string{"group_id": "mygroup"},
+	})
+	if err == nil {
+		t.Fatal("expected error when GitLab API returns 403")
+	}
+	if !strings.Contains(err.Error(), "group_milestone_progress") {
+		t.Errorf("expected wrapped 'group_milestone_progress' error, got: %v", err)
+	}
 }
 
 // TestProjectContributors_APIError verifies that handleProjectContributors
 // wraps and propagates errors from Repositories.Contributors (covers the
 // `if err != nil` branch at prompt_milestone_label.go:321).
 func TestProjectContributors_APIError(t *testing.T) {
-mux := http.NewServeMux()
-mux.HandleFunc("GET /api/v4/projects/{project}/repository/contributors", func(w http.ResponseWriter, _ *http.Request) {
-w.WriteHeader(http.StatusForbidden)
-})
-session := newMCPSession(t, mux)
-_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-Name:      "project_contributors",
-Arguments: map[string]string{"project_id": "myproject"},
-})
-if err == nil {
-t.Fatal("expected error when GitLab API returns 403")
-}
-if !strings.Contains(err.Error(), "project_contributors") {
-t.Errorf("expected wrapped 'project_contributors' error, got: %v", err)
-}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/repository/contributors", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	session := newMCPSession(t, mux)
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name:      "project_contributors",
+		Arguments: map[string]string{"project_id": "myproject"},
+	})
+	if err == nil {
+		t.Fatal("expected error when GitLab API returns 403")
+	}
+	if !strings.Contains(err.Error(), "project_contributors") {
+		t.Errorf("expected wrapped 'project_contributors' error, got: %v", err)
+	}
 }
