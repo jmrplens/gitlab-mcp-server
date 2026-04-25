@@ -19,7 +19,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_list"),
 		Description: "List all service accounts for a GitLab group.\n\nReturns: paginated list of service accounts with ID, name, username, and email. See also: gitlab_group_service_account_create, gitlab_group_service_account_pat_list.",
 		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconUser,
+		Icons:       toolutil.IconBot,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
@@ -32,7 +32,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_create"),
 		Description: "Create a service account in a GitLab group (top-level only).\n\nReturns: created service account details. See also: gitlab_group_service_account_list, gitlab_group_service_account_pat_create.",
 		Annotations: toolutil.CreateAnnotations,
-		Icons:       toolutil.IconUser,
+		Icons:       toolutil.IconBot,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Create(ctx, client, input)
@@ -45,7 +45,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_update"),
 		Description: "Update a service account in a GitLab group (top-level only).\n\nReturns: updated service account details. See also: gitlab_group_service_account_list, gitlab_group_service_account_delete.",
 		Annotations: toolutil.UpdateAnnotations,
-		Icons:       toolutil.IconUser,
+		Icons:       toolutil.IconBot,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input UpdateInput) (*mcp.CallToolResult, Output, error) {
 		start := time.Now()
 		out, err := Update(ctx, client, input)
@@ -58,7 +58,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_group_service_account_delete"),
 		Description: "Delete a service account from a GitLab group (top-level only).\n\nReturns: confirmation of deletion. See also: gitlab_group_service_account_list, gitlab_group_service_account_create.",
 		Annotations: toolutil.DeleteAnnotations,
-		Icons:       toolutil.IconUser,
+		Icons:       toolutil.IconBot,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, DeleteOutput, error) {
 		start := time.Now()
 		err := Delete(ctx, client, input)
