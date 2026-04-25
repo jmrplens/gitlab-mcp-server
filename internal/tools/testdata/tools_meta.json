@@ -1014,6 +1014,878 @@
     }
   },
   {
+    "name": "gitlab_interactive_issue_create",
+    "description": "Interactively create a GitLab issue with step-by-step user prompts via MCP elicitation. Guides the user through entering title, description, labels, and confidentiality settings with confirmation before creation. Requires the MCP client to support the elicitation capability.\n\nReturns: JSON with the created issue details.\n\nSee also: gitlab_issue_create",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Project ID or URL-encoded path where the issue will be created",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "author": {
+          "type": "string"
+        },
+        "closed_at": {
+          "type": "string"
+        },
+        "closed_by": {
+          "type": "string"
+        },
+        "confidential": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "discussion_locked": {
+          "type": "boolean"
+        },
+        "downvotes": {
+          "type": "integer"
+        },
+        "due_date": {
+          "type": "string"
+        },
+        "epic_issue_id": {
+          "type": "integer"
+        },
+        "health_status": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "issue_iid": {
+          "type": "integer"
+        },
+        "issue_type": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "merge_request_count": {
+          "type": "integer"
+        },
+        "milestone": {
+          "type": "string"
+        },
+        "moved_to_id": {
+          "type": "integer"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "references": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "subscribed": {
+          "type": "boolean"
+        },
+        "task_completion_count": {
+          "type": "integer"
+        },
+        "task_completion_total": {
+          "type": "integer"
+        },
+        "time_estimate": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "total_time_spent": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "upvotes": {
+          "type": "integer"
+        },
+        "user_notes_count": {
+          "type": "integer"
+        },
+        "web_url": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "issue_iid",
+        "title",
+        "description",
+        "state",
+        "labels",
+        "assignees",
+        "milestone",
+        "author",
+        "web_url",
+        "created_at",
+        "updated_at",
+        "closed_at",
+        "due_date",
+        "confidential",
+        "discussion_locked",
+        "project_id",
+        "subscribed"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_interactive_mr_create",
+    "description": "Interactively create a GitLab merge request with step-by-step user prompts via MCP elicitation. Guides the user through entering branches, title, description, labels, squash/remove-source options with confirmation. Requires the MCP client to support the elicitation capability.\n\nReturns: JSON with the created merge request details.\n\nSee also: gitlab_mr_create",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Project ID or URL-encoded path where the MR will be created",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_collaboration": {
+          "type": "boolean"
+        },
+        "assignees": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "author": {
+          "type": "string"
+        },
+        "blocking_discussions_resolved": {
+          "type": "boolean"
+        },
+        "changes_count": {
+          "type": "string"
+        },
+        "closed_at": {
+          "type": "string"
+        },
+        "closed_by": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "diff_refs": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "base_sha",
+            "head_sha",
+            "start_sha"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "discussion_locked": {
+          "type": "boolean"
+        },
+        "diverged_commits_count": {
+          "type": "integer"
+        },
+        "downvotes": {
+          "type": "integer"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "first_contribution": {
+          "type": "boolean"
+        },
+        "force_remove_source_branch": {
+          "type": "boolean"
+        },
+        "has_conflicts": {
+          "type": "boolean"
+        },
+        "head_pipeline_id": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "latest_build_finished_at": {
+          "type": "string"
+        },
+        "latest_build_started_at": {
+          "type": "string"
+        },
+        "merge_after": {
+          "type": "string"
+        },
+        "merge_commit_sha": {
+          "type": "string"
+        },
+        "merge_error": {
+          "type": "string"
+        },
+        "merge_status": {
+          "type": "string"
+        },
+        "merge_when_pipeline_succeeds": {
+          "type": "boolean"
+        },
+        "merged_at": {
+          "type": "string"
+        },
+        "merged_by": {
+          "type": "string"
+        },
+        "milestone": {
+          "type": "string"
+        },
+        "mr_iid": {
+          "type": "integer"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pipeline_id": {
+          "type": "integer"
+        },
+        "pipeline_name": {
+          "type": "string"
+        },
+        "pipeline_web_url": {
+          "type": "string"
+        },
+        "prepared_at": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "project_path": {
+          "type": "string"
+        },
+        "rebase_in_progress": {
+          "type": "boolean"
+        },
+        "references": {
+          "type": "string"
+        },
+        "reviewers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "sha": {
+          "type": "string"
+        },
+        "should_remove_source_branch": {
+          "type": "boolean"
+        },
+        "source_branch": {
+          "type": "string"
+        },
+        "source_project_id": {
+          "type": "integer"
+        },
+        "squash": {
+          "type": "boolean"
+        },
+        "squash_commit_sha": {
+          "type": "string"
+        },
+        "squash_on_merge": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        },
+        "subscribed": {
+          "type": "boolean"
+        },
+        "target_branch": {
+          "type": "string"
+        },
+        "target_project_id": {
+          "type": "integer"
+        },
+        "task_completion_count": {
+          "type": "integer"
+        },
+        "task_completion_total": {
+          "type": "integer"
+        },
+        "time_estimate": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "total_time_spent": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "upvotes": {
+          "type": "integer"
+        },
+        "user_notes_count": {
+          "type": "integer"
+        },
+        "web_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "mr_iid",
+        "project_id",
+        "title",
+        "description",
+        "state",
+        "source_branch",
+        "target_branch",
+        "web_url",
+        "merge_status",
+        "draft",
+        "has_conflicts",
+        "blocking_discussions_resolved",
+        "discussion_locked",
+        "assignees",
+        "reviewers",
+        "labels",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_interactive_project_create",
+    "description": "Interactively create a GitLab project with step-by-step user prompts via MCP elicitation. Guides the user through entering name, description, visibility, README initialization, and default branch with confirmation. Requires the MCP client to support the elicitation capability.\n\nReturns: JSON with the created project details.\n\nSee also: gitlab_project_create",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Optional: pre-fill project ID or path for tools that need it",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_merge_on_skipped_pipeline": {
+          "type": "boolean"
+        },
+        "approvals_before_merge": {
+          "type": "integer"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "autoclose_referenced_issues": {
+          "type": "boolean"
+        },
+        "avatar_url": {
+          "type": "string"
+        },
+        "build_timeout": {
+          "type": "integer"
+        },
+        "ci_config_path": {
+          "type": "string"
+        },
+        "compliance_frameworks": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "container_registry_enabled": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "creator_id": {
+          "type": "integer"
+        },
+        "default_branch": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "empty_repo": {
+          "type": "boolean"
+        },
+        "forked_from_project": {
+          "type": "string"
+        },
+        "forks_count": {
+          "type": "integer"
+        },
+        "http_url_to_repo": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "import_url": {
+          "type": "string"
+        },
+        "issues_enabled": {
+          "type": "boolean"
+        },
+        "jobs_enabled": {
+          "type": "boolean"
+        },
+        "last_activity_at": {
+          "type": "string"
+        },
+        "lfs_enabled": {
+          "type": "boolean"
+        },
+        "marked_for_deletion_on": {
+          "type": "string"
+        },
+        "merge_commit_template": {
+          "type": "string"
+        },
+        "merge_method": {
+          "type": "string"
+        },
+        "merge_pipelines_enabled": {
+          "type": "boolean"
+        },
+        "merge_request_title_regex": {
+          "type": "string"
+        },
+        "merge_request_title_regex_description": {
+          "type": "string"
+        },
+        "merge_requests_enabled": {
+          "type": "boolean"
+        },
+        "merge_trains_enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "name_with_namespace": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "only_allow_merge_if_all_discussions_are_resolved": {
+          "type": "boolean"
+        },
+        "only_allow_merge_if_pipeline_succeeds": {
+          "type": "boolean"
+        },
+        "open_issues_count": {
+          "type": "integer"
+        },
+        "package_registry_access_level": {
+          "type": "string"
+        },
+        "packages_enabled": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "path_with_namespace": {
+          "type": "string"
+        },
+        "public_builds": {
+          "type": "boolean"
+        },
+        "readme_url": {
+          "type": "string"
+        },
+        "remove_source_branch_after_merge": {
+          "type": "boolean"
+        },
+        "request_access_enabled": {
+          "type": "boolean"
+        },
+        "resolve_outdated_diff_discussions": {
+          "type": "boolean"
+        },
+        "shared_runners_enabled": {
+          "type": "boolean"
+        },
+        "snippets_enabled": {
+          "type": "boolean"
+        },
+        "squash_commit_template": {
+          "type": "string"
+        },
+        "squash_option": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
+          "type": "string"
+        },
+        "star_count": {
+          "type": "integer"
+        },
+        "suggestion_commit_message": {
+          "type": "string"
+        },
+        "topics": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string"
+        },
+        "web_url": {
+          "type": "string"
+        },
+        "wiki_enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "path_with_namespace",
+        "visibility",
+        "default_branch",
+        "web_url",
+        "description",
+        "archived",
+        "topics",
+        "only_allow_merge_if_pipeline_succeeds",
+        "only_allow_merge_if_all_discussions_are_resolved",
+        "remove_source_branch_after_merge",
+        "created_at",
+        "request_access_enabled",
+        "issues_enabled",
+        "merge_requests_enabled",
+        "wiki_enabled",
+        "jobs_enabled",
+        "lfs_enabled",
+        "allow_merge_on_skipped_pipeline",
+        "merge_pipelines_enabled",
+        "merge_trains_enabled",
+        "autoclose_referenced_issues",
+        "resolve_outdated_diff_discussions"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_interactive_release_create",
+    "description": "Interactively create a GitLab release with step-by-step user prompts via MCP elicitation. Guides the user through entering tag name, release name, description with confirmation before creation. Requires the MCP client to support the elicitation capability.\n\nReturns: JSON with the created release details.\n\nSee also: gitlab_release_create",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Project ID or URL-encoded path where the release will be created",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "assets_count": {
+          "type": "integer"
+        },
+        "assets_links": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "direct_asset_url": {
+                "type": "string"
+              },
+              "external": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "link_type": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "url",
+              "link_type",
+              "external"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assets_sources": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "format",
+              "url"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "author": {
+          "type": "string"
+        },
+        "commit_path": {
+          "type": "string"
+        },
+        "commit_sha": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "description_html": {
+          "type": "string"
+        },
+        "evidences": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "collected_at": {
+                "type": "string"
+              },
+              "filepath": {
+                "type": "string"
+              },
+              "sha": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sha",
+              "filepath"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "milestones": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "released_at": {
+          "type": "string"
+        },
+        "tag_name": {
+          "type": "string"
+        },
+        "tag_path": {
+          "type": "string"
+        },
+        "upcoming_release": {
+          "type": "boolean"
+        },
+        "web_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag_name",
+        "name",
+        "description",
+        "created_at",
+        "released_at"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_issue",
     "description": "Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.\nValid actions: create, create_todo, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_issue_create, emoji_issue_delete, emoji_issue_get, emoji_issue_list, emoji_issue_note_create, emoji_issue_note_delete, emoji_issue_note_get, emoji_issue_note_list, event_issue_iteration_get, event_issue_iteration_list, event_issue_label_get, event_issue_label_list, event_issue_milestone_get, event_issue_milestone_list, event_issue_state_get, event_issue_state_list, event_issue_weight_list, get, get_by_id, iteration_list_group, iteration_list_project, link_create, link_delete, link_get, link_list, list, list_all, list_group, move, mrs_closing, mrs_related, note_create, note_delete, note_get, note_list, note_update, participants, reorder, spent_time_add, spent_time_reset, statistics_get, statistics_get_group, statistics_get_project, subscribe, time_estimate_reset, time_estimate_set, time_stats_get, unsubscribe, update, work_item_create, work_item_delete, work_item_get, work_item_list, work_item_update\n\nWhen to use: issue lifecycle — creating, updating, closing, moving, commenting, linking issues, time tracking, and work item management (including Epics via Work Items API). NOT for: merge request operations (use gitlab_merge_request), project settings (use gitlab_project), CI/CD pipelines (use gitlab_pipeline).\n\nSide effects: delete/move are irreversible. move transfers the issue to another project (changes URL, IID). Time tracking uses dedicated actions (time_estimate_set, spent_time_add) — do NOT pass time params to update.\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions (delete) return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.\n\nParam conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).\n\nIssue CRUD:\n- create: project_id*, title*, description, assignee_id, assignee_ids ([]int), labels (comma-separated), milestone_id, due_date (YYYY-MM-DD), confidential, issue_type (issue/incident/test_case/task), weight, epic_id\n- get: project_id*, issue_iid*\n- get_by_id: issue_id* (global ID, no project_id needed)\n- list: project_id*, state (opened/closed/all), labels, not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential, created_after/before, updated_after/before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc)\n- list_all: global issue list (no project_id). Same filters as list.\n- list_group: group_id*, state, labels, milestone, scope, search, order_by, sort\n- update: project_id*, issue_iid*, title, description, state_event (close/reopen), assignee_id, assignee_ids, labels, add_labels, remove_labels, milestone_id, due_date, confidential, issue_type, weight, epic_id, discussion_locked\n- delete: project_id*, issue_iid* (permanent, irreversible)\n- reorder: project_id*, issue_iid*, move_after_id, move_before_id\n- move: project_id*, issue_iid*, to_project_id* (moves to another project)\n- subscribe / unsubscribe: project_id*, issue_iid*\n- create_todo: project_id*, issue_iid*\n\nTime tracking:\n- time_estimate_set: project_id*, issue_iid*, duration* (e.g. 3h30m)\n- time_estimate_reset / spent_time_reset: project_id*, issue_iid*\n- spent_time_add: project_id*, issue_iid*, duration*, summary\n- time_stats_get: project_id*, issue_iid*\n\nParticipants \u0026 related MRs:\n- participants: project_id*, issue_iid*\n- mrs_closing / mrs_related: project_id*, issue_iid*\n\nNotes (note_*): project_id*, issue_iid* for all.\n- note_list: order_by, sort\n- note_get / note_delete: note_id*\n- note_create: body*, internal\n- note_update: note_id*, body*\n\nIssue links (link_*): project_id*, issue_iid* for all.\n- link_list\n- link_get / link_delete: issue_link_id*\n- link_create: target_project_id*, target_issue_iid*, link_type\n\nDiscussions (discussion_*): project_id*, issue_iid* for all.\n- discussion_list\n- discussion_get: discussion_id*\n- discussion_create: body*\n- discussion_add_note: discussion_id*, body*\n- discussion_update_note: discussion_id*, note_id*, body*\n- discussion_delete_note: discussion_id*, note_id*\n\nWork Items (work_item_*): full_path* for all. Use types=[\"Epic\"] to list epics (replaces deprecated epic_list).\n- work_item_list: state, search, types, author_username, label_name, confidential, sort, first, after\n- work_item_get: iid*\n- work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type}\n- work_item_update: iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)\n- work_item_delete: iid* (permanent)\n\nStatistics:\n- statistics_get: global issue stats (optional filters same as list)\n- statistics_get_group: group_id*\n- statistics_get_project: project_id*\n\nAward emoji (emoji_issue_*): project_id*, iid* for all.\n- emoji_issue_list / emoji_issue_get (+ award_id*) / emoji_issue_delete (+ award_id*)\n- emoji_issue_create: name*\n- emoji_issue_note_list / emoji_issue_note_get: note_id*, (+ award_id* for get)\n- emoji_issue_note_create: note_id*, name*\n- emoji_issue_note_delete: note_id*, award_id*\n\nResource events (event_issue_*): project_id*, issue_iid* for all.\n- event_issue_label_list / event_issue_label_get (+ label_event_id*)\n- event_issue_milestone_list / event_issue_milestone_get (+ milestone_event_id*)\n- event_issue_state_list / event_issue_state_get (+ state_event_id*)\n- event_issue_iteration_list / event_issue_iteration_get (+ iteration_event_id*)\n- event_issue_weight_list\n\nIterations (Premium+ — requires GITLAB_ENTERPRISE=true):\n- iteration_list_project: project_id*, state (1=opened, 2=upcoming, 3=current, 4=closed), search, include_ancestors\n- iteration_list_group: group_id*, state, search, include_ancestors\n\nSee also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD)\n\nReturns:\n- Paginated list actions ({page, per_page, total, next_page}): list / list_all / list_group / participants / mrs_closing / mrs_related / link_list / discussion_list / note_list / emoji_issue_list / emoji_issue_note_list / event_issue_label_list / event_issue_milestone_list / event_issue_state_list / event_issue_iteration_list / event_issue_weight_list.\n- Cursor-paginated GraphQL list actions ({nodes, page_info: {end_cursor, has_next_page}}): work_item_list.\n- Single-object actions: get / get_by_id / create / update / move / reorder / subscribe / unsubscribe / create_todo / link_get / link_create / discussion_get / discussion_create / discussion_add_note / discussion_update_note / note_get / note_create / note_update / time_estimate_set / time_estimate_reset / spent_time_add / spent_time_reset / time_stats_get / work_item_get / work_item_create / work_item_update / emoji_issue_get / emoji_issue_create / emoji_issue_note_get / emoji_issue_note_create / event_issue_label_get / event_issue_milestone_get / event_issue_state_get / event_issue_iteration_get / statistics_get / statistics_get_group / statistics_get_project: issue or sub-resource object.\n- Void actions ({success, message}): delete / link_delete / note_delete / discussion_delete_note / work_item_delete / emoji_issue_delete / emoji_issue_note_delete.\n- Premium+ iteration list actions (paginated, only when GITLAB_ENTERPRISE=true): iteration_list_project / iteration_list_group.\nErrors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).",
     "inputSchema": {

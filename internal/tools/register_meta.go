@@ -127,6 +127,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelinetriggers"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/planlimits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectaliases"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectimportexport"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectiterations"
@@ -172,10 +173,13 @@ import (
 )
 
 // RegisterAllMeta wires meta-tools to the MCP server.
-// Base: 28 meta-tools (24 inline + 3 delegated + 1 standalone).
-// Enterprise: +15 inline = 43 meta-tools total.
-// Each meta-tool dispatches to the underlying handler based on
-// the "action" parameter. This reduces token usage for LLMs while preserving full functionality.
+// Base: 32 tools = 28 meta-tools (24 inline + 3 delegated + 1 standalone) +
+// 4 standalone interactive elicitation tools (gitlab_interactive_*).
+// Enterprise: +15 inline meta-tools = 47 tools total.
+// Each meta-tool dispatches to the underlying handler based on the "action"
+// parameter. This reduces token usage for LLMs while preserving full
+// functionality. Interactive tools cannot be consolidated because they
+// require multi-round MCP elicitation/create exchanges with the client.
 func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) {
 	// Core domain meta-tools (inline handlers — enterprise routes injected when enabled)
 	registerProjectMeta(server, client, enterprise)
@@ -231,8 +235,15 @@ func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise
 	runners.RegisterMeta(server, client)
 	samplingtools.RegisterMeta(server, client)
 
-	// Standalone utility tools (not consolidated into meta-tools)
+	// Standalone utility tools (not consolidated into meta-tools).
+	// projectdiscovery: git-remote → project resolution helper.
+	// elicitationtools: 4 gitlab_interactive_* tools that drive multi-step MCP
+	// elicitation flows. They cannot be folded into an action+params meta-tool
+	// because each step requires a separate elicitation/create round-trip with
+	// the client. They degrade gracefully on clients without the elicitation
+	// capability via UnsupportedResult (IsError: true).
 	projectdiscovery.RegisterTools(server, client)
+	elicitationtools.RegisterTools(server, client)
 }
 
 // registerProjectMeta registers the gitlab_project meta-tool with actions:

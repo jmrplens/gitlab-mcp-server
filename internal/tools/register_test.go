@@ -115,7 +115,10 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 28 base, 43 with enterprise.
+// the expected number of meta-tools: 32 base, 47 with enterprise.
+// Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
+// tools that cannot be folded into action+params meta-tools (they require
+// multi-round MCP elicitation/create exchanges with the client).
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -127,7 +130,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 28
+		const expectedTools = 32
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -142,7 +145,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 43
+		const expectedTools = 47
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -1237,6 +1240,11 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		"gitlab_vulnerability":         true,
 
 		"gitlab_wiki": true,
+
+		"gitlab_interactive_issue_create":   true,
+		"gitlab_interactive_mr_create":      true,
+		"gitlab_interactive_project_create": true,
+		"gitlab_interactive_release_create": true,
 	}
 
 	for _, tool := range result.Tools {
