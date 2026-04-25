@@ -221,7 +221,7 @@ result, err := samplingClient.Analyze(ctx, prompt, data,
 | `0.0 / 0.0 / 1.0` | `gitlab_review_mr_security` |
 | `0.2 / 0.2 / 0.8` | `gitlab_analyze_mr_changes` |
 | `0.2 / 0.3 / 0.8` | `gitlab_analyze_pipeline_failure` |
-| `0.3 / 0.3 / 0.7` | `gitlab_analyze_ci_config` |
+| `0.3 / 0.3 / 0.7` | `gitlab_analyze_ci_configuration` |
 | `0.3 / 0.4 / 0.6` | `gitlab_analyze_issue_scope` |
 | `0.4 / 0.5 / 0.5` | `gitlab_analyze_deployment_history`, `gitlab_summarize_mr_review`, `gitlab_generate_milestone_report` |
 | `0.4 / 0.6 / 0.4` | `gitlab_summarize_issue` |
