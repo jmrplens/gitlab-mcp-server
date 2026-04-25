@@ -43,7 +43,7 @@ func TestSearchProjects(t *testing.T) {
 	if len(values) != 2 {
 		t.Fatalf("expected 2 values, got %d", len(values))
 	}
-	if values[0] != "1: group/alpha" {
+	if values[0] != "group/alpha" {
 		t.Errorf(fmtUnexpectedValue0, values[0])
 	}
 }
@@ -102,7 +102,7 @@ func TestSearchGroups(t *testing.T) {
 	if len(values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(values))
 	}
-	if values[0] != "10: engineering/platform" {
+	if values[0] != "engineering/platform" {
 		t.Errorf("unexpected value: %s", values[0])
 	}
 }
@@ -405,7 +405,7 @@ func TestSearchPipelines(t *testing.T) {
 		if len(values) != 2 {
 			t.Fatalf("expected 2 values matching prefix '10', got %d: %v", len(values), values)
 		}
-		if values[0] != "100: main (success)" {
+		if values[0] != "100" {
 			t.Errorf(fmtUnexpectedValue0, values[0])
 		}
 	})
@@ -457,7 +457,7 @@ func TestSearchCommits(t *testing.T) {
 		if len(values) != 2 {
 			t.Fatalf("expected 2 values matching prefix 'abc', got %d: %v", len(values), values)
 		}
-		if values[0] != "abc123d: Fix login bug" {
+		if values[0] != "abc123d" {
 			t.Errorf(fmtUnexpectedValue0, values[0])
 		}
 	})
@@ -560,7 +560,7 @@ func TestSearchMilestones(t *testing.T) {
 	if len(values) != 2 {
 		t.Fatalf("expected 2 values (server-side search), got %d: %v", len(values), values)
 	}
-	if values[0] != "1: v1.0" {
+	if values[0] != "1" {
 		t.Errorf(fmtUnexpectedValue0, values[0])
 	}
 }
@@ -601,7 +601,7 @@ func TestSearchJobs(t *testing.T) {
 		if len(values) != 2 {
 			t.Fatalf("expected 2 values matching prefix '50', got %d: %v", len(values), values)
 		}
-		if values[0] != "501: build (success)" {
+		if values[0] != "501" {
 			t.Errorf(fmtUnexpectedValue0, values[0])
 		}
 	})

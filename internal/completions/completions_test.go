@@ -90,7 +90,7 @@ func TestComplete_PromptProjectID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "1: group/my-project" {
+	if result.Completion.Values[0] != "group/my-project" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -216,7 +216,7 @@ func TestComplete_ResourceProjectID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "5: team/backend" {
+	if result.Completion.Values[0] != "team/backend" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -246,7 +246,7 @@ func TestComplete_ResourceGroupID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "3: engineering/backend" {
+	if result.Completion.Values[0] != "engineering/backend" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -276,7 +276,7 @@ func TestComplete_PromptGroupID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "5: platform/infra" {
+	if result.Completion.Values[0] != "platform/infra" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -609,7 +609,7 @@ func TestComplete_PromptPipelineID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf("expected 2 values matching '10', got %d: %v", len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "100: main (success)" {
+	if result.Completion.Values[0] != "100" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -848,7 +848,7 @@ func TestComplete_PromptMilestoneID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf(fmtExpected2Values, len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "1: v1.0" {
+	if result.Completion.Values[0] != "1" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -901,7 +901,7 @@ func TestComplete_PromptJobID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf(fmtExpected2Values, len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "501: build (success)" {
+	if result.Completion.Values[0] != "501" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
