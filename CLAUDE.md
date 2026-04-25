@@ -26,7 +26,7 @@
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
-| MCP Icons                 | 44 domain SVG icons on all tools, resources, and prompts                                                     |
+| MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
 | Source files (tools)      | 522+ (infrastructure + 162 sub-packages)                                                                     |
 | Test files (tools)        | 320                                                                                                          |
 | Go packages               | 187 (16 core + 163 tool packages + 8 cmd)                                                                    |

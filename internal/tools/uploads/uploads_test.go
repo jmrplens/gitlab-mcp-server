@@ -773,3 +773,22 @@ func TestUpload_ContextCancelled(t *testing.T) {
 		t.Fatal("expected error for cancelled context")
 	}
 }
+
+// TestProjectUpload_MissingProjectID verifies that Upload returns a
+// validation error when project_id is empty. The mock handler is never
+// invoked because validation occurs before any HTTP call.
+func TestProjectUpload_MissingProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP handler must not be invoked when project_id is empty")
+	}))
+	_, err := Upload(context.Background(), nil, client, UploadInput{
+		ContentBase64: "dGVzdA==",
+		Filename:      "x.txt",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing project_id, got nil")
+	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %q, want contains \"project_id is required\"", err.Error())
+	}
+}

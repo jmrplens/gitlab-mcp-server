@@ -206,10 +206,27 @@ result, err := samplingClient.Analyze(ctx, prompt, data,
 | ------ | ------- | ------- |
 | `WithMaxTokens(n)` | 4096 | Maximum tokens for LLM response |
 | `WithModelHints(hints...)` | none | Model preference hints to the client |
+| `WithModelPriorities(cost, speed, intelligence)` | balanced | Cost/speed/intelligence priorities (0..1, clamped). Hints take precedence per the MCP spec; priorities disambiguate between matches and influence model choice when no hint matches. |
+| `WithTemperature(t)` | client default | LLM sampling temperature (0..2, clamped). Lower values produce more deterministic output — recommended for security review, code analysis, release notes. |
+| `WithStopSequences(seqs...)` | none | Stop sequences that cause the LLM to halt generation when matched. Empty strings are filtered. |
 | `WithTools(tools)` | none | Tools available to the LLM during `AnalyzeWithTools` |
 | `WithToolChoice(choice)` | auto | How the LLM should use tools (auto/required/none) |
 | `WithMaxIterations(n)` | 5 | Maximum tool-calling rounds before giving up |
 | `WithIterationTimeout(d)` | 2 min | Per-iteration timeout for `AnalyzeWithTools` loop iterations, preventing indefinite hangs |
+
+**Model-priority presets** (actual values used by built-in sampling tools):
+
+| Preset (cost / speed / intelligence) | Used by |
+| ------------------------------------ | ------- |
+| `0.0 / 0.0 / 1.0` | `gitlab_review_mr_security` |
+| `0.2 / 0.2 / 0.8` | `gitlab_analyze_mr_changes` |
+| `0.2 / 0.3 / 0.8` | `gitlab_analyze_pipeline_failure` |
+| `0.3 / 0.3 / 0.7` | `gitlab_analyze_ci_configuration` |
+| `0.3 / 0.4 / 0.6` | `gitlab_analyze_issue_scope` |
+| `0.4 / 0.5 / 0.5` | `gitlab_analyze_deployment_history`, `gitlab_summarize_mr_review`, `gitlab_generate_milestone_report` |
+| `0.4 / 0.6 / 0.4` | `gitlab_summarize_issue` |
+| `0.5 / 0.5 / 0.5` | `gitlab_find_technical_debt` |
+| `0.5 / 0.6 / 0.4` | `gitlab_generate_release_notes` |
 
 ### AnalysisResult
 

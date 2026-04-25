@@ -90,7 +90,7 @@ func TestComplete_PromptProjectID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "1: group/my-project" {
+	if result.Completion.Values[0] != "group/my-project" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -216,7 +216,7 @@ func TestComplete_ResourceProjectID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "5: team/backend" {
+	if result.Completion.Values[0] != "team/backend" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -246,7 +246,7 @@ func TestComplete_ResourceGroupID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "3: engineering/backend" {
+	if result.Completion.Values[0] != "engineering/backend" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -276,7 +276,7 @@ func TestComplete_PromptGroupID(t *testing.T) {
 	if len(result.Completion.Values) != 1 {
 		t.Fatalf(fmtExpected1Value, len(result.Completion.Values))
 	}
-	if result.Completion.Values[0] != "5: platform/infra" {
+	if result.Completion.Values[0] != "platform/infra" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -609,7 +609,7 @@ func TestComplete_PromptPipelineID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf("expected 2 values matching '10', got %d: %v", len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "100: main (success)" {
+	if result.Completion.Values[0] != "100" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -848,7 +848,7 @@ func TestComplete_PromptMilestoneID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf(fmtExpected2Values, len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "1: v1.0" {
+	if result.Completion.Values[0] != "1" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }
@@ -869,6 +869,70 @@ func TestComplete_PromptMilestoneIDWithoutProjectID(t *testing.T) {
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Errorf(fmtEmptyValuesNoProject, len(result.Completion.Values))
+	}
+}
+
+// TestComplete_PromptMilestoneTitle verifies that completing a prompt's
+// "milestone" argument (title-based, used by the milestone_progress prompt)
+// returns plain milestone titles. Distinct from "milestone_id" which returns
+// numeric IDs.
+func TestComplete_PromptMilestoneTitle(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[
+				{"id":1,"title":"Sprint 1","state":"active"},
+				{"id":2,"title":"Sprint 2","state":"active"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	h := NewHandler(client)
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refPrompt},
+		Argument: mcp.CompleteParamsArgument{Name: "milestone", Value: "Sprint"},
+		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 2 {
+		t.Fatalf(fmtExpected2Values, len(result.Completion.Values), result.Completion.Values)
+	}
+	if result.Completion.Values[0] != "Sprint 1" {
+		t.Errorf("milestone title[0] = %q, want %q", result.Completion.Values[0], "Sprint 1")
+	}
+	if result.Completion.Values[1] != "Sprint 2" {
+		t.Errorf("milestone title[1] = %q, want %q", result.Completion.Values[1], "Sprint 2")
+	}
+}
+
+// TestComplete_PromptMilestoneTitle_APIError verifies that completion errors
+// from the GitLab API are swallowed and an empty result is returned (so the
+// LLM-facing UI degrades gracefully).
+func TestComplete_PromptMilestoneTitle_APIError(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	h := NewHandler(client)
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refPrompt},
+		Argument: mcp.CompleteParamsArgument{Name: "milestone", Value: "x"},
+		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("expected no error on API failure, got: %v", err)
+	}
+	if len(result.Completion.Values) != 0 {
+		t.Errorf(fmtEmptyValues, len(result.Completion.Values))
 	}
 }
 
@@ -901,7 +965,7 @@ func TestComplete_PromptJobID(t *testing.T) {
 	if len(result.Completion.Values) != 2 {
 		t.Fatalf(fmtExpected2Values, len(result.Completion.Values), result.Completion.Values)
 	}
-	if result.Completion.Values[0] != "501: build (success)" {
+	if result.Completion.Values[0] != "501" {
 		t.Errorf(fmtUnexpectedValue, result.Completion.Values[0])
 	}
 }

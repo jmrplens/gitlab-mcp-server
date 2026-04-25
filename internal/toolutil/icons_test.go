@@ -3,6 +3,7 @@
 package toolutil
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -12,55 +13,63 @@ import (
 // allIcons returns every domain icon slice for exhaustive validation.
 func allIcons() map[string][]mcp.Icon {
 	return map[string][]mcp.Icon{
-		"Branch":      IconBranch,
-		"Commit":      IconCommit,
-		"Issue":       IconIssue,
-		"MR":          IconMR,
-		"Pipeline":    IconPipeline,
-		"Job":         IconJob,
-		"Release":     IconRelease,
-		"Tag":         IconTag,
-		"Project":     IconProject,
-		"Group":       IconGroup,
-		"User":        IconUser,
-		"Wiki":        IconWiki,
-		"File":        IconFile,
-		"Package":     IconPackage,
-		"Search":      IconSearch,
-		"Label":       IconLabel,
-		"Milestone":   IconMilestone,
-		"Environment": IconEnvironment,
-		"Deploy":      IconDeploy,
-		"Schedule":    IconSchedule,
-		"Variable":    IconVariable,
-		"Runner":      IconRunner,
-		"Todo":        IconTodo,
-		"Health":      IconHealth,
-		"Upload":      IconUpload,
-		"Board":       IconBoard,
-		"Snippet":     IconSnippet,
-		"Token":       IconToken,
-		"Integration": IconIntegration,
-		"Notify":      IconNotify,
-		"Server":      IconServer,
-		"Security":    IconSecurity,
-		"Config":      IconConfig,
-		"Analytics":   IconAnalytics,
-		"Key":         IconKey,
-		"Link":        IconLink,
-		"Discussion":  IconDiscussion,
-		"Event":       IconEvent,
-		"Container":   IconContainer,
-		"Import":      IconImport,
-		"Alert":       IconAlert,
-		"Template":    IconTemplate,
-		"Infra":       IconInfra,
+		"Branch":        IconBranch,
+		"Commit":        IconCommit,
+		"Issue":         IconIssue,
+		"MR":            IconMR,
+		"Pipeline":      IconPipeline,
+		"Job":           IconJob,
+		"Release":       IconRelease,
+		"Tag":           IconTag,
+		"Project":       IconProject,
+		"Group":         IconGroup,
+		"User":          IconUser,
+		"Wiki":          IconWiki,
+		"File":          IconFile,
+		"Package":       IconPackage,
+		"Search":        IconSearch,
+		"Label":         IconLabel,
+		"Milestone":     IconMilestone,
+		"Environment":   IconEnvironment,
+		"Deploy":        IconDeploy,
+		"Schedule":      IconSchedule,
+		"Variable":      IconVariable,
+		"Runner":        IconRunner,
+		"Todo":          IconTodo,
+		"Health":        IconHealth,
+		"Upload":        IconUpload,
+		"Board":         IconBoard,
+		"Snippet":       IconSnippet,
+		"Token":         IconToken,
+		"Integration":   IconIntegration,
+		"Notify":        IconNotify,
+		"Server":        IconServer,
+		"Security":      IconSecurity,
+		"Config":        IconConfig,
+		"Analytics":     IconAnalytics,
+		"Key":           IconKey,
+		"Link":          IconLink,
+		"Discussion":    IconDiscussion,
+		"Event":         IconEvent,
+		"Container":     IconContainer,
+		"Import":        IconImport,
+		"Alert":         IconAlert,
+		"Template":      IconTemplate,
+		"Infra":         IconInfra,
+		"Epic":          IconEpic,
+		"Shield":        IconShield,
+		"Audit":         IconAudit,
+		"Queue":         IconQueue,
+		"Bot":           IconBot,
+		"Vulnerability": IconVulnerability,
+		"Compliance":    IconCompliance,
 	}
 }
 
-// TestAllIcons_ValidDataURI verifies every icon has a valid data: SVG URI prefix.
+// TestAllIcons_ValidDataURI verifies every icon uses a valid base64-encoded
+// data URI prefix per RFC 2397.
 func TestAllIcons_ValidDataURI(t *testing.T) {
-	const prefix = "data:image/svg+xml,"
+	const prefix = "data:image/svg+xml;base64,"
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
 			if len(icons) != 1 {
@@ -96,12 +105,36 @@ func TestAllIcons_NonEmpty(t *testing.T) {
 	}
 }
 
-// TestAllIcons_ContainsSVG verifies every icon contains SVG markup.
-func TestAllIcons_ContainsSVG(t *testing.T) {
+// TestAllIcons_DecodesToSVG verifies the base64-encoded payload decodes to
+// well-formed SVG markup. This catches regressions where the encoder emits
+// invalid base64 or where a raw SVG sneaks back into the data URI.
+func TestAllIcons_DecodesToSVG(t *testing.T) {
+	const prefix = "data:image/svg+xml;base64,"
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			if !strings.Contains(icons[0].Source, "<svg") {
-				t.Error("Source does not contain <svg element")
+			payload := strings.TrimPrefix(icons[0].Source, prefix)
+			decoded, err := base64.StdEncoding.DecodeString(payload)
+			if err != nil {
+				t.Fatalf("base64 decode failed: %v", err)
+			}
+			if !strings.HasPrefix(string(decoded), "<svg") {
+				t.Errorf("decoded payload does not start with <svg: %q", string(decoded[:min(40, len(decoded))]))
+			}
+			if !strings.HasSuffix(string(decoded), "</svg>") {
+				t.Errorf("decoded payload does not end with </svg>")
+			}
+		})
+	}
+}
+
+// TestAllIcons_SizesAny verifies every icon advertises Sizes=["any"] so
+// clients know the SVG is resolution-independent.
+func TestAllIcons_SizesAny(t *testing.T) {
+	for name, icons := range allIcons() {
+		t.Run(name, func(t *testing.T) {
+			sizes := icons[0].Sizes
+			if len(sizes) != 1 || sizes[0] != "any" {
+				t.Errorf("Sizes = %v, want [\"any\"]", sizes)
 			}
 		})
 	}

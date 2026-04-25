@@ -1391,3 +1391,136 @@ func TestMCPRoundTripProjectCreate_WithElicitation(t *testing.T) {
 		t.Error("expected success, got IsError=true")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Final ec.Confirm error branch (lines 154, 234, 354, 429 in elicitationtools.go)
+// ---------------------------------------------------------------------------
+
+// stepHandlerCancelOnConfirm returns an elicitation handler that accepts the
+// first len(accepts) requests using the supplied content list and then cancels
+// every subsequent request. It exercises the path where ec.Confirm returns an
+// error wrapping ErrCancelled instead of (false, nil).
+func stepHandlerCancelOnConfirm(accepts []map[string]any) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	idx := 0
+	return func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if idx >= len(accepts) {
+			return &mcp.ElicitResult{Action: "cancel"}, nil
+		}
+		c := accepts[idx]
+		idx++
+		return &mcp.ElicitResult{Action: actionAccept, Content: c}, nil
+	}
+}
+
+// TestIssueCreate_FinalConfirmCancel verifies that IssueCreate returns a
+// cancellation error wrapping ErrCancelled when the user cancels the final
+// confirm prompt (action="cancel"), exercising the err != nil branch after
+// ec.Confirm rather than the !confirmed branch.
+func TestIssueCreate_FinalConfirmCancel(t *testing.T) {
+	ctx := context.Background()
+	accepts := []map[string]any{
+		{"title": testIssueTitle},
+		{"description": "desc"},
+		{"labels": ""},
+		{keyConfirmed: false}, // not confidential
+	}
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerCancelOnConfirm(accepts))
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{Session: ss}
+	_, err := IssueCreate(ctx, req, nil, IssueInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error when user cancels final confirmation")
+	}
+	if !errors.Is(err, elicitation.ErrCancelled) {
+		t.Errorf("error chain = %v, want ErrCancelled in chain", err)
+	}
+	if !strings.Contains(err.Error(), "canceled") {
+		t.Errorf("error = %q, want 'canceled' wrapper", err)
+	}
+}
+
+// TestMRCreate_FinalConfirmCancel verifies that MRCreate returns a
+// cancellation error wrapping ErrCancelled when the user cancels the final
+// confirm prompt.
+func TestMRCreate_FinalConfirmCancel(t *testing.T) {
+	ctx := context.Background()
+	accepts := []map[string]any{
+		{"source_branch": "feature/x"},
+		{"target_branch": "main"},
+		{"title": testMRFeatureTitle},
+		{"description": "desc"},
+		{"labels": ""},
+		{keyConfirmed: true}, // remove source
+		{keyConfirmed: true}, // squash
+	}
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerCancelOnConfirm(accepts))
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{Session: ss}
+	_, err := MRCreate(ctx, req, nil, MRInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error when user cancels final confirmation")
+	}
+	if !errors.Is(err, elicitation.ErrCancelled) {
+		t.Errorf("error chain = %v, want ErrCancelled in chain", err)
+	}
+	if !strings.Contains(err.Error(), "merge request creation canceled") {
+		t.Errorf("error = %q, want 'merge request creation canceled' wrapper", err)
+	}
+}
+
+// TestReleaseCreate_FinalConfirmCancel verifies that ReleaseCreate returns a
+// cancellation error wrapping ErrCancelled when the user cancels the final
+// confirm prompt.
+func TestReleaseCreate_FinalConfirmCancel(t *testing.T) {
+	ctx := context.Background()
+	accepts := []map[string]any{
+		{"tag_name": testTagV100},
+		{"name": testRelease10Name},
+		{"description": "release notes"},
+	}
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerCancelOnConfirm(accepts))
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{Session: ss}
+	_, err := ReleaseCreate(ctx, req, nil, ReleaseInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error when user cancels final confirmation")
+	}
+	if !errors.Is(err, elicitation.ErrCancelled) {
+		t.Errorf("error chain = %v, want ErrCancelled in chain", err)
+	}
+	if !strings.Contains(err.Error(), "release creation canceled") {
+		t.Errorf("error = %q, want 'release creation canceled' wrapper", err)
+	}
+}
+
+// TestProjectCreate_FinalConfirmCancel verifies that ProjectCreate returns a
+// cancellation error wrapping ErrCancelled when the user cancels the final
+// confirm prompt. Distinct from TestProjectCreate_UserDeclinesConfirmation,
+// which exercises the !confirmed (false-nil) branch instead.
+func TestProjectCreate_FinalConfirmCancel(t *testing.T) {
+	ctx := context.Background()
+	accepts := []map[string]any{
+		{"name": testNewProjectName},
+		{"description": ""},
+		{"selection": "private"},
+		{keyConfirmed: false}, // no README
+		{"default_branch": ""},
+	}
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandlerCancelOnConfirm(accepts))
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{Session: ss}
+	_, err := ProjectCreate(ctx, req, nil, ProjectInput{})
+	if err == nil {
+		t.Fatal("expected error when user cancels final confirmation")
+	}
+	if !errors.Is(err, elicitation.ErrCancelled) {
+		t.Errorf("error chain = %v, want ErrCancelled in chain", err)
+	}
+	if !strings.Contains(err.Error(), "project creation canceled") {
+		t.Errorf("error = %q, want 'project creation canceled' wrapper", err)
+	}
+}

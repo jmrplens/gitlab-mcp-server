@@ -6,7 +6,10 @@ package releases
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1143,4 +1146,49 @@ func newReleasesMCPSession(t *testing.T) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
+}
+
+// TestUpdate_WithMilestonesAndReleasedAt verifies that Update forwards both
+// milestones and a valid released_at timestamp to the GitLab API. This
+// targets the success branch of the released_at parser (assigning the
+// parsed time to opts.ReleasedAt) and the milestones-non-empty branch
+// (copying the slice into opts.Milestones).
+func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
+	var capturedBody []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathReleaseV120 {
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read body failed", http.StatusInternalServerError)
+				return
+			}
+			capturedBody = b
+			testutil.RespondJSON(w, http.StatusOK, `{"tag_name":"v1.2.0","name":"r","description":"d"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:  "42",
+		TagName:    testTagV120,
+		Milestones: []string{"M1", "M2"},
+		ReleasedAt: "2026-01-15T10:00:00Z",
+	}); err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	var payload struct {
+		Milestones []string `json:"milestones"`
+		ReleasedAt string   `json:"released_at"`
+	}
+	if err := json.Unmarshal(capturedBody, &payload); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(capturedBody))
+	}
+	wantMilestones := []string{"M1", "M2"}
+	if !reflect.DeepEqual(payload.Milestones, wantMilestones) {
+		t.Errorf("milestones = %v, want %v", payload.Milestones, wantMilestones)
+	}
+	if payload.ReleasedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("released_at = %q, want %q", payload.ReleasedAt, "2026-01-15T10:00:00Z")
+	}
 }

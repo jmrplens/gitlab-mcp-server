@@ -79,8 +79,13 @@ Returns a `Tracker` bound to the request's session and progress token. If the re
 | Method | Signature | Purpose |
 | ------ | --------- | ------- |
 | `IsActive()` | `() bool` | Check if tracker can send notifications |
-| `Update(ctx, progress, total, message)` | `(context.Context, float64, float64, string)` | Send progress with explicit float values |
+| `Update(ctx, progress, total, message)` | `(context.Context, float64, float64, string)` | Send progress with explicit float values. Drops non-monotonic updates (logged at debug). |
 | `Step(ctx, step, total, message)` | `(context.Context, int, int, string)` | Convenience: report 1-based step of N |
+| `Done(ctx, total, message)` | `(context.Context, float64, string)` | Send a final notification with `progress == total` to signal completion |
+
+#### Strictly-monotonic progress
+
+The MCP 2025-11-25 spec requires the `progress` value of every notification within a request to strictly increase. The `Tracker` enforces this internally: any `Update` whose new `progress` value is less than or equal to the last one is dropped silently and logged at debug level. This means tool handlers can call `Step`/`Update` defensively without risking protocol violations.
 
 ### Step-Based Progress
 
@@ -185,7 +190,7 @@ A failed progress notification never affects the tool's result. If the client di
 
 ### Minimal API Surface
 
-Only three methods: `IsActive()`, `Update()`, and `Step()`. The `Step` convenience method handles the 1-based to 0-based conversion, which is the pattern used in all tool handlers.
+Four methods: `IsActive()`, `Update()`, `Step()`, and `Done()`. The `Step` convenience method handles the 1-based to 0-based conversion, which is the pattern used in all tool handlers. `Done` sends a final `progress == total` notification when an operation completes.
 
 ## Frequently Asked Questions
 

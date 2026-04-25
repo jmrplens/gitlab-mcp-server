@@ -1298,3 +1298,19 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestList_CancelledContext verifies that List returns the context's
+// cancellation error when ctx is cancelled before the call. It targets
+// the early-return guard at the top of List that checks ctx.Err() prior
+// to performing any GitLab API request.
+func TestList_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP handler must not be invoked when context is cancelled")
+		_ = w
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := List(ctx, client, ListInput{ProjectID: "42"}); err == nil {
+		t.Fatal(errCancelledCtx)
+	}
+}

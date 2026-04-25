@@ -54,7 +54,7 @@ Additional cross-cutting features implemented alongside capabilities.
 
 | # | Feature | Package | Purpose |
 | --: | ------- | ------- | ------- |
-| 1 | [Icons](icons.md) | `internal/toolutil/` | 44 SVG icons for tools, resources, and prompts |
+| 1 | [Icons](icons.md) | `internal/toolutil/` | 50 SVG icons (base64 data URIs) for tools, resources, and prompts |
 
 ## Design Principles
 

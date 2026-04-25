@@ -19,7 +19,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_list_attestations"),
 		Description: "List all build attestations for a project matching a subject digest.\n\nReturns: JSON with attestations array. See also: gitlab_download_attestation.",
 		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSecurity,
+		Icons:       toolutil.IconCompliance,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
 		start := time.Now()
 		out, err := List(ctx, client, input)
@@ -32,7 +32,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       toolutil.TitleFromName("gitlab_download_attestation"),
 		Description: "Download a specific build attestation by IID. Returns the attestation content as base64-encoded data.\n\nReturns: JSON with attestation_iid, size, and content_base64. See also: gitlab_list_attestations.",
 		Annotations: toolutil.ReadAnnotations,
-		Icons:       toolutil.IconSecurity,
+		Icons:       toolutil.IconCompliance,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DownloadInput) (*mcp.CallToolResult, DownloadOutput, error) {
 		start := time.Now()
 		out, err := Download(ctx, client, input)

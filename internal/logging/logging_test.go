@@ -121,6 +121,20 @@ func TestBuildLogData_OtherData(t *testing.T) {
 	}
 }
 
+// TestBuildLogData_DoesNotMutateCallerMap verifies that buildLogData does not
+// mutate the caller's map when merging the message. The original map must not
+// gain a "message" key after the call returns.
+func TestBuildLogData_DoesNotMutateCallerMap(t *testing.T) {
+	original := map[string]any{"key": "value"}
+	_ = buildLogData("msg", original)
+	if _, exists := original["message"]; exists {
+		t.Errorf("buildLogData mutated caller map: original now contains 'message' key")
+	}
+	if len(original) != 1 {
+		t.Errorf("expected original map size 1, got %d", len(original))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Integration tests — in-memory MCP client/server
 // ---------------------------------------------------------------------------.
@@ -256,8 +270,12 @@ func TestSessionLogger_LevelsViaIntegration(t *testing.T) {
 	}{
 		{"debug", "debug", func(l *SessionLogger, ctx context.Context) { l.Debug(ctx, "debug msg", nil) }},
 		{"info", "info", func(l *SessionLogger, ctx context.Context) { l.Info(ctx, "info msg", nil) }},
+		{"notice", "notice", func(l *SessionLogger, ctx context.Context) { l.Notice(ctx, "notice msg", nil) }},
 		{"warning", "warning", func(l *SessionLogger, ctx context.Context) { l.Warning(ctx, "warn msg", nil) }},
 		{"error", "error", func(l *SessionLogger, ctx context.Context) { l.Error(ctx, "error msg", nil) }},
+		{"critical", "critical", func(l *SessionLogger, ctx context.Context) { l.Critical(ctx, "crit msg", nil) }},
+		{"alert", "alert", func(l *SessionLogger, ctx context.Context) { l.Alert(ctx, "alert msg", nil) }},
+		{"emergency", "emergency", func(l *SessionLogger, ctx context.Context) { l.Emergency(ctx, "emerg msg", nil) }},
 	}
 
 	for _, tt := range tests {

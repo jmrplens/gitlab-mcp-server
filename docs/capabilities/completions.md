@@ -56,9 +56,9 @@ sequenceDiagram
     AI->>S: completion/complete (arg: "project_id", value: "mcp")
     S->>GL: GET /projects?search=mcp
     GL-->>S: Matching projects
-    S-->>AI: ["gitlab-mcp-server (1835)", "redmine-mcp-server (1869)"]
+    S-->>AI: ["group/gitlab-mcp-server", "group/redmine-mcp-server"]
     AI->>U: Shows dropdown with options
-    U->>AI: Selects "gitlab-mcp-server (1835)"
+    U->>AI: Selects "group/gitlab-mcp-server"
 ```
 
 Each completion request triggers **at most one GitLab API call**. Results are returned immediately — there is no caching, ensuring data is always fresh. If the API call fails, the server returns an empty result (never an error), so the client flow is never blocked.
@@ -95,8 +95,8 @@ These completers search across the entire GitLab instance. They do not require a
 
 | Argument | Query Method | Example Input → Suggestions |
 | -------- | ------------ | --------------------------- |
-| `project_id` | Search projects by path or name | `mcp` → `gitlab-mcp-server (1835)`, `redmine-mcp-server (1869)` |
-| `group_id` | Search groups by name | `eng` → `engineering (229)` |
+| `project_id` | Search projects by path or name | `mcp` → `group/gitlab-mcp-server`, `group/redmine-mcp-server` |
+| `group_id` | Search groups by name | `eng` → `engineering` |
 | `username` | Search GitLab users | `jreq` → `jmrplens` |
 
 ### Per-Project Completers
@@ -108,13 +108,13 @@ These completers require a `project_id` context, which is extracted from previou
 | `branch`, `source_branch`, `target_branch` | List branches matching prefix | `feat` → `feature/login`, `feature/signup` |
 | `from`, `to`, `ref` | Branches + tags matching prefix | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch` |
 | `tag` | List tags matching prefix | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7` |
-| `mr_iid` | List open MRs, filter by IID prefix | `1` → `15: feat: sampling...`, `14: fix: TLS...` |
-| `issue_iid` | List open issues, filter by IID | `3` → `33: Bug report...` |
-| `pipeline_id` | Recent pipelines, filter by ID prefix | `415` → `41557 (success)`, `41556 (canceled)` |
-| `sha` | Recent commits, filter by SHA prefix | `ddc` → `ddcc2f13...` |
+| `mr_iid` | List open MRs, filter by IID prefix | `1` → `15`, `14` (titles fetched separately by client) |
+| `issue_iid` | List open issues, filter by IID | `3` → `33`, `34` |
+| `pipeline_id` | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556` |
+| `sha` | Recent commits, filter by SHA prefix | `ddc` → `ddcc2f13` |
 | `label` | Project labels matching prefix | `type` → `type::bug`, `type::enhancement` |
-| `milestone_id` | Milestones matching title | `v1` → `v1.0.0`, `v1.1.0` |
-| `job_id` | Jobs in a pipeline, filter by ID | `10` → `100: build`, `101: test` |
+| `milestone_id` | Milestones matching title | `v1` → `1`, `2` (IDs; titles fetched separately) |
+| `job_id` | Jobs in a pipeline, filter by ID | `10` → `100`, `101` |
 
 The `job_id` completer is special — it requires both `project_id` and `pipeline_id` to be resolved first.
 
@@ -122,9 +122,15 @@ The `job_id` completer is special — it requires both `project_id` and `pipelin
 
 | Setting | Value | Notes |
 | ------- | ----- | ----- |
-| Max results | 10 per request | Hardcoded per MCP spec recommendation |
+| Max results | 10 per request | `maxCompletionResults` constant; aligned with MCP spec recommendation |
 | Error handling | Graceful | Returns empty results on API errors |
 | Caching | None | Queries GitLab API in real-time for freshness |
+| `total` field | Populated from GitLab `X-Total` header | When the underlying GitLab call returns `X-Total`, the value is forwarded to `CompletionResultDetails.Total` so clients can display “N of M matches” |
+| `hasMore` field | Computed from total vs. returned | Set to `true` when more results exist beyond the returned slice |
+
+### Spec compliance
+
+The server returns **bare argument values** in `completion.values` per the MCP 2025-11-25 specification — the literal strings that will replace the partial input (e.g. `"gitlab-mcp-server"`, `"15"`, `"33"`). No labels, prefixes, or human-readable suffixes are mixed into the value string. Display formatting (titles, status badges, descriptions) is the client's responsibility — the client should fetch additional metadata via separate tool calls or resources to render rich dropdowns.
 
 ## Security
 
@@ -148,7 +154,7 @@ The server searches GitLab for projects matching "pe-mc" and returns:
 ```json
 {
   "completion": {
-    "values": ["1835: gitlab-mcp-server", "1869: redmine-mcp-server"],
+    "values": ["group/gitlab-mcp-server", "group/redmine-mcp-server"],
     "hasMore": false
   }
 }
@@ -190,11 +196,13 @@ The server lists open MRs with titles so the user can identify the right one:
 ```json
 {
   "completion": {
-    "values": ["15: feat: sampling tools modularization (merged)", "14: fix: TLS verification (merged)"],
+    "values": ["15", "14"],
     "hasMore": false
   }
 }
 ```
+
+Values are the bare IIDs; the client fetches MR titles via `gitlab_mr_get` (or a resource) when it needs to render a richer dropdown.
 
 ## How Completions Improve AI Accuracy
 

@@ -88,7 +88,11 @@ func AnalyzeDeploymentHistory(ctx context.Context, req *mcp.CallToolRequest, cli
 	data := FormatDeploymentHistoryForAnalysis(depList, input.Environment)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeDeploymentHistoryPrompt, data, sampling.WithMaxTokens(2048))
+	result, err := samplingClient.Analyze(ctx, analyzeDeploymentHistoryPrompt, data,
+		sampling.WithMaxTokens(2048),
+		sampling.WithTemperature(0.2),
+		sampling.WithModelPriorities(0.4, 0.5, 0.5),
+	)
 	if err != nil {
 		return AnalyzeDeploymentHistoryOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

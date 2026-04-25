@@ -6,6 +6,7 @@ package logging
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -72,6 +73,12 @@ func (l *SessionLogger) Info(ctx context.Context, message string, data any) {
 	l.log(ctx, "info", message, data)
 }
 
+// Notice sends a notice-level log message to the client (RFC 5424).
+// The data parameter is sent to the MCP client as-is; do not include secrets.
+func (l *SessionLogger) Notice(ctx context.Context, message string, data any) {
+	l.log(ctx, "notice", message, data)
+}
+
 // Warning sends a warning-level log message to the client.
 // The data parameter is sent to the MCP client as-is; do not include secrets.
 func (l *SessionLogger) Warning(ctx context.Context, message string, data any) {
@@ -82,6 +89,24 @@ func (l *SessionLogger) Warning(ctx context.Context, message string, data any) {
 // The data parameter is sent to the MCP client as-is; do not include secrets.
 func (l *SessionLogger) Error(ctx context.Context, message string, data any) {
 	l.log(ctx, "error", message, data)
+}
+
+// Critical sends a critical-level log message to the client (RFC 5424).
+// The data parameter is sent to the MCP client as-is; do not include secrets.
+func (l *SessionLogger) Critical(ctx context.Context, message string, data any) {
+	l.log(ctx, "critical", message, data)
+}
+
+// Alert sends an alert-level log message to the client (RFC 5424).
+// The data parameter is sent to the MCP client as-is; do not include secrets.
+func (l *SessionLogger) Alert(ctx context.Context, message string, data any) {
+	l.log(ctx, "alert", message, data)
+}
+
+// Emergency sends an emergency-level log message to the client (RFC 5424).
+// The data parameter is sent to the MCP client as-is; do not include secrets.
+func (l *SessionLogger) Emergency(ctx context.Context, message string, data any) {
+	l.log(ctx, "emergency", message, data)
 }
 
 // LogToolCall sends a structured tool execution log to the client.
@@ -108,7 +133,8 @@ func (l *SessionLogger) LogToolCall(ctx context.Context, tool string, start time
 
 // buildLogData creates a structured log payload.
 // If data is nil, the message string is used as the payload.
-// If data is a map, the message is added as a "message" key.
+// If data is a map, the message is merged into a shallow copy under the
+// "message" key (the caller's map is never mutated).
 // Otherwise both are wrapped in a new map.
 // SECURITY: The returned value is sent to the MCP client; callers must not include secrets.
 func buildLogData(message string, data any) any {
@@ -116,8 +142,10 @@ func buildLogData(message string, data any) any {
 		return message
 	}
 	if m, ok := data.(map[string]any); ok {
-		m["message"] = message
-		return m
+		cp := make(map[string]any, len(m)+1)
+		maps.Copy(cp, m)
+		cp["message"] = message
+		return cp
 	}
 	return map[string]any{
 		"message": message,

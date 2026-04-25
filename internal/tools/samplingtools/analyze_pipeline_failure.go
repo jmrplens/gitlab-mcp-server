@@ -144,7 +144,10 @@ func AnalyzePipelineFailure(ctx context.Context, req *mcp.CallToolRequest, clien
 
 	tracker.Step(ctx, 4, 5, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzePipelineFailurePrompt, data)
+	result, err := samplingClient.Analyze(ctx, analyzePipelineFailurePrompt, data,
+		sampling.WithTemperature(0.2),
+		sampling.WithModelPriorities(0.2, 0.3, 0.8),
+	)
 	if err != nil {
 		return AnalyzePipelineFailureOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

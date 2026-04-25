@@ -496,6 +496,11 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
 		},
+		InitializedHandler: func(ctx context.Context, req *mcp.InitializedRequest) {
+			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
+				slog.Debug("initial roots fetch failed; roots cache left empty", "error", err)
+			}
+		},
 		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
 			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
 				slog.Warn("failed to refresh roots on change notification", "error", err)

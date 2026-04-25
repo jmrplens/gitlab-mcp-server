@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-23.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-25.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,22 +14,23 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,675   |
-| Unit test functions         | 8,399   |
-| E2E test functions          | 206     |
-| cmd test functions          | 70      |
-| Test files (internal/)      | 395     |
-| Tool sub-packages tested    | 162     |
+| Total test functions        | 8,753   |
+| Unit test functions         | 8,460   |
+| E2E test functions          | 214     |
+| cmd test functions          | 79      |
+| Test files (internal/)      | 400     |
+| Tool sub-packages tested    | 163     |
 | Core packages tested        | 16      |
-| Average coverage            | ~98.1%  |
+| Overall coverage (`go test ./...`) | 97.3%  |
+| Average package coverage    | ~98.2%  |
 
 ### Naming Convention Stats
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 7,806 | 90.1% |
-| `TestFunc` (no-underscore)     |   663 |  7.7% |
-| `TestFunc_Sc_Exp` (3+ part)   |   195 |  2.3% |
+| `TestFunc_Scenario` (2-part)   | 7,673 | 89.9% |
+| `TestFunc` (no-underscore)     |   656 |  7.7% |
+| `TestFunc_Sc_Exp` (3+ part)   |   210 |  2.5% |
 
 ## Test Distribution
 
@@ -37,34 +38,34 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,248 |         74 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (162)  |          6,937 |        306 | Domain-specific tool handlers        |
-| E2E integration          |            206 |         94 | Full workflow against real GitLab    |
-| cmd/server               |             70 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,675** |    **490** |                                      |
+| Core packages            |          1,310 |         76 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            222 |         17 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (163)  |          6,928 |        307 | Domain-specific tool handlers        |
+| E2E integration          |            214 |         96 | Full workflow against real GitLab    |
+| cmd/server               |             79 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,753** |    **497** |                                      |
 
 ### Core Packages
 
 | Package        | Tests | Coverage | Description                          |
 | -------------- | ----: | -------: | ------------------------------------ |
-| autoupdate     |    99 |   75.6%  | Self-update via GitLab releases      |
-| completions    |    83 |  100.0%  | Argument auto-completion             |
-| config         |    36 |   95.0%  | Configuration loading                |
-| elicitation    |    77 |   92.1%  | MCP elicitation capability           |
-| gitlab         |    31 |  100.0%  | GitLab API client wrapper            |
-| logging        |    15 |  100.0%  | MCP logging capability               |
-| progress       |    14 |  100.0%  | MCP progress notifications           |
-| prompts        |   198 |   96.1%  | MCP prompt implementations           |
+| autoupdate     |   110 |   85.1%  | Self-update via GitLab releases      |
+| completions    |    91 |  100.0%  | Argument auto-completion             |
+| config         |    44 |   99.3%  | Configuration loading                |
+| elicitation    |    78 |   92.0%  | MCP elicitation capability           |
+| gitlab         |    34 |  100.0%  | GitLab API client wrapper            |
+| logging        |    16 |  100.0%  | MCP logging capability               |
+| progress       |    17 |  100.0%  | MCP progress notifications           |
+| prompts        |   202 |   96.3%  | MCP prompt implementations           |
 | resources      |    68 |   98.1%  | MCP resource implementations         |
-| roots          |    16 |  100.0%  | MCP roots capability                 |
-| sampling       |    74 |   99.3%  | MCP sampling capability              |
-| serverpool     |    33 |   99.3%  | HTTP mode server pool                |
+| roots          |    21 |   98.5%  | MCP roots capability                 |
+| sampling       |    83 |   99.5%  | MCP sampling capability              |
+| serverpool     |    38 |   99.4%  | HTTP mode server pool                |
 | testutil       |    21 |   95.5%  | Shared test helpers                  |
-| toolutil       |   243 |   95.9%  | Shared tool utilities                |
+| toolutil       |   247 |   96.2%  | Shared tool utilities                |
 | wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,248**|        |                                      |
+| **Subtotal**   |**1,310**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -136,7 +137,7 @@
 | deploytokens             |    65 |
 | dockerfiletemplates      |    14 |
 | dorametrics              |     9 |
-| elicitationtools         |    48 |
+| elicitationtools         |    56 |
 | enterpriseusers          |    33 |
 | environments             |    46 |
 | epicdiscussions          |    14 |
@@ -262,7 +263,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    66 |
-| **Total**                | **6,937** |
+| **Total** (163 sub-packages) | **6,928** |
 
 </details>
 
@@ -272,26 +273,27 @@
 
 | Package    | Coverage |
 | ---------- | -------: |
-| cmd/server |   55.3%  |
+| cmd/server |   56.3%  |
 
 ### Core Packages
 
 | Package        | Coverage |
 | -------------- | -------: |
-| autoupdate     |   75.6%  |
+| autoupdate     |   85.1%  |
 | completions    |  100.0%  |
-| config         |   95.0%  |
-| elicitation    |   92.1%  |
+| config         |   99.3%  |
+| elicitation    |   92.0%  |
 | gitlab         |  100.0%  |
 | logging        |  100.0%  |
+| oauth          |   98.6%  |
 | progress       |  100.0%  |
-| prompts        |   96.1%  |
+| prompts        |   96.3%  |
 | resources      |   98.1%  |
-| roots          |  100.0%  |
-| sampling       |   99.3%  |
-| serverpool     |   99.3%  |
+| roots          |   98.5%  |
+| sampling       |   99.5%  |
+| serverpool     |   99.4%  |
 | testutil       |   95.5%  |
-| toolutil       |   95.9%  |
+| toolutil       |   96.2%  |
 | wizard         |   83.1%  |
 
 ### Tool Sub-Packages

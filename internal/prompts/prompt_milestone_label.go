@@ -73,7 +73,7 @@ func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Cl
 		Icons:       toolutil.IconMilestone,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
-			{Name: "milestone", Title: toolutil.TitleFromName("milestone"), Description: "Specific milestone title (omit for all active)", Required: false},
+			{Name: argMilestone, Title: toolutil.TitleFromName(argMilestone), Description: "Specific milestone title (omit for all active)", Required: false},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleMilestoneProgress(ctx, client, req)
@@ -86,7 +86,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	if projectID == "" {
 		return nil, errors.New("milestone_progress: project_id is required")
 	}
-	milestoneTitle := req.Params.Arguments["milestone"]
+	milestoneTitle := req.Params.Arguments[argMilestone]
 
 	opts := &gl.ListMilestonesOptions{
 		State:       new("active"),

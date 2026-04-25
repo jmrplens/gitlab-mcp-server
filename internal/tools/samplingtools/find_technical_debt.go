@@ -85,7 +85,10 @@ func FindTechnicalDebt(ctx context.Context, req *mcp.CallToolRequest, client *gi
 	data := FormatTechnicalDebtForAnalysis(allBlobs)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, findTechnicalDebtPrompt, data)
+	result, err := samplingClient.Analyze(ctx, findTechnicalDebtPrompt, data,
+		sampling.WithTemperature(0.1),
+		sampling.WithModelPriorities(0.5, 0.5, 0.5),
+	)
 	if err != nil {
 		return FindTechnicalDebtOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

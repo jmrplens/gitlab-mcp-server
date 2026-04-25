@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **44 unique SVG icons** assigned to all 1000 individual tools, 28/43 meta-tools, 24 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, etc.).
+gitlab-mcp-server ships **50 unique SVG icons** assigned to all ~1,050 individual tools, 36 meta-tools, 4 resources, and 38 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -47,11 +47,17 @@ gitlab-mcp-server uses `image/svg+xml` exclusively. Clients that only implement 
 
 ### Encoding Format
 
-All icons use inline **data URIs** to avoid external network dependencies:
+All icons use inline **base64-encoded data URIs** to avoid external network dependencies and to comply with strict client URI parsers (some MCP clients reject percent-encoded SVG markup):
 
 ```text
-data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" ...>...</svg>
+data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIC4uLj4uLi48L3N2Zz4=
 ```
+
+Each `mcp.Icon` advertises:
+
+- `Source` — the base64 data URI shown above.
+- `MIMEType` — `image/svg+xml`.
+- `Sizes` — `["any"]`, signalling that the SVG is scalable.
 
 ### Design Principles
 
@@ -78,17 +84,22 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 }
 ```
 
-The `icon()` helper in `toolutil` wraps each SVG constant as a `[]mcp.Icon` slice:
+The `icon()` helper in `toolutil` base64-encodes each SVG constant once at registration time and wraps the result in a `[]mcp.Icon` slice:
 
 ```go
 func icon(svg string) []mcp.Icon {
-    return []mcp.Icon{{Source: "data:" + svgMIME + "," + svg, MIMEType: svgMIME}}
+    encoded := base64.StdEncoding.EncodeToString([]byte(svg))
+    return []mcp.Icon{{
+        Source:   "data:" + svgMIME + ";base64," + encoded,
+        MIMEType: svgMIME,
+        Sizes:    []string{"any"},
+    }}
 }
 ```
 
 ## Icon Gallery
 
-All 44 icons with their SVG preview, exported variable name, and the tool packages that use each one.
+All 50 icons with their SVG preview, exported variable name, and the tool packages that use each one.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -144,8 +155,10 @@ All 44 icons with their SVG preview, exported variable name, and the tool packag
 | Preview | Name | Packages |
 | ------- | ---- | -------- |
 | <img src="icons/project.svg" width="32" height="32" alt="Project"> | `IconProject` | projectdiscovery, projects |
-| <img src="icons/group.svg" width="32" height="32" alt="Group"> | `IconGroup` | groups, namespaces, resourcegroups |
+| <img src="icons/group.svg" width="32" height="32" alt="Group"> | `IconGroup` | groups, namespaces |
+| <img src="icons/queue.svg" width="32" height="32" alt="Queue"> | `IconQueue` | resourcegroups |
 | <img src="icons/user.svg" width="32" height="32" alt="User"> | `IconUser` | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
+| <img src="icons/bot.svg" width="32" height="32" alt="Bot"> | `IconBot` | groupserviceaccounts |
 
 ### Packages and Registry
 
@@ -165,7 +178,10 @@ All 44 icons with their SVG preview, exported variable name, and the tool packag
 
 | Preview | Name | Packages |
 | ------- | ---- | -------- |
-| <img src="icons/security.svg" width="32" height="32" alt="Security"> | `IconSecurity` | license, protectedenvs, securefiles |
+| <img src="icons/security.svg" width="32" height="32" alt="Security"> | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securitysettings |
+| <img src="icons/shield.svg" width="32" height="32" alt="Shield"> | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
+| <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | securityfindings, vulnerabilities |
+| <img src="icons/compliance.svg" width="32" height="32" alt="Compliance"> | `IconCompliance` | attestations, compliancepolicy |
 | <img src="icons/token.svg" width="32" height="32" alt="Token"> | `IconToken` | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens |
 | <img src="icons/key.svg" width="32" height="32" alt="Key"> | `IconKey` | deploykeys, keys |
 
@@ -190,6 +206,7 @@ All 44 icons with their SVG preview, exported variable name, and the tool packag
 | ------- | ---- | -------- |
 | <img src="icons/notify.svg" width="32" height="32" alt="Notify"> | `IconNotify` | broadcastmessages, notifications |
 | <img src="icons/event.svg" width="32" height="32" alt="Event"> | `IconEvent` | events, resourceevents |
+| <img src="icons/audit.svg" width="32" height="32" alt="Audit"> | `IconAudit` | auditevents |
 | <img src="icons/alert.svg" width="32" height="32" alt="Alert"> | `IconAlert` | alertmanagement, errortracking |
 
 ### Integrations and Operations
@@ -205,15 +222,18 @@ All 44 icons with their SVG preview, exported variable name, and the tool packag
 
 ## Complete Icon-to-Package Reference
 
-Alphabetical listing of all 44 icons and every sub-package that uses each one.
+Alphabetical listing of all 50 icons and every sub-package that uses each one.
 
-| Icon | Variable | Packages (110 total) |
-| ---- | -------- | -------------------- |
+| Icon | Variable | Packages |
+| ---- | -------- | -------- |
 | Alert | `IconAlert` | alertmanagement, errortracking |
 | Analytics | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata |
+| Audit | `IconAudit` | auditevents |
 | Board | `IconBoard` | boards, groupboards |
+| Bot | `IconBot` | groupserviceaccounts |
 | Branch | `IconBranch` | branches, repository, repositorysubmodules |
 | Commit | `IconCommit` | commits, mrcontextcommits |
+| Compliance | `IconCompliance` | attestations, compliancepolicy |
 | Config | `IconConfig` | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
 | Container | `IconContainer` | containerregistry |
 | Deploy | `IconDeploy` | deployments |
@@ -222,7 +242,7 @@ Alphabetical listing of all 44 icons and every sub-package that uses each one.
 | Environment | `IconEnvironment` | environments |
 | Event | `IconEvent` | events, resourceevents |
 | File | `IconFile` | files, markdown, pages |
-| Group | `IconGroup` | groups, namespaces, resourcegroups |
+| Group | `IconGroup` | groups, namespaces |
 | Health | `IconHealth` | health |
 | Import | `IconImport` | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport |
 | Infra | `IconInfra` | terraformstates |
@@ -238,12 +258,14 @@ Alphabetical listing of all 44 icons and every sub-package that uses each one.
 | Package | `IconPackage` | dependencyproxy, packages |
 | Pipeline | `IconPipeline` | cilint, pipelines, pipelinetriggers |
 | Project | `IconProject` | projectdiscovery, projects |
+| Queue | `IconQueue` | resourcegroups |
 | Release | `IconRelease` | releases |
 | Runner | `IconRunner` | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
 | Schedule | `IconSchedule` | freezeperiods, pipelineschedules |
 | Search | `IconSearch` | search |
-| Security | `IconSecurity` | license, protectedenvs, securefiles |
+| Security | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securitysettings |
 | Server | `IconServer` | metadata, serverupdate |
+| Shield | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
 | Snippet | `IconSnippet` | snippets |
 | Tag | `IconTag` | tags |
 | Template | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates |
@@ -252,18 +274,20 @@ Alphabetical listing of all 44 icons and every sub-package that uses each one.
 | Upload | `IconUpload` | groupmarkdownuploads, uploads |
 | User | `IconUser` | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
 | Variable | `IconVariable` | civariables, groupvariables, instancevariables |
+| Vulnerability | `IconVulnerability` | securityfindings, vulnerabilities |
 | Wiki | `IconWiki` | wikis |
 
 ## Testing
 
-Icon integrity is validated by 4 unit tests in [`internal/toolutil/icons_test.go`](../../internal/toolutil/icons_test.go):
+Icon integrity is validated by 5 unit tests in [`internal/toolutil/icons_test.go`](../../internal/toolutil/icons_test.go):
 
 | Test | Validates |
 | ---- | --------- |
-| `TestAllIcons_ValidDataURI` | Every icon starts with `data:image/svg+xml,` |
+| `TestAllIcons_ValidDataURI` | Every icon Source starts with `data:image/svg+xml;base64,` |
 | `TestAllIcons_CorrectMIMEType` | MIME type is `image/svg+xml` |
 | `TestAllIcons_NonEmpty` | Source is not empty |
-| `TestAllIcons_ContainsSVG` | Source string contains `<svg` markup |
+| `TestAllIcons_DecodesToSVG` | Base64 payload decodes to a `<svg>...</svg>` document |
+| `TestAllIcons_SizesAny` | `Sizes` field equals `["any"]` (scalable) |
 
 ## Security Considerations
 

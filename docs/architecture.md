@@ -79,7 +79,7 @@ graph TD
         PROG[progress<br/>Progress notifications]
         SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
-        ICN[icons<br/>44 SVG domain icons]
+        ICN[icons<br/>50 SVG domain icons]
         SRV[MCP Server<br/>go-sdk/mcp v1.5.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
