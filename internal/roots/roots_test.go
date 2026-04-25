@@ -410,3 +410,86 @@ func TestSetRootsForTest(t *testing.T) {
 		t.Errorf("root URI = %q, want %q", got[0].URI, "file:///test/project")
 	}
 }
+
+// TestClientSupportsRoots_NilSession verifies the capability check returns
+// false when the session is nil (e.g., before the handshake completes).
+func TestClientSupportsRoots_NilSession(t *testing.T) {
+	if ClientSupportsRoots(nil) {
+		t.Error("expected false for nil session")
+	}
+}
+
+// TestClientSupportsRoots_DefaultClient verifies that a client constructed
+// with default options advertises the roots capability (the SDK default at
+// v1.0.0 is &ClientCapabilities{RootsV2: &RootCapabilities{ListChanged: true}}).
+func TestClientSupportsRoots_DefaultClient(t *testing.T) {
+	ss := setupInMemorySession(t, nil)
+	if !ClientSupportsRoots(ss) {
+		t.Error("expected default client to advertise roots capability")
+	}
+}
+
+// TestClientSupportsRoots_DisabledCapability verifies the gate returns false
+// when the client explicitly disables the roots capability via
+// &ClientCapabilities{} (per SDK docs, this opts out of roots).
+func TestClientSupportsRoots_DisabledCapability(t *testing.T) {
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{}, // explicitly no roots
+	})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		serverSession.Wait()
+	})
+
+	if ClientSupportsRoots(serverSession) {
+		t.Error("expected false when client opts out of roots")
+	}
+}
+
+// TestRefresh_SkipsWhenClientLacksCapability verifies that Refresh does not
+// invoke ListRoots (which would fail with method not found) when the client
+// did not advertise the roots capability. The cache is cleared and no error
+// is returned, providing graceful degradation.
+func TestRefresh_SkipsWhenClientLacksCapability(t *testing.T) {
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{}, // no roots
+	})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		serverSession.Wait()
+	})
+
+	m := NewManager()
+	m.setRoots([]*mcp.Root{{URI: "file:///stale"}})
+
+	if err := m.Refresh(ctx, serverSession); err != nil {
+		t.Fatalf("expected nil error when client lacks roots capability, got: %v", err)
+	}
+	if got := m.GetRoots(); got != nil {
+		t.Errorf("expected cache cleared, got %d roots", len(got))
+	}
+}

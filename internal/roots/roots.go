@@ -32,8 +32,17 @@ func NewManager() *Manager {
 // Refresh queries the client for its current roots via the session and caches
 // the result. Returns nil with an empty root list if the client does not support
 // roots or returns an error (graceful degradation).
+//
+// When the client did not advertise the roots capability during initialization,
+// Refresh clears the cache and returns nil without contacting the client. This
+// avoids a guaranteed-to-fail JSON-RPC request and the noisy warning that
+// would follow.
 func (m *Manager) Refresh(ctx context.Context, session *mcp.ServerSession) error {
 	if session == nil {
+		m.setRoots(nil)
+		return nil
+	}
+	if !ClientSupportsRoots(session) {
 		m.setRoots(nil)
 		return nil
 	}
@@ -48,6 +57,27 @@ func (m *Manager) Refresh(ctx context.Context, session *mcp.ServerSession) error
 	m.setRoots(result.Roots)
 	slog.Info("client roots refreshed", "count", len(result.Roots))
 	return nil
+}
+
+// ClientSupportsRoots reports whether the client advertised the roots
+// capability during the MCP initialize handshake. Returns false when the
+// session has not yet completed initialize, when capabilities are missing,
+// or when the client did not declare a roots capability.
+func ClientSupportsRoots(session *mcp.ServerSession) bool {
+	if session == nil {
+		return false
+	}
+	params := session.InitializeParams()
+	if params == nil || params.Capabilities == nil {
+		return false
+	}
+	if params.Capabilities.RootsV2 != nil {
+		return true
+	}
+	// Legacy: SDK populates the deprecated Roots struct when the client sent
+	// any "roots": {...} object in capabilities. Presence of either nested
+	// flag is the only signal available pre-RootsV2.
+	return params.Capabilities.Roots.ListChanged
 }
 
 // GetRoots returns a copy of the cached root list.
