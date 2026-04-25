@@ -73,6 +73,50 @@ El asistente:
 El asistente de configuración es compatible con VS Code, Claude Desktop, Cursor y Claude Code. Para otros clientes, usa la configuración manual a continuación.
 :::
 
+## Instalar como Open Plugin (Cursor / Claude Code)
+
+Este repositorio incluye un manifest [Open Plugins](https://open-plugins.com/) v1.0.0 (`.plugin/plugin.json`) para que el servidor se pueda instalar en un solo paso en cualquier host compatible (Cursor, Claude Code, OpenCode):
+
+```bash
+# Cursor / Claude Code (cuando lo soporte tu versión)
+/plugin install jmrplens/gitlab-mcp-server
+```
+
+El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:latest` mediante `docker run -i --rm`, por lo que necesitas [Docker](https://docs.docker.com/get-docker/) instalado y en ejecución.
+
+### Variables de entorno requeridas
+
+El host debe proporcionar estas variables antes de habilitar el plugin:
+
+| Variable | Obligatoria | Descripción |
+|---|---|---|
+| `GITLAB_URL` | Sí | URL de la instancia GitLab (p. ej. `https://gitlab.example.com`) |
+| `GITLAB_TOKEN` | Sí | Personal Access Token (`glpat-...`) |
+| `GITLAB_SKIP_TLS_VERIFY` | No | `true` para certificados autofirmados (por defecto `false`) |
+| `META_TOOLS` | No | `true` para herramientas agrupadas, `false` individuales (por defecto `true`) |
+| `GITLAB_ENTERPRISE` | No | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`) |
+| `GITLAB_READ_ONLY` | No | `true` para deshabilitar herramientas de escritura (por defecto `false`) |
+| `GITLAB_SAFE_MODE` | No | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`) |
+| `LOG_LEVEL` | No | `debug`, `info`, `warn`, `error` (por defecto `info`) |
+
+### ¿Prefieres binario nativo en lugar de Docker?
+
+La spec de Open Plugins arranca automáticamente cada entrada de `.mcp.json`, así que la configuración incluida usa Docker por portabilidad. Si prefieres el binario nativo, instala el plugin y después edita la copia local de `.mcp.json` (normalmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/usr/local/bin/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "${GITLAB_URL}",
+        "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
 ## Configuración manual
 
 Si prefieres configurar manualmente, elige tu cliente de IA:

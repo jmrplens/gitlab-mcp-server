@@ -115,35 +115,37 @@ jobs:
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
 
-      - name: Commit updated server.json to main
+      - name: Commit updated server.json and plugin.json to main
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" -q '.sha')
-          gh api "repos/${GITHUB_REPOSITORY}/contents/server.json" \
-            -X PUT \
-            -f message="chore: update server.json SHA256 hashes for v${VERSION}" \
-            -f content="$(base64 -w0 server.json)" \
-            -f sha="$FILE_SHA" \
-            -f branch="main"
 
-      - name: Commit updated .plugin/plugin.json to main
-        env:
-          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [ ! -f .plugin/plugin.json ]; then
-            echo "::notice::.plugin/plugin.json not found, skipping"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git fetch origin main
+          git checkout main
+
+          # Re-apply updates on top of latest main (the script is idempotent
+          # and reads checksums.txt + version, so re-running produces the
+          # same result as the artifact built earlier in this job).
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}"
+
+          git add server.json
+          [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
+
+          if git diff --cached --quiet; then
+            echo "::notice::No manifest changes to commit"
             exit 0
           fi
-          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.plugin/plugin.json" -q '.sha')
-          gh api "repos/${GITHUB_REPOSITORY}/contents/.plugin/plugin.json" \
-            -X PUT \
-            -f message="chore: update .plugin/plugin.json version for v${VERSION}" \
-            -f content="$(base64 -w0 .plugin/plugin.json)" \
-            -f sha="$FILE_SHA" \
-            -f branch="main"
+
+          git commit -m "chore: update manifests for v${VERSION}
+
+          Updates server.json (MCP Registry) and .plugin/plugin.json
+          (Open Plugins) with version ${VERSION} and pinned SHA256 hashes."
+          git push origin main
 
   docker:
     name: Docker
