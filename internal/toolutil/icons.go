@@ -3,7 +3,11 @@
 
 package toolutil
 
-import "github.com/modelcontextprotocol/go-sdk/mcp"
+import (
+	"encoding/base64"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
 
 // Minimal 16×16 SVG icons encoded as data: URIs.
 // Each icon is a single-path SVG using currentColor for theme compatibility.
@@ -56,9 +60,21 @@ const (
 
 const svgMIME = "image/svg+xml"
 
-// icon wraps an SVG string as an [mcp.Icon] slice with data-URI encoding.
+// icon wraps an SVG string as an [mcp.Icon] slice with a base64-encoded
+// data URI. Base64 encoding is required because raw SVG markup contains
+// characters (<, >, ", spaces, #, {, }) that are not valid in an unencoded
+// RFC 2397 data URI. The MCP spec also documents base64 as the canonical
+// form for embedded image data.
+//
+// Sizes is set to ["any"] to advertise that the SVG is resolution-independent
+// and can be rendered at any size by the client.
 func icon(svg string) []mcp.Icon {
-	return []mcp.Icon{{Source: "data:" + svgMIME + "," + svg, MIMEType: svgMIME}}
+	encoded := base64.StdEncoding.EncodeToString([]byte(svg))
+	return []mcp.Icon{{
+		Source:   "data:" + svgMIME + ";base64," + encoded,
+		MIMEType: svgMIME,
+		Sizes:    []string{"any"},
+	}}
 }
 
 // Domain icons — each returns a one-element []mcp.Icon ready for the Icons field.
