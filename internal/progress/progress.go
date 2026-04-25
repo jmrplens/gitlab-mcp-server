@@ -83,17 +83,20 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 		return
 	}
 	if t.state != nil {
+		// Hold the mutex across NotifyProgress so concurrent callers cannot
+		// reorder notifications on the wire even when state updates were
+		// serialized correctly. The MCP "strictly increasing" invariant is
+		// observed by what the client receives, not by the local last value,
+		// so the send must stay inside the critical section.
 		t.state.mu.Lock()
+		defer t.state.mu.Unlock()
 		if t.state.started && progress <= t.state.last {
-			prev := t.state.last
-			t.state.mu.Unlock()
 			slog.Debug("progress: dropping non-monotonic update",
-				"previous", prev, "attempted", progress)
+				"previous", t.state.last, "attempted", progress)
 			return
 		}
 		t.state.last = progress
 		t.state.started = true
-		t.state.mu.Unlock()
 	}
 	params := &mcp.ProgressNotificationParams{
 		ProgressToken: t.token,
