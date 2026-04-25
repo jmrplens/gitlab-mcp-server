@@ -688,7 +688,8 @@ See also: gitlab_tag (create the tag before the release), gitlab_package (upload
 // approval_settings_project_get, approval_settings_project_update,
 // subscribe, unsubscribe, time_estimate_set, time_estimate_reset, spent_time_add,
 // spent_time_reset, time_stats, context_commits_list, context_commits_create,
-// context_commits_delete.
+// context_commits_delete, create_todo, related_issues,
+// dependencies_list, dependency_create, dependency_delete.
 func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := actionMap{
 		"create":                           routeAction(client, mergerequests.Create),
@@ -730,6 +731,11 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"context_commits_list":             routeAction(client, mrcontextcommits.List),
 		"context_commits_create":           routeAction(client, mrcontextcommits.Create),
 		"context_commits_delete":           destructiveVoidAction(client, mrcontextcommits.Delete),
+		"create_todo":                      routeAction(client, mergerequests.CreateTodo),
+		"related_issues":                   routeAction(client, mergerequests.RelatedIssues),
+		"dependencies_list":                routeAction(client, mergerequests.GetDependencies),
+		"dependency_create":                routeAction(client, mergerequests.CreateDependency),
+		"dependency_delete":                destructiveVoidAction(client, mergerequests.DeleteDependency),
 		"emoji_mr_list":                    routeAction(client, awardemoji.ListMRAwardEmoji),
 		"emoji_mr_get":                     routeAction(client, awardemoji.GetMRAwardEmoji),
 		"emoji_mr_create":                  routeAction(client, awardemoji.CreateMRAwardEmoji),
@@ -746,18 +752,18 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"event_mr_state_get":               routeAction(client, resourceevents.GetMRStateEvent),
 	}
 
-	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. Also manages approval rules/settings, time tracking, subscriptions, context commits, award emoji, and resource events. Delete permanently removes an MR.
+	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. Also manages approval rules/settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todo creation, related issues, award emoji, and resource events. Delete permanently removes an MR.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, award emoji, MR resource events.
-NOT for: comments, discussions, diffs, draft notes (use gitlab_mr_review), CI pipelines (use gitlab_pipeline; use action 'pipelines' here only to LIST MR pipelines), branches/tags (use gitlab_branch / gitlab_tag), commits in the repo (use gitlab_repository).
+When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
+NOT for: comments, discussions, diffs, draft notes, raw diffs (use gitlab_mr_review), CI pipelines (use gitlab_pipeline; use action 'pipelines' here only to LIST MR pipelines), branches/tags (use gitlab_branch / gitlab_tag), commits in the repo (use gitlab_repository).
 
 Returns:
-- list / list_global / list_group / commits / pipelines / participants / reviewers / issues_closed / approval_rules / context_commits_list / event_*_list / emoji_*_list: arrays with pagination {page, per_page, total, next_page}.
-- get / create / update / approve / merge / rebase / approval_state / approval_config / approval_rule_create / approval_rule_update / approval_settings_*: MR or settings object.
+- list / list_global / list_group / commits / pipelines / participants / reviewers / issues_closed / related_issues / dependencies_list / approval_rules / context_commits_list / event_*_list / emoji_*_list: arrays with pagination {page, per_page, total, next_page}.
+- get / create / update / approve / merge / rebase / approval_state / approval_config / approval_rule_create / approval_rule_update / approval_settings_* / dependency_create / create_todo: MR, dependency, todo or settings object.
 - time_estimate_set / spent_time_add / time_stats / time_estimate_reset / spent_time_reset: {time_estimate, total_time_spent, human_time_estimate, human_total_time_spent}.
 - subscribe / unsubscribe / cancel_auto_merge / create_pipeline: updated MR or pipeline object.
-- delete / unapprove / approval_reset / approval_rule_delete / context_commits_delete / emoji_*_delete: {success, message}.
+- delete / unapprove / approval_reset / approval_rule_delete / context_commits_delete / dependency_delete / emoji_*_delete: {success, message}.
 Errors: 404 (hint: confirm project_id and mr_iid — mr_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
 
 Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
@@ -792,6 +798,15 @@ Time tracking:
 Context commits:
 - context_commits_list / context_commits_create / context_commits_delete: project_id*, mr_iid*. create/delete need commits ([]string)*.
 
+MR dependencies (blocking MRs):
+- dependencies_list: project_id*, mr_iid* — list MRs that block this MR from merging.
+- dependency_create: project_id*, mr_iid*, blocking_merge_request_id* (global ID of the blocking MR).
+- dependency_delete: project_id*, mr_iid*, blocking_merge_request_id*.
+
+Todos and related issues:
+- create_todo: project_id*, mr_iid* — add this MR to the authenticated user's to-do list.
+- related_issues: project_id*, mr_iid* — list issues mentioned or linked from the MR (paginated).
+
 Award emoji:
 - emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, iid*, name* (create), award_id* (get/delete)
 - emoji_mr_get: project_id*, iid*, award_id*
@@ -803,13 +818,13 @@ Resource events:
 - event_mr_milestone_list / event_mr_milestone_get: project_id*, mr_iid*, milestone_event_id* (get)
 - event_mr_state_list / event_mr_state_get: project_id*, mr_iid*, state_event_id* (get)
 
-See also: gitlab_mr_review (comments, discussions, diffs, draft notes), gitlab_pipeline, gitlab_branch`, routes, toolutil.IconMR)
+See also: gitlab_mr_review (comments, discussions, diffs, raw diffs, draft notes), gitlab_pipeline, gitlab_branch, gitlab_issue (linked/related issue lifecycle)`, routes, toolutil.IconMR)
 }
 
 // registerMRReviewMeta registers the gitlab_mr_review meta-tool with actions:
 // note_create, note_list, note_update, note_delete, discussion_create,
 // discussion_list, discussion_get, discussion_reply, discussion_resolve,
-// discussion_note_update, discussion_note_delete, changes_get,
+// discussion_note_update, discussion_note_delete, changes_get, raw_diffs,
 // draft_note_list, draft_note_get, draft_note_create, draft_note_update,
 // draft_note_delete, draft_note_publish, draft_note_publish_all,
 // diff_versions_list, diff_version_get.
@@ -828,6 +843,7 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"discussion_note_update": routeAction(client, mrdiscussions.UpdateNote),
 		"discussion_note_delete": destructiveVoidAction(client, mrdiscussions.DeleteNote),
 		"changes_get":            routeAction(client, mrchanges.Get),
+		"raw_diffs":              routeAction(client, mrchanges.RawDiffs),
 		"draft_note_list":        routeAction(client, mrdraftnotes.List),
 		"draft_note_get":         routeAction(client, mrdraftnotes.Get),
 		"draft_note_create":      routeAction(client, mrdraftnotes.Create),
@@ -850,7 +866,8 @@ IMPORTANT — batch review pattern: call draft_note_create once per comment (wit
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
 - note_*, discussion_*, draft_note_*, diff_*: resource object(s) with id, body/note, author, position (when inline).
-- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get.
+- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
+- raw_diffs: {raw_diff: string} — full unified diff for the MR head; ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
 Errors: 404 not found (hint: check note_id/discussion_id and mr_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
 
@@ -873,6 +890,7 @@ Discussions (threaded, can be inline via position):
 
 Changes and diff versions:
 - changes_get: returns file diffs; check truncated_files
+- raw_diffs: project_id*, mr_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
 - diff_versions_list: list MR diff revisions
 - diff_version_get: version_id*, unidiff (bool)
 
@@ -889,7 +907,8 @@ See also: gitlab_merge_request (MR lifecycle, approvals, merge, time tracking, r
 
 // registerRepositoryMeta registers the gitlab_repository meta-tool with actions:
 // tree, compare, contributors, merge_base, blob, raw_blob, archive, changelog,
-// commit operations, file operations, update_submodule, and markdown_render.
+// commit operations, file operations (including file_raw_metadata),
+// update_submodule, and markdown_render.
 func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := actionMap{
 		"tree":                          routeAction(client, repository.Tree),
@@ -921,6 +940,7 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"file_blame":                    routeAction(client, files.Blame),
 		"file_metadata":                 routeAction(client, files.GetMetaData),
 		"file_raw":                      routeAction(client, files.GetRaw),
+		"file_raw_metadata":             routeAction(client, files.GetRawFileMetaData),
 		"update_submodule":              routeAction(client, repositorysubmodules.Update),
 		"list_submodules":               routeAction(client, repositorysubmodules.List),
 		"read_submodule_file":           routeAction(client, repositorysubmodules.Read),
@@ -971,7 +991,9 @@ Commits:
 - commit_signature: project_id*, sha*
 
 Files:
-- file_get / file_raw / file_metadata / file_blame: project_id*, file_path*, ref. Blame also accepts range_start, range_end.
+- file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Blame also accepts range_start, range_end.
+  - file_metadata: HEAD-style metadata for the file content endpoint (size, encoding, content_sha256, blob_id, last_commit_id, ref).
+  - file_raw_metadata: HEAD-style metadata for the raw file endpoint (size, content_type, ref) — useful to size-check before downloading via file_raw.
 - file_create: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding (text/base64), author_email, author_name, execute_filemode
 - file_update: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding, author_email, author_name, last_commit_id, execute_filemode
 - file_delete: project_id*, file_path*, branch*, commit_message*, start_branch, author_email, author_name, last_commit_id
