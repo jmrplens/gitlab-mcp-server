@@ -1496,12 +1496,20 @@ Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
 
 	desc += `
 
-See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings/files), gitlab_label (label CRUD), gitlab_milestone (milestone CRUD), gitlab_pipeline (CI/CD)
+See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD)
 
 Returns:
-- list / list_all / list_group / participants / mrs_closing / mrs_related / link_list / discussion_list / note_list / work_item_list / emoji_issue_list / emoji_issue_note_list / event_issue_label_list / event_issue_milestone_list / event_issue_state_list / event_issue_iteration_list / event_issue_weight_list / iteration_list_project / iteration_list_group: arrays with pagination {page, per_page, total, next_page}.
-- get / get_by_id / create / update / move / reorder / subscribe / unsubscribe / create_todo / link_get / link_create / discussion_get / discussion_create / discussion_add_note / discussion_update_note / note_get / note_create / note_update / time_estimate_set / time_estimate_reset / spent_time_add / spent_time_reset / time_stats_get / work_item_get / work_item_create / work_item_update / emoji_issue_get / emoji_issue_create / emoji_issue_note_get / emoji_issue_note_create / event_issue_label_get / event_issue_milestone_get / event_issue_state_get / event_issue_iteration_get / statistics_get / statistics_get_group / statistics_get_project: issue or sub-resource object.
-- delete / link_delete / note_delete / discussion_delete_note / work_item_delete / emoji_issue_delete / emoji_issue_note_delete: {success, message}.
+- Paginated list actions ({page, per_page, total, next_page}): list / list_all / list_group / participants / mrs_closing / mrs_related / link_list / discussion_list / note_list / emoji_issue_list / emoji_issue_note_list / event_issue_label_list / event_issue_milestone_list / event_issue_state_list / event_issue_iteration_list / event_issue_weight_list.
+- Cursor-paginated GraphQL list actions ({nodes, page_info: {end_cursor, has_next_page}}): work_item_list.
+- Single-object actions: get / get_by_id / create / update / move / reorder / subscribe / unsubscribe / create_todo / link_get / link_create / discussion_get / discussion_create / discussion_add_note / discussion_update_note / note_get / note_create / note_update / time_estimate_set / time_estimate_reset / spent_time_add / spent_time_reset / time_stats_get / work_item_get / work_item_create / work_item_update / emoji_issue_get / emoji_issue_create / emoji_issue_note_get / emoji_issue_note_create / event_issue_label_get / event_issue_milestone_get / event_issue_state_get / event_issue_iteration_get / statistics_get / statistics_get_group / statistics_get_project: issue or sub-resource object.
+- Void actions ({success, message}): delete / link_delete / note_delete / discussion_delete_note / work_item_delete / emoji_issue_delete / emoji_issue_note_delete.`
+
+	if enterprise {
+		desc += `
+- Premium+ iteration list actions (paginated, only when GITLAB_ENTERPRISE=true): iteration_list_project / iteration_list_group.`
+	}
+
+	desc += `
 Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).`
 
 	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
@@ -2972,7 +2980,7 @@ func registerModelRegistryMeta(server *mcp.Server, client *gitlabclient.Client) 
 	routes := actionMap{
 		"download": routeAction(client, modelregistry.Download),
 	}
-	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from the GitLab Model Registry (Premium/Ultimate). Read-only — cannot publish or delete model versions through this tool.
+	addReadOnlyMetaTool(server, "gitlab_model_registry", `Download ML model package files from the GitLab Model Registry. Read-only — cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.
@@ -3094,7 +3102,7 @@ func registerCICatalogMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"list": routeAction(client, cicatalog.List),
 		"get":  routeAction(client, cicatalog.Get),
 	}
-	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint; requires Premium/Ultimate.
+	addReadOnlyMetaTool(server, "gitlab_ci_catalog", `Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `+"`include:component`"+`, or audit which Catalog resources a publisher group exposes.
@@ -3120,11 +3128,11 @@ func registerCustomEmojiMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"create": routeAction(client, customemoji.Create),
 		"delete": destructiveVoidAction(client, customemoji.Delete),
 	}
-	addMetaTool(server, "gitlab_custom_emoji", `Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. Requires Premium/Ultimate.
+	addMetaTool(server, "gitlab_custom_emoji", `Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: list, add, or remove the custom emoji available to a group's projects (e.g. company logos, team mascots) used as reactions on issues/MRs/notes.
-NOT for: posting or removing a reaction on an issue/MR/snippet/commit/note (use the `+"`award_emoji_*`"+` actions on gitlab_issue, gitlab_merge_request, or gitlab_snippet), Unicode emoji (built-in, no action required), instance-level emoji (not supported by GitLab).
+NOT for: posting or removing a reaction on an issue/MR/snippet/commit/note (use the `+"`emoji_issue_*`"+` / `+"`emoji_mr_*`"+` / `+"`emoji_snippet_*`"+` actions on gitlab_issue, gitlab_merge_request, or gitlab_snippet), Unicode emoji (built-in, no action required), instance-level emoji (not supported by GitLab).
 
 Returns:
 - list: {nodes: [{id, name, url, external (bool), created_at, user_permissions: {delete}}], page_info: {end_cursor, has_next_page}}.
