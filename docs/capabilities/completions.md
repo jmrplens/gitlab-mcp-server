@@ -122,9 +122,15 @@ The `job_id` completer is special — it requires both `project_id` and `pipelin
 
 | Setting | Value | Notes |
 | ------- | ----- | ----- |
-| Max results | 10 per request | Hardcoded per MCP spec recommendation |
+| Max results | 10 per request | `maxCompletionResults` constant; aligned with MCP spec recommendation |
 | Error handling | Graceful | Returns empty results on API errors |
 | Caching | None | Queries GitLab API in real-time for freshness |
+| `total` field | Populated from GitLab `X-Total` header | When the underlying GitLab call returns `X-Total`, the value is forwarded to `CompletionResultDetails.Total` so clients can display “N of M matches” |
+| `hasMore` field | Computed from total vs. returned | Set to `true` when more results exist beyond the returned slice |
+
+### Spec compliance
+
+The server returns **bare argument values** in `completion.values` per the MCP 2025-11-25 specification — no labels, prefixes, or human-readable suffixes are mixed into the value string. Display formatting (e.g. `"15: feat: sampling..."`) is the client's responsibility based on the resource fetched separately.
 
 ## Security
 

@@ -138,8 +138,20 @@ if !elicitClient.IsSupported() {
 | ----- | ------- | ------------------- |
 | `ErrElicitationNotSupported` | Client does not support elicitation | Return informational message explaining the requirement |
 | `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow |
-| `ErrDeclined` | User declined the elicitation request | Return cancellation message |
-| `ErrCancelled` | User cancelled the elicitation flow | Return cancellation message |
+| `ErrDeclined` | User declined the elicitation request | Return cancellation message via `CancelledResult` |
+| `ErrCancelled` | User cancelled the elicitation flow | Return cancellation message via `CancelledResult` |
+
+### Cancellation Helper
+
+```go
+func CancelledResult(message string) *mcp.CallToolResult
+```
+
+Returns a non-error tool result that signals cancellation cleanly to the LLM. Tool handlers should call this when they receive `ErrDeclined` or `ErrCancelled` instead of returning a Go `error`, so the LLM can react with a friendly message rather than treating the cancellation as a fault.
+
+### Request Identifiers
+
+Every `elicitation/create` request carries a unique **UUID v4** identifier generated server-side. This complies with the MCP 2025-11-25 requirement that elicitation request IDs be unique per session and unguessable, and ensures correct correlation when multiple elicitation flows run in parallel.
 
 ## Security
 

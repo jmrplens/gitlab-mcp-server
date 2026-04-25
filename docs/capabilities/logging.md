@@ -80,10 +80,14 @@ logger := logging.NewSessionLogger(session)
 | ------ | --------- | -------- |
 | `Debug(ctx, message, data)` | `debug` | Detailed diagnostic information |
 | `Info(ctx, message, data)` | `info` | Normal operational events |
+| `Notice(ctx, message, data)` | `notice` | Significant but expected events |
 | `Warning(ctx, message, data)` | `warning` | Potential issues that don't block operation |
 | `Error(ctx, message, data)` | `error` | Failed operations |
+| `Critical(ctx, message, data)` | `critical` | Critical conditions requiring attention |
+| `Alert(ctx, message, data)` | `alert` | Action must be taken immediately |
+| `Emergency(ctx, message, data)` | `emergency` | System is unusable |
 
-MCP follows [RFC 5424 syslog severity levels](https://datatracker.ietf.org/doc/html/rfc5424). The server uses the four most common levels. Additional levels (`emergency`, `alert`, `critical`, `notice`) are defined by the protocol but not used by this server.
+The server exposes the full set of [RFC 5424 syslog severity levels](https://datatracker.ietf.org/doc/html/rfc5424) required by the MCP 2025-11-25 spec. Tool registration handlers currently emit at `info` (success) and `error` (failure); the higher-severity helpers are available for callers that need them and for clients to filter via `logging/setLevel`.
 
 ### Structured Tool Logging
 

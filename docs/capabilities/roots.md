@@ -72,20 +72,26 @@ manager := roots.NewManager()
 
 // Registered during server construction:
 &mcp.ServerOptions{
+    InitializedHandler:      func(ctx context.Context, req *mcp.InitializedRequest) {
+        manager.Refresh(ctx, req.Session)
+    },
     RootsListChangedHandler: manager.Refresh,
 }
 ```
+
+Roots are fetched eagerly on `notifications/initialized` (immediately after the handshake completes) so the cache is populated before the first tool call. The `RootsListChangedHandler` keeps the cache in sync afterwards.
 
 ### Methods
 
 | Method | Signature | Purpose |
 | ------ | --------- | ------- |
 | `NewManager()` | `() *Manager` | Create an empty root manager |
-| `Refresh(ctx, session)` | `(context.Context, *mcp.ServerSession) error` | Query client and cache current roots |
+| `Refresh(ctx, session)` | `(context.Context, *mcp.ServerSession) error` | Query client and cache current roots. No-op if the client did not advertise roots. |
 | `GetRoots()` | `() []*mcp.Root` | Return a copy of cached roots |
 | `FindGitRoot()` | `() (string, bool)` | Scan cached roots for a Git repository |
 | `HasRoot(uri)` | `(string) bool` | Check if a specific URI is in the cache |
 | `ListClientRoots(ctx, session)` | `(context.Context, *mcp.ServerSession) ([]*mcp.Root, error)` | Query roots without caching |
+| `ClientSupportsRoots(session)` | `(*mcp.ServerSession) bool` | Reports whether the client advertised the roots capability during initialization |
 
 ### Git Detection Heuristics
 
