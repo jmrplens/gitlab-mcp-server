@@ -16,7 +16,7 @@
 | --------------------------- | ------- |
 | Total test functions        | 8,717   |
 | Unit test functions         | 8,429   |
-| E2E test functions          | 209     |
+| E2E test functions          | 214     |
 | cmd test functions          | 79      |
 | Test files (internal/)      | 400     |
 | Tool sub-packages tested    | 162     |
@@ -41,7 +41,7 @@
 | Core packages            |          1,290 |         74 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
 | Tool sub-packages (162)  |          6,925 |        311 | Domain-specific tool handlers        |
-| E2E integration          |            209 |         96 | Full workflow against real GitLab    |
+| E2E integration          |            214 |         96 | Full workflow against real GitLab    |
 | cmd/server               |             79 |          1 | Main entry point + OAuth integration |
 | **Total**                |      **8,717** |    **497** |                                      |
 
