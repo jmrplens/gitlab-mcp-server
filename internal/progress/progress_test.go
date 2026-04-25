@@ -360,147 +360,147 @@ func TestFromRequest_InitializedSessionNoToken(t *testing.T) {
 // non-monotonic progress notifications per MCP spec 2025-11-25 requirement
 // that progress values strictly increase.
 func TestUpdate_MonotonicEnforcement(t *testing.T) {
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
-var mu sync.Mutex
-var received []float64
-allReceived := make(chan struct{})
+	var mu sync.Mutex
+	var received []float64
+	allReceived := make(chan struct{})
 
-server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
-mcp.AddTool(server, &mcp.Tool{
-Name:        "test_tool",
-Description: "Sends progress with regressions",
-}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-tracker := FromRequest(req)
-tracker.Update(ctx, 1, 10, "first")
-tracker.Update(ctx, 0.5, 10, "regression-must-drop")
-tracker.Update(ctx, 1, 10, "equal-must-drop")
-tracker.Update(ctx, 2, 10, "second")
-tracker.Update(ctx, 1.5, 10, "regression-must-drop")
-tracker.Update(ctx, 3, 10, "third")
-return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
-})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "test_tool",
+		Description: "Sends progress with regressions",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		tracker := FromRequest(req)
+		tracker.Update(ctx, 1, 10, "first")
+		tracker.Update(ctx, 0.5, 10, "regression-must-drop")
+		tracker.Update(ctx, 1, 10, "equal-must-drop")
+		tracker.Update(ctx, 2, 10, "second")
+		tracker.Update(ctx, 1.5, 10, "regression-must-drop")
+		tracker.Update(ctx, 3, 10, "third")
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	})
 
-if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
-t.Fatalf("server connect: %v", err)
-}
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
 
-expected := 3
-client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, &mcp.ClientOptions{
-ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
-mu.Lock()
-defer mu.Unlock()
-received = append(received, req.Params.Progress)
-if len(received) == expected {
-close(allReceived)
-}
-},
-})
-clientSession, err := client.Connect(ctx, clientTransport, nil)
-if err != nil {
-t.Fatalf("client connect: %v", err)
-}
-defer func() { _ = clientSession.Close() }()
+	expected := 3
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			mu.Lock()
+			defer mu.Unlock()
+			received = append(received, req.Params.Progress)
+			if len(received) == expected {
+				close(allReceived)
+			}
+		},
+	})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer func() { _ = clientSession.Close() }()
 
-_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
-Name: "test_tool",
-Meta: mcp.Meta{"progressToken": "test-monotonic-token"},
-})
-if err != nil {
-t.Fatalf("call tool: %v", err)
-}
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_tool",
+		Meta: mcp.Meta{"progressToken": "test-monotonic-token"},
+	})
+	if err != nil {
+		t.Fatalf("call tool: %v", err)
+	}
 
-select {
-case <-allReceived:
-case <-time.After(2 * time.Second):
-mu.Lock()
-got := append([]float64{}, received...)
-mu.Unlock()
-t.Fatalf("timeout: got %d notifications, want %d (values=%v)", len(got), expected, got)
-}
+	select {
+	case <-allReceived:
+	case <-time.After(2 * time.Second):
+		mu.Lock()
+		got := append([]float64{}, received...)
+		mu.Unlock()
+		t.Fatalf("timeout: got %d notifications, want %d (values=%v)", len(got), expected, got)
+	}
 
-mu.Lock()
-defer mu.Unlock()
-want := []float64{1, 2, 3}
-if len(received) != len(want) {
-t.Fatalf("received = %v, want %v", received, want)
-}
-for i, v := range want {
-if received[i] != v {
-t.Errorf("received[%d] = %v, want %v (full=%v)", i, received[i], v, received)
-}
-}
+	mu.Lock()
+	defer mu.Unlock()
+	want := []float64{1, 2, 3}
+	if len(received) != len(want) {
+		t.Fatalf("received = %v, want %v", received, want)
+	}
+	for i, v := range want {
+		if received[i] != v {
+			t.Errorf("received[%d] = %v, want %v (full=%v)", i, received[i], v, received)
+		}
+	}
 }
 
 // TestDone_SendsCompletion verifies that [Tracker.Done] sends a notification
 // with progress equal to total.
 func TestDone_SendsCompletion(t *testing.T) {
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
-var mu sync.Mutex
-var lastProgress, lastTotal float64
-gotNotification := make(chan struct{}, 1)
+	var mu sync.Mutex
+	var lastProgress, lastTotal float64
+	gotNotification := make(chan struct{}, 1)
 
-server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
-mcp.AddTool(server, &mcp.Tool{Name: "t", Description: "d"},
-func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-tracker := FromRequest(req)
-tracker.Done(ctx, 5, "complete")
-return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
-})
-if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
-t.Fatalf("server connect: %v", err)
-}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "t", Description: "d"},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			tracker := FromRequest(req)
+			tracker.Done(ctx, 5, "complete")
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
 
-client := mcp.NewClient(&mcp.Implementation{Name: "c"}, &mcp.ClientOptions{
-ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
-mu.Lock()
-lastProgress = req.Params.Progress
-lastTotal = req.Params.Total
-mu.Unlock()
-select {
-case gotNotification <- struct{}{}:
-default:
-}
-},
-})
-cs, err := client.Connect(ctx, clientTransport, nil)
-if err != nil {
-t.Fatalf("client connect: %v", err)
-}
-defer func() { _ = cs.Close() }()
+	client := mcp.NewClient(&mcp.Implementation{Name: "c"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			mu.Lock()
+			lastProgress = req.Params.Progress
+			lastTotal = req.Params.Total
+			mu.Unlock()
+			select {
+			case gotNotification <- struct{}{}:
+			default:
+			}
+		},
+	})
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer func() { _ = cs.Close() }()
 
-_, err = cs.CallTool(ctx, &mcp.CallToolParams{
-Name: "t",
-Meta: mcp.Meta{"progressToken": "done-token"},
-})
-if err != nil {
-t.Fatalf("call tool: %v", err)
-}
+	_, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "t",
+		Meta: mcp.Meta{"progressToken": "done-token"},
+	})
+	if err != nil {
+		t.Fatalf("call tool: %v", err)
+	}
 
-select {
-case <-gotNotification:
-case <-time.After(2 * time.Second):
-t.Fatal("timeout waiting for completion notification")
-}
+	select {
+	case <-gotNotification:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for completion notification")
+	}
 
-mu.Lock()
-defer mu.Unlock()
-if lastProgress != 5 || lastTotal != 5 {
-t.Errorf("progress=%v total=%v, want both 5", lastProgress, lastTotal)
-}
+	mu.Lock()
+	defer mu.Unlock()
+	if lastProgress != 5 || lastTotal != 5 {
+		t.Errorf("progress=%v total=%v, want both 5", lastProgress, lastTotal)
+	}
 }
 
 // TestDone_ZeroTotalIsNoop verifies that [Tracker.Done] with non-positive total
 // does not send a notification.
 func TestDone_ZeroTotalIsNoop(t *testing.T) {
-var tracker Tracker
-tracker.Done(context.Background(), 0, "should-noop")
-tracker.Done(context.Background(), -1, "should-noop")
+	var tracker Tracker
+	tracker.Done(context.Background(), 0, "should-noop")
+	tracker.Done(context.Background(), -1, "should-noop")
 }

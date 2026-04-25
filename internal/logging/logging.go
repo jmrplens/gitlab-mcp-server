@@ -6,6 +6,7 @@ package logging
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -142,9 +143,7 @@ func buildLogData(message string, data any) any {
 	}
 	if m, ok := data.(map[string]any); ok {
 		cp := make(map[string]any, len(m)+1)
-		for k, v := range m {
-			cp[k] = v
-		}
+		maps.Copy(cp, m)
 		cp["message"] = message
 		return cp
 	}

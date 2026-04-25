@@ -486,8 +486,8 @@ func TestRefresh_SkipsWhenClientLacksCapability(t *testing.T) {
 	m := NewManager()
 	m.setRoots([]*mcp.Root{{URI: "file:///stale"}})
 
-	if err := m.Refresh(ctx, serverSession); err != nil {
-		t.Fatalf("expected nil error when client lacks roots capability, got: %v", err)
+	if refreshErr := m.Refresh(ctx, serverSession); refreshErr != nil {
+		t.Fatalf("expected nil error when client lacks roots capability, got: %v", refreshErr)
 	}
 	if got := m.GetRoots(); got != nil {
 		t.Errorf("expected cache cleared, got %d roots", len(got))

@@ -20,52 +20,52 @@ linters:
   default: none
   enable:
     # --- Bug Detection ---
-    - govet             # Official Go vet checks
-    - staticcheck       # Comprehensive static analysis (SA*, S*, ST*, QF*)
-    - errcheck          # Unchecked error return values
-    - ineffassign       # Detects ineffectual assignments
-    - bodyclose         # HTTP response body not closed (critical for GitLab API client)
-    - noctx             # HTTP requests without context.Context
-    - durationcheck     # Multiplying two time.Duration values
-    - nilerr            # Returns nil when err is not nil
-    - nilnesserr        # Checks err != nil but returns a different nil error
-    - nilnil            # Returns nil,nil without reason
-    - errname           # Sentinel error naming conventions (ErrFoo)
-    - errorlint         # Finds code that breaks error wrapping (errors.Is/As)
-    - fatcontext        # Detects nested contexts in loops
-    - reassign          # Detects package variable reassignment
+    - govet # Official Go vet checks
+    - staticcheck # Comprehensive static analysis (SA*, S*, ST*, QF*)
+    - errcheck # Unchecked error return values
+    - ineffassign # Detects ineffectual assignments
+    - bodyclose # HTTP response body not closed (critical for GitLab API client)
+    - noctx # HTTP requests without context.Context
+    - durationcheck # Multiplying two time.Duration values
+    - nilerr # Returns nil when err is not nil
+    - nilnesserr # Checks err != nil but returns a different nil error
+    - nilnil # Returns nil,nil without reason
+    - errname # Sentinel error naming conventions (ErrFoo)
+    - errorlint # Finds code that breaks error wrapping (errors.Is/As)
+    - fatcontext # Detects nested contexts in loops
+    - reassign # Detects package variable reassignment
 
     # --- Security ---
-    - gosec             # OWASP-oriented security scanner (G1xx-G7xx)
+    - gosec # OWASP-oriented security scanner (G1xx-G7xx)
 
     # --- Code Quality ---
-    - revive            # Configurable Go linter (golint replacement)
-    - gocritic          # ~100 diagnostics: bugs, performance, style
-    - unconvert         # Unnecessary type conversions
-    - unparam           # Unused function parameters
-    - unused            # Unused code (variables, functions, types)
-    - wastedassign      # Finds wasted assignment statements
-    - predeclared       # Detects shadowing of Go predeclared identifiers
-    - recvcheck         # Checks receiver type consistency (pointer vs value)
-    - asciicheck        # Checks for non-ASCII identifiers
-    - nolintlint        # Reports ill-formed or insufficient nolint directives
-    - whitespace        # Detects leading/trailing whitespace in functions
+    - revive # Configurable Go linter (golint replacement)
+    - gocritic # ~100 diagnostics: bugs, performance, style
+    - unconvert # Unnecessary type conversions
+    - unparam # Unused function parameters
+    - unused # Unused code (variables, functions, types)
+    - wastedassign # Finds wasted assignment statements
+    - predeclared # Detects shadowing of Go predeclared identifiers
+    - recvcheck # Checks receiver type consistency (pointer vs value)
+    - asciicheck # Checks for non-ASCII identifiers
+    - nolintlint # Reports ill-formed or insufficient nolint directives
+    - whitespace # Detects leading/trailing whitespace in functions
 
     # --- Style & Formatting ---
-    - misspell          # Spelling mistakes in comments and strings
-    - usestdlibvars     # Use stdlib constants instead of magic values
-    - intrange          # for i := 0; i < n; i++ → for i := range n (Go 1.22+)
-    - modernize         # Suggests simplifications using modern Go features
-    - usetesting        # Reports functions that should use testing.T helpers
+    - misspell # Spelling mistakes in comments and strings
+    - usestdlibvars # Use stdlib constants instead of magic values
+    - intrange # for i := 0; i < n; i++ → for i := range n (Go 1.22+)
+    - modernize # Suggests simplifications using modern Go features
+    - usetesting # Reports functions that should use testing.T helpers
 
     # --- Performance ---
-    - perfsprint        # fmt.Sprintf → strconv when possible
+    - perfsprint # fmt.Sprintf → strconv when possible
 
   settings:
     govet:
       enable-all: true
       disable:
-        - fieldalignment  # Too noisy for this project
+        - fieldalignment # Too noisy for this project
       settings:
         shadow:
           strict: true
@@ -73,9 +73,9 @@ linters:
     staticcheck:
       checks:
         - "all"
-        - "-ST1000"       # Package comments (handled by revive)
-        - "-ST1016"       # Consistent receiver names (handled by revive)
-        - "-QF1008"       # Omit embedded fields from selector (too noisy)
+        - "-ST1000" # Package comments (handled by revive)
+        - "-ST1016" # Consistent receiver names (handled by revive)
+        - "-QF1008" # Omit embedded fields from selector (too noisy)
 
     errcheck:
       check-type-assertions: true
@@ -83,8 +83,8 @@ linters:
 
     gosec:
       excludes:
-        - G104            # Unhandled errors (covered by errcheck)
-        - G304            # File path from variable (many legitimate uses in tools)
+        - G104 # Unhandled errors (covered by errcheck)
+        - G304 # File path from variable (many legitimate uses in tools)
       config:
         global:
           audit: "false"
@@ -127,10 +127,11 @@ linters:
         - performance
         - style
       disabled-checks:
-        - hugeParam          # Too strict for tool input/output structs
-        - rangeValCopy       # Often false positives with simple structs
-        - ifElseChain        # Sometimes clearer than switch
-        - sloppyReassign     # Conflicts with govet shadow strict mode
+        - hugeParam # Too strict for tool input/output structs
+        - rangeValCopy # Often false positives with simple structs
+        - ifElseChain # Sometimes clearer than switch
+        - sloppyReassign # Conflicts with govet shadow strict mode
+        - unnamedResult # Low value; multi-return signatures are self-documenting
 
     misspell:
       locale: US
@@ -206,7 +207,7 @@ output:
 
 formatters:
   enable:
-    - goimports         # Import grouping and ordering
+    - goimports # Import grouping and ordering
   settings:
     goimports:
       local-prefixes:

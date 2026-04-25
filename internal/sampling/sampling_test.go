@@ -1612,97 +1612,97 @@ func TestAnalyzeWithTools_CreateMessageError(t *testing.T) {
 }
 
 func TestWithTemperature_ClampsAndSets(t *testing.T) {
-tests := []struct {
-name string
-in   float64
-want float64
-}{
-{"zero", 0, 0},
-{"middle", 0.7, 0.7},
-{"max", 2, 2},
-{"negative_clamped", -1, 0},
-{"over_clamped", 3.5, 2},
-}
-for _, tc := range tests {
-t.Run(tc.name, func(t *testing.T) {
-cfg := analyzeConfig{}
-WithTemperature(tc.in)(&cfg)
-if !cfg.hasTemperature {
-t.Fatal("hasTemperature should be true")
-}
-if cfg.temperature != tc.want {
-t.Errorf("temperature = %v, want %v", cfg.temperature, tc.want)
-}
-})
-}
+	tests := []struct {
+		name string
+		in   float64
+		want float64
+	}{
+		{"zero", 0, 0},
+		{"middle", 0.7, 0.7},
+		{"max", 2, 2},
+		{"negative_clamped", -1, 0},
+		{"over_clamped", 3.5, 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := analyzeConfig{}
+			WithTemperature(tc.in)(&cfg)
+			if !cfg.hasTemperature {
+				t.Fatal("hasTemperature should be true")
+			}
+			if cfg.temperature != tc.want {
+				t.Errorf("temperature = %v, want %v", cfg.temperature, tc.want)
+			}
+		})
+	}
 }
 
 func TestWithModelPriorities_ClampsAndSets(t *testing.T) {
-cfg := analyzeConfig{}
-WithModelPriorities(-0.5, 0.4, 1.5)(&cfg)
-if !cfg.hasPriorities {
-t.Fatal("hasPriorities should be true")
-}
-if cfg.costPriority != 0 {
-t.Errorf("costPriority = %v, want 0", cfg.costPriority)
-}
-if cfg.speedPriority != 0.4 {
-t.Errorf("speedPriority = %v, want 0.4", cfg.speedPriority)
-}
-if cfg.intelligencePriority != 1 {
-t.Errorf("intelligencePriority = %v, want 1", cfg.intelligencePriority)
-}
+	cfg := analyzeConfig{}
+	WithModelPriorities(-0.5, 0.4, 1.5)(&cfg)
+	if !cfg.hasPriorities {
+		t.Fatal("hasPriorities should be true")
+	}
+	if cfg.costPriority != 0 {
+		t.Errorf("costPriority = %v, want 0", cfg.costPriority)
+	}
+	if cfg.speedPriority != 0.4 {
+		t.Errorf("speedPriority = %v, want 0.4", cfg.speedPriority)
+	}
+	if cfg.intelligencePriority != 1 {
+		t.Errorf("intelligencePriority = %v, want 1", cfg.intelligencePriority)
+	}
 }
 
 func TestWithStopSequences_FiltersEmpty(t *testing.T) {
-cfg := analyzeConfig{}
-WithStopSequences("STOP", "", "END", "")(&cfg)
-if len(cfg.stopSequences) != 2 {
-t.Fatalf("stopSequences len = %d, want 2", len(cfg.stopSequences))
-}
-if cfg.stopSequences[0] != "STOP" || cfg.stopSequences[1] != "END" {
-t.Errorf("stopSequences = %v, want [STOP END]", cfg.stopSequences)
-}
+	cfg := analyzeConfig{}
+	WithStopSequences("STOP", "", "END", "")(&cfg)
+	if len(cfg.stopSequences) != 2 {
+		t.Fatalf("stopSequences len = %d, want 2", len(cfg.stopSequences))
+	}
+	if cfg.stopSequences[0] != "STOP" || cfg.stopSequences[1] != "END" {
+		t.Errorf("stopSequences = %v, want [STOP END]", cfg.stopSequences)
+	}
 }
 
 func TestBuildModelPreferences_NilWhenEmpty(t *testing.T) {
-cfg := &analyzeConfig{}
-if got := buildModelPreferences(cfg); got != nil {
-t.Errorf("buildModelPreferences = %v, want nil", got)
-}
+	cfg := &analyzeConfig{}
+	if got := buildModelPreferences(cfg); got != nil {
+		t.Errorf("buildModelPreferences = %v, want nil", got)
+	}
 }
 
 func TestBuildModelPreferences_HintsOnly(t *testing.T) {
-cfg := &analyzeConfig{modelHints: []string{"claude-opus", "claude-sonnet"}}
-got := buildModelPreferences(cfg)
-if got == nil {
-t.Fatal("buildModelPreferences returned nil")
-}
-if len(got.Hints) != 2 || got.Hints[0].Name != "claude-opus" {
-t.Errorf("Hints = %v, want [claude-opus, claude-sonnet]", got.Hints)
-}
-if got.CostPriority != 0 || got.SpeedPriority != 0 || got.IntelligencePriority != 0 {
-t.Errorf("priorities should be zero when hasPriorities=false")
-}
+	cfg := &analyzeConfig{modelHints: []string{"claude-opus", "claude-sonnet"}}
+	got := buildModelPreferences(cfg)
+	if got == nil {
+		t.Fatal("buildModelPreferences returned nil")
+	}
+	if len(got.Hints) != 2 || got.Hints[0].Name != "claude-opus" {
+		t.Errorf("Hints = %v, want [claude-opus, claude-sonnet]", got.Hints)
+	}
+	if got.CostPriority != 0 || got.SpeedPriority != 0 || got.IntelligencePriority != 0 {
+		t.Errorf("priorities should be zero when hasPriorities=false")
+	}
 }
 
 func TestBuildModelPreferences_HintsAndPriorities(t *testing.T) {
-cfg := &analyzeConfig{
-modelHints:           []string{"claude"},
-hasPriorities:        true,
-costPriority:         0.1,
-speedPriority:        0.5,
-intelligencePriority: 0.9,
-}
-got := buildModelPreferences(cfg)
-if got == nil {
-t.Fatal("buildModelPreferences returned nil")
-}
-if got.CostPriority != 0.1 || got.SpeedPriority != 0.5 || got.IntelligencePriority != 0.9 {
-t.Errorf("priorities = (%v,%v,%v), want (0.1,0.5,0.9)",
-got.CostPriority, got.SpeedPriority, got.IntelligencePriority)
-}
-if len(got.Hints) != 1 {
-t.Errorf("Hints len = %d, want 1", len(got.Hints))
-}
+	cfg := &analyzeConfig{
+		modelHints:           []string{"claude"},
+		hasPriorities:        true,
+		costPriority:         0.1,
+		speedPriority:        0.5,
+		intelligencePriority: 0.9,
+	}
+	got := buildModelPreferences(cfg)
+	if got == nil {
+		t.Fatal("buildModelPreferences returned nil")
+	}
+	if got.CostPriority != 0.1 || got.SpeedPriority != 0.5 || got.IntelligencePriority != 0.9 {
+		t.Errorf("priorities = (%v,%v,%v), want (0.1,0.5,0.9)",
+			got.CostPriority, got.SpeedPriority, got.IntelligencePriority)
+	}
+	if len(got.Hints) != 1 {
+		t.Errorf("Hints len = %d, want 1", len(got.Hints))
+	}
 }
