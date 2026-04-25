@@ -88,7 +88,10 @@ func AnalyzeMRChanges(ctx context.Context, req *mcp.CallToolRequest, client *git
 
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeMRPrompt, data)
+	result, err := samplingClient.Analyze(ctx, analyzeMRPrompt, data,
+		sampling.WithTemperature(0.2),
+		sampling.WithModelPriorities(0.2, 0.2, 0.8),
+	)
 	if err != nil {
 		return AnalyzeMRChangesOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

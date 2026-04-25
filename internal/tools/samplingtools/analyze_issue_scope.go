@@ -117,7 +117,10 @@ func AnalyzeIssueScope(ctx context.Context, req *mcp.CallToolRequest, client *gi
 
 	tracker.Step(ctx, 5, 6, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeIssueScopePrompt, data)
+	result, err := samplingClient.Analyze(ctx, analyzeIssueScopePrompt, data,
+		sampling.WithTemperature(0.3),
+		sampling.WithModelPriorities(0.3, 0.4, 0.6),
+	)
 	if err != nil {
 		return AnalyzeIssueScopeOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

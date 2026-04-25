@@ -95,13 +95,20 @@ type Option func(*analyzeConfig)
 
 // analyzeConfig holds data for sampling operations.
 type analyzeConfig struct {
-	maxTokens        int
-	modelHints       []string
-	tools            []*mcp.Tool
-	toolChoice       *mcp.ToolChoice
-	maxIterations    int
-	iterationTimeout time.Duration
-	totalTimeout     time.Duration
+	maxTokens            int
+	modelHints           []string
+	costPriority         float64
+	speedPriority        float64
+	intelligencePriority float64
+	hasPriorities        bool
+	temperature          float64
+	hasTemperature       bool
+	stopSequences        []string
+	tools                []*mcp.Tool
+	toolChoice           *mcp.ToolChoice
+	maxIterations        int
+	iterationTimeout     time.Duration
+	totalTimeout         time.Duration
 }
 
 // WithMaxTokens overrides the default max token limit for the LLM response.
@@ -118,6 +125,65 @@ func WithModelHints(hints ...string) Option {
 	return func(c *analyzeConfig) {
 		c.modelHints = hints
 	}
+}
+
+// WithModelPriorities sets the cost/speed/intelligence priorities (0..1) for
+// model selection. Values are clamped to [0, 1]. Hints (set via [WithModelHints])
+// take precedence per the MCP spec; priorities disambiguate between hint matches
+// and influence model choice when no hint matches.
+//
+// Suggested presets:
+//   - Security/architecture review: intelligence=1, cost=0, speed=0
+//   - Bulk summaries / release notes: speed=0.8, cost=0.6, intelligence=0.3
+//   - Default analysis: balanced (0.5 each)
+func WithModelPriorities(cost, speed, intelligence float64) Option {
+	return func(c *analyzeConfig) {
+		c.costPriority = clamp01(cost)
+		c.speedPriority = clamp01(speed)
+		c.intelligencePriority = clamp01(intelligence)
+		c.hasPriorities = true
+	}
+}
+
+// WithTemperature sets the LLM sampling temperature (0..2). Lower values produce
+// more deterministic output (recommended for security review, code analysis,
+// release notes). Values outside [0, 2] are clamped.
+func WithTemperature(t float64) Option {
+	return func(c *analyzeConfig) {
+		if t < 0 {
+			t = 0
+		}
+		if t > 2 {
+			t = 2
+		}
+		c.temperature = t
+		c.hasTemperature = true
+	}
+}
+
+// WithStopSequences sets stop sequences that cause the LLM to halt generation
+// when matched. Empty strings are filtered out.
+func WithStopSequences(sequences ...string) Option {
+	return func(c *analyzeConfig) {
+		filtered := make([]string, 0, len(sequences))
+		for _, s := range sequences {
+			if s != "" {
+				filtered = append(filtered, s)
+			}
+		}
+		c.stopSequences = filtered
+	}
+}
+
+// clamp01 returns v clamped to [0, 1].
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // WithTools sets the tools available for the LLM during AnalyzeWithTools.
@@ -227,14 +293,14 @@ func (c Client) Analyze(ctx context.Context, prompt, data string, opts ...Option
 		SystemPrompt: systemPrompt,
 	}
 
-	if len(cfg.modelHints) > 0 {
-		hints := make([]*mcp.ModelHint, len(cfg.modelHints))
-		for i, h := range cfg.modelHints {
-			hints[i] = &mcp.ModelHint{Name: h}
-		}
-		params.ModelPreferences = &mcp.ModelPreferences{
-			Hints: hints,
-		}
+	if prefs := buildModelPreferences(&cfg); prefs != nil {
+		params.ModelPreferences = prefs
+	}
+	if cfg.hasTemperature {
+		params.Temperature = cfg.temperature
+	}
+	if len(cfg.stopSequences) > 0 {
+		params.StopSequences = cfg.stopSequences
 	}
 
 	slog.Debug("sending sampling request", "prompt_length", len(prompt), "data_length", len(sanitized), "truncated", truncated)
@@ -304,7 +370,7 @@ func (c Client) AnalyzeWithTools(ctx context.Context, prompt, data string, execu
 		},
 	}
 
-	prefs := buildModelPreferences(cfg.modelHints)
+	prefs := buildModelPreferences(&cfg)
 
 	for iteration := range cfg.maxIterations {
 		if err := ctx.Err(); err != nil {
@@ -322,6 +388,12 @@ func (c Client) AnalyzeWithTools(ctx context.Context, prompt, data string, execu
 		}
 		if prefs != nil {
 			params.ModelPreferences = prefs
+		}
+		if cfg.hasTemperature {
+			params.Temperature = cfg.temperature
+		}
+		if len(cfg.stopSequences) > 0 {
+			params.StopSequences = cfg.stopSequences
 		}
 
 		slog.Debug("sending sampling request with tools",
@@ -369,16 +441,25 @@ func (c Client) AnalyzeWithTools(ctx context.Context, prompt, data string, execu
 	return AnalysisResult{}, ErrMaxIterationsReached
 }
 
-// buildModelPreferences creates model preferences from hint names, or nil if empty.
-func buildModelPreferences(hints []string) *mcp.ModelPreferences {
-	if len(hints) == 0 {
+// buildModelPreferences creates model preferences from hints and priorities.
+// Returns nil if no hints and no priorities are configured.
+func buildModelPreferences(cfg *analyzeConfig) *mcp.ModelPreferences {
+	if len(cfg.modelHints) == 0 && !cfg.hasPriorities {
 		return nil
 	}
-	h := make([]*mcp.ModelHint, len(hints))
-	for i, name := range hints {
-		h[i] = &mcp.ModelHint{Name: name}
+	prefs := &mcp.ModelPreferences{}
+	if len(cfg.modelHints) > 0 {
+		prefs.Hints = make([]*mcp.ModelHint, len(cfg.modelHints))
+		for i, name := range cfg.modelHints {
+			prefs.Hints[i] = &mcp.ModelHint{Name: name}
+		}
 	}
-	return &mcp.ModelPreferences{Hints: h}
+	if cfg.hasPriorities {
+		prefs.CostPriority = cfg.costPriority
+		prefs.SpeedPriority = cfg.speedPriority
+		prefs.IntelligencePriority = cfg.intelligencePriority
+	}
+	return prefs
 }
 
 // extractToolUseCalls filters Content blocks to find ToolUseContent entries.

@@ -104,7 +104,11 @@ func SummarizeMRReview(ctx context.Context, req *mcp.CallToolRequest, client *gi
 
 	tracker.Step(ctx, 4, 5, "Requesting LLM summary...")
 
-	result, err := samplingClient.Analyze(ctx, summarizeMRReviewPrompt, data, sampling.WithMaxTokens(2048))
+	result, err := samplingClient.Analyze(ctx, summarizeMRReviewPrompt, data,
+		sampling.WithMaxTokens(2048),
+		sampling.WithTemperature(0.3),
+		sampling.WithModelPriorities(0.4, 0.5, 0.5),
+	)
 	if err != nil {
 		return SummarizeMRReviewOutput{}, fmt.Errorf("LLM summary: %w", err)
 	}

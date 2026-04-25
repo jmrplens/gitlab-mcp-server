@@ -94,7 +94,11 @@ func GenerateMilestoneReport(ctx context.Context, req *mcp.CallToolRequest, clie
 	data := FormatMilestoneForAnalysis(milestone, msIssues, msMRs)
 	tracker.Step(ctx, 4, 5, "Requesting LLM report generation...")
 
-	result, err := samplingClient.Analyze(ctx, generateMilestoneReportPrompt, data, sampling.WithMaxTokens(4096))
+	result, err := samplingClient.Analyze(ctx, generateMilestoneReportPrompt, data,
+		sampling.WithMaxTokens(4096),
+		sampling.WithTemperature(0.3),
+		sampling.WithModelPriorities(0.4, 0.5, 0.5),
+	)
 	if err != nil {
 		return GenerateMilestoneReportOutput{}, fmt.Errorf("LLM report generation: %w", err)
 	}

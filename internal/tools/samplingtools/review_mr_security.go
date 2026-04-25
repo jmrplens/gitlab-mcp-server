@@ -88,7 +88,10 @@ func ReviewMRSecurity(ctx context.Context, req *mcp.CallToolRequest, client *git
 	data := FormatMRForAnalysis(mr, changes)
 	tracker.Step(ctx, 3, 4, "Requesting LLM security review...")
 
-	result, err := samplingClient.Analyze(ctx, reviewMRSecurityPrompt, data)
+	result, err := samplingClient.Analyze(ctx, reviewMRSecurityPrompt, data,
+		sampling.WithTemperature(0),
+		sampling.WithModelPriorities(0, 0, 1),
+	)
 	if err != nil {
 		return ReviewMRSecurityOutput{}, fmt.Errorf("LLM security review: %w", err)
 	}

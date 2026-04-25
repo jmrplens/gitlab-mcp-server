@@ -79,7 +79,10 @@ func AnalyzeCIConfig(ctx context.Context, req *mcp.CallToolRequest, client *gitl
 	data := FormatCIConfigForAnalysis(lintResult)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeCIConfigPrompt, data)
+	result, err := samplingClient.Analyze(ctx, analyzeCIConfigPrompt, data,
+		sampling.WithTemperature(0.2),
+		sampling.WithModelPriorities(0.3, 0.3, 0.7),
+	)
 	if err != nil {
 		return AnalyzeCIConfigOutput{}, fmt.Errorf("LLM analysis: %w", err)
 	}

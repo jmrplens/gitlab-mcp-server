@@ -96,7 +96,11 @@ func GenerateReleaseNotes(ctx context.Context, req *mcp.CallToolRequest, client 
 	data := FormatReleaseDataForAnalysis(input.From, input.To, cmp, mrs)
 	tracker.Step(ctx, 4, 5, "Requesting LLM release notes generation...")
 
-	result, err := samplingClient.Analyze(ctx, generateReleaseNotesPrompt, data, sampling.WithMaxTokens(4096))
+	result, err := samplingClient.Analyze(ctx, generateReleaseNotesPrompt, data,
+		sampling.WithMaxTokens(4096),
+		sampling.WithTemperature(0.4),
+		sampling.WithModelPriorities(0.5, 0.6, 0.4),
+	)
 	if err != nil {
 		return GenerateReleaseNotesOutput{}, fmt.Errorf("LLM release notes generation: %w", err)
 	}

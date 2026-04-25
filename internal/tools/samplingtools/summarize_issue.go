@@ -95,7 +95,11 @@ func SummarizeIssue(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 
 	tracker.Step(ctx, 3, 4, "Requesting LLM summary...")
 
-	result, err := samplingClient.Analyze(ctx, summarizeIssuePrompt, data, sampling.WithMaxTokens(2048))
+	result, err := samplingClient.Analyze(ctx, summarizeIssuePrompt, data,
+		sampling.WithMaxTokens(2048),
+		sampling.WithTemperature(0.3),
+		sampling.WithModelPriorities(0.4, 0.6, 0.4),
+	)
 	if err != nil {
 		return SummarizeIssueOutput{}, fmt.Errorf("LLM summary: %w", err)
 	}
