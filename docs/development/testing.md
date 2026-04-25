@@ -611,7 +611,7 @@ The `cleanupOrphanedProjects` function in `setup_test.go` runs at suite start to
 
 ### Meta-Tool Tests
 
-Meta-tool tests verify the action-dispatch layer that consolidates 1000 individual tools into 28 base / 43 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
+Meta-tool tests verify the action-dispatch layer that consolidates 1000 individual tools into 32 base / 47 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
 
 **What meta-tool tests cover:**
 

@@ -13,7 +13,7 @@ In individual mode, the server registers **1000 individual tools**, each mapping
 
 ### Meta-tool mode (default)
 
-In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **28 base meta-tools** (or **43 with enterprise features**), dramatically improving LLM token efficiency while preserving full functionality.
+In meta-tool mode (`META_TOOLS=true`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools** (or **47 with enterprise features**), dramatically improving LLM token efficiency while preserving full functionality.
 
 ```json
 {
@@ -35,7 +35,7 @@ All tools follow a consistent naming pattern:
 - **Individual tools**: `gitlab_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
 - **Meta-tools**: `gitlab_{domain}` (e.g., `gitlab_issue`, `gitlab_project`)
 
-## Base meta-tools (28)
+## Base meta-tools (32)
 
 ### Project management
 

@@ -21,7 +21,7 @@
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1000                                                                                                         |
-| Meta-mode tools           | 28 base / 43 enterprise (24 inline + 3 delegated + 1 standalone + 15 enterprise inline) |
+| Meta-mode tools           | 32 base / 47 enterprise (24 inline + 3 delegated + 1 standalone + 4 interactive + 15 enterprise inline) |
 | MCP Resources             | 24                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |

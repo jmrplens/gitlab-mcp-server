@@ -41,7 +41,7 @@ gitlab-mcp-server/
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 24 inline + 3 delegated + 1 standalone = 28 meta-tools (43 with GITLAB_ENTERPRISE=true)
+│   │   ├── register_meta.go     # RegisterAllMeta() — 24 inline + 3 delegated + 1 standalone + 4 interactive = 32 meta-tools (47 with GITLAB_ENTERPRISE=true)
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
 │   │   ├── branches/            # Branch management tools (example sub-package)
@@ -84,7 +84,7 @@ graph TD
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** register handlers via `mcp.AddTool()` with typed input/output structs
-4. **Meta-tools** optionally group 1000 base tools into 28 domain meta-tools (43 with GITLAB_ENTERPRISE=true) (via ADR-0005)
+4. **Meta-tools** optionally group 1000 base tools into 32 domain meta-tools (47 with GITLAB_ENTERPRISE=true) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation

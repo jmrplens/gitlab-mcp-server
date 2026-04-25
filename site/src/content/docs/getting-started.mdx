@@ -428,7 +428,7 @@ If you get connection errors, check:
 
 ## Understanding meta-tools
 
-By default, the server runs in **meta-tool mode** — instead of registering 1000 individual tools (which would consume most of the LLM's context window), it consolidates them into **28 domain-level meta-tools** (43 with enterprise) that cover 100% of the functionality.
+By default, the server runs in **meta-tool mode** — instead of registering 1000 individual tools (which would consume most of the LLM's context window), it consolidates them into **32 domain-level meta-tools** (47 with enterprise) that cover 100% of the functionality.
 
 For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 
