@@ -26,7 +26,7 @@ kill_timeout = 10
 [build]
   dockerfile = "Dockerfile"
   [build.args]
-    VERSION = "1.2.1"
+    VERSION = "1.2.2"
 
 # Override Dockerfile CMD for HTTP mode.
 # No --gitlab-url: each client provides it via the GITLAB-URL header.
