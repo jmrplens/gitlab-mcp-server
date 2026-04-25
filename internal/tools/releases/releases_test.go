@@ -1159,7 +1159,9 @@ func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathReleaseV120 {
 			b, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read body failed", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = b
 			testutil.RespondJSON(w, http.StatusOK, `{"tag_name":"v1.2.0","name":"r","description":"d"}`)
@@ -1167,13 +1169,12 @@ func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	_, err := Update(context.Background(), client, UpdateInput{
+	if _, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:  "42",
 		TagName:    testTagV120,
 		Milestones: []string{"M1", "M2"},
 		ReleasedAt: "2026-01-15T10:00:00Z",
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
 	}
 	var payload struct {
