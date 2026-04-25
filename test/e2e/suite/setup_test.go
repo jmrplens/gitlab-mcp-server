@@ -498,23 +498,54 @@ func extractToolError(name string, result *mcp.CallToolResult) error {
 	return fmt.Errorf("tool %s returned error", name)
 }
 
+// toolCallMaxAttempts is the maximum number of attempts for a single MCP
+// tool call. Transient network errors (EOF, connection reset, broken pipe,
+// connection refused) trigger a retry with progressive backoff. These are
+// common when GitLab CE Docker is under load right after startup.
+const toolCallMaxAttempts = 4
+
+// callToolWithRetry invokes the named MCP tool on the given session and
+// retries up to [toolCallMaxAttempts] times when the error matches
+// [isTransientNetworkError]. Returns the final [mcp.CallToolResult] (or nil)
+// and the last error encountered.
+func callToolWithRetry(ctx context.Context, session *mcp.ClientSession, name string, input any) (*mcp.CallToolResult, error) {
+	var result *mcp.CallToolResult
+	var err error
+	for attempt := range toolCallMaxAttempts {
+		result, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      name,
+			Arguments: input,
+		})
+		if err == nil && result != nil && result.IsError {
+			err = extractToolError(name, result)
+		} else if err != nil {
+			err = fmt.Errorf(fmtCallErr, name, err)
+		}
+		if err == nil || !isTransientNetworkError(err) || attempt >= toolCallMaxAttempts-1 {
+			return result, err
+		}
+		backoff := time.Duration(attempt+1) * 500 * time.Millisecond
+		select {
+		case <-ctx.Done():
+			return result, err
+		case <-time.After(backoff):
+		}
+	}
+	return result, err
+}
+
 // callToolOn invokes the named MCP tool on the given session and
 // unmarshals the response into output type O. It first tries
 // [mcp.CallToolResult.StructuredContent], falling back to JSON-parsing
 // the first [mcp.TextContent] block. Returns a zero value of O and an
 // error if the call fails, the tool reports an error, or no extractable
-// output is found.
+// output is found. Transient network errors are retried transparently via
+// [callToolWithRetry].
 func callToolOn[O any](ctx context.Context, session *mcp.ClientSession, name string, input any) (O, error) {
 	var zero O
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
+	result, err := callToolWithRetry(ctx, session, name, input)
 	if err != nil {
-		return zero, fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return zero, extractToolError(name, result)
+		return zero, err
 	}
 	if result.StructuredContent != nil {
 		var data []byte
@@ -544,19 +575,11 @@ func callToolOn[O any](ctx context.Context, session *mcp.ClientSession, name str
 
 // callToolVoidOn invokes the named MCP tool on the given session and
 // discards the response body. Returns an error if the call fails or the
-// tool reports an error via [mcp.CallToolResult.IsError].
+// tool reports an error via [mcp.CallToolResult.IsError]. Transient
+// network errors are retried transparently via [callToolWithRetry].
 func callToolVoidOn(ctx context.Context, session *mcp.ClientSession, name string, input any) error {
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      name,
-		Arguments: input,
-	})
-	if err != nil {
-		return fmt.Errorf(fmtCallErr, name, err)
-	}
-	if result.IsError {
-		return extractToolError(name, result)
-	}
-	return nil
+	_, err := callToolWithRetry(ctx, session, name, input)
+	return err
 }
 
 // ---------------------------------------------------------------------------
