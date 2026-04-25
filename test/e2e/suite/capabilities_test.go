@@ -17,10 +17,8 @@ package suite
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"log"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +29,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
 )
 
 // capabilitiesSession bundles a dedicated server-client pair built exactly
@@ -503,14 +500,3 @@ func TestCapability_Completions(t *testing.T) {
 		}
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Compile-time guard: ensure dependencies stay imported even if a future
-// refactor removes uses of these packages.
-// ---------------------------------------------------------------------------.
-
-var (
-	_ = uploads.UploadInput{}
-	_ = json.Marshal
-	_ = sync.Mutex{}
-)

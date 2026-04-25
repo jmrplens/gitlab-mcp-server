@@ -778,9 +778,8 @@ func TestUpload_ContextCancelled(t *testing.T) {
 // validation error when project_id is empty. The mock handler is never
 // invoked because validation occurs before any HTTP call.
 func TestProjectUpload_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("HTTP handler must not be invoked when project_id is empty")
-		_ = w
 	}))
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ContentBase64: "dGVzdA==",

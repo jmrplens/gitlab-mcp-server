@@ -6,8 +6,10 @@ package releases
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1152,11 +1154,14 @@ func newReleasesMCPSession(t *testing.T) *mcp.ClientSession {
 // parsed time to opts.ReleasedAt) and the milestones-non-empty branch
 // (copying the slice into opts.Milestones).
 func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
-	var capturedBody string
+	var capturedBody []byte
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathReleaseV120 {
-			b, _ := io.ReadAll(r.Body)
-			capturedBody = string(b)
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = b
 			testutil.RespondJSON(w, http.StatusOK, `{"tag_name":"v1.2.0","name":"r","description":"d"}`)
 			return
 		}
@@ -1171,13 +1176,18 @@ func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
 	}
-	if !strings.Contains(capturedBody, "milestones") {
-		t.Errorf("request body missing 'milestones' field; body=%q", capturedBody)
+	var payload struct {
+		Milestones []string `json:"milestones"`
+		ReleasedAt string   `json:"released_at"`
 	}
-	if !strings.Contains(capturedBody, "M1") || !strings.Contains(capturedBody, "M2") {
-		t.Errorf("request body missing milestone values; body=%q", capturedBody)
+	if err := json.Unmarshal(capturedBody, &payload); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(capturedBody))
 	}
-	if !strings.Contains(capturedBody, "released_at") {
-		t.Errorf("request body missing 'released_at' field; body=%q", capturedBody)
+	wantMilestones := []string{"M1", "M2"}
+	if !reflect.DeepEqual(payload.Milestones, wantMilestones) {
+		t.Errorf("milestones = %v, want %v", payload.Milestones, wantMilestones)
+	}
+	if payload.ReleasedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("released_at = %q, want %q", payload.ReleasedAt, "2026-01-15T10:00:00Z")
 	}
 }

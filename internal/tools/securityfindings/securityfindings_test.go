@@ -542,11 +542,11 @@ func TestList_WithConfidenceAndScanner(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseGraphQLVariables error: %v", err)
 			}
-			if _, ok := vars["confidence"]; !ok {
-				t.Errorf("expected variables to contain 'confidence', got %v", vars)
+			if got, ok := vars["confidence"].([]any); !ok || len(got) != 1 || got[0] != "HIGH" {
+				t.Errorf("confidence = %v, want [HIGH]", vars["confidence"])
 			}
-			if _, ok := vars["scanner"]; !ok {
-				t.Errorf("expected variables to contain 'scanner', got %v", vars)
+			if got, ok := vars["scanner"].([]any); !ok || len(got) != 1 || got[0] != "semgrep-sast" {
+				t.Errorf("scanner = %v, want [semgrep-sast]", vars["scanner"])
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"project": {
