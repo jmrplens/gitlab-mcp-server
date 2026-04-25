@@ -1,6 +1,6 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1000 individual tools, **28 domain meta-tools** (43 with `GITLAB_ENTERPRISE=true`) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1000 individual tools, **32 base meta-tools** (47 with `GITLAB_ENTERPRISE=true`) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users

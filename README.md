@@ -314,7 +314,7 @@ Meta-tool summary:
 
 | MCP Capability | Support |
 |----------------|---------|
-| **Tools** | 1000 individual / 28–43 meta |
+| **Tools** | 1000 individual / 32–47 meta |
 | **Resources** | 24 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
@@ -337,7 +337,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
 | [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
 | [Tools Reference](docs/tools/README.md) | All 1000 individual tools with input/output schemas |
-| [Meta-Tools](docs/meta-tools.md) | 28/43 domain meta-tools with action dispatching |
+| [Meta-Tools](docs/meta-tools.md) | 32/47 domain meta-tools with action dispatching |
 | [Resources](docs/resources-reference.md) | All 24 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |

@@ -201,7 +201,7 @@ gitlab://group/7/projects                          → Group projects
 
 ## Meta-Tool Discovery
 
-When `META_TOOLS=true` (default), 28 domain-level meta-tools (43 with GITLAB_ENTERPRISE=true) provide guided discovery:
+When `META_TOOLS=true` (default), 32 domain-level meta-tools (47 with GITLAB_ENTERPRISE=true) provide guided discovery:
 
 ```text
 Call: gitlab_project(action="help")
