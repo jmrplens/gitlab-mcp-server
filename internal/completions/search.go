@@ -262,6 +262,31 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 	return values, nil
 }
 
+// searchMilestoneTitles returns active milestone titles for a project, filtered by query.
+// Unlike [searchMilestones], it returns plain titles (not "id: title") for use as
+// completion values for prompt arguments that accept a milestone title.
+func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	opts := &gl.ListMilestonesOptions{
+		State: new("active"),
+	}
+	opts.PerPage = searchPerPage
+	if query != "" {
+		opts.Search = new(query)
+	}
+	milestones, _, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("search milestone titles: %w", err)
+	}
+	values := make([]string, 0, len(milestones))
+	for _, m := range milestones {
+		values = append(values, m.Title)
+	}
+	return values, nil
+}
+
 // searchJobs returns job entries for a pipeline, filtered by ID prefix.
 func searchJobs(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, query string) ([]string, error) {
 	if err := ctx.Err(); err != nil {

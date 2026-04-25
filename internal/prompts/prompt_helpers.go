@@ -23,6 +23,7 @@ const (
 	argDays         = "days"
 	argState        = "state"
 	argTargetBranch = "target_branch"
+	argMilestone    = "milestone"
 
 	descGroupID      = "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')"
 	descUsername     = "GitLab username to query"

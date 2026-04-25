@@ -78,6 +78,8 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeLabel)
 	case "milestone_id":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMilestoneID)
+	case "milestone":
+		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMilestoneTitle)
 	case "job_id":
 		pid, hasPID := resolvedArgs["project_id"]
 		plID, hasPLID := resolvedArgs["pipeline_id"]
@@ -245,6 +247,17 @@ func (h *Handler) completeMilestoneID(ctx context.Context, projectID, query stri
 	values, err := searchMilestones(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: milestone search failed", "project", projectID, "query", query, "error", err)
+		return emptyResult(), nil
+	}
+	return toResult(values), nil
+}
+
+// completeMilestoneTitle returns project milestone titles matching the partial value.
+// Used by the milestone_progress prompt's "milestone" argument (title-based, not ID-based).
+func (h *Handler) completeMilestoneTitle(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
+	values, err := searchMilestoneTitles(ctx, h.client, projectID, query)
+	if err != nil {
+		slog.Debug("completion: milestone title search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil
