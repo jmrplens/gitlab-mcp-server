@@ -239,6 +239,52 @@ Add to `.kiro/settings/mcp.json`:
 
 </details>
 
+<details>
+<summary><strong>Cline</strong></summary>
+
+Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Global MCP**, or edit `cline_mcp_settings.json` directly:
+
+- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Roo Code</strong></summary>
+
+Open the Roo Code sidebar in VS Code → MCP servers icon → **Edit Global MCP** (or **Edit Project MCP** to create `.roo/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
 ### 3. Verify
 
 Open your AI client and try:
@@ -324,7 +370,7 @@ Meta-tool summary:
 | **Elicitation** | 4 interactive creation wizards |
 | **Roots** | Workspace root tracking |
 
-Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro.
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline, Roo Code.
 
 See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/) for detailed client support.
 
