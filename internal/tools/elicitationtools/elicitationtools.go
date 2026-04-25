@@ -151,8 +151,11 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	}
 
 	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil || !confirmed {
-		return issues.Output{}, errors.New("issue creation canceled by user")
+	if err != nil {
+		return issues.Output{}, fmt.Errorf("issue creation canceled by user: %w", err)
+	}
+	if !confirmed {
+		return issues.Output{}, fmt.Errorf("issue creation canceled by user: %w", elicitation.ErrCancelled)
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating issue...")
@@ -228,8 +231,11 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	})
 
 	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil || !confirmed {
-		return mergerequests.Output{}, errors.New("merge request creation canceled by user")
+	if err != nil {
+		return mergerequests.Output{}, fmt.Errorf("merge request creation canceled by user: %w", err)
+	}
+	if !confirmed {
+		return mergerequests.Output{}, fmt.Errorf("merge request creation canceled by user: %w", elicitation.ErrCancelled)
 	}
 
 	tracker.Step(ctx, 5, 5, "Creating merge request...")
@@ -345,8 +351,11 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	}
 
 	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil || !confirmed {
-		return releases.Output{}, errors.New("release creation canceled by user")
+	if err != nil {
+		return releases.Output{}, fmt.Errorf("release creation canceled by user: %w", err)
+	}
+	if !confirmed {
+		return releases.Output{}, fmt.Errorf("release creation canceled by user: %w", elicitation.ErrCancelled)
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating release...")
@@ -417,8 +426,11 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	}
 
 	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil || !confirmed {
-		return projects.Output{}, errors.New("project creation canceled by user")
+	if err != nil {
+		return projects.Output{}, fmt.Errorf("project creation canceled by user: %w", err)
+	}
+	if !confirmed {
+		return projects.Output{}, fmt.Errorf("project creation canceled by user: %w", elicitation.ErrCancelled)
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating project...")

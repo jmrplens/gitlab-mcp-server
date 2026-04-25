@@ -12,6 +12,8 @@ package elicitation
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -393,7 +395,9 @@ func (c Client) elicit(ctx context.Context, message string, schema map[string]an
 
 // ElicitURL sends a URL-mode elicitation request, directing the user to
 // a GitLab page. The URL must belong to the configured GitLab instance
-// (SSRF prevention). Returns the action ("accept", "decline", "cancel").
+// (SSRF prevention). Per the MCP 2025-11-25 spec, URL mode requests MUST
+// include a unique elicitationId; one is generated automatically.
+// Returns nil on accept, ErrDeclined, ErrCancelled, or another error.
 func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message string) error {
 	if !c.IsSupported() {
 		return ErrElicitationNotSupported
@@ -408,12 +412,18 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 		return err
 	}
 
-	slog.Debug("sending URL elicitation", "url", targetURL)
+	elicitationID, err := newElicitationID()
+	if err != nil {
+		return fmt.Errorf("elicitation: failed to generate elicitationId: %w", err)
+	}
+
+	slog.Debug("sending URL elicitation", "url", targetURL, "elicitationId", elicitationID)
 
 	result, err := c.session.Elicit(ctx, &mcp.ElicitParams{
-		Mode:    "url",
-		Message: message,
-		URL:     targetURL,
+		Mode:          "url",
+		Message:       message,
+		URL:           targetURL,
+		ElicitationID: elicitationID,
 	})
 	if err != nil {
 		return fmt.Errorf("elicitation: URL request failed: %w", err)
@@ -429,6 +439,25 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 	default:
 		return fmt.Errorf("elicitation: unknown action %q", result.Action)
 	}
+}
+
+// newElicitationID returns a random UUID v4 string for use as the
+// elicitationId in URL-mode elicitation requests, as required by the
+// MCP 2025-11-25 specification.
+func newElicitationID() (string, error) {
+	var b [16]byte
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(b[0:4]),
+		hex.EncodeToString(b[4:6]),
+		hex.EncodeToString(b[6:8]),
+		hex.EncodeToString(b[8:10]),
+		hex.EncodeToString(b[10:16]),
+	), nil
 }
 
 // validateGitLabURL ensures targetURL belongs to the configured GitLab

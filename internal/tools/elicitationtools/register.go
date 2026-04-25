@@ -37,6 +37,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		if errors.Is(err, elicitation.ErrElicitationNotSupported) {
 			return UnsupportedResult("gitlab_interactive_issue_create"), issues.Output{}, nil
 		}
+		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+			return CancelledResult("Issue creation cancelled by user."), issues.Output{}, nil
+		}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(issues.FormatMarkdown(out)), out, err)
 	})
 
@@ -54,6 +57,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		toolutil.LogToolCallAll(ctx, req, "gitlab_interactive_mr_create", start, err)
 		if errors.Is(err, elicitation.ErrElicitationNotSupported) {
 			return UnsupportedResult("gitlab_interactive_mr_create"), mergerequests.Output{}, nil
+		}
+		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+			return CancelledResult("Merge request creation cancelled by user."), mergerequests.Output{}, nil
 		}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(mergerequests.FormatMarkdown(out)), out, err)
 	})
@@ -73,6 +79,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		if errors.Is(err, elicitation.ErrElicitationNotSupported) {
 			return UnsupportedResult("gitlab_interactive_release_create"), releases.Output{}, nil
 		}
+		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+			return CancelledResult("Release creation cancelled by user."), releases.Output{}, nil
+		}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(releases.FormatMarkdown(out)), out, err)
 	})
 
@@ -90,6 +99,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		toolutil.LogToolCallAll(ctx, req, "gitlab_interactive_project_create", start, err)
 		if errors.Is(err, elicitation.ErrElicitationNotSupported) {
 			return UnsupportedResult("gitlab_interactive_project_create"), projects.Output{}, nil
+		}
+		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+			return CancelledResult("Project creation cancelled by user."), projects.Output{}, nil
 		}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(projects.FormatMarkdown(out)), out, err)
 	})
