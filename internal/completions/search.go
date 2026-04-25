@@ -33,8 +33,8 @@ func totalFromResponse(resp *gl.Response) int {
 
 // searchProjects returns project entries matching the query plus the total
 // match count from the GitLab pagination header (X-Total) when available.
-func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListProjectsOptions{
@@ -48,7 +48,7 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 	if err != nil {
 		return nil, 0, fmt.Errorf("search projects: %w", err)
 	}
-	values := make([]string, 0, len(projects))
+	values = make([]string, 0, len(projects))
 	for _, p := range projects {
 		values = append(values, formatProjectEntry(p.ID, p.PathWithNamespace))
 	}
@@ -57,8 +57,8 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 
 // searchGroups returns group entries matching the query plus the total
 // match count from the GitLab pagination header.
-func searchGroups(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchGroups(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListGroupsOptions{}
@@ -70,7 +70,7 @@ func searchGroups(ctx context.Context, client *gitlabclient.Client, query string
 	if err != nil {
 		return nil, 0, fmt.Errorf("search groups: %w", err)
 	}
-	values := make([]string, 0, len(groups))
+	values = make([]string, 0, len(groups))
 	for _, g := range groups {
 		values = append(values, formatGroupEntry(g.ID, g.FullPath))
 	}
@@ -79,8 +79,8 @@ func searchGroups(ctx context.Context, client *gitlabclient.Client, query string
 
 // searchUsers returns usernames matching the query plus the total match
 // count from the GitLab pagination header.
-func searchUsers(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchUsers(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListUsersOptions{
@@ -94,7 +94,7 @@ func searchUsers(ctx context.Context, client *gitlabclient.Client, query string)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search users: %w", err)
 	}
-	values := make([]string, 0, len(users))
+	values = make([]string, 0, len(users))
 	for _, u := range users {
 		values = append(values, u.Username)
 	}
@@ -149,8 +149,8 @@ func searchIssues(ctx context.Context, client *gitlabclient.Client, projectID, q
 
 // searchBranches returns branch names matching the query plus the total
 // match count from the GitLab pagination header.
-func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListBranchesOptions{}
@@ -162,7 +162,7 @@ func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID,
 	if err != nil {
 		return nil, 0, fmt.Errorf("search branches: %w", err)
 	}
-	values := make([]string, 0, len(branches))
+	values = make([]string, 0, len(branches))
 	for _, b := range branches {
 		values = append(values, b.Name)
 	}
@@ -171,8 +171,8 @@ func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID,
 
 // searchTags returns tag names matching the query plus the total match
 // count from the GitLab pagination header.
-func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListTagsOptions{}
@@ -184,7 +184,7 @@ func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, que
 	if err != nil {
 		return nil, 0, fmt.Errorf("search tags: %w", err)
 	}
-	values := make([]string, 0, len(tags))
+	values = make([]string, 0, len(tags))
 	for _, t := range tags {
 		values = append(values, t.Name)
 	}
@@ -237,8 +237,8 @@ func searchCommits(ctx context.Context, client *gitlabclient.Client, projectID, 
 
 // searchLabels returns label names for a project matching the query plus
 // the total match count from the GitLab pagination header.
-func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListLabelsOptions{}
@@ -250,7 +250,7 @@ func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, q
 	if err != nil {
 		return nil, 0, fmt.Errorf("search labels: %w", err)
 	}
-	values := make([]string, 0, len(labels))
+	values = make([]string, 0, len(labels))
 	for _, l := range labels {
 		values = append(values, l.Name)
 	}
@@ -259,8 +259,8 @@ func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, q
 
 // searchMilestones returns milestone entries for a project plus the total
 // match count from the GitLab pagination header.
-func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListMilestonesOptions{
@@ -274,7 +274,7 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 	if err != nil {
 		return nil, 0, fmt.Errorf("search milestones: %w", err)
 	}
-	values := make([]string, 0, len(milestones))
+	values = make([]string, 0, len(milestones))
 	for _, m := range milestones {
 		values = append(values, formatMilestoneEntry(m.ID, m.Title))
 	}
@@ -284,8 +284,8 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 // searchMilestoneTitles returns active milestone titles for a project, filtered by query.
 // Unlike [searchMilestones], it returns plain titles (not "id: title") for use as
 // completion values for prompt arguments that accept a milestone title.
-func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
-	if err := ctx.Err(); err != nil {
+func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
 		return nil, 0, err
 	}
 	opts := &gl.ListMilestonesOptions{
@@ -299,7 +299,7 @@ func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, pro
 	if err != nil {
 		return nil, 0, fmt.Errorf("search milestone titles: %w", err)
 	}
-	values := make([]string, 0, len(milestones))
+	values = make([]string, 0, len(milestones))
 	for _, m := range milestones {
 		values = append(values, m.Title)
 	}

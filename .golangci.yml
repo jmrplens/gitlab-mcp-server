@@ -131,7 +131,6 @@ linters:
         - rangeValCopy # Often false positives with simple structs
         - ifElseChain # Sometimes clearer than switch
         - sloppyReassign # Conflicts with govet shadow strict mode
-        - unnamedResult # Low value; multi-return signatures are self-documenting
 
     misspell:
       locale: US
