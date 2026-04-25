@@ -128,6 +128,23 @@ jobs:
             -f sha="$FILE_SHA" \
             -f branch="main"
 
+      - name: Commit updated .plugin/plugin.json to main
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ ! -f .plugin/plugin.json ]; then
+            echo "::notice::.plugin/plugin.json not found, skipping"
+            exit 0
+          fi
+          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.plugin/plugin.json" -q '.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.plugin/plugin.json" \
+            -X PUT \
+            -f message="chore: update .plugin/plugin.json version for v${VERSION}" \
+            -f content="$(base64 -w0 .plugin/plugin.json)" \
+            -f sha="$FILE_SHA" \
+            -f branch="main"
+
   docker:
     name: Docker
     runs-on: ubuntu-latest
