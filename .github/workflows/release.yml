@@ -163,3 +163,51 @@ jobs:
         run: |
           cosign sign --yes \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
+
+  fly-deploy:
+    name: Fly.io Deploy
+    runs-on: ubuntu-latest
+    environment: release
+    needs: [release, docker]
+    # Skip silently if FLY_API_TOKEN secret is not configured.
+    if: ${{ github.repository == 'jmrplens/gitlab-mcp-server' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check FLY_API_TOKEN
+        id: check
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "${FLY_API_TOKEN}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::FLY_API_TOKEN not set — skipping Fly.io deployment."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract version
+        if: steps.check.outputs.skip == 'false'
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Deploy to Fly.io
+        if: steps.check.outputs.skip == 'false'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          fly deploy --remote-only \
+            --config fly.toml \
+            --build-arg VERSION=${{ steps.version.outputs.version }} \
+            --build-arg COMMIT=${{ github.sha }} \
+            --image-label v${{ steps.version.outputs.version }} \
+            --strategy rolling
+
+      - name: Verify deployment health
+        if: steps.check.outputs.skip == 'false'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: fly status --config fly.toml

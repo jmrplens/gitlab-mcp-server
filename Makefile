@@ -4,6 +4,7 @@
        mdlint mdlint-fix \
        analyze analyze-fix analyze-report install-tools audit-output audit-tokens gen-llms gen-readme \
        docker-build docker-push docker-run \
+       fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
        inspector inspector-stop help
 
 BINARY_NAME=gitlab-mcp-server
@@ -395,6 +396,63 @@ endif
 	docker run --rm -p 8080:8080 \
 		-e GITLAB_URL=$(GITLAB_URL) \
 		$(BINARY_NAME):latest
+
+# ─── Fly.io Deployment ───────────────────────────────────────────────────────
+# Deploys the HTTP-mode server to Fly.io using fly.toml.
+# Requires: flyctl (https://fly.io/docs/flyctl/install/) and `fly auth login`.
+# The Docker image is built remotely by Fly's builder using the repo Dockerfile.
+
+FLY_CONFIG ?= fly.toml
+FLY_APP    := $(shell awk -F\" '/^app *=/ {print $$2; exit}' $(FLY_CONFIG) 2>/dev/null)
+
+## fly-check: verify flyctl is installed and authenticated
+fly-check:
+	@command -v fly >/dev/null 2>&1 || { echo "flyctl not found. Install: https://fly.io/docs/flyctl/install/"; exit 1; }
+	@fly auth whoami >/dev/null 2>&1 || { echo "Not authenticated. Run: fly auth login"; exit 1; }
+	@echo "flyctl OK — app: $(FLY_APP)"
+
+## fly-deploy: deploy current working tree to Fly.io (HTTP mode)
+## Builds the image remotely with VERSION/COMMIT build args injected.
+fly-deploy: fly-check
+	fly deploy --config $(FLY_CONFIG) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--image-label v$(VERSION)
+
+## fly-deploy-release: deploy a tagged release to Fly.io.
+## Verifies the working tree is clean and the current commit matches tag v$(VERSION).
+## Use after `git tag vX.Y.Z && git push --tags` to ship a release.
+fly-deploy-release: fly-check
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Working tree is dirty. Commit or stash before deploying a release."; exit 1; \
+	fi
+	@expected="v$(VERSION)"; \
+	tag_at_head=$$(git tag --points-at HEAD | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$$" | head -1); \
+	if [ "$$tag_at_head" != "$$expected" ]; then \
+		echo "HEAD is not tagged $$expected (found: '$$tag_at_head'). Tag the release first."; exit 1; \
+	fi
+	@echo "Deploying release $(VERSION) to Fly app $(FLY_APP)…"
+	fly deploy --config $(FLY_CONFIG) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--image-label v$(VERSION) \
+		--strategy rolling
+
+## fly-status: show Fly.io app status (machines, regions, health)
+fly-status: fly-check
+	fly status --config $(FLY_CONFIG)
+
+## fly-logs: tail Fly.io app logs
+fly-logs: fly-check
+	fly logs --config $(FLY_CONFIG)
+
+## fly-ssh: open an SSH console to a running Fly.io machine
+fly-ssh: fly-check
+	fly ssh console --config $(FLY_CONFIG)
+
+## fly-restart: restart all Fly.io machines (no redeploy)
+fly-restart: fly-check
+	fly machine restart --app $(FLY_APP)
 
 # ─── LLM Discovery Files ─────────────────────────────────────────────────────
 

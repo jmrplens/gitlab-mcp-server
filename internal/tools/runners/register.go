@@ -338,12 +338,17 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_runner",
 		Title: toolutil.TitleFromName("gitlab_runner"),
-		Description: `Manage CI/CD runners: CRUD, project/group assignment, registration, token resets, and runner controllers (admin, experimental). Remove/delete/revoke actions are destructive.
+		Description: `Manage GitLab CI/CD runners and runner controllers: instance / group / project runner CRUD, registration tokens, job assignments, and runner controllers (admin, experimental). Remove / delete / revoke and reset_token actions are destructive (revoking the registration token forces all runners to re-register).
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+When to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.
+NOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitlab_job), CI variables (use gitlab_ci_variable), CI lint or templates (use gitlab_template), self-hosted GitLab Runner installation (out of scope — install via the GitLab Runner CLI).
 
-When to use: manage runner instances, tokens, project/group runner assignment, runner controllers. NOT for: pipeline runs (use gitlab_pipeline), job logs (use gitlab_job).
+Returns:
+- list / list_all / list_project / list_group / list_managers / jobs / controller_list / controller_scope_list / controller_token_list: arrays with pagination {page, per_page, total, next_page}.
+- get / update / register / reset_*_token / enable_project / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE — store it securely.
+- verify / remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.
+Errors: 401/403 (hint: list_all / register with admin token / runner controller actions require admin), 404 (hint: runner_id and controller_id are global, project / group context only filters), 400 (hint: access_level ∈ not_protected / ref_protected; tag_list is a comma-separated string; deprecated reset_*_reg_token endpoints — prefer controller_token_create).
 
 Param conventions: * = required. List actions accept page, per_page. Runner IDs are integers.
 

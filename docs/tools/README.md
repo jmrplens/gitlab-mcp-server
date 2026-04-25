@@ -2,6 +2,10 @@
 
 Per-domain tool reference for gitlab-mcp-server. Each document covers one logical domain, listing all individual MCP tools with their descriptions, parameter tables, and annotation types.
 
+## Server scope rationale
+
+The server exposes its 1000+ individual tools through a curated set of meta-tools, each consolidating a non-overlapping GitLab REST/GraphQL surface area. The meta-tool boundary maps 1:1 to GitLab's resource taxonomy (project, group, merge_request, issue, pipeline, etc.), so domains never duplicate functionality: lifecycle CRUD lives in the resource's own meta-tool (`gitlab_merge_request` for MR open/merge/close), peripheral concerns ship as siblings (`gitlab_mr_review` for diffs, comments, draft notes; `gitlab_pipeline` for CI runs, never MR pipelines). Read-only LLM-assisted analysis is isolated in `gitlab_analyze`, project discovery in `gitlab_discover_project`, and infrastructure self-management in `gitlab_server`. Enterprise/Premium-only domains (epics, audit events, DORA metrics, vulnerabilities, compliance, etc.) are gated by `GITLAB_ENTERPRISE` and either ship as dedicated meta-tools or attach as additional actions on the relevant base meta-tool, never as duplicate alternatives. This keeps every meta-tool independently invokable, free of overlap with its siblings, and minimal in surface area for LLM tool selection.
+
 ## Domains
 
 | Domain | Tools | Meta-tool | Document |
@@ -31,8 +35,9 @@ Per-domain tool reference for gitlab-mcp-server. Each document covers one logica
 | Admin & Instance | 77 | `gitlab_admin` | [admin.md](admin.md) |
 | Templates | 10 | `gitlab_template` | [templates.md](templates.md) |
 | Integrations & Misc | 34 | various | [integrations.md](integrations.md) |
-| MCP Capabilities | 16 | — | [capabilities.md](capabilities.md) |
-| Project Discovery | 1 | — | [project-discovery.md](project-discovery.md) |
+| MCP Capabilities | 16 | `gitlab_server`, `gitlab_analyze` (plus individually-registered elicitation tools) | [capabilities.md](capabilities.md) |
+| Project Discovery | 1 | `gitlab_discover_project` (individual tool) | [project-discovery.md](project-discovery.md) |
+| Analysis (LLM-assisted) | 11 | `gitlab_analyze` | [capabilities.md](capabilities.md) |
 | Identity & Security | 28 | `gitlab_group_scim`, `gitlab_member_role`, etc. | [identity-security.md](identity-security.md) |
 | Enterprise Users & Attestations | 6 | `gitlab_enterprise_user`, `gitlab_attestation` | [enterprise-attestations.md](enterprise-attestations.md) |
 | Analytics & Compliance | 12 | `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias` | [analytics-compliance.md](analytics-compliance.md) |
