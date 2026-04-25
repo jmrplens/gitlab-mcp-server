@@ -317,7 +317,13 @@ Valid actions: ` + toolutil.ValidActionsString(routes) + `
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
 NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a ` + "`SamplingUnsupportedResult`" + `).
 
-Returns: each action returns action-specific JSON (typically identifiers + analysis/review/release_notes/summary text plus model and truncated flags) and a Markdown summary suitable for direct display. Common keys: {analysis|review|release_notes|summary, model, truncated} alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input. issue_summary and mr_review return summary; mr_changes / mr_security / pipeline_failure / ci_config / issue_scope / technical_debt / deployment_history / milestone_report return analysis; release_notes returns release_notes.
+Returns: each action returns action-specific JSON (typically identifiers + a text field plus model and truncated flags) and a Markdown summary suitable for direct display. Per-action text key:
+- summary: issue_summary, mr_review
+- analysis: mr_changes, pipeline_failure, ci_config, issue_scope, technical_debt, deployment_history
+- review: mr_security
+- report: milestone_report
+- release_notes: release_notes
+Alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
 Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:

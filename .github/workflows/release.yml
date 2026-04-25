@@ -191,7 +191,7 @@ jobs:
         id: version
         run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
         if: steps.check.outputs.skip == 'false'
 
       - name: Deploy to Fly.io
