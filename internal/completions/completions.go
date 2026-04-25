@@ -80,7 +80,15 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 	case "milestone_id":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMilestoneID)
 	case "milestone":
-		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMilestoneTitle)
+		// Prefer project scope; fall back to group scope when no project_id
+		// is resolved (e.g. group_milestone_progress prompt).
+		if pid, ok := resolvedArgs["project_id"]; ok && pid != "" {
+			return h.completeMilestoneTitle(ctx, pid, argValue)
+		}
+		if gid, ok := resolvedArgs["group_id"]; ok && gid != "" {
+			return h.completeGroupMilestoneTitle(ctx, gid, argValue)
+		}
+		return emptyResult(), nil
 	case "job_id":
 		pid, hasPID := resolvedArgs["project_id"]
 		plID, hasPLID := resolvedArgs["pipeline_id"]
@@ -261,6 +269,18 @@ func (h *Handler) completeMilestoneTitle(ctx context.Context, projectID, query s
 	values, total, err := searchMilestoneTitles(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: milestone title search failed", "project", projectID, "query", query, "error", err)
+		return emptyResult(), nil
+	}
+	return toResultWithTotal(values, total), nil
+}
+
+// completeGroupMilestoneTitle returns group milestone titles matching the partial value.
+// Used by prompts whose milestone argument resolves against a group (for example
+// group_milestone_progress) rather than a project.
+func (h *Handler) completeGroupMilestoneTitle(ctx context.Context, groupID, query string) (*mcp.CompleteResult, error) {
+	values, total, err := searchGroupMilestoneTitles(ctx, h.client, groupID, query)
+	if err != nil {
+		slog.Debug("completion: group milestone title search failed", "group", groupID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil

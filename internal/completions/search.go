@@ -306,6 +306,31 @@ func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, pro
 	return values, totalFromResponse(resp), nil
 }
 
+// searchGroupMilestoneTitles returns active group milestone titles, filtered by query.
+// Used by prompts that scope milestones to a group rather than a project (for
+// example group_milestone_progress).
+func searchGroupMilestoneTitles(ctx context.Context, client *gitlabclient.Client, groupID, query string) (values []string, total int, err error) {
+	if err = ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	opts := &gl.ListGroupMilestonesOptions{
+		State: new("active"),
+	}
+	opts.PerPage = searchPerPage
+	if query != "" {
+		opts.Search = new(query)
+	}
+	milestones, resp, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return nil, 0, fmt.Errorf("search group milestone titles: %w", err)
+	}
+	values = make([]string, 0, len(milestones))
+	for _, m := range milestones {
+		values = append(values, m.Title)
+	}
+	return values, totalFromResponse(resp), nil
+}
+
 // searchJobs returns job entries for a pipeline, filtered by ID prefix.
 func searchJobs(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, query string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
