@@ -127,22 +127,22 @@ func (h *Handler) completeWithProjectID(ctx context.Context, resolvedArgs map[st
 
 // completeProjectID searches projects matching the partial value.
 func (h *Handler) completeProjectID(ctx context.Context, query string) (*mcp.CompleteResult, error) {
-	values, err := searchProjects(ctx, h.client, query)
+	values, total, err := searchProjects(ctx, h.client, query)
 	if err != nil {
 		slog.Debug("completion: project search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeGroupID searches groups matching the partial value.
 func (h *Handler) completeGroupID(ctx context.Context, query string) (*mcp.CompleteResult, error) {
-	values, err := searchGroups(ctx, h.client, query)
+	values, total, err := searchGroups(ctx, h.client, query)
 	if err != nil {
 		slog.Debug("completion: group search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeMRIID lists open MRs for the given project and filters by IID prefix.
@@ -167,40 +167,42 @@ func (h *Handler) completeIssueIID(ctx context.Context, projectID, query string)
 
 // completeUsername searches GitLab users matching the partial value.
 func (h *Handler) completeUsername(ctx context.Context, query string) (*mcp.CompleteResult, error) {
-	values, err := searchUsers(ctx, h.client, query)
+	values, total, err := searchUsers(ctx, h.client, query)
 	if err != nil {
 		slog.Debug("completion: user search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeBranchOrTag returns branches and tags matching the partial value.
 func (h *Handler) completeBranchOrTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	branches, err := searchBranches(ctx, h.client, projectID, query)
+	branches, branchTotal, err := searchBranches(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: branch search failed", "project", projectID, "query", query, "error", err)
 		branches = nil
+		branchTotal = 0
 	}
 
-	tags, err := searchTags(ctx, h.client, projectID, query)
+	tags, tagTotal, err := searchTags(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: tag search failed", "project", projectID, "query", query, "error", err)
 		tags = nil
+		tagTotal = 0
 	}
 
 	branches = append(branches, tags...)
-	return toResult(branches), nil
+	return toResultWithTotal(branches, branchTotal+tagTotal), nil
 }
 
 // completeTag returns tags matching the partial value.
 func (h *Handler) completeTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchTags(ctx, h.client, projectID, query)
+	values, total, err := searchTags(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: tag search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completePipelineID lists recent pipelines for a project, filtered by ID prefix.
@@ -225,43 +227,43 @@ func (h *Handler) completeSHA(ctx context.Context, projectID, query string) (*mc
 
 // completeBranch returns branches matching the partial value.
 func (h *Handler) completeBranch(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchBranches(ctx, h.client, projectID, query)
+	values, total, err := searchBranches(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: branch search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeLabel returns project labels matching the partial value.
 func (h *Handler) completeLabel(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchLabels(ctx, h.client, projectID, query)
+	values, total, err := searchLabels(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: label search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeMilestoneID returns project milestones matching the partial value.
 func (h *Handler) completeMilestoneID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchMilestones(ctx, h.client, projectID, query)
+	values, total, err := searchMilestones(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: milestone search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeMilestoneTitle returns project milestone titles matching the partial value.
 // Used by the milestone_progress prompt's "milestone" argument (title-based, not ID-based).
 func (h *Handler) completeMilestoneTitle(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	values, err := searchMilestoneTitles(ctx, h.client, projectID, query)
+	values, total, err := searchMilestoneTitles(ctx, h.client, projectID, query)
 	if err != nil {
 		slog.Debug("completion: milestone title search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
-	return toResult(values), nil
+	return toResultWithTotal(values, total), nil
 }
 
 // completeJobID lists jobs for a pipeline, filtered by ID prefix.

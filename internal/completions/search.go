@@ -19,10 +19,23 @@ import (
 // that toResult can compute an accurate HasMore flag after truncation.
 const searchPerPage = 20
 
-// searchProjects returns project entries matching the query.
-func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) ([]string, error) {
+// totalFromResponse extracts the total match count from a GitLab REST
+// pagination response. GitLab populates [gitlab.Response.TotalItems] from
+// the X-Total header for offset-paginated endpoints; it is 0 for keyset
+// pagination or when the server omits the header (e.g. on collections
+// large enough to skip counting).
+func totalFromResponse(resp *gl.Response) int {
+	if resp == nil {
+		return 0
+	}
+	return int(resp.TotalItems)
+}
+
+// searchProjects returns project entries matching the query plus the total
+// match count from the GitLab pagination header (X-Total) when available.
+func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListProjectsOptions{
 		Membership: new(true),
@@ -31,42 +44,44 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 	if query != "" {
 		opts.Search = new(query)
 	}
-	projects, _, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
+	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search projects: %w", err)
+		return nil, 0, fmt.Errorf("search projects: %w", err)
 	}
 	values := make([]string, 0, len(projects))
 	for _, p := range projects {
 		values = append(values, formatProjectEntry(p.ID, p.PathWithNamespace))
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
-// searchGroups returns group entries matching the query.
-func searchGroups(ctx context.Context, client *gitlabclient.Client, query string) ([]string, error) {
+// searchGroups returns group entries matching the query plus the total
+// match count from the GitLab pagination header.
+func searchGroups(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListGroupsOptions{}
 	opts.PerPage = searchPerPage
 	if query != "" {
 		opts.Search = new(query)
 	}
-	groups, _, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
+	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search groups: %w", err)
+		return nil, 0, fmt.Errorf("search groups: %w", err)
 	}
 	values := make([]string, 0, len(groups))
 	for _, g := range groups {
 		values = append(values, formatGroupEntry(g.ID, g.FullPath))
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
-// searchUsers returns usernames matching the query.
-func searchUsers(ctx context.Context, client *gitlabclient.Client, query string) ([]string, error) {
+// searchUsers returns usernames matching the query plus the total match
+// count from the GitLab pagination header.
+func searchUsers(ctx context.Context, client *gitlabclient.Client, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListUsersOptions{
 		Active: new(true),
@@ -75,15 +90,15 @@ func searchUsers(ctx context.Context, client *gitlabclient.Client, query string)
 	if query != "" {
 		opts.Search = new(query)
 	}
-	users, _, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
+	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search users: %w", err)
+		return nil, 0, fmt.Errorf("search users: %w", err)
 	}
 	values := make([]string, 0, len(users))
 	for _, u := range users {
 		values = append(values, u.Username)
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
 // searchMRs returns merge request entries for a project, filtered by IID prefix.
@@ -132,46 +147,48 @@ func searchIssues(ctx context.Context, client *gitlabclient.Client, projectID, q
 	return values, nil
 }
 
-// searchBranches returns branch names matching the query.
-func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+// searchBranches returns branch names matching the query plus the total
+// match count from the GitLab pagination header.
+func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListBranchesOptions{}
 	opts.PerPage = searchPerPage
 	if query != "" {
 		opts.Search = new(query)
 	}
-	branches, _, err := client.GL().Branches.ListBranches(projectID, opts, gl.WithContext(ctx))
+	branches, resp, err := client.GL().Branches.ListBranches(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search branches: %w", err)
+		return nil, 0, fmt.Errorf("search branches: %w", err)
 	}
 	values := make([]string, 0, len(branches))
 	for _, b := range branches {
 		values = append(values, b.Name)
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
-// searchTags returns tag names matching the query.
-func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+// searchTags returns tag names matching the query plus the total match
+// count from the GitLab pagination header.
+func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListTagsOptions{}
 	opts.PerPage = searchPerPage
 	if query != "" {
 		opts.Search = new(query)
 	}
-	tags, _, err := client.GL().Tags.ListTags(projectID, opts, gl.WithContext(ctx))
+	tags, resp, err := client.GL().Tags.ListTags(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search tags: %w", err)
+		return nil, 0, fmt.Errorf("search tags: %w", err)
 	}
 	values := make([]string, 0, len(tags))
 	for _, t := range tags {
 		values = append(values, t.Name)
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
 // searchPipelines returns recent pipelines for a project, filtered by ID prefix.
@@ -218,31 +235,33 @@ func searchCommits(ctx context.Context, client *gitlabclient.Client, projectID, 
 	return values, nil
 }
 
-// searchLabels returns label names for a project matching the query.
-func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+// searchLabels returns label names for a project matching the query plus
+// the total match count from the GitLab pagination header.
+func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListLabelsOptions{}
 	opts.PerPage = searchPerPage
 	if query != "" {
 		opts.Search = new(query)
 	}
-	labels, _, err := client.GL().Labels.ListLabels(projectID, opts, gl.WithContext(ctx))
+	labels, resp, err := client.GL().Labels.ListLabels(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search labels: %w", err)
+		return nil, 0, fmt.Errorf("search labels: %w", err)
 	}
 	values := make([]string, 0, len(labels))
 	for _, l := range labels {
 		values = append(values, l.Name)
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
-// searchMilestones returns milestone entries for a project, filtered by query.
-func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+// searchMilestones returns milestone entries for a project plus the total
+// match count from the GitLab pagination header.
+func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListMilestonesOptions{
 		State: new("active"),
@@ -251,23 +270,23 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 	if query != "" {
 		opts.Search = new(query)
 	}
-	milestones, _, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
+	milestones, resp, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search milestones: %w", err)
+		return nil, 0, fmt.Errorf("search milestones: %w", err)
 	}
 	values := make([]string, 0, len(milestones))
 	for _, m := range milestones {
 		values = append(values, formatMilestoneEntry(m.ID, m.Title))
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
 // searchMilestoneTitles returns active milestone titles for a project, filtered by query.
 // Unlike [searchMilestones], it returns plain titles (not "id: title") for use as
 // completion values for prompt arguments that accept a milestone title.
-func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, error) {
+func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) ([]string, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	opts := &gl.ListMilestonesOptions{
 		State: new("active"),
@@ -276,15 +295,15 @@ func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, pro
 	if query != "" {
 		opts.Search = new(query)
 	}
-	milestones, _, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
+	milestones, resp, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("search milestone titles: %w", err)
+		return nil, 0, fmt.Errorf("search milestone titles: %w", err)
 	}
 	values := make([]string, 0, len(milestones))
 	for _, m := range milestones {
 		values = append(values, m.Title)
 	}
-	return values, nil
+	return values, totalFromResponse(resp), nil
 }
 
 // searchJobs returns job entries for a pipeline, filtered by ID prefix.

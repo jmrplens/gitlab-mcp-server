@@ -36,7 +36,7 @@ func TestSearchProjects(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchProjects(context.Background(), client, "group")
+	values, _, err := searchProjects(context.Background(), client, "group")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -62,7 +62,7 @@ func TestSearchProjects_EmptyQuery(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchProjects(context.Background(), client, "")
+	values, _, err := searchProjects(context.Background(), client, "")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -78,7 +78,7 @@ func TestSearchProjects_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchProjects(context.Background(), client, "test")
+	_, _, err := searchProjects(context.Background(), client, "test")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -95,7 +95,7 @@ func TestSearchGroups(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchGroups(context.Background(), client, "eng")
+	values, _, err := searchGroups(context.Background(), client, "eng")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -114,7 +114,7 @@ func TestSearchGroups_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchGroups(context.Background(), client, "test")
+	_, _, err := searchGroups(context.Background(), client, "test")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -130,7 +130,7 @@ func TestSearchUsers(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchUsers(context.Background(), client, "ali")
+	values, _, err := searchUsers(context.Background(), client, "ali")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -149,7 +149,7 @@ func TestSearchUsers_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchUsers(context.Background(), client, "test")
+	_, _, err := searchUsers(context.Background(), client, "test")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -266,7 +266,7 @@ func TestSearchBranches(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchBranches(context.Background(), client, "42", "main")
+	values, _, err := searchBranches(context.Background(), client, "42", "main")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -292,7 +292,7 @@ func TestSearchBranches_EmptyQuery(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchBranches(context.Background(), client, "42", "")
+	values, _, err := searchBranches(context.Background(), client, "42", "")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -308,7 +308,7 @@ func TestSearchBranches_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchBranches(context.Background(), client, "42", "main")
+	_, _, err := searchBranches(context.Background(), client, "42", "main")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -329,7 +329,7 @@ func TestSearchTags(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchTags(context.Background(), client, "42", "v1")
+	values, _, err := searchTags(context.Background(), client, "42", "v1")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -345,7 +345,7 @@ func TestSearchTags_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchTags(context.Background(), client, "42", "v1")
+	_, _, err := searchTags(context.Background(), client, "42", "v1")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -362,13 +362,13 @@ func TestSearch_ContextCancelled(t *testing.T) {
 		name string
 		fn   func() error
 	}{
-		{"projects", func() error { _, err := searchProjects(ctx, client, "x"); return err }},
-		{"groups", func() error { _, err := searchGroups(ctx, client, "x"); return err }},
-		{"users", func() error { _, err := searchUsers(ctx, client, "x"); return err }},
+		{"projects", func() error { _, _, err := searchProjects(ctx, client, "x"); return err }},
+		{"groups", func() error { _, _, err := searchGroups(ctx, client, "x"); return err }},
+		{"users", func() error { _, _, err := searchUsers(ctx, client, "x"); return err }},
 		{"mrs", func() error { _, err := searchMRs(ctx, client, "42", "x"); return err }},
 		{"issues", func() error { _, err := searchIssues(ctx, client, "42", "x"); return err }},
-		{"branches", func() error { _, err := searchBranches(ctx, client, "42", "x"); return err }},
-		{"tags", func() error { _, err := searchTags(ctx, client, "42", "x"); return err }},
+		{"branches", func() error { _, _, err := searchBranches(ctx, client, "42", "x"); return err }},
+		{"tags", func() error { _, _, err := searchTags(ctx, client, "42", "x"); return err }},
 	}
 
 	for _, tt := range tests {
@@ -502,7 +502,7 @@ func TestSearchLabels(t *testing.T) {
 	}))
 
 	t.Run("search with query", func(t *testing.T) {
-		values, err := searchLabels(context.Background(), client, "42", "bug")
+		values, _, err := searchLabels(context.Background(), client, "42", "bug")
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -516,7 +516,7 @@ func TestSearchLabels(t *testing.T) {
 	})
 
 	t.Run("empty query", func(t *testing.T) {
-		values, err := searchLabels(context.Background(), client, "42", "")
+		values, _, err := searchLabels(context.Background(), client, "42", "")
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)
 		}
@@ -533,7 +533,7 @@ func TestSearchLabels_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchLabels(context.Background(), client, "42", "bug")
+	_, _, err := searchLabels(context.Background(), client, "42", "bug")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -553,7 +553,7 @@ func TestSearchMilestones(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	values, err := searchMilestones(context.Background(), client, "42", "v1")
+	values, _, err := searchMilestones(context.Background(), client, "42", "v1")
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
@@ -572,7 +572,7 @@ func TestSearchMilestones_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 
-	_, err := searchMilestones(context.Background(), client, "42", "v1")
+	_, _, err := searchMilestones(context.Background(), client, "42", "v1")
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
 	}
@@ -642,8 +642,8 @@ func TestSearchNew_ContextCancelled(t *testing.T) {
 	}{
 		{"pipelines", func() error { _, err := searchPipelines(ctx, client, "42", "x"); return err }},
 		{"commits", func() error { _, err := searchCommits(ctx, client, "42", "x"); return err }},
-		{"labels", func() error { _, err := searchLabels(ctx, client, "42", "x"); return err }},
-		{"milestones", func() error { _, err := searchMilestones(ctx, client, "42", "x"); return err }},
+		{"labels", func() error { _, _, err := searchLabels(ctx, client, "42", "x"); return err }},
+		{"milestones", func() error { _, _, err := searchMilestones(ctx, client, "42", "x"); return err }},
 		{"jobs", func() error { _, err := searchJobs(ctx, client, "42", 10, "x"); return err }},
 	}
 
