@@ -1,0 +1,39 @@
+{
+    "mcpServers": {
+        "gitlab": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--rm",
+                "-e",
+                "GITLAB_URL",
+                "-e",
+                "GITLAB_TOKEN",
+                "-e",
+                "GITLAB_SKIP_TLS_VERIFY",
+                "-e",
+                "META_TOOLS",
+                "-e",
+                "GITLAB_ENTERPRISE",
+                "-e",
+                "GITLAB_READ_ONLY",
+                "-e",
+                "GITLAB_SAFE_MODE",
+                "-e",
+                "LOG_LEVEL",
+                "ghcr.io/jmrplens/gitlab-mcp-server:latest"
+            ],
+            "env": {
+                "GITLAB_URL": "${GITLAB_URL}",
+                "GITLAB_TOKEN": "${GITLAB_TOKEN}",
+                "GITLAB_SKIP_TLS_VERIFY": "${GITLAB_SKIP_TLS_VERIFY:-false}",
+                "META_TOOLS": "${META_TOOLS:-true}",
+                "GITLAB_ENTERPRISE": "${GITLAB_ENTERPRISE:-false}",
+                "GITLAB_READ_ONLY": "${GITLAB_READ_ONLY:-false}",
+                "GITLAB_SAFE_MODE": "${GITLAB_SAFE_MODE:-false}",
+                "LOG_LEVEL": "${LOG_LEVEL:-info}"
+            }
+        }
+    }
+}
