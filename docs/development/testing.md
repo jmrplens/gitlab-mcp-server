@@ -49,23 +49,23 @@
 
 | Package        | Tests | Coverage | Description                          |
 | -------------- | ----: | -------: | ------------------------------------ |
-| autoupdate     |    99 |   85.1%  | Self-update via GitLab releases      |
+| autoupdate     |   110 |   85.1%  | Self-update via GitLab releases      |
 | completions    |    91 |  100.0%  | Argument auto-completion             |
-| config         |    36 |   99.3%  | Configuration loading                |
+| config         |    44 |   99.3%  | Configuration loading                |
 | elicitation    |    78 |   92.0%  | MCP elicitation capability           |
-| gitlab         |    31 |  100.0%  | GitLab API client wrapper            |
-| logging        |    15 |  100.0%  | MCP logging capability               |
-| progress       |    14 |  100.0%  | MCP progress notifications           |
+| gitlab         |    34 |  100.0%  | GitLab API client wrapper            |
+| logging        |    16 |  100.0%  | MCP logging capability               |
+| progress       |    17 |  100.0%  | MCP progress notifications           |
 | prompts        |   202 |   96.3%  | MCP prompt implementations           |
 | resources      |    68 |   98.1%  | MCP resource implementations         |
 | roots          |    21 |   98.5%  | MCP roots capability                 |
 | sampling       |    83 |   99.5%  | MCP sampling capability              |
-| serverpool     |    33 |   99.4%  | HTTP mode server pool                |
+| serverpool     |    38 |   99.4%  | HTTP mode server pool                |
 | testutil       |    21 |   95.5%  | Shared test helpers                  |
-| toolutil       |   243 |   96.2%  | Shared tool utilities                |
+| toolutil       |   247 |   96.2%  | Shared tool utilities                |
 | wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,290**|        |                                      |
+| **Subtotal**   |**1,310**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -263,7 +263,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    66 |
-| **Total**                | **6,937** |
+| **Total** (163 sub-packages) | **6,928** |
 
 </details>
 
