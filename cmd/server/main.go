@@ -498,7 +498,7 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		},
 		InitializedHandler: func(ctx context.Context, req *mcp.InitializedRequest) {
 			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
-				slog.Debug("initial roots fetch failed (client may not support roots)", "error", err)
+				slog.Debug("initial roots fetch failed; roots cache left empty", "error", err)
 			}
 		},
 		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
