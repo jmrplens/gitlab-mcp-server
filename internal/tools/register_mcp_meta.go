@@ -51,7 +51,7 @@ NOT for: GitLab instance admin (use gitlab_admin), git remote resolution (use gi
 Returns:
 - status / health_check: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated, username, user_id, response_time_ms, error}.
 - check_update: {update_available (bool), current_version, latest_version, release_url, release_notes, mode}.
-- apply_update: {applied (bool), deferred (bool), previous_version, new_version, staging_path, script_path, message}.
+- apply_update: {applied (bool), previous_version, new_version, message}. Optional fields populated only on the Windows rename-trick fallback: deferred (bool), staging_path, script_path.
 Errors: connectivity / auth failures appear inside the diagnostics object (status / error). Update channel errors include the release fetch URL.
 
 - status / health_check: (no params)
