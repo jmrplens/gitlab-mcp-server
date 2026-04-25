@@ -214,13 +214,19 @@ result, err := samplingClient.Analyze(ctx, prompt, data,
 | `WithMaxIterations(n)` | 5 | Maximum tool-calling rounds before giving up |
 | `WithIterationTimeout(d)` | 2 min | Per-iteration timeout for `AnalyzeWithTools` loop iterations, preventing indefinite hangs |
 
-**Suggested model-priority presets** (used by built-in sampling tools):
+**Model-priority presets** (actual values used by built-in sampling tools):
 
-| Preset | Cost | Speed | Intelligence | Used by |
-| ------ | ---- | ----- | ------------ | ------- |
-| Security / architecture review | 0.0 | 0.0 | 1.0 | `gitlab_review_mr_security`, `gitlab_analyze_mr_changes` |
-| Bulk summaries / release notes | 0.6 | 0.8 | 0.3 | `gitlab_generate_release_notes`, `gitlab_summarize_issue` |
-| Default analysis | 0.5 | 0.5 | 0.5 | other sampling tools |
+| Preset (cost / speed / intelligence) | Used by |
+| ------------------------------------ | ------- |
+| `0.0 / 0.0 / 1.0` | `gitlab_review_mr_security` |
+| `0.2 / 0.2 / 0.8` | `gitlab_analyze_mr_changes` |
+| `0.2 / 0.3 / 0.8` | `gitlab_analyze_pipeline_failure` |
+| `0.3 / 0.3 / 0.7` | `gitlab_analyze_ci_config` |
+| `0.3 / 0.4 / 0.6` | `gitlab_analyze_issue_scope` |
+| `0.4 / 0.5 / 0.5` | `gitlab_analyze_deployment_history`, `gitlab_summarize_mr_review`, `gitlab_generate_milestone_report` |
+| `0.4 / 0.6 / 0.4` | `gitlab_summarize_issue` |
+| `0.5 / 0.5 / 0.5` | `gitlab_find_technical_debt` |
+| `0.5 / 0.6 / 0.4` | `gitlab_generate_release_notes` |
 
 ### AnalysisResult
 

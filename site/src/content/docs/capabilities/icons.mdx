@@ -5,7 +5,7 @@ description: SVG icon gallery for all tools, resources, and prompts
 
 import { Badge } from "@astrojs/starlight/components";
 
-GitLab MCP Server assigns **50 unique SVG icons** to all 1000 individual tools, 28/43 meta-tools, 24 resources, and 38 prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain.
+GitLab MCP Server assigns **50 unique SVG icons** to all ~1,050 individual tools, 36 meta-tools, 4 resources, and 38 prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain.
 
 ## Design principles
 
@@ -850,6 +850,6 @@ Icons are optional metadata. Clients that do not support icon rendering simply i
 ## Technical details
 
 - **Source**: [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)
-- **Encoding**: `data:image/svg+xml,<svg ...>...</svg>` (inline data URIs)
+- **Encoding**: `data:image/svg+xml;base64,...` (base64-encoded SVG data URIs). The previews on this page use URL-encoded SVG (`data:image/svg+xml,%3Csvg ...`) for inline browser rendering only — the registered icons in `internal/toolutil/icons.go` are base64.
 - **Viewport**: All icons use 16×16 with `currentColor` for theme adaptation
 - **Registration**: Each tool sub-package assigns icons via `Icons: toolutil.IconName` in `register.go`

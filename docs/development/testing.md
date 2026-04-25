@@ -14,12 +14,12 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,717   |
-| Unit test functions         | 8,429   |
+| Total test functions        | 8,753   |
+| Unit test functions         | 8,460   |
 | E2E test functions          | 214     |
 | cmd test functions          | 79      |
 | Test files (internal/)      | 400     |
-| Tool sub-packages tested    | 162     |
+| Tool sub-packages tested    | 163     |
 | Core packages tested        | 16      |
 | Overall coverage (`go test ./...`) | 97.3%  |
 | Average package coverage    | ~98.2%  |
@@ -28,9 +28,9 @@
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 7,806 | 90.1% |
-| `TestFunc` (no-underscore)     |   663 |  7.7% |
-| `TestFunc_Sc_Exp` (3+ part)   |   195 |  2.3% |
+| `TestFunc_Scenario` (2-part)   | 7,673 | 89.9% |
+| `TestFunc` (no-underscore)     |   656 |  7.7% |
+| `TestFunc_Sc_Exp` (3+ part)   |   210 |  2.5% |
 
 ## Test Distribution
 
@@ -38,12 +38,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,290 |         74 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            214 |         15 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (162)  |          6,925 |        311 | Domain-specific tool handlers        |
+| Core packages            |          1,310 |         76 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            222 |         17 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (163)  |          6,928 |        307 | Domain-specific tool handlers        |
 | E2E integration          |            214 |         96 | Full workflow against real GitLab    |
 | cmd/server               |             79 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,717** |    **497** |                                      |
+| **Total**                |      **8,753** |    **497** |                                      |
 
 ### Core Packages
 
