@@ -41,7 +41,7 @@ gitlab-mcp-server/
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 162 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — delegates to sub-package RegisterTools()
-│   │   ├── register_meta.go     # RegisterAllMeta() — 24 inline + 3 delegated + 1 standalone = 28 meta-tools (43 with GITLAB_ENTERPRISE=true)
+│   │   ├── register_meta.go     # RegisterAllMeta() — 24 inline + 3 delegated + 1 standalone + 4 interactive = 32 meta-tools (47 with GITLAB_ENTERPRISE=true)
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult dispatcher — type-switch over all outputs
 │   │   ├── branches/            # Branch management tools (example sub-package)

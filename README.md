@@ -28,7 +28,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1000 MCP tools** — complete GitLab REST API v4 coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **28 meta-tools** (43 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **32 meta-tools** (47 with `GITLAB_ENTERPRISE=true`) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **24 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, workspace roots, and 5 workflow best-practice guides
@@ -253,7 +253,7 @@ Two registration modes, controlled by the `META_TOOLS` environment variable:
 
 | Mode | Tools | Description |
 |------|-------|-------------|
-| **Meta-Tools** (default) | 28 base / 43 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
+| **Meta-Tools** (default) | 32 base / 47 enterprise | Domain-grouped dispatchers with `action` parameter. Lower token usage. |
 | **Individual** | 1000 | Every GitLab operation as a separate MCP tool. |
 
 Meta-tool summary:
@@ -306,7 +306,7 @@ Meta-tool summary:
 | `gitlab_storage_move` 🏢 | 18 | Manage repository storage moves for projects, groups, and snippets (admin only). |
 | `gitlab_vulnerability` 🏢 | 8 | List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). |
 
-**28 base** / **43 with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
+**32 base** / **47 with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
 
 <!-- END TOOLS -->
 
