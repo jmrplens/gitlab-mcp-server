@@ -6,6 +6,7 @@ package releases
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -1143,4 +1144,40 @@ func newReleasesMCPSession(t *testing.T) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
+}
+
+// TestUpdate_WithMilestonesAndReleasedAt verifies that Update forwards both
+// milestones and a valid released_at timestamp to the GitLab API. This
+// targets the success branch of the released_at parser (assigning the
+// parsed time to opts.ReleasedAt) and the milestones-non-empty branch
+// (copying the slice into opts.Milestones).
+func TestUpdate_WithMilestonesAndReleasedAt(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathReleaseV120 {
+			b, _ := io.ReadAll(r.Body)
+			capturedBody = string(b)
+			testutil.RespondJSON(w, http.StatusOK, `{"tag_name":"v1.2.0","name":"r","description":"d"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:  "42",
+		TagName:    testTagV120,
+		Milestones: []string{"M1", "M2"},
+		ReleasedAt: "2026-01-15T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "milestones") {
+		t.Errorf("request body missing 'milestones' field; body=%q", capturedBody)
+	}
+	if !strings.Contains(capturedBody, "M1") || !strings.Contains(capturedBody, "M2") {
+		t.Errorf("request body missing milestone values; body=%q", capturedBody)
+	}
+	if !strings.Contains(capturedBody, "released_at") {
+		t.Errorf("request body missing 'released_at' field; body=%q", capturedBody)
+	}
 }

@@ -729,3 +729,34 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestProtect_WithRequiredApprovalCount verifies that Protect forwards the
+// required_approval_count value to the GitLab API when input.RequiredApprovalCount
+// is non-nil. This targets the optional-field branch at the top of Protect.
+func TestProtect_WithRequiredApprovalCount(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, envJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	count := int64(3)
+	_, err := Protect(context.Background(), client, ProtectInput{
+		ProjectID:             "42",
+		Name:                  "production",
+		RequiredApprovalCount: &count,
+	})
+	if err != nil {
+		t.Fatalf("Protect() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "required_approval_count") {
+		t.Errorf("request body missing required_approval_count; body=%q", capturedBody)
+	}
+}

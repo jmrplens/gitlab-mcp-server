@@ -400,3 +400,14 @@ func TestMCPRoundTrip_Get404(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveProjectLabel_ZeroProjectID verifies that resolveProjectLabel
+// returns an empty string when the snippet has no associated project
+// (ProjectID == 0, indicating a personal snippet). This targets the early
+// return branch at the top of resolveProjectLabel.
+func TestResolveProjectLabel_ZeroProjectID(t *testing.T) {
+	got := resolveProjectLabel(Output{ProjectID: 0, WebURL: "https://gitlab.example.com/snippets/42"})
+	if got != "" {
+		t.Errorf("resolveProjectLabel(ProjectID=0) = %q, want empty string", got)
+	}
+}

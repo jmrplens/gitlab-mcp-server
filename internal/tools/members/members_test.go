@@ -1171,3 +1171,28 @@ func newMembersMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestMemberEdit_GenericAPIError verifies that Edit returns a generic
+// wrapped error (without the access-level hint) when the GitLab API
+// responds with a non-403 error status. This targets the
+// WrapErrWithMessage branch that handles failures other than Forbidden.
+func TestMemberEdit_GenericAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/members/7" {
+			testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable Entity"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := Edit(context.Background(), client, EditInput{
+		ProjectID:   "42",
+		UserID:      7,
+		AccessLevel: 30,
+	})
+	if err == nil {
+		t.Fatal("expected error for 422 response, got nil")
+	}
+	if strings.Contains(err.Error(), "higher access level") {
+		t.Errorf("error must not contain 403 hint for non-403 status; got %q", err.Error())
+	}
+}

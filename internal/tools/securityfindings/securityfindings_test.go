@@ -530,3 +530,71 @@ func TestList_APIError(t *testing.T) {
 		t.Fatal("expected error for 500 response")
 	}
 }
+
+// TestList_WithConfidenceAndScanner verifies that confidence and scanner
+// filters are correctly forwarded to the GraphQL API as query variables.
+// This targets the two optional-filter branches that copy non-empty
+// arrays into the variables map.
+func TestList_WithConfidenceAndScanner(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Fatalf("ParseGraphQLVariables error: %v", err)
+			}
+			if _, ok := vars["confidence"]; !ok {
+				t.Errorf("expected variables to contain 'confidence', got %v", vars)
+			}
+			if _, ok := vars["scanner"]; !ok {
+				t.Errorf("expected variables to contain 'scanner', got %v", vars)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": {
+						"securityReportFindings": {
+							"nodes": [],
+							"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}
+						}
+					}
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(context.Background(), client, ListInput{
+		ProjectPath: "g/p",
+		PipelineIID: "1",
+		Confidence:  []string{"HIGH"},
+		Scanner:     []string{"semgrep-sast"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Findings) != 0 {
+		t.Errorf("expected 0 findings, got %d", len(out.Findings))
+	}
+}
+
+// TestList_NullProject verifies that List returns a not-found error when
+// the GraphQL API responds with a null project (project does not exist
+// or user has no access). This targets the resp.Data.Project == nil
+// branch that produces a domain-specific error message.
+func TestList_NullProject(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(context.Background(), client, ListInput{
+		ProjectPath: "missing/proj",
+		PipelineIID: "1",
+	})
+	if err == nil {
+		t.Fatal("expected error for null project, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing/proj") {
+		t.Errorf("error = %q, want contains project path", err.Error())
+	}
+}

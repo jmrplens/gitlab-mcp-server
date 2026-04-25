@@ -926,3 +926,17 @@ func TestFormatLinksMarkdown_Empty(t *testing.T) {
 		t.Errorf("expected 'No child epics found', got %q", result)
 	}
 }
+
+// TestFormatListMarkdown_WithLabels verifies that FormatListMarkdown joins
+// non-empty Labels with ", " separator and includes the joined value in
+// the output. This targets the labels-non-empty branch that builds the
+// labels column from the slice.
+func TestFormatListMarkdown_WithLabels(t *testing.T) {
+	out := ListOutput{Epics: []Output{
+		{IID: 1, Title: "Epic A", State: "opened", Author: "alice", Labels: []string{"backend", "priority"}},
+	}}
+	result := FormatListMarkdown(out)
+	if !strings.Contains(result, "backend, priority") {
+		t.Errorf("expected joined labels in output; got:\n%s", result)
+	}
+}

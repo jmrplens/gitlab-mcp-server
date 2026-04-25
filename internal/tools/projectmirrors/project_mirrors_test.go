@@ -5,7 +5,9 @@ package projectmirrors
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -933,4 +935,32 @@ func containsSubstring(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestEdit_WithHostKeys verifies that Edit forwards host_keys to the
+// GitLab API in the PUT body when input.HostKeys is non-empty. This
+// targets the optional-field branch in Edit that copies host keys into
+// the request options struct.
+func TestEdit_WithHostKeys(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathMirror42 {
+			b, _ := io.ReadAll(r.Body)
+			capturedBody = string(b)
+			testutil.RespondJSON(w, http.StatusOK, mirrorJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := Edit(context.Background(), client, EditInput{
+		ProjectID: testProjectID,
+		MirrorID:  42,
+		HostKeys:  []string{"ssh-rsa AAAA..."},
+	})
+	if err != nil {
+		t.Fatalf("Edit() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "host_keys") {
+		t.Errorf("request body missing host_keys field; body=%q", capturedBody)
+	}
 }
