@@ -4,6 +4,7 @@ package groupvariables
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -120,7 +121,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	vars, resp, err := client.GL().GroupVariables.ListVariables(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list group variables", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group variables", err, http.StatusNotFound,
+			"verify group_id; listing variables requires Maintainer or Owner role")
 	}
 
 	out := ListOutput{Variables: make([]Output, 0, len(vars))}
@@ -152,7 +154,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	v, _, err := client.GL().GroupVariables.GetVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get group variable", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get group variable", err, http.StatusNotFound,
+			"verify the variable key with gitlab_list_group_variables; for scoped vars supply matching environment_scope filter")
 	}
 	return toOutput(v), nil
 }
@@ -201,7 +204,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	v, _, err := client.GL().GroupVariables.CreateVariable(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create group variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("create group variable", err,
+				"creating group variables requires Maintainer or Owner role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("create group variable", err, http.StatusBadRequest,
+			"key must match /^[A-Za-z0-9_]{1,255}$/; valid variable_type: env_var (default) or file; the (key, environment_scope) pair may already exist")
 	}
 	return toOutput(v), nil
 }
@@ -244,7 +252,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	v, _, err := client.GL().GroupVariables.UpdateVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update group variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("update group variable", err,
+				"updating group variables requires Maintainer or Owner role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("update group variable", err, http.StatusNotFound,
+			"verify the variable key and environment_scope with gitlab_list_group_variables")
 	}
 	return toOutput(v), nil
 }
@@ -270,7 +283,12 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().GroupVariables.RemoveVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete group variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("delete group variable", err,
+				"deleting group variables requires Maintainer or Owner role")
+		}
+		return toolutil.WrapErrWithStatusHint("delete group variable", err, http.StatusNotFound,
+			"the variable may already be deleted \u2014 verify with gitlab_list_group_variables")
 	}
 	return nil
 }
