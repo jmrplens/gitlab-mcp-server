@@ -3,6 +3,7 @@ package keys
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -51,7 +52,8 @@ func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetB
 	}
 	key, _, err := client.GL().Keys.GetKeyWithUser(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("key_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("key_get", err, http.StatusNotFound,
+			"verify key_id with gitlab_user_ssh_keys_list (per-user) \u2014 this admin endpoint requires administrator access on self-managed instances")
 	}
 	return toOutput(key), nil
 }
@@ -64,7 +66,8 @@ func GetKeyByFingerprint(ctx context.Context, client *gitlabclient.Client, input
 	opts := &gl.GetKeyByFingerprintOptions{Fingerprint: input.Fingerprint}
 	key, _, err := client.GL().Keys.GetKeyByFingerprint(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("key_get_by_fingerprint", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("key_get_by_fingerprint", err, http.StatusNotFound,
+			"fingerprint format must be SHA256:base64 (43 chars, no padding) or MD5:aa:bb:cc:... (32 hex pairs); requires administrator access")
 	}
 	return toOutput(key), nil
 }
