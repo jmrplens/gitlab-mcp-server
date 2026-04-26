@@ -329,7 +329,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_catalog_resources", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("list_catalog_resources", err,
+			"the CI/CD Catalog requires GitLab 16.7+; scope must be one of {all, public}; sort one of {NAME_ASC, NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, USAGE_COUNT_ASC, USAGE_COUNT_DESC}")
 	}
 
 	items := make([]ResourceItem, 0, len(resp.Data.CiCatalogResources.Nodes))
@@ -382,7 +383,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_catalog_resource", err)
+		return GetOutput{}, toolutil.WrapErrWithHint("get_catalog_resource", err,
+			"verify the resource exists with gitlab_catalog_list; id must be a GID (gid://gitlab/Ci::CatalogResource/N) or use full_path of the hosting project")
 	}
 
 	if resp.Data.CiCatalogResource == nil {
