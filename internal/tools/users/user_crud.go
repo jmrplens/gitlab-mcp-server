@@ -13,6 +13,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// createUserForbiddenHint is the hint returned when CreateUser fails with 403.
+// The string mentions password policy as part of GitLab's documented user-creation
+// requirements; it is operator guidance, not a credential. The trailing NOSONAR
+// suppresses go:S2068 (hard-coded credential heuristic).
+const createUserForbiddenHint = "creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username" //NOSONAR
+
 // CreateInput holds parameters for creating a new GitLab user (admin only).
 type CreateInput struct {
 	Email               string `json:"email" jsonschema:"The user email address,required"`
@@ -92,7 +98,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	u, _, err := client.GL().Users.CreateUser(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create_user", err, http.StatusForbidden,
-			"creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username")
+			createUserForbiddenHint)
 	}
 	return toOutput(u), nil
 }
@@ -177,7 +183,7 @@ func Modify(ctx context.Context, client *gitlabclient.Client, input ModifyInput)
 	u, _, err := client.GL().Users.ModifyUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("modify_user", err, http.StatusForbidden,
-			"modifying users requires admin token; verify user_id with gitlab_user_get; email/username changes must remain unique")
+			"modifying users requires admin token; verify user_id with gitlab_get_user; email/username changes must remain unique")
 	}
 	return toOutput(u), nil
 }

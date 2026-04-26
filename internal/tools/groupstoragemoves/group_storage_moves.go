@@ -145,7 +145,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group storage move", err, http.StatusNotFound,
-			"requires admin + Premium/Ultimate; verify id with gitlab_group_storage_move_list")
+			"requires admin + Premium/Ultimate; verify id with gitlab_retrieve_all_group_storage_moves")
 	}
 	return toOutput(move), nil
 }

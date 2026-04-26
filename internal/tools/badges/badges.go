@@ -13,6 +13,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyGroupBadgeID is the 404 hint shared by group badge tools.
+const hintVerifyGroupBadgeID = "verify badge_id with gitlab_list_group_badges"
+
 // BadgeItem represents a badge in output.
 type BadgeItem struct {
 	ID               int64  `json:"id"`
@@ -305,7 +308,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	badge, _, err := client.GL().GroupBadges.GetGroupBadge(string(input.GroupID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
 		return GetGroupOutput{}, toolutil.WrapErrWithStatusHint("get_group_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_group_badges")
+			hintVerifyGroupBadgeID)
 	}
 	return GetGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }
@@ -385,7 +388,7 @@ func EditGroup(ctx context.Context, client *gitlabclient.Client, input EditGroup
 				"editing group badges requires Owner role on the group")
 		}
 		return EditGroupOutput{}, toolutil.WrapErrWithStatusHint("edit_group_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_group_badges")
+			hintVerifyGroupBadgeID)
 	}
 	return EditGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }
@@ -408,7 +411,7 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, input DeleteG
 				"deleting group badges requires Owner role on the group")
 		}
 		return toolutil.WrapErrWithStatusHint("delete_group_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_group_badges")
+			hintVerifyGroupBadgeID)
 	}
 	return nil
 }

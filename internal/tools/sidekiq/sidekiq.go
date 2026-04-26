@@ -12,6 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintSidekiqAdminRequired is the 403 hint shared by all Sidekiq metrics tools.
+const hintSidekiqAdminRequired = "Sidekiq metrics require administrator access \u2014 verify your token has admin scope"
+
 // ---------------------------------------------------------------------------
 // Shared output types
 // ---------------------------------------------------------------------------.
@@ -59,7 +62,7 @@ type GetQueueMetricsOutput struct {
 func GetQueueMetrics(ctx context.Context, client *gitlabclient.Client, _ GetQueueMetricsInput) (GetQueueMetricsOutput, error) {
 	metrics, _, err := client.GL().Sidekiq.GetQueueMetrics(gl.WithContext(ctx))
 	if err != nil {
-		return GetQueueMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_queue_metrics", err, http.StatusForbidden, "Sidekiq metrics require administrator access \u2014 verify your token has admin scope")
+		return GetQueueMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_queue_metrics", err, http.StatusForbidden, hintSidekiqAdminRequired)
 	}
 	return GetQueueMetricsOutput{Queues: convertQueues(metrics.Queues)}, nil
 }
@@ -81,7 +84,7 @@ type GetProcessMetricsOutput struct {
 func GetProcessMetrics(ctx context.Context, client *gitlabclient.Client, _ GetProcessMetricsInput) (GetProcessMetricsOutput, error) {
 	metrics, _, err := client.GL().Sidekiq.GetProcessMetrics(gl.WithContext(ctx))
 	if err != nil {
-		return GetProcessMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_process_metrics", err, http.StatusForbidden, "Sidekiq metrics require administrator access \u2014 verify your token has admin scope")
+		return GetProcessMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_process_metrics", err, http.StatusForbidden, hintSidekiqAdminRequired)
 	}
 	return GetProcessMetricsOutput{Processes: convertProcesses(metrics.Processes)}, nil
 }
@@ -103,7 +106,7 @@ type GetJobStatsOutput struct {
 func GetJobStats(ctx context.Context, client *gitlabclient.Client, _ GetJobStatsInput) (GetJobStatsOutput, error) {
 	stats, _, err := client.GL().Sidekiq.GetJobStats(gl.WithContext(ctx))
 	if err != nil {
-		return GetJobStatsOutput{}, toolutil.WrapErrWithStatusHint("get_job_stats", err, http.StatusForbidden, "Sidekiq metrics require administrator access \u2014 verify your token has admin scope")
+		return GetJobStatsOutput{}, toolutil.WrapErrWithStatusHint("get_job_stats", err, http.StatusForbidden, hintSidekiqAdminRequired)
 	}
 	return GetJobStatsOutput{
 		Jobs: JobStatsItem{
@@ -133,7 +136,7 @@ type GetCompoundMetricsOutput struct {
 func GetCompoundMetrics(ctx context.Context, client *gitlabclient.Client, _ GetCompoundMetricsInput) (GetCompoundMetricsOutput, error) {
 	metrics, _, err := client.GL().Sidekiq.GetCompoundMetrics(gl.WithContext(ctx))
 	if err != nil {
-		return GetCompoundMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_compound_metrics", err, http.StatusForbidden, "Sidekiq metrics require administrator access \u2014 verify your token has admin scope")
+		return GetCompoundMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_compound_metrics", err, http.StatusForbidden, hintSidekiqAdminRequired)
 	}
 	return GetCompoundMetricsOutput{
 		Queues:    convertQueues(metrics.Queues),

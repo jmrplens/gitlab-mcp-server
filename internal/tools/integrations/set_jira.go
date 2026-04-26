@@ -92,7 +92,7 @@ func SetJira(ctx context.Context, client *gitlabclient.Client, input SetJiraInpu
 
 	svc, _, err := client.GL().Services.SetJiraService(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return SetJiraOutput{}, toolutil.WrapErrWithStatusHint("set_jira_integration", err, http.StatusNotFound, "verify project_id with gitlab_get_project and ensure jira_url is reachable")
+		return SetJiraOutput{}, toolutil.WrapErrWithStatusHint("set_jira_integration", err, http.StatusNotFound, "verify project_id with gitlab_project_get and ensure jira_url is reachable")
 	}
 	return SetJiraOutput{Integration: integrationToItem(&svc.Service)}, nil
 }

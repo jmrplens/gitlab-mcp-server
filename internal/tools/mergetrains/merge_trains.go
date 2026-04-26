@@ -137,7 +137,7 @@ func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, in
 	}
 	trains, resp, err := client.GL().MergeTrains.ListProjectMergeTrains(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_merge_trains", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 merge trains require Premium license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_merge_trains", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 merge trains require Premium license")
 	}
 	return toListOutput(trains, resp), nil
 }

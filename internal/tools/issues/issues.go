@@ -18,6 +18,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Shared hints used by error wrappers (kept as constants to satisfy S1192).
+const (
+	hintVerifyIssue        = "verify project_id and issue_iid with gitlab_issue_get"
+	hintConfirmIssueExists = "verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists"
+)
+
 const (
 	msgNoIssuesFound = "No issues found.\n"
 	tblHeaderIssues  = "| IID | Title | State | Author | Labels |\n"
@@ -267,7 +273,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
-				"check that referenced labels, assignee_ids and milestone_id exist in this project (use gitlab_label_list, gitlab_user_get, gitlab_milestone_list)")
+				"check that referenced labels, assignee_ids and milestone_id exist in this project (use gitlab_label_list, gitlab_get_user, gitlab_milestone_list)")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueCreate", err)
 	}
@@ -729,7 +735,7 @@ func Reorder(ctx context.Context, client *gitlabclient.Client, input ReorderInpu
 				"exactly one of move_after_id or move_before_id must be set, and the referenced issue must be in the same project as issue_iid")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("issueReorder", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			hintVerifyIssue)
 	}
 	return ToOutput(issue), nil
 }
@@ -795,7 +801,7 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("issueSubscribe", err,
-				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
+				hintConfirmIssueExists)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueSubscribe", err)
 	}
@@ -826,7 +832,7 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("issueUnsubscribe", err,
-				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
+				hintConfirmIssueExists)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUnsubscribe", err)
 	}
@@ -867,7 +873,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return TodoOutput{}, toolutil.WrapErrWithHint("issueCreateTodo", err,
-				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
+				hintConfirmIssueExists)
 		}
 		return TodoOutput{}, toolutil.WrapErrWithMessage("issueCreateTodo", err)
 	}
@@ -959,7 +965,7 @@ func ResetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input G
 	ts, _, err := client.GL().Issues.ResetTimeEstimate(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueResetTimeEstimate", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1015,7 +1021,7 @@ func ResetSpentTime(ctx context.Context, client *gitlabclient.Client, input GetI
 	ts, _, err := client.GL().Issues.ResetSpentTime(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueResetSpentTime", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1034,7 +1040,7 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 	ts, _, err := client.GL().Issues.GetTimeSpent(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueGetTimeStats", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1067,7 +1073,7 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 	users, _, err := client.GL().Issues.GetParticipants(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("issueGetParticipants", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			hintVerifyIssue)
 	}
 	out := make([]ParticipantOutput, len(users))
 	for i, u := range users {

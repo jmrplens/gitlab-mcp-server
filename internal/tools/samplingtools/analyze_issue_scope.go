@@ -221,7 +221,7 @@ func FormatAnalyzeIssueScopeMarkdown(a AnalyzeIssueScopeOutput) string {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_update_issue` to refine scope, labels, or milestone",
+		"Use `gitlab_issue_update` to refine scope, labels, or milestone",
 		"Use `gitlab_add_issue_note` to document scope decisions",
 	)
 	return b.String()

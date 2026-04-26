@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_epic_discussions",
 		Title:       toolutil.TitleFromName("gitlab_list_epic_discussions"),
-		Description: "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_list_groups",
+		Description: "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_group_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

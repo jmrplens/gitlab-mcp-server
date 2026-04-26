@@ -157,7 +157,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 
 	if resp.Data.Group == nil {

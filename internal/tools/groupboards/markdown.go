@@ -47,7 +47,7 @@ func FormatListGroupBoardsMarkdown(out ListGroupBoardsOutput) string {
 			len(bd.Lists))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_get_group_board` to view details of a specific board")
+	toolutil.WriteHints(&b, "Use `gitlab_group_board_get` to view details of a specific board")
 	return b.String()
 }
 
@@ -71,7 +71,7 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	if out.MilestoneTitle != "" {
 		fmt.Fprintf(&b, "**Milestone**: %s (ID: %d)\n", out.MilestoneTitle, out.MilestoneID)
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_update_group_board_list` to reorder or modify this list")
+	toolutil.WriteHints(&b, "Use `gitlab_group_board_list_update` to reorder or modify this list")
 	return b.String()
 }
 
@@ -86,7 +86,7 @@ func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
 			l.ID, toolutil.EscapeMdTableCell(l.LabelName), l.Position, l.MaxIssueCount, l.MaxIssueWeight)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_get_group_board_list` to view list details")
+	toolutil.WriteHints(&b, "Use `gitlab_group_board_list_get` to view list details")
 	return b.String()
 }
 

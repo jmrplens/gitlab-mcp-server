@@ -165,8 +165,8 @@ func FormatAnalyzeDeploymentHistoryMarkdown(a AnalyzeDeploymentHistoryOutput) st
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_list_deployments` to drill into specific deployments",
-		"Use `gitlab_list_environments` to review environment configuration",
+		"Use `gitlab_deployment_list` to drill into specific deployments",
+		"Use `gitlab_environment_list` to review environment configuration",
 	)
 	return b.String()
 }

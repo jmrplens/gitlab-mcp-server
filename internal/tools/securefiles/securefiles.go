@@ -49,7 +49,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	files, resp, err := client.GL().SecureFiles.ListProjectSecureFiles(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 	items := make([]SecureFileItem, 0, len(files))
 	for _, f := range files {

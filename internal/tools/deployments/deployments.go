@@ -17,6 +17,7 @@ import (
 )
 
 const errDeploymentIDRequired = "deployment_id is required and must be > 0"
+const opCreateDeployment = "create deployment"
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -178,7 +179,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Deployments.GetProjectDeployment(string(input.ProjectID), int64(input.DeploymentID), gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_list_deployments \u2014 deployment IDs are project-scoped")
+			"verify deployment_id with gitlab_deployment_list \u2014 deployment IDs are project-scoped")
 	}
 
 	return toOutput(d), nil
@@ -218,14 +219,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Deployments.CreateProjectDeployment(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("create deployment", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
 				"creating deployments requires Developer+ role; protected environments may require additional approver permissions")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("create deployment", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
 				"verify environment exists with gitlab_environment_list, sha is a valid commit, and ref is an existing branch/tag")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("create deployment", err)
+		return Output{}, toolutil.WrapErrWithMessage(opCreateDeployment, err)
 	}
 
 	return toOutput(d), nil
@@ -258,7 +259,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"status must be one of: created, running, success, failed, canceled, blocked \u2014 transitions out of terminal states are not allowed")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_list_deployments")
+			"verify deployment_id with gitlab_deployment_list")
 	}
 
 	return toOutput(d), nil
@@ -283,7 +284,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting deployments requires Maintainer+ role and the deployment must be in a final state (success, failed, canceled)")
 		}
 		return toolutil.WrapErrWithStatusHint("delete deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_list_deployments")
+			"verify deployment_id with gitlab_deployment_list")
 	}
 	return nil
 }
@@ -332,7 +333,7 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 				"approving/rejecting deployments requires being a designated approver on the protected environment; status must be 'approved' or 'rejected'")
 		}
 		return ApproveOrRejectOutput{}, toolutil.WrapErrWithStatusHint("approve_or_reject_deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_list_deployments \u2014 only deployments awaiting approval can be acted on")
+			"verify deployment_id with gitlab_deployment_list \u2014 only deployments awaiting approval can be acted on")
 	}
 
 	return ApproveOrRejectOutput{

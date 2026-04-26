@@ -20,6 +20,9 @@ import (
 
 const errRunnerIDRequired = "runner_id is required and must be > 0"
 
+// hintRunnerNotFound is the 404 hint shared by runner tools.
+const hintRunnerNotFound = "runner not found \u2014 verify runner_id with gitlab_runner_list"
+
 // ---------------------------------------------------------------------------
 // Output types
 // ---------------------------------------------------------------------------.
@@ -265,7 +268,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating instance runners requires an admin token; group/project runners require Owner/Maintainer role on the owning scope")
 		}
 		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("update runner details", err, http.StatusNotFound,
-			"runner not found \u2014 verify runner_id with gitlab_runner_list")
+			hintRunnerNotFound)
 	}
 	return toDetailsOutput(d), nil
 }
@@ -674,7 +677,7 @@ func ResetAuthToken(ctx context.Context, client *gitlabclient.Client, input Rese
 	t, _, err := client.GL().Runners.ResetRunnerAuthenticationToken(input.RunnerID, gl.WithContext(ctx))
 	if err != nil {
 		return AuthTokenOutput{}, toolutil.WrapErrWithStatusHint("reset runner auth token", err, http.StatusNotFound,
-			"runner not found \u2014 verify runner_id with gitlab_runner_list")
+			hintRunnerNotFound)
 	}
 
 	out := AuthTokenOutput{}
@@ -912,7 +915,7 @@ func ListManagers(ctx context.Context, client *gitlabclient.Client, input ListMa
 	managers, _, err := client.GL().Runners.ListRunnerManagers(int(input.RunnerID), gl.WithContext(ctx))
 	if err != nil {
 		return ManagerListOutput{}, toolutil.WrapErrWithStatusHint("list runner managers", err, http.StatusNotFound,
-			"runner not found \u2014 verify runner_id with gitlab_runner_list")
+			hintRunnerNotFound)
 	}
 
 	items := make([]ManagerOutput, len(managers))

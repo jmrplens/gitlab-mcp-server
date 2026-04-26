@@ -12,6 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyGroupPathPremium is the 404 hint shared by group analytics tools.
+const hintVerifyGroupPathPremium = "verify group_path \u2014 requires Premium license"
+
 // IssuesCountInput holds parameters for retrieving recently created issues count.
 type IssuesCountInput struct {
 	GroupPath string `json:"group_path" jsonschema:"Full path of the group (e.g. my-group or parent/child),required"`
@@ -62,7 +65,7 @@ func GetIssuesCount(ctx context.Context, client *gitlabclient.Client, in IssuesC
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedIssuesCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return IssuesCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created issues count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
+		return IssuesCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created issues count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
 	}
 
 	return IssuesCountOutput{
@@ -85,7 +88,7 @@ func GetMRCount(ctx context.Context, client *gitlabclient.Client, in MRCountInpu
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedMergeRequestsCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return MRCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created merge requests count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
+		return MRCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created merge requests count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
 	}
 
 	return MRCountOutput{
@@ -108,7 +111,7 @@ func GetMembersCount(ctx context.Context, client *gitlabclient.Client, in Member
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyAddedMembersCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return MembersCountOutput{}, toolutil.WrapErrWithStatusHint("get recently added members count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
+		return MembersCountOutput{}, toolutil.WrapErrWithStatusHint("get recently added members count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
 	}
 
 	return MembersCountOutput{

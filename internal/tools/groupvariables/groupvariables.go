@@ -12,6 +12,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Operation names used by error wrappers (kept as constants to satisfy S1192).
+const (
+	opCreateGroupVariable = "create group variable"
+	opUpdateGroupVariable = "update group variable"
+	opDeleteGroupVariable = "delete group variable"
+)
+
 // ---------- Input types ----------.
 
 // ListInput holds parameters for listing group CI/CD variables.
@@ -155,7 +162,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	v, _, err := client.GL().GroupVariables.GetVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group variable", err, http.StatusNotFound,
-			"verify the variable key with gitlab_list_group_variables; for scoped vars supply matching environment_scope filter")
+			"verify the variable key with gitlab_group_variable_list; for scoped vars supply matching environment_scope filter")
 	}
 	return toOutput(v), nil
 }
@@ -172,7 +179,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.ErrFieldRequired("value")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create group variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opCreateGroupVariable, err)
 	}
 
 	opts := &gl.CreateGroupVariableOptions{
@@ -205,10 +212,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	v, _, err := client.GL().GroupVariables.CreateVariable(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("create group variable", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreateGroupVariable, err,
 				"creating group variables requires Maintainer or Owner role")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create group variable", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opCreateGroupVariable, err, http.StatusBadRequest,
 			"key must match /^[A-Za-z0-9_]{1,255}$/; valid variable_type: env_var (default) or file; the (key, environment_scope) pair may already exist")
 	}
 	return toOutput(v), nil
@@ -223,7 +230,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update group variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opUpdateGroupVariable, err)
 	}
 
 	opts := &gl.UpdateGroupVariableOptions{}
@@ -253,11 +260,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	v, _, err := client.GL().GroupVariables.UpdateVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("update group variable", err,
+			return Output{}, toolutil.WrapErrWithHint(opUpdateGroupVariable, err,
 				"updating group variables requires Maintainer or Owner role")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("update group variable", err, http.StatusNotFound,
-			"verify the variable key and environment_scope with gitlab_list_group_variables")
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateGroupVariable, err, http.StatusNotFound,
+			"verify the variable key and environment_scope with gitlab_group_variable_list")
 	}
 	return toOutput(v), nil
 }
@@ -271,7 +278,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return toolutil.WrapErrWithMessage("delete group variable", err)
+		return toolutil.WrapErrWithMessage(opDeleteGroupVariable, err)
 	}
 
 	var opts *gl.RemoveGroupVariableOptions
@@ -284,11 +291,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().GroupVariables.RemoveVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("delete group variable", err,
+			return toolutil.WrapErrWithHint(opDeleteGroupVariable, err,
 				"deleting group variables requires Maintainer or Owner role")
 		}
-		return toolutil.WrapErrWithStatusHint("delete group variable", err, http.StatusNotFound,
-			"the variable may already be deleted \u2014 verify with gitlab_list_group_variables")
+		return toolutil.WrapErrWithStatusHint(opDeleteGroupVariable, err, http.StatusNotFound,
+			"the variable may already be deleted \u2014 verify with gitlab_group_variable_list")
 	}
 	return nil
 }

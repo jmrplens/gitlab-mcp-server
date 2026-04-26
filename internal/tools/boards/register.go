@@ -19,7 +19,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_board_list",
 		Title:       toolutil.TitleFromName("gitlab_board_list"),
-		Description: "List all issue boards for a project\n\nSee also: gitlab_board_create, gitlab_list_issues\n\nReturns: JSON array of boards with pagination.",
+		Description: "List all issue boards for a project\n\nSee also: gitlab_board_create, gitlab_issue_list\n\nReturns: JSON array of boards with pagination.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconBoard,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListBoardsInput) (*mcp.CallToolResult, ListBoardsOutput, error) {
@@ -117,7 +117,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_board_list_create",
 		Title:       toolutil.TitleFromName("gitlab_board_list_create"),
-		Description: "Create a new list in an issue board\n\nSee also: gitlab_board_list_lists, gitlab_list_labels\n\nReturns: JSON with the board list details.",
+		Description: "Create a new list in an issue board\n\nSee also: gitlab_board_list_lists, gitlab_label_list\n\nReturns: JSON with the board list details.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconBoard,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateBoardListInput) (*mcp.CallToolResult, BoardListOutput, error) {

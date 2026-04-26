@@ -112,7 +112,7 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	emails, _, err := client.GL().Users.ListEmailsForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_emails_for_user", err, http.StatusNotFound,
-			"verify user_id with gitlab_user_get; viewing other users' emails requires admin token")
+			"verify user_id with gitlab_get_user; viewing other users' emails requires admin token")
 	}
 	return toOutputList(emails), nil
 }

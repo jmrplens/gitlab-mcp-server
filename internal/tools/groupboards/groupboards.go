@@ -202,7 +202,7 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
-				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via gitlab_milestone_list / gitlab_label_list_group")
+				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via gitlab_milestone_list / gitlab_group_label_list")
 		}
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_create", err, http.StatusNotFound,
 			"verify the group exists with gitlab_group_get")
@@ -254,7 +254,7 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
-				"verify referenced assignee_id (gitlab_user_get), milestone_id (gitlab_milestone_list), and label IDs exist; weight is 0\u20139")
+				"verify referenced assignee_id (gitlab_get_user), milestone_id (gitlab_milestone_list), and label IDs exist; weight is 0\u20139")
 		}
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_update", err, http.StatusNotFound,
 			"board_id not found \u2014 use gitlab_group_board_list to verify")
@@ -346,7 +346,7 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
-			"list_id not found on this board \u2014 use gitlab_group_board_list_list to discover list IDs (each list represents a label column)")
+			"list_id not found on this board \u2014 use gitlab_group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
 	return convertBoardList(list), nil
 }

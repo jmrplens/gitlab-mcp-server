@@ -438,7 +438,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("epicDiscussionGet", err,
-			"verify full_path + iid with gitlab_epic_list; discussion_id may be hex (e.g. abc123) or full GID; use gitlab_epic_discussion_list to enumerate existing discussions")
+			"verify full_path + iid with gitlab_epic_list; discussion_id may be hex (e.g. abc123) or full GID; use gitlab_list_epic_discussions to enumerate existing discussions")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -570,7 +570,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionAddNote", err,
-			"verify discussion_id with gitlab_epic_discussion_list; cannot reply to a system-generated discussion; body is GFM with 1MB max")
+			"verify discussion_id with gitlab_list_epic_discussions; cannot reply to a system-generated discussion; body is GFM with 1MB max")
 	}
 
 	if len(resp.Data.CreateNote.Errors) > 0 {
@@ -620,7 +620,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionUpdateNote", err,
-			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_epic_discussion_list; body is GFM with 1MB max")
+			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_list_epic_discussions; body is GFM with 1MB max")
 	}
 
 	if len(resp.Data.UpdateNote.Errors) > 0 {
@@ -664,7 +664,7 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithHint("epicDiscussionDeleteNote", err,
-			"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_epic_discussion_list; deletion is irreversible \u2014 system-generated notes cannot be removed")
+			"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_list_epic_discussions; deletion is irreversible \u2014 system-generated notes cannot be removed")
 	}
 
 	if len(resp.Data.DestroyNote.Errors) > 0 {

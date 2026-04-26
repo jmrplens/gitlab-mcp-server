@@ -412,7 +412,7 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 	keys, resp, err := client.GL().DeployKeys.ListUserProjectDeployKeys(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_user_project", err, http.StatusNotFound,
-			"verify user_id with gitlab_user_get; admin token required to query other users' deploy keys")
+			"verify user_id with gitlab_get_user; admin token required to query other users' deploy keys")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}

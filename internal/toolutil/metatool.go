@@ -118,7 +118,7 @@ func schemaForType(rt reflect.Type) map[string]any {
 		return nil
 	}
 	var m map[string]any
-	if unmarshalErr := json.Unmarshal(data, &m); unmarshalErr != nil {
+	if json.Unmarshal(data, &m) != nil {
 		return nil
 	}
 	outputSchemaCache.Store(rt, m)

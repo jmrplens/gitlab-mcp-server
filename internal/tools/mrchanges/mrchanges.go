@@ -16,6 +16,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyMR is the 404 hint shared by MR-changes tools.
+const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_list_merge_requests"
+
 // GetInput defines parameters for listing changed files in a merge request.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -74,7 +77,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, &gl.ListMergeRequestDiffsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
+		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, hintVerifyMR)
 	}
 	out := make([]FileDiffOutput, len(diffs))
 	var truncated []string
@@ -202,7 +205,7 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 	versions, resp, err := client.GL().MergeRequests.GetMergeRequestDiffVersions(
 		string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DiffVersionsListOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionsList", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
+		return DiffVersionsListOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionsList", err, http.StatusNotFound, hintVerifyMR)
 	}
 	out := make([]DiffVersionOutput, len(versions))
 	for i, v := range versions {
@@ -235,7 +238,7 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 	version, _, err := client.GL().MergeRequests.GetSingleMergeRequestDiffVersion(
 		string(input.ProjectID), input.MRIID, input.VersionID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with gitlab_list_mr_diff_versions")
+		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with gitlab_mr_diff_versions_list")
 	}
 	return diffVersionToOutput(version), nil
 }
@@ -276,7 +279,7 @@ func RawDiffs(ctx context.Context, client *gitlabclient.Client, input RawDiffsIn
 	raw, _, err := client.GL().MergeRequests.ShowMergeRequestRawDiffs(
 		string(input.ProjectID), input.MRIID, &gl.ShowMergeRequestRawDiffsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return RawDiffsOutput{}, toolutil.WrapErrWithStatusHint("mrRawDiffs", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
+		return RawDiffsOutput{}, toolutil.WrapErrWithStatusHint("mrRawDiffs", err, http.StatusNotFound, hintVerifyMR)
 	}
 	return RawDiffsOutput{MRIID: input.MRIID, RawDiff: string(raw)}, nil
 }

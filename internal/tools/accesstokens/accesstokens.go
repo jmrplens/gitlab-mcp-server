@@ -19,6 +19,9 @@ import (
 const (
 	errTokenIDInvalid      = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
 	errInvalidExpiresAtFmt = "invalid expires_at format (expected YYYY-MM-DD): %w"
+	// hintTokenAlreadyRevoked is returned when revoking a token that the API
+	// reports as not found.
+	hintTokenAlreadyRevoked = "token already revoked or never existed \u2014 nothing to do" //#nosec G101 -- error hint, not a credential
 )
 
 // ---------------------------------------------------------------------------
@@ -315,7 +318,7 @@ func ProjectRevoke(ctx context.Context, client *gitlabclient.Client, input Proje
 	_, err := client.GL().ProjectAccessTokens.RevokeProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("revoke project access token", err, http.StatusNotFound,
-			"token already revoked or never existed \u2014 nothing to do")
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }
@@ -542,7 +545,7 @@ func GroupRevoke(ctx context.Context, client *gitlabclient.Client, input GroupRe
 	_, err := client.GL().GroupAccessTokens.RevokeGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("revoke group access token", err, http.StatusNotFound,
-			"token already revoked or never existed \u2014 nothing to do")
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }
@@ -710,7 +713,7 @@ func PersonalRevoke(ctx context.Context, client *gitlabclient.Client, input Pers
 	_, err := client.GL().PersonalAccessTokens.RevokePersonalAccessTokenByID(input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("revoke personal access token", err, http.StatusNotFound,
-			"token already revoked or never existed \u2014 nothing to do")
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }

@@ -125,7 +125,7 @@ func GetUserMemberships(ctx context.Context, client *gitlabclient.Client, input 
 	memberships, resp, err := client.GL().Users.GetUserMemberships(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UserMembershipsOutput{}, toolutil.WrapErrWithStatusHint("get_user_memberships", err, http.StatusForbidden,
-			"user memberships require admin token; type filter must be one of {Project, Namespace}; verify user_id with gitlab_user_get")
+			"user memberships require admin token; type filter must be one of {Project, Namespace}; verify user_id with gitlab_get_user")
 	}
 
 	out := make([]UserMembershipOutput, 0, len(memberships))

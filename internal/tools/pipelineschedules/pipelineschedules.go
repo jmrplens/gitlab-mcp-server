@@ -15,6 +15,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Operation names and shared hints used by error wrappers (kept as constants to satisfy S1192).
+const (
+	opCreatePipelineSchedule = "create pipeline schedule"
+	opRunPipelineSchedule    = "run pipeline schedule"
+	hintVerifyScheduleID     = "verify schedule_id with gitlab_pipeline_schedule_list"
+)
+
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------.
@@ -215,14 +222,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	s, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("create pipeline schedule", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreatePipelineSchedule, err,
 				"check cron expression format (5-field standard cron, e.g. '0 4 * * *') and that ref refers to an existing branch or tag")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("create pipeline schedule", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreatePipelineSchedule, err,
 				"creating pipeline schedules requires Developer+ role on the project")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create pipeline schedule", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opCreatePipelineSchedule, err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
 
@@ -265,7 +272,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"only the schedule owner can edit \u2014 use gitlab_pipeline_schedule_take_ownership first (requires Maintainer+) to become the owner")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update pipeline schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+			hintVerifyScheduleID)
 	}
 
 	return toOutput(s), nil
@@ -290,7 +297,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"only the schedule owner or a Maintainer+ can delete a pipeline schedule")
 		}
 		return toolutil.WrapErrWithStatusHint("delete pipeline schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+			hintVerifyScheduleID)
 	}
 	return nil
 }
@@ -310,15 +317,15 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 	_, err := client.GL().PipelineSchedules.RunPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("run pipeline schedule", err,
+			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
 				"only the schedule owner can manually trigger a schedule \u2014 use gitlab_pipeline_schedule_take_ownership first if you have Maintainer+ role")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusTooManyRequests) {
-			return Output{}, toolutil.WrapErrWithHint("run pipeline schedule", err,
+			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
 				"manual schedule runs are rate-limited (1 per minute by default) \u2014 wait and retry")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("run pipeline schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+		return Output{}, toolutil.WrapErrWithStatusHint(opRunPipelineSchedule, err, http.StatusNotFound,
+			hintVerifyScheduleID)
 	}
 
 	// Fetch the schedule after triggering to return current state
@@ -356,7 +363,7 @@ func TakeOwnership(ctx context.Context, client *gitlabclient.Client, input TakeO
 				"taking ownership of a pipeline schedule requires Maintainer+ role on the project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("take_ownership_pipeline_schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+			hintVerifyScheduleID)
 	}
 	return toOutput(s), nil
 }
@@ -416,7 +423,7 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 				"only the schedule owner can manage variables \u2014 take ownership first if you are Maintainer+")
 		}
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("create_pipeline_schedule_variable", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+			hintVerifyScheduleID)
 	}
 	return VariableOutput{Key: v.Key, Value: v.Value, VariableType: string(v.VariableType)}, nil
 }
@@ -549,7 +556,7 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 	)
 	if err != nil {
 		return TriggeredPipelinesListOutput{}, toolutil.WrapErrWithStatusHint("list_triggered_pipelines", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list")
+			hintVerifyScheduleID)
 	}
 
 	items := make([]TriggeredPipelineOutput, 0, len(pipelines))

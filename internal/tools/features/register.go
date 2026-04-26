@@ -66,7 +66,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_delete_feature_flag",
 		Title:       toolutil.TitleFromName("gitlab_delete_feature_flag"),
-		Description: "Delete a feature flag (admin). Requires the flag name.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_feature_flags.",
+		Description: "Delete a feature flag (admin). Requires the flag name.\n\nReturns: confirmation message.\n\nSee also: gitlab_feature_flag_list.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

@@ -3282,7 +3282,7 @@
   },
   {
     "name": "gitlab_merge_train",
-    "description": "Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.\nValid actions: add, get, list_branch, list_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.\n\nParam conventions: * = required. All actions need project_id*.\n\n- list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page\n- list_branch: project_id*, target_branch*, scope, sort, page, per_page\n- get: project_id*, merge_request_id*\n- add: project_id*, merge_request_id*, auto_merge (bool), sha, squash (bool)\n\nSee also: gitlab_merge_request, gitlab_pipeline",
+    "description": "Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.\nValid actions: add, get, list_branch, list_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.\n\nParam conventions: * = required. All actions need project_id*.\n\n- list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page\n- list_branch: project_id*, target_branch*, scope, sort, page, per_page\n- get: project_id*, merge_request_iid*\n- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)\n\nSee also: gitlab_merge_request, gitlab_pipeline",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

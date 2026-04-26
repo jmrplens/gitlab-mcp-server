@@ -165,7 +165,7 @@ func AddInstanceScope(ctx context.Context, client *gitlabclient.Client, input Ad
 				"adding instance scope requires admin privileges")
 		}
 		return InstanceScopeOutput{}, toolutil.WrapErrWithStatusHint("add runner controller instance scope", err, http.StatusConflict,
-			"the controller may already have instance scope assigned \u2014 use gitlab_list_runner_controller_scopes to verify")
+			"the controller may already have instance scope assigned \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return toInstanceScopeOutput(is), nil
 }
@@ -195,7 +195,7 @@ func RemoveInstanceScope(ctx context.Context, client *gitlabclient.Client, input
 				"removing instance scope requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint("remove instance scope", err, http.StatusNotFound,
-			"the controller may not have instance scope assigned \u2014 use gitlab_list_runner_controller_scopes to verify")
+			"the controller may not have instance scope assigned \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return nil
 }
@@ -263,7 +263,7 @@ func RemoveRunnerScope(ctx context.Context, client *gitlabclient.Client, input R
 				"removing runner scope requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint("remove runner scope", err, http.StatusNotFound,
-			"the runner may not be scoped to this controller \u2014 use gitlab_list_runner_controller_scopes to verify")
+			"the runner may not be scoped to this controller \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return nil
 }

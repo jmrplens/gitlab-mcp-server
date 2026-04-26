@@ -64,7 +64,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 	s, _, err := client.GL().TerraformStates.Get(input.ProjectPath, input.Name, gl.WithContext(ctx))
 	if err != nil {
 		return StateItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_terraform_state", err, http.StatusNotFound,
-			"verify state name with gitlab_terraform_states_list; the state may not exist for this project")
+			"verify state name with gitlab_list_terraform_states; the state may not exist for this project")
 	}
 	return StateItem{
 		Name:         s.Name,
@@ -105,7 +105,7 @@ func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().TerraformStates.DeleteVersion(string(input.ProjectID), input.Name, input.Serial, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state_version", err, http.StatusNotFound,
-			"verify serial with gitlab_terraform_states_list; cannot delete the latest version \u2014 use gitlab_delete_terraform_state to remove the entire state")
+			"verify serial with gitlab_list_terraform_states; cannot delete the latest version \u2014 use gitlab_delete_terraform_state to remove the entire state")
 	}
 	return nil
 }

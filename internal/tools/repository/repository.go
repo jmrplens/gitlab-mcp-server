@@ -526,7 +526,7 @@ func GenerateChangelogData(ctx context.Context, client *gitlabclient.Client, inp
 	data, _, err := client.GL().Repositories.GenerateChangelogData(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ChangelogDataOutput{}, toolutil.WrapErrWithStatusHint("generateChangelogData", err, http.StatusUnprocessableEntity,
-			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; this is a read-only preview \u2014 use gitlab_repository_add_changelog to commit")
+			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; this is a read-only preview \u2014 use gitlab_repository_changelog_add to commit")
 	}
 	return ChangelogDataOutput{Notes: data.Notes}, nil
 }

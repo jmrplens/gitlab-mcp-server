@@ -202,7 +202,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionResolve", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussions_list; only thread (resolvable) discussions can be resolved")
+			"verify discussion_id with gitlab_mr_discussion_list; only thread (resolvable) discussions can be resolved")
 	}
 	return ToOutput(d), nil
 }
@@ -224,7 +224,7 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussions_list")
+			"verify discussion_id with gitlab_mr_discussion_list")
 	}
 	return NoteToOutput(n), nil
 }
@@ -251,7 +251,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_merge_request_get")
+			"verify project_id and mr_iid with gitlab_mr_get")
 	}
 	out := make([]Output, len(discussions))
 	for i, d := range discussions {
@@ -299,7 +299,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionGet", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussions_list")
+			"verify discussion_id with gitlab_mr_discussion_list")
 	}
 	return ToOutput(d), nil
 }
@@ -332,7 +332,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 				"only the note author can edit body; only Maintainers can change the resolved flag on resolvable threads")
 		}
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionNoteUpdate", err, http.StatusNotFound,
-			"verify note_id with gitlab_mr_discussions_get")
+			"verify note_id with gitlab_mr_discussion_get")
 	}
 	return NoteToOutput(n), nil
 }

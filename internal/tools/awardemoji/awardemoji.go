@@ -12,6 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintEmojiOwnerOnly is the hint shared by all emoji delete handlers.
+const hintEmojiOwnerOnly = "only the user who awarded the emoji can remove it"
+
 // Common Input/Output types.
 
 // ListInput is the common input for listing award emoji on a resource.
@@ -163,7 +166,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	_, err := client.GL().AwardEmoji.DeleteIssueAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("issue_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_issue_emoji_list to verify award_id")
@@ -253,7 +256,7 @@ func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	_, err := client.GL().AwardEmoji.DeleteIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("issue_note_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("issue_note_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("issue_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_issue_note_emoji_list to verify award_id")
@@ -331,7 +334,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	_, err := client.GL().AwardEmoji.DeleteMergeRequestAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("mr_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_mr_emoji_list to verify award_id")
@@ -421,7 +424,7 @@ func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 	_, err := client.GL().AwardEmoji.DeleteMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("mr_note_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("mr_note_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("mr_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_mr_note_emoji_list to verify award_id")
@@ -499,7 +502,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	_, err := client.GL().AwardEmoji.DeleteSnippetAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_snippet_emoji_list to verify award_id")
@@ -589,7 +592,7 @@ func DeleteSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Clien
 	_, err := client.GL().AwardEmoji.DeleteSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
-			return toolutil.WrapErrWithHint("snippet_note_emoji_delete", err, "only the user who awarded the emoji can remove it")
+			return toolutil.WrapErrWithHint("snippet_note_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
 			return toolutil.WrapErrWithHint("snippet_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_snippet_note_emoji_list to verify award_id")

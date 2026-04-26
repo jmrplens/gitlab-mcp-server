@@ -38,7 +38,7 @@ func BlockUser(ctx context.Context, client *gitlabclient.Client, input AdminActi
 	_, err := client.GL().Users.BlockUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("block_user", err, http.StatusForbidden,
-			"blocking users requires admin token; cannot block already-blocked, ldap-blocked, or admin users; verify user_id with gitlab_user_get")
+			"blocking users requires admin token; cannot block already-blocked, ldap-blocked, or admin users; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "blocked", Success: true}, nil
 }
@@ -70,7 +70,7 @@ func BanUser(ctx context.Context, client *gitlabclient.Client, input AdminAction
 	_, err := client.GL().Users.BanUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("ban_user", err, http.StatusForbidden,
-			"banning users requires admin token; cannot ban admin users; verify user_id with gitlab_user_get")
+			"banning users requires admin token; cannot ban admin users; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "banned", Success: true}, nil
 }
@@ -86,7 +86,7 @@ func UnbanUser(ctx context.Context, client *gitlabclient.Client, input AdminActi
 	_, err := client.GL().Users.UnbanUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("unban_user", err, http.StatusForbidden,
-			"unbanning users requires admin token; user must currently be banned; verify user_id with gitlab_user_get")
+			"unbanning users requires admin token; user must currently be banned; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "unbanned", Success: true}, nil
 }

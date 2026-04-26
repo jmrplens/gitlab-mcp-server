@@ -230,7 +230,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 			return StateOutput{}, fmt.Errorf("mrApprovalState: merge request approval features require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return StateOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalState", err, http.StatusNotFound,
-			"verify project_id + merge_request_iid with gitlab_merge_request_list; approval rules require Premium/Ultimate license")
+			"verify project_id + merge_request_iid with gitlab_mr_list; approval rules require Premium/Ultimate license")
 	}
 	out := StateOutput{
 		ApprovalRulesOverwritten: state.ApprovalRulesOverwritten,
@@ -258,7 +258,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return RulesOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRules", err, http.StatusNotFound,
-			"verify project_id + merge_request_iid with gitlab_merge_request_list; rules-per-MR require Premium/Ultimate")
+			"verify project_id + merge_request_iid with gitlab_mr_list; rules-per-MR require Premium/Ultimate")
 	}
 	out := RulesOutput{}
 	for _, r := range rules {

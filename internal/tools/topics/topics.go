@@ -94,7 +94,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	topic, _, err := client.GL().Topics.GetTopic(input.TopicID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_topic", err, http.StatusNotFound,
-			"verify topic id (numeric) with gitlab_topic_list; topic ids are instance-wide \u2014 names are unique per instance")
+			"verify topic id (numeric) with gitlab_list_topics; topic ids are instance-wide \u2014 names are unique per instance")
 	}
 	return GetOutput{Topic: topicToItem(topic)}, nil
 }
@@ -167,7 +167,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	topic, _, err := client.GL().Topics.UpdateTopic(input.TopicID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_topic", err, http.StatusForbidden,
-			"requires administrator access; verify id with gitlab_topic_list; renaming may break existing project associations \u2014 prefer updating title and description")
+			"requires administrator access; verify id with gitlab_list_topics; renaming may break existing project associations \u2014 prefer updating title and description")
 	}
 	return UpdateOutput{Topic: topicToItem(topic)}, nil
 }

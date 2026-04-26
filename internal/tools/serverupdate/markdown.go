@@ -38,7 +38,7 @@ func FormatCheckMarkdownString(o CheckOutput) string {
 	if o.UpdateAvailable && o.ReleaseNotes != "" {
 		fmt.Fprintf(&b, "\n### Release Notes\n\n%s\n", o.ReleaseNotes)
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_apply_server_update` to install the update")
+	toolutil.WriteHints(&b, "Use `gitlab_server_apply_update` to install the update")
 	return b.String()
 }
 

@@ -145,7 +145,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move", err, http.StatusNotFound,
-			"requires admin; verify id with gitlab_snippet_storage_move_list; the move record may have been pruned after completion")
+			"requires admin; verify id with gitlab_retrieve_all_snippet_storage_moves; the move record may have been pruned after completion")
 	}
 	return toOutput(move), nil
 }

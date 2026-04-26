@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_namespace_list",
 		Title:       toolutil.TitleFromName("gitlab_namespace_list"),
-		Description: "List all namespaces visible to the authenticated user. Supports filtering by search, owned-only, top-level-only, and pagination.\n\nReturns: JSON array of namespaces with pagination.\n\nSee also: gitlab_namespace_get, gitlab_list_groups",
+		Description: "List all namespaces visible to the authenticated user. Supports filtering by search, owned-only, top-level-only, and pagination.\n\nReturns: JSON array of namespaces with pagination.\n\nSee also: gitlab_namespace_get, gitlab_group_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

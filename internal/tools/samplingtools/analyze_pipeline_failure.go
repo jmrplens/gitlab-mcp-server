@@ -210,7 +210,7 @@ func FormatAnalyzePipelineFailureMarkdown(a AnalyzePipelineFailureOutput) string
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_retry_pipeline` to re-run the failed pipeline",
+		"Use `gitlab_pipeline_retry` to re-run the failed pipeline",
 		"Use `gitlab_list_pipeline_jobs` to inspect individual job logs",
 	)
 	return b.String()

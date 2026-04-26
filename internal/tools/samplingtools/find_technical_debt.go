@@ -128,8 +128,8 @@ func FormatFindTechnicalDebtMarkdown(f FindTechnicalDebtOutput) string {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", f.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_create_issue` to track debt items as issues",
-		"Use `gitlab_create_label` to add a 'technical-debt' label for tracking",
+		"Use `gitlab_issue_create` to track debt items as issues",
+		"Use `gitlab_label_create` to add a 'technical-debt' label for tracking",
 	)
 	return b.String()
 }

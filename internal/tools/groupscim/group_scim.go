@@ -12,6 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyUID is the 404 hint shared by SCIM identity tools.
+const hintVerifyUID = "verify uid with gitlab_list_group_scim_identities"
+
 // ListInput holds parameters for listing SCIM identities for a group.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
@@ -100,7 +103,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	id, _, err := client.GL().GroupSCIM.GetSCIMIdentity(in.GroupID.String(), in.UID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
+		return Output{}, toolutil.WrapErrWithStatusHint("get SCIM identity", err, http.StatusNotFound, hintVerifyUID)
 	}
 	return toOutput(id), nil
 }
@@ -124,7 +127,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) er
 	}
 	_, err := client.GL().GroupSCIM.UpdateSCIMIdentity(in.GroupID.String(), in.UID, opts)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("update SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
+		return toolutil.WrapErrWithStatusHint("update SCIM identity", err, http.StatusNotFound, hintVerifyUID)
 	}
 	return nil
 }
@@ -142,7 +145,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().GroupSCIM.DeleteSCIMIdentity(in.GroupID.String(), in.UID)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
+		return toolutil.WrapErrWithStatusHint("delete SCIM identity", err, http.StatusNotFound, hintVerifyUID)
 	}
 	return nil
 }

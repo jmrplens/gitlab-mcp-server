@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_commit_discussions",
 		Title:       toolutil.TitleFromName("gitlab_list_commit_discussions"),
-		Description: "List discussion threads on a project commit.\n\nReturns: JSON with discussion threads including notes, authors, and positions.\n\nSee also: gitlab_create_commit_discussion, gitlab_get_commit",
+		Description: "List discussion threads on a project commit.\n\nReturns: JSON with discussion threads including notes, authors, and positions.\n\nSee also: gitlab_create_commit_discussion, gitlab_commit_get",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -43,7 +43,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_commit_discussion",
 		Title:       toolutil.TitleFromName("gitlab_create_commit_discussion"),
-		Description: "Create a new discussion thread on a project commit. Supports inline diff comments via position.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_commit_discussions, gitlab_get_commit",
+		Description: "Create a new discussion thread on a project commit. Supports inline diff comments via position.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_commit_discussions, gitlab_commit_get",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {

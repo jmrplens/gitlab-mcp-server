@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_resource_groups",
 		Title:       toolutil.TitleFromName("gitlab_list_resource_groups"),
-		Description: "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_list_pipelines",
+		Description: "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_pipeline_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconQueue,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

@@ -97,7 +97,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	fp, _, err := client.GL().FreezePeriods.GetFreezePeriod(string(input.ProjectID), input.FreezePeriodID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_get", err, http.StatusNotFound,
-			"verify freeze_period_id with gitlab_freeze_period_list")
+			"verify freeze_period_id with gitlab_list_freeze_periods")
 	}
 	return toOutput(fp), nil
 }
@@ -151,7 +151,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating freeze periods requires Maintainer or Owner role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_update", err, http.StatusNotFound,
-			"verify freeze_period_id with gitlab_freeze_period_list; cron strings must be valid POSIX cron")
+			"verify freeze_period_id with gitlab_list_freeze_periods; cron strings must be valid POSIX cron")
 	}
 	return toOutput(fp), nil
 }
@@ -171,7 +171,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting freeze periods requires Maintainer or Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint("freeze_period_delete", err, http.StatusNotFound,
-			"the freeze period may already be deleted \u2014 verify with gitlab_freeze_period_list")
+			"the freeze period may already be deleted \u2014 verify with gitlab_list_freeze_periods")
 	}
 	return nil
 }

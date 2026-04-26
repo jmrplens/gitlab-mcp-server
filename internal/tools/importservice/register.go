@@ -49,7 +49,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_import_github_gists",
 		Title:       toolutil.TitleFromName("gitlab_import_github_gists"),
-		Description: "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_list_snippets",
+		Description: "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_snippet_list",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconImport,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ImportGistsInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

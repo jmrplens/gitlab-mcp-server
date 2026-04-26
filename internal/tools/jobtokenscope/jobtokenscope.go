@@ -155,7 +155,7 @@ func RemoveProjectAllowlist(ctx context.Context, client *gitlabclient.Client, in
 	_, err := client.GL().JobTokenScope.RemoveProjectFromJobScopeAllowList(string(input.ProjectID), input.TargetProjectID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("remove_project_job_token_allowlist", err, http.StatusNotFound,
-			"verify target_project_id is on the allowlist with gitlab_job_token_inbound_allowlist_list; requires Maintainer role")
+			"verify target_project_id is on the allowlist with gitlab_list_job_token_inbound_allowlist; requires Maintainer role")
 	}
 	return nil
 }
@@ -258,7 +258,7 @@ func RemoveGroupAllowlist(ctx context.Context, client *gitlabclient.Client, inpu
 	_, err := client.GL().JobTokenScope.RemoveGroupFromJobTokenAllowlist(string(input.ProjectID), input.TargetGroupID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("remove_group_job_token_allowlist", err, http.StatusNotFound,
-			"verify target_group_id is on the allowlist with gitlab_job_token_group_allowlist_list; requires Maintainer role")
+			"verify target_group_id is on the allowlist with gitlab_list_job_token_group_allowlist; requires Maintainer role")
 	}
 	return nil
 }

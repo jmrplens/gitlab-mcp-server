@@ -355,7 +355,7 @@ func GetBoardList(ctx context.Context, client *gitlabclient.Client, input GetBoa
 	list, _, err := client.GL().Boards.GetIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_get", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_list")
+			"verify board_id and list_id with gitlab_board_list_lists")
 	}
 	return convertBoardList(list), nil
 }
@@ -432,7 +432,7 @@ func UpdateBoardList(ctx context.Context, client *gitlabclient.Client, input Upd
 	list, _, err := client.GL().Boards.UpdateIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_update", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_list \u2014 position is 0-based and must be within the current list count")
+			"verify board_id and list_id with gitlab_board_list_lists \u2014 position is 0-based and must be within the current list count")
 	}
 	return convertBoardList(list), nil
 }
@@ -458,7 +458,7 @@ func DeleteBoardList(ctx context.Context, client *gitlabclient.Client, input Del
 	_, err := client.GL().Boards.DeleteIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("board_list_delete", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_list")
+			"verify board_id and list_id with gitlab_board_list_lists")
 	}
 	return nil
 }

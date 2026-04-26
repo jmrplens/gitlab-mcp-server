@@ -23,7 +23,7 @@ func FormatOutputMarkdown(out Output) string {
 	if out.UpdatedAt != "" {
 		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_list_runner_controller_tokens` to manage authentication")
+	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_token_list` to manage authentication")
 	return b.String()
 }
 
@@ -40,7 +40,7 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	if out.UpdatedAt != "" {
 		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_list_runner_controller_scopes` to view scopes")
+	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_scope_list` to view scopes")
 	return b.String()
 }
 
@@ -59,7 +59,7 @@ func FormatListMarkdown(out ListOutput) string {
 			rc.ID, toolutil.EscapeMdTableCell(rc.Description), rc.State, rc.CreatedAt)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_get_runner_controller` to view details of a specific controller")
+	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_get` to view details of a specific controller")
 	return b.String()
 }
 

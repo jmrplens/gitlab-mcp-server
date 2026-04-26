@@ -44,7 +44,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Summarize a GitLab issue discussion using LLM-assisted analysis via MCP sampling. " +
 			"Fetches issue details and all notes, then requests LLM summary of key decisions and action items. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown summary of the issue with key decisions and action items.\n\nSee also: gitlab_analyze_issue_scope, gitlab_list_issues",
+			"\n\nReturns: Markdown summary of the issue with key decisions and action items.\n\nSee also: gitlab_analyze_issue_scope, gitlab_issue_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SummarizeIssueInput) (*mcp.CallToolResult, SummarizeIssueOutput, error) {
@@ -64,7 +64,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Compares two Git refs, fetches commits and merged MRs with labels, then requests LLM to produce " +
 			"categorized release notes (Features, Bug Fixes, Improvements, Breaking Changes). " +
 			samplingRequirement +
-			"\n\nReturns: Markdown release notes categorized by Features, Bug Fixes, Improvements, and Breaking Changes.\n\nSee also: gitlab_create_release, gitlab_list_commits",
+			"\n\nReturns: Markdown release notes categorized by Features, Bug Fixes, Improvements, and Breaking Changes.\n\nSee also: gitlab_release_create, gitlab_commit_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GenerateReleaseNotesInput) (*mcp.CallToolResult, GenerateReleaseNotesOutput, error) {
@@ -84,7 +84,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches pipeline details, failed jobs and their traces, then requests LLM analysis for root cause, " +
 			"fix suggestions, and impact assessment. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown analysis of pipeline failure with root cause and suggested fixes.\n\nSee also: gitlab_get_pipeline, gitlab_get_job_trace",
+			"\n\nReturns: Markdown analysis of pipeline failure with root cause and suggested fixes.\n\nSee also: gitlab_pipeline_get, gitlab_get_job_trace",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AnalyzePipelineFailureInput) (*mcp.CallToolResult, AnalyzePipelineFailureOutput, error) {
@@ -104,7 +104,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches MR details, discussions, and approval state, then requests LLM summary of reviewer feedback, " +
 			"unresolved threads, and action items. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown summary of reviewer feedback, unresolved threads, and action items.\n\nSee also: gitlab_analyze_mr_changes, gitlab_list_mr_discussions",
+			"\n\nReturns: Markdown summary of reviewer feedback, unresolved threads, and action items.\n\nSee also: gitlab_analyze_mr_changes, gitlab_mr_discussion_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SummarizeMRReviewInput) (*mcp.CallToolResult, SummarizeMRReviewOutput, error) {
@@ -124,7 +124,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches milestone details, linked issues and merge requests, then requests LLM to produce " +
 			"a data-driven progress report with metrics, risks, and recommendations. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown progress report with metrics, risks, and recommendations.\n\nSee also: gitlab_get_milestone, gitlab_list_milestone_issues",
+			"\n\nReturns: Markdown progress report with metrics, risks, and recommendations.\n\nSee also: gitlab_milestone_get, gitlab_list_milestone_issues",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GenerateMilestoneReportInput) (*mcp.CallToolResult, GenerateMilestoneReportOutput, error) {
@@ -144,7 +144,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Lints the CI config, fetches merged YAML and includes, then requests LLM analysis for " +
 			"best practices, performance, security, and maintainability. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown analysis of CI/CD configuration covering best practices, performance, security, and maintainability.\n\nSee also: gitlab_ci_lint_project, gitlab_list_pipelines",
+			"\n\nReturns: Markdown analysis of CI/CD configuration covering best practices, performance, security, and maintainability.\n\nSee also: gitlab_ci_lint_project, gitlab_pipeline_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AnalyzeCIConfigInput) (*mcp.CallToolResult, AnalyzeCIConfigOutput, error) {
@@ -164,7 +164,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches issue details, time stats, participants, related MRs, and discussion notes, then " +
 			"requests LLM to assess scope, complexity, risks, and whether the issue should be broken down. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown analysis of issue scope, complexity, risks, and breakdown recommendations.\n\nSee also: gitlab_summarize_issue, gitlab_get_issue",
+			"\n\nReturns: Markdown analysis of issue scope, complexity, risks, and breakdown recommendations.\n\nSee also: gitlab_summarize_issue, gitlab_issue_get",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AnalyzeIssueScopeInput) (*mcp.CallToolResult, AnalyzeIssueScopeOutput, error) {
@@ -184,7 +184,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches MR details and code diffs, then requests LLM to identify injection vulnerabilities, " +
 			"auth issues, exposed secrets, and OWASP Top 10 findings. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown security review with vulnerability findings and OWASP Top 10 assessment.\n\nSee also: gitlab_analyze_mr_changes, gitlab_get_merge_request",
+			"\n\nReturns: Markdown security review with vulnerability findings and OWASP Top 10 assessment.\n\nSee also: gitlab_analyze_mr_changes, gitlab_mr_get",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ReviewMRSecurityInput) (*mcp.CallToolResult, ReviewMRSecurityOutput, error) {
@@ -204,7 +204,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Searches for TODO, FIXME, HACK, XXX, and DEPRECATED markers in source code, then requests LLM " +
 			"to categorize, prioritize, and recommend a remediation strategy. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown report of technical debt categorized by priority with remediation strategy.\n\nSee also: gitlab_search_code, gitlab_get_project",
+			"\n\nReturns: Markdown report of technical debt categorized by priority with remediation strategy.\n\nSee also: gitlab_search_code, gitlab_project_get",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input FindTechnicalDebtInput) (*mcp.CallToolResult, FindTechnicalDebtOutput, error) {
@@ -224,7 +224,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"Fetches recent deployments, then requests LLM to assess deployment frequency, success rate, " +
 			"rollback patterns, and suggest improvements. " +
 			samplingRequirement +
-			"\n\nReturns: Markdown analysis of deployment patterns with frequency, success rate, and improvement suggestions.\n\nSee also: gitlab_list_deployments, gitlab_list_environments",
+			"\n\nReturns: Markdown analysis of deployment patterns with frequency, success rate, and improvement suggestions.\n\nSee also: gitlab_deployment_list, gitlab_environment_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AnalyzeDeploymentHistoryInput) (*mcp.CallToolResult, AnalyzeDeploymentHistoryOutput, error) {

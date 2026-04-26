@@ -29,7 +29,7 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	}
 	_, err := client.GL().GroupRelationsExport.ScheduleExport(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("gitlab_schedule_group_relations_export", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
+		return toolutil.WrapErrWithStatusHint("gitlab_schedule_group_relations_export", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ func ListExportStatus(ctx context.Context, client *gitlabclient.Client, input Li
 	}
 	statuses, resp, err := client.GL().GroupRelationsExport.ListExportStatus(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithStatusHint("gitlab_list_group_relations_export_status", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_list_group_relations_export_status", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 	items := make([]ExportStatusItem, 0, len(statuses))
 	for _, s := range statuses {
@@ -118,6 +118,6 @@ func FormatListExportStatus(out *ListExportStatusOutput) string {
 			toolutil.EscapeMdTableCell(s.UpdatedAt))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_download_group_relations_export` to download exported data")
+	toolutil.WriteHints(&sb, "Use `gitlab_download_group_export` to download exported data")
 	return sb.String()
 }

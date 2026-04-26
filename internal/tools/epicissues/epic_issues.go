@@ -20,6 +20,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintEpicGIDResolution is the shared hint when epic GID resolution fails.
+const hintEpicGIDResolution = "could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list"
+
 // GraphQL queries and mutations for work item hierarchy operations.
 
 const queryListChildren = `
@@ -428,7 +431,7 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueAssign", err,
-			"could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list")
+			hintEpicGIDResolution)
 	}
 
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
@@ -478,7 +481,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
-			"could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list")
+			hintEpicGIDResolution)
 	}
 
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
@@ -496,7 +499,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
-			"the issue may not be linked to this epic; verify with gitlab_epic_issues_list; removing requires Reporter role")
+			"the issue may not be linked to this epic; verify with gitlab_epic_issue_list; removing requires Reporter role")
 	}
 
 	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
@@ -535,7 +538,7 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueUpdate", err,
-			"could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list")
+			hintEpicGIDResolution)
 	}
 
 	var resp gqlMutationResponse

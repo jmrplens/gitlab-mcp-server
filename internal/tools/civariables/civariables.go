@@ -13,6 +13,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Operation names used by error wrappers (kept as constants to satisfy S1192).
+const (
+	opCreateCIVariable = "create CI/CD variable"
+	opUpdateCIVariable = "update CI/CD variable"
+	opDeleteCIVariable = "delete CI/CD variable"
+)
+
 // ---------------------------------------------------------------------------
 // Input / Output types
 // ---------------------------------------------------------------------------.
@@ -171,7 +178,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	v, _, err := client.GL().ProjectVariables.GetVariable(string(input.ProjectID), input.Key, opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get CI/CD variable", err, http.StatusNotFound,
-			"verify the variable key with gitlab_list_ci_variables; for scoped vars supply matching environment_scope filter")
+			"verify the variable key with gitlab_ci_variable_list; for scoped vars supply matching environment_scope filter")
 	}
 	return toOutput(v), nil
 }
@@ -188,7 +195,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.ErrFieldRequired("value")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create CI/CD variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opCreateCIVariable, err)
 	}
 
 	opts := &gitlab.CreateProjectVariableOptions{
@@ -221,10 +228,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	v, _, err := client.GL().ProjectVariables.CreateVariable(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("create CI/CD variable", err,
+			return Output{}, toolutil.WrapErrWithHint(opCreateCIVariable, err,
 				"creating CI/CD variables requires Maintainer or Owner role")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create CI/CD variable", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opCreateCIVariable, err, http.StatusBadRequest,
 			"key must match /^[A-Za-z0-9_]{1,255}$/; valid variable_type: env_var (default) or file; the (key, environment_scope) pair may already exist; masked vars require values without newlines and minimum 8 chars")
 	}
 	return toOutput(v), nil
@@ -239,7 +246,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update CI/CD variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opUpdateCIVariable, err)
 	}
 
 	opts := &gitlab.UpdateProjectVariableOptions{}
@@ -269,11 +276,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	v, _, err := client.GL().ProjectVariables.UpdateVariable(string(input.ProjectID), input.Key, opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("update CI/CD variable", err,
+			return Output{}, toolutil.WrapErrWithHint(opUpdateCIVariable, err,
 				"updating CI/CD variables requires Maintainer or Owner role")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("update CI/CD variable", err, http.StatusNotFound,
-			"verify the variable key and environment_scope with gitlab_list_ci_variables")
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateCIVariable, err, http.StatusNotFound,
+			"verify the variable key and environment_scope with gitlab_ci_variable_list")
 	}
 	return toOutput(v), nil
 }
@@ -287,7 +294,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return toolutil.WrapErrWithMessage("delete CI/CD variable", err)
+		return toolutil.WrapErrWithMessage(opDeleteCIVariable, err)
 	}
 
 	var opts *gitlab.RemoveProjectVariableOptions
@@ -300,11 +307,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().ProjectVariables.RemoveVariable(string(input.ProjectID), input.Key, opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return toolutil.WrapErrWithHint("delete CI/CD variable", err,
+			return toolutil.WrapErrWithHint(opDeleteCIVariable, err,
 				"deleting CI/CD variables requires Maintainer or Owner role")
 		}
-		return toolutil.WrapErrWithStatusHint("delete CI/CD variable", err, http.StatusNotFound,
-			"the variable may already be deleted \u2014 verify with gitlab_list_ci_variables")
+		return toolutil.WrapErrWithStatusHint(opDeleteCIVariable, err, http.StatusNotFound,
+			"the variable may already be deleted \u2014 verify with gitlab_ci_variable_list")
 	}
 	return nil
 }

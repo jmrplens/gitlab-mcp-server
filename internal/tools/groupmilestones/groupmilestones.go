@@ -16,6 +16,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyGroupMilestoneID is the 404 hint shared by group milestone tools.
+const hintVerifyGroupMilestoneID = "verify milestone_id with gitlab_group_milestone_list"
+
 // ---------- Input types ----------.
 
 // ListInput defines parameters for listing milestones in a GitLab group.
@@ -303,7 +306,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	m, _, err := client.GL().GroupMilestones.GetGroupMilestone(string(input.GroupID), globalID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneGet", err, http.StatusNotFound,
-			"verify milestone_id with gitlab_group_milestones_list")
+			hintVerifyGroupMilestoneID)
 	}
 	return toOutput(m, string(input.GroupID)), nil
 }
@@ -393,7 +396,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	m, _, err := client.GL().GroupMilestones.UpdateGroupMilestone(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneUpdate", err, http.StatusBadRequest,
-			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with gitlab_group_milestones_list")
+			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with gitlab_group_milestone_list")
 	}
 	return toOutput(m, string(input.GroupID)), nil
 }
@@ -451,7 +454,7 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	issues, resp, err := client.GL().GroupMilestones.GetGroupMilestoneIssues(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return IssuesOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneGetIssues", err, http.StatusNotFound,
-			"verify milestone_id with gitlab_group_milestones_list")
+			hintVerifyGroupMilestoneID)
 	}
 
 	items := make([]IssueItem, len(issues))
@@ -500,7 +503,7 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	mrs, resp, err := client.GL().GroupMilestones.GetGroupMilestoneMergeRequests(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return MergeRequestsOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneGetMergeRequests", err, http.StatusNotFound,
-			"verify milestone_id with gitlab_group_milestones_list")
+			hintVerifyGroupMilestoneID)
 	}
 
 	items := make([]MergeRequestItem, len(mrs))
@@ -551,7 +554,7 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 	events, resp, err := client.GL().GroupMilestones.GetGroupMilestoneBurndownChartEvents(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BurndownChartEventsOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneGetBurndownChartEvents", err, http.StatusNotFound,
-			"verify milestone_id with gitlab_group_milestones_list; burndown charts require GitLab Premium or higher")
+			"verify milestone_id with gitlab_group_milestone_list; burndown charts require GitLab Premium or higher")
 	}
 
 	items := make([]BurndownChartEventItem, len(events))

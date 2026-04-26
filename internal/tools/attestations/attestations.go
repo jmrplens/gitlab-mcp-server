@@ -96,7 +96,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	atts, _, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), in.SubjectDigest, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 attestations require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 attestations require Ultimate license")
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts))}
 	for _, a := range atts {

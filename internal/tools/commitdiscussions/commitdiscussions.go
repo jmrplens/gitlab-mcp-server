@@ -122,7 +122,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetCommitDiscussion(string(input.ProjectID), input.CommitSHA, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_get", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_commit_discussions_list")
+			"verify discussion_id with gitlab_list_commit_discussions")
 	}
 	return toOutput(d), nil
 }
@@ -160,7 +160,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	note, _, err := client.GL().Discussions.AddCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_add_note", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_commit_discussions_list")
+			"verify discussion_id with gitlab_list_commit_discussions")
 	}
 	return noteToOutput(note), nil
 }

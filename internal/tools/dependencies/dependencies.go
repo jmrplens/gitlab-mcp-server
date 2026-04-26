@@ -162,7 +162,7 @@ func CreateExport(ctx context.Context, client *gitlabclient.Client, input Create
 	e, _, err := client.GL().DependencyListExport.CreateDependencyListExport(input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyCreateExport", err, http.StatusBadRequest,
-			"requires Developer + Ultimate; export_type defaults to dependency_list (CycloneDX SBOM); creation is async \u2014 poll with gitlab_dependency_get_export until status=finished")
+			"requires Developer + Ultimate; export_type defaults to dependency_list (CycloneDX SBOM); creation is async \u2014 poll with gitlab_get_dependency_list_export until status=finished")
 	}
 	return toExportOutput(e), nil
 }
@@ -178,7 +178,7 @@ func GetExport(ctx context.Context, client *gitlabclient.Client, input GetExport
 	e, _, err := client.GL().DependencyListExport.GetDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyGetExport", err, http.StatusNotFound,
-			"verify export_id with the response from gitlab_dependency_create_export; status values: created, running, finished, failed; only finished exports can be downloaded")
+			"verify export_id with the response from gitlab_create_dependency_list_export; status values: created, running, finished, failed; only finished exports can be downloaded")
 	}
 	return toExportOutput(e), nil
 }
@@ -194,7 +194,7 @@ func DownloadExport(ctx context.Context, client *gitlabclient.Client, input Down
 	rc, _, err := client.GL().DependencyListExport.DownloadDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("dependencyDownloadExport", err, http.StatusNotFound,
-			"verify export_id; export must be in status=finished (poll with gitlab_dependency_get_export); content is CycloneDX-format SBOM \u2014 capped at 1MB")
+			"verify export_id; export must be in status=finished (poll with gitlab_get_dependency_list_export); content is CycloneDX-format SBOM \u2014 capped at 1MB")
 	}
 	defer rc.Close()
 

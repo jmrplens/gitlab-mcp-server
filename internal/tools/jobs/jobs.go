@@ -17,6 +17,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyJobID is the 404 hint shared by job tools.
+const hintVerifyJobID = "verify job_id with gitlab_job_list"
+
 // maxTraceBytes limits trace output to prevent oversized responses.
 const maxTraceBytes = 100 * 1024
 
@@ -240,7 +243,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 				"retrying jobs requires Developer+ role; only failed or canceled jobs can be retried (running/successful jobs cannot)")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobRetry", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list")
+			hintVerifyJobID)
 	}
 	return ToOutput(j), nil
 }
@@ -611,7 +614,7 @@ func Erase(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 				"erasing jobs requires Maintainer+ role and the job must be in a finished state (success/failed/canceled) \u2014 erase wipes the trace log and artifacts")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobErase", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list")
+			hintVerifyJobID)
 	}
 	return ToOutput(j), nil
 }
@@ -693,7 +696,7 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 				"playing manual jobs requires Developer+ role; protected branches/environments may require Maintainer+")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobPlay", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list")
+			hintVerifyJobID)
 	}
 	return ToOutput(j), nil
 }

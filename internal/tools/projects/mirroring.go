@@ -71,7 +71,7 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 	}
 	details, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 pull mirroring requires Premium license")
+		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 pull mirroring requires Premium license")
 	}
 	return pullMirrorToOutput(details), nil
 }

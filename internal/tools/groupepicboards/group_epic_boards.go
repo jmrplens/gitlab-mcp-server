@@ -116,7 +116,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	b, _, err := client.GL().GroupEpicBoards.GetGroupEpicBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with gitlab_list_group_epic_boards")
+		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with gitlab_group_epic_board_list")
 	}
 	return toOutput(b), nil
 }

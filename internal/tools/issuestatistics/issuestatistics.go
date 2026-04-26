@@ -93,7 +93,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_issue_statistics", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
+		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_issue_statistics", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 	return fromGL(stats), nil
 }
@@ -127,7 +127,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_issue_statistics", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
+		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_issue_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 	return fromGL(stats), nil
 }

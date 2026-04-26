@@ -111,7 +111,7 @@ func GetMember(ctx context.Context, client *gitlabclient.Client, input GetInput)
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id with gitlab_user_list \u2014 inherited members are not returned, use gitlab_group_member_get_inherited for those")
+			"verify group_id with gitlab_group_get and user_id with gitlab_list_users \u2014 inherited members are not returned, use gitlab_group_member_get_inherited for those")
 	}
 	return convertMember(m), nil
 }
@@ -129,7 +129,7 @@ func GetInheritedMember(ctx context.Context, client *gitlabclient.Client, input 
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get_inherited", err, http.StatusNotFound,
-			"the user is not a member of this group or any ancestor group; verify with gitlab_group_member_list (include_inherited=true)")
+			"the user is not a member of this group or any ancestor group; verify with gitlab_group_members_list (include_inherited=true)")
 	}
 	return convertMember(m), nil
 }
@@ -174,7 +174,7 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 				"access_level must be one of 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner); expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_add", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id/username with gitlab_user_list")
+			"verify group_id with gitlab_group_get and user_id/username with gitlab_list_users")
 	}
 	return convertMember(m), nil
 }
@@ -203,7 +203,7 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 				"editing members requires Owner role; cannot edit inherited members (only direct members) and cannot grant access higher than your own role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_edit", err, http.StatusNotFound,
-			"the user is not a direct member of this group \u2014 use gitlab_group_member_list to confirm direct membership before editing")
+			"the user is not a direct member of this group \u2014 use gitlab_group_members_list to confirm direct membership before editing")
 	}
 	return convertMember(m), nil
 }
@@ -232,7 +232,7 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 				"inherited members cannot be removed from this group \u2014 they must be removed from the ancestor group where they were added directly. Removing direct members requires Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint("group_member_remove", err, http.StatusNotFound,
-			"the user is not a direct member of this group; use gitlab_group_member_list to confirm direct membership")
+			"the user is not a direct member of this group; use gitlab_group_members_list to confirm direct membership")
 	}
 	return nil
 }

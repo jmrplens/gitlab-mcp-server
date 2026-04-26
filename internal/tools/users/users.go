@@ -146,7 +146,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	u, _, err := client.GL().Users.GetUser(input.UserID, &gl.GetUserOptions{}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_user", err, http.StatusNotFound,
-			"verify user_id with gitlab_user_list (search by username); user_id must be a positive integer")
+			"verify user_id with gitlab_list_users (search by username); user_id must be a positive integer")
 	}
 	return toOutput(u), nil
 }
@@ -433,7 +433,7 @@ func GetAssociationsCount(ctx context.Context, client *gitlabclient.Client, inpu
 	ac, _, err := client.GL().Users.GetUserAssociationsCount(input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return AssociationsCountOutput{}, toolutil.WrapErrWithStatusHint("get_user_associations_count", err, http.StatusForbidden,
-			"associations count requires admin token; verify user_id with gitlab_user_get")
+			"associations count requires admin token; verify user_id with gitlab_get_user")
 	}
 	return AssociationsCountOutput{
 		GroupsCount:        ac.GroupsCount,

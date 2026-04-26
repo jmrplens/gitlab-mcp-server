@@ -122,7 +122,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetSnippetDiscussion(string(input.ProjectID), input.SnippetID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_snippet_discussion_list (discussion IDs are 40-char hex strings)")
+			"verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)")
 	}
 	return toOutput(d), nil
 }
@@ -160,7 +160,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_snippet_discussion_list; the discussion must exist on this snippet")
+			"verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet")
 	}
 	return noteToOutput(note), nil
 }

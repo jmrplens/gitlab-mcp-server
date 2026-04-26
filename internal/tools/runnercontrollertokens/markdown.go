@@ -45,7 +45,7 @@ func FormatListMarkdown(out ListOutput) string {
 			t.ID, t.RunnerControllerID, toolutil.EscapeMdTableCell(t.Description), t.LastUsedAt, t.CreatedAt)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_get_runner_controller_token` to view details of a specific token")
+	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_token_get` to view details of a specific token")
 	return b.String()
 }
 

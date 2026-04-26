@@ -200,7 +200,7 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectEventsOutput{}, toolutil.WrapErrWithStatusHint("project_event_list", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
+		return ListProjectEventsOutput{}, toolutil.WrapErrWithStatusHint("project_event_list", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 
 	out := ListProjectEventsOutput{

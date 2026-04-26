@@ -68,7 +68,7 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 	result, _, err := client.GL().Import.ImportRepositoryFromGitHub(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_github", err, http.StatusBadRequest,
-			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab \u2014 import is async, poll status with gitlab_get_project")
+			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab \u2014 import is async, poll status with gitlab_project_get")
 	}
 	return &GitHubImportOutput{
 		ID:                    result.ID,

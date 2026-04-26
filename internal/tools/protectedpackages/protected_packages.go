@@ -162,7 +162,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	rule, _, err := client.GL().ProtectedPackages.UpdatePackageProtectionRules(string(in.ProjectID), in.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleUpdate", err, http.StatusNotFound,
-			"verify rule_id with gitlab_package_protection_rule_list; pattern uniqueness still applies on rename")
+			"verify rule_id with gitlab_list_package_protection_rules; pattern uniqueness still applies on rename")
 	}
 	return toOutput(rule), nil
 }
@@ -181,7 +181,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	_, err := client.GL().ProtectedPackages.DeletePackageProtectionRules(string(in.ProjectID), in.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("packageProtectionRuleDelete", err, http.StatusNotFound,
-			"verify rule_id with gitlab_package_protection_rule_list; managing protection rules requires Maintainer role or higher")
+			"verify rule_id with gitlab_list_package_protection_rules; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

@@ -2218,7 +2218,7 @@
   },
   {
     "name": "gitlab_analyze_ci_configuration",
-    "description": "Analyze a GitLab project's CI/CD configuration using LLM-assisted analysis via MCP sampling. Lints the CI config, fetches merged YAML and includes, then requests LLM analysis for best practices, performance, security, and maintainability. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of CI/CD configuration covering best practices, performance, security, and maintainability.\n\nSee also: gitlab_ci_lint_project, gitlab_list_pipelines",
+    "description": "Analyze a GitLab project's CI/CD configuration using LLM-assisted analysis via MCP sampling. Lints the CI config, fetches merged YAML and includes, then requests LLM analysis for best practices, performance, security, and maintainability. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of CI/CD configuration covering best practices, performance, security, and maintainability.\n\nSee also: gitlab_ci_lint_project, gitlab_pipeline_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2283,7 +2283,7 @@
   },
   {
     "name": "gitlab_analyze_deployment_history",
-    "description": "Analyze deployment history and patterns for a GitLab project using LLM-assisted analysis via MCP sampling. Fetches recent deployments, then requests LLM to assess deployment frequency, success rate, rollback patterns, and suggest improvements. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of deployment patterns with frequency, success rate, and improvement suggestions.\n\nSee also: gitlab_list_deployments, gitlab_list_environments",
+    "description": "Analyze deployment history and patterns for a GitLab project using LLM-assisted analysis via MCP sampling. Fetches recent deployments, then requests LLM to assess deployment frequency, success rate, rollback patterns, and suggest improvements. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of deployment patterns with frequency, success rate, and improvement suggestions.\n\nSee also: gitlab_deployment_list, gitlab_environment_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2346,7 +2346,7 @@
   },
   {
     "name": "gitlab_analyze_issue_scope",
-    "description": "Analyze a GitLab issue's scope and effort using LLM-assisted analysis via MCP sampling. Fetches issue details, time stats, participants, related MRs, and discussion notes, then requests LLM to assess scope, complexity, risks, and whether the issue should be broken down. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of issue scope, complexity, risks, and breakdown recommendations.\n\nSee also: gitlab_summarize_issue, gitlab_get_issue",
+    "description": "Analyze a GitLab issue's scope and effort using LLM-assisted analysis via MCP sampling. Fetches issue details, time stats, participants, related MRs, and discussion notes, then requests LLM to assess scope, complexity, risks, and whether the issue should be broken down. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of issue scope, complexity, risks, and breakdown recommendations.\n\nSee also: gitlab_summarize_issue, gitlab_issue_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2476,7 +2476,7 @@
   },
   {
     "name": "gitlab_analyze_pipeline_failure",
-    "description": "Analyze a GitLab pipeline failure using LLM-assisted root cause analysis via MCP sampling. Fetches pipeline details, failed jobs and their traces, then requests LLM analysis for root cause, fix suggestions, and impact assessment. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of pipeline failure with root cause and suggested fixes.\n\nSee also: gitlab_get_pipeline, gitlab_get_job_trace",
+    "description": "Analyze a GitLab pipeline failure using LLM-assisted root cause analysis via MCP sampling. Fetches pipeline details, failed jobs and their traces, then requests LLM analysis for root cause, fix suggestions, and impact assessment. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown analysis of pipeline failure with root cause and suggested fixes.\n\nSee also: gitlab_pipeline_get, gitlab_get_job_trace",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3019,7 +3019,7 @@
   },
   {
     "name": "gitlab_board_list",
-    "description": "List all issue boards for a project\n\nSee also: gitlab_board_create, gitlab_list_issues\n\nReturns: JSON array of boards with pagination.",
+    "description": "List all issue boards for a project\n\nSee also: gitlab_board_create, gitlab_issue_list\n\nReturns: JSON array of boards with pagination.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3232,7 +3232,7 @@
   },
   {
     "name": "gitlab_board_list_create",
-    "description": "Create a new list in an issue board\n\nSee also: gitlab_board_list_lists, gitlab_list_labels\n\nReturns: JSON with the board list details.",
+    "description": "Create a new list in an issue board\n\nSee also: gitlab_board_list_lists, gitlab_label_list\n\nReturns: JSON with the board list details.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -7629,7 +7629,7 @@
   },
   {
     "name": "gitlab_create_commit_discussion",
-    "description": "Create a new discussion thread on a project commit. Supports inline diff comments via position.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_commit_discussions, gitlab_get_commit",
+    "description": "Create a new discussion thread on a project commit. Supports inline diff comments via position.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_commit_discussions, gitlab_commit_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -8160,7 +8160,7 @@
   },
   {
     "name": "gitlab_create_freeze_period",
-    "description": "Create a deploy freeze period with cron-based start and end times.\n\nReturns: JSON with created freeze period including ID, cron schedule, and timezone.\n\nSee also: gitlab_list_freeze_periods, gitlab_list_deployments",
+    "description": "Create a deploy freeze period with cron-based start and end times.\n\nReturns: JSON with created freeze period including ID, cron schedule, and timezone.\n\nSee also: gitlab_list_freeze_periods, gitlab_deployment_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -10458,7 +10458,7 @@
   },
   {
     "name": "gitlab_create_user_runner",
-    "description": "Create a GitLab CI runner linked to the current user. Runners execute CI/CD jobs. Specify runner_type (instance_type, group_type, or project_type).\n\nSee also: gitlab_user_current, gitlab_list_runners\n\nReturns: JSON with runner ID and authentication token.",
+    "description": "Create a GitLab CI runner linked to the current user. Runners execute CI/CD jobs. Specify runner_type (instance_type, group_type, or project_type).\n\nSee also: gitlab_user_current, gitlab_runner_list\n\nReturns: JSON with runner ID and authentication token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -11499,7 +11499,7 @@
   },
   {
     "name": "gitlab_delete_feature_flag",
-    "description": "Delete a feature flag (admin). Requires the flag name.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_feature_flags.",
+    "description": "Delete a feature flag (admin). Requires the flag name.\n\nReturns: confirmation message.\n\nSee also: gitlab_feature_flag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16015,7 +16015,7 @@
   },
   {
     "name": "gitlab_download_ml_model_package",
-    "description": "Download a machine learning model package file from the GitLab model registry.\n\nReturns: JSON with base64-encoded file content, filename, and size.\n\nSee also: gitlab_list_packages",
+    "description": "Download a machine learning model package file from the GitLab model registry.\n\nReturns: JSON with base64-encoded file content, filename, and size.\n\nSee also: gitlab_package_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20967,7 +20967,7 @@
   },
   {
     "name": "gitlab_find_technical_debt",
-    "description": "Find and analyze technical debt in a GitLab project using LLM-assisted analysis via MCP sampling. Searches for TODO, FIXME, HACK, XXX, and DEPRECATED markers in source code, then requests LLM to categorize, prioritize, and recommend a remediation strategy. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown report of technical debt categorized by priority with remediation strategy.\n\nSee also: gitlab_search_code, gitlab_get_project",
+    "description": "Find and analyze technical debt in a GitLab project using LLM-assisted analysis via MCP sampling. Searches for TODO, FIXME, HACK, XXX, and DEPRECATED markers in source code, then requests LLM to categorize, prioritize, and recommend a remediation strategy. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown report of technical debt categorized by priority with remediation strategy.\n\nSee also: gitlab_search_code, gitlab_project_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -21080,7 +21080,7 @@
   },
   {
     "name": "gitlab_generate_milestone_report",
-    "description": "Generate a comprehensive milestone progress report using LLM-assisted analysis via MCP sampling. Fetches milestone details, linked issues and merge requests, then requests LLM to produce a data-driven progress report with metrics, risks, and recommendations. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown progress report with metrics, risks, and recommendations.\n\nSee also: gitlab_get_milestone, gitlab_list_milestone_issues",
+    "description": "Generate a comprehensive milestone progress report using LLM-assisted analysis via MCP sampling. Fetches milestone details, linked issues and merge requests, then requests LLM to produce a data-driven progress report with metrics, risks, and recommendations. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown progress report with metrics, risks, and recommendations.\n\nSee also: gitlab_milestone_get, gitlab_list_milestone_issues",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -21145,7 +21145,7 @@
   },
   {
     "name": "gitlab_generate_release_notes",
-    "description": "Generate polished release notes using LLM-assisted analysis via MCP sampling. Compares two Git refs, fetches commits and merged MRs with labels, then requests LLM to produce categorized release notes (Features, Bug Fixes, Improvements, Breaking Changes). Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown release notes categorized by Features, Bug Fixes, Improvements, and Breaking Changes.\n\nSee also: gitlab_create_release, gitlab_list_commits",
+    "description": "Generate polished release notes using LLM-assisted analysis via MCP sampling. Compares two Git refs, fetches commits and merged MRs with labels, then requests LLM to produce categorized release notes (Features, Bug Fixes, Improvements, Breaking Changes). Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown release notes categorized by Features, Bug Fixes, Improvements, and Breaking Changes.\n\nSee also: gitlab_release_create, gitlab_commit_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24049,7 +24049,7 @@
   },
   {
     "name": "gitlab_get_job_token_access_settings",
-    "description": "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_list_ci_variables",
+    "description": "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_ci_variable_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25378,7 +25378,7 @@
   },
   {
     "name": "gitlab_get_project_issue_statistics",
-    "description": "Get issue statistics for a project.\n\nReturns: JSON with project issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_list_issues",
+    "description": "Get issue statistics for a project.\n\nReturns: JSON with project issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31624,7 +31624,7 @@
   },
   {
     "name": "gitlab_group_invite",
-    "description": "Invite a user to a group by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_group_invite_list_pending, gitlab_add_group_member",
+    "description": "Invite a user to a group by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_group_invite_list_pending, gitlab_group_member_add",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31689,7 +31689,7 @@
   },
   {
     "name": "gitlab_group_invite_list_pending",
-    "description": "List all pending invitations for a group. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_group_invite, gitlab_list_group_members",
+    "description": "List all pending invitations for a group. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_group_invite, gitlab_group_members_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32964,7 +32964,7 @@
   },
   {
     "name": "gitlab_group_member_add",
-    "description": "Add a member to a GitLab group. Specify user by user_id or username, and set access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set expiration date.\n\nReturns: JSON with the added member details. See also: gitlab_group_member_list, gitlab_get_user.",
+    "description": "Add a member to a GitLab group. Specify user by user_id or username, and set access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set expiration date.\n\nReturns: JSON with the added member details. See also: gitlab_group_members_list, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33163,7 +33163,7 @@
   },
   {
     "name": "gitlab_group_member_get",
-    "description": "Get a single member of a GitLab group by user ID. Returns user details including access level, state, and expiration date.\n\nReturns: JSON with member details including access level, state, and expiration. See also: gitlab_group_member_list.",
+    "description": "Get a single member of a GitLab group by user ID. Returns user details including access level, state, and expiration date.\n\nReturns: JSON with member details including access level, state, and expiration. See also: gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33345,7 +33345,7 @@
   },
   {
     "name": "gitlab_group_member_remove",
-    "description": "Remove a member from a GitLab group. Optionally skip subresource removal and unassign issuables.\n\nReturns: JSON confirming member removal. See also: gitlab_group_member_list.",
+    "description": "Remove a member from a GitLab group. Optionally skip subresource removal and unassign issuables.\n\nReturns: JSON confirming member removal. See also: gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39541,7 +39541,7 @@
   },
   {
     "name": "gitlab_import_github_gists",
-    "description": "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_list_snippets",
+    "description": "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_snippet_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -42523,7 +42523,7 @@
   },
   {
     "name": "gitlab_issue_label_event_list",
-    "description": "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_list_issues",
+    "description": "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_issue_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -42907,7 +42907,7 @@
   },
   {
     "name": "gitlab_issue_link_list",
-    "description": "List issue relations (linked issues) for a given issue in a GitLab project. Returns related issues with link type (relates_to, blocks, is_blocked_by).\n\nReturns: JSON array of linked issues.\n\nSee also: gitlab_issue_link_create, gitlab_get_issue",
+    "description": "List issue relations (linked issues) for a given issue in a GitLab project. Returns related issues with link type (relates_to, blocks, is_blocked_by).\n\nReturns: JSON array of linked issues.\n\nSee also: gitlab_issue_link_create, gitlab_issue_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45502,7 +45502,7 @@
   },
   {
     "name": "gitlab_issue_participants",
-    "description": "List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_member_list.",
+    "description": "List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50918,7 +50918,7 @@
   },
   {
     "name": "gitlab_list_commit_discussions",
-    "description": "List discussion threads on a project commit.\n\nReturns: JSON with discussion threads including notes, authors, and positions.\n\nSee also: gitlab_create_commit_discussion, gitlab_get_commit",
+    "description": "List discussion threads on a project commit.\n\nReturns: JSON with discussion threads including notes, authors, and positions.\n\nSee also: gitlab_create_commit_discussion, gitlab_commit_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51853,7 +51853,7 @@
   },
   {
     "name": "gitlab_list_epic_discussions",
-    "description": "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_list_groups",
+    "description": "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_group_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -52330,7 +52330,7 @@
   },
   {
     "name": "gitlab_list_freeze_periods",
-    "description": "List deploy freeze periods for a GitLab project.\n\nReturns: JSON with freeze periods array including cron schedule, timezone, and status.\n\nSee also: gitlab_create_freeze_period, gitlab_list_environments",
+    "description": "List deploy freeze periods for a GitLab project.\n\nReturns: JSON with freeze periods array including cron schedule, timezone, and status.\n\nSee also: gitlab_create_freeze_period, gitlab_environment_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -57555,7 +57555,7 @@
   },
   {
     "name": "gitlab_list_resource_groups",
-    "description": "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_list_pipelines",
+    "description": "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_pipeline_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -57631,7 +57631,7 @@
   },
   {
     "name": "gitlab_list_secure_files",
-    "description": "List CI/CD secure files for a GitLab project.\n\nReturns: JSON array of secure files with pagination.\n\nSee also: gitlab_show_secure_file, gitlab_list_ci_variables",
+    "description": "List CI/CD secure files for a GitLab project.\n\nReturns: JSON array of secure files with pagination.\n\nSee also: gitlab_show_secure_file, gitlab_ci_variable_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -58092,7 +58092,7 @@
   },
   {
     "name": "gitlab_list_snippet_discussions",
-    "description": "List discussion threads on a project snippet.\n\nReturns: JSON array of discussions with pagination.\n\nSee also: gitlab_get_snippet_discussion, gitlab_list_project_snippets",
+    "description": "List discussion threads on a project snippet.\n\nReturns: JSON array of discussions with pagination.\n\nSee also: gitlab_get_snippet_discussion, gitlab_project_snippet_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -58812,7 +58812,7 @@
   },
   {
     "name": "gitlab_list_topics",
-    "description": "List project topics. Can be filtered by search query.\n\nSee also: gitlab_create_topic, gitlab_list_projects\n\nReturns: JSON with array of topics and pagination info.",
+    "description": "List project topics. Can be filtered by search query.\n\nSee also: gitlab_create_topic, gitlab_project_list\n\nReturns: JSON with array of topics and pagination info.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -64025,7 +64025,7 @@
   },
   {
     "name": "gitlab_mr_discussion_list",
-    "description": "List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.\n\nReturns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_note_list.",
+    "description": "List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.\n\nReturns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_notes_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -71571,7 +71571,7 @@
   },
   {
     "name": "gitlab_namespace_list",
-    "description": "List all namespaces visible to the authenticated user. Supports filtering by search, owned-only, top-level-only, and pagination.\n\nReturns: JSON array of namespaces with pagination.\n\nSee also: gitlab_namespace_get, gitlab_list_groups",
+    "description": "List all namespaces visible to the authenticated user. Supports filtering by search, owned-only, top-level-only, and pagination.\n\nReturns: JSON array of namespaces with pagination.\n\nSee also: gitlab_namespace_get, gitlab_group_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -73617,7 +73617,7 @@
   },
   {
     "name": "gitlab_package_publish_and_link",
-    "description": "Upload a file to the Generic Package Registry and create a release asset link pointing to it in one step (recommended over separate publish + link calls). Provide either file_path or content_base64 for the file content. The release identified by tag_name must already exist. Automatically uses the real download URL — no manual URL construction needed.\n\nIMPORTANT: link_name MUST be the exact filename (e.g. 'checksums.txt.asc'). NEVER add descriptive suffixes like '(GPG signature)' — tools like go-selfupdate match release asset names exactly.\n\nSee also: gitlab_package_publish, gitlab_create_release_link\n\nReturns: JSON with the published package details and release link URL.",
+    "description": "Upload a file to the Generic Package Registry and create a release asset link pointing to it in one step (recommended over separate publish + link calls). Provide either file_path or content_base64 for the file content. The release identified by tag_name must already exist. Automatically uses the real download URL — no manual URL construction needed.\n\nIMPORTANT: link_name MUST be the exact filename (e.g. 'checksums.txt.asc'). NEVER add descriptive suffixes like '(GPG signature)' — tools like go-selfupdate match release asset names exactly.\n\nSee also: gitlab_package_publish, gitlab_release_link_create\n\nReturns: JSON with the published package details and release link URL.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78218,7 +78218,7 @@
   },
   {
     "name": "gitlab_pipeline_trigger_run",
-    "description": "Trigger a pipeline using a trigger token\n\nReturns: JSON with the triggered pipeline details.\n\nSee also: gitlab_pipeline_trigger_list, gitlab_create_pipeline",
+    "description": "Trigger a pipeline using a trigger token\n\nReturns: JSON with the triggered pipeline details.\n\nSee also: gitlab_pipeline_trigger_list, gitlab_pipeline_create",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -82054,7 +82054,7 @@
   },
   {
     "name": "gitlab_project_event_list",
-    "description": "List all visible events for a project. Supports filtering by action type, target type, date range, sort order, and pagination.\n\nReturns: JSON array of events with pagination.\n\nSee also: gitlab_user_contribution_event_list, gitlab_list_commits",
+    "description": "List all visible events for a project. Supports filtering by action type, target type, date range, sort order, and pagination.\n\nReturns: JSON array of events with pagination.\n\nSee also: gitlab_user_contribution_event_list, gitlab_commit_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84138,7 +84138,7 @@
   },
   {
     "name": "gitlab_project_invite",
-    "description": "Invite a user to a project by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_project_invite_list_pending, gitlab_add_project_member",
+    "description": "Invite a user to a project by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_project_invite_list_pending, gitlab_project_member_add",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84203,7 +84203,7 @@
   },
   {
     "name": "gitlab_project_invite_list_pending",
-    "description": "List all pending invitations for a project. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_project_invite, gitlab_list_project_members",
+    "description": "List all pending invitations for a project. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_project_invite, gitlab_project_members_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -86626,7 +86626,7 @@
   },
   {
     "name": "gitlab_project_list_users",
-    "description": "List users who are members of a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of project users with pagination. Fields include id, username, name, and state.\n\nSee also: gitlab_project_member_list.",
+    "description": "List users who are members of a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of project users with pagination. Fields include id, username, name, and state.\n\nSee also: gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -86857,7 +86857,7 @@
   },
   {
     "name": "gitlab_project_member_delete",
-    "description": "Remove a member from a project.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_member_list.",
+    "description": "Remove a member from a project.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91036,7 +91036,7 @@
   },
   {
     "name": "gitlab_protected_environment_get",
-    "description": "Get a single protected environment by name, including deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_get_environment\n\nReturns: JSON with protected environment details (name, deploy access levels, approval rules).",
+    "description": "Get a single protected environment by name, including deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_environment_get\n\nReturns: JSON with protected environment details (name, deploy access levels, approval rules).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91165,7 +91165,7 @@
   },
   {
     "name": "gitlab_protected_environment_list",
-    "description": "List protected environments in a GitLab project with their deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_protect, gitlab_list_environments\n\nReturns: JSON with array of protected environments and pagination info.",
+    "description": "List protected environments in a GitLab project with their deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_protect, gitlab_environment_list\n\nReturns: JSON with array of protected environments and pagination info.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91358,7 +91358,7 @@
   },
   {
     "name": "gitlab_protected_environment_protect",
-    "description": "Protect an environment in a GitLab project. Configure deploy access levels, required approvals, and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_create_environment\n\nReturns: JSON with the newly protected environment details.",
+    "description": "Protect an environment in a GitLab project. Configure deploy access levels, required approvals, and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_environment_create\n\nReturns: JSON with the newly protected environment details.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -95581,7 +95581,7 @@
   },
   {
     "name": "gitlab_repository_changelog_generate",
-    "description": "Generate changelog data (notes) without committing. Returns the changelog notes as Markdown text. Requires version string.\n\nReturns: Markdown changelog notes for the specified version.\n\nSee also: gitlab_repository_changelog_data.",
+    "description": "Generate changelog data (notes) without committing. Returns the changelog notes as Markdown text. Requires version string.\n\nReturns: Markdown changelog notes for the specified version.\n\nSee also: gitlab_repository_changelog_generate.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -97699,7 +97699,7 @@
   },
   {
     "name": "gitlab_review_mr_security",
-    "description": "Perform a security-focused review of a GitLab merge request using LLM-assisted analysis via MCP sampling. Fetches MR details and code diffs, then requests LLM to identify injection vulnerabilities, auth issues, exposed secrets, and OWASP Top 10 findings. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown security review with vulnerability findings and OWASP Top 10 assessment.\n\nSee also: gitlab_analyze_mr_changes, gitlab_get_merge_request",
+    "description": "Perform a security-focused review of a GitLab merge request using LLM-assisted analysis via MCP sampling. Fetches MR details and code diffs, then requests LLM to identify injection vulnerabilities, auth issues, exposed secrets, and OWASP Top 10 findings. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown security review with vulnerability findings and OWASP Top 10 assessment.\n\nSee also: gitlab_analyze_mr_changes, gitlab_mr_get",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -106635,7 +106635,7 @@
   },
   {
     "name": "gitlab_summarize_issue",
-    "description": "Summarize a GitLab issue discussion using LLM-assisted analysis via MCP sampling. Fetches issue details and all notes, then requests LLM summary of key decisions and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown summary of the issue with key decisions and action items.\n\nSee also: gitlab_analyze_issue_scope, gitlab_list_issues",
+    "description": "Summarize a GitLab issue discussion using LLM-assisted analysis via MCP sampling. Fetches issue details and all notes, then requests LLM summary of key decisions and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown summary of the issue with key decisions and action items.\n\nSee also: gitlab_analyze_issue_scope, gitlab_issue_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -106700,7 +106700,7 @@
   },
   {
     "name": "gitlab_summarize_mr_review",
-    "description": "Summarize a GitLab merge request review using LLM-assisted analysis via MCP sampling. Fetches MR details, discussions, and approval state, then requests LLM summary of reviewer feedback, unresolved threads, and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown summary of reviewer feedback, unresolved threads, and action items.\n\nSee also: gitlab_analyze_mr_changes, gitlab_list_mr_discussions",
+    "description": "Summarize a GitLab merge request review using LLM-assisted analysis via MCP sampling. Fetches MR details, discussions, and approval state, then requests LLM summary of reviewer feedback, unresolved threads, and action items. Requires the MCP client to support the sampling capability (human-in-the-loop approval).\n\nReturns: Markdown summary of reviewer feedback, unresolved threads, and action items.\n\nSee also: gitlab_analyze_mr_changes, gitlab_mr_discussion_list",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

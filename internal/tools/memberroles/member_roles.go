@@ -286,7 +286,7 @@ func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteI
 	_, err := client.GL().MemberRolesService.DeleteInstanceMemberRole(in.MemberRoleID)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete instance member role", err, http.StatusForbidden,
-			"requires admin + self-managed Ultimate; verify member_role_id with gitlab_member_role_list_instance; deletion is irreversible and may fail if role is still assigned")
+			"requires admin + self-managed Ultimate; verify member_role_id with gitlab_list_instance_member_roles; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }
@@ -305,7 +305,7 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGrou
 	_, err := client.GL().MemberRolesService.DeleteMemberRole(in.GroupID.String(), in.MemberRoleID)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete group member role", err, http.StatusForbidden,
-			"requires Owner + Ultimate; verify member_role_id with gitlab_member_role_list_group; deletion is irreversible and may fail if role is still assigned")
+			"requires Owner + Ultimate; verify member_role_id with gitlab_list_group_member_roles; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }

@@ -176,7 +176,7 @@ func FormatGenerateMilestoneReportMarkdown(r GenerateMilestoneReportOutput) stri
 		fmt.Fprintf(&b, "\n*Model: %s*\n", r.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_update_milestone` to adjust dates or status",
+		"Use `gitlab_milestone_update` to adjust dates or status",
 		"Use `gitlab_list_milestone_issues` to review open items",
 	)
 	return b.String()

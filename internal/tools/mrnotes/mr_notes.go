@@ -143,7 +143,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteCreate", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_merge_request_get; creating notes requires Reporter role or higher")
+			"verify project_id and mr_iid with gitlab_mr_get; creating notes requires Reporter role or higher")
 	}
 	return ToOutput(n), nil
 }
@@ -177,7 +177,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().Notes.ListMergeRequestNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrNotesList", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_merge_request_get")
+			"verify project_id and mr_iid with gitlab_mr_get")
 	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {

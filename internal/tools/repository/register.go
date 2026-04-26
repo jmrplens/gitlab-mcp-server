@@ -122,7 +122,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_repository_changelog_generate",
 		Title:       toolutil.TitleFromName("gitlab_repository_changelog_generate"),
-		Description: "Generate changelog data (notes) without committing. Returns the changelog notes as Markdown text. Requires version string.\n\nReturns: Markdown changelog notes for the specified version.\n\nSee also: gitlab_repository_changelog_data.",
+		Description: "Generate changelog data (notes) without committing. Returns the changelog notes as Markdown text. Requires version string.\n\nReturns: Markdown changelog notes for the specified version.\n\nSee also: gitlab_repository_changelog_generate.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GenerateChangelogInput) (*mcp.CallToolResult, ChangelogDataOutput, error) {

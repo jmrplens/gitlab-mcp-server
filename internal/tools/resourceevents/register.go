@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_issue_label_event_list",
 		Title:       toolutil.TitleFromName("gitlab_issue_label_event_list"),
-		Description: "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_list_issues",
+		Description: "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_issue_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEvent,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListIssueLabelEventsInput) (*mcp.CallToolResult, ListLabelEventsOutput, error) {

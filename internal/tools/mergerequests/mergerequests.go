@@ -23,6 +23,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyMR is the 404 hint shared by MR tools.
+const hintVerifyMR = "verify project_id and mr_iid with gitlab_mr_get"
+
 // CreateInput defines parameters for creating a merge request.
 type CreateInput struct {
 	// Basic metadata
@@ -1124,7 +1127,7 @@ func Participants(ctx context.Context, client *gitlabclient.Client, input Partic
 	users, _, err := client.GL().MergeRequests.GetMergeRequestParticipants(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("mrParticipants", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	out := make([]ParticipantOutput, len(users))
 	for i, u := range users {
@@ -1227,7 +1230,7 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 				"the MR's source branch may have no .gitlab-ci.yml or the pipeline configuration is invalid; use gitlab_ci_lint to validate the YAML")
 		}
 		return pipelines.Output{}, toolutil.WrapErrWithStatusHint("mrCreatePipeline", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return pipelines.ToOutput(pi), nil
 }
@@ -1304,7 +1307,7 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 				"the MR may already be merged/closed, or auto-merge was not enabled. Use gitlab_mr_get to check state and auto_merge_enabled")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return ToOutput(mr), nil
 }
@@ -1333,7 +1336,7 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input GetInput)
 			return Get(ctx, client, input)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrSubscribe", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return ToOutput(mr), nil
 }
@@ -1356,7 +1359,7 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input GetInpu
 			return Get(ctx, client, input)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrUnsubscribe", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return ToOutput(mr), nil
 }
@@ -1431,7 +1434,7 @@ func ResetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input G
 	ts, _, err := client.GL().MergeRequests.ResetTimeEstimate(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("mrResetTimeEstimate", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1484,7 +1487,7 @@ func ResetSpentTime(ctx context.Context, client *gitlabclient.Client, input GetI
 	ts, _, err := client.GL().MergeRequests.ResetSpentTime(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("mrResetSpentTime", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1503,7 +1506,7 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 	ts, _, err := client.GL().MergeRequests.GetTimeSpent(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("mrGetTimeStats", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1598,7 +1601,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 				"a pending todo for this MR already exists for the authenticated user \u2014 use gitlab_todo_list to inspect it")
 		}
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	out := CreateTodoOutput{
 		ID:         todo.ID,
@@ -1748,7 +1751,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 				"MR dependencies require GitLab Premium or Ultimate")
 		}
 		return DependenciesOutput{}, toolutil.WrapErrWithStatusHint("mrGetDependencies", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			hintVerifyMR)
 	}
 	out := make([]DependencyOutput, len(deps))
 	for i := range deps {

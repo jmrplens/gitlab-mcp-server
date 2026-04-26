@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_job_token_access_settings",
 		Title:       toolutil.TitleFromName("gitlab_get_job_token_access_settings"),
-		Description: "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_list_ci_variables",
+		Description: "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_ci_variable_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconToken,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetAccessSettingsInput) (*mcp.CallToolResult, AccessSettingsOutput, error) {

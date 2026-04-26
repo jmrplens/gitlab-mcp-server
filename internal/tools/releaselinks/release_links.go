@@ -192,7 +192,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	l, _, err := client.GL().ReleaseLinks.DeleteReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("Delete", err, http.StatusNotFound,
-			"verify link_id with gitlab_release_links_list; deleting release links requires Developer role or higher")
+			"verify link_id with gitlab_release_link_list; deleting release links requires Developer role or higher")
 	}
 	return ToOutput(l), nil
 }
@@ -211,7 +211,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	l, _, err := client.GL().ReleaseLinks.GetReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
-			"verify link_id with gitlab_release_links_list and tag_name with gitlab_release_list")
+			"verify link_id with gitlab_release_link_list and tag_name with gitlab_release_list")
 	}
 	return ToOutput(l), nil
 }
@@ -246,7 +246,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	l, _, err := client.GL().ReleaseLinks.UpdateReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("Update", err, http.StatusBadRequest,
-			"name and url must remain unique within the release; link_type must be one of {other, runbook, image, package}; verify link_id with gitlab_release_links_list")
+			"name and url must remain unique within the release; link_type must be one of {other, runbook, image, package}; verify link_id with gitlab_release_link_list")
 	}
 	return ToOutput(l), nil
 }

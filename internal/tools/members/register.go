@@ -87,7 +87,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_project_member_delete",
 		Title:       toolutil.TitleFromName("gitlab_project_member_delete"),
-		Description: "Remove a member from a project.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_member_list.",
+		Description: "Remove a member from a project.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_members_list.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

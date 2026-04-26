@@ -36,7 +36,7 @@ type ListOutput struct {
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	groups, _, err := client.GL().ResourceGroup.GetAllResourceGroupsForAProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_groups", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_groups", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 	items := make([]ResourceGroupItem, 0, len(groups))
 	for _, g := range groups {

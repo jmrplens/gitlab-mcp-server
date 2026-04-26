@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_topics",
 		Title:       toolutil.TitleFromName("gitlab_list_topics"),
-		Description: "List project topics. Can be filtered by search query.\n\nSee also: gitlab_create_topic, gitlab_list_projects\n\nReturns: JSON with array of topics and pagination info.",
+		Description: "List project topics. Can be filtered by search query.\n\nSee also: gitlab_create_topic, gitlab_project_list\n\nReturns: JSON with array of topics and pagination info.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

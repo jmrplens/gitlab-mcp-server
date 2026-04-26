@@ -23,6 +23,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyProjectExists is the 404 hint shared by project tools.
+const hintVerifyProjectExists = "verify the project exists with gitlab_project_get"
+
 // boolToAccessLevel converts a bool pointer to an AccessControlValue pointer
 // for bridging legacy bool-based tool inputs to the modern AccessLevel API.
 func boolToAccessLevel(b *bool) *gl.AccessControlValue {
@@ -944,7 +947,7 @@ func Star(ctx context.Context, client *gitlabclient.Client, input StarInput) (Ou
 	p, _, err := client.GL().Projects.StarProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("projectStar", err, http.StatusNotModified,
-			"project is already starred by the authenticated user \u2014 use gitlab_project_get to inspect star_count and gitlab_user_list_starred_projects to list current stars")
+			"project is already starred by the authenticated user \u2014 use gitlab_project_get to inspect star_count and gitlab_project_list_user_starred to list current stars")
 	}
 	return ToOutput(p), nil
 }
@@ -1052,7 +1055,7 @@ func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferIn
 				"transferring a project requires Owner role on the source AND permission to create projects in the target namespace")
 		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
 			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"verify the target namespace exists \u2014 use gitlab_group_list or gitlab_user_get; namespace must be a numeric ID or full path")
+				"verify the target namespace exists \u2014 use gitlab_group_list or gitlab_get_user; namespace must be a numeric ID or full path")
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
 				"target namespace may already contain a project with this name/path; consider renaming the project before transferring")
@@ -1273,10 +1276,10 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListHooksOutput{}, toolutil.WrapErrWithHint("projectListHooks", err,
-				"only Maintainers and Owners can list project webhooks \u2014 verify your role with gitlab_project_member_list")
+				"only Maintainers and Owners can list project webhooks \u2014 verify your role with gitlab_project_members_list")
 		}
 		return ListHooksOutput{}, toolutil.WrapErrWithStatusHint("projectListHooks", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			hintVerifyProjectExists)
 	}
 	out := make([]HookOutput, 0, len(hooks))
 	for _, h := range hooks {
@@ -1664,7 +1667,7 @@ func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input Li
 	projects, resp, err := client.GL().Projects.ListUserProjects(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserProjects", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_user_get to verify user_id (numeric ID or exact username)")
+			"user not found \u2014 use gitlab_get_user to verify user_id (numeric ID or exact username)")
 	}
 	out := make([]Output, len(projects))
 	for i, p := range projects {
@@ -1734,7 +1737,7 @@ func ListProjectUsers(ctx context.Context, client *gitlabclient.Client, input Li
 	users, resp, err := client.GL().Projects.ListProjectsUsers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectUsersOutput{}, toolutil.WrapErrWithStatusHint("projectListUsers", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			hintVerifyProjectExists)
 	}
 	out := make([]ProjectUserOutput, len(users))
 	for i, u := range users {
@@ -1820,7 +1823,7 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 	groups, resp, err := client.GL().Projects.ListProjectsGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListGroups", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			hintVerifyProjectExists)
 	}
 	out := make([]ProjectGroupOutput, len(groups))
 	for i, g := range groups {
@@ -1874,7 +1877,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 	starrers, resp, err := client.GL().Projects.ListProjectStarrers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectStarrersOutput{}, toolutil.WrapErrWithStatusHint("projectListStarrers", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			hintVerifyProjectExists)
 	}
 	out := make([]StarrerOutput, len(starrers))
 	for i, s := range starrers {
@@ -2020,7 +2023,7 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 	groups, resp, err := client.GL().Projects.ListProjectsInvitedGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListInvitedGroups", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			hintVerifyProjectExists)
 	}
 	out := make([]ProjectGroupOutput, len(groups))
 	for i, g := range groups {
@@ -2061,7 +2064,7 @@ func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Clien
 	projects, resp, err := client.GL().Projects.ListUserContributedProjects(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserContributed", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_user_get to verify user_id")
+			"user not found \u2014 use gitlab_get_user to verify user_id")
 	}
 	out := make([]Output, len(projects))
 	for i, p := range projects {
@@ -2102,7 +2105,7 @@ func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, i
 	projects, resp, err := client.GL().Projects.ListUserStarredProjects(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserStarred", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_user_get to verify user_id")
+			"user not found \u2014 use gitlab_get_user to verify user_id")
 	}
 	out := make([]Output, len(projects))
 	for i, p := range projects {
@@ -2831,7 +2834,7 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 				"creating a project on behalf of another user requires an admin token (instance-administrator scope) \u2014 use gitlab_project_create for the authenticated user instead")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForUser", err, http.StatusNotFound,
-			"target user_id not found \u2014 use gitlab_user_get to verify")
+			"target user_id not found \u2014 use gitlab_get_user to verify")
 	}
 	return ToOutput(p), nil
 }

@@ -173,7 +173,7 @@ func GetInstance(ctx context.Context, client *gitlabclient.Client, input GetInst
 	e, _, err := client.GL().AuditEvents.GetInstanceAuditEvent(input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetInstance", err, http.StatusNotFound,
-			"verify id with gitlab_audit_list_instance; admin-only on self-managed Premium/Ultimate")
+			"verify id with gitlab_list_instance_audit_events; admin-only on self-managed Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -213,7 +213,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	e, _, err := client.GL().AuditEvents.GetGroupAuditEvent(string(input.GroupID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetGroup", err, http.StatusNotFound,
-			"verify group_id + id combination with gitlab_audit_list_group; requires Owner + Premium/Ultimate")
+			"verify group_id + id combination with gitlab_list_group_audit_events; requires Owner + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -253,7 +253,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	e, _, err := client.GL().AuditEvents.GetProjectAuditEvent(string(input.ProjectID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetProject", err, http.StatusNotFound,
-			"verify project_id + id combination with gitlab_audit_list_project; requires Maintainer + Premium/Ultimate")
+			"verify project_id + id combination with gitlab_list_project_audit_events; requires Maintainer + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }

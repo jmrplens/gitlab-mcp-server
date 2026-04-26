@@ -61,7 +61,7 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	keys, _, err := client.GL().Users.ListGPGKeysForUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_gpg_keys_for_user", err, http.StatusNotFound,
-			"verify user_id with gitlab_user_get; viewing other users' GPG keys may require admin token")
+			"verify user_id with gitlab_get_user; viewing other users' GPG keys may require admin token")
 	}
 	return ListOutput{Keys: toOutputList(keys)}, nil
 }

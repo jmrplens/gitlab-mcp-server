@@ -38,7 +38,7 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys_for_user", err, http.StatusNotFound,
-			"verify user_id with gitlab_user_get; the user may have no SSH keys")
+			"verify user_id with gitlab_get_user; the user may have no SSH keys")
 	}
 
 	out := make([]SSHKeyOutput, 0, len(keys))
@@ -163,7 +163,7 @@ func AddSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ad
 	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key_for_user", err, http.StatusForbidden,
-			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with gitlab_user_get")
+			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with gitlab_get_user")
 	}
 	return toSSHKeyOutput(k), nil
 }

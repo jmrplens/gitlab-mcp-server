@@ -276,7 +276,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_issue_participants",
 		Title:       toolutil.TitleFromName("gitlab_issue_participants"),
-		Description: "List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_member_list.",
+		Description: "List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_project_members_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, ParticipantsOutput, error) {

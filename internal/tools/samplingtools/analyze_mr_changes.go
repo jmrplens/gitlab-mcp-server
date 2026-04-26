@@ -157,7 +157,7 @@ func FormatAnalyzeMRChangesMarkdown(a AnalyzeMRChangesOutput) string {
 	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_add_mr_note` to comment on specific findings",
-		"Use `gitlab_approve_merge_request` or `gitlab_update_merge_request` to act on the review",
+		"Use `gitlab_mr_approve` or `gitlab_mr_update` to act on the review",
 	)
 	return b.String()
 }

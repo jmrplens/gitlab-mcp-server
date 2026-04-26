@@ -152,7 +152,7 @@ func MarkDone(ctx context.Context, client *gitlabclient.Client, input MarkDoneIn
 
 	_, err := client.GL().Todos.MarkTodoAsDone(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return MarkDoneOutput{}, toolutil.WrapErrWithStatusHint("todoMarkDone", err, http.StatusNotFound, "verify todo_id with gitlab_list_todos")
+		return MarkDoneOutput{}, toolutil.WrapErrWithStatusHint("todoMarkDone", err, http.StatusNotFound, "verify todo_id with gitlab_todo_list")
 	}
 	return MarkDoneOutput{
 		ID:      input.ID,

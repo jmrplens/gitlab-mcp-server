@@ -173,7 +173,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	m, _, err := client.GL().ProjectMembers.GetProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("memberGet", err, http.StatusNotFound,
-			"user is not a direct member of this project; use gitlab_member_get_inherited to include parent-group inheritance, or gitlab_member_list to enumerate members")
+			"user is not a direct member of this project; use gitlab_project_member_get_inherited to include parent-group inheritance, or gitlab_project_members_list to enumerate members")
 	}
 	return ToOutput(m), nil
 }
@@ -190,7 +190,7 @@ func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInp
 	m, _, err := client.GL().ProjectMembers.GetInheritedProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("memberGetInherited", err, http.StatusNotFound,
-			"user is not a member of this project nor any parent group; verify user_id with gitlab_user_list")
+			"user is not a member of this project nor any parent group; verify user_id with gitlab_list_users")
 	}
 	return ToOutput(m), nil
 }
@@ -227,9 +227,9 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project — use gitlab_member_update to change their access level")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project — use gitlab_project_member_edit to change their access level")
 		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found — use gitlab_user_list to search for the user")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found — use gitlab_list_users to search for the user")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("memberAdd", err)
 		}
