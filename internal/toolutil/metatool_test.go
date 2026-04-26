@@ -1039,3 +1039,159 @@ func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
 		})
 	}
 }
+
+// --- OutputSchema tests (TASK-064/065/066/067/071) ---
+
+// TestRouteAction_OutputSchema verifies RouteAction populates OutputSchema
+// from the result type R.
+func TestRouteAction_OutputSchema(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := RouteAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	})
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil for RouteAction[T,R]")
+	}
+	typ, ok := route.OutputSchema["type"]
+	if !ok || typ != "object" {
+		t.Errorf("expected OutputSchema type=object, got %v", typ)
+	}
+	props, ok := route.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("expected OutputSchema to have properties")
+	}
+	if _, ok := props["result"]; !ok {
+		t.Error("expected OutputSchema to include 'result' property from testOutput struct")
+	}
+}
+
+// TestDestructiveAction_OutputSchema verifies DestructiveAction populates OutputSchema.
+func TestDestructiveAction_OutputSchema(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := DestructiveAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	})
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil for DestructiveAction[T,R]")
+	}
+	if !route.Destructive {
+		t.Error("expected Destructive=true")
+	}
+}
+
+// TestRouteActionWithRequest_OutputSchema verifies RouteActionWithRequest populates OutputSchema.
+func TestRouteActionWithRequest_OutputSchema(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := RouteActionWithRequest(client, func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	})
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil for RouteActionWithRequest[T,R]")
+	}
+}
+
+// TestDestructiveActionWithRequest_OutputSchema verifies DestructiveActionWithRequest populates OutputSchema.
+func TestDestructiveActionWithRequest_OutputSchema(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := DestructiveActionWithRequest(client, func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		return testOutput{}, nil
+	})
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil")
+	}
+	if !route.Destructive {
+		t.Error("expected Destructive=true")
+	}
+}
+
+// TestRouteVoidAction_OutputSchema_Nil verifies void variants keep OutputSchema nil.
+func TestRouteVoidAction_OutputSchema_Nil(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := RouteVoidAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	})
+	if route.OutputSchema != nil {
+		t.Errorf("expected OutputSchema to be nil for void action, got %v", route.OutputSchema)
+	}
+}
+
+// TestDestructiveVoidAction_OutputSchema_Nil verifies destructive void variants keep OutputSchema nil.
+func TestDestructiveVoidAction_OutputSchema_Nil(t *testing.T) {
+	client := &gitlabclient.Client{}
+	route := DestructiveVoidAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		return nil
+	})
+	if route.OutputSchema != nil {
+		t.Errorf("expected OutputSchema to be nil for void action, got %v", route.OutputSchema)
+	}
+	if !route.Destructive {
+		t.Error("expected Destructive=true")
+	}
+}
+
+// TestSchemaForRoute_Caching verifies that SchemaForRoute returns the same
+// map instance across multiple calls (cache hit).
+func TestSchemaForRoute_Caching(t *testing.T) {
+	s1 := SchemaForRoute[testOutput]()
+	s2 := SchemaForRoute[testOutput]()
+	if s1 == nil {
+		t.Fatal("expected non-nil schema")
+	}
+	// Pointer comparison: both should be the same cached map.
+	if &s1 == nil || &s2 == nil {
+		t.Fatal("unexpected nil")
+	}
+	j1, _ := json.Marshal(s1)
+	j2, _ := json.Marshal(s2)
+	if string(j1) != string(j2) {
+		t.Errorf("cached schemas differ:\n%s\n%s", j1, j2)
+	}
+}
+
+// TestMetaToolOutputSchema_IsEnvelope verifies the envelope schema returned
+// by MetaToolOutputSchema() contains cross-cutting fields and does NOT contain
+// per-action schemas (regression test for TASK-067).
+func TestMetaToolOutputSchema_IsEnvelope(t *testing.T) {
+	schema := MetaToolOutputSchema()
+	if schema["type"] != "object" {
+		t.Errorf("expected type=object, got %v", schema["type"])
+	}
+	addProps, ok := schema["additionalProperties"]
+	if !ok || addProps != true {
+		t.Error("envelope schema must have additionalProperties=true")
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("expected properties map")
+	}
+	if _, ok := props["next_steps"]; !ok {
+		t.Error("expected next_steps in envelope properties")
+	}
+	if _, ok := props["pagination"]; !ok {
+		t.Error("expected pagination in envelope properties")
+	}
+	// Envelope must NOT contain per-action output schemas.
+	if _, ok := props["result"]; ok {
+		t.Error("envelope should not contain per-action fields like 'result'")
+	}
+}
+
+// TestRoute_OutputSchema_Nil verifies plain Route() has nil OutputSchema.
+func TestRoute_OutputSchema_Nil(t *testing.T) {
+	r := Route(func(_ context.Context, _ map[string]any) (any, error) {
+		return nil, nil
+	})
+	if r.OutputSchema != nil {
+		t.Error("expected nil OutputSchema for plain Route()")
+	}
+}
+
+// TestDestructiveRoute_OutputSchema_Nil verifies plain DestructiveRoute() has nil OutputSchema.
+func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
+	r := DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
+		return nil, nil
+	})
+	if r.OutputSchema != nil {
+		t.Error("expected nil OutputSchema for plain DestructiveRoute()")
+	}
+}

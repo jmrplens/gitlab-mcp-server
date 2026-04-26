@@ -10,11 +10,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -37,24 +40,62 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
-// without string parsing.
+// without string parsing. OutputSchema holds the JSON Schema for the
+// action's typed output (nil for void actions).
 type ActionRoute struct {
-	Handler     ActionFunc
-	Destructive bool
+	Handler      ActionFunc
+	Destructive  bool
+	OutputSchema map[string]any
 }
 
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-// Route creates a non-destructive ActionRoute.
+// Route creates a non-destructive ActionRoute without an output schema.
 func Route(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: false}
 }
 
-// DestructiveRoute creates a destructive ActionRoute that will trigger
-// user confirmation before execution.
+// DestructiveRoute creates a destructive ActionRoute without an output schema.
 func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
+}
+
+// --- Output schema cache ---
+
+var (
+	outputSchemaCache sync.Map // reflect.Type → map[string]any
+)
+
+// schemaForType generates a JSON Schema map for the given reflect.Type
+// and caches the result. Returns nil on error (best-effort).
+func schemaForType(rt reflect.Type) map[string]any {
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if cached, ok := outputSchemaCache.Load(rt); ok {
+		return cached.(map[string]any)
+	}
+	schema, err := jsonschema.ForType(rt, nil)
+	if err != nil {
+		return nil
+	}
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	outputSchemaCache.Store(rt, m)
+	return m
+}
+
+// SchemaForRoute returns the cached output schema for type R.
+// Exported for use by gen_llms and audit tools.
+func SchemaForRoute[R any]() map[string]any {
+	return schemaForType(reflect.TypeFor[R]())
 }
 
 // requestContextKey is the context key for storing the MCP request in
@@ -158,34 +199,56 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 	}
 }
 
-// RouteAction wraps a typed function as a non-destructive ActionRoute.
+// RouteAction wraps a typed function as a non-destructive ActionRoute
+// and attaches the JSON Schema for the output type R.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapAction(client, fn))
+	return ActionRoute{
+		Handler:      WrapAction(client, fn),
+		Destructive:  false,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
+// OutputSchema is nil because the action returns no data.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return Route(WrapVoidAction(client, fn))
 }
 
-// RouteActionWithRequest wraps a typed function that needs the MCP request as a non-destructive ActionRoute.
+// RouteActionWithRequest wraps a typed function that needs the MCP request
+// as a non-destructive ActionRoute and attaches the output schema.
 func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapActionWithRequest(client, fn))
+	return ActionRoute{
+		Handler:      WrapActionWithRequest(client, fn),
+		Destructive:  false,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
-// DestructiveAction wraps a typed function as a destructive ActionRoute.
+// DestructiveAction wraps a typed function as a destructive ActionRoute
+// and attaches the output schema.
 func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapAction(client, fn))
+	return ActionRoute{
+		Handler:      WrapAction(client, fn),
+		Destructive:  true,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
+// OutputSchema is nil because the action returns no data.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return DestructiveRoute(WrapVoidAction(client, fn))
 }
 
-// DestructiveActionWithRequest wraps a typed function that needs the MCP request as a destructive ActionRoute.
+// DestructiveActionWithRequest wraps a typed function that needs the MCP request
+// as a destructive ActionRoute and attaches the output schema.
 func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapActionWithRequest(client, fn))
+	return ActionRoute{
+		Handler:      WrapActionWithRequest(client, fn),
+		Destructive:  true,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // FormatResultFunc converts an action result into an MCP call tool result.
