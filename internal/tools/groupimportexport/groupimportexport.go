@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -36,7 +37,7 @@ type ScheduleExportOutput struct {
 func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input ScheduleExportInput) (ScheduleExportOutput, error) {
 	_, err := client.GL().GroupImportExport.ScheduleExport(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return ScheduleExportOutput{}, toolutil.WrapErrWithMessage("schedule_group_export", err)
+		return ScheduleExportOutput{}, toolutil.WrapErrWithStatusHint("schedule_group_export", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
 	}
 	return ScheduleExportOutput{Message: "Group export scheduled successfully"}, nil
 }
@@ -61,7 +62,7 @@ type ExportDownloadOutput struct {
 func ExportDownload(ctx context.Context, client *gitlabclient.Client, input ExportDownloadInput) (ExportDownloadOutput, error) {
 	reader, _, err := client.GL().GroupImportExport.ExportDownload(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return ExportDownloadOutput{}, toolutil.WrapErrWithMessage("download_group_export", err)
+		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("download_group_export", err, http.StatusNotFound, "export must be scheduled first with gitlab_schedule_group_export")
 	}
 
 	data, err := io.ReadAll(reader)
@@ -106,7 +107,7 @@ func ImportFile(ctx context.Context, client *gitlabclient.Client, input ImportFi
 
 	_, err := client.GL().GroupImportExport.ImportFile(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ImportFileOutput{}, toolutil.WrapErrWithMessage("import_group_file", err)
+		return ImportFileOutput{}, toolutil.WrapErrWithStatusHint("import_group_file", err, http.StatusBadRequest, "verify the file path points to a valid .tar.gz group export archive")
 	}
 	return ImportFileOutput{Message: "Group import started successfully"}, nil
 }

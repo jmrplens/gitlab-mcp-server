@@ -4,6 +4,7 @@ package grouprelationsexport
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -28,7 +29,7 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	}
 	_, err := client.GL().GroupRelationsExport.ScheduleExport(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_schedule_group_relations_export", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_schedule_group_relations_export", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
 	}
 	return nil
 }
@@ -72,7 +73,7 @@ func ListExportStatus(ctx context.Context, client *gitlabclient.Client, input Li
 	}
 	statuses, resp, err := client.GL().GroupRelationsExport.ListExportStatus(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_list_group_relations_export_status", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_list_group_relations_export_status", err, http.StatusNotFound, "verify group_id with gitlab_get_group")
 	}
 	items := make([]ExportStatusItem, 0, len(statuses))
 	for _, s := range statuses {

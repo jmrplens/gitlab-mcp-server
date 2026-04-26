@@ -4,6 +4,7 @@ package groupcredentials
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -160,7 +161,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 	}
 	tokens, resp, err := client.GL().GroupCredentials.ListGroupPersonalAccessTokens(in.GroupID.String(), opts)
 	if err != nil {
-		return PATListOutput{}, toolutil.WrapErrWithMessage("list group PATs", err)
+		return PATListOutput{}, toolutil.WrapErrWithStatusHint("list group PATs", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
 	}
 	out := PATListOutput{Tokens: make([]PATOutput, 0, len(tokens))}
 	for _, t := range tokens {
@@ -187,7 +188,7 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 	}
 	keys, resp, err := client.GL().GroupCredentials.ListGroupSSHKeys(in.GroupID.String(), opts)
 	if err != nil {
-		return SSHKeyListOutput{}, toolutil.WrapErrWithMessage("list group SSH keys", err)
+		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH keys", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
 	}
 	out := SSHKeyListOutput{Keys: make([]SSHKeyOutput, 0, len(keys))}
 	for _, k := range keys {
@@ -210,7 +211,7 @@ func RevokePAT(ctx context.Context, client *gitlabclient.Client, in RevokePATInp
 	}
 	_, err := client.GL().GroupCredentials.RevokeGroupPersonalAccessToken(in.GroupID.String(), in.TokenID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("revoke group PAT", err)
+		return toolutil.WrapErrWithStatusHint("revoke group PAT", err, http.StatusNotFound, "verify token_id with gitlab_list_group_pats")
 	}
 	return nil
 }
@@ -228,7 +229,7 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, in DeleteSSH
 	}
 	_, err := client.GL().GroupCredentials.DeleteGroupSSHKey(in.GroupID.String(), in.KeyID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete group SSH key", err)
+		return toolutil.WrapErrWithStatusHint("delete group SSH key", err, http.StatusNotFound, "verify key_id with gitlab_list_group_ssh_keys")
 	}
 	return nil
 }

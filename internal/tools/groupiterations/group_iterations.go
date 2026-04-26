@@ -3,6 +3,7 @@ package groupiterations
 
 import (
 	"context"
+	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -90,7 +91,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	items, resp, err := client.GL().GroupIterations.ListGroupIterations(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_group_iterations", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_iterations", err, http.StatusNotFound, "verify group_id with gitlab_get_group \u2014 iterations require Premium license")
 	}
 	out := ListOutput{
 		Iterations: make([]Output, 0, len(items)),

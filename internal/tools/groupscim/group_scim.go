@@ -4,6 +4,7 @@ package groupscim
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -77,7 +78,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	ids, _, err := client.GL().GroupSCIM.GetSCIMIdentitiesForGroup(in.GroupID.String())
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list SCIM identities for group", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list SCIM identities for group", err, http.StatusNotFound, "verify group_id \u2014 SCIM provisioning requires Premium license and SAML SSO")
 	}
 	out := ListOutput{Identities: make([]Output, 0, len(ids))}
 	for _, id := range ids {
@@ -99,7 +100,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	id, _, err := client.GL().GroupSCIM.GetSCIMIdentity(in.GroupID.String(), in.UID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get SCIM identity", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
 	}
 	return toOutput(id), nil
 }
@@ -123,7 +124,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) er
 	}
 	_, err := client.GL().GroupSCIM.UpdateSCIMIdentity(in.GroupID.String(), in.UID, opts)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("update SCIM identity", err)
+		return toolutil.WrapErrWithStatusHint("update SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
 	}
 	return nil
 }
@@ -141,7 +142,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().GroupSCIM.DeleteSCIMIdentity(in.GroupID.String(), in.UID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete SCIM identity", err)
+		return toolutil.WrapErrWithStatusHint("delete SCIM identity", err, http.StatusNotFound, "verify uid with gitlab_list_group_scim_identities")
 	}
 	return nil
 }

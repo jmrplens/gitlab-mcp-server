@@ -4,6 +4,7 @@ package groupsshcerts
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -69,7 +70,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	certs, _, err := client.GL().GroupSSHCertificates.ListGroupSSHCertificates(in.GroupID.String())
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list group SSH certificates", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
 	}
 	out := ListOutput{Certificates: make([]Output, 0, len(certs))}
 	for _, c := range certs {
@@ -98,7 +99,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	}
 	cert, _, err := client.GL().GroupSSHCertificates.CreateGroupSSHCertificate(in.GroupID.String(), opts)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create group SSH certificate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create group SSH certificate", err, http.StatusBadRequest, "verify the SSH certificate key is valid PEM format")
 	}
 	return toOutput(cert), nil
 }
@@ -116,7 +117,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().GroupSSHCertificates.DeleteGroupSSHCertificate(in.GroupID.String(), in.CertificateID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete group SSH certificate", err)
+		return toolutil.WrapErrWithStatusHint("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with gitlab_list_group_ssh_certificates")
 	}
 	return nil
 }

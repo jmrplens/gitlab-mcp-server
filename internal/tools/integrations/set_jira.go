@@ -4,6 +4,7 @@ package integrations
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -91,7 +92,7 @@ func SetJira(ctx context.Context, client *gitlabclient.Client, input SetJiraInpu
 
 	svc, _, err := client.GL().Services.SetJiraService(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return SetJiraOutput{}, toolutil.WrapErrWithMessage("set_jira_integration", err)
+		return SetJiraOutput{}, toolutil.WrapErrWithStatusHint("set_jira_integration", err, http.StatusNotFound, "verify project_id with gitlab_get_project and ensure jira_url is reachable")
 	}
 	return SetJiraOutput{Integration: integrationToItem(&svc.Service)}, nil
 }
