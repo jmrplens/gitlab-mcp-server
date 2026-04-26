@@ -865,9 +865,14 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 
 // buildServerCard creates a Smithery-compatible server-card JSON by spinning up
 // an ephemeral MCP server with a dummy GitLab client, listing all registered
-// tools, and marshaling the result. The dummy client is never used for API
-// calls — it only satisfies createServer's non-nil requirement so that tool
-// registration can proceed.
+// tools, resources, resource templates, and prompts via in-memory MCP session,
+// and marshaling the result. The dummy client is never used for API calls —
+// it only satisfies createServer's non-nil requirement so that registration
+// can proceed.
+//
+// The card includes per-tool OutputSchema, Annotations, and Title so external
+// scanners (Smithery, Glama, MCP Hive) get the full metadata without needing
+// to authenticate against the live MCP endpoint.
 func buildServerCard(cfg *config.Config) ([]byte, error) {
 	// Use configured URL or a placeholder — the dummy client only needs a
 	// parseable URL to register tools; it never makes real API calls.
@@ -884,7 +889,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 	srv := createServer(dummyClient, cfg, nil)
 
 	st, ct := mcp.NewInMemoryTransports()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	serverSession, err := srv.Connect(ctx, st, nil)
@@ -900,23 +905,115 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 	}
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
+	toolsResult, err := session.ListTools(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
 
 	type serverCardTool struct {
-		Name        string `json:"name"`
-		Description string `json:"description,omitempty"`
-		InputSchema any    `json:"inputSchema,omitempty"`
+		Name         string               `json:"name"`
+		Title        string               `json:"title,omitempty"`
+		Description  string               `json:"description,omitempty"`
+		InputSchema  any                  `json:"inputSchema,omitempty"`
+		OutputSchema any                  `json:"outputSchema,omitempty"`
+		Annotations  *mcp.ToolAnnotations `json:"annotations,omitempty"`
 	}
 
-	cardTools := make([]serverCardTool, 0, len(result.Tools))
-	for _, t := range result.Tools {
+	cardTools := make([]serverCardTool, 0, len(toolsResult.Tools))
+	for _, t := range toolsResult.Tools {
 		cardTools = append(cardTools, serverCardTool{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: t.InputSchema,
+			Name:         t.Name,
+			Title:        t.Title,
+			Description:  t.Description,
+			InputSchema:  t.InputSchema,
+			OutputSchema: t.OutputSchema,
+			Annotations:  t.Annotations,
+		})
+	}
+
+	type serverCardResource struct {
+		URI         string           `json:"uri"`
+		Name        string           `json:"name,omitempty"`
+		Title       string           `json:"title,omitempty"`
+		Description string           `json:"description,omitempty"`
+		MIMEType    string           `json:"mimeType,omitempty"`
+		Annotations *mcp.Annotations `json:"annotations,omitempty"`
+	}
+
+	resourcesResult, err := session.ListResources(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list resources: %w", err)
+	}
+	cardResources := make([]serverCardResource, 0, len(resourcesResult.Resources))
+	for _, r := range resourcesResult.Resources {
+		cardResources = append(cardResources, serverCardResource{
+			URI:         r.URI,
+			Name:        r.Name,
+			Title:       r.Title,
+			Description: r.Description,
+			MIMEType:    r.MIMEType,
+			Annotations: r.Annotations,
+		})
+	}
+
+	type serverCardResourceTemplate struct {
+		URITemplate string           `json:"uriTemplate"`
+		Name        string           `json:"name,omitempty"`
+		Title       string           `json:"title,omitempty"`
+		Description string           `json:"description,omitempty"`
+		MIMEType    string           `json:"mimeType,omitempty"`
+		Annotations *mcp.Annotations `json:"annotations,omitempty"`
+	}
+
+	templatesResult, err := session.ListResourceTemplates(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list resource templates: %w", err)
+	}
+	cardTemplates := make([]serverCardResourceTemplate, 0, len(templatesResult.ResourceTemplates))
+	for _, rt := range templatesResult.ResourceTemplates {
+		cardTemplates = append(cardTemplates, serverCardResourceTemplate{
+			URITemplate: rt.URITemplate,
+			Name:        rt.Name,
+			Title:       rt.Title,
+			Description: rt.Description,
+			MIMEType:    rt.MIMEType,
+			Annotations: rt.Annotations,
+		})
+	}
+
+	type serverCardPromptArgument struct {
+		Name        string `json:"name"`
+		Title       string `json:"title,omitempty"`
+		Description string `json:"description,omitempty"`
+		Required    bool   `json:"required,omitempty"`
+	}
+	type serverCardPrompt struct {
+		Name        string                     `json:"name"`
+		Title       string                     `json:"title,omitempty"`
+		Description string                     `json:"description,omitempty"`
+		Arguments   []serverCardPromptArgument `json:"arguments,omitempty"`
+	}
+
+	promptsResult, err := session.ListPrompts(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list prompts: %w", err)
+	}
+	cardPrompts := make([]serverCardPrompt, 0, len(promptsResult.Prompts))
+	for _, p := range promptsResult.Prompts {
+		args := make([]serverCardPromptArgument, 0, len(p.Arguments))
+		for _, a := range p.Arguments {
+			args = append(args, serverCardPromptArgument{
+				Name:        a.Name,
+				Title:       a.Title,
+				Description: a.Description,
+				Required:    a.Required,
+			})
+		}
+		cardPrompts = append(cardPrompts, serverCardPrompt{
+			Name:        p.Name,
+			Title:       p.Title,
+			Description: p.Description,
+			Arguments:   args,
 		})
 	}
 
@@ -929,9 +1026,10 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 			"required": true,
 			"schemes":  []string{"header-token"},
 		},
-		"tools":     cardTools,
-		"resources": []any{},
-		"prompts":   []any{},
+		"tools":             cardTools,
+		"resources":         cardResources,
+		"resourceTemplates": cardTemplates,
+		"prompts":           cardPrompts,
 	}
 
 	return json.Marshal(card)

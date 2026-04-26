@@ -2244,6 +2244,39 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if desc, descOK := tool["description"].(string); !descOK || desc == "" {
 		t.Error("tools[0] missing or empty 'description'")
 	}
+
+	// Verify the card carries resources, resourceTemplates, and prompts.
+	// These are gated by configured registration in createServer; if any
+	// is empty the external scanners (Smithery, Glama) report 0 and the
+	// quality score drops, so we treat empty as a regression.
+	if resourcesRaw, ok := card["resources"].([]any); !ok || len(resourcesRaw) == 0 {
+		t.Error("card 'resources' array missing or empty")
+	}
+	if templatesRaw, ok := card["resourceTemplates"].([]any); !ok || len(templatesRaw) == 0 {
+		t.Error("card 'resourceTemplates' array missing or empty")
+	}
+	if promptsRaw, ok := card["prompts"].([]any); !ok || len(promptsRaw) == 0 {
+		t.Error("card 'prompts' array missing or empty")
+	}
+
+	// Verify per-tool metadata: at least one tool must expose
+	// outputSchema and annotations so external scanners pick them up.
+	var withOutputSchema, withAnnotations int
+	for _, raw := range toolsRaw {
+		tEntry, _ := raw.(map[string]any)
+		if _, ok := tEntry["outputSchema"]; ok {
+			withOutputSchema++
+		}
+		if _, ok := tEntry["annotations"]; ok {
+			withAnnotations++
+		}
+	}
+	if withOutputSchema == 0 {
+		t.Error("no tool exposes 'outputSchema' — scanner will not see typed outputs")
+	}
+	if withAnnotations == 0 {
+		t.Error("no tool exposes 'annotations' — scanner will not see destructive/readOnly hints")
+	}
 }
 
 // TestBuildServerCard_IndividualMode verifies that [buildServerCard] returns
