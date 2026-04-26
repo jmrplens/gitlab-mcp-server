@@ -4,6 +4,7 @@ package memberroles
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -201,7 +202,8 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstan
 	}
 	roles, _, err := client.GL().MemberRolesService.ListInstanceMemberRoles()
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list instance member roles", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance member roles", err, http.StatusForbidden,
+			"requires administrator access; self-managed Ultimate only \u2014 instance-level custom roles are not available on GitLab.com")
 	}
 	out := ListOutput{Roles: make([]Output, 0, len(roles))}
 	for _, r := range roles {
@@ -220,7 +222,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 	}
 	roles, _, err := client.GL().MemberRolesService.ListMemberRoles(in.GroupID.String())
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list group member roles", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group member roles", err, http.StatusForbidden,
+			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with gitlab_group_list")
 	}
 	out := ListOutput{Roles: make([]Output, 0, len(roles))}
 	for _, r := range roles {
@@ -243,7 +246,8 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	opts := buildCreateOpts(in.Name, in.BaseAccessLevel, in.Description, in.Permissions)
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create instance member role", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
+			"requires admin + self-managed Ultimate; base_access_level must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); name must be unique; permissions are a list of valid permission strings")
 	}
 	return toOutput(role), nil
 }
@@ -265,7 +269,8 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	opts := buildCreateOpts(in.Name, in.BaseAccessLevel, in.Description, in.Permissions)
 	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create group member role", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
+			"requires Owner + Ultimate; base_access_level 10/20/30/40; name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
 	return toOutput(role), nil
 }
@@ -280,7 +285,8 @@ func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteI
 	}
 	_, err := client.GL().MemberRolesService.DeleteInstanceMemberRole(in.MemberRoleID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete instance member role", err)
+		return toolutil.WrapErrWithStatusHint("delete instance member role", err, http.StatusForbidden,
+			"requires admin + self-managed Ultimate; verify member_role_id with gitlab_member_role_list_instance; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }
@@ -298,7 +304,8 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGrou
 	}
 	_, err := client.GL().MemberRolesService.DeleteMemberRole(in.GroupID.String(), in.MemberRoleID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete group member role", err)
+		return toolutil.WrapErrWithStatusHint("delete group member role", err, http.StatusForbidden,
+			"requires Owner + Ultimate; verify member_role_id with gitlab_member_role_list_group; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }
