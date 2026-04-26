@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -37,10 +38,17 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
-// without string parsing.
+// and the JSON Schema describing the action's typed output (when known).
 type ActionRoute struct {
 	Handler     ActionFunc
 	Destructive bool
+	// OutputSchema describes the shape of the action's structured result.
+	// Populated by the typed wrappers (RouteAction[T,R], DestructiveAction[T,R],
+	// RouteActionWithRequest[T,R], DestructiveActionWithRequest[T,R]) using the
+	// generic R type parameter. Nil for type-erased Route/DestructiveRoute and
+	// for void variants. Used by MetaToolOutputSchema to build a discriminated
+	// per-action output schema for the parent meta-tool.
+	OutputSchema *jsonschema.Schema
 }
 
 // ActionMap maps action names to their route definitions (handler + metadata).
@@ -51,10 +59,80 @@ func Route(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: false}
 }
 
+// RouteTyped creates a non-destructive ActionRoute and captures the JSON
+// Schema for the static result type R. Use this when the underlying handler
+// must remain a type-erased ActionFunc (e.g. it returns a sentinel sum type
+// like sampling unsupported), but you still want the meta-tool to advertise
+// the typed shape in its OutputSchema for LLMs.
+func RouteTyped[R any](fn ActionFunc) ActionRoute {
+	return ActionRoute{Handler: fn, Destructive: false, OutputSchema: schemaFor[R]()}
+}
+
 // DestructiveRoute creates a destructive ActionRoute that will trigger
 // user confirmation before execution.
 func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
+}
+
+// DestructiveRouteTyped is the destructive equivalent of RouteTyped.
+func DestructiveRouteTyped[R any](fn ActionFunc) ActionRoute {
+	return ActionRoute{Handler: fn, Destructive: true, OutputSchema: schemaFor[R]()}
+}
+
+// schemaFor returns the JSON Schema for type R, post-processed for use as a
+// branch in a meta-tool output schema. The schema is generated via
+// jsonschema.For[R] which by default sets additionalProperties:false on
+// structs; we relax that constraint at the *root* of the branch so that the
+// meta-tool dispatcher can decorate the structured content with extra fields
+// (e.g. "next_steps" injected by enrichWithHints) without failing SDK output
+// validation. Nested object schemas keep their original additionalProperties
+// settings so type safety inside child structures is preserved.
+//
+// Returns nil if schema generation fails (the route then contributes no
+// branch to the union schema).
+func schemaFor[R any]() *jsonschema.Schema {
+	s, err := jsonschema.For[R](nil)
+	if err != nil || s == nil {
+		return nil
+	}
+	relaxRootAdditionalProperties(s)
+	return s
+}
+
+// relaxRootAdditionalProperties clears AdditionalProperties on the schema's
+// root only, and only when it explicitly forbids extras (i.e. is set to
+// schema-false / `additionalProperties: false`). Schemas with
+// `additionalProperties: true` or schema-valued constraints, and the
+// AdditionalProperties of nested objects, are left untouched.
+//
+// This is sufficient because the dispatcher injects "next_steps" only at the
+// top level of the marshaled result, so a recursive walk would needlessly
+// weaken the contract of nested structures.
+func relaxRootAdditionalProperties(s *jsonschema.Schema) {
+	if s == nil || s.AdditionalProperties == nil {
+		return
+	}
+	if schemaForbidsAdditional(s.AdditionalProperties) {
+		s.AdditionalProperties = nil
+	}
+}
+
+// schemaForbidsAdditional reports whether a schema represents a closed
+// object (`additionalProperties: false`). It checks whether Not is
+// non-nil, relying on the assumption that jsonschema-go only emits this
+// representation (`{"not": {}}`) when a Go struct closes its additional
+// properties; in that case Not points to the zero-value Schema. We do
+// not inspect Not's internal fields because future versions of
+// jsonschema-go may include book-keeping flags. If a future schema
+// legitimately carries Not alongside meaningful constraints, this
+// heuristic would incorrectly clear AdditionalProperties — but no such
+// case exists in the current code path (all callers feed schemas
+// produced by jsonschema.For on plain Go structs).
+func schemaForbidsAdditional(s *jsonschema.Schema) bool {
+	if s == nil {
+		return false
+	}
+	return s.Not != nil
 }
 
 // requestContextKey is the context key for storing the MCP request in
@@ -158,24 +236,35 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 	}
 }
 
-// RouteAction wraps a typed function as a non-destructive ActionRoute.
+// RouteAction wraps a typed function as a non-destructive ActionRoute and
+// captures the JSON Schema of the result type R for the meta-tool's union
+// output schema.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapAction(client, fn))
+	r := Route(WrapAction(client, fn))
+	r.OutputSchema = schemaFor[R]()
+	return r
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
+// Void actions contribute no branch to the meta-tool output schema.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return Route(WrapVoidAction(client, fn))
 }
 
-// RouteActionWithRequest wraps a typed function that needs the MCP request as a non-destructive ActionRoute.
+// RouteActionWithRequest wraps a typed function that needs the MCP request as
+// a non-destructive ActionRoute and captures R's schema.
 func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapActionWithRequest(client, fn))
+	r := Route(WrapActionWithRequest(client, fn))
+	r.OutputSchema = schemaFor[R]()
+	return r
 }
 
-// DestructiveAction wraps a typed function as a destructive ActionRoute.
+// DestructiveAction wraps a typed function as a destructive ActionRoute and
+// captures R's schema.
 func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapAction(client, fn))
+	r := DestructiveRoute(WrapAction(client, fn))
+	r.OutputSchema = schemaFor[R]()
+	return r
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
@@ -183,9 +272,12 @@ func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 	return DestructiveRoute(WrapVoidAction(client, fn))
 }
 
-// DestructiveActionWithRequest wraps a typed function that needs the MCP request as a destructive ActionRoute.
+// DestructiveActionWithRequest wraps a typed function that needs the MCP request
+// as a destructive ActionRoute and captures R's schema.
 func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapActionWithRequest(client, fn))
+	r := DestructiveRoute(WrapActionWithRequest(client, fn))
+	r.OutputSchema = schemaFor[R]()
+	return r
 }
 
 // FormatResultFunc converts an action result into an MCP call tool result.
@@ -229,7 +321,15 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		callResult := formatResult(result)
-		return callResult, enrichWithHints(result, callResult), err
+		// Ensure structured content is always a JSON object so it satisfies
+		// MetaToolOutputSchema's `type: "object"` constraint. Void actions
+		// (and any handler that returns nil) would otherwise marshal to
+		// `null` and be rejected by the SDK output validator.
+		structured := enrichWithHints(result, callResult)
+		if structured == nil {
+			structured = struct{}{}
+		}
+		return callResult, structured, err
 	}
 }
 
@@ -339,6 +439,75 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 		},
 		"required":             []any{"action"},
 		"additionalProperties": false,
+	}
+}
+
+// MetaToolOutputSchema builds a JSON Schema describing the union of possible
+// outputs for a meta-tool. For each route in the map that has a typed result
+// (captured via RouteAction[T,R] and friends, or RouteTyped[R] for type-erased
+// handlers), a branch is added to the schema's "anyOf" array, titled with the
+// action name. Type-erased routes (Route / DestructiveRoute without a
+// captured R) and void variants contribute no typed branch.
+//
+// A permissive "any_action_result" branch is *always* appended so that
+// SDK output validation tolerates results that do not match any typed
+// branch. Such results occur when:
+//   - a route is type-erased (Route / DestructiveRoute);
+//   - a void action returns nil (the dispatcher serializes this as `{}`);
+//   - a typed handler returns a sentinel sum-type value (e.g. the
+//     samplingUnsupportedOutput empty struct used by gitlab_analyze when the
+//     client does not advertise sampling capability).
+//
+// The typed branches still serve as machine-readable documentation for LLMs
+// and scanners; the fallback only widens the validator, not the LLM hints.
+//
+// The returned schema is suitable for use as Tool.OutputSchema. Returns
+// untyped nil if no routes carry an output schema, in which case the caller
+// should leave OutputSchema unset.
+//
+// Validation note: each typed branch has root-level additionalProperties
+// relaxed (see schemaFor / relaxRootAdditionalProperties) so SDK output
+// validation tolerates the "next_steps" field that the dispatcher injects at
+// the top level of structured results via enrichWithHints. The fallback
+// branch is intentionally permissive (object with no constraints).
+func MetaToolOutputSchema(routes ActionMap) any {
+	if len(routes) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(routes))
+	for name, r := range routes {
+		if r.OutputSchema == nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+
+	branches := make([]*jsonschema.Schema, 0, len(names)+1)
+	for _, name := range names {
+		s := routes[name].OutputSchema
+		// Copy to avoid mutating the cached schema; only Title needs setting.
+		branch := *s
+		branch.Title = name
+		branches = append(branches, &branch)
+	}
+	// Always append a permissive fallback so the SDK does not reject results
+	// that fall outside the typed branches (void actions, sentinel values,
+	// type-erased routes). LLMs read the typed branches; the SDK uses the
+	// fallback only as a last resort.
+	branches = append(branches, &jsonschema.Schema{
+		Title:       "any_action_result",
+		Description: "Permissive fallback that accepts any object. Used for void actions returning {}, sentinel values, and type-erased routes.",
+		Type:        "object",
+	})
+
+	return &jsonschema.Schema{
+		Type:        "object",
+		Description: "Action-dependent output. The concrete shape depends on the requested action; see the per-branch titles in anyOf for the typed schemas. The dispatcher may also inject a top-level \"next_steps\" array of LLM hints, which is tolerated by every branch.",
+		AnyOf:       branches,
 	}
 }
 

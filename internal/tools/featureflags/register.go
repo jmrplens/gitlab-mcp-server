@@ -108,8 +108,9 @@ Actions:
 - create: Create a feature flag (project_id, name, description, version, active, strategies)
 - update: Update a feature flag (project_id, name, new_name, description, active, strategies)
 - delete: Delete a feature flag (project_id, name)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconConfig,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconConfig,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_feature_flag", routes, nil))
 }

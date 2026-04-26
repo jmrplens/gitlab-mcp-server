@@ -122,8 +122,9 @@ Actions:
 - add_note: Reply to an existing discussion. Params: full_path, iid, discussion_id, body (required)
 - update_note: Update a discussion note. Params: full_path, iid, note_id, body (required)
 - delete_note: Delete a discussion note. Params: full_path, iid, note_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconDiscussion,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconDiscussion,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_epic_discussion", routes, nil))
 }

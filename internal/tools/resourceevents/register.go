@@ -256,8 +256,9 @@ Actions:
 - list_issue_iteration_events: List iteration events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_iteration_event: Get a single issue iteration event. Params: project_id, issue_iid, iteration_event_id (all required)
 - list_issue_weight_events: List weight events for an issue. Params: project_id, issue_iid (required), page, per_page`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconEvent,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconEvent,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_resource_event", routes, nil))
 }

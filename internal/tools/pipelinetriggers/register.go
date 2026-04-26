@@ -123,8 +123,9 @@ Actions:
 - update: Update a trigger token (project_id, trigger_id, description)
 - delete: Delete a trigger token (project_id, trigger_id)
 - run: Trigger a pipeline (project_id, ref, token, variables)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconPipeline,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconPipeline,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_pipeline_trigger", routes, nil))
 }

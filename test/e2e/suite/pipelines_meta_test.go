@@ -17,13 +17,15 @@ import (
 // TestMeta_PipelinesExtended exercises pipeline meta-tool actions not covered
 // by pipelines_test.go: latest, variables, test_report, test_report_summary,
 // update_metadata, cancel, and resource group operations.
+//
+// NOT parallelized: pipeline-heavy tests share a single CI runner; running them
+// concurrently causes pipelines to queue, leading to spurious timeouts.
 func TestMeta_PipelinesExtended(t *testing.T) {
-	t.Parallel()
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -33,12 +35,13 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 		"stages:\n  - test\ntest_job:\n  stage: test\n  script:\n    - echo hello\n",
 		"add CI config")
 
-	// Wait for pipeline creation with polling
+	// Wait for pipeline creation with polling. Sidekiq + runner registration in
+	// ephemeral Docker GitLab CE can be slow on cold starts.
 	t.Run("Latest", func(t *testing.T) {
 		drainSidekiq(ctx, t)
 		var out pipelines.DetailOutput
 		var err error
-		deadline := time.Now().Add(120 * time.Second)
+		deadline := time.Now().Add(600 * time.Second)
 		delay := 2 * time.Second
 		for time.Now().Before(deadline) {
 			out, err = callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
@@ -156,7 +159,7 @@ func TestMeta_ResourceGroups(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)

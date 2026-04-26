@@ -132,7 +132,7 @@ test-e2e-docker:
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
-	  -- -tags e2e -timeout 600s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt || true
+	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt || true
 	@echo "=== Tearing down ==="
 	docker compose -f test/e2e/docker-compose.yml down -v
 	@echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="

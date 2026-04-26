@@ -295,17 +295,17 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 // all 11 sampling analysis tools under one action-dispatched interface.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := toolutil.ActionMap{
-		"mr_changes":         toolutil.Route(wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges)),
-		"issue_summary":      toolutil.Route(wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue)),
-		"release_notes":      toolutil.Route(wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes)),
-		"pipeline_failure":   toolutil.Route(wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure)),
-		"mr_review":          toolutil.Route(wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview)),
-		"milestone_report":   toolutil.Route(wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport)),
-		"ci_config":          toolutil.Route(wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig)),
-		"issue_scope":        toolutil.Route(wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope)),
-		"mr_security":        toolutil.Route(wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity)),
-		"technical_debt":     toolutil.Route(wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt)),
-		"deployment_history": toolutil.Route(wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory)),
+		"mr_changes":         toolutil.RouteTyped[AnalyzeMRChangesOutput](wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges)),
+		"issue_summary":      toolutil.RouteTyped[SummarizeIssueOutput](wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue)),
+		"release_notes":      toolutil.RouteTyped[GenerateReleaseNotesOutput](wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes)),
+		"pipeline_failure":   toolutil.RouteTyped[AnalyzePipelineFailureOutput](wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure)),
+		"mr_review":          toolutil.RouteTyped[SummarizeMRReviewOutput](wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview)),
+		"milestone_report":   toolutil.RouteTyped[GenerateMilestoneReportOutput](wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport)),
+		"ci_config":          toolutil.RouteTyped[AnalyzeCIConfigOutput](wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig)),
+		"issue_scope":        toolutil.RouteTyped[AnalyzeIssueScopeOutput](wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope)),
+		"mr_security":        toolutil.RouteTyped[ReviewMRSecurityOutput](wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity)),
+		"technical_debt":     toolutil.RouteTyped[FindTechnicalDebtOutput](wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt)),
+		"deployment_history": toolutil.RouteTyped[AnalyzeDeploymentHistoryOutput](wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory)),
 	}
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -340,8 +340,9 @@ All actions need project_id*. Additional params per action:
 - deployment_history: environment. Frequency, success rate, patterns.
 
 See also: gitlab_merge_request (MR lifecycle), gitlab_issue (issue CRUD), gitlab_pipeline (raw pipelines and test reports), gitlab_release (release CRUD).`,
-		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
-		Icons:       toolutil.IconAnalytics,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
+		Icons:        toolutil.IconAnalytics,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_analyze", routes, metaMarkdownForResult))
 }

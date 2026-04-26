@@ -34,13 +34,15 @@ fast-pass:
 // TestIndividual_CIRunner exercises the full pipeline/job lifecycle using
 // individual MCP tools. Requires a CI runner (Docker mode or self-hosted runner).
 // Subtests are sequential because they share pipeline/job state.
+//
+// NOT parallelized: pipeline-heavy tests share a single CI runner. Running
+// them concurrently causes pipelines to queue, leading to spurious timeouts.
 func TestIndividual_CIRunner(t *testing.T) {
-	t.Parallel()
 	if !hasRunner() {
 		t.Skip("CI runner not available — skipping pipeline/job tests")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 	defer cancel()
 
 	proj := createProject(ctx, t, sess.individual)
@@ -101,7 +103,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 	t.Run("WaitAndJobList", func(t *testing.T) {
 		requireTrue(t, pipelineID > 0, "pipeline ID not set")
 
-		status := waitForPipeline(t, proj.ID, pipelineID, 180*time.Second)
+		status := waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
 		t.Logf("Pipeline %d finished with status: %s", pipelineID, status)
 
 		out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{
@@ -161,7 +163,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 		requireNoError(t, err, "pipeline retry")
 		t.Logf("Retried pipeline: ID=%d status=%s", out.ID, out.Status)
 
-		waitForPipeline(t, proj.ID, pipelineID, 180*time.Second)
+		waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
 	})
 
 	t.Run("PipelineDelete", func(t *testing.T) {
