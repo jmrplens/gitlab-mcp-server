@@ -40,7 +40,7 @@ func LockdownInputSchemas(server *mcp.Server) {
 			}
 			if listResult, ok := result.(*mcp.ListToolsResult); ok && listResult != nil {
 				for _, t := range listResult.Tools {
-					if schema, ok := t.InputSchema.(map[string]any); ok {
+					if schema, isMap := t.InputSchema.(map[string]any); isMap {
 						lockdownSchemaNode(schema)
 					}
 				}
@@ -61,7 +61,7 @@ func lockdownSchemaNode(node map[string]any) {
 
 	if props, ok := node["properties"].(map[string]any); ok {
 		for _, v := range props {
-			if child, ok := v.(map[string]any); ok {
+			if child, isMap := v.(map[string]any); isMap {
 				lockdownSchemaNode(child)
 			}
 		}
@@ -74,7 +74,7 @@ func lockdownSchemaNode(node map[string]any) {
 	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
 		if arr, ok := node[key].([]any); ok {
 			for _, v := range arr {
-				if child, ok := v.(map[string]any); ok {
+				if child, isMap := v.(map[string]any); isMap {
 					lockdownSchemaNode(child)
 				}
 			}

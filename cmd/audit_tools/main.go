@@ -233,7 +233,7 @@ func auditAdditionalProperties(tls []*mcp.Tool, kind string) []violation {
 				fmt.Sprintf("%s tool inputSchema missing additionalProperties:false", kind)})
 			continue
 		}
-		if v, ok := raw.(bool); !ok || v {
+		if v, isBool := raw.(bool); !isBool || v {
 			vs = append(vs, violation{t.Name, "additional-properties",
 				fmt.Sprintf("%s tool inputSchema additionalProperties=%v, want false", kind, raw)})
 		}

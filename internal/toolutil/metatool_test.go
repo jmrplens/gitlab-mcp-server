@@ -1056,11 +1056,11 @@ func TestRouteAction_OutputSchema(t *testing.T) {
 	if !ok || typ != "object" {
 		t.Errorf("expected OutputSchema type=object, got %v", typ)
 	}
-	props, ok := route.OutputSchema["properties"].(map[string]any)
-	if !ok {
+	props, propsOK := route.OutputSchema["properties"].(map[string]any)
+	if !propsOK {
 		t.Fatal("expected OutputSchema to have properties")
 	}
-	if _, ok := props["result"]; !ok {
+	if _, hasResult := props["result"]; !hasResult {
 		t.Error("expected OutputSchema to include 'result' property from testOutput struct")
 	}
 }
@@ -1137,9 +1137,8 @@ func TestSchemaForRoute_Caching(t *testing.T) {
 	if s1 == nil {
 		t.Fatal("expected non-nil schema")
 	}
-	// Pointer comparison: both should be the same cached map.
-	if &s1 == nil || &s2 == nil {
-		t.Fatal("unexpected nil")
+	if s2 == nil {
+		t.Fatal("expected non-nil schema on second call")
 	}
 	j1, _ := json.Marshal(s1)
 	j2, _ := json.Marshal(s2)
@@ -1156,22 +1155,22 @@ func TestMetaToolOutputSchema_IsEnvelope(t *testing.T) {
 	if schema["type"] != "object" {
 		t.Errorf("expected type=object, got %v", schema["type"])
 	}
-	addProps, ok := schema["additionalProperties"]
-	if !ok || addProps != true {
+	addProps, hasAddProps := schema["additionalProperties"]
+	if !hasAddProps || addProps != true {
 		t.Error("envelope schema must have additionalProperties=true")
 	}
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
+	props, propsOK := schema["properties"].(map[string]any)
+	if !propsOK {
 		t.Fatal("expected properties map")
 	}
-	if _, ok := props["next_steps"]; !ok {
+	if _, hasNextSteps := props["next_steps"]; !hasNextSteps {
 		t.Error("expected next_steps in envelope properties")
 	}
-	if _, ok := props["pagination"]; !ok {
+	if _, hasPagination := props["pagination"]; !hasPagination {
 		t.Error("expected pagination in envelope properties")
 	}
 	// Envelope must NOT contain per-action output schemas.
-	if _, ok := props["result"]; ok {
+	if _, hasResult := props["result"]; hasResult {
 		t.Error("envelope should not contain per-action fields like 'result'")
 	}
 }
@@ -1179,7 +1178,7 @@ func TestMetaToolOutputSchema_IsEnvelope(t *testing.T) {
 // TestRoute_OutputSchema_Nil verifies plain Route() has nil OutputSchema.
 func TestRoute_OutputSchema_Nil(t *testing.T) {
 	r := Route(func(_ context.Context, _ map[string]any) (any, error) {
-		return nil, nil
+		return "", nil
 	})
 	if r.OutputSchema != nil {
 		t.Error("expected nil OutputSchema for plain Route()")
@@ -1189,7 +1188,7 @@ func TestRoute_OutputSchema_Nil(t *testing.T) {
 // TestDestructiveRoute_OutputSchema_Nil verifies plain DestructiveRoute() has nil OutputSchema.
 func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 	r := DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
-		return nil, nil
+		return "", nil
 	})
 	if r.OutputSchema != nil {
 		t.Error("expected nil OutputSchema for plain DestructiveRoute()")

@@ -96,7 +96,7 @@ func TestEnrichPaginationConstraints_PreservesExisting(t *testing.T) {
 
 // TestEnrichPaginationConstraints_SkipsNonNumeric verifies the middleware
 // does not mutate properties named page/per_page when their declared type
-// is non-numeric (defensive behaviour for custom schemas).
+// is non-numeric (defensive behavior for custom schemas).
 func TestEnrichPaginationConstraints_SkipsNonNumeric(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{

@@ -20,7 +20,7 @@ import (
 // retry-loop with a flaky tool can fire dozens of identical calls per
 // second) and to give operators a single knob they can tighten when they
 // see 429s in practice. Default is off so existing deployments keep their
-// current behaviour.
+// current behavior.
 //
 // The limiter shares a single bucket across the server. In HTTP mode each
 // per-token server instance from the pool gets its own RateLimiter, so the

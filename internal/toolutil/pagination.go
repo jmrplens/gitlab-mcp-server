@@ -16,7 +16,7 @@ import (
 // directly in tools/list responses.
 type PaginationInput struct {
 	Page    int `json:"page,omitempty"     jsonschema:"Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward."`
-	PerPage int `json:"per_page,omitempty" jsonschema:"Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large."`
+	PerPage int `json:"per_page,omitempty" jsonschema:"Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large."`
 }
 
 // PaginationOutput holds pagination metadata extracted from GitLab API responses.

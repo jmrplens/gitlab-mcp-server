@@ -37,7 +37,7 @@ func EnrichPaginationConstraints(server *mcp.Server) {
 			}
 			if listResult, ok := result.(*mcp.ListToolsResult); ok && listResult != nil {
 				for _, t := range listResult.Tools {
-					if schema, ok := t.InputSchema.(map[string]any); ok {
+					if schema, isMap := t.InputSchema.(map[string]any); isMap {
 						enrichPaginationNode(schema)
 					}
 				}
@@ -51,15 +51,15 @@ func EnrichPaginationConstraints(server *mcp.Server) {
 // property in the given schema node, then recurses through nested schemas.
 func enrichPaginationNode(node map[string]any) {
 	if props, ok := node["properties"].(map[string]any); ok {
-		if page, ok := props["page"].(map[string]any); ok && isIntegerLike(page) {
+		if page, isPage := props["page"].(map[string]any); isPage && isIntegerLike(page) {
 			setIfAbsent(page, "minimum", float64(1))
 		}
-		if perPage, ok := props["per_page"].(map[string]any); ok && isIntegerLike(perPage) {
+		if perPage, isPerPage := props["per_page"].(map[string]any); isPerPage && isIntegerLike(perPage) {
 			setIfAbsent(perPage, "minimum", float64(1))
 			setIfAbsent(perPage, "maximum", float64(100))
 		}
 		for _, v := range props {
-			if child, ok := v.(map[string]any); ok {
+			if child, isMap := v.(map[string]any); isMap {
 				enrichPaginationNode(child)
 			}
 		}
@@ -72,7 +72,7 @@ func enrichPaginationNode(node map[string]any) {
 	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
 		if arr, ok := node[key].([]any); ok {
 			for _, v := range arr {
-				if child, ok := v.(map[string]any); ok {
+				if child, isMap := v.(map[string]any); isMap {
 					enrichPaginationNode(child)
 				}
 			}
@@ -89,7 +89,7 @@ func isIntegerLike(node map[string]any) bool {
 	if !ok {
 		return true
 	}
-	if s, ok := t.(string); ok {
+	if s, isStr := t.(string); isStr {
 		return s == "integer" || s == "number"
 	}
 	return false

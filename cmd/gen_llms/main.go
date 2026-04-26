@@ -410,7 +410,7 @@ func writeAnnotations(b *strings.Builder, ann *mcp.ToolAnnotations) {
 }
 
 // writeActionOutputSchemas writes a per-action output schema summary for a meta-tool.
-func writeActionOutputSchemas(b *strings.Builder, toolName string, routes toolutil.ActionMap) {
+func writeActionOutputSchemas(b *strings.Builder, _ string, routes toolutil.ActionMap) {
 	if len(routes) == 0 {
 		return
 	}

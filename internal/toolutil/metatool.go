@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
 	"sort"
@@ -54,8 +55,8 @@ type ActionMap map[string]ActionRoute
 // --- Meta-tool route registry ---
 
 var (
-	metaRoutesMu      sync.Mutex
-	metaRoutesMap     = map[string]ActionMap{}
+	metaRoutesMu  sync.Mutex
+	metaRoutesMap = map[string]ActionMap{}
 )
 
 // RegisterRoutes records a meta-tool's action routes for external consumers
@@ -71,9 +72,7 @@ func MetaRoutes() map[string]ActionMap {
 	metaRoutesMu.Lock()
 	defer metaRoutesMu.Unlock()
 	cp := make(map[string]ActionMap, len(metaRoutesMap))
-	for k, v := range metaRoutesMap {
-		cp[k] = v
-	}
+	maps.Copy(cp, metaRoutesMap)
 	return cp
 }
 
@@ -107,18 +106,19 @@ func schemaForType(rt reflect.Type) map[string]any {
 		rt = rt.Elem()
 	}
 	if cached, ok := outputSchemaCache.Load(rt); ok {
-		return cached.(map[string]any)
+		m, _ := cached.(map[string]any)
+		return m
 	}
 	schema, err := jsonschema.ForType(rt, nil)
 	if err != nil {
 		return nil
 	}
-	data, err := json.Marshal(schema)
-	if err != nil {
+	data, marshalErr := json.Marshal(schema)
+	if marshalErr != nil {
 		return nil
 	}
 	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
+	if unmarshalErr := json.Unmarshal(data, &m); unmarshalErr != nil {
 		return nil
 	}
 	outputSchemaCache.Store(rt, m)
