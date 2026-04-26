@@ -3,6 +3,7 @@ package bulkimports
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -72,7 +73,7 @@ func StartMigration(ctx context.Context, client *gitlabclient.Client, input Star
 
 	resp, _, err := client.GL().BulkImports.StartMigration(opts, gl.WithContext(ctx))
 	if err != nil {
-		return MigrationOutput{}, toolutil.WrapErrWithMessage("start_bulk_import", err)
+		return MigrationOutput{}, toolutil.WrapErrWithStatusHint("start_bulk_import", err, http.StatusBadRequest, "verify source_type (group_entity or project_entity), source_full_path, and destination_namespace")
 	}
 
 	return MigrationOutput{

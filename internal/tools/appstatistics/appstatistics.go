@@ -4,6 +4,7 @@ package appstatistics
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -57,7 +58,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 
 	var raw flexibleStats
 	if _, err = client.GL().Do(req, &raw); err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_application_statistics", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_application_statistics", err, http.StatusForbidden, "application statistics require administrator access")
 	}
 
 	toInt := func(n json.Number) int64 {

@@ -5,6 +5,7 @@ package attestations
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -95,7 +96,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	atts, _, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), in.SubjectDigest, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list attestations", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 attestations require Ultimate license")
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts))}
 	for _, a := range atts {
@@ -117,7 +118,7 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	}
 	data, _, err := client.GL().Attestations.DownloadAttestation(in.ProjectID.String(), in.AttestationIID, gl.WithContext(ctx))
 	if err != nil {
-		return DownloadOutput{}, toolutil.WrapErrWithMessage("download attestation", err)
+		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound, "verify digest_sha is valid for the given project")
 	}
 	return DownloadOutput{
 		AttestationIID: in.AttestationIID,

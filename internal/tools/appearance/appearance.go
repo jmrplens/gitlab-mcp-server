@@ -5,6 +5,7 @@ package appearance
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -71,7 +72,7 @@ type GetOutput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	a, _, err := client.GL().Appearance.GetAppearance(gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("appearance_get", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("appearance_get", err, http.StatusForbidden, "appearance settings require administrator access")
 	}
 	return GetOutput{Appearance: toItem(a)}, nil
 }
@@ -146,7 +147,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	a, _, err := client.GL().Appearance.ChangeAppearance(opts, gl.WithContext(ctx))
 	if err != nil {
-		return UpdateOutput{}, toolutil.WrapErrWithMessage("appearance_update", err)
+		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("appearance_update", err, http.StatusForbidden, "updating appearance requires administrator access")
 	}
 	return UpdateOutput{Appearance: toItem(a)}, nil
 }

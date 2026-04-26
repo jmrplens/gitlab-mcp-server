@@ -3,6 +3,7 @@ package avatar
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -32,7 +33,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	a, _, err := client.GL().Avatar.GetAvatar(opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("gitlab_get_avatar", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_avatar", err, http.StatusBadRequest, "verify email address format")
 	}
 	return GetOutput{AvatarURL: a.AvatarURL}, nil
 }
