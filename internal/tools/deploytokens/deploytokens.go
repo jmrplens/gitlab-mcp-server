@@ -6,6 +6,7 @@ package deploytokens
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -135,7 +136,8 @@ type DeleteGroupInput struct {
 func ListAll(ctx context.Context, client *gitlabclient.Client, _ ListAllInput) (ListOutput, error) {
 	tokens, resp, err := client.GL().DeployTokens.ListAllDeployTokens(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("deploy_token_list_all", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_token_list_all", err, http.StatusForbidden,
+			"listing all instance-level deploy tokens requires admin token")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -160,7 +162,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 
 	tokens, resp, err := client.GL().DeployTokens.ListProjectDeployTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("deploy_token_list_project", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_token_list_project", err, http.StatusForbidden,
+			"listing project deploy tokens requires Maintainer role; verify project_id with gitlab_project_get")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -185,7 +188,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 
 	tokens, resp, err := client.GL().DeployTokens.ListGroupDeployTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("deploy_token_list_group", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_token_list_group", err, http.StatusForbidden,
+			"listing group deploy tokens requires Owner role; verify group_id with gitlab_group_get")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -206,7 +210,8 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 
 	token, _, err := client.GL().DeployTokens.GetProjectDeployToken(string(input.ProjectID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_token_get_project", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_get_project", err, http.StatusNotFound,
+			"verify deploy_token_id with gitlab_deploy_token_list_project; the token may have been revoked")
 	}
 
 	return toOutput(token), nil
@@ -223,7 +228,8 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 
 	token, _, err := client.GL().DeployTokens.GetGroupDeployToken(string(input.GroupID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_token_get_group", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_get_group", err, http.StatusNotFound,
+			"verify deploy_token_id with gitlab_deploy_token_list_group; the token may have been revoked")
 	}
 
 	return toOutput(token), nil
@@ -258,7 +264,8 @@ func CreateProject(ctx context.Context, client *gitlabclient.Client, input Creat
 
 	token, _, err := client.GL().DeployTokens.CreateProjectDeployToken(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_token_create_project", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_create_project", err, http.StatusBadRequest,
+			"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within project; requires Maintainer role")
 	}
 
 	return toOutput(token), nil
@@ -293,7 +300,8 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, input CreateG
 
 	token, _, err := client.GL().DeployTokens.CreateGroupDeployToken(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_token_create_group", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_create_group", err, http.StatusBadRequest,
+			"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within group; requires Owner role")
 	}
 
 	return toOutput(token), nil
@@ -310,7 +318,8 @@ func DeleteProject(ctx context.Context, client *gitlabclient.Client, input Delet
 
 	_, err := client.GL().DeployTokens.DeleteProjectDeployToken(string(input.ProjectID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deploy_token_delete_project", err)
+		return toolutil.WrapErrWithStatusHint("deploy_token_delete_project", err, http.StatusForbidden,
+			"deleting project deploy tokens requires Maintainer role; deletion is irreversible \u2014 the token cannot be recovered")
 	}
 
 	return nil
@@ -327,7 +336,8 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, input DeleteG
 
 	_, err := client.GL().DeployTokens.DeleteGroupDeployToken(string(input.GroupID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deploy_token_delete_group", err)
+		return toolutil.WrapErrWithStatusHint("deploy_token_delete_group", err, http.StatusForbidden,
+			"deleting group deploy tokens requires Owner role; deletion is irreversible \u2014 the token cannot be recovered")
 	}
 
 	return nil
