@@ -5,6 +5,7 @@ package invites
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -96,7 +97,8 @@ func ListPendingProjectInvitations(ctx context.Context, client *gitlabclient.Cli
 
 	invites, resp, err := client.GL().Invites.ListPendingProjectInvitations(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage("project_invite_list_pending", err)
+		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint("project_invite_list_pending", err, http.StatusNotFound,
+			"verify project_id; listing pending invitations requires Maintainer or Owner role")
 	}
 
 	out := ListPendingInvitationsOutput{
@@ -127,7 +129,8 @@ func ListPendingGroupInvitations(ctx context.Context, client *gitlabclient.Clien
 
 	invites, resp, err := client.GL().Invites.ListPendingGroupInvitations(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage("group_invite_list_pending", err)
+		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint("group_invite_list_pending", err, http.StatusNotFound,
+			"verify group_id; listing pending invitations requires Owner role")
 	}
 
 	out := ListPendingInvitationsOutput{
@@ -168,7 +171,12 @@ func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input Proj
 
 	result, _, err := client.GL().Invites.ProjectInvites(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return InviteResultOutput{}, toolutil.WrapErrWithMessage("project_invite", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return InviteResultOutput{}, toolutil.WrapErrWithHint("project_invite", err,
+				"inviting users requires Maintainer or Owner role on the project")
+		}
+		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint("project_invite", err, http.StatusBadRequest,
+			"valid access_level: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer), 50 (Owner); expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
 	return toInviteResultOutput(result), nil
@@ -202,7 +210,12 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 
 	result, _, err := client.GL().Invites.GroupInvites(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return InviteResultOutput{}, toolutil.WrapErrWithMessage("group_invite", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return InviteResultOutput{}, toolutil.WrapErrWithHint("group_invite", err,
+				"inviting users requires Owner role on the group")
+		}
+		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint("group_invite", err, http.StatusBadRequest,
+			"valid access_level: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer), 50 (Owner); expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
 	return toInviteResultOutput(result), nil
