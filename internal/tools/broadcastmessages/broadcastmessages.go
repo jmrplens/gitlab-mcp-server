@@ -6,6 +6,7 @@ package broadcastmessages
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -76,7 +77,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	msgs, resp, err := client.GL().BroadcastMessage.ListBroadcastMessages(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("broadcast_message_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_list", err, http.StatusForbidden,
+			"this is an instance-wide endpoint and may require administrator access on self-managed instances; not available on GitLab.com SaaS for non-admins")
 	}
 
 	items := make([]MessageItem, 0, len(msgs))
@@ -109,7 +111,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	m, _, err := client.GL().BroadcastMessage.GetBroadcastMessage(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("broadcast_message_get", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_get", err, http.StatusNotFound,
+			"verify id with gitlab_broadcast_message_list; the message may have been deleted")
 	}
 	return GetOutput{Message: toItem(m)}, nil
 }
@@ -179,7 +182,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithMessage("broadcast_message_create", err)
+		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
+			"requires administrator access; broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/20/30/40/50")
 	}
 	return CreateOutput{Message: toItem(m)}, nil
 }
@@ -218,7 +222,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	m, _, err := client.GL().BroadcastMessage.UpdateBroadcastMessage(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UpdateOutput{}, toolutil.WrapErrWithMessage("broadcast_message_update", err)
+		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_update", err, http.StatusNotFound,
+			"verify id with gitlab_broadcast_message_list; requires administrator access; broadcast_type must be 'banner' or 'notification'")
 	}
 	return UpdateOutput{Message: toItem(m)}, nil
 }
@@ -282,7 +287,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().BroadcastMessage.DeleteBroadcastMessage(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("broadcast_message_delete", err)
+		return toolutil.WrapErrWithStatusHint("broadcast_message_delete", err, http.StatusForbidden,
+			"requires administrator access; verify id with gitlab_broadcast_message_list; deletion is irreversible")
 	}
 	return nil
 }
