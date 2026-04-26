@@ -117,18 +117,22 @@ func relaxRootAdditionalProperties(s *jsonschema.Schema) {
 	}
 }
 
-// schemaForbidsAdditional reports whether a schema is the trivially-false
-// schema (`{"not":{}}` in JSON Schema 2020-12 vocabulary, or any schema
-// whose Not is non-nil with no other constraints). This is what
-// jsonschema-go produces for `additionalProperties: false`.
+// schemaForbidsAdditional reports whether a schema represents a closed
+// object (`additionalProperties: false`). It checks whether Not is
+// non-nil, relying on the assumption that jsonschema-go only emits this
+// representation (`{"not": {}}`) when a Go struct closes its additional
+// properties; in that case Not points to the zero-value Schema. We do
+// not inspect Not's internal fields because future versions of
+// jsonschema-go may include book-keeping flags. If a future schema
+// legitimately carries Not alongside meaningful constraints, this
+// heuristic would incorrectly clear AdditionalProperties — but no such
+// case exists in the current code path (all callers feed schemas
+// produced by jsonschema.For on plain Go structs).
 func schemaForbidsAdditional(s *jsonschema.Schema) bool {
 	if s == nil {
 		return false
 	}
-	if s.Not != nil {
-		return true
-	}
-	return false
+	return s.Not != nil
 }
 
 // requestContextKey is the context key for storing the MCP request in
