@@ -7,6 +7,7 @@ package mrnotes
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -141,7 +142,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Body: new(toolutil.NormalizeText(input.Body)),
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrNoteCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteCreate", err, http.StatusNotFound,
+			"verify project_id and mr_iid with gitlab_merge_request_get; creating notes requires Reporter role or higher")
 	}
 	return ToOutput(n), nil
 }
@@ -174,7 +176,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	notes, resp, err := client.GL().Notes.ListMergeRequestNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("mrNotesList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrNotesList", err, http.StatusNotFound,
+			"verify project_id and mr_iid with gitlab_merge_request_get")
 	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {
@@ -202,7 +205,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		Body: new(toolutil.NormalizeText(input.Body)),
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrNoteUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteUpdate", err, http.StatusForbidden,
+			"only the note author can edit a note; system notes cannot be edited")
 	}
 	return ToOutput(n), nil
 }
@@ -223,7 +227,8 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 	}
 	n, _, err := client.GL().Notes.GetMergeRequestNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrNoteGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteGet", err, http.StatusNotFound,
+			"verify note_id with gitlab_mr_notes_list")
 	}
 	return ToOutput(n), nil
 }
@@ -245,7 +250,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Notes.DeleteMergeRequestNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("mrNoteDelete", err)
+		return toolutil.WrapErrWithStatusHint("mrNoteDelete", err, http.StatusForbidden,
+			"only the note author or a Maintainer can delete a note; system notes cannot be deleted")
 	}
 	return nil
 }
