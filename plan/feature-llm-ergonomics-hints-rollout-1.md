@@ -132,7 +132,7 @@ Sub-phases (one cluster = one commit, ~5 files each):
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-036 | Cluster 4A — Notes & discussions: `issuenotes`, `mrnotes`, `issuediscussions`, `mrdiscussions`, `commitdiscussions` | ✅ | 2026-04-26 |
-| TASK-037 | Cluster 4B — Repo content: `repository`, `tags`, `files`, `repositoryfiles` (if exists), `wikis` | | |
+| TASK-037 | Cluster 4B — Repo content: `repository`, `tags`, `files`, `repositoryfiles` (if exists), `wikis` | ✅ | 2026-04-26 |
 | TASK-038 | Cluster 4C — Group features: `groupmilestones`, `grouplabels`, `groupboards` (if not in T1), `groupwikis`, `grouphooks` | | |
 | TASK-039 | Cluster 4D — Issue tracking: `labels`, `milestones`, `issuelinks`, `epics`, `epicissues` | | |
 | TASK-040 | Cluster 4E — Snippets & uploads: `snippets`, `snippetdiscussions`, `uploads`, `groupmarkdownuploads` | | |
