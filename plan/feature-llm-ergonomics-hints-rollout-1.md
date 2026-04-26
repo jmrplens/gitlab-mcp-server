@@ -152,13 +152,13 @@ Sub-phases (one cluster = one commit, ~5 files each):
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-048 | Long-tail commit 5A (10 files) | | |
-| TASK-049 | Long-tail commit 5B (10 files) | | |
-| TASK-050 | Long-tail commit 5C (10 files) | | |
-| TASK-051 | Long-tail commit 5D (10 files) | | |
-| TASK-052 | Long-tail commit 5E (10 files) | | |
-| TASK-053 | Long-tail commit 5F (10 files) | | |
-| TASK-054 | Long-tail commit 5G (~9 files, final) | | |
+| TASK-048 | Long-tail commit 5A (10 files) | ✅ | 2025-07-23 |
+| TASK-049 | Long-tail commit 5B (10 files) | ✅ | 2025-07-23 |
+| TASK-050 | Long-tail commit 5C (10 files) | ✅ | 2025-07-23 |
+| TASK-051 | Long-tail commit 5D (10 files) | ✅ | 2025-07-23 |
+| TASK-052 | Long-tail commit 5E (10 files) | ✅ | 2025-07-23 |
+| TASK-053 | Long-tail commit 5F (10 files) | ✅ | 2025-07-23 |
+| TASK-054 | Long-tail commit 5G (~9 files, final) | ✅ | 2025-07-23 |
 
 **Phase 5 acceptance:** 168 sites reviewed. **All 1236 original sites accounted for** (either with hint or deliberately left as `WrapErrWithMessage`).
 
