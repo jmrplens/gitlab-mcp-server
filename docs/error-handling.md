@@ -280,3 +280,45 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 | `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction |
 | `internal/toolutil/confirm.go` | Destructive action confirmation flow |
 | `internal/toolutil/output.go` | SuccessResult, ErrorResult helpers |
+
+## LLM Ergonomics Hint Rollout
+
+Actionable hints were added across the entire codebase to help LLMs self-correct when API calls fail. The rollout converted `WrapErrWithMessage` calls to `WrapErrWithHint` (GraphQL) or `WrapErrWithStatusHint` (REST) with domain-specific suggestions.
+
+### Coverage
+
+| Metric | Count |
+| --- | --- |
+| `WrapErrWithHint` call sites (GraphQL) | 257 |
+| `WrapErrWithStatusHint` call sites (REST) | 858 |
+| **Total hinted error sites** | **1,115** |
+| `WrapErrWithMessage` (skip-category, retained) | 344 |
+| `NotFoundResult` (informational 404s) | 32 |
+| Domain sub-packages with hints | 153 of 162 |
+| Source files with hints | 171 |
+
+### Skip Categories
+
+The following `WrapErrWithMessage` calls were intentionally retained because the error originates from local operations, not from the GitLab API:
+
+- **Input validation**: `ErrFieldRequired`, `ErrRequiredInt64`, `ErrRequiredString`
+- **Body parsing**: `json.Unmarshal`, `io.ReadAll`, `io.ReadFull`, `os.ReadFile`, `base64.Decode`
+- **Time parsing**: `time.Parse`
+- **Local construction**: `NewRequest` (constructs HTTP request object locally)
+- **Context cancellation**: `ctx.Err()`
+
+### Hint Patterns
+
+REST error sites use `WrapErrWithStatusHint` which checks a single HTTP status code and appends the hint only when matched, falling back to `WrapErrWithMessage` for other statuses:
+
+```go
+return toolutil.WrapErrWithStatusHint("issueGet", err, http.StatusNotFound,
+    "verify issue_iid with gitlab_issue_list")
+```
+
+GraphQL error sites use `WrapErrWithHint` which always appends the hint (GraphQL errors don't carry HTTP status codes):
+
+```go
+return toolutil.WrapErrWithHint("list_vulnerabilities", err,
+    "verify the project fullPath is correct and your token has access to security features")
+```
