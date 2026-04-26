@@ -51,6 +51,39 @@ type ActionRoute struct {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
+// --- Meta-tool route registry ---
+
+var (
+	metaRoutesMu      sync.Mutex
+	metaRoutesMap     = map[string]ActionMap{}
+)
+
+// RegisterRoutes records a meta-tool's action routes for external consumers
+// (gen_llms, audit_output) to inspect per-action OutputSchema.
+func RegisterRoutes(toolName string, routes ActionMap) {
+	metaRoutesMu.Lock()
+	metaRoutesMap[toolName] = routes
+	metaRoutesMu.Unlock()
+}
+
+// MetaRoutes returns a snapshot of all registered meta-tool route maps.
+func MetaRoutes() map[string]ActionMap {
+	metaRoutesMu.Lock()
+	defer metaRoutesMu.Unlock()
+	cp := make(map[string]ActionMap, len(metaRoutesMap))
+	for k, v := range metaRoutesMap {
+		cp[k] = v
+	}
+	return cp
+}
+
+// ClearMetaRoutes resets the registry (useful for tests).
+func ClearMetaRoutes() {
+	metaRoutesMu.Lock()
+	metaRoutesMap = map[string]ActionMap{}
+	metaRoutesMu.Unlock()
+}
+
 // Route creates a non-destructive ActionRoute without an output schema.
 func Route(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: false}
@@ -263,6 +296,7 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
+	RegisterRoutes(toolName, routes)
 	if formatResult == nil {
 		formatResult = defaultFormatResult
 	}

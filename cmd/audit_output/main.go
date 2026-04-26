@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 type finding struct {
@@ -60,6 +61,7 @@ func main() {
 	findings = append(findings, auditTitle(individual, "individual")...)
 	findings = append(findings, auditTitle(meta, "meta")...)
 	findings = append(findings, auditSeeAlso(individual, "individual")...)
+	findings = append(findings, auditRouteOutputSchema()...)
 
 	printReport(individual, meta, findings)
 }
@@ -141,6 +143,26 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 		if !strings.Contains(strings.ToLower(t.Description), "see also:") {
 			fs = append(fs, finding{t.Name, "see-also",
 				fmt.Sprintf("%s description lacks 'See also:' cross-references", kind)})
+		}
+	}
+	return fs
+}
+
+// auditRouteOutputSchema checks meta-tool routes for missing OutputSchema.
+// Routes without OutputSchema are reported (these are typically void actions
+// or plain Route() calls that lack typed output).
+func auditRouteOutputSchema() []finding {
+	var fs []finding
+	allRoutes := toolutil.MetaRoutes()
+	for toolName, routes := range allRoutes {
+		for action, route := range routes {
+			if route.OutputSchema == nil {
+				fs = append(fs, finding{
+					tool:     toolName,
+					category: "route-output-schema",
+					detail:   fmt.Sprintf("action %q has no OutputSchema (void or untyped)", action),
+				})
+			}
 		}
 	}
 	return fs
