@@ -108,7 +108,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("projectMembersList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectMembersList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; lists direct + inherited members from parent groups")
 	}
 
 	out := ListOutput{
@@ -171,7 +172,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	m, _, err := client.GL().ProjectMembers.GetProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("memberGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("memberGet", err, http.StatusNotFound,
+			"user is not a direct member of this project; use gitlab_member_get_inherited to include parent-group inheritance, or gitlab_member_list to enumerate members")
 	}
 	return ToOutput(m), nil
 }
@@ -187,7 +189,8 @@ func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInp
 
 	m, _, err := client.GL().ProjectMembers.GetInheritedProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("memberGetInherited", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("memberGetInherited", err, http.StatusNotFound,
+			"user is not a member of this project nor any parent group; verify user_id with gitlab_user_list")
 	}
 	return ToOutput(m), nil
 }
@@ -261,7 +264,8 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("memberEdit", err, "you need at least the same or higher access level as the target member")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("memberEdit", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("memberEdit", err, http.StatusBadRequest,
+			"access_level must be one of 10/20/30/40/50; expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)")
 	}
 	return ToOutput(m), nil
 }
@@ -277,7 +281,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().ProjectMembers.DeleteProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("memberDelete", err)
+		return toolutil.WrapErrWithStatusHint("memberDelete", err, http.StatusForbidden,
+			"requires Maintainer role; you cannot remove members whose access level equals or exceeds yours; the last Owner of a project cannot be removed")
 	}
 	return nil
 }
