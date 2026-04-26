@@ -4,6 +4,7 @@ package terraformstates
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -36,7 +37,8 @@ type ListOutput struct {
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	states, _, err := client.GL().TerraformStates.List(input.ProjectPath, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_terraform_states", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_terraform_states", err, http.StatusNotFound,
+			"verify project_path with gitlab_project_get; uses GraphQL \u2014 Terraform states require Maintainer role to view")
 	}
 	items := make([]StateItem, 0, len(states))
 	for _, s := range states {
@@ -61,7 +63,8 @@ type GetInput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (StateItem, error) {
 	s, _, err := client.GL().TerraformStates.Get(input.ProjectPath, input.Name, gl.WithContext(ctx))
 	if err != nil {
-		return StateItem{}, toolutil.WrapErrWithMessage("gitlab_get_terraform_state", err)
+		return StateItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_terraform_state", err, http.StatusNotFound,
+			"verify state name with gitlab_terraform_states_list; the state may not exist for this project")
 	}
 	return StateItem{
 		Name:         s.Name,
@@ -82,7 +85,8 @@ type DeleteInput struct {
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	_, err := client.GL().TerraformStates.Delete(string(input.ProjectID), input.Name, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_terraform_state", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state", err, http.StatusForbidden,
+			"deleting Terraform states requires Maintainer role; deletion is irreversible \u2014 all versions are removed")
 	}
 	return nil
 }
@@ -100,7 +104,8 @@ type DeleteVersionInput struct {
 func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input DeleteVersionInput) error {
 	_, err := client.GL().TerraformStates.DeleteVersion(string(input.ProjectID), input.Name, input.Serial, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_terraform_state_version", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state_version", err, http.StatusNotFound,
+			"verify serial with gitlab_terraform_states_list; cannot delete the latest version \u2014 use gitlab_delete_terraform_state to remove the entire state")
 	}
 	return nil
 }
