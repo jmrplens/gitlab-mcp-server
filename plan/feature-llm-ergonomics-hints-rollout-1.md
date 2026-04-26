@@ -138,7 +138,7 @@ Sub-phases (one cluster = one commit, ~5 files each):
 | TASK-040 | Cluster 4E — Snippets & uploads: `snippets`, `snippetdiscussions`, `uploads`, `groupmarkdownuploads` | ✅ | 2026-04-26 |
 | TASK-041 | Cluster 4F — Releases: `releases`, `releaselinks`, `tags` (if not in 4B) | ✅ | 2026-04-26 |
 | TASK-042 | Cluster 4G — Packages & registries: `packages`, `containerregistry`, `dependencyproxy`, `protectedpackages` | ✅ | 2026-04-26 |
-| TASK-043 | Cluster 4H — User-scoped: `users`, `user_admin`, `usergpgkeys`, `usersshkeys`, `useremails`, `userimpersonationtokens`, `userstatus` | | |
+| TASK-043 | Cluster 4H — User-scoped: `users`, `user_admin`, `usergpgkeys`, `usersshkeys`, `useremails`, `userimpersonationtokens`, `userstatus` | ✅ | 2026-04-26 |
 | TASK-044 | Cluster 4I — CI surface: `cilint`, `cicatalog`, `environments`, `joblogs`, `jobartifacts`, `jobtokenscope` | | |
 | TASK-045 | Cluster 4J — Deployments & infra: `deploykeys`, `deploytokens`, `pages`, `terraformstates`, `clusteragents` | | |
 | TASK-046 | Cluster 4K — Settings & admin: `settings`, `applicationsettings`, `geo`, `keys`, `members`, `accessrequests` | | |
