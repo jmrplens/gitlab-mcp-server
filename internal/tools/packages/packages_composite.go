@@ -92,9 +92,9 @@ func PublishAndLink(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 	linkOut, err := releaselinks.Create(ctx, client, linkInput)
 	if err != nil {
 		return PublishAndLinkOutput{
-			Package: pubOut,
-		}, toolutil.WrapErrWithStatusHint("packagePublishAndLink/link", err, http.StatusBadRequest,
-			"package was published successfully but linking to release failed; verify tag_name with gitlab_release_list and link_type enum {other, runbook, image, package}")
+				Package: pubOut,
+			}, toolutil.WrapErrWithStatusHint("packagePublishAndLink/link", err, http.StatusBadRequest,
+				"package was published successfully but linking to release failed; verify tag_name with gitlab_release_list and link_type enum {other, runbook, image, package}")
 	}
 
 	return PublishAndLinkOutput{
