@@ -8,6 +8,7 @@ package integrations
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -59,7 +60,8 @@ type ListOutput struct {
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	services, _, err := client.GL().Services.ListServices(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_integrations", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_integrations", err, http.StatusForbidden,
+			"requires Maintainer role on the project; verify project_id with gitlab_project_list; lists active integrations only")
 	}
 	items := make([]IntegrationItem, 0, len(services))
 	for _, s := range services {
@@ -213,7 +215,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_integration", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_integration", err, http.StatusNotFound,
+			"verify slug is a valid integration name (e.g. slack, jira, microsoft-teams, jenkins); integration must be active on the project; use gitlab_list_integrations to enumerate enabled integrations")
 	}
 	if result == nil {
 		return GetOutput{}, toolutil.WrapErrWithMessage("get_integration", fmt.Errorf("integration %s returned nil", input.Slug))
@@ -282,7 +285,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_integration", err)
+		return toolutil.WrapErrWithStatusHint("delete_integration", err, http.StatusForbidden,
+			"requires Maintainer role; deactivates the integration on the project; verify slug with gitlab_list_integrations; deletion is irreversible (configuration is removed)")
 	}
 	return nil
 }
