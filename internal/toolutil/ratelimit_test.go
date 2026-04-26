@@ -206,3 +206,12 @@ func connectClient(t *testing.T, server *mcp.Server) (*mcp.ClientSession, contex
 	t.Cleanup(func() { _ = session.Close() })
 	return session, ctx
 }
+
+// TestExtractToolName_NilRequest verifies that extractToolName is safe for
+// nil input (returns empty string).
+func TestExtractToolName_NilRequest(t *testing.T) {
+	t.Parallel()
+	if got := extractToolName(nil); got != "" {
+		t.Errorf("extractToolName(nil) = %q, want empty", got)
+	}
+}

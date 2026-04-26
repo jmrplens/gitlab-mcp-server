@@ -120,3 +120,84 @@ func TestEnrichPaginationConstraints_SkipsNonNumeric(t *testing.T) {
 		t.Errorf("string page unexpectedly received minimum: %v", page["minimum"])
 	}
 }
+
+// TestEnrichPaginationNode_RecursesItems verifies enrichPaginationNode
+// recurses through the "items" key to reach nested page/per_page.
+func TestEnrichPaginationNode_RecursesItems(t *testing.T) {
+	t.Parallel()
+	node := map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"page": map[string]any{"type": "integer"},
+			},
+		},
+	}
+	enrichPaginationNode(node)
+
+	items := node["items"].(map[string]any)
+	page := items["properties"].(map[string]any)["page"].(map[string]any)
+	if v, ok := page["minimum"]; !ok || v.(float64) != 1 {
+		t.Errorf("items→page.minimum = %v, want 1", page["minimum"])
+	}
+}
+
+// TestEnrichPaginationNode_RecursesAnyOfOneOfAllOf verifies enrichPaginationNode
+// recurses through anyOf, oneOf, and allOf arrays to reach nested schemas.
+func TestEnrichPaginationNode_RecursesAnyOfOneOfAllOf(t *testing.T) {
+	t.Parallel()
+	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			node := map[string]any{
+				key: []any{
+					map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"per_page": map[string]any{"type": "integer"},
+						},
+					},
+				},
+			}
+			enrichPaginationNode(node)
+
+			branch := node[key].([]any)[0].(map[string]any)
+			perPage := branch["properties"].(map[string]any)["per_page"].(map[string]any)
+			if v, ok := perPage["minimum"]; !ok || v.(float64) != 1 {
+				t.Errorf("%s→per_page.minimum = %v, want 1", key, perPage["minimum"])
+			}
+			if v, ok := perPage["maximum"]; !ok || v.(float64) != 100 {
+				t.Errorf("%s→per_page.maximum = %v, want 100", key, perPage["maximum"])
+			}
+		})
+	}
+}
+
+// TestIsIntegerLike_NonStringType verifies that isIntegerLike returns false
+// when the "type" field exists but is not a string (e.g. an integer or array).
+func TestIsIntegerLike_NonStringType(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		node map[string]any
+		want bool
+	}{
+		{"no type field (defaults to integer)", map[string]any{}, true},
+		{"type=integer", map[string]any{"type": "integer"}, true},
+		{"type=number", map[string]any{"type": "number"}, true},
+		{"type=string", map[string]any{"type": "string"}, false},
+		{"type=object", map[string]any{"type": "object"}, false},
+		{"type is int (non-string)", map[string]any{"type": 42}, false},
+		{"type is array (non-string)", map[string]any{"type": []any{"integer", "null"}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := isIntegerLike(tt.node)
+			if got != tt.want {
+				t.Errorf("isIntegerLike(%v) = %v, want %v", tt.node, got, tt.want)
+			}
+		})
+	}
+}

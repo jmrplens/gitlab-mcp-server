@@ -1013,3 +1013,160 @@ func TestLoad_ExcludeTools(t *testing.T) {
 		t.Errorf("ExcludeTools[1] = %q, want %q", cfg.ExcludeTools[1], "gitlab_delete_project")
 	}
 }
+
+// TestParseIntNonNegative verifies parseIntNonNegative handles empty strings
+// (default), valid non-negative integers, negative values (error), and
+// invalid strings (error).
+func TestParseIntNonNegative(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		defaultVal int
+		want       int
+		wantErr    bool
+	}{
+		{"empty returns default", "", 40, 40, false},
+		{"zero is valid", "0", 40, 0, false},
+		{"positive value", "10", 0, 10, false},
+		{"whitespace trimmed", " 5 ", 0, 5, false},
+		{"negative value", "-1", 0, 0, true},
+		{"invalid string", "abc", 0, 0, true},
+		{"float string rejected", "1.5", 0, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseIntNonNegative(tt.input, tt.defaultVal)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseIntNonNegative(%q, %d) error = %v, wantErr %v", tt.input, tt.defaultVal, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("parseIntNonNegative(%q, %d) = %d, want %d", tt.input, tt.defaultVal, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseFloatNonNegative verifies parseFloatNonNegative handles empty
+// strings (default), valid non-negative floats, zero (valid, disables
+// feature), negative values (error), and invalid strings (error).
+func TestParseFloatNonNegative(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		defaultVal float64
+		want       float64
+		wantErr    bool
+	}{
+		{"empty returns default", "", 0, 0, false},
+		{"zero is valid", "0", 5.0, 0, false},
+		{"positive integer string", "10", 0, 10, false},
+		{"positive float", "2.5", 0, 2.5, false},
+		{"whitespace trimmed", " 3.14 ", 0, 3.14, false},
+		{"negative value", "-0.1", 0, 0, true},
+		{"invalid string", "abc", 0, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseFloatNonNegative(tt.input, tt.defaultVal)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseFloatNonNegative(%q, %g) error = %v, wantErr %v", tt.input, tt.defaultVal, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("parseFloatNonNegative(%q, %g) = %g, want %g", tt.input, tt.defaultVal, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLoad_RateLimitRPS verifies RATE_LIMIT_RPS env var parsing and defaults.
+func TestLoad_RateLimitRPS(t *testing.T) {
+	tests := []struct {
+		name    string
+		envVal  string
+		want    float64
+		wantErr bool
+	}{
+		{subtestDefault, "", 0, false},
+		{subtestCustom, "5.5", 5.5, false},
+		{subtestInvalid, "not-a-number", 0, true},
+		{"negative rejected", "-1", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testHTTPExampleURL)
+			t.Setenv("GITLAB_TOKEN", "test")
+			if tt.envVal != "" {
+				t.Setenv("RATE_LIMIT_RPS", tt.envVal)
+			}
+			cfg, err := Load()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Load() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf(fmtLoadErr, err)
+			}
+			if cfg.RateLimitRPS != tt.want {
+				t.Errorf("RateLimitRPS = %g, want %g", cfg.RateLimitRPS, tt.want)
+			}
+		})
+	}
+}
+
+// TestLoad_RateLimitBurst verifies RATE_LIMIT_BURST env var parsing and defaults.
+func TestLoad_RateLimitBurst(t *testing.T) {
+	tests := []struct {
+		name    string
+		envVal  string
+		want    int
+		wantErr bool
+	}{
+		{subtestDefault, "", DefaultRateLimitBurst, false},
+		{subtestCustom, "100", 100, false},
+		{subtestInvalid, "xyz", 0, true},
+		{"negative rejected", "-5", 0, true},
+		{"zero is valid", "0", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testHTTPExampleURL)
+			t.Setenv("GITLAB_TOKEN", "test")
+			if tt.envVal != "" {
+				t.Setenv("RATE_LIMIT_BURST", tt.envVal)
+			}
+			cfg, err := Load()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Load() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf(fmtLoadErr, err)
+			}
+			if cfg.RateLimitBurst != tt.want {
+				t.Errorf("RateLimitBurst = %d, want %d", cfg.RateLimitBurst, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidate_RateLimitBurstRequiredWithRPS verifies that a positive
+// RATE_LIMIT_RPS combined with a zero RATE_LIMIT_BURST fails validation.
+func TestValidate_RateLimitBurstRequiredWithRPS(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("RATE_LIMIT_RPS", "10")
+	t.Setenv("RATE_LIMIT_BURST", "0")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for RPS > 0 with burst = 0, got nil")
+	}
+}

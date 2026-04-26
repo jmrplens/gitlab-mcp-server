@@ -1194,3 +1194,53 @@ func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 		t.Error("expected nil OutputSchema for plain DestructiveRoute()")
 	}
 }
+
+// TestRegisterRoutes_MetaRoutes_ClearMetaRoutes verifies the meta-tool route
+// registry lifecycle: RegisterRoutes stores routes, MetaRoutes returns a
+// snapshot, and ClearMetaRoutes empties the registry.
+func TestRegisterRoutes_MetaRoutes_ClearMetaRoutes(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return "", nil
+		}),
+	}
+	RegisterRoutes("gitlab_test_tool", routes)
+
+	snap := MetaRoutes()
+	if len(snap) != 1 {
+		t.Fatalf("MetaRoutes() returned %d entries, want 1", len(snap))
+	}
+	if _, ok := snap["gitlab_test_tool"]; !ok {
+		t.Error("MetaRoutes() missing key 'gitlab_test_tool'")
+	}
+
+	ClearMetaRoutes()
+	snap = MetaRoutes()
+	if len(snap) != 0 {
+		t.Fatalf("MetaRoutes() after ClearMetaRoutes() returned %d entries, want 0", len(snap))
+	}
+}
+
+// TestMetaRoutes_ReturnsSnapshot verifies that the map returned by
+// MetaRoutes is a copy — mutations do not affect the internal registry.
+func TestMetaRoutes_ReturnsSnapshot(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	RegisterRoutes("gitlab_snap", ActionMap{
+		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return "", nil
+		}),
+	})
+
+	snap := MetaRoutes()
+	delete(snap, "gitlab_snap")
+
+	snap2 := MetaRoutes()
+	if _, ok := snap2["gitlab_snap"]; !ok {
+		t.Error("deleting from snapshot must not affect the internal registry")
+	}
+}
