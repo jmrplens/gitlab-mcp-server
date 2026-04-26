@@ -329,11 +329,11 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        actions,
-				"description": "Action to perform. See the tool description for available actions and their parameters.",
+				"description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
 				"additionalProperties": true,
 			},
 		},

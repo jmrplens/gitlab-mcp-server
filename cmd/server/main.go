@@ -575,6 +575,12 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	// it sees the final schema set on every tools/list response.
 	toolutil.LockdownInputSchemas(server)
 
+	// Inject JSON Schema numeric bounds on the standard pagination
+	// parameters so LLM clients see `page >= 1` and `1 <= per_page <= 100`
+	// directly in tools/list. Runs after the lockdown so it operates on
+	// the same finalized schema set.
+	toolutil.EnrichPaginationConstraints(server)
+
 	// Optional per-server tools/call rate limit. In HTTP mode each pooled
 	// per-token server gets its own bucket (effectively per-token). In
 	// stdio mode the bucket is global to the process. Disabled when

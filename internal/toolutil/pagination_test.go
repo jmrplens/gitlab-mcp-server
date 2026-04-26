@@ -35,6 +35,9 @@ func TestPaginationFromResponse_NilResponse(t *testing.T) {
 	if got.PrevPage != 0 {
 		t.Errorf("PrevPage = %d, want 0", got.PrevPage)
 	}
+	if got.HasMore {
+		t.Errorf("HasMore = true, want false on nil response")
+	}
 }
 
 // TestPaginationFromResponse_WithPaginationHeaders verifies that all pagination
@@ -69,6 +72,9 @@ func TestPaginationFromResponse_WithPaginationHeaders(t *testing.T) {
 	if got.PrevPage != 1 {
 		t.Errorf("PrevPage = %d, want 1", got.PrevPage)
 	}
+	if !got.HasMore {
+		t.Errorf("HasMore = false, want true when NextPage > 0")
+	}
 }
 
 // TestPaginationFromResponse_SinglePage verifies that NextPage and PrevPage
@@ -97,6 +103,9 @@ func TestPaginationFromResponse_SinglePage(t *testing.T) {
 	if got.PrevPage != 0 {
 		t.Errorf("PrevPage = %d, want 0 (no previous page)", got.PrevPage)
 	}
+	if got.HasMore {
+		t.Errorf("HasMore = true, want false on single-page result")
+	}
 }
 
 // TestAdjustPagination verifies that AdjustPagination corrects pagination
@@ -109,6 +118,7 @@ func TestAdjustPagination(t *testing.T) {
 		wantItems int64
 		wantPages int64
 		wantPage  int64
+		wantMore  bool
 	}{
 		{
 			name:      "no items — no adjustment",
@@ -117,6 +127,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 0,
 			wantPages: 0,
 			wantPage:  1,
+			wantMore:  false,
 		},
 		{
 			name:      "single page with missing totals",
@@ -125,6 +136,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 3,
 			wantPages: 1,
 			wantPage:  1,
+			wantMore:  false,
 		},
 		{
 			name:      "page zero corrected to 1",
@@ -133,6 +145,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 5,
 			wantPages: 1,
 			wantPage:  1,
+			wantMore:  false,
 		},
 		{
 			name:      "multi-page with next page",
@@ -141,6 +154,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 20,
 			wantPages: 2,
 			wantPage:  1,
+			wantMore:  true,
 		},
 		{
 			name:      "existing totals not overwritten",
@@ -149,6 +163,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 55,
 			wantPages: 3,
 			wantPage:  1,
+			wantMore:  false,
 		},
 		{
 			name:      "last page — NextPage 0 infers TotalPages from Page",
@@ -157,6 +172,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 5,
 			wantPages: 3,
 			wantPage:  3,
+			wantMore:  false,
 		},
 		{
 			name:      "middle page — NextPage set infers TotalPages",
@@ -165,6 +181,7 @@ func TestAdjustPagination(t *testing.T) {
 			wantItems: 20,
 			wantPages: 3,
 			wantPage:  2,
+			wantMore:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -179,6 +196,9 @@ func TestAdjustPagination(t *testing.T) {
 			}
 			if p.Page != tt.wantPage {
 				t.Errorf("Page = %d, want %d", p.Page, tt.wantPage)
+			}
+			if p.HasMore != tt.wantMore {
+				t.Errorf("HasMore = %v, want %v", p.HasMore, tt.wantMore)
 			}
 		})
 	}
