@@ -114,9 +114,8 @@ Actions:
 - remove_instance: Remove instance-level scope. Params: controller_id (required, int)
 - add_runner: Add runner scope (runner must be instance-level). Params: controller_id (required, int), runner_id (required, int)
 - remove_runner: Remove runner scope. Params: controller_id (required, int), runner_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconRunner,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconRunner,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_runner_controller_scope", routes, nil))
 }

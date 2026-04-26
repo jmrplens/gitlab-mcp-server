@@ -159,9 +159,8 @@ Actions:
 - approve_group: Approve group access request. Params: group_id (required), user_id (required, int), access_level (optional, int)
 - deny_project: Deny project access request. Params: project_id (required), user_id (required, int)
 - deny_group: Deny group access request. Params: group_id (required), user_id (required, int)`,
-		Annotations:  toolutil.DeriveAnnotationsWithTitle("gitlab_access_request", routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotationsWithTitle("gitlab_access_request", routes),
+		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_access_request", routes, nil))
 }

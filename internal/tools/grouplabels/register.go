@@ -140,12 +140,11 @@ Actions:
 - unsubscribe: Unsubscribe from a group label. Params: group_id (required), label_id (required)`
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:         "gitlab_group_label",
-		Title:        toolutil.TitleFromName("gitlab_group_label"),
-		Description:  desc,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconLabel,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Name:        "gitlab_group_label",
+		Title:       toolutil.TitleFromName("gitlab_group_label"),
+		Description: desc,
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconLabel,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_label", routes, nil))
 }

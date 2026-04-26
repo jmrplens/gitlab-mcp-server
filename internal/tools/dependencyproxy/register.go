@@ -49,9 +49,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 Actions:
 - purge: Purge the dependency proxy cache for a group. Params: group_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconPackage,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconPackage,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_dependency_proxy", routes, nil))
 }

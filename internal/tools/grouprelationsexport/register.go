@@ -63,9 +63,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 Actions:
 - schedule: Schedule a new group relations export. Params: group_id (required), batched (bool)
 - list_status: List group relations export statuses. Params: group_id (required), relation, page, per_page`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconImport,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconImport,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_relations_export", routes, nil))
 }

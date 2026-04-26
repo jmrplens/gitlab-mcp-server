@@ -44,9 +44,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 
 Actions:
 - get: Get project fetch statistics for the last 30 days. Params: project_id (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconAnalytics,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconAnalytics,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_project_statistics", routes, nil))
 }

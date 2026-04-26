@@ -191,9 +191,8 @@ Actions:
 - create_list: Create a group board list (group_id, board_id, label_id)
 - update_list: Reorder a group board list (group_id, board_id, list_id, position)
 - delete_list: Delete a group board list (group_id, board_id, list_id)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconBoard,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconBoard,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_board", routes, nil))
 }

@@ -149,9 +149,8 @@ Actions:
 - remove: Remove a member from a group (group_id, user_id, skip_subresources, unassign_issuables)
 - share: Share a group with another group (group_id, share_group_id, group_access, expires_at)
 - unshare: Stop sharing a group (group_id, share_group_id)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_group_member", routes, nil))
 }

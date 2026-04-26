@@ -216,9 +216,8 @@ Errors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hi
 - snippets: query* (global only)
 
 See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).`,
-		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_search"),
-		Icons:        toolutil.IconSearch,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_search"),
+		Icons:       toolutil.IconSearch,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_search", routes, markdownForResult))
 }

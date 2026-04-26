@@ -98,9 +98,8 @@ Actions:
 - get: Get a single resource group. Params: project_id (required), key (required)
 - edit: Edit a resource group process mode. Params: project_id (required), key (required), process_mode (required: unordered, oldest_first, newest_first)
 - list_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required)`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconQueue,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconQueue,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_resource_group", routes, nil))
 }

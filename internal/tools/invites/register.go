@@ -86,9 +86,8 @@ Actions:
 - list_pending_group: List pending group invitations. Params: group_id (required), query, page, per_page
 - project: Invite user to a project. Params: project_id (required), email or user_id (required), access_level (required), expires_at
 - group: Invite user to a group. Params: group_id (required), email or user_id (required), access_level (required), expires_at`,
-		Annotations:  toolutil.DeriveAnnotations(routes),
-		Icons:        toolutil.IconUser,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(routes),
+		Annotations: toolutil.DeriveAnnotations(routes),
+		Icons:       toolutil.IconUser,
+		InputSchema: toolutil.MetaToolSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_invite", routes, nil))
 }
