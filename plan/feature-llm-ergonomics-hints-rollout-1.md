@@ -141,7 +141,7 @@ Sub-phases (one cluster = one commit, ~5 files each):
 | TASK-043 | Cluster 4H — User-scoped: `users`, `user_admin`, `usergpgkeys`, `usersshkeys`, `useremails`, `userimpersonationtokens`, `userstatus` | ✅ | 2026-04-26 |
 | TASK-044 | Cluster 4I — CI surface: `cilint`, `cicatalog`, `environments`, `joblogs`, `jobartifacts`, `jobtokenscope` | ✅ | 2026-04-26 |
 | TASK-045 | Cluster 4J — Deployments & infra: `deploykeys`, `deploytokens`, `pages`, `terraformstates`, `clusteragents` | ✅ | 2026-04-26 |
-| TASK-046 | Cluster 4K — Settings & admin: `settings`, `applicationsettings`, `geo`, `keys`, `members`, `accessrequests` | | |
+| TASK-046 | Cluster 4K — Settings & admin: `settings`, `applicationsettings`, `geo`, `keys`, `members`, `accessrequests` | ✅ | 2026-04-26 |
 | TASK-047 | Cluster 4L — Remaining 5-9 site files (sweep, ~20 files left) | | |
 
 **Phase 4 acceptance:** 470 sites reviewed. Cumulative ~1068 sites covered.
