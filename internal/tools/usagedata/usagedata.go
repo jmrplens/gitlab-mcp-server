@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"time"
 
@@ -33,7 +34,8 @@ type GetServicePingOutput struct {
 func GetServicePing(ctx context.Context, client *gitlabclient.Client, _ GetServicePingInput) (GetServicePingOutput, error) {
 	data, _, err := client.GL().UsageData.GetServicePing(gl.WithContext(ctx))
 	if err != nil {
-		return GetServicePingOutput{}, toolutil.WrapErrWithMessage("get_service_ping", err)
+		return GetServicePingOutput{}, toolutil.WrapErrWithStatusHint("get_service_ping", err, http.StatusForbidden,
+			"requires administrator access; only available on self-managed instances; service ping must be enabled in admin settings")
 	}
 	recordedAt := ""
 	if data.RecordedAt != nil {
@@ -83,7 +85,8 @@ type NonSQLMetricsOutput struct {
 func GetNonSQLMetrics(ctx context.Context, client *gitlabclient.Client, _ GetNonSQLMetricsInput) (NonSQLMetricsOutput, error) {
 	data, _, err := client.GL().UsageData.GetNonSQLMetrics(gl.WithContext(ctx))
 	if err != nil {
-		return NonSQLMetricsOutput{}, toolutil.WrapErrWithMessage("get_non_sql_metrics", err)
+		return NonSQLMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_non_sql_metrics", err, http.StatusForbidden,
+			"requires administrator access; self-managed only; service ping must be enabled")
 	}
 	return NonSQLMetricsOutput{
 		RecordedAt:            data.RecordedAt,
@@ -148,7 +151,8 @@ type QueriesOutput struct {
 func GetQueries(ctx context.Context, client *gitlabclient.Client, _ GetQueriesInput) (QueriesOutput, error) {
 	data, _, err := client.GL().UsageData.GetQueries(gl.WithContext(ctx))
 	if err != nil {
-		return QueriesOutput{}, toolutil.WrapErrWithMessage("get_usage_queries", err)
+		return QueriesOutput{}, toolutil.WrapErrWithStatusHint("get_usage_queries", err, http.StatusForbidden,
+			"requires administrator access; self-managed only; returns the SQL queries that produce service ping counts")
 	}
 	recordedAt := ""
 	if data.RecordedAt != nil {
@@ -197,7 +201,8 @@ type MetricDefinitionsOutput struct {
 func GetMetricDefinitions(ctx context.Context, client *gitlabclient.Client, _ GetMetricDefinitionsInput) (MetricDefinitionsOutput, error) {
 	reader, _, err := client.GL().UsageData.GetMetricDefinitionsAsYAML(gl.WithContext(ctx))
 	if err != nil {
-		return MetricDefinitionsOutput{}, toolutil.WrapErrWithMessage("get_metric_definitions", err)
+		return MetricDefinitionsOutput{}, toolutil.WrapErrWithStatusHint("get_metric_definitions", err, http.StatusForbidden,
+			"requires administrator access; returns YAML metric definitions; self-managed only")
 	}
 	defer reader.Close()
 
@@ -237,7 +242,8 @@ func TrackEvent(ctx context.Context, client *gitlabclient.Client, input TrackEve
 
 	_, err := client.GL().UsageData.TrackEvent(opts, gl.WithContext(ctx))
 	if err != nil {
-		return TrackEventOutput{}, toolutil.WrapErrWithMessage("track_event", err)
+		return TrackEventOutput{}, toolutil.WrapErrWithStatusHint("track_event", err, http.StatusBadRequest,
+			"event name must be a valid Snowplow event identifier; tracking may be disabled by admin or feature flag; verify namespace_id/project_id exist if provided")
 	}
 	return TrackEventOutput{Status: "accepted"}, nil
 }
@@ -272,7 +278,8 @@ func TrackEvents(ctx context.Context, client *gitlabclient.Client, input TrackEv
 
 	_, err := client.GL().UsageData.TrackEvents(&gl.TrackEventsOptions{Events: events}, gl.WithContext(ctx))
 	if err != nil {
-		return TrackEventsOutput{}, toolutil.WrapErrWithMessage("track_events", err)
+		return TrackEventsOutput{}, toolutil.WrapErrWithStatusHint("track_events", err, http.StatusBadRequest,
+			"each event name must be a valid Snowplow event identifier; tracking may be disabled by admin or feature flag; max batch size applies")
 	}
 	return TrackEventsOutput{Status: "accepted", Count: len(input.Events)}, nil
 }
