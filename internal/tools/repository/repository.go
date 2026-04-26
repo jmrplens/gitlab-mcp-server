@@ -71,7 +71,8 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 
 	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return TreeOutput{}, toolutil.WrapErrWithMessage("repositoryTree", err)
+		return TreeOutput{}, toolutil.WrapErrWithStatusHint("repositoryTree", err, http.StatusNotFound,
+			"verify project_id and ref (branch/tag/SHA) with gitlab_branch_list or gitlab_tag_list; check the path exists in the tree")
 	}
 
 	out := make([]TreeNodeOutput, len(nodes))
@@ -131,7 +132,8 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 
 	cmp, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return CompareOutput{}, toolutil.WrapErrWithMessage("repositoryCompare", err)
+		return CompareOutput{}, toolutil.WrapErrWithStatusHint("repositoryCompare", err, http.StatusNotFound,
+			"verify both 'from' and 'to' refs exist (branch name, tag name, or commit SHA) using gitlab_branch_list or gitlab_tag_list")
 	}
 
 	commitList := make([]commits.Output, len(cmp.Commits))
@@ -204,7 +206,8 @@ func Contributors(ctx context.Context, client *gitlabclient.Client, input Contri
 	}
 	contribs, resp, err := client.GL().Repositories.Contributors(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ContributorsOutput{}, toolutil.WrapErrWithMessage("repositoryContributors", err)
+		return ContributorsOutput{}, toolutil.WrapErrWithStatusHint("repositoryContributors", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the repository may be empty")
 	}
 	out := make([]ContributorOutput, len(contribs))
 	for i, c := range contribs {
@@ -245,7 +248,8 @@ func MergeBase(ctx context.Context, client *gitlabclient.Client, input MergeBase
 	}
 	c, _, err := client.GL().Repositories.MergeBase(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return commits.Output{}, toolutil.WrapErrWithMessage("repositoryMergeBase", err)
+		return commits.Output{}, toolutil.WrapErrWithStatusHint("repositoryMergeBase", err, http.StatusNotFound,
+			"verify all refs exist and share common history; refs must be branch/tag names or commit SHAs")
 	}
 	return commits.ToOutput(c), nil
 }
@@ -286,7 +290,8 @@ func Blob(ctx context.Context, client *gitlabclient.Client, input BlobInput) (Bl
 	}
 	data, _, err := client.GL().Repositories.Blob(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
 	if err != nil {
-		return BlobOutput{}, toolutil.WrapErrWithMessage("repositoryBlob", err)
+		return BlobOutput{}, toolutil.WrapErrWithStatusHint("repositoryBlob", err, http.StatusNotFound,
+			"verify the blob SHA with gitlab_repository_tree; SHAs must be full 40-character commit/blob hashes")
 	}
 
 	mime := http.DetectContentType(data)
@@ -328,7 +333,8 @@ func RawBlobContent(ctx context.Context, client *gitlabclient.Client, input Blob
 	}
 	data, _, err := client.GL().Repositories.RawBlobContent(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
 	if err != nil {
-		return RawBlobContentOutput{}, toolutil.WrapErrWithMessage("repositoryRawBlobContent", err)
+		return RawBlobContentOutput{}, toolutil.WrapErrWithStatusHint("repositoryRawBlobContent", err, http.StatusNotFound,
+			"verify the blob SHA with gitlab_repository_tree; SHAs must be full 40-character blob hashes")
 	}
 
 	mime := http.DetectContentType(data)
@@ -465,7 +471,8 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 	}
 	_, err := client.GL().Repositories.AddChangelog(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return AddChangelogOutput{}, toolutil.WrapErrWithMessage("addChangelog", err)
+		return AddChangelogOutput{}, toolutil.WrapErrWithStatusHint("addChangelog", err, http.StatusUnprocessableEntity,
+			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; the branch must be writable and the changelog file path must be valid; requires Developer role or higher")
 	}
 	return AddChangelogOutput{Success: true, Version: input.Version}, nil
 }
@@ -518,7 +525,8 @@ func GenerateChangelogData(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	data, _, err := client.GL().Repositories.GenerateChangelogData(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ChangelogDataOutput{}, toolutil.WrapErrWithMessage("generateChangelogData", err)
+		return ChangelogDataOutput{}, toolutil.WrapErrWithStatusHint("generateChangelogData", err, http.StatusUnprocessableEntity,
+			"verify version follows semver (e.g. 1.0.0) and 'from'/'to' refs exist; this is a read-only preview \u2014 use gitlab_repository_add_changelog to commit")
 	}
 	return ChangelogDataOutput{Notes: data.Notes}, nil
 }
