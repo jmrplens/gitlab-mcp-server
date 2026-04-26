@@ -6,6 +6,7 @@ package grouplabels
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -118,7 +119,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	labels, resp, err := client.GL().GroupLabels.ListGroupLabels(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("groupLabelList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupLabelList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get")
 	}
 
 	out := make([]Output, len(labels))
@@ -138,7 +140,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	l, _, err := client.GL().GroupLabels.GetGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupLabelGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelGet", err, http.StatusNotFound,
+			"verify label_id (numeric ID or name) with gitlab_group_label_list; label names are case-sensitive")
 	}
 	return toOutput(l), nil
 }
@@ -163,7 +166,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	l, _, err := client.GL().GroupLabels.CreateGroupLabel(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupLabelCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelCreate", err, http.StatusBadRequest,
+			"name must be unique within the group; color must be a 6-digit hex string with leading # (e.g. #FF0000); creating group labels requires Reporter role or higher")
 	}
 	return toOutput(l), nil
 }
@@ -191,7 +195,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	l, _, err := client.GL().GroupLabels.UpdateGroupLabel(string(input.GroupID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupLabelUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelUpdate", err, http.StatusBadRequest,
+			"new_name must be unique within the group; color must be a 6-digit hex string with leading #; verify label_id with gitlab_group_label_list")
 	}
 	return toOutput(l), nil
 }
@@ -206,7 +211,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().GroupLabels.DeleteGroupLabel(string(input.GroupID), string(input.LabelID), &gl.DeleteGroupLabelOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("groupLabelDelete", err)
+		return toolutil.WrapErrWithStatusHint("groupLabelDelete", err, http.StatusForbidden,
+			"deleting group labels requires Maintainer or Owner role")
 	}
 	return nil
 }
@@ -221,7 +227,8 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	}
 	l, _, err := client.GL().GroupLabels.SubscribeToGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupLabelSubscribe", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelSubscribe", err, http.StatusNotModified,
+			"the user is already subscribed to this label")
 	}
 	return toOutput(l), nil
 }
@@ -236,7 +243,8 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 	}
 	_, err := client.GL().GroupLabels.UnsubscribeFromGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("groupLabelUnsubscribe", err)
+		return toolutil.WrapErrWithStatusHint("groupLabelUnsubscribe", err, http.StatusNotModified,
+			"the user is not subscribed to this label")
 	}
 	return nil
 }

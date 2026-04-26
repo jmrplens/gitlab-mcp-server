@@ -120,6 +120,7 @@ See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the fu
 | Links not clickable in IDE | Your IDE does not render Markdown links from tool responses | The `next_steps` hints are also available in the JSON `structuredContent`. Your AI assistant reads these and can present clickable links in its response |
 | Raw Markdown displayed alongside formatted output | Client shows both `content` and `structuredContent` | Content is annotated `audience: ["assistant"]` — MCP clients that support annotations will hide the raw Markdown. Update your MCP client to the latest version |
 | No "Next steps" in response | Tool is used in individual mode (not meta-tool) | Next steps appear in meta-tool mode (`META_TOOLS=true`, default). Individual tools include hints in Markdown content only |
+| Error message lacks corrective suggestion | Not all errors have known corrective actions | Errors with known fixes include a `💡 Suggestion` section. The server uses `WrapErrWithHint` / `WrapErrWithStatusHint` for status-specific guidance. See [Error Handling](error-handling.md) |
 
 See [Output Format](output-format.md) for the complete response format specification.
 

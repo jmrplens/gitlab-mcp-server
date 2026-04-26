@@ -3,6 +3,7 @@ package errortracking
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -31,7 +32,8 @@ type SettingsOutput struct {
 func GetSettings(ctx context.Context, client *gitlabclient.Client, input GetSettingsInput) (SettingsOutput, error) {
 	s, _, err := client.GL().ErrorTracking.GetErrorTrackingSettings(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return SettingsOutput{}, toolutil.WrapErrWithMessage("gitlab_get_error_tracking_settings", err)
+		return SettingsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_error_tracking_settings", err, http.StatusForbidden,
+			"requires Maintainer role on the project; verify project_id with gitlab_project_list; error tracking must be enabled at the instance level (Sentry integration or GitLab-integrated)")
 	}
 	return SettingsOutput{
 		Active:            s.Active,
@@ -59,7 +61,8 @@ func EnableDisable(ctx context.Context, client *gitlabclient.Client, input Enabl
 	}
 	s, _, err := client.GL().ErrorTracking.EnableDisableErrorTracking(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return SettingsOutput{}, toolutil.WrapErrWithMessage("gitlab_enable_disable_error_tracking", err)
+		return SettingsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_enable_disable_error_tracking", err, http.StatusBadRequest,
+			"requires Maintainer role; active=true requires error tracking to be configured (Sentry or GitLab-integrated); integrated_error_tracking flag toggles between Sentry and GitLab backend")
 	}
 	return SettingsOutput{
 		Active:            s.Active,
@@ -103,7 +106,8 @@ func ListClientKeys(ctx context.Context, client *gitlabclient.Client, input List
 	}
 	keys, resp, err := client.GL().ErrorTracking.ListClientKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListClientKeysOutput{}, toolutil.WrapErrWithMessage("gitlab_list_error_tracking_client_keys", err)
+		return ListClientKeysOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_error_tracking_client_keys", err, http.StatusForbidden,
+			"requires Maintainer role; client keys are used by SDK clients to send events; only available with GitLab-integrated error tracking (not Sentry)")
 	}
 	items := make([]ClientKeyItem, 0, len(keys))
 	for _, k := range keys {
@@ -131,7 +135,8 @@ type CreateClientKeyInput struct {
 func CreateClientKey(ctx context.Context, client *gitlabclient.Client, input CreateClientKeyInput) (ClientKeyItem, error) {
 	k, _, err := client.GL().ErrorTracking.CreateClientKey(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return ClientKeyItem{}, toolutil.WrapErrWithMessage("gitlab_create_error_tracking_client_key", err)
+		return ClientKeyItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_error_tracking_client_key", err, http.StatusBadRequest,
+			"requires Maintainer role; only available with GitLab-integrated error tracking; the returned public_key is used as the Sentry DSN by SDK clients")
 	}
 	return ClientKeyItem{
 		ID:        k.ID,
@@ -156,7 +161,8 @@ func DeleteClientKey(ctx context.Context, client *gitlabclient.Client, input Del
 	}
 	_, err := client.GL().ErrorTracking.DeleteClientKey(string(input.ProjectID), input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_error_tracking_client_key", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_error_tracking_client_key", err, http.StatusForbidden,
+			"requires Maintainer role; verify key_id with gitlab_list_error_tracking_client_keys; deletion is irreversible \u2014 SDK clients using the key will stop receiving events")
 	}
 	return nil
 }

@@ -99,7 +99,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	wikiPages, _, err := client.GL().Wikis.ListWikis(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("wikiList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("wikiList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project's wiki feature may be disabled")
 	}
 
 	out := make([]Output, len(wikiPages))
@@ -131,7 +132,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	w, _, err := client.GL().Wikis.GetWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("wikiGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("wikiGet", err, http.StatusNotFound,
+			"verify slug with gitlab_wiki_list; slugs are case-sensitive and use hyphens for spaces")
 	}
 	return toOutput(w), nil
 }
@@ -195,7 +197,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	w, _, err := client.GL().Wikis.EditWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("wikiUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("wikiUpdate", err, http.StatusNotFound,
+			"verify slug with gitlab_wiki_list; slugs are case-sensitive")
 	}
 	return toOutput(w), nil
 }
@@ -214,7 +217,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().Wikis.DeleteWikiPage(string(input.ProjectID), input.Slug, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("wikiDelete", err)
+		return toolutil.WrapErrWithStatusHint("wikiDelete", err, http.StatusForbidden,
+			"deleting wiki pages requires Maintainer or Owner role")
 	}
 	return nil
 }
@@ -299,7 +303,8 @@ func UploadAttachment(ctx context.Context, client *gitlabclient.Client, input Up
 		string(input.ProjectID), reader, input.Filename, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return AttachmentOutput{}, toolutil.WrapErrWithMessage("upload_wiki_attachment", err)
+		return AttachmentOutput{}, toolutil.WrapErrWithStatusHint("upload_wiki_attachment", err, http.StatusBadRequest,
+			"filename must be non-empty and content must be valid binary; uploading wiki attachments requires Developer role or higher")
 	}
 
 	return AttachmentOutput{

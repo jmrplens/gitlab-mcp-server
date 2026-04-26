@@ -163,7 +163,7 @@ func FormatSummarizeIssueMarkdown(s SummarizeIssueOutput) string {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", s.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_update_issue` to update status, labels, or assignee",
+		"Use `gitlab_issue_update` to update status, labels, or assignee",
 		"Use `gitlab_add_issue_note` to add follow-up comments",
 	)
 	return b.String()

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -178,7 +179,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrDiscussionCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionCreate", err, http.StatusBadRequest,
+			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; use gitlab_mr_changes to fetch the diff context")
 	}
 	return ToOutput(d), nil
 }
@@ -199,7 +201,8 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 		Resolved: new(input.Resolved),
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrDiscussionResolve", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionResolve", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_mr_discussion_list; only thread (resolvable) discussions can be resolved")
 	}
 	return ToOutput(d), nil
 }
@@ -220,7 +223,8 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 		Body: new(toolutil.NormalizeText(input.Body)),
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("mrDiscussionReply", err)
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_mr_discussion_list")
 	}
 	return NoteToOutput(n), nil
 }
@@ -246,7 +250,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("mrDiscussionList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
+			"verify project_id and mr_iid with gitlab_mr_get")
 	}
 	out := make([]Output, len(discussions))
 	for i, d := range discussions {
@@ -293,7 +298,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	d, _, err := client.GL().Discussions.GetMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrDiscussionGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionGet", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_mr_discussion_list")
 	}
 	return ToOutput(d), nil
 }
@@ -321,7 +327,12 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	}
 	n, _, err := client.GL().Discussions.UpdateMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("mrDiscussionNoteUpdate", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return NoteOutput{}, toolutil.WrapErrWithHint("mrDiscussionNoteUpdate", err,
+				"only the note author can edit body; only Maintainers can change the resolved flag on resolvable threads")
+		}
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionNoteUpdate", err, http.StatusNotFound,
+			"verify note_id with gitlab_mr_discussion_get")
 	}
 	return NoteToOutput(n), nil
 }
@@ -342,7 +353,8 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}
 	_, err := client.GL().Discussions.DeleteMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("mrDiscussionNoteDelete", err)
+		return toolutil.WrapErrWithStatusHint("mrDiscussionNoteDelete", err, http.StatusForbidden,
+			"only the note author or a Maintainer can delete a discussion note")
 	}
 	return nil
 }

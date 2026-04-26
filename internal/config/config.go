@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -46,6 +47,13 @@ const (
 	MaxAutoUpdateTimeout      = 10 * time.Minute
 )
 
+// Rate-limit defaults.
+const (
+	// DefaultRateLimitBurst is the bucket size used when rps > 0 and the
+	// operator did not set RATE_LIMIT_BURST explicitly.
+	DefaultRateLimitBurst = 40
+)
+
 // Config holds all configuration values for the MCP server.
 type Config struct {
 	GitLabURL     string
@@ -74,6 +82,9 @@ type Config struct {
 	ExcludeTools       []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
 	IgnoreScopes       bool     // When true, skip PAT scope detection and register all tools
 	TokenScopes        []string // Detected PAT scopes (populated at runtime, not from env)
+
+	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
+	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
@@ -179,6 +190,15 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 	}
 
+	rateLimitRPS, err := parseFloatNonNegative(os.Getenv("RATE_LIMIT_RPS"), 0)
+	if err != nil {
+		return nil, fmt.Errorf("invalid RATE_LIMIT_RPS value: %w", err)
+	}
+	rateLimitBurst, err := parseIntNonNegative(os.Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
+	if err != nil {
+		return nil, fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
+	}
+
 	cfg := &Config{
 		GitLabURL:          os.Getenv("GITLAB_URL"),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
@@ -199,6 +219,8 @@ func Load() (*Config, error) {
 		OAuthCacheTTL:      oauthCacheTTL,
 		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       ignoreScopes,
+		RateLimitRPS:       rateLimitRPS,
+		RateLimitBurst:     rateLimitBurst,
 	}
 
 	if err = cfg.validate(); err != nil {
@@ -253,6 +275,12 @@ func (c *Config) validate() error {
 		if c.AutoUpdateTimeout > MaxAutoUpdateTimeout {
 			return fmt.Errorf("AUTO_UPDATE_TIMEOUT %s exceeds maximum of %s", c.AutoUpdateTimeout, MaxAutoUpdateTimeout)
 		}
+	}
+	if c.RateLimitRPS < 0 {
+		return fmt.Errorf("RATE_LIMIT_RPS must be >= 0 (got %g)", c.RateLimitRPS)
+	}
+	if c.RateLimitRPS > 0 && c.RateLimitBurst < 1 {
+		return fmt.Errorf("RATE_LIMIT_BURST must be >= 1 when RATE_LIMIT_RPS > 0 (got %d)", c.RateLimitBurst)
 	}
 	return nil
 }
@@ -316,6 +344,42 @@ func parseInt(s string, defaultValue int) (int, error) {
 		return 0, fmt.Errorf("value must be positive, got %d", n)
 	}
 	return n, nil
+}
+
+// parseIntNonNegative parses an integer where 0 is permitted (useful for
+// "disabled by default" knobs). Returns defaultValue when s is empty.
+func parseIntNonNegative(s string, defaultValue int) (int, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer %q: %w", s, err)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("value must be >= 0, got %d", n)
+	}
+	return n, nil
+}
+
+// parseFloatNonNegative parses a non-negative float, returning defaultValue
+// when s is empty. Used for rate-per-second knobs where 0 disables the
+// feature.
+func parseFloatNonNegative(s string, defaultValue float64) (float64, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid float %q: %w", s, err)
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("value must be a finite number, got %g", f)
+	}
+	if f < 0 {
+		return 0, fmt.Errorf("value must be >= 0, got %g", f)
+	}
+	return f, nil
 }
 
 // parseDuration parses a string as a [time.Duration], returning defaultValue when s is empty.

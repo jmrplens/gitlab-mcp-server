@@ -5,12 +5,16 @@ package badges
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+// hintVerifyGroupBadgeID is the 404 hint shared by group badge tools.
+const hintVerifyGroupBadgeID = "verify badge_id with gitlab_list_group_badges"
 
 // BadgeItem represents a badge in output.
 type BadgeItem struct {
@@ -76,7 +80,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	}
 	badges, resp, err := client.GL().ProjectBadges.ListProjectBadges(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectOutput{}, toolutil.WrapErrWithMessage("list_project_badges", err)
+		return ListProjectOutput{}, toolutil.WrapErrWithStatusHint("list_project_badges", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get")
 	}
 	items := make([]BadgeItem, 0, len(badges))
 	for _, b := range badges {
@@ -107,7 +112,8 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	}
 	badge, _, err := client.GL().ProjectBadges.GetProjectBadge(string(input.ProjectID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
-		return GetProjectOutput{}, toolutil.WrapErrWithMessage("get_project_badge", err)
+		return GetProjectOutput{}, toolutil.WrapErrWithStatusHint("get_project_badge", err, http.StatusNotFound,
+			"verify badge_id with gitlab_list_project_badges \u2014 inherited group badges have negative IDs and cannot be fetched at the project scope")
 	}
 	return GetProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -137,6 +143,14 @@ func AddProject(ctx context.Context, client *gitlabclient.Client, input AddProje
 	}
 	badge, _, err := client.GL().ProjectBadges.AddProjectBadge(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return AddProjectOutput{}, toolutil.WrapErrWithHint("add_project_badge", err,
+				"adding project badges requires Maintainer+ role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return AddProjectOutput{}, toolutil.WrapErrWithHint("add_project_badge", err,
+				"link_url and image_url must be valid absolute URLs; placeholders %{project_path}, %{commit_sha}, %{default_branch} are supported")
+		}
 		return AddProjectOutput{}, toolutil.WrapErrWithMessage("add_project_badge", err)
 	}
 	return AddProjectOutput{Badge: projectBadgeToItem(badge)}, nil
@@ -174,7 +188,12 @@ func EditProject(ctx context.Context, client *gitlabclient.Client, input EditPro
 	}
 	badge, _, err := client.GL().ProjectBadges.EditProjectBadge(string(input.ProjectID), input.BadgeID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return EditProjectOutput{}, toolutil.WrapErrWithMessage("edit_project_badge", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return EditProjectOutput{}, toolutil.WrapErrWithHint("edit_project_badge", err,
+				"editing project badges requires Maintainer+ role; inherited group badges cannot be edited at project scope")
+		}
+		return EditProjectOutput{}, toolutil.WrapErrWithStatusHint("edit_project_badge", err, http.StatusNotFound,
+			"verify badge_id with gitlab_list_project_badges")
 	}
 	return EditProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -192,7 +211,12 @@ func DeleteProject(ctx context.Context, client *gitlabclient.Client, input Delet
 	}
 	_, err := client.GL().ProjectBadges.DeleteProjectBadge(string(input.ProjectID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_project_badge", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("delete_project_badge", err,
+				"deleting project badges requires Maintainer+ role; inherited group badges must be deleted at the group level")
+		}
+		return toolutil.WrapErrWithStatusHint("delete_project_badge", err, http.StatusNotFound,
+			"verify badge_id with gitlab_list_project_badges")
 	}
 	return nil
 }
@@ -218,7 +242,8 @@ func PreviewProject(ctx context.Context, client *gitlabclient.Client, input Prev
 	}
 	badge, _, err := client.GL().ProjectBadges.PreviewProjectBadge(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return PreviewProjectOutput{}, toolutil.WrapErrWithMessage("preview_project_badge", err)
+		return PreviewProjectOutput{}, toolutil.WrapErrWithStatusHint("preview_project_badge", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get; preview substitutes placeholders without persisting the badge")
 	}
 	return PreviewProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -250,7 +275,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	}
 	badges, resp, err := client.GL().GroupBadges.ListGroupBadges(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListGroupOutput{}, toolutil.WrapErrWithMessage("list_group_badges", err)
+		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("list_group_badges", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get")
 	}
 	items := make([]BadgeItem, 0, len(badges))
 	for _, b := range badges {
@@ -281,7 +307,8 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	}
 	badge, _, err := client.GL().GroupBadges.GetGroupBadge(string(input.GroupID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
-		return GetGroupOutput{}, toolutil.WrapErrWithMessage("get_group_badge", err)
+		return GetGroupOutput{}, toolutil.WrapErrWithStatusHint("get_group_badge", err, http.StatusNotFound,
+			hintVerifyGroupBadgeID)
 	}
 	return GetGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }
@@ -311,6 +338,14 @@ func AddGroup(ctx context.Context, client *gitlabclient.Client, input AddGroupIn
 	}
 	badge, _, err := client.GL().GroupBadges.AddGroupBadge(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return AddGroupOutput{}, toolutil.WrapErrWithHint("add_group_badge", err,
+				"adding group badges requires Owner role on the group")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return AddGroupOutput{}, toolutil.WrapErrWithHint("add_group_badge", err,
+				"link_url and image_url must be valid absolute URLs; group badges are inherited by all projects in the group")
+		}
 		return AddGroupOutput{}, toolutil.WrapErrWithMessage("add_group_badge", err)
 	}
 	return AddGroupOutput{Badge: groupBadgeToItem(badge)}, nil
@@ -348,7 +383,12 @@ func EditGroup(ctx context.Context, client *gitlabclient.Client, input EditGroup
 	}
 	badge, _, err := client.GL().GroupBadges.EditGroupBadge(string(input.GroupID), input.BadgeID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return EditGroupOutput{}, toolutil.WrapErrWithMessage("edit_group_badge", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return EditGroupOutput{}, toolutil.WrapErrWithHint("edit_group_badge", err,
+				"editing group badges requires Owner role on the group")
+		}
+		return EditGroupOutput{}, toolutil.WrapErrWithStatusHint("edit_group_badge", err, http.StatusNotFound,
+			hintVerifyGroupBadgeID)
 	}
 	return EditGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }
@@ -366,7 +406,12 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, input DeleteG
 	}
 	_, err := client.GL().GroupBadges.DeleteGroupBadge(string(input.GroupID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_group_badge", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("delete_group_badge", err,
+				"deleting group badges requires Owner role on the group")
+		}
+		return toolutil.WrapErrWithStatusHint("delete_group_badge", err, http.StatusNotFound,
+			hintVerifyGroupBadgeID)
 	}
 	return nil
 }
@@ -396,7 +441,8 @@ func PreviewGroup(ctx context.Context, client *gitlabclient.Client, input Previe
 	}
 	badge, _, err := client.GL().GroupBadges.PreviewGroupBadge(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return PreviewGroupOutput{}, toolutil.WrapErrWithMessage("preview_group_badge", err)
+		return PreviewGroupOutput{}, toolutil.WrapErrWithStatusHint("preview_group_badge", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; preview substitutes placeholders without persisting the badge")
 	}
 	return PreviewGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }

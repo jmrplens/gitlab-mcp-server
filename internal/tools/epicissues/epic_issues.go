@@ -20,6 +20,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintEpicGIDResolution is the shared hint when epic GID resolution fails.
+const hintEpicGIDResolution = "could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list"
+
 // GraphQL queries and mutations for work item hierarchy operations.
 
 const queryListChildren = `
@@ -381,7 +384,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicIssueList", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueList", err,
+			"verify full_path (group path) with gitlab_group_get and iid with gitlab_epic_list; epics require GitLab Premium or Ultimate")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -426,12 +430,14 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueAssign", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueAssign", err,
+			hintEpicGIDResolution)
 	}
 
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueAssign", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueAssign", err,
+			"could not resolve child issue GID; verify child_project_path with gitlab_project_get and child_iid with gitlab_issue_list")
 	}
 
 	var resp gqlMutationResponse
@@ -443,7 +449,8 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueAssign", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueAssign", err,
+			"the child issue may already be linked to another epic, or you lack Reporter role on the group; epics require GitLab Premium or Ultimate")
 	}
 
 	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
@@ -473,12 +480,14 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueRemove", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+			hintEpicGIDResolution)
 	}
 
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueRemove", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+			"could not resolve child issue GID; verify child_project_path with gitlab_project_get and child_iid with gitlab_issue_list")
 	}
 
 	var resp gqlMutationResponse
@@ -489,7 +498,8 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return AssignOutput{}, toolutil.WrapErrWithMessage("epicIssueRemove", err)
+		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
+			"the issue may not be linked to this epic; verify with gitlab_epic_issue_list; removing requires Reporter role")
 	}
 
 	if len(resp.Data.WorkItemUpdate.Errors) > 0 {
@@ -527,7 +537,8 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 
 	epicGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicIssueUpdate", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueUpdate", err,
+			hintEpicGIDResolution)
 	}
 
 	var resp gqlMutationResponse
@@ -541,7 +552,8 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicIssueUpdate", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueUpdate", err,
+			"child_id and adjacent_id must both be GIDs of issues already linked to this epic; relative_position must be BEFORE or AFTER; reordering requires Reporter role")
 	}
 
 	if len(resp.Data.WorkItemUpdate.Errors) > 0 {

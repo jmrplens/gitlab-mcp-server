@@ -115,7 +115,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Tags.DeleteTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("tagDelete", err)
+		return toolutil.WrapErrWithStatusHint("tagDelete", err, http.StatusForbidden,
+			"deleting tags requires Maintainer or Owner role; protected tags cannot be deleted without unprotecting first")
 	}
 	return nil
 }
@@ -146,7 +147,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	tags, resp, err := client.GL().Tags.ListTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("tagList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("tagList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get")
 	}
 	out := make([]Output, len(tags))
 	for i, t := range tags {
@@ -172,7 +174,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	t, _, err := client.GL().Tags.GetTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("tagGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("tagGet", err, http.StatusNotFound,
+			"verify tag_name with gitlab_tag_list; tag names are case-sensitive")
 	}
 	return toOutput(t), nil
 }
@@ -227,7 +230,8 @@ func GetSignature(ctx context.Context, client *gitlabclient.Client, input Signat
 	}
 	sig, _, err := client.GL().Tags.GetTagSignature(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return SignatureOutput{}, toolutil.WrapErrWithMessage("tagGetSignature", err)
+		return SignatureOutput{}, toolutil.WrapErrWithStatusHint("tagGetSignature", err, http.StatusNotFound,
+			"the tag may not be signed, or verify tag_name with gitlab_tag_list")
 	}
 	out := SignatureOutput{
 		SignatureType:      sig.SignatureType,
@@ -347,7 +351,8 @@ func ListProtectedTags(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	tags, resp, err := client.GL().ProtectedTags.ListProtectedTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProtectedTagsOutput{}, toolutil.WrapErrWithMessage("tagListProtected", err)
+		return ListProtectedTagsOutput{}, toolutil.WrapErrWithStatusHint("tagListProtected", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; protected tags require Maintainer or Owner role to view")
 	}
 	out := make([]ProtectedTagOutput, len(tags))
 	for i, pt := range tags {
@@ -369,7 +374,8 @@ func GetProtectedTag(ctx context.Context, client *gitlabclient.Client, input Get
 	}
 	pt, _, err := client.GL().ProtectedTags.GetProtectedTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectedTagOutput{}, toolutil.WrapErrWithMessage("tagGetProtected", err)
+		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagGetProtected", err, http.StatusNotFound,
+			"the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }
@@ -422,7 +428,8 @@ func ProtectTag(ctx context.Context, client *gitlabclient.Client, input ProtectT
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return ProtectedTagOutput{}, toolutil.WrapErrWithHint("tagProtect", err, "a protected tag rule for this name already exists")
 		}
-		return ProtectedTagOutput{}, toolutil.WrapErrWithMessage("tagProtect", err)
+		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagProtect", err, http.StatusForbidden,
+			"protecting tags requires Maintainer or Owner role; create_access_level must be one of 0 (no access), 30 (Developer), 40 (Maintainer)")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }
@@ -440,7 +447,8 @@ func UnprotectTag(ctx context.Context, client *gitlabclient.Client, input Unprot
 	}
 	_, err := client.GL().ProtectedTags.UnprotectRepositoryTags(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("tagUnprotect", err)
+		return toolutil.WrapErrWithStatusHint("tagUnprotect", err, http.StatusForbidden,
+			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
 	}
 	return nil
 }

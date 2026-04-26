@@ -89,7 +89,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_pipeline_trigger_run",
 		Title:       toolutil.TitleFromName("gitlab_pipeline_trigger_run"),
-		Description: "Trigger a pipeline using a trigger token\n\nReturns: JSON with the triggered pipeline details.\n\nSee also: gitlab_pipeline_trigger_list, gitlab_create_pipeline",
+		Description: "Trigger a pipeline using a trigger token\n\nReturns: JSON with the triggered pipeline details.\n\nSee also: gitlab_pipeline_trigger_list, gitlab_pipeline_create",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RunInput) (*mcp.CallToolResult, RunOutput, error) {
@@ -123,8 +123,9 @@ Actions:
 - update: Update a trigger token (project_id, trigger_id, description)
 - delete: Delete a trigger token (project_id, trigger_id)
 - run: Trigger a pipeline (project_id, ref, token, variables)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconPipeline,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconPipeline,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_pipeline_trigger", routes, nil))
 }

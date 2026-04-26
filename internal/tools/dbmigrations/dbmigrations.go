@@ -3,6 +3,7 @@ package dbmigrations
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -34,7 +35,7 @@ func Mark(ctx context.Context, client *gitlabclient.Client, input MarkInput) (Ma
 
 	_, err := client.GL().DatabaseMigrations.MarkMigrationAsSuccessful(input.Version, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MarkOutput{}, toolutil.WrapErrWithMessage("mark_migration", err)
+		return MarkOutput{}, toolutil.WrapErrWithStatusHint("mark_migration", err, http.StatusForbidden, "database migrations require administrator access")
 	}
 	return MarkOutput{
 		Status:  "marked",

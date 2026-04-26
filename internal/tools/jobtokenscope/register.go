@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_job_token_access_settings",
 		Title:       toolutil.TitleFromName("gitlab_get_job_token_access_settings"),
-		Description: "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_list_ci_variables",
+		Description: "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_ci_variable_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconToken,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetAccessSettingsInput) (*mcp.CallToolResult, AccessSettingsOutput, error) {
@@ -161,8 +161,9 @@ Actions:
 - list_group_allowlist: List groups in allowlist. Params: project_id (required), page, per_page
 - add_group_allowlist: Add a group to allowlist. Params: project_id (required), target_group_id (required, int)
 - remove_group_allowlist: Remove a group from allowlist. Params: project_id (required), target_group_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconToken,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconToken,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_job_token_scope", routes, nil))
 }

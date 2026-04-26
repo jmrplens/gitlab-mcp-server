@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -228,7 +229,8 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 		if toolutil.IsNotFound(err) {
 			return StateOutput{}, fmt.Errorf("mrApprovalState: merge request approval features require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
-		return StateOutput{}, toolutil.WrapErrWithMessage("mrApprovalState", err)
+		return StateOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalState", err, http.StatusNotFound,
+			"verify project_id + merge_request_iid with gitlab_mr_list; approval rules require Premium/Ultimate license")
 	}
 	out := StateOutput{
 		ApprovalRulesOverwritten: state.ApprovalRulesOverwritten,
@@ -255,7 +257,8 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 		if toolutil.IsNotFound(err) {
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
-		return RulesOutput{}, toolutil.WrapErrWithMessage("mrApprovalRules", err)
+		return RulesOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRules", err, http.StatusNotFound,
+			"verify project_id + merge_request_iid with gitlab_mr_list; rules-per-MR require Premium/Ultimate")
 	}
 	out := RulesOutput{}
 	for _, r := range rules {
@@ -281,7 +284,8 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 		if toolutil.IsNotFound(err) {
 			return ConfigOutput{}, fmt.Errorf("mrApprovalConfig: merge request approval configuration requires GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
-		return ConfigOutput{}, toolutil.WrapErrWithMessage("mrApprovalConfig", err)
+		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
+			"requires Maintainer role; approvals_required is deprecated \u2014 prefer approval rules; verify project_id + merge_request_iid")
 	}
 	return configToOutput(cfg), nil
 }
@@ -299,7 +303,8 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 	}
 	_, err := client.GL().MergeRequestApprovals.ResetApprovalsOfMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("mrApprovalReset", err)
+		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusForbidden,
+			"requires Maintainer role; resets all approvals on the MR \u2014 cannot be undone; verify project_id + merge_request_iid")
 	}
 	return nil
 }
@@ -335,7 +340,8 @@ func CreateRule(ctx context.Context, client *gitlabclient.Client, input CreateRu
 
 	rule, _, err := client.GL().MergeRequestApprovals.CreateApprovalRule(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RuleOutput{}, toolutil.WrapErrWithMessage("mrApprovalRuleCreate", err)
+		return RuleOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRuleCreate", err, http.StatusBadRequest,
+			"requires Maintainer + Premium/Ultimate; user_ids/group_ids must be project members; rule_type must be 'regular' or 'any_approver'; cannot have multiple any_approver rules")
 	}
 	return RuleToOutput(rule), nil
 }
@@ -371,7 +377,8 @@ func UpdateRule(ctx context.Context, client *gitlabclient.Client, input UpdateRu
 
 	rule, _, err := client.GL().MergeRequestApprovals.UpdateApprovalRule(string(input.ProjectID), input.MRIID, input.ApprovalRuleID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RuleOutput{}, toolutil.WrapErrWithMessage("mrApprovalRuleUpdate", err)
+		return RuleOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRuleUpdate", err, http.StatusNotFound,
+			"verify approval_rule_id with gitlab_mr_approval_rules; requires Maintainer; cannot change rule_type after creation")
 	}
 	return RuleToOutput(rule), nil
 }
@@ -392,7 +399,8 @@ func DeleteRule(ctx context.Context, client *gitlabclient.Client, input DeleteRu
 	}
 	_, err := client.GL().MergeRequestApprovals.DeleteApprovalRule(string(input.ProjectID), input.MRIID, input.ApprovalRuleID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("mrApprovalRuleDelete", err)
+		return toolutil.WrapErrWithStatusHint("mrApprovalRuleDelete", err, http.StatusForbidden,
+			"requires Maintainer role; verify approval_rule_id with gitlab_mr_approval_rules; deletion is irreversible")
 	}
 	return nil
 }

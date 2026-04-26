@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -18,6 +19,9 @@ import (
 const (
 	errTokenIDInvalid      = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
 	errInvalidExpiresAtFmt = "invalid expires_at format (expected YYYY-MM-DD): %w"
+	// hintTokenAlreadyRevoked is returned when revoking a token that the API
+	// reports as not found.
+	hintTokenAlreadyRevoked = "token already revoked or never existed \u2014 nothing to do" //#nosec G101 -- error hint, not a credential
 )
 
 // ---------------------------------------------------------------------------
@@ -159,7 +163,8 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 
 	tokens, resp, err := client.GL().ProjectAccessTokens.ListProjectAccessTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list project access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list project access tokens", err, http.StatusForbidden,
+			"listing project access tokens requires Maintainer or Owner role on the project")
 	}
 
 	items := make([]Output, len(tokens))
@@ -189,7 +194,8 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 
 	t, _, err := client.GL().ProjectAccessTokens.GetProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get project access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get project access token", err, http.StatusNotFound,
+			"token_id not found on this project (already revoked or never existed) \u2014 use gitlab_access_token_project_list to discover current token IDs")
 	}
 	return fromProjectToken(t), nil
 }
@@ -240,7 +246,12 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 
 	token, _, err := client.GL().ProjectAccessTokens.CreateProjectAccessToken(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create project access token", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("create project access token", err,
+				"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("create project access token", err, http.StatusForbidden,
+			"creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role")
 	}
 	return fromProjectToken(token), nil
 }
@@ -276,7 +287,12 @@ func ProjectRotate(ctx context.Context, client *gitlabclient.Client, input Proje
 
 	token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessToken(string(input.ProjectID), input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("rotate project access token", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("rotate project access token", err,
+				"token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("rotate project access token", err, http.StatusNotFound,
+			"token_id not found \u2014 use gitlab_access_token_project_list to verify")
 	}
 	return fromProjectToken(token), nil
 }
@@ -301,7 +317,8 @@ func ProjectRevoke(ctx context.Context, client *gitlabclient.Client, input Proje
 
 	_, err := client.GL().ProjectAccessTokens.RevokeProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("revoke project access token", err)
+		return toolutil.WrapErrWithStatusHint("revoke project access token", err, http.StatusNotFound,
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }
@@ -333,7 +350,8 @@ func ProjectRotateSelf(ctx context.Context, client *gitlabclient.Client, input P
 
 	token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessTokenSelf(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("self-rotate project access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate project access token", err, http.StatusUnauthorized,
+			"the calling token is not a project access token for this project, or has already been rotated/revoked")
 	}
 	return fromProjectToken(token), nil
 }
@@ -372,7 +390,8 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 
 	tokens, resp, err := client.GL().GroupAccessTokens.ListGroupAccessTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list group access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group access tokens", err, http.StatusForbidden,
+			"listing group access tokens requires Owner role on the group")
 	}
 
 	items := make([]Output, len(tokens))
@@ -402,7 +421,8 @@ func GroupGet(ctx context.Context, client *gitlabclient.Client, input GroupGetIn
 
 	t, _, err := client.GL().GroupAccessTokens.GetGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get group access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get group access token", err, http.StatusNotFound,
+			"token_id not found on this group \u2014 use gitlab_access_token_group_list to discover current token IDs")
 	}
 	return fromGroupToken(t), nil
 }
@@ -453,7 +473,12 @@ func GroupCreate(ctx context.Context, client *gitlabclient.Client, input GroupCr
 
 	token, _, err := client.GL().GroupAccessTokens.CreateGroupAccessToken(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create group access token", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("create group access token", err,
+				"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD)")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("create group access token", err, http.StatusForbidden,
+			"creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role")
 	}
 	return fromGroupToken(token), nil
 }
@@ -489,7 +514,12 @@ func GroupRotate(ctx context.Context, client *gitlabclient.Client, input GroupRo
 
 	token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessToken(string(input.GroupID), input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("rotate group access token", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("rotate group access token", err,
+				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("rotate group access token", err, http.StatusNotFound,
+			"token_id not found \u2014 use gitlab_access_token_group_list to verify")
 	}
 	return fromGroupToken(token), nil
 }
@@ -514,7 +544,8 @@ func GroupRevoke(ctx context.Context, client *gitlabclient.Client, input GroupRe
 
 	_, err := client.GL().GroupAccessTokens.RevokeGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("revoke group access token", err)
+		return toolutil.WrapErrWithStatusHint("revoke group access token", err, http.StatusNotFound,
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }
@@ -546,7 +577,8 @@ func GroupRotateSelf(ctx context.Context, client *gitlabclient.Client, input Gro
 
 	token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessTokenSelf(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("self-rotate group access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate group access token", err, http.StatusUnauthorized,
+			"the calling token is not a group access token for this group, or has already been rotated/revoked")
 	}
 	return fromGroupToken(token), nil
 }
@@ -588,7 +620,8 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 
 	tokens, resp, err := client.GL().PersonalAccessTokens.ListPersonalAccessTokens(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list personal access tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list personal access tokens", err, http.StatusForbidden,
+			"listing all personal access tokens (across all users) requires an admin token; without admin, the result is filtered to the authenticated user's own tokens")
 	}
 
 	items := make([]Output, len(tokens))
@@ -612,14 +645,16 @@ func PersonalGet(ctx context.Context, client *gitlabclient.Client, input Persona
 	if input.TokenID == 0 {
 		t, _, err := client.GL().PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 		if err != nil {
-			return Output{}, toolutil.WrapErrWithMessage("get current personal access token", err)
+			return Output{}, toolutil.WrapErrWithStatusHint("get current personal access token", err, http.StatusUnauthorized,
+				"the calling credential is not a personal access token (e.g. OAuth or job token) \u2014 supply token_id to introspect a specific PAT instead")
 		}
 		return fromPersonalToken(t), nil
 	}
 
 	t, _, err := client.GL().PersonalAccessTokens.GetSinglePersonalAccessTokenByID(input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get personal access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get personal access token", err, http.StatusNotFound,
+			"token_id not found, already revoked, or owned by another user (admin token required to inspect other users' tokens)")
 	}
 	return fromPersonalToken(t), nil
 }
@@ -651,7 +686,12 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessToken(input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("rotate personal access token", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("rotate personal access token", err,
+				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("rotate personal access token", err, http.StatusNotFound,
+			"token_id not found \u2014 use gitlab_access_token_personal_list to verify")
 	}
 	return fromPersonalToken(token), nil
 }
@@ -672,7 +712,8 @@ func PersonalRevoke(ctx context.Context, client *gitlabclient.Client, input Pers
 
 	_, err := client.GL().PersonalAccessTokens.RevokePersonalAccessTokenByID(input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("revoke personal access token", err)
+		return toolutil.WrapErrWithStatusHint("revoke personal access token", err, http.StatusNotFound,
+			hintTokenAlreadyRevoked)
 	}
 	return nil
 }
@@ -700,7 +741,8 @@ func PersonalRotateSelf(ctx context.Context, client *gitlabclient.Client, input 
 
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessTokenSelf(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("self-rotate personal access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate personal access token", err, http.StatusUnauthorized,
+			"the calling credential is not a personal access token (e.g. OAuth or job token) or has already been rotated/revoked")
 	}
 	return fromPersonalToken(token), nil
 }
@@ -716,7 +758,8 @@ func PersonalRevokeSelf(ctx context.Context, client *gitlabclient.Client, _ Pers
 
 	_, err := client.GL().PersonalAccessTokens.RevokePersonalAccessTokenSelf(gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("self-revoke personal access token", err)
+		return toolutil.WrapErrWithStatusHint("self-revoke personal access token", err, http.StatusUnauthorized,
+			"the calling credential is not a personal access token or has already been revoked")
 	}
 	return nil
 }

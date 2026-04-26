@@ -4,6 +4,7 @@ package topics
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -59,7 +60,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	topics, resp, err := client.GL().Topics.ListTopics(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_topics", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_topics", err, http.StatusForbidden,
+			"topic listing is public on most instances; search filter is case-insensitive substring; without_projects=true returns orphaned topics (admin-managed)")
 	}
 	items := make([]TopicItem, 0, len(topics))
 	for _, t := range topics {
@@ -91,7 +93,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	topic, _, err := client.GL().Topics.GetTopic(input.TopicID, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_topic", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_topic", err, http.StatusNotFound,
+			"verify topic id (numeric) with gitlab_list_topics; topic ids are instance-wide \u2014 names are unique per instance")
 	}
 	return GetOutput{Topic: topicToItem(topic)}, nil
 }
@@ -124,7 +127,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	topic, _, err := client.GL().Topics.CreateTopic(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithMessage("create_topic", err)
+		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_topic", err, http.StatusForbidden,
+			"requires administrator access; name must be unique on the instance; title is the human-readable display name; avatar must be a valid file upload")
 	}
 	return CreateOutput{Topic: topicToItem(topic)}, nil
 }
@@ -162,7 +166,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	topic, _, err := client.GL().Topics.UpdateTopic(input.TopicID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UpdateOutput{}, toolutil.WrapErrWithMessage("update_topic", err)
+		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_topic", err, http.StatusForbidden,
+			"requires administrator access; verify id with gitlab_list_topics; renaming may break existing project associations \u2014 prefer updating title and description")
 	}
 	return UpdateOutput{Topic: topicToItem(topic)}, nil
 }
@@ -181,7 +186,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Topics.DeleteTopic(input.TopicID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_topic", err)
+		return toolutil.WrapErrWithStatusHint("delete_topic", err, http.StatusForbidden,
+			"requires administrator access; deletion is irreversible and removes the topic from all associated projects; consider gitlab_topic_merge instead to consolidate duplicate topics")
 	}
 	return nil
 }

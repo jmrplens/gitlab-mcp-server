@@ -4,6 +4,7 @@ package projecttemplates
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -53,7 +54,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		string(input.ProjectID), input.TemplateType, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_project_templates", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_templates", err, http.StatusNotFound, "verify project_id and template_type (dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests)")
 	}
 	items := make([]TemplateItem, 0, len(templates))
 	for _, t := range templates {
@@ -89,7 +90,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		string(input.ProjectID), input.TemplateType, input.Key, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("gitlab_get_project_template", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_template", err, http.StatusNotFound, "verify template_type and template_name with gitlab_list_project_templates")
 	}
 	return GetOutput{TemplateItem: templateFromGL(tpl)}, nil
 }

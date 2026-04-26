@@ -48,6 +48,8 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-auth-mode` | string | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) |
 | `-oauth-cache-ttl` | duration | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth` |
 | `-trusted-proxy-header` | string | _(empty)_ | HTTP header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Forwarded-For`, `X-Real-IP`). Required for accurate rate limiting behind proxies |
+| `-rate-limit-rps` | float | `0` | Per-server `tools/call` rate limit in requests/second. `0` disables. See [Security — Rate Limiting Model](security.md#rate-limiting-model) |
+| `-rate-limit-burst` | int | `40` | Token-bucket burst size when `--rate-limit-rps > 0`. Must be ≥ 1 |
 
 ### Auto-Update
 

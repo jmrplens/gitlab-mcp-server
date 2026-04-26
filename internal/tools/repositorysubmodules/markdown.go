@@ -27,7 +27,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		}
 		fmt.Fprintf(&b, "| %s | `%s` | `%s` | %s |\n", s.Name, s.Path, sha, s.ResolvedProject)
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_read_submodule` to view submodule content details")
+	toolutil.WriteHints(&b, "Use `gitlab_read_repository_submodule_file` to view submodule content details")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
@@ -49,7 +49,7 @@ func FormatReadMarkdown(out ReadOutput) *mcp.CallToolResult {
 	fmt.Fprintf(&b, "- **Commit**: `%s`\n", sha)
 	fmt.Fprintf(&b, "- **File**: `%s` (%d bytes)\n\n", out.FilePath, out.Size)
 	fmt.Fprintf(&b, "```%s\n%s\n```\n", ext, out.Content)
-	toolutil.WriteHints(&b, "Use `gitlab_update_submodule` to change the commit SHA reference")
+	toolutil.WriteHints(&b, "Use `gitlab_update_repository_submodule` to change the commit SHA reference")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 

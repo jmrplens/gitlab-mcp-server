@@ -4,6 +4,7 @@ package containerregistry
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -60,7 +61,8 @@ func ListProtectionRules(ctx context.Context, client *gitlabclient.Client, input
 	rules, resp, err := client.GL().ContainerRegistryProtectionRules.ListContainerRegistryProtectionRules(
 		string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return ProtectionRuleListOutput{}, toolutil.WrapErrWithMessage("registry_protection_list", err)
+		return ProtectionRuleListOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_list", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; container registry protection requires GitLab 16.7+ and may need feature flag")
 	}
 	out := ProtectionRuleListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
@@ -103,7 +105,8 @@ func CreateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	rule, _, err := client.GL().ContainerRegistryProtectionRules.CreateContainerRegistryProtectionRule(
 		string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectionRuleOutput{}, toolutil.WrapErrWithMessage("registry_protection_create", err)
+		return ProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_create", err, http.StatusBadRequest,
+			"repository_path_pattern must be a glob (e.g. project/path/*); minimum_access_level_for_push and minimum_access_level_for_delete must be one of {maintainer, owner, admin}; pattern must be unique within the project")
 	}
 	return convertProtectionRule(rule), nil
 }
@@ -144,7 +147,8 @@ func UpdateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	rule, _, err := client.GL().ContainerRegistryProtectionRules.UpdateContainerRegistryProtectionRule(
 		string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectionRuleOutput{}, toolutil.WrapErrWithMessage("registry_protection_update", err)
+		return ProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_update", err, http.StatusNotFound,
+			"verify rule_id with gitlab_registry_protection_list; pattern uniqueness still applies on rename")
 	}
 	return convertProtectionRule(rule), nil
 }
@@ -170,7 +174,8 @@ func DeleteProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	_, err := client.GL().ContainerRegistryProtectionRules.DeleteContainerRegistryProtectionRule(
 		string(input.ProjectID), input.RuleID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("registry_protection_delete", err)
+		return toolutil.WrapErrWithStatusHint("registry_protection_delete", err, http.StatusNotFound,
+			"verify rule_id with gitlab_registry_protection_list; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

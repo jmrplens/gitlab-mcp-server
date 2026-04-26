@@ -3,6 +3,7 @@ package dependencyproxy
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -19,7 +20,8 @@ type PurgeInput struct {
 func Purge(ctx context.Context, client *gitlabclient.Client, input PurgeInput) error {
 	_, err := client.GL().DependencyProxy.PurgeGroupDependencyProxy(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_purge_dependency_proxy", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_purge_dependency_proxy", err, http.StatusForbidden,
+			"purging the dependency proxy cache requires group Owner role; verify group_id with gitlab_group_get; the dependency proxy must be enabled at group level")
 	}
 	return nil
 }

@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_snippet_discussions",
 		Title:       toolutil.TitleFromName("gitlab_list_snippet_discussions"),
-		Description: "List discussion threads on a project snippet.\n\nReturns: JSON array of discussions with pagination.\n\nSee also: gitlab_get_snippet_discussion, gitlab_list_project_snippets",
+		Description: "List discussion threads on a project snippet.\n\nReturns: JSON array of discussions with pagination.\n\nSee also: gitlab_get_snippet_discussion, gitlab_project_snippet_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -122,8 +122,9 @@ Actions:
 - add_note: Reply to an existing discussion. Params: project_id, snippet_id, discussion_id, body (required)
 - update_note: Update a discussion note. Params: project_id, snippet_id, discussion_id, note_id, body (required)
 - delete_note: Delete a discussion note. Params: project_id, snippet_id, discussion_id, note_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconDiscussion,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconDiscussion,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_snippet_discussion", routes, nil))
 }

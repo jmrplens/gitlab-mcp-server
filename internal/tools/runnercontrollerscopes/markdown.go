@@ -34,7 +34,7 @@ func FormatScopesMarkdown(out ScopesOutput) string {
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", rs.RunnerID, toolutil.FormatTime(rs.CreatedAt), toolutil.FormatTime(rs.UpdatedAt))
 		}
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_create_runner_controller_scope` to add a new scope")
+	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_scope_add_instance` to add a new scope")
 	return b.String()
 }
 

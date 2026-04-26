@@ -4,6 +4,7 @@ package snippetdiscussions
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -104,7 +105,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	discussions, resp, err := client.GL().Discussions.ListSnippetDiscussions(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_discussion_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_list", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get and snippet_id with gitlab_project_snippet_list")
 	}
 	return toListOutput(discussions, resp), nil
 }
@@ -119,7 +121,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	d, _, err := client.GL().Discussions.GetSnippetDiscussion(string(input.ProjectID), input.SnippetID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_discussion_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)")
 	}
 	return toOutput(d), nil
 }
@@ -137,7 +140,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	d, _, err := client.GL().Discussions.CreateSnippetDiscussion(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_discussion_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_create", err, http.StatusBadRequest,
+			"body is required and cannot be empty; commenting requires Reporter role or being the snippet author")
 	}
 	return toOutput(d), nil
 }
@@ -155,7 +159,8 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	}
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("snippet_discussion_add_note", err)
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet")
 	}
 	return noteToOutput(note), nil
 }
@@ -176,7 +181,8 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	}
 	note, _, err := client.GL().Discussions.UpdateSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("snippet_discussion_update_note", err)
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_update_note", err, http.StatusForbidden,
+			"updating a note requires being the note author; system notes cannot be modified")
 	}
 	return noteToOutput(note), nil
 }
@@ -194,7 +200,8 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}
 	_, err := client.GL().Discussions.DeleteSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("snippet_discussion_delete_note", err)
+		return toolutil.WrapErrWithStatusHint("snippet_discussion_delete_note", err, http.StatusForbidden,
+			"deleting a note requires being the note author or Maintainer role; system notes cannot be deleted")
 	}
 	return nil
 }

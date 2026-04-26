@@ -121,7 +121,7 @@ func FormatReviewMRSecurityMarkdown(r ReviewMRSecurityOutput) string {
 	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_add_mr_note` to flag security concerns on the MR",
-		"Use `gitlab_create_issue` to track security findings as issues",
+		"Use `gitlab_issue_create` to track security findings as issues",
 	)
 	return b.String()
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -110,7 +111,8 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	}
 	emails, _, err := client.GL().Users.ListEmailsForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_emails_for_user", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_emails_for_user", err, http.StatusNotFound,
+			"verify user_id with gitlab_get_user; viewing other users' emails requires admin token")
 	}
 	return toOutputList(emails), nil
 }
@@ -122,7 +124,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	email, _, err := client.GL().Users.GetEmail(input.EmailID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get_email", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get_email", err, http.StatusNotFound,
+			"verify email_id with gitlab_user_emails_list; the email may have been deleted")
 	}
 	return toOutput(email), nil
 }
@@ -140,7 +143,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	}
 	email, _, err := client.GL().Users.AddEmail(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("add_email", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("add_email", err, http.StatusBadRequest,
+			"email must be a valid RFC 5322 address and not already taken; skip_confirmation requires admin token")
 	}
 	return toOutput(email), nil
 }
@@ -161,7 +165,8 @@ func AddForUser(ctx context.Context, client *gitlabclient.Client, input AddForUs
 	}
 	email, _, err := client.GL().Users.AddEmailForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("add_email_for_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("add_email_for_user", err, http.StatusForbidden,
+			"adding emails for other users requires admin token; email must be a valid RFC 5322 address and not already taken")
 	}
 	return toOutput(email), nil
 }
@@ -173,7 +178,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Users.DeleteEmail(input.EmailID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithMessage("delete_email", err)
+		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_email", err, http.StatusNotFound,
+			"verify email_id with gitlab_user_emails_list; the primary email cannot be deleted")
 	}
 	return DeleteOutput{EmailID: input.EmailID, Deleted: true}, nil
 }
@@ -188,7 +194,8 @@ func DeleteForUser(ctx context.Context, client *gitlabclient.Client, input Delet
 	}
 	_, err := client.GL().Users.DeleteEmailForUser(input.UserID, input.EmailID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithMessage("delete_email_for_user", err)
+		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_email_for_user", err, http.StatusForbidden,
+			"deleting emails for other users requires admin token; the primary email cannot be deleted; verify user_id and email_id")
 	}
 	return DeleteOutput{EmailID: input.EmailID, Deleted: true}, nil
 }

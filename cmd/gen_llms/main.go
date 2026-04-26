@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -259,6 +260,8 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 	b.WriteString("Meta-tools are the default mode (META_TOOLS=true). Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
 
+	allRoutes := toolutil.MetaRoutes()
+
 	for _, t := range metaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 		if t.Title != "" {
@@ -268,6 +271,9 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		b.WriteString("\n\n")
 		writeAnnotations(&b, t.Annotations)
 		b.WriteString("\n")
+		if routes, ok := allRoutes[t.Name]; ok {
+			writeActionOutputSchemas(&b, t.Name, routes)
+		}
 	}
 
 	// Enterprise-only meta-tools
@@ -293,6 +299,9 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 			b.WriteString("\n\n")
 			writeAnnotations(&b, t.Annotations)
 			b.WriteString("\n")
+			if routes, ok := allRoutes[t.Name]; ok {
+				writeActionOutputSchemas(&b, t.Name, routes)
+			}
 		}
 	}
 
@@ -398,6 +407,33 @@ func writeAnnotations(b *strings.Builder, ann *mcp.ToolAnnotations) {
 	}
 	fmt.Fprintf(b, "Annotations: readOnly=%v, destructive=%v, idempotent=%v, openWorld=%v\n",
 		ann.ReadOnlyHint, dest, ann.IdempotentHint, openWorld)
+}
+
+// writeActionOutputSchemas writes a per-action output schema summary for a meta-tool.
+func writeActionOutputSchemas(b *strings.Builder, _ string, routes toolutil.ActionMap) {
+	if len(routes) == 0 {
+		return
+	}
+	names := make([]string, 0, len(routes))
+	for name, route := range routes {
+		if route.OutputSchema != nil {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	sort.Strings(names)
+
+	b.WriteString("**Action Output Schemas:**\n\n")
+	for _, name := range names {
+		schema := routes[name].OutputSchema
+		data, err := json.Marshal(schema)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(b, "<details><summary>%s</summary>\n\n```json\n%s\n```\n\n</details>\n\n", name, data)
+	}
 }
 
 // writeInputSchema writes a compact representation of the tool's input schema.

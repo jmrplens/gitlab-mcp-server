@@ -84,12 +84,13 @@ func makeMetaHandler(toolName string, routes actionMap) func(ctx context.Context
 // If NO route is destructive, it gets NonDestructiveMetaAnnotations.
 func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        name,
-		Title:       toolutil.TitleFromName(name),
-		Description: desc,
-		Annotations: toolutil.DeriveAnnotationsWithTitle(name, routes),
-		Icons:       icons,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Name:         name,
+		Title:        toolutil.TitleFromName(name),
+		Description:  desc,
+		Annotations:  toolutil.DeriveAnnotationsWithTitle(name, routes),
+		Icons:        icons,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, makeMetaHandler(name, routes))
 }
 
@@ -97,12 +98,13 @@ func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons 
 // (list/get/search only). Uses ReadOnlyMetaAnnotations with ReadOnlyHint: true.
 func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        name,
-		Title:       toolutil.TitleFromName(name),
-		Description: desc,
-		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
-		Icons:       icons,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Name:         name,
+		Title:        toolutil.TitleFromName(name),
+		Description:  desc,
+		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
+		Icons:        icons,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, makeMetaHandler(name, routes))
 }
 

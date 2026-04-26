@@ -4,6 +4,7 @@ package groupprotectedbranches
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -160,7 +161,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	branches, resp, err := client.GL().GroupProtectedBranches.ListProtectedBranches(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("listGroupProtectedBranches", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupProtectedBranches", err, http.StatusForbidden,
+			"requires Owner role + Premium/Ultimate; verify group_id with gitlab_group_list; group protected branches cascade to all projects in the group")
 	}
 	out := make([]Output, len(branches))
 	for i, b := range branches {
@@ -185,7 +187,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	b, _, err := client.GL().GroupProtectedBranches.GetProtectedBranch(string(input.GroupID), input.Branch, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("getGroupProtectedBranch", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("getGroupProtectedBranch", err, http.StatusNotFound,
+			"verify group_id and name (branch name or wildcard like 'release/*'); name supports wildcards but matching is exact \u2014 use gitlab_group_protected_branch_list to enumerate")
 	}
 	return toOutput(b), nil
 }
@@ -223,7 +226,8 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	}
 	b, _, err := client.GL().GroupProtectedBranches.ProtectRepositoryBranches(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("protectGroupBranch", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("protectGroupBranch", err, http.StatusBadRequest,
+			"requires Owner + Premium/Ultimate; name supports wildcards (e.g. 'release/*'); push_access_level and merge_access_level: 0=No one, 30=Developer, 40=Maintainer; allow_force_push=false recommended")
 	}
 	return toOutput(b), nil
 }
@@ -251,7 +255,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	b, _, err := client.GL().GroupProtectedBranches.UpdateProtectedBranch(string(input.GroupID), input.Branch, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("updateGroupProtectedBranch", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("updateGroupProtectedBranch", err, http.StatusBadRequest,
+			"verify name with gitlab_group_protected_branch_list; partial updates merge with existing config \u2014 unset fields keep current values; provide _destroy=true to remove access level entries")
 	}
 	return toOutput(b), nil
 }
@@ -269,7 +274,8 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	}
 	_, err := client.GL().GroupProtectedBranches.UnprotectRepositoryBranches(string(input.GroupID), input.Branch, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("unprotectGroupBranch", err)
+		return toolutil.WrapErrWithStatusHint("unprotectGroupBranch", err, http.StatusForbidden,
+			"requires Owner + Premium/Ultimate; verify name with gitlab_group_protected_branch_list; unprotection cascades and removes restrictions on all subgroup projects \u2014 irreversible")
 	}
 	return nil
 }

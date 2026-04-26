@@ -3,6 +3,7 @@ package license
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -124,7 +125,7 @@ func toItem(l *gl.License) Item {
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	lic, _, err := client.GL().License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("license_get", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("license_get", err, http.StatusForbidden, "license endpoints require administrator access")
 	}
 	return GetOutput{License: toItem(lic)}, nil
 }
@@ -136,7 +137,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	}
 	lic, _, err := client.GL().License.AddLicense(opts, gl.WithContext(ctx))
 	if err != nil {
-		return AddOutput{}, toolutil.WrapErrWithMessage("license_add", err)
+		return AddOutput{}, toolutil.WrapErrWithStatusHint("license_add", err, http.StatusBadRequest, "verify the license key is valid \u2014 requires administrator access")
 	}
 	return AddOutput{License: toItem(lic)}, nil
 }
@@ -148,7 +149,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().License.DeleteLicense(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("license_delete", err)
+		return toolutil.WrapErrWithStatusHint("license_delete", err, http.StatusNotFound, "verify license_id \u2014 requires administrator access")
 	}
 	return nil
 }

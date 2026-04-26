@@ -160,7 +160,7 @@ func FormatAnalyzeCIConfigMarkdown(a AnalyzeCIConfigOutput) string {
 	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_ci_lint` to validate updated CI configuration",
-		"Use `gitlab_get_ci_variables` to review referenced variables",
+		"Use `gitlab_ci_variable_get` to review referenced variables",
 	)
 	return b.String()
 }

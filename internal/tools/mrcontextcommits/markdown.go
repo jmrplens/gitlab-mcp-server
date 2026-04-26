@@ -23,7 +23,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	for _, c := range out.Commits {
 		fmt.Fprintf(&sb, "| %s | %s | %s |\n", c.ShortID, toolutil.EscapeMdTableCell(c.Title), c.AuthorName)
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_get_commit` to view full details of a specific commit")
+	toolutil.WriteHints(&sb, "Use `gitlab_commit_get` to view full details of a specific commit")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

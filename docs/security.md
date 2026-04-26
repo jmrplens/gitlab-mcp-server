@@ -33,6 +33,7 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 All tool handlers validate inputs before making API calls:
 
 - **Required fields** — Checked before hitting the GitLab API
+- **Schema lockdown** — All tool input schemas set `additionalProperties: false`, rejecting unexpected fields at the MCP SDK level before the handler runs
 - **String sanitization** — `NormalizeText()` handles double-escaped sequences from MCP transport
 - **Markdown escaping** — `EscapeMdTableCell()` and `EscapeMdHeading()` prevent injection in formatted output
 - **File validation** — `OpenAndValidateFile()` checks file existence, type (regular files only), and size limits
@@ -188,6 +189,65 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 | `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client |
 | `internal/autoupdate/autoupdate.go` | HTTPS enforcement, `Config.String()`/`GoString()` |
 | `cmd/server/main.go` | Update initialization |
+
+---
+
+## Rate Limiting Model
+
+The server ships an **optional** token-bucket rate limiter that gates `tools/call`
+invocations. It is **disabled by default** because GitLab itself is the canonical
+rate-limit authority — the limiter exists to protect operators against runaway
+agents and noisy clients, not to replace upstream throttling.
+
+### Configuration
+
+| Setting | Env var | Flag (HTTP mode) | Default |
+| --- | --- | --- | --- |
+| Requests/second | `RATE_LIMIT_RPS` | `--rate-limit-rps` | `0` (disabled) |
+| Burst capacity | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40` |
+
+When `RATE_LIMIT_RPS = 0` the middleware is not attached and there is zero
+overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
+limiter scoped to **one MCP server instance**:
+
+- **stdio mode** — one process, one bucket → effectively per-user.
+- **HTTP mode** — the server pool maintains one MCP server per token+URL, so
+  each authenticated client gets its own bucket. Multi-tenant deployments do
+  not share quota across users.
+
+### Recommended values
+
+| Deployment | `--rate-limit-rps` | Rationale |
+| --- | --- | --- |
+| GitLab.com (authenticated user) | `20` | Stays well under the published ~33 rps authenticated quota with headroom for pagination loops. |
+| Self-hosted (default config) | `8` | Matches the typical 600 req/min default in `application_settings`. |
+| CI / batch automation | `2`–`4` | Conservative; pipelines that invoke many tools per job. |
+| Disabled (default) | `0` | Trust GitLab's own throttle; useful when you have not measured traffic patterns yet. |
+
+### Behavior on excess
+
+When the bucket is empty the middleware short-circuits the call and returns a
+`CallToolResult` with `IsError: true` and a human-readable hint:
+
+```text
+Rate limit exceeded for `gitlab_list_merge_requests`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
+```
+
+The error is returned as a tool result (not a JSON-RPC error) so the LLM can
+parse it and decide whether to back off, batch differently, or surface the
+problem to the user. `tools/list`, `resources/*`, and `prompts/*` are **not**
+gated.
+
+### Defense-in-depth
+
+The local limiter complements but does not replace:
+
+- GitLab's per-user rate limiter (primary defense).
+- HTTP-mode bounded server pool (`MAX_HTTP_CLIENTS`) which caps concurrency.
+- Reverse-proxy/WAF policies in front of public deployments.
+
+Disable it again by setting `RATE_LIMIT_RPS=0` (or omitting the flag). No state
+is persisted between restarts.
 
 ---
 

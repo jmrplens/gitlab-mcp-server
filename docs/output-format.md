@@ -156,7 +156,7 @@ Page 1 of 1 (20 per page) · 5 items
     { "name": "main", "protected": true, "default": true, "web_url": "https://..." },
     { "name": "develop", "protected": true, "default": false, "web_url": "https://..." }
   ],
-  "pagination": { "page": 1, "per_page": 20, "total_items": 5, "total_pages": 1 },
+  "pagination": { "page": 1, "per_page": 20, "total_items": 5, "total_pages": 1, "has_more": false },
   "next_steps": [
     "When presenting these results, always include the clickable [text](url) links",
     "Get details of a specific branch",
@@ -226,6 +226,21 @@ The branch **"nonexistent" in project 42** does not exist or is not accessible w
 ```
 
 Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 27 "get" handlers across 21 domains.
+
+## Per-Route OutputSchema (Meta-Tools)
+
+Meta-tools declare a single tool-level `OutputSchema` (the envelope with `next_steps` and `pagination` fields). In addition, each action route can carry its own output schema describing the exact shape returned by that specific action.
+
+Per-route schemas are populated automatically when using typed route constructors (`RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]`). Void actions and plain `Route()` calls do not have per-route schemas.
+
+These schemas are:
+
+- **Exposed in `llms-full.txt`** under "Action Output Schemas" for each meta-tool, using collapsible `<details>` blocks per action
+- **Audited by `cmd/audit_output`** which reports routes with missing schemas (category `route-output-schema`)
+- **Accessible programmatically** via `toolutil.MetaRoutes()` which returns all registered route maps
+- **Cached** by `reflect.Type` to avoid redundant schema generation
+
+This enables LLMs to predict the exact response shape of each meta-tool action without trial-and-error.
 
 ## See Also
 

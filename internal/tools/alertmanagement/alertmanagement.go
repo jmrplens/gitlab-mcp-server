@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -53,7 +54,7 @@ func ListMetricImages(ctx context.Context, client *gitlabclient.Client, input Li
 	}
 	images, resp, err := client.GL().AlertManagement.ListMetricImages(string(input.ProjectID), input.AlertIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListMetricImagesOutput{}, toolutil.WrapErrWithMessage("gitlab_list_alert_metric_images", err)
+		return ListMetricImagesOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_alert_metric_images", err, http.StatusNotFound, "verify project_id and alert_iid \u2014 check alerts with the project's alert management")
 	}
 	items := make([]MetricImageItem, 0, len(images))
 	for _, img := range images {
@@ -96,7 +97,7 @@ func UpdateMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 	}
 	img, _, err := client.GL().AlertManagement.UpdateMetricImage(string(input.ProjectID), input.AlertIID, input.ImageID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MetricImageItem{}, toolutil.WrapErrWithMessage("gitlab_update_alert_metric_image", err)
+		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_update_alert_metric_image", err, http.StatusNotFound, "verify image_id with gitlab_list_alert_metric_images")
 	}
 	return MetricImageItem{
 		ID:       img.ID,
@@ -169,7 +170,7 @@ func UploadMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 	}
 	img, _, err := client.GL().AlertManagement.UploadMetricImage(string(input.ProjectID), input.AlertIID, reader, input.Filename, uploadOpts, gl.WithContext(ctx))
 	if err != nil {
-		return MetricImageItem{}, toolutil.WrapErrWithMessage("gitlab_upload_alert_metric_image", err)
+		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_upload_alert_metric_image", err, http.StatusBadRequest, "check file content is valid base64 PNG/JPEG")
 	}
 	return MetricImageItem{
 		ID:       img.ID,
@@ -199,7 +200,7 @@ func DeleteMetricImage(ctx context.Context, client *gitlabclient.Client, input D
 	}
 	_, err := client.GL().AlertManagement.DeleteMetricImage(string(input.ProjectID), input.AlertIID, input.ImageID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_alert_metric_image", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_alert_metric_image", err, http.StatusNotFound, "verify image_id with gitlab_list_alert_metric_images")
 	}
 	return nil
 }

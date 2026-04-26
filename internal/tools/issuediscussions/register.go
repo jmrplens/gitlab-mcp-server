@@ -122,8 +122,9 @@ Actions:
 - add_note: Reply to an existing discussion. Params: project_id, issue_iid, discussion_id, body (required)
 - update_note: Update a discussion note. Params: project_id, issue_iid, discussion_id, note_id, body (required)
 - delete_note: Delete a discussion note. Params: project_id, issue_iid, discussion_id, note_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconDiscussion,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconDiscussion,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_issue_discussion", routes, nil))
 }

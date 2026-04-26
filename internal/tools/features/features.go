@@ -4,6 +4,7 @@ package features
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -127,7 +128,8 @@ func toFeatureItem(f *gl.Feature) FeatureItem {
 func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOutput, error) {
 	features, _, err := client.GL().Features.ListFeatures(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("feature_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_list", err, http.StatusForbidden,
+			"requires administrator access; feature flags are instance-wide on self-managed; only set features (not all definitions) are returned \u2014 use feature_list_definitions for the catalog")
 	}
 
 	items := make([]FeatureItem, 0, len(features))
@@ -141,7 +143,8 @@ func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOu
 func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDefinitionsInput) (ListDefinitionsOutput, error) {
 	defs, _, err := client.GL().Features.ListFeatureDefinitions(gl.WithContext(ctx))
 	if err != nil {
-		return ListDefinitionsOutput{}, toolutil.WrapErrWithMessage("feature_list_definitions", err)
+		return ListDefinitionsOutput{}, toolutil.WrapErrWithStatusHint("feature_list_definitions", err, http.StatusForbidden,
+			"requires administrator access; returns the full catalog of available feature flags including not-yet-set ones")
 	}
 
 	items := make([]DefinitionItem, 0, len(defs))
@@ -200,7 +203,8 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 
 	var feature gl.Feature
 	if _, err = client.GL().Do(req, &feature); err != nil {
-		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
+		return SetOutput{}, toolutil.WrapErrWithStatusHint("feature_set", err, http.StatusBadRequest,
+			"requires administrator access; value can be 0/1, true/false, or 0-100 percentage; feature_group/user/group/project/repository scope mutually exclusive with global value")
 	}
 	return SetOutput{Feature: toFeatureItem(&feature)}, nil
 }
@@ -209,7 +213,8 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	_, err := client.GL().Features.DeleteFeatureFlag(input.Name, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("feature_delete", err)
+		return toolutil.WrapErrWithStatusHint("feature_delete", err, http.StatusForbidden,
+			"requires administrator access; verify name with gitlab_feature_list; deletion resets the feature flag to its default state")
 	}
 	return nil
 }

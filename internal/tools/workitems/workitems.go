@@ -7,6 +7,7 @@ package workitems
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -124,7 +125,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_work_item", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_work_item", err, http.StatusNotFound,
+			"verify full_path (group or project path) and iid (work item IID) with gitlab_work_item_list; Work Items API is experimental \u2014 verify GitLab version supports the work item type")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -192,7 +194,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_work_items", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_work_items", err, http.StatusNotFound,
+			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
 	}
 	result := make([]WorkItemItem, 0, len(items))
 	for _, wi := range items {
@@ -279,7 +282,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	wi, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("create_work_item", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("create_work_item", err, http.StatusBadRequest,
+			"work_item_type_id must be a valid type GID; verify type compatibility with full_path (e.g. Epic only at group level + Premium); title is required; Work Items API is experimental")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -376,7 +380,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("update_work_item", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
+			"verify full_path + iid with gitlab_work_item_list; only widget-supported fields can be updated for the type; state_event values: close|reopen")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -396,7 +401,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_work_item", err)
+		return toolutil.WrapErrWithStatusHint("delete_work_item", err, http.StatusForbidden,
+			"only the author or a Maintainer/Owner can delete; verify full_path + iid; deletion is irreversible \u2014 some work item types are protected (e.g. system-managed)")
 	}
 	return nil
 }

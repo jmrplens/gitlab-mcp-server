@@ -5,6 +5,7 @@ package cilint
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
@@ -108,7 +109,8 @@ func LintProject(ctx context.Context, client *gitlabclient.Client, input Project
 
 	result, _, err := client.GL().Validate.ProjectLint(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("lint project CI config", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("lint project CI config", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; project must have a .gitlab-ci.yml at the specified ref; ref/content_ref must be a valid branch or tag")
 	}
 	return toOutput(result), nil
 }
@@ -140,7 +142,8 @@ func LintContent(ctx context.Context, client *gitlabclient.Client, input Content
 
 	result, _, err := client.GL().Validate.ProjectNamespaceLint(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("lint CI content", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("lint CI content", err, http.StatusBadRequest,
+			"content must be valid YAML; verify project_id provides namespace context for resolving includes; ref must be a valid branch or tag")
 	}
 	return toOutput(result), nil
 }

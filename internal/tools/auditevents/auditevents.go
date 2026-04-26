@@ -6,6 +6,7 @@ package auditevents
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -151,7 +152,8 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, input ListIn
 	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
 	events, resp, err := client.GL().AuditEvents.ListInstanceAuditEvents(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("auditListInstance", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListInstance", err, http.StatusForbidden,
+			"requires administrator access; self-managed Premium/Ultimate only; created_after/created_before must be ISO 8601 dates; entity_type filters: User, Group, Project")
 	}
 	out := make([]Output, len(events))
 	for i, e := range events {
@@ -170,7 +172,8 @@ func GetInstance(ctx context.Context, client *gitlabclient.Client, input GetInst
 	}
 	e, _, err := client.GL().AuditEvents.GetInstanceAuditEvent(input.EventID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("auditGetInstance", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("auditGetInstance", err, http.StatusNotFound,
+			"verify id with gitlab_list_instance_audit_events; admin-only on self-managed Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -186,7 +189,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
 	events, resp, err := client.GL().AuditEvents.ListGroupAuditEvents(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("auditListGroup", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListGroup", err, http.StatusForbidden,
+			"requires Owner role + Premium/Ultimate; verify group_id with gitlab_group_list; created_after/created_before must be ISO 8601")
 	}
 	out := make([]Output, len(events))
 	for i, e := range events {
@@ -208,7 +212,8 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	}
 	e, _, err := client.GL().AuditEvents.GetGroupAuditEvent(string(input.GroupID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("auditGetGroup", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("auditGetGroup", err, http.StatusNotFound,
+			"verify group_id + id combination with gitlab_list_group_audit_events; requires Owner + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -224,7 +229,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	opts := buildListOpts(input.CreatedAfter, input.CreatedBefore, input.PaginationInput)
 	events, resp, err := client.GL().AuditEvents.ListProjectAuditEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("auditListProject", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListProject", err, http.StatusForbidden,
+			"requires Maintainer role + Premium/Ultimate; verify project_id with gitlab_project_list; created_after/created_before must be ISO 8601")
 	}
 	out := make([]Output, len(events))
 	for i, e := range events {
@@ -246,7 +252,8 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	}
 	e, _, err := client.GL().AuditEvents.GetProjectAuditEvent(string(input.ProjectID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("auditGetProject", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("auditGetProject", err, http.StatusNotFound,
+			"verify project_id + id combination with gitlab_list_project_audit_events; requires Maintainer + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }

@@ -3,6 +3,7 @@ package ffuserlists
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -94,7 +95,12 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("ff_user_list_list", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ListOutput{}, toolutil.WrapErrWithHint("ff_user_list_list", err,
+				"feature flag user lists require GitLab Premium/Ultimate \u2014 verify the project tier and that you have Developer+ role")
+		}
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("ff_user_list_list", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get")
 	}
 	out := ListOutput{
 		UserLists:  make([]Output, 0, len(lists)),
@@ -118,7 +124,8 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 		string(input.ProjectID), input.IID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_get", err, http.StatusNotFound,
+			"verify iid with gitlab_ff_user_list_list \u2014 user lists are scoped per-project and require Premium/Ultimate")
 	}
 	return convertUserList(l), nil
 }
@@ -139,6 +146,14 @@ func CreateUserList(ctx context.Context, client *gitlabclient.Client, input Crea
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("ff_user_list_create", err,
+				"creating feature flag user lists requires GitLab Premium/Ultimate and Developer+ role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("ff_user_list_create", err,
+				"name must be unique within the project; user_xids must be a comma-separated list of external user IDs")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_create", err)
 	}
 	return convertUserList(l), nil
@@ -160,7 +175,12 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 		string(input.ProjectID), input.IID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_update", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("ff_user_list_update", err,
+				"updating feature flag user lists requires Developer+ role on a Premium/Ultimate project")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_update", err, http.StatusNotFound,
+			"verify iid with gitlab_ff_user_list_list")
 	}
 	return convertUserList(l), nil
 }
@@ -177,7 +197,12 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 		string(input.ProjectID), input.IID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("ff_user_list_delete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("ff_user_list_delete", err,
+				"deleting feature flag user lists requires Developer+ role; the list cannot be in use by an enabled feature flag strategy")
+		}
+		return toolutil.WrapErrWithStatusHint("ff_user_list_delete", err, http.StatusNotFound,
+			"verify iid with gitlab_ff_user_list_list")
 	}
 	return nil
 }

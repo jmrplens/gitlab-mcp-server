@@ -4,6 +4,7 @@ package groupwikis
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -88,7 +89,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	pages, _, err := client.GL().GroupWikis.ListGroupWikis(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("listGroupWikis", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupWikis", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; group wikis require GitLab Premium or higher")
 	}
 	out := make([]Output, len(pages))
 	for i, w := range pages {
@@ -117,7 +119,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	w, _, err := client.GL().GroupWikis.GetGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("getGroupWikiPage", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("getGroupWikiPage", err, http.StatusNotFound,
+			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive and use hyphens for spaces")
 	}
 	return toOutput(w), nil
 }
@@ -146,7 +149,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	w, _, err := client.GL().GroupWikis.CreateGroupWikiPage(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("createGroupWikiPage", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("createGroupWikiPage", err, http.StatusBadRequest,
+			"title and content are required; format must be 'markdown', 'rdoc', 'asciidoc', or 'org'; group wikis require GitLab Premium or higher")
 	}
 	return toOutput(w), nil
 }
@@ -175,7 +179,8 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	}
 	w, _, err := client.GL().GroupWikis.EditGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("editGroupWikiPage", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("editGroupWikiPage", err, http.StatusNotFound,
+			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive")
 	}
 	return toOutput(w), nil
 }
@@ -193,7 +198,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().GroupWikis.DeleteGroupWikiPage(string(input.GroupID), input.Slug, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deleteGroupWikiPage", err)
+		return toolutil.WrapErrWithStatusHint("deleteGroupWikiPage", err, http.StatusForbidden,
+			"deleting group wiki pages requires Maintainer or Owner role")
 	}
 	return nil
 }

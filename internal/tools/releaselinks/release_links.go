@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -127,7 +128,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	l, _, err := client.GL().ReleaseLinks.CreateReleaseLink(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("Create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("Create", err, http.StatusBadRequest,
+			"name and url are required and must be unique within the release; link_type must be one of {other, runbook, image, package}; verify tag_name with gitlab_release_list")
 	}
 	return ToOutput(l), nil
 }
@@ -189,7 +191,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	l, _, err := client.GL().ReleaseLinks.DeleteReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("Delete", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("Delete", err, http.StatusNotFound,
+			"verify link_id with gitlab_release_link_list; deleting release links requires Developer role or higher")
 	}
 	return ToOutput(l), nil
 }
@@ -207,7 +210,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	l, _, err := client.GL().ReleaseLinks.GetReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("Get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
+			"verify link_id with gitlab_release_link_list and tag_name with gitlab_release_list")
 	}
 	return ToOutput(l), nil
 }
@@ -241,7 +245,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	l, _, err := client.GL().ReleaseLinks.UpdateReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("Update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("Update", err, http.StatusBadRequest,
+			"name and url must remain unique within the release; link_type must be one of {other, runbook, image, package}; verify link_id with gitlab_release_link_list")
 	}
 	return ToOutput(l), nil
 }
@@ -264,7 +269,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	links, resp, err := client.GL().ReleaseLinks.ListReleaseLinks(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("List", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get and tag_name with gitlab_release_list")
 	}
 	out := make([]Output, len(links))
 	for i, l := range links {

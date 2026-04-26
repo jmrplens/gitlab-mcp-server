@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_issue_link_list",
 		Title:       toolutil.TitleFromName("gitlab_issue_link_list"),
-		Description: "List issue relations (linked issues) for a given issue in a GitLab project. Returns related issues with link type (relates_to, blocks, is_blocked_by).\n\nReturns: JSON array of linked issues.\n\nSee also: gitlab_issue_link_create, gitlab_get_issue",
+		Description: "List issue relations (linked issues) for a given issue in a GitLab project. Returns related issues with link type (relates_to, blocks, is_blocked_by).\n\nReturns: JSON array of linked issues.\n\nSee also: gitlab_issue_link_create, gitlab_issue_get",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconLink,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

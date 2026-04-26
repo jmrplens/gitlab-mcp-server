@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -110,7 +111,8 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_list", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get and that you have Maintainer+ role (trigger tokens are sensitive)")
 	}
 	out := ListOutput{
 		Triggers:   make([]Output, 0, len(triggers)),
@@ -134,7 +136,8 @@ func GetTrigger(ctx context.Context, client *gitlabclient.Client, input GetInput
 		string(input.ProjectID), input.TriggerID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("pipeline_trigger_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_get", err, http.StatusNotFound,
+			"verify trigger_id with gitlab_pipeline_trigger_list \u2014 trigger tokens are scoped to a single project")
 	}
 	return convertTrigger(t), nil
 }
@@ -154,7 +157,12 @@ func CreateTrigger(ctx context.Context, client *gitlabclient.Client, input Creat
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("pipeline_trigger_create", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("pipeline_trigger_create", err,
+				"creating trigger tokens requires Maintainer+ role on the project")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_create", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get")
 	}
 	return convertTrigger(t), nil
 }
@@ -175,7 +183,12 @@ func UpdateTrigger(ctx context.Context, client *gitlabclient.Client, input Updat
 		string(input.ProjectID), input.TriggerID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("pipeline_trigger_update", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("pipeline_trigger_update", err,
+				"only the trigger owner or Maintainer+ can edit trigger tokens")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_update", err, http.StatusNotFound,
+			"verify trigger_id with gitlab_pipeline_trigger_list")
 	}
 	return convertTrigger(t), nil
 }
@@ -192,7 +205,12 @@ func DeleteTrigger(ctx context.Context, client *gitlabclient.Client, input Delet
 		string(input.ProjectID), input.TriggerID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("pipeline_trigger_delete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("pipeline_trigger_delete", err,
+				"only the trigger owner or Maintainer+ can delete trigger tokens \u2014 the token is invalidated immediately on deletion")
+		}
+		return toolutil.WrapErrWithStatusHint("pipeline_trigger_delete", err, http.StatusNotFound,
+			"verify trigger_id with gitlab_pipeline_trigger_list")
 	}
 	return nil
 }
@@ -223,7 +241,16 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
+				"the token is invalid or has been revoked \u2014 use gitlab_pipeline_trigger_list to find a valid token (Maintainer+ required to read tokens)")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
+				"the ref does not exist, the project has no .gitlab-ci.yml, or CI/CD is disabled \u2014 verify with gitlab_branch_get/gitlab_tag_get and gitlab_ci_lint")
+		}
+		return RunOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_run", err, http.StatusNotFound,
+			"verify project_id and that the ref (branch/tag) exists with gitlab_branch_get or gitlab_tag_get")
 	}
 	return convertPipeline(p), nil
 }

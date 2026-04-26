@@ -4,11 +4,19 @@ package protectedenvs
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// Operation names used by error wrappers (kept as constants to satisfy S1192).
+const (
+	opProtectEnvironment   = "protect environment"
+	opUpdateProtectedEnv   = "update protected environment"
+	opUnprotectEnvironment = "unprotect environment"
 )
 
 // ---------- Input types ----------.
@@ -191,7 +199,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	envs, resp, err := client.GL().ProtectedEnvironments.ListProtectedEnvironments(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list protected environments", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list protected environments", err, http.StatusNotFound,
+			"verify project_id; protected environments require GitLab Premium or Ultimate")
 	}
 
 	out := ListOutput{Environments: make([]Output, 0, len(envs))}
@@ -216,7 +225,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	pe, _, err := client.GL().ProtectedEnvironments.GetProtectedEnvironment(string(input.ProjectID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get protected environment", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get protected environment", err, http.StatusNotFound,
+			"the environment may not be protected \u2014 use gitlab_protected_environment_list first")
 	}
 	return toOutput(pe), nil
 }
@@ -230,7 +240,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("protect environment", err)
+		return Output{}, toolutil.WrapErrWithMessage(opProtectEnvironment, err)
 	}
 
 	opts := &gl.ProtectRepositoryEnvironmentsOptions{
@@ -287,7 +297,12 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 
 	pe, _, err := client.GL().ProtectedEnvironments.ProtectRepositoryEnvironments(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("protect environment", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint(opProtectEnvironment, err,
+				"protecting environments requires Maintainer role and GitLab Premium/Ultimate")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint(opProtectEnvironment, err, http.StatusConflict,
+			"the environment is already protected \u2014 use gitlab_protected_environment_update to modify access levels")
 	}
 	return toOutput(pe), nil
 }
@@ -301,7 +316,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrFieldRequired("environment")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update protected environment", err)
+		return Output{}, toolutil.WrapErrWithMessage(opUpdateProtectedEnv, err)
 	}
 
 	opts := &gl.UpdateProtectedEnvironmentsOptions{}
@@ -371,7 +386,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	pe, _, err := client.GL().ProtectedEnvironments.UpdateProtectedEnvironments(string(input.ProjectID), input.Environment, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update protected environment", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint(opUpdateProtectedEnv, err,
+				"updating protected environments requires Maintainer role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateProtectedEnv, err, http.StatusNotFound,
+			"the environment may not be protected \u2014 use gitlab_protected_environment_protect first")
 	}
 	return toOutput(pe), nil
 }
@@ -385,12 +405,17 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 		return toolutil.ErrFieldRequired("environment")
 	}
 	if err := ctx.Err(); err != nil {
-		return toolutil.WrapErrWithMessage("unprotect environment", err)
+		return toolutil.WrapErrWithMessage(opUnprotectEnvironment, err)
 	}
 
 	_, err := client.GL().ProtectedEnvironments.UnprotectEnvironment(string(input.ProjectID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("unprotect environment", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint(opUnprotectEnvironment, err,
+				"unprotecting environments requires Maintainer role")
+		}
+		return toolutil.WrapErrWithStatusHint(opUnprotectEnvironment, err, http.StatusNotFound,
+			"the environment may already be unprotected \u2014 use gitlab_protected_environment_list to verify")
 	}
 	return nil
 }

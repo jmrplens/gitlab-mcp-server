@@ -68,12 +68,13 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 
 ### Árbol de decisión
 
-| Escenario                                       | Función              |
-| ----------------------------------------------- | -------------------- |
-| Operación de solo lectura (list, get, search)   | `WrapErr`            |
-| Operación de escritura (create, update, delete) | `WrapErrWithMessage` |
-| Error específico con corrección conocida        | `WrapErrWithHint`    |
-| Operación get que devuelve 404                  | `NotFoundResult`     |
+| Escenario                                       | Función                 |
+| ----------------------------------------------- | ----------------------- |
+| Operación de solo lectura (list, get, search)   | `WrapErr`               |
+| Operación de escritura (create, update, delete) | `WrapErrWithMessage`    |
+| Error específico con corrección conocida        | `WrapErrWithHint`       |
+| Hint específico para un código de estado        | `WrapErrWithStatusHint` |
+| Operación get que devuelve 404                  | `NotFoundResult`        |
 
 ### NotFoundResult — Respuestas informativas para 404
 

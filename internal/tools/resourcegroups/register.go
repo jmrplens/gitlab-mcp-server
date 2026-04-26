@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_resource_groups",
 		Title:       toolutil.TitleFromName("gitlab_list_resource_groups"),
-		Description: "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_list_pipelines",
+		Description: "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_pipeline_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconQueue,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -98,8 +98,9 @@ Actions:
 - get: Get a single resource group. Params: project_id (required), key (required)
 - edit: Edit a resource group process mode. Params: project_id (required), key (required), process_mode (required: unordered, oldest_first, newest_first)
 - list_upcoming_jobs: List upcoming jobs for a resource group. Params: project_id (required), key (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconQueue,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconQueue,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_resource_group", routes, nil))
 }

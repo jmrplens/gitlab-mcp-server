@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -38,7 +39,8 @@ func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOu
 	}
 	keys, _, err := client.GL().Users.ListGPGKeys(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_gpg_keys", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_gpg_keys", err, http.StatusUnauthorized,
+			"GPG key listing requires an authenticated user; verify your token is valid (api or read_user scope)")
 	}
 	return ListOutput{Keys: toOutputList(keys)}, nil
 }
@@ -58,7 +60,8 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 	}
 	keys, _, err := client.GL().Users.ListGPGKeysForUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_gpg_keys_for_user", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_gpg_keys_for_user", err, http.StatusNotFound,
+			"verify user_id with gitlab_get_user; viewing other users' GPG keys may require admin token")
 	}
 	return ListOutput{Keys: toOutputList(keys)}, nil
 }
@@ -78,7 +81,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	k, _, err := client.GL().Users.GetGPGKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get_gpg_key", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get_gpg_key", err, http.StatusNotFound,
+			"verify key_id with gitlab_user_gpg_keys_list; the key may have been deleted")
 	}
 	return toOutput(k), nil
 }
@@ -102,7 +106,8 @@ func GetForUser(ctx context.Context, client *gitlabclient.Client, input GetForUs
 	}
 	k, _, err := client.GL().Users.GetGPGKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get_gpg_key_for_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get_gpg_key_for_user", err, http.StatusNotFound,
+			"verify user_id and key_id with gitlab_user_gpg_keys_list_for_user; admin token may be required")
 	}
 	return toOutput(k), nil
 }
@@ -123,7 +128,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	opts := &gl.AddGPGKeyOptions{Key: new(input.Key)}
 	k, _, err := client.GL().Users.AddGPGKey(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("add_gpg_key", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("add_gpg_key", err, http.StatusBadRequest,
+			"key must be an ASCII-armored OpenPGP public key block beginning with '-----BEGIN PGP PUBLIC KEY BLOCK-----'; the key fingerprint must be unique across GitLab")
 	}
 	return toOutput(k), nil
 }
@@ -148,7 +154,8 @@ func AddForUser(ctx context.Context, client *gitlabclient.Client, input AddForUs
 	opts := &gl.AddGPGKeyOptions{Key: new(input.Key)}
 	k, _, err := client.GL().Users.AddGPGKeyForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("add_gpg_key_for_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("add_gpg_key_for_user", err, http.StatusForbidden,
+			"adding GPG keys for other users requires admin token; key must be ASCII-armored and unique")
 	}
 	return toOutput(k), nil
 }
@@ -174,7 +181,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Users.DeleteGPGKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithMessage("delete_gpg_key", err)
+		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_gpg_key", err, http.StatusNotFound,
+			"verify key_id with gitlab_user_gpg_keys_list; the key may already have been deleted")
 	}
 	return DeleteOutput{KeyID: input.KeyID, Deleted: true}, nil
 }
@@ -198,7 +206,8 @@ func DeleteForUser(ctx context.Context, client *gitlabclient.Client, input Delet
 	}
 	_, err := client.GL().Users.DeleteGPGKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithMessage("delete_gpg_key_for_user", err)
+		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_gpg_key_for_user", err, http.StatusForbidden,
+			"deleting GPG keys for other users requires admin token; verify user_id and key_id with gitlab_user_gpg_keys_list_for_user")
 	}
 	return DeleteOutput{KeyID: input.KeyID, Deleted: true}, nil
 }

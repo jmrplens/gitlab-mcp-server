@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_issue_label_event_list",
 		Title:       toolutil.TitleFromName("gitlab_issue_label_event_list"),
-		Description: "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_list_issues",
+		Description: "List label events for a project issue. Shows when labels were added or removed.\n\nReturns: JSON array of label events with pagination. Fields include id, action, user, created_at.\n\nSee also: gitlab_issue_label_event_get, gitlab_issue_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEvent,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListIssueLabelEventsInput) (*mcp.CallToolResult, ListLabelEventsOutput, error) {
@@ -256,8 +256,9 @@ Actions:
 - list_issue_iteration_events: List iteration events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_iteration_event: Get a single issue iteration event. Params: project_id, issue_iid, iteration_event_id (all required)
 - list_issue_weight_events: List weight events for an issue. Params: project_id, issue_iid (required), page, per_page`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconEvent,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconEvent,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_resource_event", routes, nil))
 }

@@ -4,11 +4,19 @@ package instancevariables
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+)
+
+// Operation names used by error wrappers (kept as constants to satisfy S1192).
+const (
+	opCreateInstanceVariable = "create instance variable"
+	opUpdateInstanceVariable = "update instance variable"
+	opDeleteInstanceVariable = "delete instance variable"
 )
 
 // ---------- Input types ----------.
@@ -103,7 +111,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	vars, resp, err := client.GL().InstanceVariables.ListVariables(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list instance variables", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance variables", err, http.StatusForbidden,
+			"instance-level CI/CD variables are admin-only \u2014 verify your token has admin scope")
 	}
 
 	out := ListOutput{Variables: make([]Output, 0, len(vars))}
@@ -125,7 +134,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	v, _, err := client.GL().InstanceVariables.GetVariable(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get instance variable", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get instance variable", err, http.StatusNotFound,
+			"verify the variable key exists with gitlab_instance_variable_list; admin-only API")
 	}
 	return toOutput(v), nil
 }
@@ -139,7 +149,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.ErrFieldRequired("value")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create instance variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opCreateInstanceVariable, err)
 	}
 
 	opts := &gl.CreateInstanceVariableOptions{
@@ -165,7 +175,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	v, _, err := client.GL().InstanceVariables.CreateVariable(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create instance variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint(opCreateInstanceVariable, err,
+				"creating instance variables requires admin privileges")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint(opCreateInstanceVariable, err, http.StatusBadRequest,
+			"key must match /^[A-Za-z0-9_]{1,255}$/; valid variable_type: env_var (default) or file; the key may already exist")
 	}
 	return toOutput(v), nil
 }
@@ -176,7 +191,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update instance variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opUpdateInstanceVariable, err)
 	}
 
 	opts := &gl.UpdateInstanceVariableOptions{}
@@ -202,7 +217,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	v, _, err := client.GL().InstanceVariables.UpdateVariable(input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update instance variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint(opUpdateInstanceVariable, err,
+				"updating instance variables requires admin privileges")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateInstanceVariable, err, http.StatusNotFound,
+			"verify the variable key exists with gitlab_instance_variable_list")
 	}
 	return toOutput(v), nil
 }
@@ -213,12 +233,17 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return toolutil.WrapErrWithMessage("delete instance variable", err)
+		return toolutil.WrapErrWithMessage(opDeleteInstanceVariable, err)
 	}
 
 	_, err := client.GL().InstanceVariables.RemoveVariable(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete instance variable", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint(opDeleteInstanceVariable, err,
+				"deleting instance variables requires admin privileges")
+		}
+		return toolutil.WrapErrWithStatusHint(opDeleteInstanceVariable, err, http.StatusNotFound,
+			"the variable may already be deleted \u2014 verify with gitlab_instance_variable_list")
 	}
 	return nil
 }

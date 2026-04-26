@@ -4,6 +4,7 @@ package containerregistry
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -133,7 +134,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	repos, resp, err := client.GL().ContainerRegistry.ListProjectRegistryRepositories(
 		string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return RepositoryListOutput{}, toolutil.WrapErrWithMessage("registry_list_project", err)
+		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_project", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project may have container registry disabled or no repositories yet")
 	}
 	out := RepositoryListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range repos {
@@ -167,7 +169,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	repos, resp, err := client.GL().ContainerRegistry.ListGroupRegistryRepositories(
 		string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return RepositoryListOutput{}, toolutil.WrapErrWithMessage("registry_list_group", err)
+		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_group", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; the group may have no projects with container registry enabled")
 	}
 	out := RepositoryListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range repos {
@@ -202,7 +205,8 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 	repo, _, err := client.GL().ContainerRegistry.GetSingleRegistryRepository(
 		input.RepositoryID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RepositoryOutput{}, toolutil.WrapErrWithMessage("registry_get_repository", err)
+		return RepositoryOutput{}, toolutil.WrapErrWithStatusHint("registry_get_repository", err, http.StatusNotFound,
+			"verify repository_id with gitlab_registry_list_project; container repositories must be queried by ID, not name")
 	}
 	return convertRepository(repo), nil
 }
@@ -228,7 +232,8 @@ func DeleteRepository(ctx context.Context, client *gitlabclient.Client, input De
 	_, err := client.GL().ContainerRegistry.DeleteRegistryRepository(
 		string(input.ProjectID), input.RepositoryID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("registry_delete_repository", err)
+		return toolutil.WrapErrWithStatusHint("registry_delete_repository", err, http.StatusForbidden,
+			"deleting container repositories requires Maintainer role or higher; verify repository_id with gitlab_registry_list_project")
 	}
 	return nil
 }
@@ -262,7 +267,8 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 	tags, resp, err := client.GL().ContainerRegistry.ListRegistryRepositoryTags(
 		string(input.ProjectID), input.RepositoryID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return TagListOutput{}, toolutil.WrapErrWithMessage("registry_list_tags", err)
+		return TagListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_tags", err, http.StatusNotFound,
+			"verify repository_id with gitlab_registry_list_project; the repository may have no tags or be in the process of being created")
 	}
 	out := TagListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, t := range tags {
@@ -296,7 +302,8 @@ func GetTag(ctx context.Context, client *gitlabclient.Client, input GetTagInput)
 	tag, _, err := client.GL().ContainerRegistry.GetRegistryRepositoryTagDetail(
 		string(input.ProjectID), input.RepositoryID, input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return TagOutput{}, toolutil.WrapErrWithMessage("registry_get_tag", err)
+		return TagOutput{}, toolutil.WrapErrWithStatusHint("registry_get_tag", err, http.StatusNotFound,
+			"verify tag_name with gitlab_registry_list_tags; tag names are case-sensitive and must match exactly")
 	}
 	return convertTag(tag), nil
 }
@@ -326,7 +333,8 @@ func DeleteTag(ctx context.Context, client *gitlabclient.Client, input DeleteTag
 	_, err := client.GL().ContainerRegistry.DeleteRegistryRepositoryTag(
 		string(input.ProjectID), input.RepositoryID, input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("registry_delete_tag", err)
+		return toolutil.WrapErrWithStatusHint("registry_delete_tag", err, http.StatusForbidden,
+			"deleting registry tags requires Developer role or higher; verify tag_name with gitlab_registry_list_tags")
 	}
 	return nil
 }
@@ -369,7 +377,8 @@ func DeleteTagsBulk(ctx context.Context, client *gitlabclient.Client, input Dele
 	_, err := client.GL().ContainerRegistry.DeleteRegistryRepositoryTags(
 		string(input.ProjectID), input.RepositoryID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("registry_delete_tags_bulk", err)
+		return toolutil.WrapErrWithStatusHint("registry_delete_tags_bulk", err, http.StatusBadRequest,
+			"name_regex_delete is required and must be a valid regex; older_than format like '7d' or '1month'; deletion is async and may not be immediate")
 	}
 	return nil
 }

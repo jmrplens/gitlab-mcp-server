@@ -152,11 +152,12 @@ Actions:
 - burndown_events: List burndown chart events for a group milestone. Params: group_id (required), milestone_iid (required), page, per_page`
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "gitlab_group_milestone",
-		Title:       toolutil.TitleFromName("gitlab_group_milestone"),
-		Description: desc,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconMilestone,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Name:         "gitlab_group_milestone",
+		Title:        toolutil.TitleFromName("gitlab_group_milestone"),
+		Description:  desc,
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconMilestone,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_group_milestone", routes, nil))
 }

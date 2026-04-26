@@ -3,6 +3,7 @@ package applications
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -48,7 +49,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	apps, resp, err := client.GL().Applications.ListApplications(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_applications", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_applications", err, http.StatusForbidden, "requires administrator access")
 	}
 
 	items := make([]ApplicationItem, 0, len(apps))
@@ -91,7 +92,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	app, _, err := client.GL().Applications.CreateApplication(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithMessage("create_application", err)
+		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_application", err, http.StatusBadRequest, "verify redirect_uri is a valid URL and scopes are valid \u2014 requires administrator access")
 	}
 
 	return CreateOutput{ApplicationItem: toItem(app)}, nil
@@ -113,7 +114,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Applications.DeleteApplication(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_application", err)
+		return toolutil.WrapErrWithStatusHint("delete_application", err, http.StatusNotFound, "verify application_id with gitlab_list_applications")
 	}
 	return nil
 }

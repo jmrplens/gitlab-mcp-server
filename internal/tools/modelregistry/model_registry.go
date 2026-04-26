@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"io"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -55,7 +56,7 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 		gl.WithContext(ctx),
 	)
 	if err != nil {
-		return DownloadOutput{}, toolutil.WrapErrWithMessage("download ml model package", err)
+		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download ml model package", err, http.StatusNotFound, "verify project_id, model_version_id, path, and filename")
 	}
 
 	data, err := io.ReadAll(reader)

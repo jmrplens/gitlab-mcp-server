@@ -5,6 +5,7 @@ package dorametrics
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -92,7 +93,7 @@ func GetProjectMetrics(ctx context.Context, client *gitlabclient.Client, input P
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetProjectDORAMetrics(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("doraProjectMetrics", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("doraProjectMetrics", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 DORA metrics require Ultimate license")
 	}
 	return toOutput(metrics), nil
 }
@@ -111,7 +112,7 @@ func GetGroupMetrics(ctx context.Context, client *gitlabclient.Client, input Gro
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetGroupDORAMetrics(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("doraGroupMetrics", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("doraGroupMetrics", err, http.StatusNotFound, "verify group_id with gitlab_group_get \u2014 DORA metrics require Ultimate license")
 	}
 	return toOutput(metrics), nil
 }

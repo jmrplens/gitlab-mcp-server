@@ -123,7 +123,7 @@ func Dismiss(ctx context.Context, client *gitlabclient.Client, input DismissInpu
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithMessage("dismiss_vulnerability", err)
+		return MutationOutput{}, toolutil.WrapErrWithHint("dismiss_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a dismissable state")
 	}
 
 	if len(resp.Data.VulnerabilityDismiss.Errors) > 0 {
@@ -157,7 +157,7 @@ func Confirm(ctx context.Context, client *gitlabclient.Client, input ConfirmInpu
 		Variables: map[string]any{"id": input.ID},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithMessage("confirm_vulnerability", err)
+		return MutationOutput{}, toolutil.WrapErrWithHint("confirm_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a confirmable state")
 	}
 
 	if len(resp.Data.VulnerabilityConfirm.Errors) > 0 {
@@ -191,7 +191,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 		Variables: map[string]any{"id": input.ID},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithMessage("resolve_vulnerability", err)
+		return MutationOutput{}, toolutil.WrapErrWithHint("resolve_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a resolvable state")
 	}
 
 	if len(resp.Data.VulnerabilityResolve.Errors) > 0 {
@@ -225,7 +225,7 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 		Variables: map[string]any{"id": input.ID},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithMessage("revert_vulnerability", err)
+		return MutationOutput{}, toolutil.WrapErrWithHint("revert_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in resolved or dismissed state")
 	}
 
 	if len(resp.Data.VulnerabilityRevertToDetected.Errors) > 0 {

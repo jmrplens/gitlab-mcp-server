@@ -195,6 +195,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
+| `RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (also `--rate-limit-rps` flag; `0` = disabled) | `0` (default)    |
+| `RATE_LIMIT_BURST`       | Token-bucket burst size when RPS > 0 (also `--rate-limit-burst` flag) | `40` (default)   |
 | `AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 

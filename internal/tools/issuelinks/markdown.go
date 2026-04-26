@@ -20,7 +20,7 @@ func FormatOutputMarkdown(v Output) string {
 	fmt.Fprintf(&b, "- **Link Type**: %s\n", v.LinkType)
 	fmt.Fprintf(&b, "- **Source Issue IID**: %d (project %d)\n", v.SourceIssueIID, v.SourceProjectID)
 	fmt.Fprintf(&b, "- **Target Issue IID**: %d (project %d)\n", v.TargetIssueIID, v.TargetProjectID)
-	toolutil.WriteHints(&b, "Use `gitlab_list_issue_links` to see all links for this issue")
+	toolutil.WriteHints(&b, "Use `gitlab_issue_link_list` to see all links for this issue")
 	return b.String()
 }
 
@@ -37,7 +37,7 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %d |\n",
 			r.ID, r.IID, toolutil.MdTitleLink(r.Title, r.WebURL), r.State, r.LinkType, r.IssueLinkID)
 	}
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_create_issue_link` to add a new link between issues")
+	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_issue_link_create` to add a new link between issues")
 	return b.String()
 }
 

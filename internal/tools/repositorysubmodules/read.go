@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -80,9 +81,10 @@ func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (Re
 	}
 	f, _, err := client.GL().RepositoryFiles.GetFile(resolvedProject, input.FilePath, fileOpts, gl.WithContext(ctx))
 	if err != nil {
-		return ReadOutput{}, toolutil.WrapErrWithMessage("readRepositorySubmodule",
+		return ReadOutput{}, toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
 			fmt.Errorf("file %q in submodule %q (project %q, commit %s): %w",
-				input.FilePath, input.SubmodulePath, resolvedProject, commitSHA[:minLen(8, len(commitSHA))], err))
+				input.FilePath, input.SubmodulePath, resolvedProject, commitSHA[:minLen(8, len(commitSHA))], err),
+			http.StatusNotFound, "verify project_id, ref, submodule_path, and file_path are correct")
 	}
 
 	content := f.Content
@@ -117,8 +119,9 @@ func resolveSubmoduleProject(ctx context.Context, client *gitlabclient.Client, p
 
 	f, _, err := client.GL().RepositoryFiles.GetFile(projectID, ".gitmodules", fileOpts, gl.WithContext(ctx))
 	if err != nil {
-		return "", toolutil.WrapErrWithMessage("readRepositorySubmodule",
-			fmt.Errorf("could not read .gitmodules from project %s: %w", projectID, err))
+		return "", toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
+			fmt.Errorf("could not read .gitmodules from project %s: %w", projectID, err),
+			http.StatusNotFound, "verify the project contains a .gitmodules file and the ref exists")
 	}
 
 	content := f.Content
@@ -159,8 +162,9 @@ func getSubmoduleCommitSHA(ctx context.Context, client *gitlabclient.Client, pro
 
 	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return "", toolutil.WrapErrWithMessage("readRepositorySubmodule",
-			fmt.Errorf("could not list tree for submodule path %q: %w", submodulePath, err))
+		return "", toolutil.WrapErrWithStatusHint("readRepositorySubmodule",
+			fmt.Errorf("could not list tree for submodule path %q: %w", submodulePath, err),
+			http.StatusNotFound, "verify the submodule_path exists in the project tree at the given ref")
 	}
 
 	for _, n := range nodes {

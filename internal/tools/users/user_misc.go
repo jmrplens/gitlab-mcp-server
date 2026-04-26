@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -24,7 +25,8 @@ func CurrentUserStatus(ctx context.Context, client *gitlabclient.Client, _ Curre
 
 	s, _, err := client.GL().Users.CurrentUserStatus(gl.WithContext(ctx))
 	if err != nil {
-		return StatusOutput{}, toolutil.WrapErrWithMessage("current_user_status", err)
+		return StatusOutput{}, toolutil.WrapErrWithStatusHint("current_user_status", err, http.StatusUnauthorized,
+			"verify your token is valid with read_user or api scope")
 	}
 	return toStatusOutput(s), nil
 }
@@ -64,7 +66,8 @@ func GetUserActivities(ctx context.Context, client *gitlabclient.Client, input G
 
 	activities, resp, err := client.GL().Users.GetUserActivities(opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserActivitiesOutput{}, toolutil.WrapErrWithMessage("get_user_activities", err)
+		return UserActivitiesOutput{}, toolutil.WrapErrWithStatusHint("get_user_activities", err, http.StatusForbidden,
+			"user activities require admin token; from format YYYY-MM-DD; activity is reported as last_activity_on date")
 	}
 
 	out := make([]UserActivityOutput, 0, len(activities))
@@ -121,7 +124,8 @@ func GetUserMemberships(ctx context.Context, client *gitlabclient.Client, input 
 
 	memberships, resp, err := client.GL().Users.GetUserMemberships(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserMembershipsOutput{}, toolutil.WrapErrWithMessage("get_user_memberships", err)
+		return UserMembershipsOutput{}, toolutil.WrapErrWithStatusHint("get_user_memberships", err, http.StatusForbidden,
+			"user memberships require admin token; type filter must be one of {Project, Namespace}; verify user_id with gitlab_get_user")
 	}
 
 	out := make([]UserMembershipOutput, 0, len(memberships))
@@ -206,7 +210,8 @@ func CreateUserRunner(ctx context.Context, client *gitlabclient.Client, input Cr
 
 	r, _, err := client.GL().Users.CreateUserRunner(opts, gl.WithContext(ctx))
 	if err != nil {
-		return UserRunnerOutput{}, toolutil.WrapErrWithMessage("create_user_runner", err)
+		return UserRunnerOutput{}, toolutil.WrapErrWithStatusHint("create_user_runner", err, http.StatusBadRequest,
+			"runner_type must be one of {instance_type, group_type, project_type}; group_id required for group_type, project_id for project_type; tag_list optional; access_level one of {not_protected, ref_protected}")
 	}
 
 	out := UserRunnerOutput{ID: r.ID, Token: r.Token}
@@ -243,7 +248,8 @@ func DeleteUserIdentity(ctx context.Context, client *gitlabclient.Client, input 
 
 	_, err := client.GL().Users.DeleteUserIdentity(input.UserID, input.Provider, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteUserIdentityOutput{}, toolutil.WrapErrWithMessage("delete_user_identity", err)
+		return DeleteUserIdentityOutput{}, toolutil.WrapErrWithStatusHint("delete_user_identity", err, http.StatusForbidden,
+			"deleting user identity providers requires admin token; verify user_id and provider name (e.g. 'github', 'google_oauth2', 'ldapmain'); identity must currently be associated")
 	}
 	return DeleteUserIdentityOutput{
 		UserID:   input.UserID,

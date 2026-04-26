@@ -118,7 +118,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	labels, resp, err := client.GL().Labels.ListLabels(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("labelList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("labelList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get")
 	}
 
 	out := make([]Output, len(labels))
@@ -138,7 +139,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	l, _, err := client.GL().Labels.GetLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("labelGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("labelGet", err, http.StatusNotFound,
+			"verify label_id (numeric ID or name) with gitlab_label_list; label names are case-sensitive")
 	}
 	return toOutput(l), nil
 }
@@ -198,7 +200,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	l, _, err := client.GL().Labels.UpdateLabel(string(input.ProjectID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("labelUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("labelUpdate", err, http.StatusBadRequest,
+			"verify label_id (numeric ID or name) with gitlab_label_list; new_name must be unique; color must be 6-digit hex (e.g. #FF0000)")
 	}
 	return toOutput(l), nil
 }
@@ -213,7 +216,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Labels.DeleteLabel(string(input.ProjectID), string(input.LabelID), &gl.DeleteLabelOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("labelDelete", err)
+		return toolutil.WrapErrWithStatusHint("labelDelete", err, http.StatusForbidden,
+			"deleting project labels requires Maintainer or Owner role; group-inherited labels must be deleted at the group level")
 	}
 	return nil
 }
@@ -228,7 +232,8 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	}
 	l, _, err := client.GL().Labels.SubscribeToLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("labelSubscribe", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("labelSubscribe", err, http.StatusNotModified,
+			"the user is already subscribed to this label")
 	}
 	return toOutput(l), nil
 }
@@ -243,7 +248,8 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 	}
 	_, err := client.GL().Labels.UnsubscribeFromLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("labelUnsubscribe", err)
+		return toolutil.WrapErrWithStatusHint("labelUnsubscribe", err, http.StatusNotModified,
+			"the user is not subscribed to this label")
 	}
 	return nil
 }
@@ -261,7 +267,8 @@ func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInpu
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return toolutil.WrapErrWithHint("labelPromote", err, "label promotion requires group-level Maintainer or higher access")
 		}
-		return toolutil.WrapErrWithMessage("labelPromote", err)
+		return toolutil.WrapErrWithStatusHint("labelPromote", err, http.StatusNotFound,
+			"verify label_id with gitlab_label_list; project must belong to a group (cannot promote labels in personal projects)")
 	}
 	return nil
 }

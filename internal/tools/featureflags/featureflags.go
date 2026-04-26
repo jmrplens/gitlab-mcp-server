@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -151,7 +152,12 @@ func ListFeatureFlags(ctx context.Context, client *gitlabclient.Client, input Li
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("feature_flag_list", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ListOutput{}, toolutil.WrapErrWithHint("feature_flag_list", err,
+				"feature flags require GitLab Premium/Ultimate \u2014 verify the project's tier and that you have Developer+ role")
+		}
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_flag_list", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get")
 	}
 	out := ListOutput{
 		FeatureFlags: make([]Output, 0, len(flags)),
@@ -175,7 +181,8 @@ func GetFeatureFlag(ctx context.Context, client *gitlabclient.Client, input GetI
 		string(input.ProjectID), input.Name, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("feature_flag_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_get", err, http.StatusNotFound,
+			"verify the flag name with gitlab_feature_flag_list \u2014 names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }
@@ -211,6 +218,14 @@ func CreateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input C
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("feature_flag_create", err,
+				"creating feature flags requires GitLab Premium/Ultimate and Developer+ role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("feature_flag_create", err,
+				"name may already exist or strategies JSON is malformed \u2014 valid strategy names: 'default', 'gradualRolloutUserId', 'userWithId', 'gitlabUserList', 'flexibleRollout'")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("feature_flag_create", err)
 	}
 	return convertFeatureFlag(flag), nil
@@ -245,7 +260,12 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 		string(input.ProjectID), input.Name, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("feature_flag_update", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("feature_flag_update", err,
+				"updating feature flags requires Developer+ role on a Premium/Ultimate project")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_update", err, http.StatusNotFound,
+			"verify the flag name with gitlab_feature_flag_list \u2014 names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }
@@ -262,7 +282,12 @@ func DeleteFeatureFlag(ctx context.Context, client *gitlabclient.Client, input D
 		string(input.ProjectID), input.Name, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("feature_flag_delete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("feature_flag_delete", err,
+				"deleting feature flags requires Maintainer+ role on a Premium/Ultimate project")
+		}
+		return toolutil.WrapErrWithStatusHint("feature_flag_delete", err, http.StatusNotFound,
+			"verify the flag name with gitlab_feature_flag_list")
 	}
 	return nil
 }

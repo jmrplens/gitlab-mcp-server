@@ -18,6 +18,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Shared hints used by error wrappers (kept as constants to satisfy S1192).
+const (
+	hintVerifyIssue        = "verify project_id and issue_iid with gitlab_issue_get"
+	hintConfirmIssueExists = "verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists"
+)
+
 const (
 	msgNoIssuesFound = "No issues found.\n"
 	tblHeaderIssues  = "| IID | Title | State | Author | Labels |\n"
@@ -261,6 +267,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	issue, _, err := client.GL().Issues.CreateIssue(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
+				"verify project_id with gitlab_project_get; the project must exist and your token must have at least Reporter role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
+				"check that referenced labels, assignee_ids and milestone_id exist in this project (use gitlab_label_list, gitlab_get_user, gitlab_milestone_list)")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueCreate", err)
 	}
 	return ToOutput(issue), nil
@@ -341,6 +355,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	issue, _, err := client.GL().Issues.GetIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueGet", err,
+				"verify project_id and issue_iid; use gitlab_issue_list to see existing issues in the project")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueGet", err)
 	}
 	return ToOutput(issue), nil
@@ -400,7 +418,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("issueList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get \u2014 issues must be enabled in project settings")
 	}
 	out := make([]Output, len(issues))
 	for i, issue := range issues {
@@ -572,7 +591,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListGroupOutput{}, toolutil.WrapErrWithMessage("issueListGroup", err)
+		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("issueListGroup", err, http.StatusNotFound,
+			"verify the group exists with gitlab_group_get \u2014 use full_path or numeric ID")
 	}
 
 	out := make([]Output, len(issues))
@@ -653,7 +673,8 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("issueListAll", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueListAll", err, http.StatusUnauthorized,
+			"global issue listing requires an authenticated token; results are scoped to issues visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow)")
 	}
 
 	out := make([]Output, len(result))
@@ -678,7 +699,8 @@ func GetByID(ctx context.Context, client *gitlabclient.Client, input GetByIDInpu
 	}
 	issue, _, err := client.GL().Issues.GetIssueByID(input.IssueID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("issueGetByID", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("issueGetByID", err, http.StatusNotFound,
+			"issue_id is the global database ID, not the project-scoped iid; for iid lookups use gitlab_issue_get with project_id+issue_iid")
 	}
 	return ToOutput(issue), nil
 }
@@ -708,7 +730,12 @@ func Reorder(ctx context.Context, client *gitlabclient.Client, input ReorderInpu
 	}
 	issue, _, err := client.GL().Issues.ReorderIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("issueReorder", err)
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("issueReorder", err,
+				"exactly one of move_after_id or move_before_id must be set, and the referenced issue must be in the same project as issue_iid")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("issueReorder", err, http.StatusNotFound,
+			hintVerifyIssue)
 	}
 	return ToOutput(issue), nil
 }
@@ -772,6 +799,10 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, GetInput(input))
 		}
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueSubscribe", err,
+				hintConfirmIssueExists)
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueSubscribe", err)
 	}
 	return ToOutput(issue), nil
@@ -798,6 +829,10 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 	if err != nil {
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, GetInput(input))
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueUnsubscribe", err,
+				hintConfirmIssueExists)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUnsubscribe", err)
 	}
@@ -836,6 +871,10 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	}
 	todo, _, err := client.GL().Issues.CreateTodo(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return TodoOutput{}, toolutil.WrapErrWithHint("issueCreateTodo", err,
+				hintConfirmIssueExists)
+		}
 		return TodoOutput{}, toolutil.WrapErrWithMessage("issueCreateTodo", err)
 	}
 	out := TodoOutput{
@@ -903,6 +942,10 @@ func SetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input Set
 	ts, _, err := client.GL().Issues.SetTimeEstimate(string(input.ProjectID), input.IssueIID,
 		&gl.SetTimeEstimateOptions{Duration: new(input.Duration)}, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return TimeStatsOutput{}, toolutil.WrapErrWithHint("issueSetTimeEstimate", err,
+				"duration must be in human-readable format like '3h30m', '1w2d', or '45m'; bare numbers are rejected")
+		}
 		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueSetTimeEstimate", err)
 	}
 	return timeStatsToOutput(ts), nil
@@ -921,7 +964,8 @@ func ResetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input G
 	}
 	ts, _, err := client.GL().Issues.ResetTimeEstimate(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
-		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueResetTimeEstimate", err)
+		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueResetTimeEstimate", err, http.StatusNotFound,
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -954,6 +998,10 @@ func AddSpentTime(ctx context.Context, client *gitlabclient.Client, input AddSpe
 	}
 	ts, _, err := client.GL().Issues.AddSpentTime(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return TimeStatsOutput{}, toolutil.WrapErrWithHint("issueAddSpentTime", err,
+				"duration must be in human-readable format like '1h', '30m', or '1w2d'; bare numbers are rejected")
+		}
 		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueAddSpentTime", err)
 	}
 	return timeStatsToOutput(ts), nil
@@ -972,7 +1020,8 @@ func ResetSpentTime(ctx context.Context, client *gitlabclient.Client, input GetI
 	}
 	ts, _, err := client.GL().Issues.ResetSpentTime(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
-		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueResetSpentTime", err)
+		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueResetSpentTime", err, http.StatusNotFound,
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -990,7 +1039,8 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 	}
 	ts, _, err := client.GL().Issues.GetTimeSpent(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
-		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueGetTimeStats", err)
+		return TimeStatsOutput{}, toolutil.WrapErrWithStatusHint("issueGetTimeStats", err, http.StatusNotFound,
+			hintVerifyIssue)
 	}
 	return timeStatsToOutput(ts), nil
 }
@@ -1022,7 +1072,8 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 	}
 	users, _, err := client.GL().Issues.GetParticipants(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
-		return ParticipantsOutput{}, toolutil.WrapErrWithMessage("issueGetParticipants", err)
+		return ParticipantsOutput{}, toolutil.WrapErrWithStatusHint("issueGetParticipants", err, http.StatusNotFound,
+			hintVerifyIssue)
 	}
 	out := make([]ParticipantOutput, len(users))
 	for i, u := range users {
@@ -1099,7 +1150,8 @@ func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input List
 	}
 	mrs, resp, err := client.GL().Issues.ListMergeRequestsClosingIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RelatedMRsOutput{}, toolutil.WrapErrWithMessage("issueListMRsClosing", err)
+		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint("issueListMRsClosing", err, http.StatusNotFound,
+			"verify project_id and issue_iid with gitlab_issue_get \u2014 only MRs that include 'Closes #N' are returned")
 	}
 	out := make([]RelatedMROutput, len(mrs))
 	for i, mr := range mrs {
@@ -1135,7 +1187,8 @@ func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input List
 	}
 	mrs, resp, err := client.GL().Issues.ListMergeRequestsRelatedToIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RelatedMRsOutput{}, toolutil.WrapErrWithMessage("issueListMRsRelated", err)
+		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint("issueListMRsRelated", err, http.StatusNotFound,
+			"verify project_id and issue_iid with gitlab_issue_get \u2014 returns MRs mentioning the issue in description/notes (broader than 'closing')")
 	}
 	out := make([]RelatedMROutput, len(mrs))
 	for i, mr := range mrs {

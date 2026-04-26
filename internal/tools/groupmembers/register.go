@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_member_get",
 		Title:       toolutil.TitleFromName("gitlab_group_member_get"),
-		Description: "Get a single member of a GitLab group by user ID. Returns user details including access level, state, and expiration date.\n\nReturns: JSON with member details including access level, state, and expiration. See also: gitlab_group_member_list.",
+		Description: "Get a single member of a GitLab group by user ID. Returns user details including access level, state, and expiration date.\n\nReturns: JSON with member details including access level, state, and expiration. See also: gitlab_group_members_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
@@ -46,7 +46,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_member_add",
 		Title:       toolutil.TitleFromName("gitlab_group_member_add"),
-		Description: "Add a member to a GitLab group. Specify user by user_id or username, and set access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set expiration date.\n\nReturns: JSON with the added member details. See also: gitlab_group_member_list, gitlab_get_user.",
+		Description: "Add a member to a GitLab group. Specify user by user_id or username, and set access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set expiration date.\n\nReturns: JSON with the added member details. See also: gitlab_group_members_list, gitlab_get_user.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input AddInput) (*mcp.CallToolResult, Output, error) {
@@ -74,7 +74,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_group_member_remove",
 		Title:       toolutil.TitleFromName("gitlab_group_member_remove"),
-		Description: "Remove a member from a GitLab group. Optionally skip subresource removal and unassign issuables.\n\nReturns: JSON confirming member removal. See also: gitlab_group_member_list.",
+		Description: "Remove a member from a GitLab group. Optionally skip subresource removal and unassign issuables.\n\nReturns: JSON confirming member removal. See also: gitlab_group_members_list.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RemoveInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -149,8 +149,9 @@ Actions:
 - remove: Remove a member from a group (group_id, user_id, skip_subresources, unassign_issuables)
 - share: Share a group with another group (group_id, share_group_id, group_access, expires_at)
 - unshare: Stop sharing a group (group_id, share_group_id)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconUser,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconUser,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_group_member", routes, nil))
 }

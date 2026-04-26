@@ -690,6 +690,47 @@ func TestWrapErrWithHint_NoGitLabMessage(t *testing.T) {
 	}
 }
 
+// TestWrapErrWithStatusHint_MatchAppliesHint verifies that when the error
+// matches the requested HTTP status, the hint is appended just like
+// WrapErrWithHint would.
+func TestWrapErrWithStatusHint_MatchAppliesHint(t *testing.T) {
+	err := &gl.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusNotFound,
+			Request:    &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/api/v4/projects/1"}},
+		},
+		Message: "{message: 404 Project Not Found}",
+	}
+	wrapped := WrapErrWithStatusHint("projectGet", err, http.StatusNotFound,
+		"verify project_id with gitlab_project_list")
+	msg := wrapped.Error()
+	if !strings.Contains(msg, "Suggestion: verify project_id with gitlab_project_list") {
+		t.Errorf("expected hint to be appended on status match, got: %s", msg)
+	}
+}
+
+// TestWrapErrWithStatusHint_NoMatchFallsBack verifies that when the error
+// does not match the requested HTTP status, WrapErrWithStatusHint falls back
+// to WrapErrWithMessage (no Suggestion clause).
+func TestWrapErrWithStatusHint_NoMatchFallsBack(t *testing.T) {
+	err := &gl.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusForbidden,
+			Request:    &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/api/v4/projects/1"}},
+		},
+		Message: "{message: 403 Forbidden}",
+	}
+	wrapped := WrapErrWithStatusHint("projectGet", err, http.StatusNotFound,
+		"verify project_id with gitlab_project_list")
+	msg := wrapped.Error()
+	if strings.Contains(msg, "Suggestion:") {
+		t.Errorf("expected no Suggestion clause on status mismatch, got: %s", msg)
+	}
+	if !strings.Contains(msg, "access denied") {
+		t.Errorf("expected fallback classification, got: %s", msg)
+	}
+}
+
 // TestIsHTTPStatus_ErrNotFound verifies that IsHTTPStatus recognizes the
 // sentinel gl.ErrNotFound for code 404 without requiring a full ErrorResponse.
 func TestIsHTTPStatus_ErrNotFound(t *testing.T) {

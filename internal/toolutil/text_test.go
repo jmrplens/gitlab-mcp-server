@@ -400,3 +400,58 @@ func TestIsBinaryFile(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildTargetURL verifies URL construction for various target types
+// including Issue, MergeRequest, Milestone, and edge cases (unknown type,
+// empty URL, zero IID).
+func TestBuildTargetURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		projectURL string
+		targetType string
+		targetIID  int64
+		want       string
+	}{
+		{"issue", "https://gitlab.com/g/p", "Issue", 42, "https://gitlab.com/g/p/-/issues/42"},
+		{"merge request", "https://gitlab.com/g/p", "MergeRequest", 10, "https://gitlab.com/g/p/-/merge_requests/10"},
+		{"milestone", "https://gitlab.com/g/p", "Milestone", 3, "https://gitlab.com/g/p/-/milestones/3"},
+		{"unknown type", "https://gitlab.com/g/p", "Tag", 1, ""},
+		{"empty project URL", "", "Issue", 42, ""},
+		{"zero IID", "https://gitlab.com/g/p", "Issue", 0, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildTargetURL(tt.projectURL, tt.targetType, tt.targetIID)
+			if got != tt.want {
+				t.Errorf("BuildTargetURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatTarget verifies Markdown cell rendering for target resources,
+// including combinations of title/URL presence and the fallback to type+IID.
+func TestFormatTarget(t *testing.T) {
+	tests := []struct {
+		name        string
+		targetType  string
+		targetIID   int64
+		targetTitle string
+		targetURL   string
+		want        string
+	}{
+		{"with title and URL", "Issue", 42, "Bug fix", "https://example.com/issues/42", "[Bug fix](https://example.com/issues/42)"},
+		{"with title no URL", "Issue", 42, "Bug fix", "", "Bug fix"},
+		{"no title with IID", "Issue", 42, "", "", "Issue #42"},
+		{"no title with IID and URL", "MergeRequest", 10, "", "https://example.com/mr/10", "[MergeRequest #10](https://example.com/mr/10)"},
+		{"no title no IID", "Issue", 0, "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatTarget(tt.targetType, tt.targetIID, tt.targetTitle, tt.targetURL)
+			if got != tt.want {
+				t.Errorf("FormatTarget() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

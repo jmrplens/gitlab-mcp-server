@@ -4,6 +4,7 @@ package groupmarkdownuploads
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -45,7 +46,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*L
 	}
 	uploads, resp, err := client.GL().GroupMarkdownUploads.ListGroupMarkdownUploads(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_list_group_markdown_uploads", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_list_group_markdown_uploads", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; listing markdown uploads requires Maintainer role or higher")
 	}
 	items := make([]UploadItem, 0, len(uploads))
 	for _, u := range uploads {
@@ -81,7 +83,8 @@ func DeleteByID(ctx context.Context, client *gitlabclient.Client, input DeleteBy
 	}
 	_, err := client.GL().GroupMarkdownUploads.DeleteGroupMarkdownUploadByID(string(input.GroupID), input.UploadID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_group_markdown_upload_by_id", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_group_markdown_upload_by_id", err, http.StatusNotFound,
+			"verify upload_id with gitlab_list_group_markdown_uploads; deleting requires Maintainer role or higher")
 	}
 	return nil
 }
@@ -99,7 +102,8 @@ type DeleteBySecretAndFilenameInput struct {
 func DeleteBySecretAndFilename(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretAndFilenameInput) error {
 	_, err := client.GL().GroupMarkdownUploads.DeleteGroupMarkdownUploadBySecretAndFilename(string(input.GroupID), input.Secret, input.Filename, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_group_markdown_upload_by_secret", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_group_markdown_upload_by_secret", err, http.StatusNotFound,
+			"verify secret (32-char hex) and filename match an existing upload; deleting requires Maintainer role or higher")
 	}
 	return nil
 }

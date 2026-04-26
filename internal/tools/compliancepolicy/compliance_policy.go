@@ -4,6 +4,7 @@ package compliancepolicy
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -33,7 +34,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (Output, 
 
 	result, _, err := client.GL().AdminCompliancePolicySettings.GetCompliancePolicySettings(gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get compliance policy settings", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get compliance policy settings", err, http.StatusForbidden, "compliance policies require Ultimate license and Owner role")
 	}
 
 	return Output{
@@ -52,7 +53,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	}
 	result, _, err := client.GL().AdminCompliancePolicySettings.UpdateCompliancePolicySettings(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update compliance policy settings", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("update compliance policy settings", err, http.StatusForbidden, "updating compliance policies requires Ultimate license and Owner role")
 	}
 
 	return Output{

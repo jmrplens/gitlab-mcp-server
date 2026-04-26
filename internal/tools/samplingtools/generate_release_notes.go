@@ -171,8 +171,8 @@ func FormatGenerateReleaseNotesMarkdown(r GenerateReleaseNotesOutput) string {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", r.Model)
 	}
 	toolutil.WriteHints(&b,
-		"Use `gitlab_create_release` to publish the release with these notes",
-		"Use `gitlab_create_release_link` to attach assets to the release",
+		"Use `gitlab_release_create` to publish the release with these notes",
+		"Use `gitlab_release_link_create` to attach assets to the release",
 	)
 	return b.String()
 }

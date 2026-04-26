@@ -6,6 +6,7 @@ package users
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -36,7 +37,8 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 
 	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyListOutput{}, toolutil.WrapErrWithMessage("list_ssh_keys_for_user", err)
+		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys_for_user", err, http.StatusNotFound,
+			"verify user_id with gitlab_get_user; the user may have no SSH keys")
 	}
 
 	out := make([]SSHKeyOutput, 0, len(keys))
@@ -65,7 +67,8 @@ func GetSSHKey(ctx context.Context, client *gitlabclient.Client, input GetSSHKey
 
 	k, _, err := client.GL().Users.GetSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErrWithMessage("get_ssh_key", err)
+		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key", err, http.StatusNotFound,
+			"verify key_id with gitlab_user_ssh_keys_list; the key may have been deleted")
 	}
 	return toSSHKeyOutput(k), nil
 }
@@ -90,7 +93,8 @@ func GetSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ge
 
 	k, _, err := client.GL().Users.GetSSHKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErrWithMessage("get_ssh_key_for_user", err)
+		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key_for_user", err, http.StatusNotFound,
+			"verify user_id and key_id; admin token may be required to view other users' keys")
 	}
 	return toSSHKeyOutput(k), nil
 }
@@ -119,7 +123,8 @@ func AddSSHKey(ctx context.Context, client *gitlabclient.Client, input AddSSHKey
 
 	k, _, err := client.GL().Users.AddSSHKey(opts, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErrWithMessage("add_ssh_key", err)
+		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key", err, http.StatusBadRequest,
+			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and not already used by another user; usage_type must be one of {auth, signing, auth_and_signing}; expires_at format YYYY-MM-DD")
 	}
 	return toSSHKeyOutput(k), nil
 }
@@ -157,7 +162,8 @@ func AddSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ad
 
 	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyOutput{}, toolutil.WrapErrWithMessage("add_ssh_key_for_user", err)
+		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key_for_user", err, http.StatusForbidden,
+			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with gitlab_get_user")
 	}
 	return toSSHKeyOutput(k), nil
 }
@@ -184,7 +190,8 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, input Delete
 
 	_, err := client.GL().Users.DeleteSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithMessage("delete_ssh_key", err)
+		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithStatusHint("delete_ssh_key", err, http.StatusNotFound,
+			"verify key_id with gitlab_user_ssh_keys_list; the key may already have been deleted")
 	}
 	return DeleteSSHKeyOutput{KeyID: input.KeyID, Deleted: true}, nil
 }
@@ -209,7 +216,8 @@ func DeleteSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input
 
 	_, err := client.GL().Users.DeleteSSHKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithMessage("delete_ssh_key_for_user", err)
+		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithStatusHint("delete_ssh_key_for_user", err, http.StatusForbidden,
+			"deleting SSH keys for other users requires admin token; verify user_id and key_id")
 	}
 	return DeleteSSHKeyOutput{KeyID: input.KeyID, Deleted: true}, nil
 }

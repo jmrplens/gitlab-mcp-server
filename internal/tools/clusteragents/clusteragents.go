@@ -3,6 +3,7 @@ package clusteragents
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -42,7 +43,8 @@ func ListAgents(ctx context.Context, client *gitlabclient.Client, input ListAgen
 	}
 	agents, resp, err := client.GL().ClusterAgents.ListAgents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListAgentsOutput{}, toolutil.WrapErrWithMessage("gitlab_list_cluster_agents", err)
+		return ListAgentsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_cluster_agents", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; cluster agents require Maintainer role to view")
 	}
 	items := make([]AgentItem, 0, len(agents))
 	for _, a := range agents {
@@ -66,7 +68,8 @@ func GetAgent(ctx context.Context, client *gitlabclient.Client, input GetAgentIn
 	}
 	a, _, err := client.GL().ClusterAgents.GetAgent(string(input.ProjectID), input.AgentID, gl.WithContext(ctx))
 	if err != nil {
-		return AgentItem{}, toolutil.WrapErrWithMessage("gitlab_get_cluster_agent", err)
+		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent", err, http.StatusNotFound,
+			"verify agent_id with gitlab_list_cluster_agents; the agent may have been deleted")
 	}
 	return AgentItem{ID: a.ID, Name: a.Name, CreatedByUserID: a.CreatedByUserID}, nil
 }
@@ -84,7 +87,8 @@ func RegisterAgent(ctx context.Context, client *gitlabclient.Client, input Regis
 	opts := &gl.RegisterAgentOptions{Name: new(input.Name)}
 	a, _, err := client.GL().ClusterAgents.RegisterAgent(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return AgentItem{}, toolutil.WrapErrWithMessage("gitlab_register_cluster_agent", err)
+		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_register_cluster_agent", err, http.StatusBadRequest,
+			"name must match DNS-1123 label format (lowercase alphanumeric + dashes, max 63 chars) and be unique within the project; requires Maintainer role")
 	}
 	return AgentItem{ID: a.ID, Name: a.Name, CreatedByUserID: a.CreatedByUserID}, nil
 }
@@ -104,7 +108,8 @@ func DeleteAgent(ctx context.Context, client *gitlabclient.Client, input DeleteA
 	}
 	_, err := client.GL().ClusterAgents.DeleteAgent(string(input.ProjectID), input.AgentID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_delete_cluster_agent", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_cluster_agent", err, http.StatusForbidden,
+			"deleting cluster agents requires Maintainer role; the agent and all its tokens will be removed")
 	}
 	return nil
 }
@@ -148,7 +153,8 @@ func ListAgentTokens(ctx context.Context, client *gitlabclient.Client, input Lis
 	}
 	tokens, resp, err := client.GL().ClusterAgents.ListAgentTokens(string(input.ProjectID), input.AgentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListAgentTokensOutput{}, toolutil.WrapErrWithMessage("gitlab_list_cluster_agent_tokens", err)
+		return ListAgentTokensOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_cluster_agent_tokens", err, http.StatusNotFound,
+			"verify agent_id with gitlab_list_cluster_agents; requires Maintainer role")
 	}
 	items := make([]AgentTokenItem, 0, len(tokens))
 	for _, t := range tokens {
@@ -179,7 +185,8 @@ func GetAgentToken(ctx context.Context, client *gitlabclient.Client, input GetAg
 	}
 	t, _, err := client.GL().ClusterAgents.GetAgentToken(string(input.ProjectID), input.AgentID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return AgentTokenItem{}, toolutil.WrapErrWithMessage("gitlab_get_cluster_agent_token", err)
+		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent_token", err, http.StatusNotFound,
+			"verify token_id with gitlab_list_cluster_agent_tokens; the token value is only returned at creation \u2014 stored tokens show metadata only")
 	}
 	return AgentTokenItem{
 		ID: t.ID, Name: t.Name, Description: t.Description,
@@ -210,7 +217,8 @@ func CreateAgentToken(ctx context.Context, client *gitlabclient.Client, input Cr
 	}
 	t, _, err := client.GL().ClusterAgents.CreateAgentToken(string(input.ProjectID), input.AgentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return AgentTokenItem{}, toolutil.WrapErrWithMessage("gitlab_create_cluster_agent_token", err)
+		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_cluster_agent_token", err, http.StatusBadRequest,
+			"name must be unique within the agent; max 2 active tokens per agent (revoke an existing token first); save the returned token value \u2014 it cannot be retrieved later")
 	}
 	return AgentTokenItem{
 		ID: t.ID, Name: t.Name, Description: t.Description,
@@ -237,7 +245,8 @@ func RevokeAgentToken(ctx context.Context, client *gitlabclient.Client, input Re
 	}
 	_, err := client.GL().ClusterAgents.RevokeAgentToken(string(input.ProjectID), input.AgentID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_revoke_cluster_agent_token", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_revoke_cluster_agent_token", err, http.StatusForbidden,
+			"revoking cluster agent tokens requires Maintainer role; revocation is irreversible \u2014 the token cannot be reactivated")
 	}
 	return nil
 }

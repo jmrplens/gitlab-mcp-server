@@ -109,7 +109,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_package_publish_and_link",
 		Title:       toolutil.TitleFromName("gitlab_package_publish_and_link"),
-		Description: "Upload a file to the Generic Package Registry and create a release asset link pointing to it in one step (recommended over separate publish + link calls). Provide either file_path or content_base64 for the file content. The release identified by tag_name must already exist. Automatically uses the real download URL — no manual URL construction needed.\n\nIMPORTANT: link_name MUST be the exact filename (e.g. 'checksums.txt.asc'). NEVER add descriptive suffixes like '(GPG signature)' — tools like go-selfupdate match release asset names exactly.\n\nSee also: gitlab_package_publish, gitlab_create_release_link\n\nReturns: JSON with the published package details and release link URL.",
+		Description: "Upload a file to the Generic Package Registry and create a release asset link pointing to it in one step (recommended over separate publish + link calls). Provide either file_path or content_base64 for the file content. The release identified by tag_name must already exist. Automatically uses the real download URL — no manual URL construction needed.\n\nIMPORTANT: link_name MUST be the exact filename (e.g. 'checksums.txt.asc'). NEVER add descriptive suffixes like '(GPG signature)' — tools like go-selfupdate match release asset names exactly.\n\nSee also: gitlab_package_publish, gitlab_release_link_create\n\nReturns: JSON with the published package details and release link URL.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconPackage,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input PublishAndLinkInput) (*mcp.CallToolResult, PublishAndLinkOutput, error) {
@@ -210,8 +210,9 @@ Delete actions:
 - file_delete: Delete a single file from a package (irreversible). Params: project_id (required), package_id (required), package_file_id (required)
 
 Common workflow: list → publish_directory → publish_and_link (for release binaries)`,
-		Annotations: toolutil.DeriveAnnotationsWithTitle("gitlab_package", routes),
-		Icons:       toolutil.IconPackage,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotationsWithTitle("gitlab_package", routes),
+		Icons:        toolutil.IconPackage,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_package", routes, nil))
 }

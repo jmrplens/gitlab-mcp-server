@@ -3,6 +3,7 @@ package projectstatistics
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -32,7 +33,7 @@ type GetOutput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
 	stats, _, err := client.GL().ProjectStatistics.Last30DaysStatistics(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("gitlab_get_project_statistics", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 	days := make([]DayStat, 0, len(stats.Fetches.Days))
 	for _, d := range stats.Fetches.Days {

@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_secure_files",
 		Title:       toolutil.TitleFromName("gitlab_list_secure_files"),
-		Description: "List CI/CD secure files for a GitLab project.\n\nReturns: JSON array of secure files with pagination.\n\nSee also: gitlab_show_secure_file, gitlab_list_ci_variables",
+		Description: "List CI/CD secure files for a GitLab project.\n\nReturns: JSON array of secure files with pagination.\n\nSee also: gitlab_show_secure_file, gitlab_ci_variable_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -103,8 +103,9 @@ Actions:
 - show: Show details of a secure file. Params: project_id (required), file_id (required, int)
 - create: Create a new secure file. Params: project_id (required), name (required), content (required, base64-encoded)
 - remove: Remove a secure file. Params: project_id (required), file_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconSecurity,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconSecurity,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_secure_file", routes, nil))
 }

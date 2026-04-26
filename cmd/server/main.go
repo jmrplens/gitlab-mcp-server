@@ -79,6 +79,8 @@ type httpConfig struct {
 	authMode           string
 	oauthCacheTTL      time.Duration
 	trustedProxyHeader string
+	rateLimitRPS       float64
+	rateLimitBurst     int
 }
 
 // main is an internal helper for the main package.
@@ -118,6 +120,8 @@ func main() {
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
+	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
+	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.Parse()
 
 	if showHelp {
@@ -340,6 +344,8 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		AuthMode:           hcfg.authMode,
 		OAuthCacheTTL:      hcfg.oauthCacheTTL,
 		TrustedProxyHeader: hcfg.trustedProxyHeader,
+		RateLimitRPS:       hcfg.rateLimitRPS,
+		RateLimitBurst:     hcfg.rateLimitBurst,
 	}
 
 	if cfg.AuthMode == "" {
@@ -375,6 +381,10 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 	if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
 		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
+	}
+
+	if err := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); err != nil {
+		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", err)
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -557,6 +567,31 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	resources.RegisterWorkspaceRoots(server, rootsManager)
 	resources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)
+
+	// Force `additionalProperties: false` on tool input schemas so unknown
+	// properties produce actionable validation errors LLMs can self-correct
+	// rather than silent acceptance with empty values. Registered as a
+	// receiving middleware after every tool/resource/prompt is in place so
+	// it sees the final schema set on every tools/list response.
+	toolutil.LockdownInputSchemas(server)
+
+	// Inject JSON Schema numeric bounds on the standard pagination
+	// parameters so LLM clients see `page >= 1` and `1 <= per_page <= 100`
+	// directly in tools/list. Runs after the lockdown so it operates on
+	// the same finalized schema set.
+	toolutil.EnrichPaginationConstraints(server)
+
+	// Optional per-server tools/call rate limit. In HTTP mode each pooled
+	// per-token server gets its own bucket (effectively per-token). In
+	// stdio mode the bucket is global to the process. Disabled when
+	// RateLimitRPS is 0 (default).
+	if limiter := toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst); limiter != nil {
+		toolutil.AttachRateLimit(server, limiter)
+		slog.Info("tools/call rate limit enabled",
+			"rps", cfg.RateLimitRPS,
+			"burst", cfg.RateLimitBurst,
+		)
+	}
 
 	return server
 }

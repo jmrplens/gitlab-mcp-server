@@ -6,6 +6,7 @@ package protectedpackages
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -92,7 +93,8 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	rules, resp, err := client.GL().ProtectedPackages.ListPackageProtectionRules(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("packageProtectionRuleList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; package protection rules require GitLab 16.7+ and the package_protection_rule feature")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
@@ -127,7 +129,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	}
 	rule, _, err := client.GL().ProtectedPackages.CreatePackageProtectionRules(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("packageProtectionRuleCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleCreate", err, http.StatusBadRequest,
+			"package_name_pattern must be a glob (e.g. com.example.*); package_type must be one of {npm, maven, conan, nuget, pypi, generic, golang, debian, rubygems, helm, terraform_module}; minimum_access_level_for_push and minimum_access_level_for_delete must be one of {maintainer, owner, admin}")
 	}
 	return toOutput(rule), nil
 }
@@ -158,7 +161,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	}
 	rule, _, err := client.GL().ProtectedPackages.UpdatePackageProtectionRules(string(in.ProjectID), in.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("packageProtectionRuleUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleUpdate", err, http.StatusNotFound,
+			"verify rule_id with gitlab_list_package_protection_rules; pattern uniqueness still applies on rename")
 	}
 	return toOutput(rule), nil
 }
@@ -176,7 +180,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().ProtectedPackages.DeletePackageProtectionRules(string(in.ProjectID), in.RuleID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("packageProtectionRuleDelete", err)
+		return toolutil.WrapErrWithStatusHint("packageProtectionRuleDelete", err, http.StatusNotFound,
+			"verify rule_id with gitlab_list_package_protection_rules; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

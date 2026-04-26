@@ -5,6 +5,7 @@ package runnercontrollerscopes
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -133,7 +134,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Sc
 
 	scopes, _, err := client.GL().RunnerControllerScopes.ListRunnerControllerScopes(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
-		return ScopesOutput{}, toolutil.WrapErrWithMessage("list runner controller scopes", err)
+		return ScopesOutput{}, toolutil.WrapErrWithStatusHint("list runner controller scopes", err, http.StatusNotFound,
+			"verify controller_id with gitlab_runner_controller_list; admin-only API")
 	}
 	return toScopesOutput(scopes), nil
 }
@@ -158,7 +160,12 @@ func AddInstanceScope(ctx context.Context, client *gitlabclient.Client, input Ad
 
 	is, _, err := client.GL().RunnerControllerScopes.AddRunnerControllerInstanceScope(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
-		return InstanceScopeOutput{}, toolutil.WrapErrWithMessage("add instance scope", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return InstanceScopeOutput{}, toolutil.WrapErrWithHint("add runner controller instance scope", err,
+				"adding instance scope requires admin privileges")
+		}
+		return InstanceScopeOutput{}, toolutil.WrapErrWithStatusHint("add runner controller instance scope", err, http.StatusConflict,
+			"the controller may already have instance scope assigned \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return toInstanceScopeOutput(is), nil
 }
@@ -183,7 +190,12 @@ func RemoveInstanceScope(ctx context.Context, client *gitlabclient.Client, input
 
 	_, err := client.GL().RunnerControllerScopes.RemoveRunnerControllerInstanceScope(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("remove instance scope", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("remove instance scope", err,
+				"removing instance scope requires admin privileges")
+		}
+		return toolutil.WrapErrWithStatusHint("remove instance scope", err, http.StatusNotFound,
+			"the controller may not have instance scope assigned \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return nil
 }
@@ -212,7 +224,12 @@ func AddRunnerScope(ctx context.Context, client *gitlabclient.Client, input AddR
 
 	rs, _, err := client.GL().RunnerControllerScopes.AddRunnerControllerRunnerScope(input.ControllerID, input.RunnerID, gl.WithContext(ctx))
 	if err != nil {
-		return RunnerScopeOutput{}, toolutil.WrapErrWithMessage("add runner scope", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return RunnerScopeOutput{}, toolutil.WrapErrWithHint("add runner controller runner scope", err,
+				"adding runner scope requires admin privileges")
+		}
+		return RunnerScopeOutput{}, toolutil.WrapErrWithStatusHint("add runner controller runner scope", err, http.StatusNotFound,
+			"verify controller_id and runner_id; admin-only API")
 	}
 	return toRunnerScopeOutput(rs), nil
 }
@@ -241,7 +258,12 @@ func RemoveRunnerScope(ctx context.Context, client *gitlabclient.Client, input R
 
 	_, err := client.GL().RunnerControllerScopes.RemoveRunnerControllerRunnerScope(input.ControllerID, input.RunnerID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("remove runner scope", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("remove runner scope", err,
+				"removing runner scope requires admin privileges")
+		}
+		return toolutil.WrapErrWithStatusHint("remove runner scope", err, http.StatusNotFound,
+			"the runner may not be scoped to this controller \u2014 use gitlab_runner_controller_scope_list to verify")
 	}
 	return nil
 }

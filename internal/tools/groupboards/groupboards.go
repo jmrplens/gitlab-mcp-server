@@ -7,6 +7,7 @@ package groupboards
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -140,7 +141,12 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 	}
 	boards, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoards(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListGroupBoardsOutput{}, toolutil.WrapErrWithMessage("group_board_list", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ListGroupBoardsOutput{}, toolutil.WrapErrWithHint("group_board_list", err,
+				"group issue boards require GitLab Premium or Ultimate (multiple boards per group); on Free tier groups have a single implicit board only")
+		}
+		return ListGroupBoardsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list", err, http.StatusNotFound,
+			"verify the group exists with gitlab_group_get")
 	}
 	out := ListGroupBoardsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, b := range boards {
@@ -165,7 +171,8 @@ func GetGroupBoard(ctx context.Context, client *gitlabclient.Client, input GetGr
 	}
 	board, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_get", err)
+		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_get", err, http.StatusNotFound,
+			"board_id not found on this group \u2014 use gitlab_group_board_list to discover current board IDs")
 	}
 	return convertGroupBoard(board), nil
 }
@@ -189,7 +196,16 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 	}
 	board, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoard(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_create", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
+				"creating multiple group issue boards requires GitLab Premium or Ultimate, plus Reporter role on the group")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
+				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via gitlab_milestone_list / gitlab_group_label_list")
+		}
+		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_create", err, http.StatusNotFound,
+			"verify the group exists with gitlab_group_get")
 	}
 	return convertGroupBoard(board), nil
 }
@@ -232,7 +248,16 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	}
 	board, _, err := client.GL().GroupIssueBoards.UpdateIssueBoard(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_update", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
+				"updating board scope (assignee, milestone, iteration, labels, weight) requires GitLab Premium or Ultimate; basic name updates require Reporter role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
+				"verify referenced assignee_id (gitlab_get_user), milestone_id (gitlab_milestone_list), and label IDs exist; weight is 0\u20139")
+		}
+		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_update", err, http.StatusNotFound,
+			"board_id not found \u2014 use gitlab_group_board_list to verify")
 	}
 	return convertGroupBoard(board), nil
 }
@@ -253,7 +278,12 @@ func DeleteGroupBoard(ctx context.Context, client *gitlabclient.Client, input De
 	}
 	_, err := client.GL().GroupIssueBoards.DeleteIssueBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("group_board_delete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("group_board_delete", err,
+				"deleting boards requires GitLab Premium/Ultimate plus Reporter role; the group's last/default board cannot be deleted")
+		}
+		return toolutil.WrapErrWithStatusHint("group_board_delete", err, http.StatusNotFound,
+			"board_id already deleted or never existed")
 	}
 	return nil
 }
@@ -285,7 +315,8 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	}
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListBoardListsOutput{}, toolutil.WrapErrWithMessage("group_board_list_list", err)
+		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_list", err, http.StatusNotFound,
+			"board_id not found on this group \u2014 use gitlab_group_board_list to discover board IDs")
 	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, l := range lists {
@@ -314,7 +345,8 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	}
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_get", err)
+		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
+			"list_id not found on this board \u2014 use gitlab_group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
 	return convertBoardList(list), nil
 }
@@ -342,7 +374,12 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", err)
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return BoardListOutput{}, toolutil.WrapErrWithHint("group_board_list_create", err,
+				"exactly one of label_id (group label), assignee_id (Premium+), or milestone_id (Premium+) must be provided; verify referenced ID exists; a list with the same scope already exists on this board")
+		}
+		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_create", err, http.StatusForbidden,
+			"creating non-label lists (assignee/milestone) requires GitLab Premium or Ultimate; all list creation requires Reporter role on the group")
 	}
 	return convertBoardList(list), nil
 }
@@ -372,7 +409,8 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	lists, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", err)
+		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_update", err, http.StatusNotFound,
+			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
 	// V2 returns a slice; find the updated list by ID
 	for _, l := range lists {
@@ -407,7 +445,8 @@ func DeleteGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	_, err := client.GL().GroupIssueBoards.DeleteGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("group_board_list_delete", err)
+		return toolutil.WrapErrWithStatusHint("group_board_list_delete", err, http.StatusNotFound,
+			"list_id already deleted or never existed on this board")
 	}
 	return nil
 }

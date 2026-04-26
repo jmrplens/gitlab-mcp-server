@@ -3,6 +3,7 @@ package metadata
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -34,7 +35,7 @@ type GetOutput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	meta, _, err := client.GL().Metadata.GetMetadata(gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_metadata", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_metadata", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 	return GetOutput{
 		Version:  meta.Version,

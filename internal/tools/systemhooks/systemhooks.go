@@ -3,6 +3,7 @@ package systemhooks
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -122,7 +123,8 @@ func toItem(h *gl.Hook) HookItem {
 func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOutput, error) {
 	hooks, _, err := client.GL().SystemHooks.ListHooks(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("system_hook_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("system_hook_list", err, http.StatusForbidden,
+			"requires administrator access; system hooks are instance-wide and only available on self-managed instances")
 	}
 	items := make([]HookItem, 0, len(hooks))
 	for _, h := range hooks {
@@ -138,7 +140,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	hook, _, err := client.GL().SystemHooks.GetHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("system_hook_get", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("system_hook_get", err, http.StatusNotFound,
+			"verify hook_id with gitlab_list_system_hooks; admin-only on self-managed instances")
 	}
 	return GetOutput{Hook: toItem(hook)}, nil
 }
@@ -181,7 +184,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 
 	hook, _, err := client.GL().SystemHooks.AddHook(opts, gl.WithContext(ctx))
 	if err != nil {
-		return AddOutput{}, toolutil.WrapErrWithMessage("system_hook_add", err)
+		return AddOutput{}, toolutil.WrapErrWithStatusHint("system_hook_add", err, http.StatusBadRequest,
+			"requires administrator; url must be HTTP(S) and reachable from the instance; token is shared secret for X-Gitlab-Token header; enable specific event flags (push_events, tag_push_events, merge_requests_events, etc.)")
 	}
 	return AddOutput{Hook: toItem(hook)}, nil
 }
@@ -193,7 +197,8 @@ func Test(ctx context.Context, client *gitlabclient.Client, input TestInput) (Te
 	}
 	event, _, err := client.GL().SystemHooks.TestHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return TestOutput{}, toolutil.WrapErrWithMessage("system_hook_test", err)
+		return TestOutput{}, toolutil.WrapErrWithStatusHint("system_hook_test", err, http.StatusNotFound,
+			"verify hook_id with gitlab_list_system_hooks; test triggers a sample push event \u2014 verify the receiving endpoint is reachable")
 	}
 	return TestOutput{Event: HookEventItem{
 		EventName:  event.EventName,
@@ -212,7 +217,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().SystemHooks.DeleteHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("system_hook_delete", err)
+		return toolutil.WrapErrWithStatusHint("system_hook_delete", err, http.StatusForbidden,
+			"requires administrator access; deletion is irreversible \u2014 verify hook_id with gitlab_list_system_hooks before deleting")
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ package snippets
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -201,7 +202,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	snippets, resp, err := client.GL().Snippets.ListSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list", err, http.StatusUnauthorized,
+			"this endpoint lists snippets owned by the authenticated user; ensure the access token has the 'api' scope")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, s := range snippets {
@@ -241,7 +243,8 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	}
 	snippets, resp, err := client.GL().Snippets.ListAllSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_list_all", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list_all", err, http.StatusForbidden,
+			"listing all public snippets across the instance requires admin privileges")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, s := range snippets {
@@ -262,7 +265,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	snippet, _, err := client.GL().Snippets.GetSnippet(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_get", err, http.StatusNotFound,
+			"verify snippet_id with gitlab_snippet_list; private snippets are only accessible to the author")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -279,7 +283,8 @@ func Content(ctx context.Context, client *gitlabclient.Client, input ContentInpu
 	}
 	data, _, err := client.GL().Snippets.SnippetContent(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return ContentOutput{}, toolutil.WrapErrWithMessage("snippet_content", err)
+		return ContentOutput{}, toolutil.WrapErrWithStatusHint("snippet_content", err, http.StatusNotFound,
+			"verify snippet_id with gitlab_snippet_list; for multi-file snippets use gitlab_snippet_file_content with a specific file_path")
 	}
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
@@ -304,7 +309,8 @@ func FileContent(ctx context.Context, client *gitlabclient.Client, input FileCon
 	}
 	data, _, err := client.GL().Snippets.SnippetFileContent(input.SnippetID, input.Ref, input.FileName, gl.WithContext(ctx))
 	if err != nil {
-		return FileContentOutput{}, toolutil.WrapErrWithMessage("snippet_file_content", err)
+		return FileContentOutput{}, toolutil.WrapErrWithStatusHint("snippet_file_content", err, http.StatusNotFound,
+			"verify snippet_id and file_path; ref defaults to 'main' but the snippet may use a different default branch")
 	}
 	return FileContentOutput{
 		SnippetID: input.SnippetID,
@@ -357,7 +363,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	snippet, _, err := client.GL().Snippets.CreateSnippet(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_create", err, http.StatusBadRequest,
+			"title and content are required; visibility must be 'private', 'internal', or 'public'; instance may have disabled snippet creation")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -381,7 +388,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	opts := buildUpdateOpts(input)
 	snippet, _, err := client.GL().Snippets.UpdateSnippet(input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_update", err, http.StatusForbidden,
+			"updating a snippet requires being the author or having admin privileges; verify snippet_id with gitlab_snippet_list")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -441,7 +449,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Snippets.DeleteSnippet(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("snippet_delete", err)
+		return toolutil.WrapErrWithStatusHint("snippet_delete", err, http.StatusForbidden,
+			"deleting a snippet requires being the author or having admin privileges")
 	}
 	return nil
 }
@@ -461,7 +470,8 @@ func Explore(ctx context.Context, client *gitlabclient.Client, input ExploreInpu
 	}
 	snippets, resp, err := client.GL().Snippets.ExploreSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_explore", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_explore", err, http.StatusForbidden,
+			"exploring all public snippets may be restricted by instance configuration")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, s := range snippets {

@@ -5,6 +5,7 @@ package deploymentmergerequests
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -66,7 +67,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	mrs, resp, err := client.GL().DeploymentMergeRequests.ListDeploymentMergeRequests(string(input.ProjectID), input.DeploymentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_deployment_merge_requests", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_deployment_merge_requests", err, http.StatusNotFound, "verify project_id and deployment_id with gitlab_deployment_list")
 	}
 
 	items := make([]MergeRequestItem, 0, len(mrs))

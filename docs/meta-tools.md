@@ -130,7 +130,7 @@ The base mode provides a ~53% reduction from v3.0, with enterprise features gate
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
-- `ActionRoute` — pairs a handler with a `Destructive bool` field for metadata-driven classification
+- `ActionRoute` — pairs a handler with a `Destructive bool` field for metadata-driven classification. Each route can also carry an `OutputSchema` describing the exact shape returned by that specific action
 - `ActionMap` — `map[string]ActionRoute` mapping action names to route definitions
 - `Route(fn)` / `DestructiveRoute(fn)` — constructors for non-destructive and destructive routes
 - `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
@@ -164,7 +164,7 @@ Meta-tool responses include a `next_steps` array in the JSON `structuredContent`
 ```json
 {
   "branches": [...],
-  "pagination": { "page": 1, "total_pages": 2 },
+  "pagination": { "page": 1, "total_pages": 2, "has_more": true },
   "next_steps": [
     "When presenting these results, always include the clickable [text](url) links",
     "Get details of a specific branch",

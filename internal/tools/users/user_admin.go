@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -36,7 +37,8 @@ func BlockUser(ctx context.Context, client *gitlabclient.Client, input AdminActi
 	}
 	_, err := client.GL().Users.BlockUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("block_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("block_user", err, http.StatusForbidden,
+			"blocking users requires admin token; cannot block already-blocked, ldap-blocked, or admin users; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "blocked", Success: true}, nil
 }
@@ -51,7 +53,8 @@ func UnblockUser(ctx context.Context, client *gitlabclient.Client, input AdminAc
 	}
 	_, err := client.GL().Users.UnblockUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("unblock_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("unblock_user", err, http.StatusForbidden,
+			"unblocking users requires admin token; cannot unblock ldap-blocked users (use LDAP); user must currently be blocked")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "unblocked", Success: true}, nil
 }
@@ -66,7 +69,8 @@ func BanUser(ctx context.Context, client *gitlabclient.Client, input AdminAction
 	}
 	_, err := client.GL().Users.BanUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("ban_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("ban_user", err, http.StatusForbidden,
+			"banning users requires admin token; cannot ban admin users; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "banned", Success: true}, nil
 }
@@ -81,7 +85,8 @@ func UnbanUser(ctx context.Context, client *gitlabclient.Client, input AdminActi
 	}
 	_, err := client.GL().Users.UnbanUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("unban_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("unban_user", err, http.StatusForbidden,
+			"unbanning users requires admin token; user must currently be banned; verify user_id with gitlab_get_user")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "unbanned", Success: true}, nil
 }
@@ -96,7 +101,8 @@ func ActivateUser(ctx context.Context, client *gitlabclient.Client, input AdminA
 	}
 	_, err := client.GL().Users.ActivateUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("activate_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("activate_user", err, http.StatusForbidden,
+			"activating users requires admin token; user must currently be deactivated (not blocked or banned)")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "activated", Success: true}, nil
 }
@@ -111,7 +117,8 @@ func DeactivateUser(ctx context.Context, client *gitlabclient.Client, input Admi
 	}
 	_, err := client.GL().Users.DeactivateUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("deactivate_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("deactivate_user", err, http.StatusForbidden,
+			"deactivating users requires admin token; user must have been inactive for >90 days; cannot deactivate admins or already-blocked users")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "deactivated", Success: true}, nil
 }
@@ -126,7 +133,8 @@ func ApproveUser(ctx context.Context, client *gitlabclient.Client, input AdminAc
 	}
 	_, err := client.GL().Users.ApproveUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("approve_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("approve_user", err, http.StatusForbidden,
+			"approving users requires admin token; user must be pending approval (require_admin_approval_after_user_signup setting)")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "approved", Success: true}, nil
 }
@@ -141,7 +149,8 @@ func RejectUser(ctx context.Context, client *gitlabclient.Client, input AdminAct
 	}
 	_, err := client.GL().Users.RejectUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("reject_user", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("reject_user", err, http.StatusForbidden,
+			"rejecting users requires admin token; user must be pending approval; rejection deletes the user permanently")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "rejected", Success: true}, nil
 }
@@ -156,7 +165,8 @@ func DisableTwoFactor(ctx context.Context, client *gitlabclient.Client, input Ad
 	}
 	_, err := client.GL().Users.DisableTwoFactor(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AdminActionOutput{}, toolutil.WrapErrWithMessage("disable_two_factor", err)
+		return AdminActionOutput{}, toolutil.WrapErrWithStatusHint("disable_two_factor", err, http.StatusForbidden,
+			"disabling 2FA for other users requires admin token; user must currently have 2FA enabled")
 	}
 	return AdminActionOutput{UserID: input.UserID, Action: "two_factor_disabled", Success: true}, nil
 }

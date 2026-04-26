@@ -19,6 +19,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintVerifyFilePathRef is the 404 hint shared by repository file tools.
+const hintVerifyFilePathRef = "verify file_path and ref exist with gitlab_repository_tree"
+
 // GetInput defines parameters for retrieving a file from a repository.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -369,7 +372,8 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	}
 	ranges, _, err := client.GL().RepositoryFiles.GetFileBlame(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return BlameOutput{}, toolutil.WrapErrWithMessage("fileBlame", err)
+		return BlameOutput{}, toolutil.WrapErrWithStatusHint("fileBlame", err, http.StatusNotFound,
+			"verify file_path and ref exist with gitlab_repository_tree; range_start/range_end must be 1-based and within the file's line count")
 	}
 	out := make([]BlameRangeOutput, len(ranges))
 	for i, r := range ranges {
@@ -492,7 +496,8 @@ func GetMetaData(ctx context.Context, client *gitlabclient.Client, input MetaDat
 	}
 	f, _, err := client.GL().RepositoryFiles.GetFileMetaData(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MetaDataOutput{}, toolutil.WrapErrWithMessage("fileGetMetaData", err)
+		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint("fileGetMetaData", err, http.StatusNotFound,
+			hintVerifyFilePathRef)
 	}
 	return MetaDataOutput{
 		FileName:        f.FileName,
@@ -547,7 +552,8 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 	}
 	data, _, err := client.GL().RepositoryFiles.GetRawFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return RawOutput{}, toolutil.WrapErrWithMessage("fileGetRaw", err)
+		return RawOutput{}, toolutil.WrapErrWithStatusHint("fileGetRaw", err, http.StatusNotFound,
+			hintVerifyFilePathRef)
 	}
 
 	imageMIME := toolutil.ImageMIMEType(input.FilePath)
@@ -596,7 +602,7 @@ func GetRawFileMetaData(ctx context.Context, client *gitlabclient.Client, input 
 		return MetaDataOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return MetaDataOutput{}, errors.New("fileGetRawMetaData: project_id is required. Use gitlab_list_projects to find the ID first, then pass it as project_id")
+		return MetaDataOutput{}, errors.New("fileGetRawMetaData: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.GetRawFileOptions{}
 	if input.Ref != "" {
@@ -604,7 +610,8 @@ func GetRawFileMetaData(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	f, _, err := client.GL().RepositoryFiles.GetRawFileMetaData(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MetaDataOutput{}, toolutil.WrapErrWithMessage("fileGetRawMetaData", err)
+		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint("fileGetRawMetaData", err, http.StatusNotFound,
+			hintVerifyFilePathRef)
 	}
 	return MetaDataOutput{
 		FileName:        f.FileName,

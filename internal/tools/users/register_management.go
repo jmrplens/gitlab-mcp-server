@@ -280,7 +280,7 @@ func registerMiscTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_user_runner",
 		Title:       toolutil.TitleFromName("gitlab_create_user_runner"),
-		Description: "Create a GitLab CI runner linked to the current user. Runners execute CI/CD jobs. Specify runner_type (instance_type, group_type, or project_type).\n\nSee also: gitlab_user_current, gitlab_list_runners\n\nReturns: JSON with runner ID and authentication token.",
+		Description: "Create a GitLab CI runner linked to the current user. Runners execute CI/CD jobs. Specify runner_type (instance_type, group_type, or project_type).\n\nSee also: gitlab_user_current, gitlab_runner_list\n\nReturns: JSON with runner ID and authentication token.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateUserRunnerInput) (*mcp.CallToolResult, UserRunnerOutput, error) {

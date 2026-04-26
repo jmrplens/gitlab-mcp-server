@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "approve_group",
             "approve_project",
@@ -61,13 +61,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -83,7 +132,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "alert_metric_image_delete",
             "alert_metric_image_list",
@@ -172,13 +221,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -194,7 +292,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "ci_config",
             "deployment_history",
@@ -212,13 +310,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -236,7 +383,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "download",
             "list"
@@ -245,13 +392,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -269,7 +465,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "get_group",
             "get_instance",
@@ -282,13 +478,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -304,7 +549,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -322,13 +567,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -344,7 +638,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "get",
             "list"
@@ -353,13 +647,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -377,7 +720,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -399,13 +742,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -421,7 +813,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "get",
             "update"
@@ -430,13 +822,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -452,7 +893,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -462,13 +903,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -484,7 +974,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "export_create",
             "export_download",
@@ -495,13 +985,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -599,7 +1138,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "group",
             "project"
@@ -608,13 +1147,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -630,7 +1218,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "delete",
             "disable_2fa",
@@ -641,13 +1229,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -663,7 +1300,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -693,13 +1330,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -715,7 +1401,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create_project",
             "delete_project",
@@ -730,13 +1416,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -752,7 +1487,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "feature_flag_create",
             "feature_flag_delete",
@@ -769,13 +1504,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -791,7 +1575,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -806,13 +1590,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -828,7 +1661,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "analytics_issues_count",
             "analytics_members_count",
@@ -965,13 +1798,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -987,7 +1869,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "delete",
             "get",
@@ -998,13 +1880,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -1892,7 +2823,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "create_todo",
@@ -1962,13 +2893,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -1984,7 +2964,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "artifacts",
             "cancel",
@@ -2016,13 +2996,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2038,7 +3067,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create_group",
             "create_instance",
@@ -2051,13 +3080,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2073,7 +3151,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "approval_config",
             "approval_reset",
@@ -2138,13 +3216,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2155,12 +3282,12 @@
   },
   {
     "name": "gitlab_merge_train",
-    "description": "Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.\nValid actions: add, get, list_branch, list_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.\n\nParam conventions: * = required. All actions need project_id*.\n\n- list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page\n- list_branch: project_id*, target_branch*, scope, sort, page, per_page\n- get: project_id*, merge_request_id*\n- add: project_id*, merge_request_id*, auto_merge (bool), sha, squash (bool)\n\nSee also: gitlab_merge_request, gitlab_pipeline",
+    "description": "Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.\nValid actions: add, get, list_branch, list_project\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.\n\nParam conventions: * = required. All actions need project_id*.\n\n- list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page\n- list_branch: project_id*, target_branch*, scope, sort, page, per_page\n- get: project_id*, merge_request_iid*\n- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)\n\nSee also: gitlab_merge_request, gitlab_pipeline",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "add",
             "get",
@@ -2171,13 +3298,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2193,7 +3369,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "download"
           ],
@@ -2201,13 +3377,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2225,7 +3450,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "changes_get",
             "diff_version_get",
@@ -2255,13 +3480,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2277,7 +3551,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "delete",
             "download",
@@ -2308,13 +3582,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2330,7 +3653,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "cancel",
             "create",
@@ -2370,13 +3693,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2392,7 +3764,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "approval_config_change",
             "approval_config_get",
@@ -2521,13 +3893,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2543,7 +3964,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -2554,13 +3975,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2576,7 +4046,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -2595,13 +4065,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2617,7 +4136,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "archive",
             "blob",
@@ -2665,13 +4184,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2687,7 +4255,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "controller_create",
             "controller_delete",
@@ -2728,13 +4296,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2750,7 +4367,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "code",
             "commits",
@@ -2767,13 +4384,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2791,7 +4457,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "list"
           ],
@@ -2799,13 +4465,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2823,7 +4538,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "content",
             "create",
@@ -2864,13 +4579,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2886,7 +4650,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "get_group",
             "get_group_for_group",
@@ -2911,13 +4675,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2933,7 +4746,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -2949,13 +4762,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -2971,7 +4833,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "ci_yml_get",
             "ci_yml_list",
@@ -2990,13 +4852,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -3014,7 +4925,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "activate",
             "activities",
@@ -3095,13 +5006,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -3117,7 +5077,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "confirm",
             "dismiss",
@@ -3132,13 +5092,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {
@@ -3154,7 +5163,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "Action to perform. See the tool description for available actions and their parameters.",
+          "description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
           "enum": [
             "create",
             "delete",
@@ -3167,13 +5176,62 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
           "type": "object"
         }
       },
       "required": [
         "action"
       ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "description": "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+      "properties": {
+        "next_steps": {
+          "description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "additionalProperties": true,
+          "description": "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+          "properties": {
+            "has_more": {
+              "description": "True when more pages are available after the current one.",
+              "type": "boolean"
+            },
+            "next_page": {
+              "description": "Next page index when `has_more` is true.",
+              "type": "integer"
+            },
+            "page": {
+              "description": "Current 1-based page index.",
+              "type": "integer"
+            },
+            "per_page": {
+              "description": "Items per page.",
+              "type": "integer"
+            },
+            "prev_page": {
+              "description": "Previous page index when applicable.",
+              "type": "integer"
+            },
+            "total": {
+              "description": "Total item count when known (some endpoints omit it for performance).",
+              "type": "integer"
+            },
+            "total_pages": {
+              "description": "Total page count when known.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
       "type": "object"
     },
     "annotations": {

@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.2.5                                               |
+| Version       | 1.3.0                                               |
 
 ### Scale
 
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.2.5)
+└── VERSION                      # Semantic version (1.3.0)
 ```
 
 ## Key Development Patterns
@@ -158,11 +158,12 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Three error wrapping functions in `internal/toolutil/errors.go`, used by all 162 domain sub-packages:
+Four error wrapping functions in `internal/toolutil/errors.go`, used by all 162 domain sub-packages:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
 - `WrapErrWithHint(op, err, hint)` — when a specific corrective action is known (e.g., "use gitlab_branch_unprotect first"). Includes detail + actionable suggestion.
+- `WrapErrWithStatusHint(op, err, code, hint)` — combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
 - `NotFoundResult(resource, identifier, hints...)` — for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Applied to 27 get handlers across 21 domains. Defined in `internal/toolutil/not_found.go`.
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/error-handling.md).
@@ -246,6 +247,8 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate (`false` default) |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
+| `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
+| `RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
@@ -268,6 +271,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |
+| `--rate-limit-rps` | `0` | Per-server tools/call rate limit in req/s (0 = disabled) |
+| `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
 | `--auto-update-timeout` | `60s` | Pre-start download timeout (range 5s–10m)                |
 
 **General flags** (both stdio and HTTP modes):

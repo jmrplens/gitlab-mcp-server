@@ -103,8 +103,9 @@ Actions:
 - upload_metric_image: Upload a metric image (base64). Params: project_id (required), alert_iid (required, int), filename (required), file_path or content_base64 (one required), url, url_text
 - update_metric_image: Update a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int), filename, url, url_text
 - delete_metric_image: Delete a metric image. Params: project_id (required), alert_iid (required, int), image_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconAlert,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconAlert,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_alert_management", routes, nil))
 }

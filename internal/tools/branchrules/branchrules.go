@@ -261,7 +261,7 @@ func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query strin
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_branch_rules", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("list_branch_rules", err, "verify the project fullPath is correct and your token has read_api scope")
 	}
 
 	if resp.Data.Project == nil {

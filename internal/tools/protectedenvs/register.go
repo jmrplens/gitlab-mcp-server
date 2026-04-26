@@ -18,7 +18,7 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_protected_environment_list",
 		Title:       toolutil.TitleFromName("gitlab_protected_environment_list"),
-		Description: "List protected environments in a GitLab project with their deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_protect, gitlab_list_environments\n\nReturns: JSON with array of protected environments and pagination info.",
+		Description: "List protected environments in a GitLab project with their deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_protect, gitlab_environment_list\n\nReturns: JSON with array of protected environments and pagination info.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconShield,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -31,7 +31,7 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_protected_environment_get",
 		Title:       toolutil.TitleFromName("gitlab_protected_environment_get"),
-		Description: "Get a single protected environment by name, including deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_get_environment\n\nReturns: JSON with protected environment details (name, deploy access levels, approval rules).",
+		Description: "Get a single protected environment by name, including deploy access levels and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_environment_get\n\nReturns: JSON with protected environment details (name, deploy access levels, approval rules).",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconShield,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, Output, error) {
@@ -44,7 +44,7 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_protected_environment_protect",
 		Title:       toolutil.TitleFromName("gitlab_protected_environment_protect"),
-		Description: "Protect an environment in a GitLab project. Configure deploy access levels, required approvals, and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_create_environment\n\nReturns: JSON with the newly protected environment details.",
+		Description: "Protect an environment in a GitLab project. Configure deploy access levels, required approvals, and approval rules.\n\nSee also: gitlab_protected_environment_list, gitlab_environment_create\n\nReturns: JSON with the newly protected environment details.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconShield,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ProtectInput) (*mcp.CallToolResult, Output, error) {
@@ -108,8 +108,9 @@ Actions:
 - protect: Protect an environment. Params: project_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
 - update: Update a protected environment. Params: project_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
 - unprotect: Remove environment protection. Params: project_id (required), environment (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconShield,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconShield,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_protected_environment", routes, nil))
 }

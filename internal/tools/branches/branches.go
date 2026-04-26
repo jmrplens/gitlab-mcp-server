@@ -147,7 +147,8 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 			out.AlreadyProtected = true
 			return out, nil
 		}
-		return ProtectedOutput{}, toolutil.WrapErrWithMessage("branchProtect", err)
+		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("branchProtect", err, http.StatusForbidden,
+			"protecting branches requires Maintainer or Owner role")
 	}
 	return ProtectedToOutput(b), nil
 }
@@ -181,7 +182,8 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 				Message: fmt.Sprintf("Branch %q in project %s is not protected — no action needed.", input.BranchName, input.ProjectID),
 			}, nil
 		}
-		return UnprotectOutput{}, toolutil.WrapErrWithMessage("branchUnprotect", err)
+		return UnprotectOutput{}, toolutil.WrapErrWithStatusHint("branchUnprotect", err, http.StatusForbidden,
+			"unprotecting branches requires Maintainer or Owner role")
 	}
 	return UnprotectOutput{
 		Status:  "success",
@@ -207,7 +209,8 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 	}
 	branches, resp, err := client.GL().ProtectedBranches.ListProtectedBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectedListOutput{}, toolutil.WrapErrWithMessage("protectedBranchesList", err)
+		return ProtectedListOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchesList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get")
 	}
 	out := make([]ProtectedOutput, len(branches))
 	for i, b := range branches {
@@ -260,7 +263,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			return Output{}, toolutil.WrapErrWithHint("branchCreate", err,
 				"a branch with this name already exists. Use gitlab_branch_get to check it, or choose a different name")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("branchCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("branchCreate", err, http.StatusBadRequest,
+			"the ref must be an existing branch name, tag name, or commit SHA; creating branches requires Developer role or higher")
 	}
 	return ToOutput(b), nil
 }
@@ -286,7 +290,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	branches, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("branchList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("branchList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get")
 	}
 	out := make([]Output, len(branches))
 	for i, b := range branches {
@@ -315,7 +320,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	b, _, err := client.GL().Branches.GetBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("branchGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("branchGet", err, http.StatusNotFound,
+			"verify branch_name with gitlab_branch_list; branch names are case-sensitive")
 	}
 	return ToOutput(b), nil
 }
@@ -348,7 +354,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 			return toolutil.WrapErrWithHint("branchDelete", err,
 				"branch not found. Use gitlab_branch_list to verify the branch name")
 		}
-		return toolutil.WrapErrWithMessage("branchDelete", err)
+		return toolutil.WrapErrWithStatusHint("branchDelete", err, http.StatusForbidden,
+			"the branch may be protected or the default branch \u2014 use gitlab_branch_unprotect first or change the default branch")
 	}
 	return nil
 }
@@ -369,7 +376,8 @@ func DeleteMerged(ctx context.Context, client *gitlabclient.Client, input Delete
 	}
 	_, err := client.GL().Branches.DeleteMergedBranches(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deleteMergedBranches", err)
+		return toolutil.WrapErrWithStatusHint("deleteMergedBranches", err, http.StatusForbidden,
+			"deleting merged branches requires Maintainer or Owner role; protected and default branches are skipped")
 	}
 	return nil
 }
@@ -393,7 +401,8 @@ func ProtectedGet(ctx context.Context, client *gitlabclient.Client, input Protec
 	}
 	b, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectedOutput{}, toolutil.WrapErrWithMessage("protectedBranchGet", err)
+		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchGet", err, http.StatusNotFound,
+			"the branch may not be protected \u2014 use gitlab_protected_branches_list to verify")
 	}
 	return ProtectedToOutput(b), nil
 }
@@ -426,7 +435,12 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 	}
 	b, _, err := client.GL().ProtectedBranches.UpdateProtectedBranch(string(input.ProjectID), input.BranchName, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProtectedOutput{}, toolutil.WrapErrWithMessage("protectedBranchUpdate", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ProtectedOutput{}, toolutil.WrapErrWithHint("protectedBranchUpdate", err,
+				"updating protected branch settings requires Maintainer or Owner role")
+		}
+		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchUpdate", err, http.StatusNotFound,
+			"the branch may not be protected \u2014 use gitlab_branch_protect first")
 	}
 	return ProtectedToOutput(b), nil
 }

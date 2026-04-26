@@ -5,6 +5,7 @@ package resourceevents
 
 import (
 	"context"
+	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -199,7 +200,8 @@ func ListIssueLabelEvents(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	events, resp, err := client.GL().ResourceLabelEvents.ListIssueLabelEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListLabelEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_label_event_list", err)
+		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_label_event_list", err, http.StatusNotFound,
+			"verify project_id and issue_iid (the per-project issue number) with gitlab_issue_get")
 	}
 	return toLabelEventsOutput(events, resp), nil
 }
@@ -217,7 +219,8 @@ func GetIssueLabelEvent(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	event, _, err := client.GL().ResourceLabelEvents.GetIssueLabelEvent(string(input.ProjectID), input.IssueIID, input.LabelEventID, gl.WithContext(ctx))
 	if err != nil {
-		return LabelEventOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_label_event_get", err)
+		return LabelEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_label_event_get", err, http.StatusNotFound,
+			"verify label_event_id with gitlab_issue_label_event_list")
 	}
 	return toLabelEventOutput(event), nil
 }
@@ -235,7 +238,8 @@ func ListMRLabelEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	events, resp, err := client.GL().ResourceLabelEvents.ListMergeRequestsLabelEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListLabelEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_label_event_list", err)
+		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_list", err, http.StatusNotFound,
+			"verify project_id and mr_iid (per-project MR number) with gitlab_mr_get")
 	}
 	return toLabelEventsOutput(events, resp), nil
 }
@@ -253,7 +257,8 @@ func GetMRLabelEvent(ctx context.Context, client *gitlabclient.Client, input Get
 	}
 	event, _, err := client.GL().ResourceLabelEvents.GetMergeRequestLabelEvent(string(input.ProjectID), input.MRIID, input.LabelEventID, gl.WithContext(ctx))
 	if err != nil {
-		return LabelEventOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_label_event_get", err)
+		return LabelEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_get", err, http.StatusNotFound,
+			"verify label_event_id with gitlab_mr_label_event_list")
 	}
 	return toLabelEventOutput(event), nil
 }
@@ -275,7 +280,8 @@ func ListIssueMilestoneEvents(ctx context.Context, client *gitlabclient.Client, 
 	}
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListIssueMilestoneEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_milestone_event_list", err)
+		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_milestone_event_list", err, http.StatusNotFound,
+			"verify project_id and issue_iid with gitlab_issue_get")
 	}
 	return toMilestoneEventsOutput(events, resp), nil
 }
@@ -293,7 +299,8 @@ func GetIssueMilestoneEvent(ctx context.Context, client *gitlabclient.Client, in
 	}
 	event, _, err := client.GL().ResourceMilestoneEvents.GetIssueMilestoneEvent(string(input.ProjectID), input.IssueIID, input.MilestoneEventID, gl.WithContext(ctx))
 	if err != nil {
-		return MilestoneEventOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_milestone_event_get", err)
+		return MilestoneEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_milestone_event_get", err, http.StatusNotFound,
+			"verify milestone_event_id with gitlab_issue_milestone_event_list")
 	}
 	return toMilestoneEventOutput(event), nil
 }
@@ -311,7 +318,8 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListMergeMilestoneEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_milestone_event_list", err)
+		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_list", err, http.StatusNotFound,
+			"verify project_id and mr_iid with gitlab_mr_get")
 	}
 	return toMilestoneEventsOutput(events, resp), nil
 }
@@ -329,7 +337,8 @@ func GetMRMilestoneEvent(ctx context.Context, client *gitlabclient.Client, input
 	}
 	event, _, err := client.GL().ResourceMilestoneEvents.GetMergeRequestMilestoneEvent(string(input.ProjectID), input.MRIID, input.MilestoneEventID, gl.WithContext(ctx))
 	if err != nil {
-		return MilestoneEventOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_milestone_event_get", err)
+		return MilestoneEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_get", err, http.StatusNotFound,
+			"verify milestone_event_id with gitlab_mr_milestone_event_list")
 	}
 	return toMilestoneEventOutput(event), nil
 }
@@ -351,7 +360,8 @@ func ListIssueStateEvents(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	events, resp, err := client.GL().ResourceStateEvents.ListIssueStateEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListStateEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_state_event_list", err)
+		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_state_event_list", err, http.StatusNotFound,
+			"verify project_id and issue_iid with gitlab_issue_get")
 	}
 	return toStateEventsOutput(events, resp), nil
 }
@@ -369,7 +379,8 @@ func GetIssueStateEvent(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	event, _, err := client.GL().ResourceStateEvents.GetIssueStateEvent(string(input.ProjectID), input.IssueIID, input.StateEventID, gl.WithContext(ctx))
 	if err != nil {
-		return StateEventOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_state_event_get", err)
+		return StateEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_state_event_get", err, http.StatusNotFound,
+			"verify state_event_id with gitlab_issue_state_event_list")
 	}
 	return toStateEventOutput(event), nil
 }
@@ -387,7 +398,8 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	events, resp, err := client.GL().ResourceStateEvents.ListMergeStateEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListStateEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_state_event_list", err)
+		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_list", err, http.StatusNotFound,
+			"verify project_id and mr_iid with gitlab_mr_get")
 	}
 	return toStateEventsOutput(events, resp), nil
 }
@@ -405,7 +417,8 @@ func GetMRStateEvent(ctx context.Context, client *gitlabclient.Client, input Get
 	}
 	event, _, err := client.GL().ResourceStateEvents.GetMergeRequestStateEvent(string(input.ProjectID), input.MRIID, input.StateEventID, gl.WithContext(ctx))
 	if err != nil {
-		return StateEventOutput{}, toolutil.WrapErrWithMessage("gitlab_mr_state_event_get", err)
+		return StateEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_get", err, http.StatusNotFound,
+			"verify state_event_id with gitlab_mr_state_event_list")
 	}
 	return toStateEventOutput(event), nil
 }
@@ -629,7 +642,8 @@ func ListIssueIterationEvents(ctx context.Context, client *gitlabclient.Client, 
 	}
 	events, resp, err := client.GL().ResourceIterationEvents.ListIssueIterationEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListIterationEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_iteration_event_list", err)
+		return ListIterationEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_list", err, http.StatusNotFound,
+			"iteration events require GitLab Premium/Ultimate \u2014 verify the project tier and that issue_iid exists")
 	}
 	return toIterationEventsOutput(events, resp), nil
 }
@@ -647,7 +661,8 @@ func GetIssueIterationEvent(ctx context.Context, client *gitlabclient.Client, in
 	}
 	event, _, err := client.GL().ResourceIterationEvents.GetIssueIterationEvent(string(input.ProjectID), input.IssueIID, input.IterationEventID, gl.WithContext(ctx))
 	if err != nil {
-		return IterationEventOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_iteration_event_get", err)
+		return IterationEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_get", err, http.StatusNotFound,
+			"iteration events require Premium/Ultimate \u2014 verify iteration_event_id with gitlab_issue_iteration_event_list")
 	}
 	return toIterationEventOutput(event), nil
 }
@@ -669,7 +684,8 @@ func ListIssueWeightEvents(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	events, resp, err := client.GL().ResourceWeightEvents.ListIssueWeightEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListWeightEventsOutput{}, toolutil.WrapErrWithMessage("gitlab_issue_weight_event_list", err)
+		return ListWeightEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_weight_event_list", err, http.StatusNotFound,
+			"weight events require GitLab Premium/Ultimate \u2014 verify the project tier and that issue_iid exists")
 	}
 	return toWeightEventsOutput(events, resp), nil
 }

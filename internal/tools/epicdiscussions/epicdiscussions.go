@@ -376,7 +376,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicDiscussionList", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("epicDiscussionList", err,
+			"verify full_path (group path) and iid (project-scoped epic IID) with gitlab_epic_list; epics are migrated to Work Items \u2014 Premium/Ultimate license required")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -436,7 +437,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicDiscussionGet", err)
+		return Output{}, toolutil.WrapErrWithHint("epicDiscussionGet", err,
+			"verify full_path + iid with gitlab_epic_list; discussion_id may be hex (e.g. abc123) or full GID; use gitlab_list_epic_discussions to enumerate existing discussions")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -482,7 +484,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicDiscussionCreate", err)
+		return Output{}, toolutil.WrapErrWithHint("epicDiscussionCreate", err,
+			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
 	}
 
 	body := toolutil.NormalizeText(input.Body)
@@ -500,7 +503,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicDiscussionCreate", err)
+		return Output{}, toolutil.WrapErrWithHint("epicDiscussionCreate", err,
+			"body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if the work item is locked or confidential without permission")
 	}
 
 	if len(resp.Data.CreateNote.Errors) > 0 {
@@ -543,7 +547,8 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("epicDiscussionAddNote", err)
+		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionAddNote", err,
+			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role")
 	}
 
 	body := toolutil.NormalizeText(input.Body)
@@ -564,7 +569,8 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("epicDiscussionAddNote", err)
+		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionAddNote", err,
+			"verify discussion_id with gitlab_list_epic_discussions; cannot reply to a system-generated discussion; body is GFM with 1MB max")
 	}
 
 	if len(resp.Data.CreateNote.Errors) > 0 {
@@ -613,7 +619,8 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("epicDiscussionUpdateNote", err)
+		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionUpdateNote", err,
+			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_list_epic_discussions; body is GFM with 1MB max")
 	}
 
 	if len(resp.Data.UpdateNote.Errors) > 0 {
@@ -656,7 +663,8 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("epicDiscussionDeleteNote", err)
+		return toolutil.WrapErrWithHint("epicDiscussionDeleteNote", err,
+			"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_list_epic_discussions; deletion is irreversible \u2014 system-generated notes cannot be removed")
 	}
 
 	if len(resp.Data.DestroyNote.Errors) > 0 {

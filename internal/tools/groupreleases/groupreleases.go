@@ -4,6 +4,7 @@ package groupreleases
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -75,7 +76,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	releases, resp, err := client.GL().GroupReleases.ListGroupReleases(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("listGroupReleases", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupReleases", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 	out := make([]Output, len(releases))
 	for i, r := range releases {

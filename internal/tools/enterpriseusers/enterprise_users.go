@@ -5,6 +5,7 @@ package enterpriseusers
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -134,7 +135,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	users, resp, err := client.GL().EnterpriseUsers.ListEnterpriseUsers(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list enterprise users", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list enterprise users", err, http.StatusNotFound, "verify group_id \u2014 enterprise users require Ultimate license")
 	}
 	out := ListOutput{
 		Users:      make([]Output, 0, len(users)),
@@ -159,7 +160,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	u, _, err := client.GL().EnterpriseUsers.GetEnterpriseUser(in.GroupID.String(), in.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get enterprise user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users")
 	}
 	return toOutput(u), nil
 }
@@ -177,7 +178,7 @@ func Disable2FA(ctx context.Context, client *gitlabclient.Client, in Disable2FAI
 	}
 	_, err := client.GL().EnterpriseUsers.Disable2FAForEnterpriseUser(in.GroupID.String(), in.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("disable 2FA for enterprise user", err)
+		return toolutil.WrapErrWithStatusHint("disable 2FA for enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users")
 	}
 	return nil
 }
@@ -199,7 +200,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().EnterpriseUsers.DeleteEnterpriseUser(in.GroupID.String(), in.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete enterprise user", err)
+		return toolutil.WrapErrWithStatusHint("delete enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users \u2014 this action is irreversible")
 	}
 	return nil
 }

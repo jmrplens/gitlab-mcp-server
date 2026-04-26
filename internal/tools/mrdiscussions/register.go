@@ -58,7 +58,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_mr_discussion_list",
 		Title:       toolutil.TitleFromName("gitlab_mr_discussion_list"),
-		Description: "List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.\n\nReturns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_note_list.",
+		Description: "List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.\n\nReturns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_notes_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconDiscussion,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {

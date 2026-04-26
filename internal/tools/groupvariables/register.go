@@ -108,8 +108,9 @@ Actions:
 - create: Create variable. Params: group_id (required), key (required), value (required), description, variable_type, protected (bool), masked (bool), masked_and_hidden (bool), raw (bool), environment_scope
 - update: Update variable. Params: group_id (required), key (required), value, description, variable_type, protected (bool), masked (bool), raw (bool), environment_scope
 - delete: Delete variable. Params: group_id (required), key (required), environment_scope`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconVariable,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconVariable,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_group_variable", routes, nil))
 }

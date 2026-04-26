@@ -352,7 +352,7 @@ func registerProjectMembershipTools(server *mcp.Server, client *gitlabclient.Cli
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_project_list_users",
 		Title:       toolutil.TitleFromName("gitlab_project_list_users"),
-		Description: "List users who are members of a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of project users with pagination. Fields include id, username, name, and state.\n\nSee also: gitlab_project_member_list.",
+		Description: "List users who are members of a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of project users with pagination. Fields include id, username, name, and state.\n\nSee also: gitlab_project_members_list.",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListProjectUsersInput) (*mcp.CallToolResult, ListProjectUsersOutput, error) {

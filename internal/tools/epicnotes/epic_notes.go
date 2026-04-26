@@ -311,7 +311,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicNoteList", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("epicNoteList", err,
+			"verify full_path (group path) and iid (epic IID) with gitlab_epic_list; epics are migrated to Work Items \u2014 Premium/Ultimate license required")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -366,7 +367,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicNoteGet", err)
+		return Output{}, toolutil.WrapErrWithHint("epicNoteGet", err,
+			"verify full_path + iid with gitlab_epic_list; verify note_id (numeric) with gitlab_epic_note_list; system-generated notes may have restricted access")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -406,7 +408,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicNoteCreate", err)
+		return Output{}, toolutil.WrapErrWithHint("epicNoteCreate", err,
+			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
 	}
 
 	body := toolutil.NormalizeText(input.Body)
@@ -424,7 +427,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicNoteCreate", err)
+		return Output{}, toolutil.WrapErrWithHint("epicNoteCreate", err,
+			"body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if work item is locked or confidential")
 	}
 
 	if len(resp.Data.CreateNote.Errors) > 0 {
@@ -473,7 +477,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicNoteUpdate", err)
+		return Output{}, toolutil.WrapErrWithHint("epicNoteUpdate", err,
+			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_epic_note_list; body is GFM with 1MB max; system notes cannot be edited")
 	}
 
 	if len(resp.Data.UpdateNote.Errors) > 0 {
@@ -516,7 +521,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("epicNoteDelete", err)
+		return toolutil.WrapErrWithHint("epicNoteDelete", err,
+			"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_epic_note_list; deletion is irreversible \u2014 system-generated notes cannot be removed")
 	}
 
 	if len(resp.Data.DestroyNote.Errors) > 0 {

@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_list_freeze_periods",
 		Title:       toolutil.TitleFromName("gitlab_list_freeze_periods"),
-		Description: "List deploy freeze periods for a GitLab project.\n\nReturns: JSON with freeze periods array including cron schedule, timezone, and status.\n\nSee also: gitlab_create_freeze_period, gitlab_list_environments",
+		Description: "List deploy freeze periods for a GitLab project.\n\nReturns: JSON with freeze periods array including cron schedule, timezone, and status.\n\nSee also: gitlab_create_freeze_period, gitlab_environment_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconSchedule,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
@@ -43,7 +43,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_create_freeze_period",
 		Title:       toolutil.TitleFromName("gitlab_create_freeze_period"),
-		Description: "Create a deploy freeze period with cron-based start and end times.\n\nReturns: JSON with created freeze period including ID, cron schedule, and timezone.\n\nSee also: gitlab_list_freeze_periods, gitlab_list_deployments",
+		Description: "Create a deploy freeze period with cron-based start and end times.\n\nReturns: JSON with created freeze period including ID, cron schedule, and timezone.\n\nSee also: gitlab_list_freeze_periods, gitlab_deployment_list",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconSchedule,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input CreateInput) (*mcp.CallToolResult, Output, error) {
@@ -107,8 +107,9 @@ Actions:
 - create_freeze_period: Create a freeze period. Params: project_id (required), freeze_start (required, cron), freeze_end (required, cron), cron_timezone
 - update_freeze_period: Update a freeze period. Params: project_id (required), freeze_period_id (required), freeze_start, freeze_end, cron_timezone
 - delete_freeze_period: Delete a freeze period. Params: project_id (required), freeze_period_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconSchedule,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconSchedule,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_freeze_period", routes, nil))
 }

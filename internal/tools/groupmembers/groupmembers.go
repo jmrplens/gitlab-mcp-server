@@ -4,6 +4,7 @@ package groupmembers
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -109,7 +110,8 @@ func GetMember(ctx context.Context, client *gitlabclient.Client, input GetInput)
 		string(input.GroupID), input.UserID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("group_member_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get and user_id with gitlab_list_users \u2014 inherited members are not returned, use gitlab_group_member_get_inherited for those")
 	}
 	return convertMember(m), nil
 }
@@ -126,7 +128,8 @@ func GetInheritedMember(ctx context.Context, client *gitlabclient.Client, input 
 		string(input.GroupID), input.UserID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("group_member_get_inherited", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get_inherited", err, http.StatusNotFound,
+			"the user is not a member of this group or any ancestor group; verify with gitlab_group_members_list (include_inherited=true)")
 	}
 	return convertMember(m), nil
 }
@@ -158,7 +161,20 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("group_member_add", err)
+		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
+			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
+				"the user is already a direct member of this group \u2014 use gitlab_group_member_edit to change their access level instead")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
+				"adding members requires Owner role on the group; cannot grant access higher than your own role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
+				"access_level must be one of 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner); expires_at must be YYYY-MM-DD")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("group_member_add", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get and user_id/username with gitlab_list_users")
 	}
 	return convertMember(m), nil
 }
@@ -182,7 +198,12 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("group_member_edit", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("group_member_edit", err,
+				"editing members requires Owner role; cannot edit inherited members (only direct members) and cannot grant access higher than your own role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("group_member_edit", err, http.StatusNotFound,
+			"the user is not a direct member of this group \u2014 use gitlab_group_members_list to confirm direct membership before editing")
 	}
 	return convertMember(m), nil
 }
@@ -206,7 +227,12 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("group_member_remove", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("group_member_remove", err,
+				"inherited members cannot be removed from this group \u2014 they must be removed from the ancestor group where they were added directly. Removing direct members requires Owner role")
+		}
+		return toolutil.WrapErrWithStatusHint("group_member_remove", err, http.StatusNotFound,
+			"the user is not a direct member of this group; use gitlab_group_members_list to confirm direct membership")
 	}
 	return nil
 }
@@ -233,7 +259,16 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", err)
+		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
+			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
+				"this group is already shared with the target group \u2014 use gitlab_group_unshare first to change the access level")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
+				"sharing requires Owner role on this group AND Maintainer+ on the target group; cross-hierarchy sharing may be disabled in group/instance settings")
+		}
+		return ShareOutput{}, toolutil.WrapErrWithStatusHint("group_share", err, http.StatusNotFound,
+			"verify group_id and share_group_id with gitlab_group_get \u2014 share_group_id must be a numeric group ID, not a path")
 	}
 	return ShareOutput{
 		ID:          g.ID,
@@ -256,7 +291,8 @@ func UnshareGroup(ctx context.Context, client *gitlabclient.Client, input Unshar
 		string(input.GroupID), input.ShareGroupID, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("group_unshare", err)
+		return toolutil.WrapErrWithStatusHint("group_unshare", err, http.StatusNotFound,
+			"the share does not exist \u2014 use gitlab_group_get to inspect shared_with_groups for the current shares")
 	}
 	return nil
 }

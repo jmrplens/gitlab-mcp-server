@@ -216,7 +216,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("List", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusUnauthorized,
+			"verify GITLAB_TOKEN is valid; non-authenticated requests only return public groups")
 	}
 
 	out := ListOutput{
@@ -241,7 +242,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	g, _, err := client.GL().Groups.GetGroup(string(input.GroupID), &gl.GetGroupOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("Get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
+			"verify group_id (numeric ID or full path like 'group/subgroup'); URL-encode '/' as '%2F' when using paths")
 	}
 	return ToOutput(g), nil
 }
@@ -270,7 +272,8 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 
 	memberList, resp, err := client.GL().Groups.ListAllGroupMembers(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return MemberListOutput{}, toolutil.WrapErrWithMessage("MembersList", err)
+		return MemberListOutput{}, toolutil.WrapErrWithStatusHint("MembersList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; private group membership requires the caller to be a member")
 	}
 
 	out := MemberListOutput{
@@ -325,7 +328,8 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 
 	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("SubgroupsList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("SubgroupsList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; subgroup listing returns descendants at all depths")
 	}
 
 	out := ListOutput{
@@ -546,7 +550,12 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 
 	g, _, err := client.GL().Groups.RestoreGroup(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupRestore", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("groupRestore", err,
+				"restoring groups requires Owner role; the group must be marked for deletion (within retention window) and not yet permanently removed")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("groupRestore", err, http.StatusNotFound,
+			"the group is not marked for deletion or has already been permanently removed \u2014 only soft-deleted groups can be restored")
 	}
 	return ToOutput(g), nil
 }
@@ -591,7 +600,8 @@ func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput)
 
 	groups, _, err := client.GL().Groups.SearchGroup(input.Query, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("groupSearch", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupSearch", err, http.StatusUnauthorized,
+			"search returns groups visible to the authenticated user; pass a non-empty query string")
 	}
 
 	out := ListOutput{
@@ -614,7 +624,16 @@ func TransferProject(ctx context.Context, client *gitlabclient.Client, input Tra
 
 	g, _, err := client.GL().Groups.TransferGroup(string(input.GroupID), string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("groupTransferProject", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("groupTransferProject", err,
+				"transferring projects requires Owner role on both source and target groups")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("groupTransferProject", err,
+				"the project may already belong to this group, or the target group is incompatible (e.g. visibility mismatch, missing CI/CD setup)")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("groupTransferProject", err, http.StatusNotFound,
+			"verify both group_id and project_id with gitlab_group_get and gitlab_project_get")
 	}
 	return ToOutput(g), nil
 }
@@ -665,7 +684,8 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 
 	projects, resp, err := client.GL().Groups.ListGroupProjects(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectsOutput{}, toolutil.WrapErrWithMessage("groupListProjects", err)
+		return ListProjectsOutput{}, toolutil.WrapErrWithStatusHint("groupListProjects", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get \u2014 use include_subgroups=true to also list projects in descendant groups")
 	}
 
 	items := make([]ProjectItem, len(projects))

@@ -69,6 +69,8 @@ These variables configure the HTTP server pool when running in HTTP mode. In std
 | `SESSION_REVALIDATE_INTERVAL` | `15m` | Token re-validation interval; `0` to disable. Upper bound: 24h |
 | `AUTH_MODE` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API) |
 | `OAUTH_CACHE_TTL` | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h |
+| `RATE_LIMIT_RPS` | `0` | Per-server `tools/call` rate limit in requests/second. `0` disables the limiter (default). See [Security — Rate Limiting Model](security.md#rate-limiting-model) |
+| `RATE_LIMIT_BURST` | `40` | Token-bucket burst size when `RATE_LIMIT_RPS > 0`. Must be ≥ 1 |
 
 ---
 
@@ -131,6 +133,8 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `SESSION_REVALIDATE_INTERVAL` | `--revalidate-interval` | |
 | `AUTH_MODE` | `--auth-mode` | |
 | `OAUTH_CACHE_TTL` | `--oauth-cache-ttl` | |
+| `RATE_LIMIT_RPS` | `--rate-limit-rps` | |
+| `RATE_LIMIT_BURST` | `--rate-limit-burst` | |
 | *(none)* | `--trusted-proxy-header` | CLI-only; HTTP header with real client IP for rate limiting behind proxies |
 | `AUTO_UPDATE` | `--auto-update` | |
 | `AUTO_UPDATE_REPO` | `--auto-update-repo` | |

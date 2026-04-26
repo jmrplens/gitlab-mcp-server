@@ -4,6 +4,7 @@ package importservice
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -66,7 +67,8 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 	}
 	result, _, err := client.GL().Import.ImportRepositoryFromGitHub(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_import_from_github", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_github", err, http.StatusBadRequest,
+			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab \u2014 import is async, poll status with gitlab_project_get")
 	}
 	return &GitHubImportOutput{
 		ID:                    result.ID,
@@ -110,7 +112,8 @@ func CancelGitHubImport(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	result, _, err := client.GL().Import.CancelGitHubProjectImport(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_cancel_github_import", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_cancel_github_import", err, http.StatusBadRequest,
+			"verify project_id with gitlab_project_list; cancellation only works while import is in progress (status=started); completed/failed imports cannot be cancelled")
 	}
 	return &CancelledImportOutput{
 		ID:                    result.ID,
@@ -138,7 +141,8 @@ func ImportGists(ctx context.Context, client *gitlabclient.Client, input ImportG
 	}
 	_, err := client.GL().Import.ImportGitHubGistsIntoGitLabSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_import_github_gists", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_import_github_gists", err, http.StatusBadRequest,
+			"personal_access_token must have gist scope; gists are imported as personal snippets for the authenticated user; import is async")
 	}
 	return nil
 }
@@ -179,7 +183,8 @@ func ImportFromBitbucketCloud(ctx context.Context, client *gitlabclient.Client, 
 	}
 	result, _, err := client.GL().Import.ImportRepositoryFromBitbucketCloud(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_import_from_bitbucket_cloud", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_bitbucket_cloud", err, http.StatusBadRequest,
+			"bitbucket_username + bitbucket_app_password (NOT account password); repo_path is workspace/repo; target_namespace must exist; import is async")
 	}
 	return &BitbucketCloudImportOutput{
 		ID:                    result.ID,
@@ -235,7 +240,8 @@ func ImportFromBitbucketServer(ctx context.Context, client *gitlabclient.Client,
 	}
 	result, _, err := client.GL().Import.ImportRepositoryFromBitbucketServer(opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, toolutil.WrapErrWithMessage("gitlab_import_from_bitbucket_server", err)
+		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_bitbucket_server", err, http.StatusBadRequest,
+			"bitbucket_server_url must be the base URL (no trailing path); bitbucket_server_username + personal_access_token; project_key + repo_slug from Bitbucket Server; import is async")
 	}
 	return &BitbucketServerImportOutput{
 		ID:       result.ID,

@@ -4,6 +4,7 @@ package snippets
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -35,7 +36,8 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	snippets, resp, err := client.GL().ProjectSnippets.ListSnippets(
 		string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("project_snippet_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("project_snippet_list", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project must have snippets enabled")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, s := range snippets {
@@ -61,7 +63,8 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	snippet, _, err := client.GL().ProjectSnippets.GetSnippet(
 		string(input.ProjectID), input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("project_snippet_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_get", err, http.StatusNotFound,
+			"verify snippet_id with gitlab_project_snippet_list; project_id must match the project that owns the snippet")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -83,7 +86,8 @@ func ProjectContent(ctx context.Context, client *gitlabclient.Client, input Proj
 	data, _, err := client.GL().ProjectSnippets.SnippetContent(
 		string(input.ProjectID), input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return ContentOutput{}, toolutil.WrapErrWithMessage("project_snippet_content", err)
+		return ContentOutput{}, toolutil.WrapErrWithStatusHint("project_snippet_content", err, http.StatusNotFound,
+			"verify snippet_id with gitlab_project_snippet_list")
 	}
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
@@ -140,7 +144,8 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	snippet, _, err := client.GL().ProjectSnippets.CreateSnippet(
 		string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("project_snippet_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_create", err, http.StatusBadRequest,
+			"title, file_name, and content are required; visibility must be 'private', 'internal', or 'public'; creating project snippets requires Developer role or higher")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -169,7 +174,8 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 	snippet, _, err := client.GL().ProjectSnippets.UpdateSnippet(
 		string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("project_snippet_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_update", err, http.StatusForbidden,
+			"updating a project snippet requires being the author or Maintainer role; verify snippet_id with gitlab_project_snippet_list")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -191,7 +197,8 @@ func ProjectDelete(ctx context.Context, client *gitlabclient.Client, input Proje
 	_, err := client.GL().ProjectSnippets.DeleteSnippet(
 		string(input.ProjectID), input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("project_snippet_delete", err)
+		return toolutil.WrapErrWithStatusHint("project_snippet_delete", err, http.StatusForbidden,
+			"deleting a project snippet requires being the author or Maintainer role")
 	}
 	return nil
 }

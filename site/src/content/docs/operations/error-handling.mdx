@@ -68,12 +68,13 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 
 ### Decision tree
 
-| Scenario                                    | Function             |
-| ------------------------------------------- | -------------------- |
-| Read-only operation (list, get, search)     | `WrapErr`            |
-| Mutating operation (create, update, delete) | `WrapErrWithMessage` |
-| Specific error with known fix               | `WrapErrWithHint`    |
-| Get operation returning 404                 | `NotFoundResult`     |
+| Scenario                                    | Function                |
+| ------------------------------------------- | ----------------------- |
+| Read-only operation (list, get, search)     | `WrapErr`               |
+| Mutating operation (create, update, delete) | `WrapErrWithMessage`    |
+| Specific error with known fix               | `WrapErrWithHint`       |
+| Status-specific hint (single code)          | `WrapErrWithStatusHint` |
+| Get operation returning 404                 | `NotFoundResult`        |
 
 ### NotFoundResult — Informational 404 responses
 

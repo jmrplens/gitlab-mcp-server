@@ -12,6 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// hintEmojiOwnerOnly is the hint shared by all emoji delete handlers.
+const hintEmojiOwnerOnly = "only the user who awarded the emoji can remove it"
+
 // Common Input/Output types.
 
 // ListInput is the common input for listing award emoji on a resource.
@@ -108,7 +111,8 @@ func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("issue_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_emoji_list", err, 404,
+			"verify the issue exists with gitlab_issue_get (correct project_id and iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -142,7 +146,8 @@ func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("issue_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("issue_emoji_create", err, 404,
+			"verify the issue exists with gitlab_issue_get; emoji name must be a valid GitLab shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -160,6 +165,12 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	_, err := client.GL().AwardEmoji.DeleteIssueAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("issue_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_issue_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("issue_emoji_delete", err)
 	}
 	return nil
@@ -181,7 +192,8 @@ func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("issue_note_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_note_emoji_list", err, 404,
+			"verify the issue and note exist with gitlab_issue_note_get (correct project_id, iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -221,7 +233,8 @@ func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("issue_note_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("issue_note_emoji_create", err, 404,
+			"verify the issue note exists with gitlab_issue_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -242,6 +255,12 @@ func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	}
 	_, err := client.GL().AwardEmoji.DeleteIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("issue_note_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("issue_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_issue_note_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("issue_note_emoji_delete", err)
 	}
 	return nil
@@ -260,7 +279,8 @@ func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input Li
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("mr_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_emoji_list", err, 404,
+			"verify the merge request exists with gitlab_mr_get (correct project_id and iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -294,7 +314,8 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mr_emoji_create", err, 404,
+			"verify the merge request exists with gitlab_mr_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -312,6 +333,12 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	_, err := client.GL().AwardEmoji.DeleteMergeRequestAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("mr_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_mr_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("mr_emoji_delete", err)
 	}
 	return nil
@@ -333,7 +360,8 @@ func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("mr_note_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_note_emoji_list", err, 404,
+			"verify the MR and note exist with gitlab_mr_note_get (correct project_id, iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -373,7 +401,8 @@ func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mr_note_emoji_create", err, 404,
+			"verify the MR note exists with gitlab_mr_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -394,6 +423,12 @@ func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 	}
 	_, err := client.GL().AwardEmoji.DeleteMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("mr_note_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("mr_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_mr_note_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("mr_note_emoji_delete", err)
 	}
 	return nil
@@ -412,7 +447,8 @@ func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_emoji_list", err, 404,
+			"verify the snippet exists with gitlab_project_snippet_get (correct project_id and iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -446,7 +482,8 @@ func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_emoji_create", err, 404,
+			"verify the snippet exists with gitlab_project_snippet_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -464,6 +501,12 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	}
 	_, err := client.GL().AwardEmoji.DeleteSnippetAwardEmoji(string(input.ProjectID), input.IID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_snippet_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("snippet_emoji_delete", err)
 	}
 	return nil
@@ -485,7 +528,8 @@ func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_note_emoji_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_note_emoji_list", err, 404,
+			"verify the snippet and note exist with gitlab_snippet_note_get (correct project_id, iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -525,7 +569,8 @@ func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Clien
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippet_note_emoji_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippet_note_emoji_create", err, 404,
+			"verify the snippet note exists with gitlab_snippet_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -546,6 +591,12 @@ func DeleteSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Clien
 	}
 	_, err := client.GL().AwardEmoji.DeleteSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, input.AwardID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 403) {
+			return toolutil.WrapErrWithHint("snippet_note_emoji_delete", err, hintEmojiOwnerOnly)
+		}
+		if toolutil.IsHTTPStatus(err, 404) {
+			return toolutil.WrapErrWithHint("snippet_note_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_snippet_note_emoji_list to verify award_id")
+		}
 		return toolutil.WrapErrWithMessage("snippet_note_emoji_delete", err)
 	}
 	return nil

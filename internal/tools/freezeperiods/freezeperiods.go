@@ -3,6 +3,7 @@ package freezeperiods
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -79,7 +80,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := &gl.ListFreezePeriodsOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	periods, resp, err := client.GL().FreezePeriods.ListFreezePeriods(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("freeze_period_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("freeze_period_list", err, http.StatusNotFound,
+			"verify project_id; freeze periods are project-scoped, not group-scoped")
 	}
 	return toListOutput(periods, resp), nil
 }
@@ -94,7 +96,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	fp, _, err := client.GL().FreezePeriods.GetFreezePeriod(string(input.ProjectID), input.FreezePeriodID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("freeze_period_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_get", err, http.StatusNotFound,
+			"verify freeze_period_id with gitlab_list_freeze_periods")
 	}
 	return toOutput(fp), nil
 }
@@ -113,7 +116,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	fp, _, err := client.GL().FreezePeriods.CreateFreezePeriodOptions(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("freeze_period_create", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("freeze_period_create", err,
+				"creating freeze periods requires Maintainer or Owner role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_create", err, http.StatusBadRequest,
+			"freeze_start and freeze_end must be valid POSIX cron strings (e.g. '0 23 * * 5'); cron_timezone defaults to UTC \u2014 use IANA names like 'Europe/Madrid' or POSIX offsets")
 	}
 	return toOutput(fp), nil
 }
@@ -138,7 +146,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	fp, _, err := client.GL().FreezePeriods.UpdateFreezePeriodOptions(string(input.ProjectID), input.FreezePeriodID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("freeze_period_update", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("freeze_period_update", err,
+				"updating freeze periods requires Maintainer or Owner role")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_update", err, http.StatusNotFound,
+			"verify freeze_period_id with gitlab_list_freeze_periods; cron strings must be valid POSIX cron")
 	}
 	return toOutput(fp), nil
 }
@@ -153,7 +166,12 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().FreezePeriods.DeleteFreezePeriod(string(input.ProjectID), input.FreezePeriodID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("freeze_period_delete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("freeze_period_delete", err,
+				"deleting freeze periods requires Maintainer or Owner role")
+		}
+		return toolutil.WrapErrWithStatusHint("freeze_period_delete", err, http.StatusNotFound,
+			"the freeze period may already be deleted \u2014 verify with gitlab_list_freeze_periods")
 	}
 	return nil
 }

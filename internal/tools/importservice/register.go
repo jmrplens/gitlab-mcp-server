@@ -49,7 +49,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_import_github_gists",
 		Title:       toolutil.TitleFromName("gitlab_import_github_gists"),
-		Description: "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_list_snippets",
+		Description: "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_snippet_list",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconImport,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ImportGistsInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -117,8 +117,9 @@ Actions:
 - github_gists: Import GitHub gists as GitLab snippets. Params: personal_access_token (required)
 - from_bitbucket_cloud: Import from Bitbucket Cloud. Params: bitbucket_username (required), bitbucket_app_password (required), repo_path (required), target_namespace (required), new_name
 - from_bitbucket_server: Import from Bitbucket Server. Params: bitbucket_server_url (required), bitbucket_server_username (required), personal_access_token (required), bitbucket_server_project (required), bitbucket_server_repo (required), new_name, new_namespace, timeout_strategy`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconImport,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconImport,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_import", routes, nil))
 }

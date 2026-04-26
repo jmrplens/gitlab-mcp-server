@@ -17,7 +17,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_project_event_list",
 		Title:       toolutil.TitleFromName("gitlab_project_event_list"),
-		Description: "List all visible events for a project. Supports filtering by action type, target type, date range, sort order, and pagination.\n\nReturns: JSON array of events with pagination.\n\nSee also: gitlab_user_contribution_event_list, gitlab_list_commits",
+		Description: "List all visible events for a project. Supports filtering by action type, target type, date range, sort order, and pagination.\n\nReturns: JSON array of events with pagination.\n\nSee also: gitlab_user_contribution_event_list, gitlab_commit_list",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconEvent,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ListProjectEventsInput) (*mcp.CallToolResult, ListProjectEventsOutput, error) {
@@ -56,8 +56,9 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 Actions:
 - list_project: List visible events for a project. Params: project_id (required), action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, page, per_page
 - list_user_contributions: List contribution events for the authenticated user. Params: action, target_type, before (YYYY-MM-DD), after (YYYY-MM-DD), sort, scope, page, per_page`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconEvent,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconEvent,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_event", routes, nil))
 }

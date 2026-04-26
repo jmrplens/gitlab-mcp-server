@@ -9,12 +9,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -37,24 +41,94 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
-// without string parsing.
+// without string parsing. OutputSchema holds the JSON Schema for the
+// action's typed output (nil for void actions).
 type ActionRoute struct {
-	Handler     ActionFunc
-	Destructive bool
+	Handler      ActionFunc
+	Destructive  bool
+	OutputSchema map[string]any
 }
 
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-// Route creates a non-destructive ActionRoute.
+// --- Meta-tool route registry ---
+
+var (
+	metaRoutesMu  sync.Mutex
+	metaRoutesMap = map[string]ActionMap{}
+)
+
+// RegisterRoutes records a meta-tool's action routes for external consumers
+// (gen_llms, audit_output) to inspect per-action OutputSchema.
+func RegisterRoutes(toolName string, routes ActionMap) {
+	metaRoutesMu.Lock()
+	metaRoutesMap[toolName] = routes
+	metaRoutesMu.Unlock()
+}
+
+// MetaRoutes returns a snapshot of all registered meta-tool route maps.
+func MetaRoutes() map[string]ActionMap {
+	metaRoutesMu.Lock()
+	defer metaRoutesMu.Unlock()
+	cp := make(map[string]ActionMap, len(metaRoutesMap))
+	maps.Copy(cp, metaRoutesMap)
+	return cp
+}
+
+// ClearMetaRoutes resets the registry (useful for tests).
+func ClearMetaRoutes() {
+	metaRoutesMu.Lock()
+	metaRoutesMap = map[string]ActionMap{}
+	metaRoutesMu.Unlock()
+}
+
+// Route creates a non-destructive ActionRoute without an output schema.
 func Route(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: false}
 }
 
-// DestructiveRoute creates a destructive ActionRoute that will trigger
-// user confirmation before execution.
+// DestructiveRoute creates a destructive ActionRoute without an output schema.
 func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
+}
+
+// --- Output schema cache ---
+
+var (
+	outputSchemaCache sync.Map // reflect.Type → map[string]any
+)
+
+// schemaForType generates a JSON Schema map for the given reflect.Type
+// and caches the result. Returns nil on error (best-effort).
+func schemaForType(rt reflect.Type) map[string]any {
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if cached, ok := outputSchemaCache.Load(rt); ok {
+		m, _ := cached.(map[string]any)
+		return m
+	}
+	schema, err := jsonschema.ForType(rt, nil)
+	if err != nil {
+		return nil
+	}
+	data, marshalErr := json.Marshal(schema)
+	if marshalErr != nil {
+		return nil
+	}
+	var m map[string]any
+	if json.Unmarshal(data, &m) != nil {
+		return nil
+	}
+	outputSchemaCache.Store(rt, m)
+	return m
+}
+
+// SchemaForRoute returns the cached output schema for type R.
+// Exported for use by gen_llms and audit tools.
+func SchemaForRoute[R any]() map[string]any {
+	return schemaForType(reflect.TypeFor[R]())
 }
 
 // requestContextKey is the context key for storing the MCP request in
@@ -158,34 +232,56 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 	}
 }
 
-// RouteAction wraps a typed function as a non-destructive ActionRoute.
+// RouteAction wraps a typed function as a non-destructive ActionRoute
+// and attaches the JSON Schema for the output type R.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapAction(client, fn))
+	return ActionRoute{
+		Handler:      WrapAction(client, fn),
+		Destructive:  false,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
+// OutputSchema is nil because the action returns no data.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return Route(WrapVoidAction(client, fn))
 }
 
-// RouteActionWithRequest wraps a typed function that needs the MCP request as a non-destructive ActionRoute.
+// RouteActionWithRequest wraps a typed function that needs the MCP request
+// as a non-destructive ActionRoute and attaches the output schema.
 func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return Route(WrapActionWithRequest(client, fn))
+	return ActionRoute{
+		Handler:      WrapActionWithRequest(client, fn),
+		Destructive:  false,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
-// DestructiveAction wraps a typed function as a destructive ActionRoute.
+// DestructiveAction wraps a typed function as a destructive ActionRoute
+// and attaches the output schema.
 func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapAction(client, fn))
+	return ActionRoute{
+		Handler:      WrapAction(client, fn),
+		Destructive:  true,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
+// OutputSchema is nil because the action returns no data.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return DestructiveRoute(WrapVoidAction(client, fn))
 }
 
-// DestructiveActionWithRequest wraps a typed function that needs the MCP request as a destructive ActionRoute.
+// DestructiveActionWithRequest wraps a typed function that needs the MCP request
+// as a destructive ActionRoute and attaches the output schema.
 func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
-	return DestructiveRoute(WrapActionWithRequest(client, fn))
+	return ActionRoute{
+		Handler:      WrapActionWithRequest(client, fn),
+		Destructive:  true,
+		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
 }
 
 // FormatResultFunc converts an action result into an MCP call tool result.
@@ -200,6 +296,7 @@ type FormatResultFunc func(any) *mcp.CallToolResult
 // Confirmation can be bypassed with YOLO_MODE/AUTOPILOT env vars or by passing
 // "confirm": true in the action params.
 func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResultFunc) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
+	RegisterRoutes(toolName, routes)
 	if formatResult == nil {
 		formatResult = defaultFormatResult
 	}
@@ -329,16 +426,50 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        actions,
-				"description": "Action to perform. See the tool description for available actions and their parameters.",
+				"description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. See the tool description for required/optional fields per action.",
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
 				"additionalProperties": true,
 			},
 		},
 		"required":             []any{"action"},
 		"additionalProperties": false,
+	}
+}
+
+// MetaToolOutputSchema returns a permissive JSON Schema describing the result
+// envelope returned by every meta-tool. The exact shape varies per action and
+// matches the chosen action's typed output, so the schema is intentionally
+// open (additionalProperties: true) but it documents the cross-cutting fields
+// the LLM should look for: `next_steps` and `pagination`.
+func MetaToolOutputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"description":          "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+		"additionalProperties": true,
+		"properties": map[string]any{
+			"next_steps": map[string]any{
+				"type":        "array",
+				"description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+				"items":       map[string]any{"type": "string"},
+			},
+			"pagination": map[string]any{
+				"type":                 "object",
+				"description":          "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+				"additionalProperties": true,
+				"properties": map[string]any{
+					"page":        map[string]any{"type": "integer", "description": "Current 1-based page index."},
+					"per_page":    map[string]any{"type": "integer", "description": "Items per page."},
+					"total":       map[string]any{"type": "integer", "description": "Total item count when known (some endpoints omit it for performance)."},
+					"total_pages": map[string]any{"type": "integer", "description": "Total page count when known."},
+					"next_page":   map[string]any{"type": "integer", "description": "Next page index when `has_more` is true."},
+					"prev_page":   map[string]any{"type": "integer", "description": "Previous page index when applicable."},
+					"has_more":    map[string]any{"type": "boolean", "description": "True when more pages are available after the current one."},
+				},
+			},
+		},
 	}
 }
 

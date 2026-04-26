@@ -6,6 +6,7 @@ package environments
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -147,7 +148,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	envs, resp, err := client.GL().Environments.ListEnvironments(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("environmentList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("environmentList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; states filter must be one of {available, stopping, stopped}")
 	}
 	out := ListOutput{
 		Environments: make([]Output, 0, len(envs)),
@@ -172,7 +174,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	env, _, err := client.GL().Environments.GetEnvironment(string(input.ProjectID), input.EnvironmentID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("environmentGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("environmentGet", err, http.StatusNotFound,
+			"verify environment_id with gitlab_environment_list; the environment may have been deleted")
 	}
 	return toOutput(env), nil
 }
@@ -202,7 +205,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	env, _, err := client.GL().Environments.CreateEnvironment(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("environmentCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("environmentCreate", err, http.StatusBadRequest,
+			"name must be unique within the project; tier must be one of {production, staging, testing, development, other}; external_url must be a valid URL; requires Developer role")
 	}
 	return toOutput(env), nil
 }
@@ -233,7 +237,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	env, _, err := client.GL().Environments.EditEnvironment(string(input.ProjectID), input.EnvironmentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("environmentUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("environmentUpdate", err, http.StatusNotFound,
+			"verify environment_id with gitlab_environment_list; tier must be one of {production, staging, testing, development, other}; requires Developer role")
 	}
 	return toOutput(env), nil
 }
@@ -251,7 +256,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Environments.DeleteEnvironment(string(input.ProjectID), input.EnvironmentID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("environmentDelete", err)
+		return toolutil.WrapErrWithStatusHint("environmentDelete", err, http.StatusForbidden,
+			"environment must be stopped before deletion; use gitlab_environment_stop first; requires Maintainer role")
 	}
 	return nil
 }
@@ -273,7 +279,8 @@ func Stop(ctx context.Context, client *gitlabclient.Client, input StopInput) (Ou
 	}
 	env, _, err := client.GL().Environments.StopEnvironment(string(input.ProjectID), input.EnvironmentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("environmentStop", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("environmentStop", err, http.StatusForbidden,
+			"stopping an environment requires Developer role; use force=true to stop environments with active deployments; verify environment_id")
 	}
 	return toOutput(env), nil
 }
