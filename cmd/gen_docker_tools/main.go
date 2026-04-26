@@ -52,6 +52,13 @@ type dockerTool struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	enterprise := flag.Bool("enterprise", false, "include enterprise meta-tools")
 	individual := flag.Bool("individual", false, "emit individual tools instead of meta-tools")
 	flag.Parse()
@@ -69,8 +76,7 @@ func main() {
 	}
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("client: %w", err)
 	}
 
 	opts := &mcp.ServerOptions{PageSize: 2000}
@@ -87,22 +93,19 @@ func main() {
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
+	if _, connErr := server.Connect(ctx, st, nil); connErr != nil {
+		return fmt.Errorf("server connect: %w", connErr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-docker-tools-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("client connect: %w", err)
 	}
 	defer func() { _ = session.Close() }()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "list tools: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("list tools: %w", err)
 	}
 
 	out := make([]dockerTool, 0, len(result.Tools))
@@ -118,10 +121,10 @@ func main() {
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(out); err != nil {
-		fmt.Fprintf(os.Stderr, "encode: %v\n", err)
-		os.Exit(1)
+	if encErr := enc.Encode(out); encErr != nil {
+		return fmt.Errorf("encode: %w", encErr)
 	}
+	return nil
 }
 
 // schemaArgs flattens a JSON Schema object into Docker's argument format.
@@ -140,7 +143,7 @@ func schemaArgs(schema any) []dockerArg {
 			Description string `json:"description"`
 		} `json:"properties"`
 	}
-	if err := json.Unmarshal(raw, &s); err != nil {
+	if unmarshalErr := json.Unmarshal(raw, &s); unmarshalErr != nil {
 		return nil
 	}
 	args := make([]dockerArg, 0, len(s.Properties))
