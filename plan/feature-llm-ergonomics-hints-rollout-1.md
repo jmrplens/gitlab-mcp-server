@@ -105,7 +105,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-019 | `internal/tools/ffuserlists/ffuserlists.go` (14) | ✅ | 2026-04-26 |
 | TASK-020 | `internal/tools/pipelines/pipelines.go` (13) — Cancel/Retry/Delete + already-finished hint. | ✅ | 2026-04-26 |
 | TASK-021 | `internal/tools/groups/groups.go` (13) — Transfer/Restore/Search subgroups. | ✅ | 2026-04-26 |
-| TASK-022 | `internal/tools/commits/commits.go` (13) — CherryPick/Revert/CreateCommit + diverged-branch hint. | | |
+| TASK-022 | `internal/tools/commits/commits.go` (13) — CherryPick/Revert/CreateCommit + diverged-branch hint. | ✅ | 2026-04-26 |
 | TASK-023 | `internal/tools/badges/badges.go` (12) | | |
 | TASK-024 | `internal/tools/deployments/deployments.go` (11) | | |
 | TASK-025 | `internal/tools/runnercontrollertokens/runnercontrollertokens.go` (10) | | |
