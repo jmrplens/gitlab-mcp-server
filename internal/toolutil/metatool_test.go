@@ -415,7 +415,9 @@ func TestMetaToolSchema(t *testing.T) {
 
 // TestMetaToolOutputSchema_TypedRoutesProduceAnyOf verifies that routes
 // created via the typed RouteAction[T,R] family contribute one anyOf branch
-// per action, with the action name as branch title.
+// per action, with the action name as branch title. Verifies branch shape
+// (typed properties survive) and that the always-on permissive fallback
+// branch is appended.
 func TestMetaToolOutputSchema_TypedRoutesProduceAnyOf(t *testing.T) {
 	type fooOut struct {
 		Foo string `json:"foo"`
@@ -442,48 +444,122 @@ func TestMetaToolOutputSchema_TypedRoutesProduceAnyOf(t *testing.T) {
 	if s.Type != "object" {
 		t.Errorf("type = %q, want object", s.Type)
 	}
-	if len(s.AnyOf) != 2 {
-		t.Fatalf("anyOf len = %d, want 2", len(s.AnyOf))
+	// 2 typed branches + 1 always-on permissive fallback.
+	if len(s.AnyOf) != 3 {
+		t.Fatalf("anyOf len = %d, want 3 (2 typed + 1 fallback)", len(s.AnyOf))
 	}
-	titles := []string{s.AnyOf[0].Title, s.AnyOf[1].Title}
+
+	titles := make([]string, 0, len(s.AnyOf))
+	var fooBranch *jsonschema.Schema
+	var fallback *jsonschema.Schema
+	for _, b := range s.AnyOf {
+		titles = append(titles, b.Title)
+		switch b.Title {
+		case "foo":
+			fooBranch = b
+		case "any_action_result":
+			fallback = b
+		}
+	}
 	sort.Strings(titles)
-	if titles[0] != "bar" || titles[1] != "foo" {
-		t.Errorf("titles = %v, want [bar foo]", titles)
+	want := []string{"any_action_result", "bar", "foo"}
+	if !equalStrings(titles, want) {
+		t.Errorf("titles = %v, want %v", titles, want)
+	}
+
+	// The "foo" branch must preserve the typed shape.
+	if fooBranch == nil {
+		t.Fatal("missing foo branch")
+	}
+	if fooBranch.Type != "object" {
+		t.Errorf("foo branch type = %q, want object", fooBranch.Type)
+	}
+	fooProp, ok := fooBranch.Properties["foo"]
+	if !ok {
+		t.Fatalf("foo branch should declare a foo property; got properties %v", fooBranch.Properties)
+	}
+	if fooProp.Type != "string" {
+		t.Errorf("foo property type = %q, want string", fooProp.Type)
+	}
+
+	// next_steps is NOT declared as a top-level property; it is tolerated by
+	// the relaxed additionalProperties at the root of each typed branch and
+	// the unconstrained fallback. Encode this contract.
+	if _, has := s.Properties["next_steps"]; has {
+		t.Error("root schema should NOT declare next_steps as a property")
+	}
+	if fallback == nil {
+		t.Fatal("missing any_action_result fallback branch")
+	}
+	if fallback.Type != "object" {
+		t.Errorf("fallback type = %q, want object", fallback.Type)
+	}
+	if len(fallback.Properties) != 0 || fallback.AdditionalProperties != nil {
+		t.Error("fallback should be permissive (no properties, no additionalProperties constraint)")
 	}
 }
 
-// TestMetaToolOutputSchema_UntypedRoutesAddFallback verifies that when at
-// least one route is type-erased (Route / DestructiveRoute), the schema
-// includes a permissive untyped_action_result fallback branch.
-func TestMetaToolOutputSchema_UntypedRoutesAddFallback(t *testing.T) {
+// TestMetaToolOutputSchema_AlwaysAppendsFallback verifies that the
+// permissive any_action_result branch is always appended, even when every
+// route is typed. This handles sentinel sum-type results (e.g. samplingtools'
+// samplingUnsupportedOutput) and void actions returning {}.
+func TestMetaToolOutputSchema_AlwaysAppendsFallback(t *testing.T) {
 	type fooOut struct {
 		Foo string `json:"foo"`
 	}
-	routes := ActionMap{
+	// Mixed (type-erased present): fallback appended.
+	mixed := ActionMap{
 		"foo": RouteAction[struct{}, fooOut](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (fooOut, error) {
 			return fooOut{}, nil
 		}),
 		"untyped": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
 	}
-	out := MetaToolOutputSchema(routes)
-	s := out.(*jsonschema.Schema)
-	if len(s.AnyOf) != 2 {
-		t.Fatalf("anyOf len = %d, want 2 (1 typed + 1 fallback)", len(s.AnyOf))
+	if !hasFallbackBranch(MetaToolOutputSchema(mixed)) {
+		t.Error("mixed routes: expected any_action_result fallback")
 	}
-	hasFallback := false
+	// All-typed: fallback still appended.
+	allTyped := ActionMap{
+		"foo": RouteAction[struct{}, fooOut](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (fooOut, error) {
+			return fooOut{}, nil
+		}),
+	}
+	if !hasFallbackBranch(MetaToolOutputSchema(allTyped)) {
+		t.Error("all-typed routes: expected any_action_result fallback")
+	}
+}
+
+// hasFallbackBranch returns true if the union schema contains the permissive
+// any_action_result branch.
+func hasFallbackBranch(out any) bool {
+	s, ok := out.(*jsonschema.Schema)
+	if !ok || s == nil {
+		return false
+	}
 	for _, b := range s.AnyOf {
-		if b.Title == "untyped_action_result" {
-			hasFallback = true
+		if b.Title == "any_action_result" {
+			return true
 		}
 	}
-	if !hasFallback {
-		t.Error("expected untyped_action_result fallback branch")
+	return false
+}
+
+// equalStrings is a tiny helper to compare sorted string slices.
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
 	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // TestMetaToolOutputSchema_EmptyOrAllUntypedReturnsNil verifies that the
 // helper returns untyped nil (assignable cleanly to a *mcp.Tool's any field)
-// when there are no typed routes.
+// when there are no typed routes. Without typed branches there is nothing to
+// document, and emitting only a fallback would just confuse LLMs.
 func TestMetaToolOutputSchema_EmptyOrAllUntypedReturnsNil(t *testing.T) {
 	if got := MetaToolOutputSchema(ActionMap{}); got != nil {
 		t.Errorf("empty routes should return nil, got %v", got)
@@ -497,11 +573,11 @@ func TestMetaToolOutputSchema_EmptyOrAllUntypedReturnsNil(t *testing.T) {
 	}
 }
 
-// TestMetaToolOutputSchema_RelaxesAdditionalProperties verifies that the
-// schemaFor pre-processing clears additionalProperties:false on object
-// branches so the dispatcher's next_steps injection does not break SDK
-// output validation.
-func TestMetaToolOutputSchema_RelaxesAdditionalProperties(t *testing.T) {
+// TestMetaToolOutputSchema_RelaxesRootAdditionalProperties verifies that the
+// schemaFor pre-processing clears additionalProperties:false at the *root* of
+// each typed branch (so the dispatcher's next_steps injection passes
+// validation) without weakening additionalProperties on nested schemas.
+func TestMetaToolOutputSchema_RelaxesRootAdditionalProperties(t *testing.T) {
 	type out struct {
 		Field string `json:"field"`
 	}
@@ -513,7 +589,32 @@ func TestMetaToolOutputSchema_RelaxesAdditionalProperties(t *testing.T) {
 	s := MetaToolOutputSchema(routes).(*jsonschema.Schema)
 	branch := s.AnyOf[0]
 	if branch.AdditionalProperties != nil {
-		t.Errorf("expected AdditionalProperties to be nil (relaxed), got %+v", branch.AdditionalProperties)
+		t.Errorf("expected root AdditionalProperties to be nil (relaxed), got %+v", branch.AdditionalProperties)
+	}
+}
+
+// TestRelaxRootAdditionalProperties_PreservesNested verifies that the
+// non-recursive helper only touches the root: nested object schemas keep
+// their original additionalProperties settings (so type safety inside child
+// structures is preserved).
+func TestRelaxRootAdditionalProperties_PreservesNested(t *testing.T) {
+	denyNested := &jsonschema.Schema{Not: &jsonschema.Schema{}}
+	root := &jsonschema.Schema{
+		Type:                 "object",
+		AdditionalProperties: &jsonschema.Schema{Not: &jsonschema.Schema{}},
+		Properties: map[string]*jsonschema.Schema{
+			"child": {
+				Type:                 "object",
+				AdditionalProperties: denyNested,
+			},
+		},
+	}
+	relaxRootAdditionalProperties(root)
+	if root.AdditionalProperties != nil {
+		t.Error("root AdditionalProperties should have been cleared")
+	}
+	if root.Properties["child"].AdditionalProperties != denyNested {
+		t.Error("nested AdditionalProperties must be preserved")
 	}
 }
 

@@ -82,52 +82,53 @@ func DestructiveRouteTyped[R any](fn ActionFunc) ActionRoute {
 // schemaFor returns the JSON Schema for type R, post-processed for use as a
 // branch in a meta-tool output schema. The schema is generated via
 // jsonschema.For[R] which by default sets additionalProperties:false on
-// structs; we relax this so that the meta-tool dispatcher can decorate the
-// structured content with extra fields (e.g. "next_steps" injected by
-// enrichWithHints) without failing SDK output validation.
+// structs; we relax that constraint at the *root* of the branch so that the
+// meta-tool dispatcher can decorate the structured content with extra fields
+// (e.g. "next_steps" injected by enrichWithHints) without failing SDK output
+// validation. Nested object schemas keep their original additionalProperties
+// settings so type safety inside child structures is preserved.
 //
-// Returns nil if schema generation fails (the route then contributes no branch
-// to the union schema).
+// Returns nil if schema generation fails (the route then contributes no
+// branch to the union schema).
 func schemaFor[R any]() *jsonschema.Schema {
 	s, err := jsonschema.For[R](nil)
 	if err != nil || s == nil {
 		return nil
 	}
-	relaxAdditionalProperties(s)
+	relaxRootAdditionalProperties(s)
 	return s
 }
 
-// relaxAdditionalProperties recursively clears additionalProperties:false on
-// every object schema in the tree, so that injected fields such as next_steps
-// do not break SDK output validation. Walks Properties, Items, AnyOf, OneOf,
-// AllOf, $defs, and PatternProperties.
-func relaxAdditionalProperties(s *jsonschema.Schema) {
-	if s == nil {
+// relaxRootAdditionalProperties clears AdditionalProperties on the schema's
+// root only, and only when it explicitly forbids extras (i.e. is set to
+// schema-false / `additionalProperties: false`). Schemas with
+// `additionalProperties: true` or schema-valued constraints, and the
+// AdditionalProperties of nested objects, are left untouched.
+//
+// This is sufficient because the dispatcher injects "next_steps" only at the
+// top level of the marshaled result, so a recursive walk would needlessly
+// weaken the contract of nested structures.
+func relaxRootAdditionalProperties(s *jsonschema.Schema) {
+	if s == nil || s.AdditionalProperties == nil {
 		return
 	}
-	s.AdditionalProperties = nil
-	for _, p := range s.Properties {
-		relaxAdditionalProperties(p)
+	if schemaForbidsAdditional(s.AdditionalProperties) {
+		s.AdditionalProperties = nil
 	}
-	for _, p := range s.PatternProperties {
-		relaxAdditionalProperties(p)
+}
+
+// schemaForbidsAdditional reports whether a schema is the trivially-false
+// schema (`{"not":{}}` in JSON Schema 2020-12 vocabulary, or any schema
+// whose Not is non-nil with no other constraints). This is what
+// jsonschema-go produces for `additionalProperties: false`.
+func schemaForbidsAdditional(s *jsonschema.Schema) bool {
+	if s == nil {
+		return false
 	}
-	relaxAdditionalProperties(s.Items)
-	for _, b := range s.AnyOf {
-		relaxAdditionalProperties(b)
+	if s.Not != nil {
+		return true
 	}
-	for _, b := range s.OneOf {
-		relaxAdditionalProperties(b)
-	}
-	for _, b := range s.AllOf {
-		relaxAdditionalProperties(b)
-	}
-	for _, d := range s.Defs {
-		relaxAdditionalProperties(d)
-	}
-	for _, d := range s.Definitions {
-		relaxAdditionalProperties(d)
-	}
+	return false
 }
 
 // requestContextKey is the context key for storing the MCP request in
@@ -316,7 +317,15 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		callResult := formatResult(result)
-		return callResult, enrichWithHints(result, callResult), err
+		// Ensure structured content is always a JSON object so it satisfies
+		// MetaToolOutputSchema's `type: "object"` constraint. Void actions
+		// (and any handler that returns nil) would otherwise marshal to
+		// `null` and be rejected by the SDK output validator.
+		structured := enrichWithHints(result, callResult)
+		if structured == nil {
+			structured = struct{}{}
+		}
+		return callResult, structured, err
 	}
 }
 
@@ -431,30 +440,39 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 
 // MetaToolOutputSchema builds a JSON Schema describing the union of possible
 // outputs for a meta-tool. For each route in the map that has a typed result
-// (captured via RouteAction[T,R] and friends), a branch is added to the schema's
-// "anyOf" array, titled with the action name. Type-erased routes (Route /
-// DestructiveRoute) and void variants contribute no branch.
+// (captured via RouteAction[T,R] and friends, or RouteTyped[R] for type-erased
+// handlers), a branch is added to the schema's "anyOf" array, titled with the
+// action name. Type-erased routes (Route / DestructiveRoute without a
+// captured R) and void variants contribute no typed branch.
 //
-// The returned schema is suitable for use as Tool.OutputSchema, giving LLMs
-// and scanners machine-readable insight into the shape of each action's
-// result. Returns nil if no routes carry an output schema, in which case the
-// caller should leave OutputSchema unset.
+// A permissive "any_action_result" branch is *always* appended so that
+// SDK output validation tolerates results that do not match any typed
+// branch. Such results occur when:
+//   - a route is type-erased (Route / DestructiveRoute);
+//   - a void action returns nil (the dispatcher serializes this as `{}`);
+//   - a typed handler returns a sentinel sum-type value (e.g. the
+//     samplingUnsupportedOutput empty struct used by gitlab_analyze when the
+//     client does not advertise sampling capability).
 //
-// The schema also includes "next_steps" as an optional top-level property
-// because the meta-tool dispatcher injects it via enrichWithHints.
+// The typed branches still serve as machine-readable documentation for LLMs
+// and scanners; the fallback only widens the validator, not the LLM hints.
 //
-// Validation note: each branch has additionalProperties relaxed (see
-// schemaFor / relaxAdditionalProperties) so SDK output validation tolerates
-// the injected "next_steps" field.
+// The returned schema is suitable for use as Tool.OutputSchema. Returns
+// untyped nil if no routes carry an output schema, in which case the caller
+// should leave OutputSchema unset.
+//
+// Validation note: each typed branch has root-level additionalProperties
+// relaxed (see schemaFor / relaxRootAdditionalProperties) so SDK output
+// validation tolerates the "next_steps" field that the dispatcher injects at
+// the top level of structured results via enrichWithHints. The fallback
+// branch is intentionally permissive (object with no constraints).
 func MetaToolOutputSchema(routes ActionMap) any {
 	if len(routes) == 0 {
 		return nil
 	}
 	names := make([]string, 0, len(routes))
-	hasUntyped := false
 	for name, r := range routes {
 		if r.OutputSchema == nil {
-			hasUntyped = true
 			continue
 		}
 		names = append(names, name)
@@ -472,21 +490,19 @@ func MetaToolOutputSchema(routes ActionMap) any {
 		branch.Title = name
 		branches = append(branches, &branch)
 	}
-	// When at least one route is type-erased (Route / DestructiveRoute without
-	// a captured R), append a permissive fallback branch so SDK output
-	// validation never rejects those results. The typed branches still serve
-	// as machine-readable documentation for LLMs and scanners.
-	if hasUntyped {
-		branches = append(branches, &jsonschema.Schema{
-			Title:       "untyped_action_result",
-			Description: "Fallback for actions whose result type is not statically captured by the dispatcher.",
-			Type:        "object",
-		})
-	}
+	// Always append a permissive fallback so the SDK does not reject results
+	// that fall outside the typed branches (void actions, sentinel values,
+	// type-erased routes). LLMs read the typed branches; the SDK uses the
+	// fallback only as a last resort.
+	branches = append(branches, &jsonschema.Schema{
+		Title:       "any_action_result",
+		Description: "Permissive fallback that accepts any object. Used for void actions returning {}, sentinel values, and type-erased routes.",
+		Type:        "object",
+	})
 
 	return &jsonschema.Schema{
 		Type:        "object",
-		Description: "Action-dependent output. The shape depends on the requested action; see the per-branch titles in anyOf for typed schemas, plus an optional next_steps array of LLM hints injected by the dispatcher.",
+		Description: "Action-dependent output. The concrete shape depends on the requested action; see the per-branch titles in anyOf for the typed schemas. The dispatcher may also inject a top-level \"next_steps\" array of LLM hints, which is tolerated by every branch.",
 		AnyOf:       branches,
 	}
 }
