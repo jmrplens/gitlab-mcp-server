@@ -188,15 +188,15 @@ Sub-phases (one cluster = one commit, ~5 files each):
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-064 | Add `OutputSchema map[string]any` field to `toolutil.ActionRoute`. Default nil for void variants. | | |
-| TASK-065 | Modify `RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]` to populate `OutputSchema` via `jsonschema.For[R](nil)` and `json.Marshal` to `map[string]any`. Cache by `reflect.Type` to avoid repeated work. | | |
-| TASK-066 | Verify `RouteVoidAction` / `DestructiveVoidAction` keep `OutputSchema = nil`. | | |
-| TASK-067 | Confirm `addMetaTool` and `addReadOnlyMetaTool` continue to emit only the permissive envelope schema in `tools/list` (the per-route data must NOT be exposed there). Add a regression test that asserts `Tool.OutputSchema` is the envelope, not a discriminated union. | | |
-| TASK-068 | Modify `cmd/gen_llms/main.go` to emit a per-action output-shape section per meta-tool in `llms-full.txt`. Format: collapsible Markdown block with the JSON schema for each action. | | |
-| TASK-069 | Modify `cmd/audit_output/main.go` to also report routes whose `OutputSchema` is missing (excluding void routes by design). | | |
-| TASK-070 | Regenerate `llms-full.txt` and verify size and structure are reasonable (target: <2 MB total). | | |
-| TASK-071 | Add unit tests in `internal/toolutil/metatool_test.go` covering schema population for `RouteAction[T,R]` with a representative struct. | | |
-| TASK-072 | Document the new field and its consumers in `docs/architecture.md` or a new short ADR. | | |
+| TASK-064 | Add `OutputSchema map[string]any` field to `toolutil.ActionRoute`. Default nil for void variants. | ✅ | 2025-07-23 |
+| TASK-065 | Modify `RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]` to populate `OutputSchema` via `jsonschema.For[R](nil)` and `json.Marshal` to `map[string]any`. Cache by `reflect.Type` to avoid repeated work. | ✅ | 2025-07-23 |
+| TASK-066 | Verify `RouteVoidAction` / `DestructiveVoidAction` keep `OutputSchema = nil`. | ✅ | 2025-07-23 |
+| TASK-067 | Confirm `addMetaTool` and `addReadOnlyMetaTool` continue to emit only the permissive envelope schema in `tools/list` (the per-route data must NOT be exposed there). Add a regression test that asserts `Tool.OutputSchema` is the envelope, not a discriminated union. | ✅ | 2025-07-23 |
+| TASK-068 | Modify `cmd/gen_llms/main.go` to emit a per-action output-shape section per meta-tool in `llms-full.txt`. Format: collapsible Markdown block with the JSON schema for each action. | ✅ | 2025-07-23 |
+| TASK-069 | Modify `cmd/audit_output/main.go` to also report routes whose `OutputSchema` is missing (excluding void routes by design). | ✅ | 2025-07-23 |
+| TASK-070 | Regenerate `llms-full.txt` and verify size and structure are reasonable (target: <2 MB total). | ✅ | 2025-07-23 |
+| TASK-071 | Add unit tests in `internal/toolutil/metatool_test.go` covering schema population for `RouteAction[T,R]` with a representative struct. | ✅ | 2025-07-23 |
+| TASK-072 | Document the new field and its consumers in `docs/architecture.md` or a new short ADR. | ✅ | 2025-07-23 |
 
 **Phase 7 acceptance:** `llms-full.txt` enriched, audits report 0, no change to `tools/list`
 output, snapshots unchanged.
