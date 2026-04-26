@@ -107,7 +107,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-021 | `internal/tools/groups/groups.go` (13) — Transfer/Restore/Search subgroups. | ✅ | 2026-04-26 |
 | TASK-022 | `internal/tools/commits/commits.go` (13) — CherryPick/Revert/CreateCommit + diverged-branch hint. | ✅ | 2026-04-26 |
 | TASK-023 | `internal/tools/badges/badges.go` (12) | ✅ | 2026-04-26 |
-| TASK-024 | `internal/tools/deployments/deployments.go` (11) | | |
+| TASK-024 | `internal/tools/deployments/deployments.go` (11) | ✅ | 2026-04-26 |
 | TASK-025 | `internal/tools/runnercontrollertokens/runnercontrollertokens.go` (10) | | |
 | TASK-026 | `internal/tools/runnercontrollers/runnercontrollers.go` (10) | | |
 | TASK-027 | `internal/tools/runnercontrollerscopes/runnercontrollerscopes.go` (10) | | |
