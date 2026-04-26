@@ -5,6 +5,7 @@ package repositorysubmodules
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -46,7 +47,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	commit, _, err := client.GL().RepositorySubmodules.UpdateSubmodule(string(input.ProjectID), input.Submodule, opts, gl.WithContext(ctx))
 	if err != nil {
-		return UpdateOutput{}, toolutil.WrapErrWithMessage("update_repository_submodule", err)
+		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_repository_submodule", err, http.StatusNotFound, "verify project_id with gitlab_get_project and submodule path exists")
 	}
 
 	out := UpdateOutput{

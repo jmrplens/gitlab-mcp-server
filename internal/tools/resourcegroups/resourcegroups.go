@@ -3,6 +3,7 @@ package resourcegroups
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -35,7 +36,7 @@ type ListOutput struct {
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	groups, _, err := client.GL().ResourceGroup.GetAllResourceGroupsForAProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_resource_groups", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_groups", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
 	}
 	items := make([]ResourceGroupItem, 0, len(groups))
 	for _, g := range groups {
@@ -56,7 +57,7 @@ type GetInput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (ResourceGroupItem, error) {
 	g, _, err := client.GL().ResourceGroup.GetASpecificResourceGroup(string(input.ProjectID), input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return ResourceGroupItem{}, toolutil.WrapErrWithMessage("gitlab_get_resource_group", err)
+		return ResourceGroupItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_resource_group", err, http.StatusNotFound, "verify the resource group key with gitlab_list_resource_groups")
 	}
 	return ResourceGroupItem{ID: g.ID, Key: g.Key, ProcessMode: g.ProcessMode}, nil
 }
@@ -76,7 +77,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Re
 	opts := &gl.EditAnExistingResourceGroupOptions{ProcessMode: &mode}
 	g, _, err := client.GL().ResourceGroup.EditAnExistingResourceGroup(string(input.ProjectID), input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ResourceGroupItem{}, toolutil.WrapErrWithMessage("gitlab_edit_resource_group", err)
+		return ResourceGroupItem{}, toolutil.WrapErrWithStatusHint("gitlab_edit_resource_group", err, http.StatusNotFound, "verify the resource group key with gitlab_list_resource_groups; valid process_mode values: newest_first, oldest_first, unordered")
 	}
 	return ResourceGroupItem{ID: g.ID, Key: g.Key, ProcessMode: g.ProcessMode}, nil
 }
@@ -107,7 +108,7 @@ type ListUpcomingJobsOutput struct {
 func ListUpcomingJobs(ctx context.Context, client *gitlabclient.Client, input ListUpcomingJobsInput) (ListUpcomingJobsOutput, error) {
 	jobs, _, err := client.GL().ResourceGroup.ListUpcomingJobsForASpecificResourceGroup(string(input.ProjectID), input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return ListUpcomingJobsOutput{}, toolutil.WrapErrWithMessage("gitlab_list_resource_group_upcoming_jobs", err)
+		return ListUpcomingJobsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_resource_group_upcoming_jobs", err, http.StatusNotFound, "verify the resource group key with gitlab_list_resource_groups")
 	}
 	items := make([]JobItem, 0, len(jobs))
 	for _, j := range jobs {

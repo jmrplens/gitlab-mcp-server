@@ -3,6 +3,7 @@ package planlimits
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -46,7 +47,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 
 	limits, _, err := client.GL().PlanLimits.GetCurrentPlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_plan_limits", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_plan_limits", err, http.StatusForbidden, "plan limits require administrator access")
 	}
 	return GetOutput{
 		PlanLimitItem: convertPlanLimit(limits),
@@ -92,7 +93,7 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 
 	limits, _, err := client.GL().PlanLimits.ChangePlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ChangeOutput{}, toolutil.WrapErrWithMessage("change_plan_limits", err)
+		return ChangeOutput{}, toolutil.WrapErrWithStatusHint("change_plan_limits", err, http.StatusForbidden, "changing plan limits requires administrator access")
 	}
 	return ChangeOutput{
 		PlanLimitItem: convertPlanLimit(limits),

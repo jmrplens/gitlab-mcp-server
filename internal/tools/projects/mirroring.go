@@ -6,6 +6,7 @@ package projects
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -70,7 +71,7 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 	}
 	details, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return PullMirrorOutput{}, toolutil.WrapErrWithMessage("projectGetPullMirror", err)
+		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 pull mirroring requires Premium license")
 	}
 	return pullMirrorToOutput(details), nil
 }
@@ -123,7 +124,7 @@ func ConfigurePullMirror(ctx context.Context, client *gitlabclient.Client, input
 	}
 	details, _, err := client.GL().Projects.ConfigureProjectPullMirror(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return PullMirrorOutput{}, toolutil.WrapErrWithMessage("projectConfigurePullMirror", err)
+		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectConfigurePullMirror", err, http.StatusBadRequest, "verify project_id and mirror_url are correct \u2014 pull mirroring requires Premium license")
 	}
 	return pullMirrorToOutput(details), nil
 }
@@ -143,7 +144,7 @@ func StartMirroring(ctx context.Context, client *gitlabclient.Client, input Star
 	}
 	_, err := client.GL().Projects.StartMirroringProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("projectStartMirroring", err)
+		return toolutil.WrapErrWithStatusHint("projectStartMirroring", err, http.StatusNotFound, "verify project_id \u2014 pull mirroring must be configured first")
 	}
 	return nil
 }

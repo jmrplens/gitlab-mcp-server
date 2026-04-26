@@ -4,6 +4,7 @@ package projectaliases
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -52,7 +53,7 @@ func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOu
 
 	aliases, _, err := client.GL().ProjectAliases.ListProjectAliases(gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list project aliases", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list project aliases", err, http.StatusForbidden, "project aliases require administrator access")
 	}
 
 	out := ListOutput{Aliases: make([]Output, 0, len(aliases))}
@@ -73,7 +74,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 
 	alias, _, err := client.GL().ProjectAliases.GetProjectAlias(in.Name, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get project alias", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get project alias", err, http.StatusNotFound, "verify the alias name with gitlab_list_project_aliases")
 	}
 
 	return toOutput(alias), nil
@@ -97,7 +98,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	}
 	alias, _, err := client.GL().ProjectAliases.CreateProjectAlias(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create project alias", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create project alias", err, http.StatusBadRequest, "verify the project_id exists and alias name is unique \u2014 requires administrator access")
 	}
 
 	return toOutput(alias), nil
@@ -114,7 +115,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 
 	_, err := client.GL().ProjectAliases.DeleteProjectAlias(in.Name, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete project alias", err)
+		return toolutil.WrapErrWithStatusHint("delete project alias", err, http.StatusNotFound, "verify the alias name with gitlab_list_project_aliases")
 	}
 
 	return nil

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -59,7 +60,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	f, _, err := client.GL().RepositoryFiles.GetFile(string(input.ProjectID), ".gitmodules", fileOpts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("listRepositorySubmodules", fmt.Errorf("could not read .gitmodules: %w", err))
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listRepositorySubmodules", fmt.Errorf("could not read .gitmodules: %w", err), http.StatusNotFound, "verify project_id and ref \u2014 ensure .gitmodules file exists")
 	}
 
 	content := f.Content
