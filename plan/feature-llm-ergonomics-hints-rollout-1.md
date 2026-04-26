@@ -96,7 +96,7 @@ the file a genuinely complete LLM-discoverable contract.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-013 | `internal/tools/pipelinetriggers/pipelinetriggers.go` (19) | | |
+| TASK-013 | `internal/tools/pipelinetriggers/pipelinetriggers.go` (19) | ✅ | 2026-04-26 |
 | TASK-014 | `internal/tools/jobs/jobs.go` (19) — Cancel/Retry/Play/Erase + 404 vs job-not-cancellable hint. | | |
 | TASK-015 | `internal/tools/pipelineschedules/pipelineschedules.go` (18) | | |
 | TASK-016 | `internal/tools/featureflags/featureflags.go` (16) | | |
