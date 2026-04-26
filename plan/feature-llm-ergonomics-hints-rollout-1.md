@@ -82,7 +82,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-005 | `internal/tools/projects/projects.go` (46 sites). Cover Get/List remaining handlers + Delete (3 sites — delayed deletion + permanently_remove flow), Restore (pending_delete state check), Archive/Unarchive (already-archived hint), Fork (target namespace permissions), Star/Unstar. | ✅ | 2026-04-26 |
 | TASK-006 | `internal/tools/runners/runners.go` (38 sites). Runner registration tokens, scope (project/group/instance), ListAll vs ListProject. 404 = runner deleted; 403 = runner is locked/instance-scoped requiring admin. | ✅ | 2026-04-26 |
 | TASK-007 | `internal/tools/accesstokens/accesstokens.go` (37 sites). Personal/project/group access tokens. 401 = token already revoked; 403 = token scope insufficient; 422 = invalid scopes/expiration. | ✅ | 2026-04-26 |
-| TASK-008 | `internal/tools/groupboards/groupboards.go` (34 sites). Mirror of `boards` for groups. 403 = Premium-tier feature. | | |
+| TASK-008 | `internal/tools/groupboards/groupboards.go` (34 sites). Mirror of `boards` for groups. 403 = Premium-tier feature. | ✅ | 2026-04-26 |
 | TASK-009 | `internal/tools/mergerequests/mergerequests.go` (32 sites). Cover the remaining handlers not touched in `97cea0eb`: Commits, Pipelines, Participants, Rebase (already partial), CherryPickMR/RevertMR if present, Discussions list, Time-tracking handlers. | | |
 | TASK-010 | `internal/tools/boards/boards.go` (32 sites). Issue boards (project-level). 404 = board missing or Premium tier; 422 = invalid label/milestone scope. | | |
 | TASK-011 | `internal/tools/groupmembers/groupmembers.go` (23 sites). Group member CRUD + share. 404 = group/user missing; 403 = inherited membership cannot be deleted; 409 = already a member. | | |
