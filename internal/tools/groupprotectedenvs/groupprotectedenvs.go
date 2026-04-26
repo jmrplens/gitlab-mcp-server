@@ -4,6 +4,7 @@ package groupprotectedenvs
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -262,7 +263,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	envs, resp, err := client.GL().GroupProtectedEnvironments.ListGroupProtectedEnvironments(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("listGroupProtectedEnvironments", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupProtectedEnvironments", err, http.StatusForbidden,
+			"requires Owner role + Premium/Ultimate; verify group_id with gitlab_group_list; group protected environments cascade to all subgroup projects")
 	}
 	out := make([]Output, len(envs))
 	for i, e := range envs {
@@ -287,7 +289,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	e, _, err := client.GL().GroupProtectedEnvironments.GetGroupProtectedEnvironment(string(input.GroupID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("getGroupProtectedEnvironment", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("getGroupProtectedEnvironment", err, http.StatusNotFound,
+			"verify group_id and name (tier: production, staging, testing, development, other); requires Owner + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -311,7 +314,8 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	}
 	e, _, err := client.GL().GroupProtectedEnvironments.ProtectGroupEnvironment(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("protectGroupEnvironment", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("protectGroupEnvironment", err, http.StatusBadRequest,
+			"requires Owner + Premium/Ultimate; name must be a valid environment tier; deploy_access_levels and approval_rules require valid user_id/group_id; required_approval_count must be >= 1 for approval rules")
 	}
 	return toOutput(e), nil
 }
@@ -337,7 +341,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	e, _, err := client.GL().GroupProtectedEnvironments.UpdateGroupProtectedEnvironment(string(input.GroupID), input.Environment, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("updateGroupProtectedEnvironment", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("updateGroupProtectedEnvironment", err, http.StatusBadRequest,
+			"verify name with gitlab_group_protected_env_list; provide _destroy=true on individual rule entries to remove them; partial updates merge with existing rules")
 	}
 	return toOutput(e), nil
 }
@@ -355,7 +360,8 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	}
 	_, err := client.GL().GroupProtectedEnvironments.UnprotectGroupEnvironment(string(input.GroupID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("unprotectGroupEnvironment", err)
+		return toolutil.WrapErrWithStatusHint("unprotectGroupEnvironment", err, http.StatusForbidden,
+			"requires Owner + Premium/Ultimate; verify name with gitlab_group_protected_env_list; unprotection cascades and removes restrictions on subgroup projects \u2014 irreversible")
 	}
 	return nil
 }
