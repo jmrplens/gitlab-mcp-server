@@ -4,6 +4,7 @@ package notifications
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -105,7 +106,8 @@ type EventOutput struct {
 func GetGlobalSettings(ctx context.Context, client *gitlabclient.Client, _ GetGlobalInput) (Output, error) {
 	settings, _, err := client.GL().NotificationSettings.GetGlobalSettings(gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_global_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_get", err, http.StatusUnauthorized,
+			"verify token has read_user scope")
 	}
 	return toOutput(settings), nil
 }
@@ -117,7 +119,8 @@ func GetSettingsForProject(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	settings, _, err := client.GL().NotificationSettings.GetSettingsForProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_project_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_project_get", err, http.StatusNotFound,
+			"verify project_id and that you are a member of the project")
 	}
 	return toOutput(settings), nil
 }
@@ -129,7 +132,8 @@ func GetSettingsForGroup(ctx context.Context, client *gitlabclient.Client, input
 	}
 	settings, _, err := client.GL().NotificationSettings.GetSettingsForGroup(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_group_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_group_get", err, http.StatusNotFound,
+			"verify group_id and that you are a member of the group")
 	}
 	return toOutput(settings), nil
 }
@@ -139,7 +143,8 @@ func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := buildUpdateOpts(input.eventFields)
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_global_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_update", err, http.StatusBadRequest,
+			"valid level values: disabled, participating, watch, global, mention, custom")
 	}
 	return toOutput(settings), nil
 }
@@ -152,7 +157,8 @@ func UpdateSettingsForProject(ctx context.Context, client *gitlabclient.Client, 
 	opts := buildUpdateOpts(input.eventFields)
 	settings, _, err := client.GL().NotificationSettings.UpdateSettingsForProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_project_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_project_update", err, http.StatusBadRequest,
+			"valid level values: disabled, participating, watch, global, mention, custom; verify project_id")
 	}
 	return toOutput(settings), nil
 }
@@ -165,7 +171,8 @@ func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, in
 	opts := buildUpdateOpts(input.eventFields)
 	settings, _, err := client.GL().NotificationSettings.UpdateSettingsForGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("notification_group_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("notification_group_update", err, http.StatusBadRequest,
+			"valid level values: disabled, participating, watch, global, mention, custom; verify group_id")
 	}
 	return toOutput(settings), nil
 }

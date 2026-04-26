@@ -112,7 +112,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-026 | `internal/tools/runnercontrollers/runnercontrollers.go` (10) | ✅ | 2026-04-26 |
 | TASK-027 | `internal/tools/runnercontrollerscopes/runnercontrollerscopes.go` (10) | ✅ | 2026-04-26 |
 | TASK-028 | `internal/tools/protectedenvs/protectedenvs.go` (10) | ✅ | 2026-04-26 |
-| TASK-029 | `internal/tools/notifications/notifications.go` (10) | | |
+| TASK-029 | `internal/tools/notifications/notifications.go` (10) | ✅ | 2026-04-26 |
 | TASK-030 | `internal/tools/invites/invites.go` (10) — invite already accepted/expired hints. | | |
 | TASK-031 | `internal/tools/instancevariables/instancevariables.go` (10) | | |
 | TASK-032 | `internal/tools/groupvariables/groupvariables.go` (10) | | |
