@@ -231,3 +231,21 @@ func TestDeleteResult(t *testing.T) {
 		t.Errorf("markdown = %q, want resource name included", text)
 	}
 }
+
+// TestVoidResult verifies the successful void operation result returned by
+// mutating tools that produce no domain-specific output (e.g. start mirroring).
+func TestVoidResult(t *testing.T) {
+	callResult, out, err := VoidResult("Mirroring started successfully.")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callResult == nil {
+		t.Fatal("expected non-nil CallToolResult")
+	}
+	if out.Status != "success" {
+		t.Errorf("Status = %q, want %q", out.Status, "success")
+	}
+	if out.Message != "Mirroring started successfully." {
+		t.Errorf("Message = %q, want %q", out.Message, "Mirroring started successfully.")
+	}
+}
