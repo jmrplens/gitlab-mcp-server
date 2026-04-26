@@ -307,7 +307,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_security_findings", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("list_security_findings", err, "verify the project fullPath and pipeline_iid are correct \u2014 requires Ultimate license")
 	}
 
 	if resp.Data.Project == nil {

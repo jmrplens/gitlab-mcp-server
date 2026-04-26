@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -127,7 +128,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	todos, resp, err := client.GL().Todos.ListTodos(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("todoList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("todoList", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 
 	out := make([]Output, len(todos))
@@ -151,7 +152,7 @@ func MarkDone(ctx context.Context, client *gitlabclient.Client, input MarkDoneIn
 
 	_, err := client.GL().Todos.MarkTodoAsDone(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return MarkDoneOutput{}, toolutil.WrapErrWithMessage("todoMarkDone", err)
+		return MarkDoneOutput{}, toolutil.WrapErrWithStatusHint("todoMarkDone", err, http.StatusNotFound, "verify todo_id with gitlab_list_todos")
 	}
 	return MarkDoneOutput{
 		ID:      input.ID,
@@ -167,7 +168,7 @@ func MarkAllDone(ctx context.Context, client *gitlabclient.Client, _ MarkAllDone
 
 	_, err := client.GL().Todos.MarkAllTodosAsDone(gl.WithContext(ctx))
 	if err != nil {
-		return MarkAllDoneOutput{}, toolutil.WrapErrWithMessage("todoMarkAllDone", err)
+		return MarkAllDoneOutput{}, toolutil.WrapErrWithStatusHint("todoMarkAllDone", err, http.StatusForbidden, "verify your token has api scope")
 	}
 	return MarkAllDoneOutput{
 		Message: "All pending to-do items marked as done",

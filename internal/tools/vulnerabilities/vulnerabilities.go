@@ -415,7 +415,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_vulnerabilities", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("list_vulnerabilities", err, "verify the project fullPath is correct and your token has access to security features")
 	}
 
 	if resp.Data.Project == nil {
@@ -463,7 +463,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		Variables: map[string]any{"id": input.ID},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_vulnerability", err)
+		return GetOutput{}, toolutil.WrapErrWithHint("get_vulnerability", err, "verify the vulnerability GID format: gid://gitlab/Vulnerability/<id>")
 	}
 
 	if resp.Data.Vulnerability.ID == "" {

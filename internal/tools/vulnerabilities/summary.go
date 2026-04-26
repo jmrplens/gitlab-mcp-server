@@ -160,7 +160,7 @@ func SeverityCount(ctx context.Context, client *gitlabclient.Client, input Sever
 		Variables: map[string]any{"projectPath": input.ProjectPath},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return SeverityCountOutput{}, toolutil.WrapErrWithMessage("vulnerability_severity_count", err)
+		return SeverityCountOutput{}, toolutil.WrapErrWithHint("vulnerability_severity_count", err, "verify the project fullPath is correct and your token has access to security features")
 	}
 
 	if resp.Data.Project == nil {
@@ -231,7 +231,7 @@ func PipelineSecuritySummary(ctx context.Context, client *gitlabclient.Client, i
 		},
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return PipelineSecuritySummaryOutput{}, toolutil.WrapErrWithMessage("pipeline_security_summary", err)
+		return PipelineSecuritySummaryOutput{}, toolutil.WrapErrWithHint("pipeline_security_summary", err, "verify the project fullPath and pipeline_iid are correct")
 	}
 
 	if resp.Data.Project == nil {

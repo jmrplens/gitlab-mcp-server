@@ -4,6 +4,7 @@ package securitysettings
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -94,7 +95,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, in GetProjectI
 	}
 	settings, _, err := client.GL().ProjectSecuritySettings.ListProjectSecuritySettings(in.ProjectID.String())
 	if err != nil {
-		return ProjectOutput{}, toolutil.WrapErrWithMessage("get project security settings", err)
+		return ProjectOutput{}, toolutil.WrapErrWithStatusHint("get project security settings", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 requires Ultimate license")
 	}
 	return toProjectOutput(settings), nil
 }
@@ -113,7 +114,7 @@ func UpdateProject(ctx context.Context, client *gitlabclient.Client, in UpdatePr
 	}
 	settings, _, err := client.GL().ProjectSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.ProjectID.String(), opts)
 	if err != nil {
-		return ProjectOutput{}, toolutil.WrapErrWithMessage("update project security settings", err)
+		return ProjectOutput{}, toolutil.WrapErrWithStatusHint("update project security settings", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 requires Maintainer role and Ultimate license")
 	}
 	return toProjectOutput(settings), nil
 }
@@ -135,7 +136,7 @@ func UpdateGroup(ctx context.Context, client *gitlabclient.Client, in UpdateGrou
 	}
 	settings, _, err := client.GL().GroupSecuritySettings.UpdateSecretPushProtectionEnabledSetting(in.GroupID.String(), opts)
 	if err != nil {
-		return GroupOutput{}, toolutil.WrapErrWithMessage("update group security settings", err)
+		return GroupOutput{}, toolutil.WrapErrWithStatusHint("update group security settings", err, http.StatusNotFound, "verify group_id with gitlab_get_group \u2014 requires Owner role and Ultimate license")
 	}
 	return toGroupOutput(settings), nil
 }

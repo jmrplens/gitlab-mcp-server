@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -48,7 +49,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	files, resp, err := client.GL().SecureFiles.ListProjectSecureFiles(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_secure_files", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
 	}
 	items := make([]SecureFileItem, 0, len(files))
 	for _, f := range files {
@@ -80,7 +81,7 @@ func Show(ctx context.Context, client *gitlabclient.Client, input ShowInput) (Se
 	}
 	f, _, err := client.GL().SecureFiles.ShowSecureFileDetails(string(input.ProjectID), input.FileID, gl.WithContext(ctx))
 	if err != nil {
-		return SecureFileItem{}, toolutil.WrapErrWithMessage("gitlab_show_secure_file", err)
+		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_show_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
 	}
 	return SecureFileItem{
 		ID:                f.ID,
@@ -141,7 +142,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	f, _, err := client.GL().SecureFiles.CreateSecureFile(string(input.ProjectID), reader, opts, gl.WithContext(ctx))
 	if err != nil {
-		return SecureFileItem{}, toolutil.WrapErrWithMessage("gitlab_create_secure_file", err)
+		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_secure_file", err, http.StatusBadRequest, "check file content is valid base64 and name is unique within the project")
 	}
 	return SecureFileItem{
 		ID:                f.ID,
@@ -166,7 +167,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	}
 	_, err := client.GL().SecureFiles.RemoveSecureFile(string(input.ProjectID), input.FileID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_remove_secure_file", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_remove_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
 	}
 	return nil
 }
