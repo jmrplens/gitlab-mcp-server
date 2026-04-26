@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -81,7 +82,8 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	user, _, err := client.GL().Users.CreateServiceAccountUser(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create_service_account", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create_service_account", err, http.StatusForbidden,
+			"creating service accounts requires admin token; service accounts are GitLab Premium/Ultimate; username must be unique")
 	}
 	return toOutput(user), nil
 }
@@ -103,7 +105,8 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 	}
 	accounts, _, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ServiceAccountListOutput{}, toolutil.WrapErrWithMessage("list_service_accounts", err)
+		return ServiceAccountListOutput{}, toolutil.WrapErrWithStatusHint("list_service_accounts", err, http.StatusForbidden,
+			"listing service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
 	}
 	out := make([]ServiceAccountOutput, 0, len(accounts))
 	for _, a := range accounts {
@@ -141,7 +144,8 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	token, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CurrentUserPATOutput{}, toolutil.WrapErrWithMessage("create_personal_access_token_for_current_user", err)
+		return CurrentUserPATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token_for_current_user", err, http.StatusBadRequest,
+			"name is required; scopes must include valid PAT scopes (e.g. api, read_user, read_repository, write_repository); expires_at format YYYY-MM-DD")
 	}
 	return toCurrentUserPATOutput(token), nil
 }

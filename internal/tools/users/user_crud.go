@@ -5,6 +5,7 @@ package users
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -90,7 +91,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	u, _, err := client.GL().Users.CreateUser(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create_user", err, http.StatusForbidden,
+			"creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username")
 	}
 	return toOutput(u), nil
 }
@@ -174,7 +176,8 @@ func Modify(ctx context.Context, client *gitlabclient.Client, input ModifyInput)
 
 	u, _, err := client.GL().Users.ModifyUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("modify_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("modify_user", err, http.StatusForbidden,
+			"modifying users requires admin token; verify user_id with gitlab_user_get; email/username changes must remain unique")
 	}
 	return toOutput(u), nil
 }
@@ -201,7 +204,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().Users.DeleteUser(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return DeleteOutput{}, toolutil.WrapErrWithMessage("delete_user", err)
+		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_user", err, http.StatusForbidden,
+			"deleting users requires admin token; user_id must be a positive integer; use hard_delete=true to remove all contributions (default soft-deletes)")
 	}
 	return DeleteOutput{UserID: input.UserID, Deleted: true}, nil
 }

@@ -5,6 +5,7 @@ package users
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -58,7 +59,8 @@ func Current(ctx context.Context, client *gitlabclient.Client, _ CurrentInput) (
 
 	u, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("userCurrent", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("userCurrent", err, http.StatusUnauthorized,
+			"verify your token is valid and has read_user or api scope; expired tokens must be refreshed")
 	}
 	return toOutput(u), nil
 }
@@ -114,7 +116,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_users", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_users", err, http.StatusForbidden,
+			"listing all users may require admin token on private instances; use search by username/email/two_factor filters to narrow results")
 	}
 
 	out := make([]Output, 0, len(users))
@@ -142,7 +145,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	u, _, err := client.GL().Users.GetUser(input.UserID, &gl.GetUserOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get_user", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get_user", err, http.StatusNotFound,
+			"verify user_id with gitlab_user_list (search by username); user_id must be a positive integer")
 	}
 	return toOutput(u), nil
 }
@@ -172,7 +176,8 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, input GetStatus
 
 	s, _, err := client.GL().Users.GetUserStatus(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return StatusOutput{}, toolutil.WrapErrWithMessage("get_user_status", err)
+		return StatusOutput{}, toolutil.WrapErrWithStatusHint("get_user_status", err, http.StatusNotFound,
+			"verify user_id or username; status may be empty if the user has not set one")
 	}
 	if s == nil {
 		return StatusOutput{}, nil
@@ -210,7 +215,8 @@ func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatus
 
 	s, _, err := client.GL().Users.SetUserStatus(opts, gl.WithContext(ctx))
 	if err != nil {
-		return StatusOutput{}, toolutil.WrapErrWithMessage("set_user_status", err)
+		return StatusOutput{}, toolutil.WrapErrWithStatusHint("set_user_status", err, http.StatusBadRequest,
+			"emoji must be a valid name (e.g. 'coffee' or 'palm_tree') without colons; availability must be one of {busy, not_set}; clear_status_after format like '30_minutes', '3_hours', '8_hours', '1_day', '3_days', '7_days', '30_days'")
 	}
 	if s == nil {
 		return StatusOutput{}, nil
@@ -251,7 +257,8 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, input ListSSH
 
 	keys, resp, err := client.GL().Users.ListSSHKeys(opts, gl.WithContext(ctx))
 	if err != nil {
-		return SSHKeyListOutput{}, toolutil.WrapErrWithMessage("list_ssh_keys", err)
+		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys", err, http.StatusUnauthorized,
+			"listing your SSH keys requires a valid token with read_user or api scope")
 	}
 
 	out := make([]SSHKeyOutput, 0, len(keys))
@@ -286,7 +293,8 @@ type ListEmailsInput struct{}
 func ListEmails(ctx context.Context, client *gitlabclient.Client, _ ListEmailsInput) (EmailListOutput, error) {
 	emails, _, err := client.GL().Users.ListEmails(gl.WithContext(ctx))
 	if err != nil {
-		return EmailListOutput{}, toolutil.WrapErrWithMessage("list_emails", err)
+		return EmailListOutput{}, toolutil.WrapErrWithStatusHint("list_emails", err, http.StatusUnauthorized,
+			"listing your emails requires a valid token with read_user or api scope")
 	}
 
 	out := make([]EmailOutput, 0, len(emails))
@@ -370,7 +378,8 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 
 	events, resp, err := client.GL().Users.ListUserContributionEvents(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ContributionEventsOutput{}, toolutil.WrapErrWithMessage("list_contribution_events", err)
+		return ContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("list_contribution_events", err, http.StatusForbidden,
+			"verify user_id and that the user's contribution events are visible to your token; private profiles are not visible")
 	}
 
 	out := make([]ContributionEventOutput, 0, len(events))
@@ -423,7 +432,8 @@ func GetAssociationsCount(ctx context.Context, client *gitlabclient.Client, inpu
 
 	ac, _, err := client.GL().Users.GetUserAssociationsCount(input.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return AssociationsCountOutput{}, toolutil.WrapErrWithMessage("get_user_associations_count", err)
+		return AssociationsCountOutput{}, toolutil.WrapErrWithStatusHint("get_user_associations_count", err, http.StatusForbidden,
+			"associations count requires admin token; verify user_id with gitlab_user_get")
 	}
 	return AssociationsCountOutput{
 		GroupsCount:        ac.GroupsCount,
