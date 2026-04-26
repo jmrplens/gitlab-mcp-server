@@ -86,7 +86,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-009 | `internal/tools/mergerequests/mergerequests.go` (32 sites). Cover the remaining handlers not touched in `97cea0eb`: Commits, Pipelines, Participants, Rebase (already partial), CherryPickMR/RevertMR if present, Discussions list, Time-tracking handlers. | ✅ | 2026-04-26 |
 | TASK-010 | `internal/tools/boards/boards.go` (32 sites). Issue boards (project-level). 404 = board missing or Premium tier; 422 = invalid label/milestone scope. | ✅ | 2026-04-26 |
 | TASK-011 | `internal/tools/groupmembers/groupmembers.go` (23 sites). Group member CRUD + share. 404 = group/user missing; 403 = inherited membership cannot be deleted; 409 = already a member. | ✅ | 2026-04-26 |
-| TASK-012 | `internal/tools/issues/issues.go` (21 sites). Cover the remaining handlers not touched in `97cea0eb`: ListGroup, ListAll, GetByID, Reorder, Move, Participants, related-merge-requests, closed-by-MRs, ListAwardEmojis (if not in awardemoji). | | |
+| TASK-012 | `internal/tools/issues/issues.go` (21 sites). Cover the remaining handlers not touched in `97cea0eb`: ListGroup, ListAll, GetByID, Reorder, Move, Participants, related-merge-requests, closed-by-MRs, ListAwardEmojis (if not in awardemoji). | ✅ | 2026-04-26 |
 
 **Phase 2 acceptance:** 311 sites reviewed. `go test ./internal/tools/{awardemoji,projects,runners,accesstokens,groupboards,mergerequests,boards,groupmembers,issues}/ -count=1` passes.
 
