@@ -5,6 +5,7 @@ package namespaces
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -95,7 +96,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	nss, resp, err := client.GL().Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("namespace_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_list", err, http.StatusForbidden,
+			"requires authentication; only namespaces visible to the token are returned; use search to filter, owned_only=true for namespaces you own, top_level_only=true for top-level groups")
 	}
 
 	out := ListOutput{
@@ -116,7 +118,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	ns, _, err := client.GL().Namespaces.GetNamespace(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		if !strings.Contains(err.Error(), "cannot unmarshal array") {
-			return Output{}, toolutil.WrapErrWithMessage("namespace_get", err)
+			return Output{}, toolutil.WrapErrWithStatusHint("namespace_get", err, http.StatusNotFound,
+				"verify id (numeric) or path (URL-encoded full path) with gitlab_namespace_list or gitlab_namespace_search")
 		}
 		// Fallback: GitLab returned an array instead of a single object.
 		req, reqErr := client.GL().NewRequest("GET", fmt.Sprintf("namespaces/%s", gl.PathEscape(input.ID)), nil, nil)
@@ -146,7 +149,8 @@ func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput)
 
 	result, _, err := client.GL().Namespaces.NamespaceExists(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ExistsOutput{}, toolutil.WrapErrWithMessage("namespace_exists", err)
+		return ExistsOutput{}, toolutil.WrapErrWithStatusHint("namespace_exists", err, http.StatusBadRequest,
+			"id must be a valid namespace path; parent_id is optional and must reference an existing namespace; suggests field provides alternatives if path is taken")
 	}
 	return ExistsOutput{
 		Exists:   result.Exists,
@@ -158,7 +162,8 @@ func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput)
 func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput) (ListOutput, error) {
 	nss, resp, err := client.GL().Namespaces.SearchNamespace(input.Query, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("namespace_search", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_search", err, http.StatusForbidden,
+			"query is required; only namespaces visible to the authenticated user are returned")
 	}
 
 	out := ListOutput{
