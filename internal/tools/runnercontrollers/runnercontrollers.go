@@ -5,6 +5,7 @@ package runnercontrollers
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -97,7 +98,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	controllers, resp, err := client.GL().RunnerControllers.ListRunnerControllers(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list runner controllers", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list runner controllers", err, http.StatusForbidden,
+			"runner controllers are an admin-only API \u2014 verify your token has admin scope")
 	}
 
 	items := make([]Output, len(controllers))
@@ -127,7 +129,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 
 	rc, _, err := client.GL().RunnerControllers.GetRunnerController(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
-		return DetailsOutput{}, toolutil.WrapErrWithMessage("get runner controller", err)
+		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("get runner controller", err, http.StatusNotFound,
+			"verify controller_id with gitlab_runner_controller_list; admin-only API")
 	}
 	return toDetailsOutput(rc), nil
 }
@@ -159,7 +162,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	rc, _, err := client.GL().RunnerControllers.CreateRunnerController(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create runner controller", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("create runner controller", err,
+				"creating runner controllers requires admin privileges")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("create runner controller", err, http.StatusBadRequest,
+			"check name (unique, required) and description fields; runner controllers are an experimental admin-only API")
 	}
 	return toOutput(rc), nil
 }
@@ -195,7 +203,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	rc, _, err := client.GL().RunnerControllers.UpdateRunnerController(input.ControllerID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("update runner controller", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("update runner controller", err,
+				"updating runner controllers requires admin privileges")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("update runner controller", err, http.StatusNotFound,
+			"verify controller_id with gitlab_runner_controller_list")
 	}
 	return toOutput(rc), nil
 }
@@ -220,7 +233,12 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().RunnerControllers.DeleteRunnerController(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete runner controller", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("delete runner controller", err,
+				"deleting runner controllers requires admin privileges")
+		}
+		return toolutil.WrapErrWithStatusHint("delete runner controller", err, http.StatusNotFound,
+			"the controller may already be deleted \u2014 verify controller_id with gitlab_runner_controller_list")
 	}
 	return nil
 }
