@@ -6,6 +6,7 @@ package pipelines
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -117,7 +118,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := buildListOpts(input)
 	pipelines, resp, err := client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("pipelineList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipelineList", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get; pipelines require CI/CD enabled and at least one .gitlab-ci.yml run")
 	}
 
 	out := make([]Output, len(pipelines))
@@ -208,7 +210,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 
 	p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
-		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineGet", err)
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineGet", err, http.StatusNotFound,
+			"verify pipeline_id with gitlab_pipeline_list \u2014 pipeline IDs are project-scoped")
 	}
 	return DetailToOutput(p), nil
 }
@@ -374,7 +377,8 @@ func GetVariables(ctx context.Context, client *gitlabclient.Client, input GetInp
 	}
 	vars, _, err := client.GL().Pipelines.GetPipelineVariables(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
-		return VariablesOutput{}, toolutil.WrapErrWithMessage("pipelineGetVariables", err)
+		return VariablesOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetVariables", err, http.StatusNotFound,
+			"verify pipeline_id with gitlab_pipeline_list \u2014 reading variables requires Maintainer+ role on the project")
 	}
 	out := make([]VariableOutput, len(vars))
 	for i, v := range vars {
@@ -423,7 +427,8 @@ func GetTestReport(ctx context.Context, client *gitlabclient.Client, input GetIn
 	}
 	report, _, err := client.GL().Pipelines.GetPipelineTestReport(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
-		return TestReportOutput{}, toolutil.WrapErrWithMessage("pipelineGetTestReport", err)
+		return TestReportOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReport", err, http.StatusNotFound,
+			"verify pipeline_id with gitlab_pipeline_list \u2014 test reports require at least one job that uploaded a JUnit-format artifact")
 	}
 	suites := make([]TestSuiteOutput, len(report.TestSuites))
 	for i, s := range report.TestSuites {
@@ -485,7 +490,8 @@ func GetTestReportSummary(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	summary, _, err := client.GL().Pipelines.GetPipelineTestReportSummary(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
-		return TestReportSummaryOutput{}, toolutil.WrapErrWithMessage("pipelineGetTestReportSummary", err)
+		return TestReportSummaryOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReportSummary", err, http.StatusNotFound,
+			"verify pipeline_id with gitlab_pipeline_list \u2014 test report summary requires JUnit artifacts uploaded by pipeline jobs")
 	}
 	suites := make([]TestSuiteSummaryOutput, len(summary.TestSuites))
 	for i, s := range summary.TestSuites {
@@ -644,7 +650,12 @@ func UpdateMetadata(ctx context.Context, client *gitlabclient.Client, input Upda
 	}
 	p, _, err := client.GL().Pipelines.UpdatePipelineMetadata(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineUpdateMetadata", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineUpdateMetadata", err,
+				"updating pipeline metadata (name) requires Developer+ role; pipeline must not be archived")
+		}
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineUpdateMetadata", err, http.StatusNotFound,
+			"verify pipeline_id with gitlab_pipeline_list")
 	}
 	return DetailToOutput(p), nil
 }
