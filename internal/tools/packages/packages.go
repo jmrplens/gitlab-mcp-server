@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -132,7 +133,8 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 		},
 	)
 	if err != nil {
-		return PublishOutput{}, toolutil.WrapErrWithMessage("packagePublish", err)
+		return PublishOutput{}, toolutil.WrapErrWithStatusHint("packagePublish", err, http.StatusBadRequest,
+			"package_name and package_version must match pattern [A-Za-z0-9.\\-_]+ with version following SemVer; verify file_name does not already exist in this package or use status=hidden to override")
 	}
 
 	var pkgURL string
@@ -333,7 +335,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	pkgs, resp, err := client.GL().Packages.ListProjectPackages(string(input.ProjectID), buildListOptions(input))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("packageList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("packageList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project may have no packages yet or package registry may be disabled")
 	}
 
 	items := make([]ListItem, 0, len(pkgs))
@@ -397,7 +400,8 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 
 	files, resp, err := client.GL().Packages.ListPackageFiles(string(input.ProjectID), pkgID, opts)
 	if err != nil {
-		return FileListOutput{}, toolutil.WrapErrWithMessage("packageFileList", err)
+		return FileListOutput{}, toolutil.WrapErrWithStatusHint("packageFileList", err, http.StatusNotFound,
+			"verify package_id with gitlab_package_list; the package may have been deleted")
 	}
 
 	items := make([]FileListItem, 0, len(files))
@@ -449,7 +453,8 @@ func Delete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclient.Cl
 		if toolutil.IsHTTPStatus(err, 403) {
 			return fmt.Errorf("packageDelete: package deletion requires Maintainer role or higher. Your current role may only allow publishing. Contact a project Maintainer to delete packages: %w", err)
 		}
-		return toolutil.WrapErrWithMessage("packageDelete", err)
+		return toolutil.WrapErrWithStatusHint("packageDelete", err, http.StatusNotFound,
+			"verify package_id with gitlab_package_list; the package may already have been deleted")
 	}
 	return nil
 }
@@ -482,7 +487,8 @@ func FileDelete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclien
 
 	_, err = client.GL().Packages.DeletePackageFile(string(input.ProjectID), pkgID, fileID)
 	if err != nil {
-		return toolutil.WrapErrWithMessage("packageFileDelete", err)
+		return toolutil.WrapErrWithStatusHint("packageFileDelete", err, http.StatusNotFound,
+			"verify package_file_id with gitlab_package_file_list; deleting package files requires Maintainer role or higher")
 	}
 	return nil
 }

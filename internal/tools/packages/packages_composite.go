@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -68,7 +69,8 @@ func PublishAndLink(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 	}
 	pubOut, err := Publish(ctx, req, client, pubInput)
 	if err != nil {
-		return PublishAndLinkOutput{}, toolutil.WrapErrWithMessage("packagePublishAndLink/publish", err)
+		return PublishAndLinkOutput{}, toolutil.WrapErrWithStatusHint("packagePublishAndLink/publish", err, http.StatusBadRequest,
+			"package_name/version must follow SemVer; verify file_path is readable and project has Package Registry enabled")
 	}
 
 	linkName := input.LinkName
@@ -91,7 +93,8 @@ func PublishAndLink(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 	if err != nil {
 		return PublishAndLinkOutput{
 			Package: pubOut,
-		}, toolutil.WrapErrWithMessage("packagePublishAndLink/link", err)
+		}, toolutil.WrapErrWithStatusHint("packagePublishAndLink/link", err, http.StatusBadRequest,
+			"package was published successfully but linking to release failed; verify tag_name with gitlab_release_list and link_type enum {other, runbook, image, package}")
 	}
 
 	return PublishAndLinkOutput{
