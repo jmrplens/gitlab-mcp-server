@@ -375,7 +375,7 @@ func GetProtectedTag(ctx context.Context, client *gitlabclient.Client, input Get
 	pt, _, err := client.GL().ProtectedTags.GetProtectedTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagGetProtected", err, http.StatusNotFound,
-			"the tag may not be protected \u2014 use gitlab_protected_tags_list to verify")
+			"the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }
@@ -448,7 +448,7 @@ func UnprotectTag(ctx context.Context, client *gitlabclient.Client, input Unprot
 	_, err := client.GL().ProtectedTags.UnprotectRepositoryTags(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("tagUnprotect", err, http.StatusForbidden,
-			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected \u2014 use gitlab_protected_tags_list to verify")
+			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
 	}
 	return nil
 }

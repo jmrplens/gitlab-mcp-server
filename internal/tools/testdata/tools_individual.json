@@ -23144,7 +23144,7 @@
   },
   {
     "name": "gitlab_get_group_issue_statistics",
-    "description": "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_list_group_issues",
+    "description": "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list_group",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -29423,7 +29423,7 @@
   },
   {
     "name": "gitlab_group_board_list",
-    "description": "List all issue boards for a group\n\nSee also: gitlab_group_board_create, gitlab_list_group_issues\n\nReturns: JSON array of boards with pagination.",
+    "description": "List all issue boards for a group\n\nSee also: gitlab_group_board_create, gitlab_issue_list_group\n\nReturns: JSON array of boards with pagination.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

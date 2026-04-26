@@ -416,7 +416,7 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,
-				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule \u2014 use gitlab_pipeline_schedule_variable_edit to update existing keys")
+				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule \u2014 use gitlab_pipeline_schedule_edit_variable to update existing keys")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,

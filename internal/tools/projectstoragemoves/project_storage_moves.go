@@ -165,7 +165,7 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(in.ProjectID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move for project", err, http.StatusNotFound,
-			"requires admin; verify project_id + id combination with gitlab_project_storage_move_list_for_project")
+			"requires admin; verify project_id + id combination with gitlab_get_project_storage_move_for_project")
 	}
 	return toOutput(move), nil
 }

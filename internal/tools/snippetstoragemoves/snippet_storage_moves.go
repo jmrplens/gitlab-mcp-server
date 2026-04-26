@@ -165,7 +165,7 @@ func GetForSnippet(ctx context.Context, client *gitlabclient.Client, in SnippetM
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMoveForSnippet(in.SnippetID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move for snippet", err, http.StatusNotFound,
-			"requires admin; verify snippet_id + id combination with gitlab_snippet_storage_move_list_for_snippet")
+			"requires admin; verify snippet_id + id combination with gitlab_get_snippet_storage_move_for_snippet")
 	}
 	return toOutput(move), nil
 }

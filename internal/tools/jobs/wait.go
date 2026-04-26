@@ -73,7 +73,7 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
 		if err != nil {
 			return WaitOutput{}, toolutil.WrapErrWithStatusHint("jobWait", err, http.StatusNotFound,
-				"verify project_id and job_id with gitlab_jobs_list; the job may have been deleted or expired during polling")
+				"verify project_id and job_id with gitlab_job_list; the job may have been deleted or expired during polling")
 		}
 
 		out := ToOutput(j)

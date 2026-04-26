@@ -33,7 +33,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_get_group_issue_statistics",
 		Title:       toolutil.TitleFromName("gitlab_get_group_issue_statistics"),
-		Description: "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_list_group_issues",
+		Description: "Get issue statistics for a group.\n\nReturns: JSON with group issue counts.\n\nSee also: gitlab_get_issue_statistics, gitlab_issue_list_group",
 		Annotations: toolutil.ReadAnnotations,
 		Icons:       toolutil.IconAnalytics,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetGroupInput) (*mcp.CallToolResult, StatisticsOutput, error) {
