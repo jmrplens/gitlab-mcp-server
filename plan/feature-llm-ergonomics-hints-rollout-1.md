@@ -168,15 +168,15 @@ Sub-phases (one cluster = one commit, ~5 files each):
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-055 | Run `make analyze-fix` over the entire repo. Verify zero diffs after format. | | |
-| TASK-056 | Run `go vet ./...` — must pass with zero output. | | |
-| TASK-057 | Run `go test ./internal/... ./cmd/... -count=1` — only `TestToolSnapshots_*` may fail. | | |
-| TASK-058 | Run `UPDATE_TOOLSNAPS=true go test ./internal/tools/ -run TestToolSnapshots -count=1` to regenerate snapshots. | | |
-| TASK-059 | Run `go test ./internal/tools/ -run TestToolSnapshots -count=1` — must pass. | | |
-| TASK-060 | Run `go run ./cmd/audit_tools/` and `go run ./cmd/audit_output/` — must report 0 findings each. | | |
-| TASK-061 | Run `go run ./cmd/gen_llms/` to regenerate `llms.txt` and `llms-full.txt`. Commit changes. | | |
-| TASK-062 | Run E2E suite (Docker mode) to confirm no behavior regression: `make test-e2e-docker`. | | |
-| TASK-063 | Update `docs/error-handling.md` with the rollout summary (counts, coverage, examples). | | |
+| TASK-055 | Run `make analyze-fix` over the entire repo. Verify zero diffs after format. | ✅ | 2025-07-23 |
+| TASK-056 | Run `go vet ./...` — must pass with zero output. | ✅ | 2025-07-23 |
+| TASK-057 | Run `go test ./internal/... ./cmd/... -count=1` — only `TestToolSnapshots_*` may fail. | ✅ | 2025-07-23 |
+| TASK-058 | Run `UPDATE_TOOLSNAPS=true go test ./internal/tools/ -run TestToolSnapshots -count=1` to regenerate snapshots. | ✅ | 2025-07-23 |
+| TASK-059 | Run `go test ./internal/tools/ -run TestToolSnapshots -count=1` — must pass. | ✅ | 2025-07-23 |
+| TASK-060 | Run `go run ./cmd/audit_tools/` and `go run ./cmd/audit_output/` — must report 0 findings each. | ✅ | 2025-07-23 |
+| TASK-061 | Run `go run ./cmd/gen_llms/` to regenerate `llms.txt` and `llms-full.txt`. Commit changes. | ✅ | 2025-07-23 |
+| TASK-062 | Run E2E suite (Docker mode) to confirm no behavior regression: `make test-e2e-docker`. | ⏭️ | 2025-07-23 |
+| TASK-063 | Update `docs/error-handling.md` with the rollout summary (counts, coverage, examples). | ✅ | 2025-07-23 |
 
 **Phase 6 acceptance:** snapshots clean, all audits pass, E2E green.
 
