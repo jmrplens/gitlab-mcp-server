@@ -11,12 +11,14 @@ package toolutil
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 // Helpers.
@@ -406,6 +408,112 @@ func TestMetaToolSchema(t *testing.T) {
 	required := schema["required"].([]any)
 	if len(required) != 1 || required[0] != "action" {
 		t.Errorf("required = %v, want [action]", required)
+	}
+}
+
+// MetaToolOutputSchema.
+
+// TestMetaToolOutputSchema_TypedRoutesProduceAnyOf verifies that routes
+// created via the typed RouteAction[T,R] family contribute one anyOf branch
+// per action, with the action name as branch title.
+func TestMetaToolOutputSchema_TypedRoutesProduceAnyOf(t *testing.T) {
+	type fooOut struct {
+		Foo string `json:"foo"`
+	}
+	type barOut struct {
+		Bar int `json:"bar"`
+	}
+	routes := ActionMap{
+		"foo": RouteAction[struct{}, fooOut](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (fooOut, error) {
+			return fooOut{}, nil
+		}),
+		"bar": RouteAction[struct{}, barOut](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (barOut, error) {
+			return barOut{}, nil
+		}),
+	}
+	out := MetaToolOutputSchema(routes)
+	if out == nil {
+		t.Fatal("expected non-nil output schema")
+	}
+	s, ok := out.(*jsonschema.Schema)
+	if !ok {
+		t.Fatalf("expected *jsonschema.Schema, got %T", out)
+	}
+	if s.Type != "object" {
+		t.Errorf("type = %q, want object", s.Type)
+	}
+	if len(s.AnyOf) != 2 {
+		t.Fatalf("anyOf len = %d, want 2", len(s.AnyOf))
+	}
+	titles := []string{s.AnyOf[0].Title, s.AnyOf[1].Title}
+	sort.Strings(titles)
+	if titles[0] != "bar" || titles[1] != "foo" {
+		t.Errorf("titles = %v, want [bar foo]", titles)
+	}
+}
+
+// TestMetaToolOutputSchema_UntypedRoutesAddFallback verifies that when at
+// least one route is type-erased (Route / DestructiveRoute), the schema
+// includes a permissive untyped_action_result fallback branch.
+func TestMetaToolOutputSchema_UntypedRoutesAddFallback(t *testing.T) {
+	type fooOut struct {
+		Foo string `json:"foo"`
+	}
+	routes := ActionMap{
+		"foo": RouteAction[struct{}, fooOut](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (fooOut, error) {
+			return fooOut{}, nil
+		}),
+		"untyped": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+	out := MetaToolOutputSchema(routes)
+	s := out.(*jsonschema.Schema)
+	if len(s.AnyOf) != 2 {
+		t.Fatalf("anyOf len = %d, want 2 (1 typed + 1 fallback)", len(s.AnyOf))
+	}
+	hasFallback := false
+	for _, b := range s.AnyOf {
+		if b.Title == "untyped_action_result" {
+			hasFallback = true
+		}
+	}
+	if !hasFallback {
+		t.Error("expected untyped_action_result fallback branch")
+	}
+}
+
+// TestMetaToolOutputSchema_EmptyOrAllUntypedReturnsNil verifies that the
+// helper returns untyped nil (assignable cleanly to a *mcp.Tool's any field)
+// when there are no typed routes.
+func TestMetaToolOutputSchema_EmptyOrAllUntypedReturnsNil(t *testing.T) {
+	if got := MetaToolOutputSchema(ActionMap{}); got != nil {
+		t.Errorf("empty routes should return nil, got %v", got)
+	}
+	all := ActionMap{
+		"a": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+		"b": Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }),
+	}
+	if got := MetaToolOutputSchema(all); got != nil {
+		t.Errorf("all-untyped routes should return nil, got %v", got)
+	}
+}
+
+// TestMetaToolOutputSchema_RelaxesAdditionalProperties verifies that the
+// schemaFor pre-processing clears additionalProperties:false on object
+// branches so the dispatcher's next_steps injection does not break SDK
+// output validation.
+func TestMetaToolOutputSchema_RelaxesAdditionalProperties(t *testing.T) {
+	type out struct {
+		Field string `json:"field"`
+	}
+	routes := ActionMap{
+		"a": RouteAction[struct{}, out](nil, func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (out, error) {
+			return out{}, nil
+		}),
+	}
+	s := MetaToolOutputSchema(routes).(*jsonschema.Schema)
+	branch := s.AnyOf[0]
+	if branch.AdditionalProperties != nil {
+		t.Errorf("expected AdditionalProperties to be nil (relaxed), got %+v", branch.AdditionalProperties)
 	}
 }
 

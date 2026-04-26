@@ -108,8 +108,9 @@ Actions:
 - protect: Protect an environment. Params: project_id (required), name (required), deploy_access_levels, required_approval_count, approval_rules
 - update: Update a protected environment. Params: project_id (required), environment (required), name, deploy_access_levels, required_approval_count, approval_rules
 - unprotect: Remove environment protection. Params: project_id (required), environment (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconShield,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconShield,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_protected_environment", routes, nil))
 }

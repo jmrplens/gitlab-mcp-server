@@ -168,8 +168,9 @@ Actions:
 - list_all: List all instance-level deploy keys (admin). Params: public (bool), page, per_page
 - add_instance: Create instance-level deploy key (admin). Params: title (required), key (required), expires_at (YYYY-MM-DD)
 - list_user_project: List deploy keys for a user's projects. Params: user_id (required), page, per_page`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconKey,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconKey,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_deploy_key", routes, nil))
 }

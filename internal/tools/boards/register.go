@@ -191,8 +191,9 @@ Actions:
 - create_list: Create a board list (project_id, board_id, label_id, assignee_id, milestone_id, iteration_id)
 - update_list: Reorder a board list (project_id, board_id, list_id, position)
 - delete_list: Delete a board list (project_id, board_id, list_id)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconBoard,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconBoard,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_board", routes, nil))
 }

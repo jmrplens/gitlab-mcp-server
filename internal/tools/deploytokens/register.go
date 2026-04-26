@@ -174,8 +174,9 @@ Actions:
 - create_group: Create group deploy token. Params: group_id (required), name (required), scopes (required, array), username, expires_at (YYYY-MM-DD)
 - delete_project: Delete project deploy token. Params: project_id (required), deploy_token_id (required, int)
 - delete_group: Delete group deploy token. Params: group_id (required), deploy_token_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconToken,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconToken,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(routes),
 	}, toolutil.MakeMetaHandler("gitlab_deploy_token", routes, nil))
 }
