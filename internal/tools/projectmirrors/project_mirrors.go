@@ -5,6 +5,7 @@ package projectmirrors
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -148,7 +149,12 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	mirrors, resp, err := client.GL().ProjectMirrors.ListProjectMirror(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("projectMirrorList", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ListOutput{}, toolutil.WrapErrWithHint("projectMirrorList", err,
+				"push mirroring requires GitLab Premium/Ultimate \u2014 verify the project tier and that you have Maintainer+ role")
+		}
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorList", err, http.StatusNotFound,
+			"verify the project exists with gitlab_project_get")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, m := range mirrors {
@@ -170,7 +176,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	m, _, err := client.GL().ProjectMirrors.GetProjectMirror(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("projectMirrorGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorGet", err, http.StatusNotFound,
+			"verify mirror_id with gitlab_project_mirror_list \u2014 push mirrors require GitLab Premium/Ultimate")
 	}
 	return toOutput(m), nil
 }
@@ -188,7 +195,8 @@ func GetPublicKey(ctx context.Context, client *gitlabclient.Client, in GetPublic
 	}
 	pk, _, err := client.GL().ProjectMirrors.GetProjectMirrorPublicKey(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		return PublicKeyOutput{}, toolutil.WrapErrWithMessage("projectMirrorGetPublicKey", err)
+		return PublicKeyOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorGetPublicKey", err, http.StatusNotFound,
+			"verify mirror_id with gitlab_project_mirror_list \u2014 SSH public keys are only available for mirrors using SSH authentication")
 	}
 	return PublicKeyOutput{PublicKey: pk.PublicKey}, nil
 }
@@ -221,6 +229,14 @@ func Add(ctx context.Context, client *gitlabclient.Client, in AddInput) (Output,
 	}
 	m, _, err := client.GL().ProjectMirrors.AddProjectMirror(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", err,
+				"creating push mirrors requires GitLab Premium/Ultimate and Maintainer+ role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorAdd", err,
+				"check the mirror URL is well-formed (https:// or ssh://) and includes credentials inline if required \u2014 mirror to the same project is forbidden")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("projectMirrorAdd", err)
 	}
 	return toOutput(m), nil
@@ -253,7 +269,12 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 	}
 	m, _, err := client.GL().ProjectMirrors.EditProjectMirror(string(in.ProjectID), in.MirrorID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("projectMirrorEdit", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return Output{}, toolutil.WrapErrWithHint("projectMirrorEdit", err,
+				"editing push mirrors requires Maintainer+ role on a Premium/Ultimate project")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorEdit", err, http.StatusNotFound,
+			"verify mirror_id with gitlab_project_mirror_list")
 	}
 	return toOutput(m), nil
 }
@@ -271,7 +292,12 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().ProjectMirrors.DeleteProjectMirror(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("projectMirrorDelete", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("projectMirrorDelete", err,
+				"deleting push mirrors requires Maintainer+ role")
+		}
+		return toolutil.WrapErrWithStatusHint("projectMirrorDelete", err, http.StatusNotFound,
+			"verify mirror_id with gitlab_project_mirror_list")
 	}
 	return nil
 }
@@ -289,7 +315,12 @@ func ForcePushUpdate(ctx context.Context, client *gitlabclient.Client, in ForceP
 	}
 	_, err := client.GL().ProjectMirrors.ForcePushMirrorUpdate(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("projectMirrorForcePush", err)
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("projectMirrorForcePush", err,
+				"force-pushing mirrors requires Maintainer+ role; the mirror must be enabled and not in a failed-auth state")
+		}
+		return toolutil.WrapErrWithStatusHint("projectMirrorForcePush", err, http.StatusNotFound,
+			"verify mirror_id with gitlab_project_mirror_list")
 	}
 	return nil
 }
