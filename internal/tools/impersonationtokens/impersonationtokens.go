@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -165,7 +166,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	tokens, _, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_impersonation_tokens", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_impersonation_tokens", err, http.StatusForbidden,
+			"impersonation tokens require admin token; verify user_id with gitlab_user_get; state must be one of {all, active, inactive}")
 	}
 	out := make([]Output, 0, len(tokens))
 	for _, t := range tokens {
@@ -184,7 +186,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	token, _, err := client.GL().Users.GetImpersonationToken(input.UserID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get_impersonation_token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("get_impersonation_token", err, http.StatusNotFound,
+			"verify token_id with gitlab_user_impersonation_tokens_list; admin token required; the token may have been revoked")
 	}
 	return toOutput(token), nil
 }
@@ -213,7 +216,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	token, _, err := client.GL().Users.CreateImpersonationToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("create_impersonation_token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("create_impersonation_token", err, http.StatusForbidden,
+			"creating impersonation tokens requires admin token; scopes must be from {api, read_user, read_api, read_repository, write_repository, read_registry, write_registry, sudo, admin_mode, create_runner, manage_runner, ai_features, k8s_proxy}; expires_at format YYYY-MM-DD")
 	}
 	return toOutput(token), nil
 }
@@ -228,7 +232,8 @@ func Revoke(ctx context.Context, client *gitlabclient.Client, input RevokeInput)
 	}
 	_, err := client.GL().Users.RevokeImpersonationToken(input.UserID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
-		return RevokeOutput{}, toolutil.WrapErrWithMessage("revoke_impersonation_token", err)
+		return RevokeOutput{}, toolutil.WrapErrWithStatusHint("revoke_impersonation_token", err, http.StatusNotFound,
+			"verify token_id with gitlab_user_impersonation_tokens_list; admin token required; the token may already be revoked")
 	}
 	return RevokeOutput{UserID: input.UserID, TokenID: input.TokenID, Revoked: true}, nil
 }
@@ -261,7 +266,8 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	}
 	token, _, err := client.GL().Users.CreatePersonalAccessToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return PATOutput{}, toolutil.WrapErrWithMessage("create_personal_access_token", err)
+		return PATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token", err, http.StatusForbidden,
+			"creating PAT for another user requires admin token; scopes must include valid PAT scopes; expires_at format YYYY-MM-DD")
 	}
 	return toPATOutput(token), nil
 }
