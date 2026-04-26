@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -29,7 +30,8 @@ type GetOutput struct {
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (output GetOutput, err error) {
 	settings, _, err := client.GL().Settings.GetSettings(gl.WithContext(ctx))
 	if err != nil {
-		return output, toolutil.WrapErrWithMessage("settings_get", err)
+		return output, toolutil.WrapErrWithStatusHint("settings_get", err, http.StatusForbidden,
+			"requires administrator access; this is an instance-wide endpoint \u2014 not available on GitLab.com SaaS")
 	}
 
 	raw, err := json.Marshal(settings)
@@ -77,7 +79,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	settings, _, err := client.GL().Settings.UpdateSettings(&opts, gl.WithContext(ctx))
 	if err != nil {
-		return output, toolutil.WrapErrWithMessage("settings_update", err)
+		return output, toolutil.WrapErrWithStatusHint("settings_update", err, http.StatusBadRequest,
+			"settings keys must use snake_case matching the GitLab API (e.g. signup_enabled, default_project_visibility); use gitlab_settings_get first to inspect valid keys; requires administrator access")
 	}
 
 	settingsRaw, err := json.Marshal(settings)
