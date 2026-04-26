@@ -507,6 +507,7 @@ Tool handlers follow a consistent pattern:
 - GitLab API errors are wrapped with operation context: `fmt.Errorf("operation: %w", err)`
 - `ToolError` struct provides structured errors with HTTP status codes
 - `DetailedError` provides domain/action/message/details with Markdown rendering
+- `WrapErrWithStatusHint()` combines HTTP status check and hint in a single call for status-specific error paths
 - Errors propagate to the MCP client as `CallToolResult` with `isError: true`
 - `ErrorResultMarkdown()` builds human-readable error responses
 - `NotFoundResult()` intercepts 404 errors in get handlers, returning actionable hints instead of opaque errors
@@ -521,7 +522,7 @@ Structured JSON logs via `log/slog` to stderr:
 
 ### Pagination
 
-All list endpoints support pagination via `PaginationInput` (page, per_page) and return `PaginationOutput` (total_items, total_pages, next_page, prev_page) extracted from GitLab response headers.
+All list endpoints support pagination via `PaginationInput` (page, per_page) and return `PaginationOutput` (total_items, total_pages, next_page, prev_page, has_more) extracted from GitLab response headers. The `has_more` boolean allows LLMs to decide pagination without comparing page numbers.
 
 ### Security
 

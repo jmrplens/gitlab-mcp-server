@@ -239,6 +239,7 @@ See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/bl
 - ☐ Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
 - ☐ Use stdio transport when possible (no network exposure)
 - ☐ Keep the server binary updated (`AUTO_UPDATE=true`)
+- ☐ Schema lockdown: all tool input schemas enforce `additionalProperties: false` to reject unexpected fields
 
 ### HTTP mode
 

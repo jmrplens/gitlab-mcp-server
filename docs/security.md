@@ -33,6 +33,7 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 All tool handlers validate inputs before making API calls:
 
 - **Required fields** — Checked before hitting the GitLab API
+- **Schema lockdown** — All tool input schemas set `additionalProperties: false`, rejecting unexpected fields at the MCP SDK level before the handler runs
 - **String sanitization** — `NormalizeText()` handles double-escaped sequences from MCP transport
 - **Markdown escaping** — `EscapeMdTableCell()` and `EscapeMdHeading()` prevent injection in formatted output
 - **File validation** — `OpenAndValidateFile()` checks file existence, type (regular files only), and size limits

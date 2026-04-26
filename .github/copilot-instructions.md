@@ -195,6 +195,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
+| `RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (`0` = disabled) | `0` (default)    |
+| `RATE_LIMIT_BURST`       | Token-bucket burst size when RPS > 0 | `40` (default)   |
 | `AUTH_MODE`              | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) | `legacy` (default) |
 | `OAUTH_CACHE_TTL`        | OAuth token identity cache TTL (also `--oauth-cache-ttl` flag) | `15m` (default)  |
 
@@ -203,6 +205,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 | Flag                       | Description                                                    | Default            |
 | -------------------------- | -------------------------------------------------------------- | ------------------ |
 | `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) | _(empty)_          |
+| `--rate-limit-rps`         | Per-server tools/call rate limit in req/s (0 = disabled) | `0` (default)      |
+| `--rate-limit-burst`       | Token-bucket burst size when --rate-limit-rps > 0 | `40` (default)     |
 
 **General flags** (both stdio and HTTP modes):
 

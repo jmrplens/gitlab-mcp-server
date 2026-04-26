@@ -156,7 +156,7 @@ Page 1 of 1 (20 per page) · 5 items
     { "name": "main", "protected": true, "default": true, "web_url": "https://..." },
     { "name": "develop", "protected": true, "default": false, "web_url": "https://..." }
   ],
-  "pagination": { "page": 1, "per_page": 20, "total_items": 5, "total_pages": 1 },
+  "pagination": { "page": 1, "per_page": 20, "total_items": 5, "total_pages": 1, "has_more": false },
   "next_steps": [
     "When presenting these results, always include the clickable [text](url) links",
     "Get details of a specific branch",

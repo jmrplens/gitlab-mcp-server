@@ -291,7 +291,9 @@ Is the operation read-only (list, get, search)?
   └─ YES → WrapErr(op, err)
   └─ NO (mutating: create, update, delete) →
        Do you know a specific corrective action for a likely status code?
-         └─ YES → Check status with IsHTTPStatus(), then WrapErrWithHint(op, err, hint)
+         └─ YES → Does the hint apply to a single HTTP status code?
+              └─ YES → WrapErrWithStatusHint(op, err, code, hint)
+              └─ NO  → Check status with IsHTTPStatus(), then WrapErrWithHint(op, err, hint)
          └─ NO  → WrapErrWithMessage(op, err)
 ```
 
@@ -302,6 +304,7 @@ Is the operation read-only (list, get, search)?
 | `WrapErr` | Read-only operations | No | No |
 | `WrapErrWithMessage` | Mutating operations (default) | Yes | No |
 | `WrapErrWithHint` | Specific error with known fix | Yes | Yes |
+| `WrapErrWithStatusHint` | Status-specific hint (combines `IsHTTPStatus` + `WrapErrWithHint`) | Yes | Yes (for matching status) |
 
 ### Pattern: Status-specific hints
 
@@ -311,6 +314,14 @@ if toolutil.IsHTTPStatus(err, 409) {
         "label with this name already exists — use gitlab_label_update to modify it")
 }
 return Output{}, toolutil.WrapErrWithMessage("labelCreate", err)
+```
+
+### Pattern: Single-status hint (shorthand)
+
+```go
+// Equivalent to the above but in a single call — returns WrapErrWithMessage for non-409 errors
+return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
+    "label with this name already exists — use gitlab_label_update to modify it")
 ```
 
 ### Helpers

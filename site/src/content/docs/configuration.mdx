@@ -25,7 +25,7 @@ These must be set for the server to start in stdio mode:
 | Variable                 | Default | Description                                                                                 |
 | ------------------------ | ------- | ------------------------------------------------------------------------------------------- |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs                                     |
-| `META_TOOLS`             | `true`  | Enable meta-tool mode (28 domain tools instead of 1000+ individual tools)                   |
+| `META_TOOLS`             | `true`  | Enable meta-tool mode (32 domain tools instead of 1000+ individual tools)                   |
 | `GITLAB_ENTERPRISE`      | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY`       | `false` | Disable all mutating tools (create, update, delete)                                         |
 | `GITLAB_SAFE_MODE`       | `false` | Return structured JSON preview instead of executing mutating tools (dry-run mode)           |
@@ -59,9 +59,11 @@ These control which MCP capabilities are enabled:
 
 ## Admin options
 
-| Variable    | Default | Description                                             |
-| ----------- | ------- | ------------------------------------------------------- |
-| `YOLO_MODE` | `false` | Skip destructive action confirmations (not recommended) |
+| Variable           | Default | Description                                                |
+| ------------------ | ------- | ---------------------------------------------------------- |
+| `YOLO_MODE`        | `false` | Skip destructive action confirmations (not recommended)    |
+| `RATE_LIMIT_RPS`   | `0`     | Per-server tools/call rate limit in req/s (`0` = disabled) |
+| `RATE_LIMIT_BURST` | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0          |
 
 ## Example .env file
 

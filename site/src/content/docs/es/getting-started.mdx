@@ -88,16 +88,16 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 El host debe proporcionar estas variables antes de habilitar el plugin:
 
-| Variable | Obligatoria | Descripción |
-|---|---|---|
-| `GITLAB_URL` | Sí | URL de la instancia GitLab (p. ej. `https://gitlab.example.com`) |
-| `GITLAB_TOKEN` | Sí | Personal Access Token (`glpat-...`) |
-| `GITLAB_SKIP_TLS_VERIFY` | No | `true` para certificados autofirmados (por defecto `false`) |
-| `META_TOOLS` | No | `true` para herramientas agrupadas, `false` individuales (por defecto `true`) |
-| `GITLAB_ENTERPRISE` | No | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`) |
-| `GITLAB_READ_ONLY` | No | `true` para deshabilitar herramientas de escritura (por defecto `false`) |
-| `GITLAB_SAFE_MODE` | No | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`) |
-| `LOG_LEVEL` | No | `debug`, `info`, `warn`, `error` (por defecto `info`) |
+| Variable                 | Obligatoria | Descripción                                                                       |
+| ------------------------ | ----------- | --------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | Sí          | URL de la instancia GitLab (p. ej. `https://gitlab.example.com`)                  |
+| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                               |
+| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                       |
+| `META_TOOLS`             | No          | `true` para herramientas agrupadas, `false` individuales (por defecto `true`)     |
+| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)         |
+| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)          |
+| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`) |
+| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                             |
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
@@ -105,15 +105,15 @@ La spec de Open Plugins arranca automáticamente cada entrada de `.mcp.json`, as
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/usr/local/bin/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "${GITLAB_URL}",
-        "GITLAB_TOKEN": "${GITLAB_TOKEN}"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/usr/local/bin/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "${GITLAB_URL}",
+				"GITLAB_TOKEN": "${GITLAB_TOKEN}"
+			}
+		}
+	}
 }
 ```
 

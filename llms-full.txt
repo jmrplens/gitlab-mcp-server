@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.2.5 | 1000 tools | 32 meta-tools (47 enterprise) | 24 resources | 38 prompts
+> Version 1.3.0 | 1000 tools | 32 meta-tools (47 enterprise) | 24 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -9195,7 +9195,7 @@ Returns: JSON array of boards with pagination.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9263,7 +9263,7 @@ Returns: JSON array of board lists with pagination.
 
 - `board_id` (integer) (required): Board ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9368,7 +9368,7 @@ Returns: paginated list of branches with name, protected status, and latest comm
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Filter branches by name (substring match)
 
@@ -9535,7 +9535,7 @@ Returns: paginated list of variables with key, variable_type, protected, masked,
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9600,7 +9600,7 @@ Returns: paginated list of comments with note, path, line, and author. See also:
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sha` (string) (required): Commit SHA,required
 
@@ -9633,7 +9633,7 @@ Returns: paginated list of diffs with old_path, new_path, diff text, and new/ren
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sha` (string) (required): Commit SHA hash to get diffs for,required
 - `unidiff` (boolean): Return diffs in unified diff format
@@ -9665,7 +9665,7 @@ Returns: paginated list of comm...
 - `first_parent` (boolean): Follow only the first parent commit upon seeing a merge commit
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `path` (string): File path to filter commits by (only commits touching this path)
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `ref_name` (string): Branch name, tag, or commit SHA to list commits from (default: default branch)
 - `since` (string): Return commits after this date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)
@@ -9696,7 +9696,7 @@ Returns: paginated list of refs with type (branch/tag) and name. See also: gitla
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sha` (string) (required): Commit SHA to look up,required
 - `type` (string): Filter by ref type: branch, tag, or all (default: all)
@@ -9758,7 +9758,7 @@ Returns: paginated list of statuses with id, state, name, ref, description, and 
 - `all` (boolean): Return all statuses including retries
 - `name` (string): Status name filter
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `pipeline_id` (integer): Pipeline ID filter
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `ref` (string): Branch or tag name filter
@@ -11327,7 +11327,7 @@ Returns: paginated list of deployments with id, iid, ref, sha, status, environme
 - `environment` (string): Filter by environment name
 - `order_by` (string): Order by id or iid or created_at or updated_at or finished_at or ref (default: id)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort order: asc or desc (default: asc)
 - `status` (string): Filter by status: created or running or success or failed or canceled
@@ -11642,7 +11642,7 @@ Returns: paginated list of environments with id, name, slug, state, tier, and ex
 
 - `name` (string): Filter by exact environment name
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search environments by name (fuzzy)
 - `states` (string): Filter by state: available, stopping, stopped
@@ -11988,7 +11988,7 @@ See also: gitlab_feature_flag_get, gitlab_ff_user_list_list
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 - `scope` (string): Filter by scope (enabled or disabled)
 
@@ -12072,7 +12072,7 @@ See also: gitlab_ff_user_list_get, gitlab_feature_flag_list
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 - `search` (string): Search by name
 
@@ -13499,7 +13499,7 @@ Returns: JSON array of access tokens with pagination.
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `state` (string): Token state filter: active, inactive
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -13619,7 +13619,7 @@ Returns: JSON array of boards with pagination.
 
 - `group_id` (string) (required): Group ID or path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13684,7 +13684,7 @@ Returns: JSON array of board lists with pagination.
 - `board_id` (integer) (required): Board ID,required
 - `group_id` (string) (required): Group ID or path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13779,7 +13779,7 @@ Returns: JSON with boards array and pagination metadata. See also: gitlab_group_
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13896,7 +13896,7 @@ Returns: paginated list of webhooks with id, url, events, and SSL status. See al
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -13990,7 +13990,7 @@ Returns: JSON array of group labels ...
 - `include_descendant_groups` (boolean): Include labels from descendant groups
 - `only_group_labels` (boolean): Only return group-level labels (exclude project labels)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter labels by keyword search
 - `with_counts` (boolean): Include issue and merge request counts
 
@@ -14109,7 +14109,7 @@ Returns: paginated list of groups with id, name, path, full_path, visibility, we
 - `order_by` (string): Order groups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to groups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter groups by name or path
 - `skip_groups` (): Group IDs to exclude from results
 - `sort` (string): Sort direction (asc, desc)
@@ -14202,7 +14202,7 @@ Returns: paginated list of members with user_id, username, nam...
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `query` (string): Filter members by name or username
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14218,7 +14218,7 @@ Returns: JSON array of burndown chart events. See also: gitlab_group_milestone_g
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14275,7 +14275,7 @@ Returns: JSON array of issues for the milestone with pagination. See also: gitla
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14293,7 +14293,7 @@ Returns: JSON array of group milestones with pagination. See also: gitlab_group_
 - `include_ancestors` (boolean): Include milestones from ancestor groups
 - `include_descendants` (boolean): Include milestones from descendant groups
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search milestones by title or description
 - `search_title` (string): Search milestones by title only
 - `state` (string): Filter by state (active, closed)
@@ -14314,7 +14314,7 @@ Returns: JSON array of merge requests for the milestone with pagination. See als
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `milestone_iid` (integer) (required): Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14350,7 +14350,7 @@ Returns: paginated list of projects with id, name, path, visibility, and archive
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)
 - `owned` (boolean): Limit to projects owned by current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter projects by name
 - `simple` (boolean): Return limited fields
 - `sort` (string): Sort direction (asc, desc)
@@ -14383,7 +14383,7 @@ Returns: paginated list of protected branch rules with access levels. See also: 
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search by branch name
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14464,7 +14464,7 @@ Returns: paginated list of protected environments with deploy access levels and 
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14524,7 +14524,7 @@ Returns: paginated list of releases with tag, name, dates, and author. See also:
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `simple` (boolean): Return only limited fields
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14649,7 +14649,7 @@ Returns: paginated list of service accounts with ID, name, username, and email. 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `order_by` (string): Order by id or username
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `sort` (string): Sort direction: asc or desc
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14681,7 +14681,7 @@ Returns: paginated list of PATs with ID, name, scopes, and status. See also: git
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `service_account_id` (integer) (required): Service account user ID,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14843,7 +14843,7 @@ Returns: paginated list of variables with key, variable_type, protected, masked,
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15100,7 +15100,7 @@ Returns: JSON with array of instance-level CI/CD variables and pagination info. 
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15342,7 +15342,7 @@ See also: gitlab_issue_iteration_event_get, gitlab_issue_label_event_list
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15375,7 +15375,7 @@ See also: gitlab_issue_label_event_get, gitlab_list_issues
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15463,7 +15463,7 @@ List issues for a GitLab project with filters for state, labels, milestone, assi
 - `not_labels` (string): Comma-separated label names to exclude
 - `order_by` (string): Order by field (created_at, updated_at, priority, due_date)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
@@ -15489,7 +15489,7 @@ List issues visible to the authenticated user across all projects (global scope)
 - `milestone` (string): Milestone title to filter by
 - `order_by` (string): Order by field (created_at, updated_at, priority, due_date)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
@@ -15512,7 +15512,7 @@ List issues across all projects in a GitLab group. Supports filtering by state, 
 - `labels` (string): Comma-separated list of labels to filter by
 - `milestone` (string): Milestone title to filter by
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
 - `state` (string): Filter by state (opened, closed, all)
@@ -15549,7 +15549,7 @@ See also: gitlab_issue_milestone_event_get, gitlab_issue_label_event_list
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15576,7 +15576,7 @@ List merge requests that will close this issue when merged. Returns MR details i
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15589,7 +15589,7 @@ List merge requests related to this issue. Returns MR details including source/t
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15717,7 +15717,7 @@ Returns: JSON with notes array including body, author, timestamps, and system/in
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort direction (asc, desc)
 
@@ -15820,7 +15820,7 @@ See also: gitlab_issue_state_event_get, gitlab_issue_label_event_list
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15931,7 +15931,7 @@ See also: gitlab_issue_label_event_list, gitlab_issue_state_event_list
 
 - `issue_iid` (integer) (required): Issue internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16091,7 +16091,7 @@ Returns: JSON array of jobs with pagination. See also: gitl...
 
 - `include_retried` (boolean): Include retried jobs in the response
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `pipeline_id` (integer) (required): Pipeline ID to list jobs for,required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (): Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual
@@ -16107,7 +16107,7 @@ Returns: JSON array of bridge jobs with pagination. See also: gitlab_job_list, g
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `pipeline_id` (integer) (required): Pipeline ID to list bridge jobs for,required
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (): Filter by job status: created, pending, running, failed, success, canceled, skipped, manual
@@ -16126,7 +16126,7 @@ See also: gitlab_job_get.
 
 - `include_retried` (boolean): Include retried jobs in the response
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (): Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual
 
@@ -16238,7 +16238,7 @@ Returns: paginated list of labe...
 
 - `include_ancestor_groups` (boolean): Include labels from ancestor groups
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Filter labels by keyword search
 - `with_counts` (boolean): Include issue and merge request counts
@@ -16558,7 +16558,7 @@ Returns: JSON with users array and pagination. See also: gitlab_get_enterprise_u
 - `created_before` (string): Filter users created before this date (ISO 8601)
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search by name or username or email
 - `two_factor` (string): Filter by 2FA status: enabled or disabled
 - `username` (string): Filter by exact username
@@ -16647,7 +16647,7 @@ See also: gitlab_get_geo_site, gitlab_list_status_all_geo_sites
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -16700,7 +16700,7 @@ List audit events for a GitLab group. Supports filtering by date range. Returns:
 - `created_before` (string): Return events created before this date (ISO 8601 YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -16734,7 +16734,7 @@ See also: gitlab_list_project_iterations
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `include_ancestors` (boolean): Include ancestor iterations
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search by title
 - `state` (string): Filter by state: opened, upcoming, current, closed, all
 
@@ -16778,7 +16778,7 @@ Returns: JSON with tokens array. See also: gitlab_revoke_group_personal_access_t
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `revoked` (): Filter by revoked status
 - `search` (string): Filter tokens by name
 - `state` (string): Filter by state (active, inactive)
@@ -16836,7 +16836,7 @@ Returns: JSON with keys array. See also: gitlab_delete_group_ssh_key.
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -16866,7 +16866,7 @@ List instance-level audit events (admin only). Supports filtering by date range.
 - `created_after` (string): Return events created after this date (ISO 8601 YYYY-MM-DD)
 - `created_before` (string): Return events created before this date (ISO 8601 YYYY-MM-DD)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -16966,7 +16966,7 @@ See also: gitlab_list_project_merge_trains, gitlab_add_merge_request_to_merge_tr
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (string): Filter by scope: active, complete
 - `sort` (string): Sort order: asc or desc
@@ -16998,7 +16998,7 @@ Returns: JSON with rules array including name pattern, package type, and minimum
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17022,7 +17022,7 @@ List audit events for a GitLab project. Supports filtering by date range. Return
 - `created_after` (string): Return events created after this date (ISO 8601 YYYY-MM-DD)
 - `created_before` (string): Return events created before this date (ISO 8601 YYYY-MM-DD)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17052,7 +17052,7 @@ List dependencies for a GitLab project. Supports filtering by package manager. R
 
 - `package_manager` (string): Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setupt...
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17066,7 +17066,7 @@ See also: gitlab_create_project_external_status_check, gitlab_update_project_ext
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17083,7 +17083,7 @@ See also: gitlab_list_group_iterations
 
 - `include_ancestors` (boolean): Include ancestor iterations
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search by title
 - `state` (string): Filter by state: opened, upcoming, current, closed, all
@@ -17101,7 +17101,7 @@ See also: gitlab_list_merge_request_in_merge_train, gitlab_get_merge_request_on_
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (string): Filter by scope: active, complete
 - `sort` (string): Sort order: asc or desc
@@ -17117,7 +17117,7 @@ Returns: JSON with mirrors array and pagination. See also: gitlab_get_project_mi
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17132,7 +17132,7 @@ See also: gitlab_set_project_mr_external_status_check_status, gitlab_retry_faile
 
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17146,7 +17146,7 @@ See also: gitlab_list_project_external_status_checks, gitlab_create_project_exte
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17323,7 +17323,7 @@ See also: gitlab_get_status_geo_site, gitlab_list_geo_sites
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -17542,7 +17542,7 @@ Returns: JSON array of issues with pagination. See also: gitlab_milestone_get, g
 
 - `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17558,7 +17558,7 @@ Returns: JSON array of milest...
 - `iids` (): Filter by milestone IIDs
 - `include_ancestors` (boolean): Include milestones from parent groups
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search milestones by title or description
 - `state` (string): Filter by state (active, closed)
@@ -17576,7 +17576,7 @@ Returns: JSON array of merge requests with pagination. See also: gitlab_mileston
 
 - `milestone_iid` (integer) (required): Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17795,7 +17795,7 @@ Returns: JSON array of commits with pagination. Fields include id, title, author
 
 - `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id'),required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17928,7 +17928,7 @@ Returns: JSON a...
 
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17972,7 +17972,7 @@ Returns: JSON array of discussions with pagination. See also: gitlab_mr_get, git
 
 - `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id'),required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -18094,7 +18094,7 @@ Returns: JSON array of draft notes. See also: gitlab_mr_get, gitlab_mr_discussio
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `order_by` (string): Order by: id (default)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort: asc or desc (default)
 
@@ -18231,7 +18231,7 @@ Returns: JSON array of issues with pagination. Fields include iid, title, state,
 
 - `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id'),required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -18264,7 +18264,7 @@ See also: gitlab_mr_label_event_get, gitlab_list_merge_requests
 
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -18287,7 +18287,7 @@ Returns: JSON array of merge requests with pagination. Fields include iid, title
 - `not_labels` (string): Comma-separated label names to exclude
 - `order_by` (string): Order by field (created_at, updated_at, title)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
@@ -18317,7 +18317,7 @@ Returns: JSON array of merge requests with pagination. Fields include iid...
 - `not_labels` (string): Comma-separated label names to exclude
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `reviewer_username` (string): Filter by reviewer username
 - `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
@@ -18348,7 +18348,7 @@ Returns: JSON array of merge requests with pagination. Fields include iid, title
 - `not_labels` (string): Comma-separated label names to exclude
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `reviewer_username` (string): Filter by reviewer username
 - `scope` (string): Filter by scope (created_by_me, assigned_to_me, all)
 - `search` (string): Search in title and description
@@ -18406,7 +18406,7 @@ See also: gitlab_mr_milestone_event_get, gitlab_mr_label_event_list
 
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -18548,7 +18548,7 @@ Returns: JSON with array of notes and pagination info. See also: gitlab_mr_get, 
 - `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id'),required
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort direction (asc, desc)
 
@@ -18619,7 +18619,7 @@ Returns: JSON array of related issues with pagination. Fields include iid, title
 
 - `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id'),required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -18705,7 +18705,7 @@ See also: gitlab_mr_state_event_get, gitlab_mr_label_event_list
 
 - `mr_iid` (integer) (required): Merge request internal ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -19055,7 +19055,7 @@ Returns: JSON array of package files with pagination.
 
 - `package_id` (string) (required): Package ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -19076,7 +19076,7 @@ Returns: JSON array of packages with pagination.
 - `package_type` (string): Filter by type (generic, npm, maven, etc.)
 - `package_version` (string): Filter by package version
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort direction: asc or desc
 - `status` (string): Filter by status: default, hidden, processing, error
@@ -19194,7 +19194,7 @@ See also: gitlab_pages_domain_get, gitlab_pages_domain_create
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -19316,7 +19316,7 @@ Returns: JSON array of access tokens with pagination.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search by token name
 - `state` (string): Token state filter: active, inactive
 - `user_id` (integer): Filter by user ID (admin only)
@@ -19453,7 +19453,7 @@ List pipelines for a GitLab project. Supports filtering by status (success, fail
 - `name` (string): Filter by pipeline name
 - `order_by` (string): Order by field (id, status, ref, updated_at, user_id)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `ref` (string): Filter by branch or tag name
 - `scope` (string): Filter by scope (running, pending, finished, branches, tags)
@@ -19573,7 +19573,7 @@ Returns: paginated list of schedules with id, description, ref, cron, active sta
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `scope` (string): Filter by scope: active or inactive
 
@@ -19729,7 +19729,7 @@ See also: gitlab_pipeline_trigger_create, gitlab_pipeline_trigger_run
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -19890,7 +19890,7 @@ Returns: JSON array of access tokens with pagination.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `state` (string): Token state filter: active, inactive
 
@@ -20067,7 +20067,7 @@ See also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_create.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -20487,7 +20487,7 @@ Returns: JSON array of webhooks with pagination. Fields include id, url, created
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -20605,7 +20605,7 @@ List GitLab projects accessible to the authenticated user. Supports filtering by
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search query for project name
 - `search_namespaces` (): Include namespace in search
 - `simple` (boolean): Return only limited fields (faster for large result sets)
@@ -20631,7 +20631,7 @@ Returns: JSON array of forked projects with pagination. Fields include id, name,
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
 - `owned` (boolean): Limit to forks owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search query for fork name
 - `sort` (string): Sort direction (asc, desc)
@@ -20650,7 +20650,7 @@ See also: gitlab_project_get.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search by group name
 - `shared_min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
@@ -20672,7 +20672,7 @@ See also: gitlab_project_list_groups.
 
 - `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search by group name
 
@@ -20689,7 +20689,7 @@ See also: gitlab_project_get.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search by name or username
 
@@ -20708,7 +20708,7 @@ See also: gitlab_project_list.
 - `archived` (): Filter by archived status
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search query for project name
 - `simple` (boolean): Return only limited fields (faster)
 - `sort` (string): Sort direction (asc, desc)
@@ -20730,7 +20730,7 @@ See also: gitlab_project_list.
 - `archived` (): Filter by archived status
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search query for project name
 - `simple` (boolean): Return only limited fields (faster)
 - `sort` (string): Sort direction (asc, desc)
@@ -20752,7 +20752,7 @@ See also: gitlab_project_list.
 - `archived` (): Filter by archived status
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search query for project name
 - `simple` (boolean): Return only limited fields (faster)
 - `sort` (string): Sort direction (asc, desc)
@@ -20772,7 +20772,7 @@ See also: gitlab_project_member_list.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search by name or username
 
@@ -20857,7 +20857,7 @@ Returns: JSON array of members with pagin...
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `query` (string): Filter members by name or username
 
@@ -21008,7 +21008,7 @@ Returns: JSON array of snippets with pagination. See also: gitlab_project_snippe
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -21249,7 +21249,7 @@ Returns: paginated list of protected branches with name, push/merge access level
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -21280,7 +21280,7 @@ Returns: JSON with array of protected environments and pagination info.
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -21722,7 +21722,7 @@ Returns: JSON with array of release links and pagination info. See also: gitlab_
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `tag_name` (string) (required): Tag name of the release,required
 
@@ -21757,7 +21757,7 @@ Returns: paginated list of releases with tag_name, name, description, author, an
 
 - `order_by` (string): Order by field (released_at, created_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort direction (asc, desc)
 
@@ -21954,7 +21954,7 @@ Returns: JSON array of contributors with commit statistics and pagination. See a
 
 - `order_by` (string): Order by: name, email, or commits (default: commits)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `sort` (string): Sort direction: asc or desc (default: asc)
 
@@ -21996,7 +21996,7 @@ List the files and directories (tree) of a GitLab repository at a given path and
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `path` (string): Path inside the repository to list (default: root)
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `recursive` (boolean): List files recursively through subdirectories
 - `ref` (string): Branch name, tag, or commit SHA (default: default branch)
@@ -22028,7 +22028,7 @@ See also: gitlab_retrieve_group_storage_moves, gitlab_get_group_storage_move
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22043,7 +22043,7 @@ See also: gitlab_retrieve_project_storage_moves, gitlab_get_project_storage_move
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22058,7 +22058,7 @@ See also: gitlab_retrieve_snippet_storage_moves, gitlab_get_snippet_storage_move
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22074,7 +22074,7 @@ See also: gitlab_retrieve_all_group_storage_moves
 
 - `group_id` (integer) (required): Numeric ID of the group,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22089,7 +22089,7 @@ See also: gitlab_retrieve_all_project_storage_moves
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (integer) (required): Numeric ID of the project,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -22105,7 +22105,7 @@ See also: gitlab_retrieve_all_snippet_storage_moves
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `snippet_id` (integer) (required): Numeric ID of the snippet,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -22253,7 +22253,7 @@ See also: gitlab_runner_controller_get, gitlab_runner_controller_scope_list
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22371,7 +22371,7 @@ See also: gitlab_runner_controller_token_create, gitlab_runner_controller_list
 
 - `controller_id` (integer) (required): Runner controller ID,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -22505,7 +22505,7 @@ Returns: JSON array of jobs run by the runner with pagination.
 
 - `order_by` (string): Order by field: id (default)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `runner_id` (integer) (required): Runner ID,required
 - `sort` (string): Sort direction: asc, desc
 - `status` (string): Job status filter: running, success, failed, canceled
@@ -22524,7 +22524,7 @@ Returns: JSON array of runners with pagination. Fields include id, description, 
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `paused` (): Filter by paused state
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `status` (string): Runner status filter: online, offline, stale, never_contacted
 - `tag_list` (string): Comma-separated list of tags to filter by
 - `type` (string): Runner type filter: instance_type, group_type, project_type
@@ -22543,7 +22543,7 @@ Returns: JSON array of runners with pagination. Fields include id, description, 
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `paused` (): Filter by paused state
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `status` (string): Runner status filter: online, offline, stale, never_contacted
 - `tag_list` (string): Comma-separated list of tags to filter by
 - `type` (string): Runner type filter: instance_type, group_type, project_type
@@ -22562,7 +22562,7 @@ Returns: JSON array of runners with pagination. Fields include id, description, 
 
 - `group_id` (string) (required): Group ID or URL-encoded path,required
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `status` (string): Runner status filter: online, offline, stale, never_contacted
 - `tag_list` (string): Comma-separated list of tags to filter by
 - `type` (string): Runner type filter: instance_type, group_type, project_type
@@ -22594,7 +22594,7 @@ Returns: JSON array of runners with pagination. Fields include id, description, 
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `status` (string): Runner status filter: online, offline, stale, never_contacted
 - `tag_list` (string): Comma-separated list of tags to filter by
@@ -22876,7 +22876,7 @@ Returns: JSON array of mat...
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query text (param 'query' not 'search'),required
 - `ref` (string): Branch or tag name to search in (default: default branch)
@@ -22893,7 +22893,7 @@ Returns: JSON array of matching commits with pagination. See also: gitlab_commit
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string,required
 
@@ -22909,7 +22909,7 @@ Returns: JSON array of matching issues with pagination. See also: gitlab_issue_g
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query text (param 'query' not 'search'),required
 
@@ -22925,7 +22925,7 @@ Returns: JSON array of matching merge requests with pagination. See also: gitlab
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query text (param 'query' not 'search'),required
 
@@ -22941,7 +22941,7 @@ Returns: JSON array of matching milestones with pagination. See also: gitlab_mil
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string,required
 
@@ -22956,7 +22956,7 @@ Returns: JSON array of matching notes with pagination. See also: gitlab_issue_no
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `query` (string) (required): Search query string,required
 
@@ -22972,7 +22972,7 @@ Returns: JSON array of matching projects with pagination. See also: gitlab_proje
 
 - `group_id` (string): Group ID or URL-encoded path (optional — omit for global search)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `query` (string) (required): Search query string,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -22986,7 +22986,7 @@ Returns: JSON array of matching snippets with pagination. See also: gitlab_snipp
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `query` (string) (required): Search query string,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -23001,7 +23001,7 @@ Returns: JSON array of matching users with pagination. See also: gitlab_get_user
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string,required
 
@@ -23017,7 +23017,7 @@ Returns: JSON array of matching wiki pages with pagination. See also: gitlab_wik
 
 - `group_id` (string): Group ID or URL-encoded path (optional)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string,required
 
@@ -23274,7 +23274,7 @@ Returns: JSON array of public snippets with pagination. See also: gitlab_snippet
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23313,7 +23313,7 @@ Returns: JSON array of snippets with pagination. See also: gitlab_snippet_get, g
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23328,7 +23328,7 @@ Returns: JSON array of snippets with pagination. See also: gitlab_snippet_get, g
 - `created_after` (string): Filter snippets created after (ISO 8601)
 - `created_before` (string): Filter snippets created before (ISO 8601)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23453,7 +23453,7 @@ Returns: JSON with notes array including body, author, timestamps, and system fl
 
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `snippet_id` (integer) (required): Snippet ID,required
 - `sort` (string): Sort direction (asc, desc)
@@ -23527,7 +23527,7 @@ Returns: paginated list of subgroups with id, name, path, full_path, visibility,
 - `order_by` (string): Order subgroups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to subgroups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter subgroups by name or path
 - `sort` (string): Sort direction (asc, desc)
 - `statistics` (boolean): Include group statistics (storage, counts)
@@ -23637,7 +23637,7 @@ Returns: paginated list of tags with name, target SHA, message, and protected st
 
 - `order_by` (string): Order tags by field (name, updated)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 - `search` (string): Search query to filter tags by name
 - `sort` (string): Sort direction (asc, desc)
@@ -23653,7 +23653,7 @@ Returns: paginated list of protected tags with name and create access levels. Se
 **Parameters:**
 
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -23716,7 +23716,7 @@ See also: gitlab_todo_mark_done, gitlab_todo_mark_all_done
 - `author_id` (integer): Filter by author user ID
 - `group_id` (integer): Filter by group ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimise round trips when the result set is large.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (integer): Filter by project ID
 - `state` (string): Filter by state: pending or done (default: pending)
 - `type` (string): Filter by target type: Issue, MergeRequest, DesignManagement::Design, AlertManagement::Alert
