@@ -87,7 +87,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	milestones, resp, err := client.GL().Milestones.ListMilestones(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("milestoneList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("milestoneList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get")
 	}
 
 	out := make([]Output, len(milestones))
@@ -251,7 +252,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	m, _, err := client.GL().Milestones.GetMilestone(string(input.ProjectID), globalID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("milestoneGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("milestoneGet", err, http.StatusNotFound,
+			"verify milestone_iid with gitlab_milestone_list; project_id must match the project that owns the milestone")
 	}
 	return ToOutput(m), nil
 }
@@ -339,7 +341,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	m, _, err := client.GL().Milestones.UpdateMilestone(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("milestoneUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("milestoneUpdate", err, http.StatusBadRequest,
+			"state_event must be 'close' or 'activate'; dates must be YYYY-MM-DD with start_date <= due_date")
 	}
 	return ToOutput(m), nil
 }
@@ -360,7 +363,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err = client.GL().Milestones.DeleteMilestone(string(input.ProjectID), globalID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("milestoneDelete", err)
+		return toolutil.WrapErrWithStatusHint("milestoneDelete", err, http.StatusForbidden,
+			"deleting milestones requires Maintainer or Owner role")
 	}
 	return nil
 }
@@ -389,7 +393,8 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 
 	issues, resp, err := client.GL().Milestones.GetMilestoneIssues(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MilestoneIssuesOutput{}, toolutil.WrapErrWithMessage("milestoneGetIssues", err)
+		return MilestoneIssuesOutput{}, toolutil.WrapErrWithStatusHint("milestoneGetIssues", err, http.StatusNotFound,
+			"verify milestone_iid with gitlab_milestone_list")
 	}
 
 	items := make([]IssueItem, len(issues))
@@ -434,7 +439,8 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 
 	mrs, resp, err := client.GL().Milestones.GetMilestoneMergeRequests(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MilestoneMergeRequestsOutput{}, toolutil.WrapErrWithMessage("milestoneGetMergeRequests", err)
+		return MilestoneMergeRequestsOutput{}, toolutil.WrapErrWithStatusHint("milestoneGetMergeRequests", err, http.StatusNotFound,
+			"verify milestone_iid with gitlab_milestone_list")
 	}
 
 	items := make([]MergeRequestItem, len(mrs))
