@@ -154,8 +154,8 @@ func TestSchema_PaginationHasMore(t *testing.T) {
 	}
 
 	var parsed map[string]any
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
+	if unmarshalErr := json.Unmarshal(raw, &parsed); unmarshalErr != nil {
+		t.Fatalf("unmarshal response: %v", unmarshalErr)
 	}
 
 	// Look for has_more at top level or nested inside a pagination object.
@@ -165,7 +165,7 @@ func TestSchema_PaginationHasMore(t *testing.T) {
 	}
 	if pag, ok := parsed["pagination"]; ok {
 		if pagMap, isMap := pag.(map[string]any); isMap {
-			if _, ok := pagMap["has_more"]; ok {
+			if _, hasMore := pagMap["has_more"]; hasMore {
 				t.Logf("has_more found in pagination object in %s response", toolName)
 				return
 			}
