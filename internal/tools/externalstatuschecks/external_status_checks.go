@@ -5,6 +5,7 @@ package externalstatuschecks
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -104,7 +105,8 @@ func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, i
 	}
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectStatusChecks(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithMessage("listProjectStatusChecks", err)
+		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectStatusChecks", err, http.StatusForbidden,
+			"deprecated endpoint \u2014 prefer gitlab_external_status_check_list_project; requires Maintainer role and Premium/Ultimate license")
 	}
 	items := make([]ProjectStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -140,7 +142,8 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 	}
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectMergeRequestExternalStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithMessage("listProjectMRExternalStatusChecks", err)
+		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectMRExternalStatusChecks", err, http.StatusNotFound,
+			"verify mr_iid (project-scoped, not the global ID) with gitlab_merge_request_list; requires Maintainer role + Premium/Ultimate")
 	}
 	items := make([]MergeStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -172,7 +175,8 @@ func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.C
 	}
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectExternalStatusChecks(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithMessage("listProjectExternalStatusChecks", err)
+		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectExternalStatusChecks", err, http.StatusForbidden,
+			"requires Maintainer role and Premium/Ultimate license; verify project_id with gitlab_project_get")
 	}
 	items := make([]ProjectStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -216,7 +220,8 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	check, _, err := client.GL().ExternalStatusChecks.CreateProjectExternalStatusCheck(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithMessage("createProjectExternalStatusCheck", err)
+		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("createProjectExternalStatusCheck", err, http.StatusBadRequest,
+			"name must be unique within the project; external_url must be a valid HTTPS URL reachable from GitLab; protected_branch_ids must be IDs (not names) from gitlab_protected_branches_list")
 	}
 	return toProjectStatusCheckOutput(check), nil
 }
@@ -240,7 +245,8 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	_, err := client.GL().ExternalStatusChecks.DeleteProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, &gl.DeleteProjectExternalStatusCheckOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deleteProjectExternalStatusCheck", err)
+		return toolutil.WrapErrWithStatusHint("deleteProjectExternalStatusCheck", err, http.StatusForbidden,
+			"requires Maintainer role; verify check_id with gitlab_external_status_check_list_project; deletion is irreversible")
 	}
 	return nil
 }
@@ -281,7 +287,8 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	check, _, err := client.GL().ExternalStatusChecks.UpdateProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithMessage("updateProjectExternalStatusCheck", err)
+		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("updateProjectExternalStatusCheck", err, http.StatusNotFound,
+			"verify check_id with gitlab_external_status_check_list_project; name must remain unique; external_url must be valid HTTPS")
 	}
 	return toProjectStatusCheckOutput(check), nil
 }
@@ -309,7 +316,8 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 	}
 	_, err := client.GL().ExternalStatusChecks.RetryFailedExternalStatusCheckForProjectMergeRequest(string(input.ProjectID), input.MRIID, input.CheckID, &gl.RetryFailedExternalStatusCheckForProjectMergeRequestOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("retryFailedExternalStatusCheckForProjectMR", err)
+		return toolutil.WrapErrWithStatusHint("retryFailedExternalStatusCheckForProjectMR", err, http.StatusUnprocessableEntity,
+			"check must currently be in 'failed' state to retry; verify status with gitlab_external_status_check_list_mr; rate-limited per project")
 	}
 	return nil
 }
@@ -350,7 +358,8 @@ func SetProjectMRExternalStatusCheckStatus(ctx context.Context, client *gitlabcl
 	}
 	_, err := client.GL().ExternalStatusChecks.SetProjectMergeRequestExternalStatusCheckStatus(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("setProjectMRExternalStatusCheckStatus", err)
+		return toolutil.WrapErrWithStatusHint("setProjectMRExternalStatusCheckStatus", err, http.StatusBadRequest,
+			"sha must match the current MR head (use gitlab_merge_request_get to confirm); status must be 'passed' or 'failed'; only the external service that created the check (HMAC-authenticated) can set its status")
 	}
 	return nil
 }
