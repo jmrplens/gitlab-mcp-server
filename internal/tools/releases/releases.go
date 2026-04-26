@@ -244,7 +244,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	r, _, err := client.GL().Releases.UpdateRelease(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("releaseUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("releaseUpdate", err, http.StatusNotFound,
+			"verify tag_name with gitlab_release_list; updating releases requires Developer role or higher")
 	}
 	return ToOutput(r), nil
 }
@@ -260,7 +261,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	r, _, err := client.GL().Releases.DeleteRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("releaseDelete", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("releaseDelete", err, http.StatusForbidden,
+			"deleting releases requires Maintainer role or higher; verify tag_name with gitlab_release_list")
 	}
 	return ToOutput(r), nil
 }
@@ -275,7 +277,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	r, _, err := client.GL().Releases.GetRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("releaseGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("releaseGet", err, http.StatusNotFound,
+			"verify tag_name with gitlab_release_list; tag_name is case-sensitive")
 	}
 	return ToOutput(r), nil
 }
@@ -290,7 +293,8 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	}
 	r, _, err := client.GL().Releases.GetLatestRelease(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("releaseGetLatest", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("releaseGetLatest", err, http.StatusNotFound,
+			"the project has no releases; create one with gitlab_release_create")
 	}
 	return ToOutput(r), nil
 }
@@ -319,7 +323,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	releases, resp, err := client.GL().Releases.ListReleases(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("releaseList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("releaseList", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project may have no releases yet")
 	}
 	out := make([]Output, len(releases))
 	for i, r := range releases {
