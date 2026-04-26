@@ -29,8 +29,11 @@ fast-pass:
 
 // TestPipelines exercises the pipeline lifecycle: create, get, list, wait for jobs,
 // job get, job trace, retry, and delete. Requires Docker mode with a CI runner.
+//
+// NOT parallelized: pipeline-heavy tests share a single CI runner in Docker mode.
+// Running them concurrently causes pipelines to queue, leading to spurious
+// timeouts on slower hosts.
 func TestPipelines(t *testing.T) {
-	t.Parallel()
 	if !isDockerMode() {
 		t.Skip("pipeline tests require Docker mode with CI runner")
 	}
@@ -100,7 +103,7 @@ func TestPipelines(t *testing.T) {
 	})
 
 	t.Run("Individual/WaitAndJobList", func(t *testing.T) {
-		status := waitForPipeline(t, proj.ID, pipelineID, 180*time.Second)
+		status := waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
 		t.Logf("Pipeline %d finished with status: %s", pipelineID, status)
 
 		out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{
@@ -153,7 +156,7 @@ func TestPipelines(t *testing.T) {
 			t.Fatalf("pipeline retry: %v", err)
 		}
 		t.Logf("Retried pipeline: ID=%d status=%s", out.ID, out.Status)
-		waitForPipeline(t, proj.ID, pipelineID, 180*time.Second)
+		waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
 	})
 
 	t.Run("Individual/Delete", func(t *testing.T) {
@@ -238,7 +241,7 @@ func TestPipelines(t *testing.T) {
 	})
 
 	t.Run("Meta/WaitAndJobList", func(t *testing.T) {
-		status := waitForPipeline(t, projM.ID, mPipelineID, 180*time.Second)
+		status := waitForPipeline(t, projM.ID, mPipelineID, 900*time.Second)
 		t.Logf("Meta pipeline %d finished: %s", mPipelineID, status)
 
 		out, err := callToolOn[jobs.ListOutput](ctx, sess.meta, "gitlab_job", map[string]any{
@@ -300,7 +303,7 @@ func TestPipelines(t *testing.T) {
 		if err != nil {
 			t.Fatalf("meta pipeline retry: %v", err)
 		}
-		waitForPipeline(t, projM.ID, mPipelineID, 180*time.Second)
+		waitForPipeline(t, projM.ID, mPipelineID, 900*time.Second)
 	})
 
 	t.Run("Meta/Delete", func(t *testing.T) {

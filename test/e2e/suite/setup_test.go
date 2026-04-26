@@ -807,30 +807,48 @@ func drainSidekiq(ctx context.Context, t *testing.T) {
 }
 
 // waitForPipeline polls the GitLab API until the pipeline reaches a terminal
-// state (success, failed, canceled, skipped) or the timeout expires.
+// state (success, failed, canceled, skipped) or the timeout expires. To be
+// resilient against slow CI runners in ephemeral Docker environments, this
+// helper:
+//   - Uses a generous default timeout (15 min).
+//   - Polls every 5 s.
+//   - Tolerates transient API errors (logs and retries up to 10 consecutive
+//     errors before giving up).
+//   - Logs the final status before failing so test output makes the runner
+//     state easy to diagnose.
 func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
 	drainSidekiq(context.Background(), t)
 	if timeout == 0 {
-		timeout = 120 * time.Second
+		timeout = 900 * time.Second
 	}
+	const pollInterval = 5 * time.Second
+	const maxConsecutiveErrors = 10
 	deadline := time.Now().Add(timeout)
+	lastStatus := "unknown"
+	consecutiveErrors := 0
 	for time.Now().Before(deadline) {
 		p, _, err := sess.glClient.GL().Pipelines.GetPipeline(projectID, pipelineID)
 		if err != nil {
-			t.Logf("waitForPipeline: error polling pipeline %d: %v", pipelineID, err)
-			time.Sleep(5 * time.Second)
+			consecutiveErrors++
+			t.Logf("waitForPipeline: error polling pipeline %d (%d/%d): %v", pipelineID, consecutiveErrors, maxConsecutiveErrors, err)
+			if consecutiveErrors >= maxConsecutiveErrors {
+				t.Fatalf("waitForPipeline: pipeline %d aborted after %d consecutive API errors: %v", pipelineID, consecutiveErrors, err)
+			}
+			time.Sleep(pollInterval)
 			continue
 		}
+		consecutiveErrors = 0
+		lastStatus = p.Status
 		switch p.Status {
 		case "success", "failed", "canceled", "skipped":
 			t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, p.Status)
 			return p.Status
 		}
 		t.Logf("waitForPipeline: pipeline %d status=%s, waiting...", pipelineID, p.Status)
-		time.Sleep(5 * time.Second)
+		time.Sleep(pollInterval)
 	}
-	t.Fatalf("waitForPipeline: pipeline %d did not reach terminal status within %s", pipelineID, timeout)
+	t.Fatalf("waitForPipeline: pipeline %d did not reach terminal status within %s (last status: %s)", pipelineID, timeout, lastStatus)
 	return ""
 }
 
