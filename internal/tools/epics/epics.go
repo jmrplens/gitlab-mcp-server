@@ -12,6 +12,7 @@ package epics
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -289,7 +290,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("epicList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,
+			"verify full_path with gitlab_group_list; epics require GitLab Premium or Ultimate")
 	}
 	out := make([]Output, 0, len(items))
 	for _, wi := range items {
@@ -311,7 +313,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("epicGet", err, http.StatusNotFound,
+			"verify iid with gitlab_epic_list; full_path must be the group path (e.g. group/subgroup) where the epic lives")
 	}
 	return toOutput(wi), nil
 }
@@ -331,7 +334,8 @@ func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksIn
 	}
 	epics, _, err := client.GL().Epics.GetEpicLinks(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
-		return LinksOutput{}, toolutil.WrapErrWithMessage("epicGetLinks", err)
+		return LinksOutput{}, toolutil.WrapErrWithStatusHint("epicGetLinks", err, http.StatusNotFound,
+			"verify iid with gitlab_epic_list; child epics are returned only when the parent epic exists in the given group")
 	}
 	out := make([]LinksItem, len(epics))
 	for i, e := range epics {
@@ -393,7 +397,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	wi, _, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeEpic, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("epicCreate", err, http.StatusForbidden,
+			"creating epics requires Reporter role or higher; epics require GitLab Premium or Ultimate")
 	}
 	return toOutput(wi), nil
 }
@@ -463,7 +468,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("epicUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("epicUpdate", err, http.StatusBadRequest,
+			"state_event must be 'close' or 'reopen'; dates must be YYYY-MM-DD; verify iid with gitlab_epic_list")
 	}
 	return toOutput(wi), nil
 }
@@ -481,7 +487,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("epicDelete", err)
+		return toolutil.WrapErrWithStatusHint("epicDelete", err, http.StatusForbidden,
+			"deleting epics requires Owner role at the group level")
 	}
 	return nil
 }
