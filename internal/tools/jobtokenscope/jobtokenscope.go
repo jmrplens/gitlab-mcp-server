@@ -5,6 +5,7 @@ package jobtokenscope
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -29,7 +30,8 @@ type AccessSettingsOutput struct {
 func GetAccessSettings(ctx context.Context, client *gitlabclient.Client, input GetAccessSettingsInput) (AccessSettingsOutput, error) {
 	settings, _, err := client.GL().JobTokenScope.GetProjectJobTokenAccessSettings(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return AccessSettingsOutput{}, toolutil.WrapErrWithMessage("get_job_token_access_settings", err)
+		return AccessSettingsOutput{}, toolutil.WrapErrWithStatusHint("get_job_token_access_settings", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; CI/CD job token settings are at project level")
 	}
 	return AccessSettingsOutput{
 		InboundEnabled: settings.InboundEnabled,
@@ -49,7 +51,8 @@ func PatchAccessSettings(ctx context.Context, client *gitlabclient.Client, input
 	}
 	_, err := client.GL().JobTokenScope.PatchProjectJobTokenAccessSettings(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.DeleteOutput{}, toolutil.WrapErrWithMessage("patch_job_token_access_settings", err)
+		return toolutil.DeleteOutput{}, toolutil.WrapErrWithStatusHint("patch_job_token_access_settings", err, http.StatusForbidden,
+			"updating job token access settings requires Maintainer role; verify project_id")
 	}
 	return toolutil.DeleteOutput{Status: "updated"}, nil
 }
@@ -88,7 +91,8 @@ func ListInboundAllowlist(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	projects, resp, err := client.GL().JobTokenScope.GetProjectJobTokenInboundAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListInboundAllowlistOutput{}, toolutil.WrapErrWithMessage("list_job_token_inbound_allowlist", err)
+		return ListInboundAllowlistOutput{}, toolutil.WrapErrWithStatusHint("list_job_token_inbound_allowlist", err, http.StatusNotFound,
+			"verify project_id; allowlist may be empty if inbound scope is disabled")
 	}
 	items := make([]AllowlistProjectItem, 0, len(projects))
 	for _, p := range projects {
@@ -128,7 +132,8 @@ func AddProjectAllowlist(ctx context.Context, client *gitlabclient.Client, input
 	}
 	item, _, err := client.GL().JobTokenScope.AddProjectToJobScopeAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return InboundAllowItemOutput{}, toolutil.WrapErrWithMessage("add_project_job_token_allowlist", err)
+		return InboundAllowItemOutput{}, toolutil.WrapErrWithStatusHint("add_project_job_token_allowlist", err, http.StatusForbidden,
+			"adding to inbound allowlist requires Maintainer role on source project; verify target_project_id exists and is accessible")
 	}
 	return InboundAllowItemOutput{
 		SourceProjectID: item.SourceProjectID,
@@ -149,7 +154,8 @@ func RemoveProjectAllowlist(ctx context.Context, client *gitlabclient.Client, in
 	}
 	_, err := client.GL().JobTokenScope.RemoveProjectFromJobScopeAllowList(string(input.ProjectID), input.TargetProjectID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("remove_project_job_token_allowlist", err)
+		return toolutil.WrapErrWithStatusHint("remove_project_job_token_allowlist", err, http.StatusNotFound,
+			"verify target_project_id is on the allowlist with gitlab_job_token_inbound_allowlist_list; requires Maintainer role")
 	}
 	return nil
 }
@@ -188,7 +194,8 @@ func ListGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	groups, resp, err := client.GL().JobTokenScope.GetJobTokenAllowlistGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListGroupAllowlistOutput{}, toolutil.WrapErrWithMessage("list_job_token_group_allowlist", err)
+		return ListGroupAllowlistOutput{}, toolutil.WrapErrWithStatusHint("list_job_token_group_allowlist", err, http.StatusNotFound,
+			"verify project_id; group allowlist requires GitLab 17.0+")
 	}
 	items := make([]AllowlistGroupItem, 0, len(groups))
 	for _, g := range groups {
@@ -228,7 +235,8 @@ func AddGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input A
 	}
 	item, _, err := client.GL().JobTokenScope.AddGroupToJobTokenAllowlist(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return GroupAllowlistItemOutput{}, toolutil.WrapErrWithMessage("add_group_job_token_allowlist", err)
+		return GroupAllowlistItemOutput{}, toolutil.WrapErrWithStatusHint("add_group_job_token_allowlist", err, http.StatusForbidden,
+			"adding to group allowlist requires Maintainer role on project; verify target_group_id exists; requires GitLab 17.0+")
 	}
 	return GroupAllowlistItemOutput{
 		SourceProjectID: item.SourceProjectID,
@@ -249,7 +257,8 @@ func RemoveGroupAllowlist(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	_, err := client.GL().JobTokenScope.RemoveGroupFromJobTokenAllowlist(string(input.ProjectID), input.TargetGroupID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("remove_group_job_token_allowlist", err)
+		return toolutil.WrapErrWithStatusHint("remove_group_job_token_allowlist", err, http.StatusNotFound,
+			"verify target_group_id is on the allowlist with gitlab_job_token_group_allowlist_list; requires Maintainer role")
 	}
 	return nil
 }
