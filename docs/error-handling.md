@@ -135,6 +135,22 @@ if toolutil.IsHTTPStatus(err, 409) {
 //          Suggestion: protected branch rule already exists — use gitlab_protected_branch_get to view current rules: <original>"
 ```
 
+### WrapErrWithStatusHint
+
+Convenience wrapper that compresses the dominant single-status pattern into one call. Returns `WrapErrWithHint` when the error matches the requested HTTP status, otherwise falls back to `WrapErrWithMessage`:
+
+```go
+// Equivalent to:
+//   if toolutil.IsHTTPStatus(err, 404) {
+//       return toolutil.WrapErrWithHint("issueGet", err, "verify issue_iid with gitlab_issue_list")
+//   }
+//   return toolutil.WrapErrWithMessage("issueGet", err)
+return toolutil.WrapErrWithStatusHint("issueGet", err, 404,
+    "verify issue_iid with gitlab_issue_list")
+```
+
+For handlers that need different hints per status code, use a `switch` over `IsHTTPStatus` checks instead — each branch carries genuinely different context.
+
 ### Error Function Decision Tree
 
 | Scenario | Function | Example |
@@ -143,6 +159,7 @@ if toolutil.IsHTTPStatus(err, 409) {
 | Get operation returning 404 | `NotFoundResult` | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")` |
 | Mutating operation (create, update, delete) | `WrapErrWithMessage` | `WrapErrWithMessage("fileCreate", err)` |
 | Specific error with known corrective action | `WrapErrWithHint` | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")` |
+| Single-status hint (the common case) | `WrapErrWithStatusHint` | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")` |
 
 ### NotFoundResult — Informational 404 Responses
 
@@ -258,7 +275,7 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 
 | File | Purpose |
 | --- | --- |
-| `internal/toolutil/errors.go` | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
+| `internal/toolutil/errors.go` | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
 | `internal/toolutil/not_found.go` | NotFoundResult — informational 404 pattern for get handlers |
 | `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction |
 | `internal/toolutil/confirm.go` | Destructive action confirmation flow |

@@ -334,6 +334,25 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	return fmt.Errorf("%s: %s. Suggestion: %s: %w", operation, semantic, hint, err)
 }
 
+// WrapErrWithStatusHint returns WrapErrWithHint(operation, err, hint) when err
+// matches the given HTTP status code, otherwise falls back to
+// WrapErrWithMessage(operation, err). It compresses the common pattern:
+//
+//	if toolutil.IsHTTPStatus(err, 404) {
+//	    return ..., toolutil.WrapErrWithHint(op, err, hint)
+//	}
+//	return ..., toolutil.WrapErrWithMessage(op, err)
+//
+// into a single call. For handlers that need different hints per status, use
+// a switch over IsHTTPStatus checks; this helper covers the dominant single-
+// status case.
+func WrapErrWithStatusHint(operation string, err error, code int, hint string) error {
+	if IsHTTPStatus(err, code) {
+		return WrapErrWithHint(operation, err, hint)
+	}
+	return WrapErrWithMessage(operation, err)
+}
+
 // ErrorResultMarkdown creates an MCP tool error result with Markdown formatting.
 // The result has IsError = true for MCP clients that distinguish error results.
 func ErrorResultMarkdown(domain, action string, err error) *mcp.CallToolResult {
