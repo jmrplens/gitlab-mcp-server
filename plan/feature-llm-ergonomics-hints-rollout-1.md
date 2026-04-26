@@ -135,7 +135,7 @@ Sub-phases (one cluster = one commit, ~5 files each):
 | TASK-037 | Cluster 4B — Repo content: `repository`, `tags`, `files`, `repositoryfiles` (if exists), `wikis` | ✅ | 2026-04-26 |
 | TASK-038 | Cluster 4C — Group features: `groupmilestones`, `grouplabels`, `groupboards` (if not in T1), `groupwikis`, `grouphooks` | ✅ | 2026-04-26 |
 | TASK-039 | Cluster 4D — Issue tracking: `labels`, `milestones`, `issuelinks`, `epics`, `epicissues` | ✅ | 2026-04-26 |
-| TASK-040 | Cluster 4E — Snippets & uploads: `snippets`, `snippetdiscussions`, `uploads`, `groupmarkdownuploads` | | |
+| TASK-040 | Cluster 4E — Snippets & uploads: `snippets`, `snippetdiscussions`, `uploads`, `groupmarkdownuploads` | ✅ | 2026-04-26 |
 | TASK-041 | Cluster 4F — Releases: `releases`, `releaselinks`, `tags` (if not in 4B) | | |
 | TASK-042 | Cluster 4G — Packages & registries: `packages`, `containerregistry`, `dependencyproxy`, `protectedpackages` | | |
 | TASK-043 | Cluster 4H — User-scoped: `users`, `user_admin`, `usergpgkeys`, `usersshkeys`, `useremails`, `userimpersonationtokens`, `userstatus` | | |
