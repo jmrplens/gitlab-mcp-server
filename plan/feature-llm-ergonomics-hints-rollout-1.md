@@ -100,7 +100,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-014 | `internal/tools/jobs/jobs.go` (19) — Cancel/Retry/Play/Erase + 404 vs job-not-cancellable hint. | ✅ | 2026-04-26 |
 | TASK-015 | `internal/tools/pipelineschedules/pipelineschedules.go` (18) | ✅ | 2026-04-26 |
 | TASK-016 | `internal/tools/featureflags/featureflags.go` (16) | ✅ | 2026-04-26 |
-| TASK-017 | `internal/tools/resourceevents/resourceevents.go` (15) | | |
+| TASK-017 | `internal/tools/resourceevents/resourceevents.go` (15) | ✅ | 2026-04-26 |
 | TASK-018 | `internal/tools/projectmirrors/project_mirrors.go` (14) | | |
 | TASK-019 | `internal/tools/ffuserlists/ffuserlists.go` (14) | | |
 | TASK-020 | `internal/tools/pipelines/pipelines.go` (13) — Cancel/Retry/Delete + already-finished hint. | | |
