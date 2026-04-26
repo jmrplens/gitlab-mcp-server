@@ -7,6 +7,7 @@ package deploykeys
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -210,7 +211,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 
 	keys, resp, err := client.GL().DeployKeys.ListProjectDeployKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("deploy_key_list_project", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_project", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; deploy keys list requires Maintainer role")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -231,7 +233,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 	key, _, err := client.GL().DeployKeys.GetDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_key_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_get", err, http.StatusNotFound,
+			"verify deploy_key_id with gitlab_deploy_key_list_project; the key must currently be enabled on this project")
 	}
 
 	return toOutput(key), nil
@@ -268,7 +271,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 
 	key, _, err := client.GL().DeployKeys.AddDeployKey(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_key_add", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_add", err, http.StatusBadRequest,
+			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and unique within the instance; title must be unique within the project; requires Maintainer role")
 	}
 
 	return toOutput(key), nil
@@ -293,7 +297,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	key, _, err := client.GL().DeployKeys.UpdateDeployKey(string(input.ProjectID), input.DeployKeyID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_key_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_update", err, http.StatusForbidden,
+			"updating deploy keys requires Maintainer role; only keys originally created in this project can be edited (not keys enabled from other projects)")
 	}
 
 	return toOutput(key), nil
@@ -310,7 +315,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 	_, err := client.GL().DeployKeys.DeleteDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("deploy_key_delete", err)
+		return toolutil.WrapErrWithStatusHint("deploy_key_delete", err, http.StatusForbidden,
+			"deleting deploy keys requires Maintainer role; deleting a key removes it from all projects where it is enabled")
 	}
 
 	return nil
@@ -327,7 +333,8 @@ func Enable(ctx context.Context, client *gitlabclient.Client, input EnableInput)
 
 	key, _, err := client.GL().DeployKeys.EnableDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("deploy_key_enable", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_enable", err, http.StatusNotFound,
+			"verify deploy_key_id exists at instance level via gitlab_deploy_key_list_all; the key may already be enabled")
 	}
 
 	return toOutput(key), nil
@@ -347,7 +354,8 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 
 	keys, resp, err := client.GL().DeployKeys.ListAllDeployKeys(opts, gl.WithContext(ctx))
 	if err != nil {
-		return InstanceListOutput{}, toolutil.WrapErrWithMessage("deploy_key_list_all", err)
+		return InstanceListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_all", err, http.StatusForbidden,
+			"listing all instance deploy keys requires admin token")
 	}
 
 	out := InstanceListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
@@ -381,7 +389,8 @@ func AddInstance(ctx context.Context, client *gitlabclient.Client, input AddInst
 
 	key, _, err := client.GL().DeployKeys.AddInstanceDeployKey(opts, gl.WithContext(ctx))
 	if err != nil {
-		return InstanceOutput{}, toolutil.WrapErrWithMessage("deploy_key_add_instance", err)
+		return InstanceOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_add_instance", err, http.StatusForbidden,
+			"creating instance-level deploy keys requires admin token; key must be unique")
 	}
 
 	return toInstanceOutput(key), nil
@@ -402,7 +411,8 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 
 	keys, resp, err := client.GL().DeployKeys.ListUserProjectDeployKeys(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("deploy_key_list_user_project", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_user_project", err, http.StatusNotFound,
+			"verify user_id with gitlab_user_get; admin token required to query other users' deploy keys")
 	}
 
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
