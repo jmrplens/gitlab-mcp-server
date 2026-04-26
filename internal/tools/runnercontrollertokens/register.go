@@ -108,8 +108,9 @@ Actions:
 - create: Create a new token. Params: controller_id (required, int), description
 - rotate: Rotate a token. Params: controller_id (required, int), token_id (required, int)
 - revoke: Revoke a token. Params: controller_id (required, int), token_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconToken,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconToken,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_runner_controller_token", routes, nil))
 }

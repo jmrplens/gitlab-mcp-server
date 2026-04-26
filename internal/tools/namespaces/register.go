@@ -100,8 +100,9 @@ Actions:
 - get: Get namespace by ID or path. Params: id (required)
 - exists: Check namespace path availability. Params: id (required, path to check), parent_id (int)
 - search: Search namespaces by query. Params: query (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconGroup,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconGroup,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_namespace", routes, markdownForResult))
 }

@@ -270,9 +270,10 @@ Actions:
 - update: Update snippet. Params: snippet_id (required, int), title, file_name, description, content, visibility, files (array)
 - delete: Delete snippet. Params: snippet_id (required, int)
 - explore: List public snippets. Params: page, per_page`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconSnippet,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconSnippet,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_snippet", routes, nil))
 
 	projRoutes := toolutil.ActionMap{
@@ -296,8 +297,9 @@ Actions:
 - create: Create project snippet. Params: project_id (required), title (required), description, visibility, files (array), file_name, content
 - update: Update project snippet. Params: project_id (required), snippet_id (required, int), title, description, visibility, files (array), file_name, content
 - delete: Delete project snippet. Params: project_id (required), snippet_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(projRoutes),
-		Icons:       toolutil.IconSnippet,
-		InputSchema: toolutil.MetaToolSchema(projRoutes),
+		Annotations:  toolutil.DeriveAnnotations(projRoutes),
+		Icons:        toolutil.IconSnippet,
+		InputSchema:  toolutil.MetaToolSchema(projRoutes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_project_snippet", projRoutes, nil))
 }

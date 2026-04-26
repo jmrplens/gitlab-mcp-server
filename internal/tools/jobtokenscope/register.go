@@ -161,8 +161,9 @@ Actions:
 - list_group_allowlist: List groups in allowlist. Params: project_id (required), page, per_page
 - add_group_allowlist: Add a group to allowlist. Params: project_id (required), target_group_id (required, int)
 - remove_group_allowlist: Remove a group from allowlist. Params: project_id (required), target_group_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconToken,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconToken,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_job_token_scope", routes, nil))
 }

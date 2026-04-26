@@ -340,8 +340,9 @@ All actions need project_id*. Additional params per action:
 - deployment_history: environment. Frequency, success rate, patterns.
 
 See also: gitlab_merge_request (MR lifecycle), gitlab_issue (issue CRUD), gitlab_pipeline (raw pipelines and test reports), gitlab_release (release CRUD).`,
-		Annotations: toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
-		Icons:       toolutil.IconAnalytics,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
+		Icons:        toolutil.IconAnalytics,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_analyze", routes, metaMarkdownForResult))
 }

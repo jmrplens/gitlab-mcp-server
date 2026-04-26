@@ -342,6 +342,40 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 	}
 }
 
+// MetaToolOutputSchema returns a permissive JSON Schema describing the result
+// envelope returned by every meta-tool. The exact shape varies per action and
+// matches the chosen action's typed output, so the schema is intentionally
+// open (additionalProperties: true) but it documents the cross-cutting fields
+// the LLM should look for: `next_steps` and `pagination`.
+func MetaToolOutputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"description":          "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
+		"additionalProperties": true,
+		"properties": map[string]any{
+			"next_steps": map[string]any{
+				"type":        "array",
+				"description": "Optional. Suggested follow-up actions or tool calls for the LLM, contextual to the result.",
+				"items":       map[string]any{"type": "string"},
+			},
+			"pagination": map[string]any{
+				"type":                 "object",
+				"description":          "Present on list actions. Use `has_more` and `next_page` to paginate through results.",
+				"additionalProperties": true,
+				"properties": map[string]any{
+					"page":        map[string]any{"type": "integer", "description": "Current 1-based page index."},
+					"per_page":    map[string]any{"type": "integer", "description": "Items per page."},
+					"total":       map[string]any{"type": "integer", "description": "Total item count when known (some endpoints omit it for performance)."},
+					"total_pages": map[string]any{"type": "integer", "description": "Total page count when known."},
+					"next_page":   map[string]any{"type": "integer", "description": "Next page index when `has_more` is true."},
+					"prev_page":   map[string]any{"type": "integer", "description": "Previous page index when applicable."},
+					"has_more":    map[string]any{"type": "boolean", "description": "True when more pages are available after the current one."},
+				},
+			},
+		},
+	}
+}
+
 // DeriveAnnotations computes tool-level MCP annotations from the route map.
 // If any route is destructive, returns a copy of MetaAnnotations (DestructiveHint: true).
 // If all routes are non-destructive, returns a copy of NonDestructiveMetaAnnotations.

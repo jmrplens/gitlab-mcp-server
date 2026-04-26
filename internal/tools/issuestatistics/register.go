@@ -80,8 +80,9 @@ Actions:
 - get: Get global issue statistics. Params: labels, milestone, scope, author_id, assignee_id, search, confidential
 - get_group: Get group issue statistics. Params: group_id (required), labels, milestone, scope, author_id, assignee_id, search, confidential
 - get_project: Get project issue statistics. Params: project_id (required), labels, milestone, scope, author_id, assignee_id, search, confidential`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconAnalytics,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconAnalytics,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_issue_statistics", routes, nil))
 }

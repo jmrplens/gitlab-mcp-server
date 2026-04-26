@@ -489,8 +489,9 @@ Actions — Snippet note emoji:
 - snippet_note_get: Get single emoji on snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)
 - snippet_note_create: Add emoji to snippet note. Params: project_id (required), iid (required), note_id (required), name (required)
 - snippet_note_delete: Delete emoji from snippet note. Params: project_id (required), iid (required), note_id (required), award_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconLabel,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconLabel,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_award_emoji", routes, nil))
 }

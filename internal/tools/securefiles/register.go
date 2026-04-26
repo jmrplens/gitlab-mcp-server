@@ -103,8 +103,9 @@ Actions:
 - show: Show details of a secure file. Params: project_id (required), file_id (required, int)
 - create: Create a new secure file. Params: project_id (required), name (required), content (required, base64-encoded)
 - remove: Remove a secure file. Params: project_id (required), file_id (required, int)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconSecurity,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconSecurity,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_secure_file", routes, nil))
 }

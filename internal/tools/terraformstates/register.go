@@ -143,8 +143,9 @@ Actions:
 - delete_version: Delete a specific Terraform state version. Params: project_id (required), name (required), serial (required, int)
 - lock: Lock a Terraform state. Params: project_id (required), name (required)
 - unlock: Unlock a Terraform state. Params: project_id (required), name (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconInfra,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconInfra,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_terraform_state", routes, nil))
 }

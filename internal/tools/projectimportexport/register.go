@@ -101,8 +101,9 @@ Actions:
 - export_download: Download finished export archive as base64. Params: project_id (required)
 - import_from_file: Import project from archive. Params: file_path or content_base64 (required), namespace, name, path, overwrite
 - import_status: Get import status. Params: project_id (required)`,
-		Annotations: toolutil.DeriveAnnotations(routes),
-		Icons:       toolutil.IconImport,
-		InputSchema: toolutil.MetaToolSchema(routes),
+		Annotations:  toolutil.DeriveAnnotations(routes),
+		Icons:        toolutil.IconImport,
+		InputSchema:  toolutil.MetaToolSchema(routes),
+		OutputSchema: toolutil.MetaToolOutputSchema(),
 	}, toolutil.MakeMetaHandler("gitlab_project_import_export", routes, nil))
 }
