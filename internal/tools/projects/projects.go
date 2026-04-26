@@ -495,6 +495,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	p, _, err := client.GL().Projects.GetProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("projectGet", err,
+				"verify project_id (numeric ID or URL-encoded full path like 'group%2Fsubgroup%2Fproject'); use gitlab_project_list with a search term to discover the correct ID")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("projectGet", err)
 	}
 	return ToOutput(p), nil

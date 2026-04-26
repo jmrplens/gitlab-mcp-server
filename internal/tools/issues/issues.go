@@ -261,6 +261,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	issue, _, err := client.GL().Issues.CreateIssue(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
+				"verify project_id with gitlab_project_get; the project must exist and your token must have at least Reporter role")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
+				"check that referenced labels, assignee_ids and milestone_id exist in this project (use gitlab_label_list, gitlab_user_get, gitlab_milestone_list)")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueCreate", err)
 	}
 	return ToOutput(issue), nil
@@ -341,6 +349,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	issue, _, err := client.GL().Issues.GetIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueGet", err,
+				"verify project_id and issue_iid; use gitlab_issue_list to see existing issues in the project")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueGet", err)
 	}
 	return ToOutput(issue), nil
@@ -772,6 +784,10 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, GetInput(input))
 		}
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueSubscribe", err,
+				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("issueSubscribe", err)
 	}
 	return ToOutput(issue), nil
@@ -798,6 +814,10 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 	if err != nil {
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, GetInput(input))
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("issueUnsubscribe", err,
+				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUnsubscribe", err)
 	}
@@ -836,6 +856,10 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	}
 	todo, _, err := client.GL().Issues.CreateTodo(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return TodoOutput{}, toolutil.WrapErrWithHint("issueCreateTodo", err,
+				"verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists")
+		}
 		return TodoOutput{}, toolutil.WrapErrWithMessage("issueCreateTodo", err)
 	}
 	out := TodoOutput{
@@ -903,6 +927,10 @@ func SetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input Set
 	ts, _, err := client.GL().Issues.SetTimeEstimate(string(input.ProjectID), input.IssueIID,
 		&gl.SetTimeEstimateOptions{Duration: new(input.Duration)}, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return TimeStatsOutput{}, toolutil.WrapErrWithHint("issueSetTimeEstimate", err,
+				"duration must be in human-readable format like '3h30m', '1w2d', or '45m'; bare numbers are rejected")
+		}
 		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueSetTimeEstimate", err)
 	}
 	return timeStatsToOutput(ts), nil
@@ -954,6 +982,10 @@ func AddSpentTime(ctx context.Context, client *gitlabclient.Client, input AddSpe
 	}
 	ts, _, err := client.GL().Issues.AddSpentTime(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return TimeStatsOutput{}, toolutil.WrapErrWithHint("issueAddSpentTime", err,
+				"duration must be in human-readable format like '1h', '30m', or '1w2d'; bare numbers are rejected")
+		}
 		return TimeStatsOutput{}, toolutil.WrapErrWithMessage("issueAddSpentTime", err)
 	}
 	return timeStatsToOutput(ts), nil

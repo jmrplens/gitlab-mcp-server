@@ -439,6 +439,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("mrGet", err,
+				"verify project_id and mr_iid (the project-scoped IID, not the global merge_request_id); use gitlab_mr_list to find existing MRs")
+		}
 		return Output{}, toolutil.WrapErrWithMessage("mrGet", err)
 	}
 	return ToOutput(mr), nil
@@ -712,6 +716,10 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 	}
 	_, err := client.GL().MergeRequestApprovals.UnapproveMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return toolutil.WrapErrWithHint("mrUnapprove", err,
+				"verify project_id and mr_iid; unapproval requires you to have previously approved the MR (use gitlab_mr_approve first if you have not)")
+		}
 		return toolutil.WrapErrWithMessage("mrUnapprove", err)
 	}
 	return nil
