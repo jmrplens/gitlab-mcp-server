@@ -6,6 +6,7 @@ package pages
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -145,7 +146,8 @@ func GetPages(ctx context.Context, client *gitlabclient.Client, input GetPagesIn
 
 	pages, _, err := client.GL().Pages.GetPages(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("gitlab_pages_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_pages_get", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; Pages may not be configured for this project")
 	}
 
 	return toPagesOutput(pages), nil
@@ -170,7 +172,8 @@ func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdateP
 
 	pages, _, err := client.GL().Pages.UpdatePages(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("gitlab_pages_update", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_pages_update", err, http.StatusForbidden,
+			"updating Pages settings requires Maintainer role; pages_primary_domain must be a domain previously added via gitlab_pages_domain_create")
 	}
 
 	return toPagesOutput(pages), nil
@@ -184,7 +187,8 @@ func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input Unpu
 
 	_, err := client.GL().Pages.UnpublishPages(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_pages_unpublish", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_pages_unpublish", err, http.StatusForbidden,
+			"unpublishing Pages requires Maintainer role; verify project_id")
 	}
 
 	return nil
@@ -198,7 +202,8 @@ func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input Unpu
 func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllDomainsInput) (ListAllDomainsOutput, error) {
 	domains, _, err := client.GL().PagesDomains.ListAllPagesDomains(gl.WithContext(ctx))
 	if err != nil {
-		return ListAllDomainsOutput{}, toolutil.WrapErrWithMessage("gitlab_pages_domain_list_all", err)
+		return ListAllDomainsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_list_all", err, http.StatusForbidden,
+			"listing all Pages domains requires admin token")
 	}
 
 	out := ListAllDomainsOutput{Domains: make([]DomainOutput, 0, len(domains))}
@@ -224,7 +229,8 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 
 	domains, resp, err := client.GL().PagesDomains.ListPagesDomains(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListDomainsOutput{}, toolutil.WrapErrWithMessage("gitlab_pages_domain_list", err)
+		return ListDomainsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_list", err, http.StatusNotFound,
+			"verify project_id with gitlab_project_get; the project may have no Pages domains configured")
 	}
 
 	out := ListDomainsOutput{
@@ -251,7 +257,8 @@ func GetDomain(ctx context.Context, client *gitlabclient.Client, input GetDomain
 
 	domain, _, err := client.GL().PagesDomains.GetPagesDomain(string(input.ProjectID), input.Domain, gl.WithContext(ctx))
 	if err != nil {
-		return DomainOutput{}, toolutil.WrapErrWithMessage("gitlab_pages_domain_get", err)
+		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_get", err, http.StatusNotFound,
+			"verify domain with gitlab_pages_domain_list; the domain may have been removed")
 	}
 
 	out := toDomainOutput(domain)
@@ -283,7 +290,8 @@ func CreateDomain(ctx context.Context, client *gitlabclient.Client, input Create
 
 	domain, _, err := client.GL().PagesDomains.CreatePagesDomain(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return DomainOutput{}, toolutil.WrapErrWithMessage("gitlab_pages_domain_create", err)
+		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_create", err, http.StatusBadRequest,
+			"domain must be a valid FQDN and not in use by another project; certificate and key must be PEM-encoded matching pair when provided; auto_ssl_enabled requires DNS A/AAAA record pointing to GitLab Pages; requires Maintainer role")
 	}
 
 	out := toDomainOutput(domain)
@@ -313,7 +321,8 @@ func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input Update
 
 	domain, _, err := client.GL().PagesDomains.UpdatePagesDomain(string(input.ProjectID), input.Domain, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DomainOutput{}, toolutil.WrapErrWithMessage("gitlab_pages_domain_update", err)
+		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_update", err, http.StatusBadRequest,
+			"certificate and key must be PEM-encoded matching pair when provided; cannot set both auto_ssl_enabled and a custom certificate; requires Maintainer role")
 	}
 
 	out := toDomainOutput(domain)
@@ -332,7 +341,8 @@ func DeleteDomain(ctx context.Context, client *gitlabclient.Client, input Delete
 
 	_, err := client.GL().PagesDomains.DeletePagesDomain(string(input.ProjectID), input.Domain, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("gitlab_pages_domain_delete", err)
+		return toolutil.WrapErrWithStatusHint("gitlab_pages_domain_delete", err, http.StatusForbidden,
+			"deleting Pages domains requires Maintainer role; verify domain with gitlab_pages_domain_list")
 	}
 
 	return nil
