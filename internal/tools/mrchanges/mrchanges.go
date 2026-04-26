@@ -7,6 +7,7 @@ package mrchanges
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -73,7 +74,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, &gl.ListMergeRequestDiffsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("mrChangesGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
 	}
 	out := make([]FileDiffOutput, len(diffs))
 	var truncated []string
@@ -201,7 +202,7 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 	versions, resp, err := client.GL().MergeRequests.GetMergeRequestDiffVersions(
 		string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DiffVersionsListOutput{}, toolutil.WrapErrWithMessage("mrDiffVersionsList", err)
+		return DiffVersionsListOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionsList", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
 	}
 	out := make([]DiffVersionOutput, len(versions))
 	for i, v := range versions {
@@ -234,7 +235,7 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 	version, _, err := client.GL().MergeRequests.GetSingleMergeRequestDiffVersion(
 		string(input.ProjectID), input.MRIID, input.VersionID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return DiffVersionOutput{}, toolutil.WrapErrWithMessage("mrDiffVersionGet", err)
+		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with gitlab_list_mr_diff_versions")
 	}
 	return diffVersionToOutput(version), nil
 }
@@ -275,7 +276,7 @@ func RawDiffs(ctx context.Context, client *gitlabclient.Client, input RawDiffsIn
 	raw, _, err := client.GL().MergeRequests.ShowMergeRequestRawDiffs(
 		string(input.ProjectID), input.MRIID, &gl.ShowMergeRequestRawDiffsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return RawDiffsOutput{}, toolutil.WrapErrWithMessage("mrRawDiffs", err)
+		return RawDiffsOutput{}, toolutil.WrapErrWithStatusHint("mrRawDiffs", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
 	}
 	return RawDiffsOutput{MRIID: input.MRIID, RawDiff: string(raw)}, nil
 }

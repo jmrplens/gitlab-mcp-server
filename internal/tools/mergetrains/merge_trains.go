@@ -3,6 +3,7 @@ package mergetrains
 
 import (
 	"context"
+	"net/http"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -136,7 +137,7 @@ func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, in
 	}
 	trains, resp, err := client.GL().MergeTrains.ListProjectMergeTrains(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_project_merge_trains", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_merge_trains", err, http.StatusNotFound, "verify project_id with gitlab_get_project \u2014 merge trains require Premium license")
 	}
 	return toListOutput(trains, resp), nil
 }
@@ -160,7 +161,7 @@ func ListMergeRequestInMergeTrain(ctx context.Context, client *gitlabclient.Clie
 	}
 	trains, resp, err := client.GL().MergeTrains.ListMergeRequestInMergeTrain(string(input.ProjectID), input.TargetBranch, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_list_merge_request_in_merge_train", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_merge_request_in_merge_train", err, http.StatusNotFound, "verify project_id and target_branch \u2014 merge trains require Premium license")
 	}
 	return toListOutput(trains, resp), nil
 }
@@ -175,7 +176,7 @@ func GetMergeRequestOnMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	}
 	train, _, err := client.GL().MergeTrains.GetMergeRequestOnAMergeTrain(string(input.ProjectID), input.MergeRequestID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("gitlab_get_merge_request_on_merge_train", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_merge_request_on_merge_train", err, http.StatusNotFound, "verify project_id and merge_request_iid \u2014 the MR must be on a merge train")
 	}
 	return toOutput(train), nil
 }
@@ -200,7 +201,7 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	}
 	trains, resp, err := client.GL().MergeTrains.AddMergeRequestToMergeTrain(string(input.ProjectID), input.MergeRequestID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("gitlab_add_merge_request_to_merge_train", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_add_merge_request_to_merge_train", err, http.StatusBadRequest, "verify the MR is approved and pipeline passed \u2014 merge trains require Premium license")
 	}
 	return toListOutput(trains, resp), nil
 }

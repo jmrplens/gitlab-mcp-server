@@ -4,6 +4,7 @@ package markdown
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -38,7 +39,7 @@ func Render(ctx context.Context, client *gitlabclient.Client, input RenderInput)
 	}
 	md, _, err := client.GL().Markdown.Render(opts, gl.WithContext(ctx))
 	if err != nil {
-		return RenderOutput{}, toolutil.WrapErrWithMessage("render_markdown", err)
+		return RenderOutput{}, toolutil.WrapErrWithStatusHint("render_markdown", err, http.StatusBadRequest, "verify the markdown text is valid and project is accessible if using project context")
 	}
 	return RenderOutput{HTML: md.HTML}, nil
 }

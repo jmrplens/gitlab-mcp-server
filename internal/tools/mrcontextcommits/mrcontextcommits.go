@@ -6,6 +6,7 @@ package mrcontextcommits
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -50,7 +51,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	commits, _, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_mr_context_commits", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
 	}
 	items := make([]CommitItem, 0, len(commits))
 	for _, c := range commits {
@@ -94,7 +95,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	commits, _, err := client.GL().MergeRequestContextCommits.CreateMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("create_mr_context_commits", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("create_mr_context_commits", err, http.StatusBadRequest, "verify commit SHAs exist in the project repository")
 	}
 	items := make([]CommitItem, 0, len(commits))
 	for _, c := range commits {
@@ -138,7 +139,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().MergeRequestContextCommits.DeleteMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_mr_context_commits", err)
+		return toolutil.WrapErrWithStatusHint("delete_mr_context_commits", err, http.StatusNotFound, "verify commit SHAs are valid context commits for this MR")
 	}
 	return nil
 }

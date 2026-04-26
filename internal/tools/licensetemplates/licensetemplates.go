@@ -4,6 +4,7 @@ package licensetemplates
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -50,7 +51,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	items, resp, err := client.GL().LicenseTemplates.ListLicenseTemplates(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_license_templates", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_license_templates", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 	licenses := make([]LicenseItem, 0, len(items))
 	for _, l := range items {
@@ -89,7 +90,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	l, _, err := client.GL().LicenseTemplates.GetLicenseTemplate(input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_license_template", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_license_template", err, http.StatusNotFound, "verify key with gitlab_list_license_templates")
 	}
 	return GetOutput{LicenseItem: licenseFromGL(l)}, nil
 }
