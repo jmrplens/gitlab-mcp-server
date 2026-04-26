@@ -116,7 +116,7 @@ the file a genuinely complete LLM-discoverable contract.
 | TASK-030 | `internal/tools/invites/invites.go` (10) — invite already accepted/expired hints. | ✅ | 2026-04-26 |
 | TASK-031 | `internal/tools/instancevariables/instancevariables.go` (10) | ✅ | 2026-04-26 |
 | TASK-032 | `internal/tools/groupvariables/groupvariables.go` (10) | ✅ | 2026-04-26 |
-| TASK-033 | `internal/tools/freezeperiods/freezeperiods.go` (10) | | |
+| TASK-033 | `internal/tools/freezeperiods/freezeperiods.go` (10) | ✅ | 2026-04-26 |
 | TASK-034 | `internal/tools/civariables/civariables.go` (10) | | |
 | TASK-035 | `internal/tools/branches/branches.go` (10) — protected-branch hint already exists for delete; expand to Create/CherryPickHead. | | |
 
