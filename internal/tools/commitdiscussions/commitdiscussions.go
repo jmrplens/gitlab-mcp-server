@@ -3,6 +3,7 @@ package commitdiscussions
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -110,7 +111,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	discussions, resp, err := client.GL().Discussions.ListCommitDiscussions(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("commit_discussion_list", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_list", err, http.StatusNotFound,
+			"verify project_id and commit_sha with gitlab_commit_get")
 	}
 	return toListOutput(discussions, resp), nil
 }
@@ -119,7 +121,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	d, _, err := client.GL().Discussions.GetCommitDiscussion(string(input.ProjectID), input.CommitSHA, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("commit_discussion_get", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_get", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_commit_discussions_list")
 	}
 	return toOutput(d), nil
 }
@@ -143,7 +146,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	d, _, err := client.GL().Discussions.CreateCommitDiscussion(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("commit_discussion_create", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_create", err, http.StatusBadRequest,
+			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; verify the commit_sha exists in the project")
 	}
 	return toOutput(d), nil
 }
@@ -155,7 +159,8 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	}
 	note, _, err := client.GL().Discussions.AddCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("commit_discussion_add_note", err)
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_add_note", err, http.StatusNotFound,
+			"verify discussion_id with gitlab_commit_discussions_list")
 	}
 	return noteToOutput(note), nil
 }
@@ -170,7 +175,8 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	}
 	note, _, err := client.GL().Discussions.UpdateCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return NoteOutput{}, toolutil.WrapErrWithMessage("commit_discussion_update_note", err)
+		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_update_note", err, http.StatusForbidden,
+			"only the note author can edit a discussion note")
 	}
 	return noteToOutput(note), nil
 }
@@ -182,7 +188,8 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}
 	_, err := client.GL().Discussions.DeleteCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("commit_discussion_delete_note", err)
+		return toolutil.WrapErrWithStatusHint("commit_discussion_delete_note", err, http.StatusForbidden,
+			"only the note author or a Maintainer can delete a discussion note")
 	}
 	return nil
 }
