@@ -17,7 +17,7 @@ import (
 // The string mentions password policy as part of GitLab's documented user-creation
 // requirements; it is operator guidance, not a credential. The trailing NOSONAR
 // suppresses go:S2068 (hard-coded credential heuristic).
-const createUserForbiddenHint = "creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username" //NOSONAR
+const createUserForbiddenHint = "creating users requires admin token; email and username must be unique; password must meet instance complexity policy or use reset_password=true; required fields: email, name, username" // NOSONAR
 
 // CreateInput holds parameters for creating a new GitLab user (admin only).
 type CreateInput struct {

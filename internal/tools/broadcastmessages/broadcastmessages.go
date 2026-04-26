@@ -183,7 +183,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
-			"requires administrator access; broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/20/30/40/50")
+			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/20/30/40/50")
 	}
 	return CreateOutput{Message: toItem(m)}, nil
 }
@@ -223,7 +223,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	m, _, err := client.GL().BroadcastMessage.UpdateBroadcastMessage(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_update", err, http.StatusNotFound,
-			"verify id with gitlab_list_broadcast_messages; requires administrator access; broadcast_type must be 'banner' or 'notification'")
+			"verify id with gitlab_list_broadcast_messages; the message may have been deleted or you lack access")
 	}
 	return UpdateOutput{Message: toItem(m)}, nil
 }

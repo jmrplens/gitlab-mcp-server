@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
@@ -26,9 +25,11 @@ import (
 // per-token server instance from the pool gets its own RateLimiter, so the
 // limit is effectively per-token. In stdio mode the bucket is global to
 // the single process.
+//
+// [rate.Limiter] is safe for concurrent use by design, so RateLimiter does
+// not need additional synchronization of its own.
 type RateLimiter struct {
 	limiter *rate.Limiter
-	mu      sync.Mutex
 }
 
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
@@ -47,13 +48,13 @@ func NewRateLimiter(rps float64, burst int) *RateLimiter {
 	}
 }
 
-// allow reports whether a single token is currently available.
+// allow reports whether a single token is currently available. The
+// underlying [rate.Limiter] is safe for concurrent use, so no additional
+// locking is required here.
 func (r *RateLimiter) allow() bool {
 	if r == nil || r.limiter == nil {
 		return true
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	return r.limiter.Allow()
 }
 

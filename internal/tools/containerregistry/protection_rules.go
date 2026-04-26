@@ -148,7 +148,7 @@ func UpdateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 		string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_update", err, http.StatusNotFound,
-			"verify protection_rule_id with gitlab_registry_protection_list; pattern uniqueness still applies on rename")
+			"verify rule_id with gitlab_registry_protection_list; pattern uniqueness still applies on rename")
 	}
 	return convertProtectionRule(rule), nil
 }
@@ -175,7 +175,7 @@ func DeleteProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 		string(input.ProjectID), input.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("registry_protection_delete", err, http.StatusNotFound,
-			"verify protection_rule_id with gitlab_registry_protection_list; managing protection rules requires Maintainer role or higher")
+			"verify rule_id with gitlab_registry_protection_list; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

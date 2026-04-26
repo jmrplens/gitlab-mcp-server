@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,10 +26,15 @@ import (
 //
 // The transformation runs after LockdownInputSchemas so it sees the same
 // fully-populated schema set every list/tools response carries.
+//
+// Concurrency. As with [LockdownInputSchemas], the mutation is guarded by a
+// `sync.Once` so concurrent `tools/list` calls cannot race on the shared
+// *Tool.InputSchema maps.
 func EnrichPaginationConstraints(server *mcp.Server) {
 	if server == nil {
 		return
 	}
+	var once sync.Once
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			result, err := next(ctx, method, req)
@@ -36,11 +42,13 @@ func EnrichPaginationConstraints(server *mcp.Server) {
 				return result, err
 			}
 			if listResult, ok := result.(*mcp.ListToolsResult); ok && listResult != nil {
-				for _, t := range listResult.Tools {
-					if schema, isMap := t.InputSchema.(map[string]any); isMap {
-						enrichPaginationNode(schema)
+				once.Do(func() {
+					for _, t := range listResult.Tools {
+						if schema, isMap := t.InputSchema.(map[string]any); isMap {
+							enrichPaginationNode(schema)
+						}
 					}
-				}
+				})
 			}
 			return result, nil
 		}

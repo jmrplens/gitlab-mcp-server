@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -371,6 +372,9 @@ func parseFloatNonNegative(s string, defaultValue float64) (float64, error) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid float %q: %w", s, err)
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("value must be a finite number, got %g", f)
 	}
 	if f < 0 {
 		return 0, fmt.Errorf("value must be >= 0, got %g", f)

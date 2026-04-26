@@ -118,6 +118,6 @@ func FormatListExportStatus(out *ListExportStatusOutput) string {
 			toolutil.EscapeMdTableCell(s.UpdatedAt))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_download_group_export` to download exported data")
+	toolutil.WriteHints(&sb, "Use the GitLab group relations export download endpoint (`GET /groups/:id/export_relations/download`) to download exported data")
 	return sb.String()
 }

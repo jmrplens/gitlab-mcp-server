@@ -21,7 +21,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0007](adr-0007-rich-error-semantics.md) | Rich error semantics for LLM-actionable diagnostics | Accepted | 2026-04-06 |
 | [ADR-0008](adr-0008-universal-identity.md) | Universal identity system | Accepted | 2026-04-13 |
 | [ADR-0009](adr-0009-progressive-graphql-migration.md) | Progressive GraphQL migration strategy | Accepted | 2026-04-20 |
-| [ADR-0010](adr-0010-no-resource-subscribe.md) | No resource subscribe capability | Accepted | 2025-01 |
+| [ADR-0010](adr-0010-no-resource-subscribe.md) | No resource subscribe capability | Accepted | 2026-04-26 |
 
 ## About Missing ADRs
 

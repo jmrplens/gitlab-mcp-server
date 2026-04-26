@@ -157,7 +157,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_path with gitlab_get_group")
 	}
 
 	if resp.Data.Group == nil {
@@ -219,7 +219,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_custom_emoji", err, http.StatusBadRequest, "verify group_id, name is unique, and url points to a valid image")
+		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_custom_emoji", err, http.StatusBadRequest, "verify group_path, name is unique, and url points to a valid image")
 	}
 
 	if len(resp.Data.CreateCustomEmoji.Errors) > 0 {
@@ -263,7 +263,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound, "verify emoji_id with gitlab_list_custom_emoji")
+		return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound, "verify id with gitlab_list_custom_emoji")
 	}
 
 	if len(resp.Data.DestroyCustomEmoji.Errors) > 0 {

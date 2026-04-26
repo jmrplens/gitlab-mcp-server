@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,12 +27,19 @@ import (
 // intentionally permit unknown fields for forward compatibility remain
 // intact.
 //
-// The transformation is idempotent: once a node carries
-// `additionalProperties`, subsequent invocations are no-ops.
+// Concurrency. The MCP Go SDK does not expose a public API to enumerate
+// registered tools at startup, so the transformation runs inside a
+// `tools/list` middleware. To avoid a data race when multiple clients call
+// `tools/list` concurrently (each invocation would otherwise mutate the
+// shared *Tool.InputSchema map), the actual mutation is guarded by a
+// `sync.Once`: the first call performs the lockdown, and concurrent callers
+// block until that mutation completes. Subsequent calls are pure reads on
+// the (now stable) schema maps and run lock-free.
 func LockdownInputSchemas(server *mcp.Server) {
 	if server == nil {
 		return
 	}
+	var once sync.Once
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			result, err := next(ctx, method, req)
@@ -39,11 +47,13 @@ func LockdownInputSchemas(server *mcp.Server) {
 				return result, err
 			}
 			if listResult, ok := result.(*mcp.ListToolsResult); ok && listResult != nil {
-				for _, t := range listResult.Tools {
-					if schema, isMap := t.InputSchema.(map[string]any); isMap {
-						lockdownSchemaNode(schema)
+				once.Do(func() {
+					for _, t := range listResult.Tools {
+						if schema, isMap := t.InputSchema.(map[string]any); isMap {
+							lockdownSchemaNode(schema)
+						}
 					}
-				}
+				})
 			}
 			return result, nil
 		}

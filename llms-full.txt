@@ -8202,8 +8202,8 @@ Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: project_id*, target_branch*, scope, sort, page, per_page
-- get: project_id*, merge_request_id*
-- add: project_id*, merge_request_id*, auto_merge (bool), sha, squash (bool)
+- get: project_id*, merge_request_iid*
+- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline
 
@@ -9188,7 +9188,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 List all issue boards for a project
 
-See also: gitlab_board_create, gitlab_list_issues
+See also: gitlab_board_create, gitlab_issue_list
 
 Returns: JSON array of boards with pagination.
 
@@ -9204,7 +9204,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Create a new list in an issue board
 
-See also: gitlab_board_list_lists, gitlab_list_labels
+See also: gitlab_board_list_lists, gitlab_label_list
 
 Returns: JSON with the board list details.
 
@@ -9843,7 +9843,7 @@ Create a new discussion thread on a project commit. Supports inline diff comment
 
 Returns: JSON with created discussion thread including ID and initial note.
 
-See also: gitlab_list_commit_discussions, gitlab_get_commit
+See also: gitlab_list_commit_discussions, gitlab_commit_get
 
 **Parameters:**
 
@@ -9930,7 +9930,7 @@ Create a deploy freeze period with cron-based start and end times.
 
 Returns: JSON with created freeze period including ID, cron schedule, and timezone.
 
-See also: gitlab_list_freeze_periods, gitlab_list_deployments
+See also: gitlab_list_freeze_periods, gitlab_deployment_list
 
 **Parameters:**
 
@@ -10260,7 +10260,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Create a GitLab CI runner linked to the current user. Runners execute CI/CD jobs. Specify runner_type (instance_type, group_type, or project_type).
 
-See also: gitlab_user_current, gitlab_list_runners
+See also: gitlab_user_current, gitlab_runner_list
 
 Returns: JSON with runner ID and authentication token.
 
@@ -10519,7 +10519,7 @@ Delete a feature flag (admin). Requires the flag name.
 
 Returns: confirmation message.
 
-See also: gitlab_list_feature_flags.
+See also: gitlab_feature_flag_list.
 
 **Parameters:**
 
@@ -11448,7 +11448,7 @@ Download a machine learning model package file from the GitLab model registry.
 
 Returns: JSON with base64-encoded file content, filename, and size.
 
-See also: gitlab_list_packages
+See also: gitlab_package_list
 
 **Parameters:**
 
@@ -12623,7 +12623,7 @@ Get issue statistics for a group.
 
 Returns: JSON with group issue counts.
 
-See also: gitlab_get_issue_statistics, gitlab_list_group_issues
+See also: gitlab_get_issue_statistics, gitlab_issue_list_group
 
 **Parameters:**
 
@@ -12762,7 +12762,7 @@ Get the CI/CD job token access settings for a GitLab project.
 
 Returns: JSON with job token scope configuration.
 
-See also: gitlab_patch_job_token_access_settings, gitlab_list_ci_variables
+See also: gitlab_patch_job_token_access_settings, gitlab_ci_variable_list
 
 **Parameters:**
 
@@ -12972,7 +12972,7 @@ Get issue statistics for a project.
 
 Returns: JSON with project issue counts.
 
-See also: gitlab_get_issue_statistics, gitlab_list_issues
+See also: gitlab_get_issue_statistics, gitlab_issue_list
 
 **Parameters:**
 
@@ -13611,7 +13611,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 List all issue boards for a group
 
-See also: gitlab_group_board_create, gitlab_list_group_issues
+See also: gitlab_group_board_create, gitlab_issue_list_group
 
 Returns: JSON array of boards with pagination.
 
@@ -13906,7 +13906,7 @@ Invite a user to a group by email or user ID. Requires access_level (10=Guest, 2
 
 Returns: JSON with the invitation result.
 
-See also: gitlab_group_invite_list_pending, gitlab_add_group_member
+See also: gitlab_group_invite_list_pending, gitlab_group_member_add
 
 **Parameters:**
 
@@ -13924,7 +13924,7 @@ List all pending invitations for a group. Supports filtering by query and pagina
 
 Returns: JSON array of pending invitations with pagination.
 
-See also: gitlab_group_invite, gitlab_list_group_members
+See also: gitlab_group_invite, gitlab_group_members_list
 
 **Parameters:**
 
@@ -14124,7 +14124,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Add a member to a GitLab group. Specify user by user_id or username, and set access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optionally set expiration date.
 
-Returns: JSON with the added member details. See also: gitlab_group_member_list, gitlab_get_user.
+Returns: JSON with the added member details. See also: gitlab_group_members_list, gitlab_get_user.
 
 **Parameters:**
 
@@ -14155,7 +14155,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 Get a single member of a GitLab group by user ID. Returns user details including access level, state, and expiration date.
 
-Returns: JSON with member details including access level, state, and expiration. See also: gitlab_group_member_list.
+Returns: JSON with member details including access level, state, and expiration. See also: gitlab_group_members_list.
 
 **Parameters:**
 
@@ -14181,7 +14181,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Remove a member from a GitLab group. Optionally skip subresource removal and unassign issuables.
 
-Returns: JSON confirming member removal. See also: gitlab_group_member_list.
+Returns: JSON confirming member removal. See also: gitlab_group_members_list.
 
 **Parameters:**
 
@@ -15003,7 +15003,7 @@ Import GitHub gists into GitLab snippets
 
 Returns: JSON confirmation of gists import initiation.
 
-See also: gitlab_import_from_github, gitlab_list_snippets
+See also: gitlab_import_from_github, gitlab_snippet_list
 
 **Parameters:**
 
@@ -15369,7 +15369,7 @@ List label events for a project issue. Shows when labels were added or removed.
 
 Returns: JSON array of label events with pagination. Fields include id, action, user, created_at.
 
-See also: gitlab_issue_label_event_get, gitlab_list_issues
+See also: gitlab_issue_label_event_get, gitlab_issue_list
 
 **Parameters:**
 
@@ -15436,7 +15436,7 @@ List issue relations (linked issues) for a given issue in a GitLab project. Retu
 
 Returns: JSON array of linked issues.
 
-See also: gitlab_issue_link_create, gitlab_get_issue
+See also: gitlab_issue_link_create, gitlab_issue_get
 
 **Parameters:**
 
@@ -15740,7 +15740,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_participants
 
-List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_member_list.
+List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -16443,7 +16443,7 @@ List discussion threads on a project commit.
 
 Returns: JSON with discussion threads including notes, authors, and positions.
 
-See also: gitlab_create_commit_discussion, gitlab_get_commit
+See also: gitlab_create_commit_discussion, gitlab_commit_get
 
 **Parameters:**
 
@@ -16571,7 +16571,7 @@ List discussion threads on a group epic via the Work Items GraphQL API.
 
 Returns: JSON with discussion threads including notes and authors.
 
-See also: gitlab_create_epic_discussion, gitlab_list_groups
+See also: gitlab_create_epic_discussion, gitlab_group_list
 
 **Parameters:**
 
@@ -16626,7 +16626,7 @@ List deploy freeze periods for a GitLab project.
 
 Returns: JSON with freeze periods array including cron schedule, timezone, and status.
 
-See also: gitlab_create_freeze_period, gitlab_list_environments
+See also: gitlab_create_freeze_period, gitlab_environment_list
 
 **Parameters:**
 
@@ -17204,7 +17204,7 @@ List resource groups for a GitLab project.
 
 Returns: JSON array of resource groups with pagination.
 
-See also: gitlab_get_resource_group, gitlab_list_pipelines
+See also: gitlab_get_resource_group, gitlab_pipeline_list
 
 **Parameters:**
 
@@ -17218,7 +17218,7 @@ List CI/CD secure files for a GitLab project.
 
 Returns: JSON array of secure files with pagination.
 
-See also: gitlab_show_secure_file, gitlab_list_ci_variables
+See also: gitlab_show_secure_file, gitlab_ci_variable_list
 
 **Parameters:**
 
@@ -17270,7 +17270,7 @@ List discussion threads on a project snippet.
 
 Returns: JSON array of discussions with pagination.
 
-See also: gitlab_get_snippet_discussion, gitlab_list_project_snippets
+See also: gitlab_get_snippet_discussion, gitlab_project_snippet_list
 
 **Parameters:**
 
@@ -17355,7 +17355,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 List project topics. Can be filtered by search query.
 
-See also: gitlab_create_topic, gitlab_list_projects
+See also: gitlab_create_topic, gitlab_project_list
 
 Returns: JSON with array of topics and pagination info.
 
@@ -17966,7 +17966,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.
 
-Returns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_note_list.
+Returns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_notes_list.
 
 **Parameters:**
 
@@ -18825,7 +18825,7 @@ List all namespaces visible to the authenticated user. Supports filtering by sea
 
 Returns: JSON array of namespaces with pagination.
 
-See also: gitlab_namespace_get, gitlab_list_groups
+See also: gitlab_namespace_get, gitlab_group_list
 
 **Parameters:**
 
@@ -19740,7 +19740,7 @@ Trigger a pipeline using a trigger token
 
 Returns: JSON with the triggered pipeline details.
 
-See also: gitlab_pipeline_trigger_list, gitlab_create_pipeline
+See also: gitlab_pipeline_trigger_list, gitlab_pipeline_create
 
 **Parameters:**
 
@@ -20289,7 +20289,7 @@ List all visible events for a project. Supports filtering by action type, target
 
 Returns: JSON array of events with pagination.
 
-See also: gitlab_user_contribution_event_list, gitlab_list_commits
+See also: gitlab_user_contribution_event_list, gitlab_commit_list
 
 **Parameters:**
 
@@ -20546,7 +20546,7 @@ Invite a user to a project by email or user ID. Requires access_level (10=Guest,
 
 Returns: JSON with the invitation result.
 
-See also: gitlab_project_invite_list_pending, gitlab_add_project_member
+See also: gitlab_project_invite_list_pending, gitlab_project_member_add
 
 **Parameters:**
 
@@ -20564,7 +20564,7 @@ List all pending invitations for a project. Supports filtering by query and pagi
 
 Returns: JSON array of pending invitations with pagination.
 
-See also: gitlab_project_invite, gitlab_list_project_members
+See also: gitlab_project_invite, gitlab_project_members_list
 
 **Parameters:**
 
@@ -20767,7 +20767,7 @@ List users who are members of a project. Supports filtering by search (name or u
 
 Returns: JSON array of project users with pagination. Fields include id, username, name, and state.
 
-See also: gitlab_project_member_list.
+See also: gitlab_project_members_list.
 
 **Parameters:**
 
@@ -20799,7 +20799,7 @@ Remove a member from a project.
 
 Returns: confirmation message.
 
-See also: gitlab_project_member_list.
+See also: gitlab_project_members_list.
 
 **Parameters:**
 
@@ -21258,7 +21258,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Get a single protected environment by name, including deploy access levels and approval rules.
 
-See also: gitlab_protected_environment_list, gitlab_get_environment
+See also: gitlab_protected_environment_list, gitlab_environment_get
 
 Returns: JSON with protected environment details (name, deploy access levels, approval rules).
 
@@ -21273,7 +21273,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 List protected environments in a GitLab project with their deploy access levels and approval rules.
 
-See also: gitlab_protected_environment_protect, gitlab_list_environments
+See also: gitlab_protected_environment_protect, gitlab_environment_list
 
 Returns: JSON with array of protected environments and pagination info.
 
@@ -21289,7 +21289,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Protect an environment in a GitLab project. Configure deploy access levels, required approvals, and approval rules.
 
-See also: gitlab_protected_environment_list, gitlab_create_environment
+See also: gitlab_protected_environment_list, gitlab_environment_create
 
 Returns: JSON with the newly protected environment details.
 
@@ -21915,7 +21915,7 @@ Generate changelog data (notes) without committing. Returns the changelog notes 
 
 Returns: Markdown changelog notes for the specified version.
 
-See also: gitlab_repository_changelog_data.
+See also: gitlab_repository_changelog_generate.
 
 **Parameters:**
 

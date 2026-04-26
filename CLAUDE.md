@@ -158,7 +158,7 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Three error wrapping functions in `internal/toolutil/errors.go`, used by all 162 domain sub-packages:
+Four error wrapping functions in `internal/toolutil/errors.go`, used by all 162 domain sub-packages:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
