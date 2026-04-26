@@ -6,6 +6,7 @@ package snippetnotes
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -119,7 +120,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	notes, resp, err := client.GL().Notes.ListSnippetNotes(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("snippetNoteList", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippetNoteList", err, http.StatusNotFound,
+			"verify project_id and snippet_id with gitlab_snippet_list; private snippets require Reporter role on the project")
 	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {
@@ -144,7 +146,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	n, _, err := client.GL().Notes.GetSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippetNoteGet", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteGet", err, http.StatusNotFound,
+			"verify project_id, snippet_id, and note_id with gitlab_snippet_note_list")
 	}
 	return toOutput(n), nil
 }
@@ -168,7 +171,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Body: &body,
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippetNoteCreate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteCreate", err, http.StatusBadRequest,
+			"body is required and rendered as GitLab Flavored Markdown (max 1MB); requires Reporter role on the project")
 	}
 	return toOutput(n), nil
 }
@@ -192,7 +196,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		Body: &body,
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("snippetNoteUpdate", err)
+		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteUpdate", err, http.StatusForbidden,
+			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_snippet_note_list; system notes cannot be edited")
 	}
 	return toOutput(n), nil
 }
@@ -213,7 +218,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Notes.DeleteSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithMessage("snippetNoteDelete", err)
+		return toolutil.WrapErrWithStatusHint("snippetNoteDelete", err, http.StatusForbidden,
+			"only the note author or a Maintainer/Owner can delete; deletion is irreversible \u2014 system notes cannot be removed")
 	}
 	return nil
 }
