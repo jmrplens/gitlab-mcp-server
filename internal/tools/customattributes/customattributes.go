@@ -3,6 +3,7 @@ package customattributes
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -54,7 +55,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrInvalidEnum("resource_type", input.ResourceType, validResourceTypes)
 	}
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_custom_attributes", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_attributes", err, http.StatusNotFound, "verify resource_type (user, group, project) and resource_id \u2014 requires admin access")
 	}
 
 	items := make([]AttributeItem, 0, len(attrs))
@@ -101,7 +102,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		return GetOutput{}, toolutil.ErrInvalidEnum("resource_type", input.ResourceType, validResourceTypes)
 	}
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_custom_attribute", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_custom_attribute", err, http.StatusNotFound, "verify resource_type, resource_id, and key \u2014 requires admin access")
 	}
 	return GetOutput{AttributeItem: AttributeItem{Key: attr.Key, Value: attr.Value}}, nil
 }
@@ -145,7 +146,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 		return SetOutput{}, toolutil.ErrInvalidEnum("resource_type", input.ResourceType, validResourceTypes)
 	}
 	if err != nil {
-		return SetOutput{}, toolutil.WrapErrWithMessage("set_custom_attribute", err)
+		return SetOutput{}, toolutil.WrapErrWithStatusHint("set_custom_attribute", err, http.StatusNotFound, "verify resource_type and resource_id \u2014 requires admin access")
 	}
 	return SetOutput{AttributeItem: AttributeItem{Key: attr.Key, Value: attr.Value}}, nil
 }
@@ -180,7 +181,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.ErrInvalidEnum("resource_type", input.ResourceType, validResourceTypes)
 	}
 	if err != nil {
-		return toolutil.WrapErrWithMessage("delete_custom_attribute", err)
+		return toolutil.WrapErrWithStatusHint("delete_custom_attribute", err, http.StatusNotFound, "verify resource_type, resource_id, and key \u2014 requires admin access")
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ package groupanalytics
 
 import (
 	"context"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -61,7 +62,7 @@ func GetIssuesCount(ctx context.Context, client *gitlabclient.Client, in IssuesC
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedIssuesCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return IssuesCountOutput{}, toolutil.WrapErrWithMessage("get recently created issues count", err)
+		return IssuesCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created issues count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
 	}
 
 	return IssuesCountOutput{
@@ -84,7 +85,7 @@ func GetMRCount(ctx context.Context, client *gitlabclient.Client, in MRCountInpu
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedMergeRequestsCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return MRCountOutput{}, toolutil.WrapErrWithMessage("get recently created merge requests count", err)
+		return MRCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created merge requests count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
 	}
 
 	return MRCountOutput{
@@ -107,7 +108,7 @@ func GetMembersCount(ctx context.Context, client *gitlabclient.Client, in Member
 	}
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyAddedMembersCount(opts, gl.WithContext(ctx))
 	if err != nil {
-		return MembersCountOutput{}, toolutil.WrapErrWithMessage("get recently added members count", err)
+		return MembersCountOutput{}, toolutil.WrapErrWithStatusHint("get recently added members count", err, http.StatusNotFound, "verify group_path \u2014 requires Premium license")
 	}
 
 	return MembersCountOutput{

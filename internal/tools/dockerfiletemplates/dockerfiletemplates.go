@@ -4,6 +4,7 @@ package dockerfiletemplates
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -37,7 +38,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	items, resp, err := client.GL().DockerfileTemplate.ListTemplates(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list_dockerfile_templates", err)
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_dockerfile_templates", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 	templates := make([]TemplateListItem, 0, len(items))
 	for _, t := range items {
@@ -68,7 +69,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	t, _, err := client.GL().DockerfileTemplate.GetTemplate(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithMessage("get_dockerfile_template", err)
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_dockerfile_template", err, http.StatusNotFound, "verify name with gitlab_list_dockerfile_templates")
 	}
 	return GetOutput{Name: t.Name, Content: t.Content}, nil
 }

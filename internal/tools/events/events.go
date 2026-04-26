@@ -4,6 +4,7 @@ package events
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -86,7 +87,7 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 
 	events, resp, err := client.GL().Events.ListCurrentUserContributionEvents(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListContributionEventsOutput{}, toolutil.WrapErrWithMessage("user_contribution_event_list", err)
+		return ListContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("user_contribution_event_list", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 
 	out := ListContributionEventsOutput{
@@ -199,7 +200,7 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectEventsOutput{}, toolutil.WrapErrWithMessage("project_event_list", err)
+		return ListProjectEventsOutput{}, toolutil.WrapErrWithStatusHint("project_event_list", err, http.StatusNotFound, "verify project_id with gitlab_get_project")
 	}
 
 	out := ListProjectEventsOutput{
