@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // Naming patterns for MCP tool name validation.
@@ -83,6 +84,8 @@ func main() {
 	violations = append(violations, auditAnnotations(metaTools, "meta")...)
 	violations = append(violations, auditAnnotationTypes(individualTools)...)
 	violations = append(violations, auditInputSchema(individualTools)...)
+	violations = append(violations, auditAdditionalProperties(individualTools, "individual")...)
+	violations = append(violations, auditAdditionalProperties(metaTools, "meta")...)
 	violations = append(violations, auditDuplicates(individualTools, "individual")...)
 	violations = append(violations, auditDuplicates(metaTools, "meta")...)
 
@@ -99,6 +102,9 @@ func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	} else {
 		tools.RegisterAll(server, client, true)
 	}
+	// Apply the same lockdown the production server uses so the audit
+	// reflects the schemas clients actually see.
+	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -203,6 +209,45 @@ func auditInputSchema(tls []*mcp.Tool) []violation {
 		}
 	}
 	return vs
+}
+
+// auditAdditionalProperties flags root tool input schemas that do not declare
+// `additionalProperties: false`. Without this constraint an LLM that mistypes
+// an argument name receives a confusing "missing parameter" error instead of
+// the actionable "unknown property" diagnostic JSON Schema validation would
+// produce. The lockdown middleware in toolutil.LockdownInputSchemas should
+// keep this audit at zero violations.
+func auditAdditionalProperties(tls []*mcp.Tool, kind string) []violation {
+	var vs []violation
+	for _, t := range tls {
+		schema, ok := t.InputSchema.(map[string]any)
+		if !ok {
+			continue
+		}
+		if !isObjectSchema(schema) {
+			continue
+		}
+		raw, present := schema["additionalProperties"]
+		if !present {
+			vs = append(vs, violation{t.Name, "additional-properties",
+				fmt.Sprintf("%s tool inputSchema missing additionalProperties:false", kind)})
+			continue
+		}
+		if v, ok := raw.(bool); !ok || v {
+			vs = append(vs, violation{t.Name, "additional-properties",
+				fmt.Sprintf("%s tool inputSchema additionalProperties=%v, want false", kind, raw)})
+		}
+	}
+	return vs
+}
+
+// isObjectSchema reports whether a JSON Schema node represents an object.
+func isObjectSchema(node map[string]any) bool {
+	if t, ok := node["type"].(string); ok {
+		return t == "object"
+	}
+	_, hasProps := node["properties"]
+	return hasProps
 }
 
 // auditDuplicates detects tools with the same name registered more than once.
