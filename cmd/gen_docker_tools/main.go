@@ -143,7 +143,7 @@ func schemaArgs(schema any) []dockerArg {
 			Description string `json:"description"`
 		} `json:"properties"`
 	}
-	if unmarshalErr := json.Unmarshal(raw, &s); unmarshalErr != nil {
+	if err = json.Unmarshal(raw, &s); err != nil {
 		return nil
 	}
 	args := make([]dockerArg, 0, len(s.Properties))
