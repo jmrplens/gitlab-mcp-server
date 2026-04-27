@@ -4,6 +4,7 @@ package resources
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -159,6 +160,90 @@ type TagResourceOutput struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
+// CommitResourceOutput is the output for a single commit resource.
+type CommitResourceOutput struct {
+	ID            string                 `json:"id"`
+	ShortID       string                 `json:"short_id"`
+	Title         string                 `json:"title"`
+	Message       string                 `json:"message"`
+	AuthorName    string                 `json:"author_name"`
+	AuthorEmail   string                 `json:"author_email"`
+	AuthoredDate  string                 `json:"authored_date,omitempty"`
+	CommittedDate string                 `json:"committed_date,omitempty"`
+	WebURL        string                 `json:"web_url"`
+	ParentIDs     []string               `json:"parent_ids,omitempty"`
+	Stats         *CommitStatsOutput     `json:"stats,omitempty"`
+}
+
+// CommitStatsOutput holds additions/deletions/total for a commit resource.
+type CommitStatsOutput struct {
+	Additions int64 `json:"additions"`
+	Deletions int64 `json:"deletions"`
+	Total     int64 `json:"total"`
+}
+
+// FileBlobResourceOutput is the output for a repository file blob resource.
+// Binary content is omitted; only the textual representation is returned.
+type FileBlobResourceOutput struct {
+	FileName        string `json:"file_name"`
+	FilePath        string `json:"file_path"`
+	Size            int64  `json:"size"`
+	Encoding        string `json:"encoding,omitempty"`
+	Ref             string `json:"ref"`
+	BlobID          string `json:"blob_id"`
+	CommitID        string `json:"commit_id"`
+	LastCommitID    string `json:"last_commit_id"`
+	Content         string `json:"content,omitempty"`
+	ContentCategory string `json:"content_category"`
+	Truncated       bool   `json:"truncated,omitempty"`
+}
+
+// WikiResourceOutput is the output for a wiki page resource.
+type WikiResourceOutput struct {
+	Title    string `json:"title"`
+	Slug     string `json:"slug"`
+	Format   string `json:"format"`
+	Content  string `json:"content,omitempty"`
+	Encoding string `json:"encoding,omitempty"`
+}
+
+// MRNoteResourceOutput is the output for a single merge-request note inside
+// the MR notes resource.
+type MRNoteResourceOutput struct {
+	ID         int64  `json:"id"`
+	Author     string `json:"author"`
+	Body       string `json:"body"`
+	System     bool   `json:"system"`
+	Resolvable bool   `json:"resolvable,omitempty"`
+	Resolved   bool   `json:"resolved,omitempty"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	UpdatedAt  string `json:"updated_at,omitempty"`
+}
+
+// MRDiscussionNoteResourceOutput is the output for a note inside a discussion
+// thread of the MR discussions resource.
+type MRDiscussionNoteResourceOutput struct {
+	ID         int64  `json:"id"`
+	Author     string `json:"author"`
+	Body       string `json:"body"`
+	System     bool   `json:"system"`
+	Resolved   bool   `json:"resolved"`
+	Resolvable bool   `json:"resolvable"`
+	CreatedAt  string `json:"created_at,omitempty"`
+}
+
+// MRDiscussionResourceOutput is the output for a single discussion thread.
+type MRDiscussionResourceOutput struct {
+	ID             string                           `json:"id"`
+	IndividualNote bool                             `json:"individual_note"`
+	Notes          []MRDiscussionNoteResourceOutput `json:"notes"`
+}
+
+// Maximum size (in bytes) of file content returned by the file blob resource.
+// Files exceeding this limit return their metadata with content omitted and
+// truncated=true to keep responses small for LLM context windows.
+const fileBlobMaxBytes = 1 << 20 // 1 MiB
+
 // Internal constants for the JSON MIME type and URI scheme prefixes
 // used to route MCP resource requests to the correct GitLab API endpoints.
 const (
@@ -193,6 +278,11 @@ func Register(server *mcp.Server, client *gitlabclient.Client) {
 	registerProjectBranchesResource(server, client)
 	registerProjectReleasesResource(server, client)
 	registerProjectTagsResource(server, client)
+	registerCommitResource(server, client)
+	registerFileBlobResource(server, client)
+	registerWikiResource(server, client)
+	registerMergeRequestNotesResource(server, client)
+	registerMergeRequestDiscussionsResource(server, client)
 }
 
 // registerCurrentUserResource registers the "gitlab://user/current" static
@@ -824,6 +914,290 @@ func registerProjectTagsResource(server *mcp.Server, client *gitlabclient.Client
 		}
 		return marshalResourceJSON(out)
 	})
+}
+
+// registerCommitResource registers the
+// "gitlab://project/{project_id}/commit/{sha}" template resource that returns
+// details for a single commit including message, author/committer, parents
+// and stats.
+func registerCommitResource(server *mcp.Server, client *gitlabclient.Client) {
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://project/{project_id}/commit/{sha}",
+		Name:        "commit",
+		Title:       "Commit Details",
+		MIMEType:    mimeJSON,
+		Description: "Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).",
+		Annotations: toolutil.ContentDetail,
+		Icons:       toolutil.IconCommit,
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		projectID, sha := extractTwoParts(req.Params.URI, uriProjectPrefix, "/commit/")
+		if projectID == "" || sha == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		c, _, err := client.GL().Commits.GetCommit(projectID, sha, nil, gl.WithContext(ctx))
+		if err != nil {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		out := CommitResourceOutput{
+			ID:          c.ID,
+			ShortID:     c.ShortID,
+			Title:       c.Title,
+			Message:     c.Message,
+			AuthorName:  c.AuthorName,
+			AuthorEmail: c.AuthorEmail,
+			WebURL:      c.WebURL,
+			ParentIDs:   c.ParentIDs,
+		}
+		if c.AuthoredDate != nil {
+			out.AuthoredDate = c.AuthoredDate.Format(timeFormatISO)
+		}
+		if c.CommittedDate != nil {
+			out.CommittedDate = c.CommittedDate.Format(timeFormatISO)
+		}
+		if c.Stats != nil {
+			out.Stats = &CommitStatsOutput{
+				Additions: c.Stats.Additions,
+				Deletions: c.Stats.Deletions,
+				Total:     c.Stats.Total,
+			}
+		}
+		return marshalResourceJSON(out)
+	})
+}
+
+// registerFileBlobResource registers the
+// "gitlab://project/{project_id}/file/{ref}/{path}" template resource that
+// returns the textual contents of a repository file. Files larger than
+// fileBlobMaxBytes return metadata with content omitted and truncated=true.
+// Binary content is omitted (only metadata returned).
+func registerFileBlobResource(server *mcp.Server, client *gitlabclient.Client) {
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://project/{project_id}/file/{ref}/{+path}",
+		Name:        "file_blob",
+		Title:       "Repository File",
+		MIMEType:    mimeJSON,
+		Description: "Get the contents of a repository file at a specific ref (branch, tag, or SHA). Path may include slashes. Files over 1 MiB return metadata only with truncated=true. Binary files return metadata with empty content.",
+		Annotations: toolutil.ContentDetail,
+		Icons:       toolutil.IconFile,
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		projectID, ref, filePath := extractFileBlobURI(req.Params.URI)
+		if projectID == "" || ref == "" || filePath == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		opts := &gl.GetFileOptions{Ref: &ref}
+		f, _, err := client.GL().RepositoryFiles.GetFile(projectID, filePath, opts, gl.WithContext(ctx))
+		if err != nil {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		out := FileBlobResourceOutput{
+			FileName:     f.FileName,
+			FilePath:     f.FilePath,
+			Size:         f.Size,
+			Encoding:     f.Encoding,
+			Ref:          f.Ref,
+			BlobID:       f.BlobID,
+			CommitID:     f.CommitID,
+			LastCommitID: f.LastCommitID,
+		}
+		if f.Size > fileBlobMaxBytes {
+			out.Truncated = true
+			out.ContentCategory = "truncated"
+			return marshalResourceJSON(out)
+		}
+		content, category := decodeFileContent(f)
+		out.Content = content
+		out.ContentCategory = category
+		return marshalResourceJSON(out)
+	})
+}
+
+// registerWikiResource registers the
+// "gitlab://project/{project_id}/wiki/{slug}" template resource that returns
+// a single wiki page by slug.
+func registerWikiResource(server *mcp.Server, client *gitlabclient.Client) {
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://project/{project_id}/wiki/{slug}",
+		Name:        "wiki_page",
+		Title:       "Wiki Page",
+		MIMEType:    mimeJSON,
+		Description: "Get a wiki page by slug. Returns title, slug, format (markdown/rdoc/asciidoc/org), and raw content. Slugs are case-sensitive and use hyphens for spaces.",
+		Annotations: toolutil.ContentDetail,
+		Icons:       toolutil.IconWiki,
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		projectID, slug := extractTwoParts(req.Params.URI, uriProjectPrefix, "/wiki/")
+		if projectID == "" || slug == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		w, _, err := client.GL().Wikis.GetWikiPage(projectID, slug, &gl.GetWikiPageOptions{}, gl.WithContext(ctx))
+		if err != nil {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		out := WikiResourceOutput{
+			Title:    w.Title,
+			Slug:     w.Slug,
+			Format:   string(w.Format),
+			Content:  w.Content,
+			Encoding: w.Encoding,
+		}
+		return marshalResourceJSON(out)
+	})
+}
+
+// registerMergeRequestNotesResource registers the
+// "gitlab://project/{project_id}/mr/{mr_iid}/notes" template resource that
+// returns the flat list of notes (comments) for a merge request.
+func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.Client) {
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://project/{project_id}/mr/{mr_iid}/notes",
+		Name:        "merge_request_notes",
+		Title:       "Merge Request Notes",
+		MIMEType:    mimeJSON,
+		Description: "List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.",
+		Annotations: toolutil.ContentList,
+		Icons:       toolutil.IconMR,
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		uri := strings.TrimSuffix(req.Params.URI, "/notes")
+		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
+		if projectID == "" || mrIIDStr == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		mrIID, err := strconv.ParseInt(mrIIDStr, 10, 64)
+		if err != nil {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		notes, _, err := client.GL().Notes.ListMergeRequestNotes(projectID, mrIID, &gl.ListMergeRequestNotesOptions{}, gl.WithContext(ctx))
+		if err != nil {
+			return nil, wrapErr("failed to list merge request notes", err)
+		}
+		out := make([]MRNoteResourceOutput, len(notes))
+		for i, n := range notes {
+			no := MRNoteResourceOutput{
+				ID:         n.ID,
+				Body:       n.Body,
+				System:     n.System,
+				Resolvable: n.Resolvable,
+				Resolved:   n.Resolved,
+			}
+			if n.Author.Username != "" {
+				no.Author = n.Author.Username
+			}
+			if n.CreatedAt != nil {
+				no.CreatedAt = n.CreatedAt.Format(timeFormatISO)
+			}
+			if n.UpdatedAt != nil {
+				no.UpdatedAt = n.UpdatedAt.Format(timeFormatISO)
+			}
+			out[i] = no
+		}
+		return marshalResourceJSON(out)
+	})
+}
+
+// registerMergeRequestDiscussionsResource registers the
+// "gitlab://project/{project_id}/mr/{mr_iid}/discussions" template resource
+// that returns the discussion threads for a merge request, each containing
+// one or more notes.
+func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabclient.Client) {
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://project/{project_id}/mr/{mr_iid}/discussions",
+		Name:        "merge_request_discussions",
+		Title:       "Merge Request Discussions",
+		MIMEType:    mimeJSON,
+		Description: "List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).",
+		Annotations: toolutil.ContentList,
+		Icons:       toolutil.IconMR,
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		uri := strings.TrimSuffix(req.Params.URI, "/discussions")
+		projectID, mrIIDStr := extractTwoParts(uri, uriProjectPrefix, "/mr/")
+		if projectID == "" || mrIIDStr == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		mrIID, err := strconv.ParseInt(mrIIDStr, 10, 64)
+		if err != nil {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		discussions, _, err := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mrIID, &gl.ListMergeRequestDiscussionsOptions{}, gl.WithContext(ctx))
+		if err != nil {
+			return nil, wrapErr("failed to list merge request discussions", err)
+		}
+		out := make([]MRDiscussionResourceOutput, len(discussions))
+		for i, d := range discussions {
+			dout := MRDiscussionResourceOutput{
+				ID:             d.ID,
+				IndividualNote: d.IndividualNote,
+				Notes:          make([]MRDiscussionNoteResourceOutput, 0, len(d.Notes)),
+			}
+			for _, n := range d.Notes {
+				if n == nil {
+					continue
+				}
+				no := MRDiscussionNoteResourceOutput{
+					ID:         n.ID,
+					Body:       n.Body,
+					System:     n.System,
+					Resolved:   n.Resolved,
+					Resolvable: n.Resolvable,
+				}
+				if n.Author.Username != "" {
+					no.Author = n.Author.Username
+				}
+				if n.CreatedAt != nil {
+					no.CreatedAt = n.CreatedAt.Format(timeFormatISO)
+				}
+				dout.Notes = append(dout.Notes, no)
+			}
+			out[i] = dout
+		}
+		return marshalResourceJSON(out)
+	})
+}
+
+// extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}" URI
+// into its three components. The path component may contain slashes. Returns
+// empty strings if the URI does not match the expected layout.
+func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
+	rest := extractSuffix(uri, uriProjectPrefix)
+	if rest == "" {
+		return "", "", ""
+	}
+	idx := strings.Index(rest, "/file/")
+	if idx <= 0 {
+		return "", "", ""
+	}
+	projectID = rest[:idx]
+	tail := rest[idx+len("/file/"):]
+	slash := strings.Index(tail, "/")
+	if slash <= 0 || slash == len(tail)-1 {
+		return "", "", ""
+	}
+	ref = tail[:slash]
+	filePath = tail[slash+1:]
+	return projectID, ref, filePath
+}
+
+// decodeFileContent decodes the contents of a [gl.File] returned by the
+// RepositoryFiles GitLab API. Base64 encoded payloads are decoded; binary
+// content is detected via the file name and replaced with an empty string
+// so JSON responses stay textual. Returns the decoded content and a
+// human-readable category ("text" or "binary").
+func decodeFileContent(f *gl.File) (string, string) {
+	if f == nil {
+		return "", "binary"
+	}
+	if f.Encoding != "base64" {
+		if toolutil.IsBinaryFile(f.FileName) {
+			return "", "binary"
+		}
+		return f.Content, "text"
+	}
+	decoded, err := base64.StdEncoding.DecodeString(f.Content)
+	if err != nil {
+		return "", "binary"
+	}
+	if toolutil.IsBinaryFile(f.FileName) {
+		return "", "binary"
+	}
+	return string(decoded), "text"
 }
 
 // issueToResourceOutput converts a GitLab API [gl.Issue] to the MCP resource

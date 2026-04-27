@@ -48,7 +48,7 @@ gitlab-mcp-server/
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
 │   │   └── ...                  # 162 domain sub-packages total
-│   ├── resources/               # 24 MCP resource handlers
+│   ├── resources/               # 29 MCP resource handlers
 │   └── prompts/                 # 38 MCP prompt handlers (12 core + 26 extended)
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
 ├── docs/                        # Documentation (this directory)

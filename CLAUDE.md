@@ -22,7 +22,7 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1000                                                                                                         |
 | Meta-mode tools           | 32 base / 47 enterprise (24 inline + 3 delegated + 1 standalone + 4 interactive + 15 enterprise inline) |
-| MCP Resources             | 24                                                                                                           |
+| MCP Resources             | 29                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
@@ -100,7 +100,7 @@ gitlab-mcp-server/
 │   │   ├── uploads/             # Project upload tools
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
-│   ├── resources/               # 24 MCP resource implementations
+│   ├── resources/               # 29 MCP resource implementations
 │   ├── prompts/                 # 38 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
 │   ├── logging/                 # MCP logging capability
