@@ -46,6 +46,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_pipeline_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatDetailMarkdown(out), toolutil.ContentDetail)
+		if err == nil && out.ProjectID > 0 && out.ID > 0 {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%d/pipeline/%d", out.ProjectID, out.ID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 

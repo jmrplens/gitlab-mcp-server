@@ -227,6 +227,21 @@ The branch **"nonexistent" in project 42** does not exist or is not accessible w
 
 Not-found responses have `IsError: true` but include actionable hints so the AI assistant can self-correct or suggest alternatives. This pattern covers 27 "get" handlers across 21 domains.
 
+## Embedded Resources
+
+Selected `gitlab_*_get` tools attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.
+
+Currently embedded by:
+
+- `gitlab_issue_get` → `gitlab://project/{project_id}/issue/{issue_iid}`
+- `gitlab_mr_get` → `gitlab://project/{project_id}/mr/{mr_iid}`
+- `gitlab_project_get` → `gitlab://project/{project_id}`
+- `gitlab_pipeline_get` → `gitlab://project/{project_id}/pipeline/{pipeline_id}`
+
+The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Not-found responses do **not** embed (the entity does not exist).
+
+This behaviour is enabled by default and can be disabled globally with `EMBEDDED_RESOURCES=false` (env var) or `--embedded-resources=false` (HTTP-mode flag) as a kill-switch for clients that don't tolerate duplicate content blocks.
+
 ## Per-Route OutputSchema (Meta-Tools)
 
 Meta-tools declare a single tool-level `OutputSchema` (the envelope with `next_steps` and `pagination` fields). In addition, each action route can carry its own output schema describing the exact shape returned by that specific action.

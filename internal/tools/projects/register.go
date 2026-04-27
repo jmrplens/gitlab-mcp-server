@@ -65,6 +65,11 @@ func registerCRUDTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_project_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
+		if err == nil && out.ID > 0 {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%d", out.ID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 
