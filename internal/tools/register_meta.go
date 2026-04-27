@@ -1442,11 +1442,12 @@ func registerIssueMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 	desc := `Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 Valid actions: ` + validActionsString(routes) + `
 
-When to use: issue lifecycle — creating, updating, closing, moving, commenting, linking issues, time tracking, and work item management (including Epics via Work Items API). NOT for: merge request operations (use gitlab_merge_request), project settings (use gitlab_project), CI/CD pipelines (use gitlab_pipeline).
+When to use: issue lifecycle — create, update, close, move, comment, link, time-track, and manage Work Items (including Epics). NOT for: merge requests (use gitlab_merge_request), project settings (use gitlab_project), CI/CD (use gitlab_pipeline).
 
-Side effects: delete/move are irreversible. move transfers the issue to another project (changes URL, IID). Time tracking uses dedicated actions (time_estimate_set, spent_time_add) — do NOT pass time params to update.
+Side effects: delete/move are irreversible; move changes URL and IID. Time tracking uses dedicated actions — do NOT pass time params to update.
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions (delete) return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: resource object for single-item actions; paginated list ({page, per_page, total, next_page}) for *_list / list / list_all / list_group / participants / mrs_* / iteration_list_*; GraphQL cursor pagination ({nodes, page_info}) for work_item_list; {success, message} for delete actions.
+Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: Reporter+ to comment, Developer+ to edit/move), 400 (hint: state_event ∈ close/reopen; dates ISO 8601; weight integer 0–9 — Premium+).
 
 Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).
 
@@ -1529,21 +1530,7 @@ Iterations (Premium+ — requires GITLAB_ENTERPRISE=true):
 
 	desc += `
 
-See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD)
-
-Returns:
-- Paginated list actions ({page, per_page, total, next_page}): list / list_all / list_group / participants / mrs_closing / mrs_related / link_list / discussion_list / note_list / emoji_issue_list / emoji_issue_note_list / event_issue_label_list / event_issue_milestone_list / event_issue_state_list / event_issue_iteration_list / event_issue_weight_list.
-- Cursor-paginated GraphQL list actions ({nodes, page_info: {end_cursor, has_next_page}}): work_item_list.
-- Single-object actions: get / get_by_id / create / update / move / reorder / subscribe / unsubscribe / create_todo / link_get / link_create / discussion_get / discussion_create / discussion_add_note / discussion_update_note / note_get / note_create / note_update / time_estimate_set / time_estimate_reset / spent_time_add / spent_time_reset / time_stats_get / work_item_get / work_item_create / work_item_update / emoji_issue_get / emoji_issue_create / emoji_issue_note_get / emoji_issue_note_create / event_issue_label_get / event_issue_milestone_get / event_issue_state_get / event_issue_iteration_get / statistics_get / statistics_get_group / statistics_get_project: issue or sub-resource object.
-- Void actions ({success, message}): delete / link_delete / note_delete / discussion_delete_note / work_item_delete / emoji_issue_delete / emoji_issue_note_delete.`
-
-	if enterprise {
-		desc += `
-- Premium+ iteration list actions (paginated, only when GITLAB_ENTERPRISE=true): iteration_list_project / iteration_list_group.`
-	}
-
-	desc += `
-Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: requires Reporter+ to comment, Developer+ to edit/move, configured permissions to set confidential), 400 (hint: state_event ∈ close/reopen; due_date / created_after must be ISO 8601; weight is integer 0–9 — Premium+).`
+See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD).`
 
 	addMetaTool(server, "gitlab_issue", desc, routes, toolutil.IconIssue)
 }
@@ -1800,11 +1787,11 @@ Valid actions: ` + validActionsString(routes) + `
 
 When to use: user CRUD, SSH/GPG key management, PATs, todos, events, notifications, namespaces. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance admin (use gitlab_admin).
 
-Param conventions: * = required. User IDs are integers. List actions accept page, per_page.
+Param conventions: * = required. User IDs are integers. List actions accept page, per_page. Actions ending in _for_user take the same params as the base action plus user_id*. Plain ssh_keys / gpg_keys / emails (no suffix) operate on the current authenticated user with no params.
 
 Current user:
-- current / me: no params. Returns authenticated user info.
-- current_user_status: no params. Returns emoji, message, availability.
+- current / me: returns authenticated user info.
+- current_user_status: returns emoji, message, availability.
 - set_status: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
 
 User CRUD (admin):
@@ -1820,28 +1807,20 @@ User state (admin):
 - block / unblock / ban / unban / activate / deactivate / approve / reject / disable_two_factor: user_id*
 
 SSH keys:
-- ssh_keys: (current user, no params)
-- ssh_keys_for_user: user_id*
 - get_ssh_key: key_id*
 - get_ssh_key_for_user: user_id*, key_id*
 - add_ssh_key: title*, key*, expires_at, usage_type (auth/signing)
-- add_ssh_key_for_user: user_id*, title*, key*, expires_at, usage_type
 - delete_ssh_key: key_id*
 - delete_ssh_key_for_user: user_id*, key_id*
 
 GPG keys:
-- gpg_keys: (current user, no params)
-- gpg_keys_for_user: user_id*
 - get_gpg_key: key_id*
 - get_gpg_key_for_user: user_id*, key_id*
 - add_gpg_key: key* (armored GPG public key)
-- add_gpg_key_for_user: user_id*, key*
 - delete_gpg_key: key_id*
 - delete_gpg_key_for_user: user_id*, key_id*
 
 Emails:
-- emails: (current user, no params)
-- emails_for_user: user_id*
 - get_email: email_id*
 - add_email: email*, skip_confirmation
 - add_email_for_user: user_id*, email*, skip_confirmation
@@ -1973,12 +1952,7 @@ Valid actions: `+validActionsString(routes)+`
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
 NOT for: CI/CD variables scoped to environments (use gitlab_ci_variable), pipelines/jobs (use gitlab_pipeline / gitlab_job), feature flag rollout strategies (use gitlab_feature_flags).
 
-Returns:
-- *_list: array with pagination.
-- *_get / *_create / *_update / *_protect: environment / protection / freeze / deployment object.
-- deployment_approve_or_reject: updated deployment with approval state.
-- deployment_merge_requests: MRs included in a given deployment.
-- *_delete / *_unprotect / stop: {success: bool, message: string}.
+Returns: resource object (environment / protection / freeze / deployment) for *_get/*_create/*_update/*_protect; paginated array for *_list; updated deployment with approval state for deployment_approve_or_reject; MR list for deployment_merge_requests; {success, message} for *_delete/*_unprotect/stop.
 Errors: 404 not found, 403 forbidden (hint: protect/unprotect require Maintainer+), 400 invalid params (hint: tier ∈ production/staging/testing/development/other; freeze cron timezone must be valid TZ name).
 
 Param conventions: * = required. All actions need project_id*. environment_id is the numeric ID returned by list/create.
@@ -2213,11 +2187,7 @@ Valid actions: `+validActionsString(routes)+`
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports from GitHub/Bitbucket).
 NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
 
-Returns:
-- *_list: array with pagination.
-- *_get / *_create / *_update / *_set / *_add: resource object.
-- Sidekiq / usage_data / app_statistics / metadata: metrics objects.
-- *_delete / *_revoke / *_purge / *_unlock: {success: bool, message: string}.
+Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list / feature_list_definitions; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
 Errors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded; system hook url must be https).
 
 Param conventions: * = required. List actions accept page, per_page.

@@ -34,6 +34,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
+// keep the file scannable. When a description exceeds this limit, generation
+// falls back to its first sentence; if that is still too long, the text is
+// hard-truncated at the rune boundary.
+const maxFullDescRunes = 600
+
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -322,7 +328,14 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		fmt.Fprintf(&b, "### %s (%d tools)\n\n", domain, len(tls))
 		for _, t := range tls {
 			fmt.Fprintf(&b, "#### %s\n\n", t.Name)
-			desc := truncateRunes(t.Description, 300)
+			desc := firstParagraph(t.Description)
+			if utf8.RuneCountInString(desc) > maxFullDescRunes {
+				if sent := firstSentence(desc); sent != "" && utf8.RuneCountInString(sent) <= maxFullDescRunes {
+					desc = sent
+				} else {
+					desc = truncateRunes(desc, maxFullDescRunes)
+				}
+			}
 			b.WriteString(desc)
 			b.WriteString("\n\n")
 			writeInputSchema(&b, t.InputSchema)
@@ -554,6 +567,16 @@ func truncateRunes(s string, maxRunes int) string {
 		size += w
 	}
 	return s[:size] + "..."
+}
+
+// firstParagraph returns text up to the first blank-line paragraph break (\n\n).
+// Used to cut tool descriptions at a natural boundary instead of mid-sentence.
+func firstParagraph(s string) string {
+	s = strings.TrimSpace(s)
+	if before, _, ok := strings.Cut(s, "\n\n"); ok {
+		return strings.TrimSpace(before)
+	}
+	return s
 }
 
 // firstSentence returns text up to the first sentence-ending period or newline.
