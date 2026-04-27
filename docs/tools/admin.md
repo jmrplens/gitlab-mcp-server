@@ -412,6 +412,48 @@ Start a new group or project bulk import migration (admin). Requires source GitL
 | Annotation | **Create** |
 | ---------- | ---------- |
 
+### `gitlab_bulk_import_list`
+
+List all group or project bulk import migrations visible to the caller. Optionally filter by status.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_bulk_import_get`
+
+Get details of a single bulk import migration by ID.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_bulk_import_cancel`
+
+Cancel an in-progress bulk import migration. Returns the migration with updated status.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_bulk_import_entity_list`
+
+List bulk import migration entities. When `bulk_import_id` is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_bulk_import_entity_get`
+
+Get details of a single bulk import migration entity by `bulk_import_id` and `entity_id`.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_bulk_import_entity_failures`
+
+List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ---
 
 ## Avatar
@@ -735,39 +777,45 @@ Download and apply the latest MCP server update. On Linux/macOS the binary is re
 | 42 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
 | 43 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
 | 44 | `gitlab_start_bulk_import` | Bulk Imports | Create |
-| 45 | `gitlab_get_avatar` | Avatar | Read |
-| 46 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
-| 47 | `gitlab_pages_get` | Pages | Read |
-| 48 | `gitlab_pages_update` | Pages | Update |
-| 49 | `gitlab_pages_unpublish` | Pages | Delete |
-| 50 | `gitlab_pages_domain_list_all` | Pages | Read |
-| 51 | `gitlab_pages_domain_list` | Pages | Read |
-| 52 | `gitlab_pages_domain_get` | Pages | Read |
-| 53 | `gitlab_pages_domain_create` | Pages | Create |
-| 54 | `gitlab_pages_domain_update` | Pages | Update |
-| 55 | `gitlab_pages_domain_delete` | Pages | Delete |
-| 56 | `gitlab_list_terraform_states` | Terraform States | Read |
-| 57 | `gitlab_get_terraform_state` | Terraform States | Read |
-| 58 | `gitlab_delete_terraform_state` | Terraform States | Delete |
-| 59 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
-| 60 | `gitlab_lock_terraform_state` | Terraform States | Update |
-| 61 | `gitlab_unlock_terraform_state` | Terraform States | Update |
-| 62 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
-| 63 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
-| 64 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
-| 65 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
-| 66 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
-| 67 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
-| 68 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
-| 69 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
-| 70 | `gitlab_list_instance_audit_events` | Audit Events | Read |
-| 71 | `gitlab_get_instance_audit_event` | Audit Events | Read |
-| 72 | `gitlab_list_group_audit_events` | Audit Events | Read |
-| 73 | `gitlab_get_group_audit_event` | Audit Events | Read |
-| 74 | `gitlab_list_project_audit_events` | Audit Events | Read |
-| 75 | `gitlab_get_project_audit_event` | Audit Events | Read |
-| 76 | `gitlab_server_check_update` | Server Update | Read |
-| 77 | `gitlab_server_apply_update` | Server Update | Update |
+| 45 | `gitlab_bulk_import_list` | Bulk Imports | Read |
+| 46 | `gitlab_bulk_import_get` | Bulk Imports | Read |
+| 47 | `gitlab_bulk_import_cancel` | Bulk Imports | Update |
+| 48 | `gitlab_bulk_import_entity_list` | Bulk Imports | Read |
+| 49 | `gitlab_bulk_import_entity_get` | Bulk Imports | Read |
+| 50 | `gitlab_bulk_import_entity_failures` | Bulk Imports | Read |
+| 51 | `gitlab_get_avatar` | Avatar | Read |
+| 52 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
+| 53 | `gitlab_pages_get` | Pages | Read |
+| 54 | `gitlab_pages_update` | Pages | Update |
+| 55 | `gitlab_pages_unpublish` | Pages | Delete |
+| 56 | `gitlab_pages_domain_list_all` | Pages | Read |
+| 57 | `gitlab_pages_domain_list` | Pages | Read |
+| 58 | `gitlab_pages_domain_get` | Pages | Read |
+| 59 | `gitlab_pages_domain_create` | Pages | Create |
+| 60 | `gitlab_pages_domain_update` | Pages | Update |
+| 61 | `gitlab_pages_domain_delete` | Pages | Delete |
+| 62 | `gitlab_list_terraform_states` | Terraform States | Read |
+| 63 | `gitlab_get_terraform_state` | Terraform States | Read |
+| 64 | `gitlab_delete_terraform_state` | Terraform States | Delete |
+| 65 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
+| 66 | `gitlab_lock_terraform_state` | Terraform States | Update |
+| 67 | `gitlab_unlock_terraform_state` | Terraform States | Update |
+| 68 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
+| 69 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
+| 70 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
+| 71 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
+| 72 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
+| 73 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
+| 74 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
+| 75 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
+| 76 | `gitlab_list_instance_audit_events` | Audit Events | Read |
+| 77 | `gitlab_get_instance_audit_event` | Audit Events | Read |
+| 78 | `gitlab_list_group_audit_events` | Audit Events | Read |
+| 79 | `gitlab_get_group_audit_event` | Audit Events | Read |
+| 80 | `gitlab_list_project_audit_events` | Audit Events | Read |
+| 81 | `gitlab_get_project_audit_event` | Audit Events | Read |
+| 82 | `gitlab_server_check_update` | Server Update | Read |
+| 83 | `gitlab_server_apply_update` | Server Update | Update |
 
 ### Destructive Tools (Require Confirmation)
 

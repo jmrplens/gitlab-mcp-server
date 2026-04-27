@@ -390,7 +390,7 @@ func TestUserService(t *testing.T) {
 
 ```go
 func BenchmarkProcess(b *testing.B) {
-    data := generateTestData(1000)
+    data := generateTestData(1006)
     b.ResetTimer() // Don't count setup time
 
     for i := 0; i < b.N; i++ {
@@ -406,7 +406,7 @@ func BenchmarkProcess(b *testing.B) {
 
 ```go
 func BenchmarkSort(b *testing.B) {
-    sizes := []int{100, 1000, 10000, 100000}
+    sizes := []int{100, 1006, 10000, 100000}
 
     for _, size := range sizes {
         b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {

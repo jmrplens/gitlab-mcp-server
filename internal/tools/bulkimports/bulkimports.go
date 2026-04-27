@@ -88,5 +88,307 @@ func StartMigration(ctx context.Context, client *gitlabclient.Client, input Star
 }
 
 // ---------------------------------------------------------------------------
+// List / Get / Cancel
+// ---------------------------------------------------------------------------.
+
+// MigrationSummary is a single bulk import migration entry returned by list/get.
+type MigrationSummary struct {
+	ID          int64  `json:"id"`
+	Status      string `json:"status"`
+	SourceType  string `json:"source_type"`
+	SourceURL   string `json:"source_url"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+	HasFailures bool   `json:"has_failures"`
+}
+
+// ListInput defines parameters for listing bulk import migrations.
+type ListInput struct {
+	Status string `json:"status,omitempty" jsonschema:"Filter by status: created, started, finished, timeout, failed, canceled"`
+	toolutil.PaginationInput
+}
+
+// ListOutput holds the paginated list of bulk import migrations.
+type ListOutput struct {
+	toolutil.HintableOutput
+	Migrations []MigrationSummary        `json:"migrations"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// List returns all bulk import migrations visible to the caller.
+func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+	opts := &gl.ListBulkImportsOptions{
+		ListOptions: gl.ListOptions{
+			Page:    int64(input.Page),
+			PerPage: int64(input.PerPage),
+		},
+	}
+	if input.Status != "" {
+		opts.Status = new(input.Status)
+	}
+	imports, resp, err := client.GL().BulkImports.ListBulkImports(opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("bulk_import_list", err)
+	}
+	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
+	for _, m := range imports {
+		out.Migrations = append(out.Migrations, toSummary(m))
+	}
+	return out, nil
+}
+
+// GetInput defines parameters for retrieving a single bulk import migration.
+type GetInput struct {
+	ID int64 `json:"id" jsonschema:"Bulk import ID,required"`
+}
+
+// Get retrieves a single bulk import migration by ID.
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (MigrationSummary, error) {
+	if input.ID <= 0 {
+		return MigrationSummary{}, toolutil.ErrRequiredInt64("bulk_import_get", "id")
+	}
+	m, _, err := client.GL().BulkImports.GetBulkImport(input.ID, gl.WithContext(ctx))
+	if err != nil {
+		return MigrationSummary{}, toolutil.WrapErrWithStatusHint("bulk_import_get", err, http.StatusNotFound,
+			"verify the migration id with gitlab_bulk_import_list")
+	}
+	return toSummary(m), nil
+}
+
+// CancelInput defines parameters for canceling a bulk import migration.
+type CancelInput struct {
+	ID int64 `json:"id" jsonschema:"Bulk import ID,required"`
+}
+
+// Cancel cancels an in-progress bulk import migration.
+func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput) (MigrationSummary, error) {
+	if input.ID <= 0 {
+		return MigrationSummary{}, toolutil.ErrRequiredInt64("bulk_import_cancel", "id")
+	}
+	m, _, err := client.GL().BulkImports.CancelBulkImport(input.ID, gl.WithContext(ctx))
+	if err != nil {
+		return MigrationSummary{}, toolutil.WrapErrWithMessage("bulk_import_cancel", err)
+	}
+	return toSummary(m), nil
+}
+
+// toSummary converts a *gl.BulkImport to MigrationSummary.
+func toSummary(m *gl.BulkImport) MigrationSummary {
+	if m == nil {
+		return MigrationSummary{}
+	}
+	return MigrationSummary{
+		ID:          m.ID,
+		Status:      m.Status,
+		SourceType:  m.SourceType,
+		SourceURL:   m.SourceURL,
+		CreatedAt:   m.CreatedAt.String(),
+		UpdatedAt:   m.UpdatedAt.String(),
+		HasFailures: m.HasFailures,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Entities
+// ---------------------------------------------------------------------------.
+
+// EntityStats summarizes per-relation import counts for a migration entity.
+type EntityStats struct {
+	LabelsSource       int `json:"labels_source"`
+	LabelsFetched      int `json:"labels_fetched"`
+	LabelsImported     int `json:"labels_imported"`
+	MilestonesSource   int `json:"milestones_source"`
+	MilestonesFetched  int `json:"milestones_fetched"`
+	MilestonesImported int `json:"milestones_imported"`
+}
+
+// EntitySummary describes a single bulk import migration entity (group or project).
+type EntitySummary struct {
+	ID                   int64       `json:"id"`
+	BulkImportID         int64       `json:"bulk_import_id"`
+	Status               string      `json:"status"`
+	EntityType           string      `json:"entity_type"`
+	SourceFullPath       string      `json:"source_full_path"`
+	DestinationFullPath  string      `json:"destination_full_path"`
+	DestinationName      string      `json:"destination_name"`
+	DestinationSlug      string      `json:"destination_slug"`
+	DestinationNamespace string      `json:"destination_namespace"`
+	ParentID             *int64      `json:"parent_id,omitempty"`
+	NamespaceID          *int64      `json:"namespace_id,omitempty"`
+	ProjectID            *int64      `json:"project_id,omitempty"`
+	CreatedAt            string      `json:"created_at"`
+	UpdatedAt            string      `json:"updated_at"`
+	MigrateProjects      bool        `json:"migrate_projects"`
+	MigrateMemberships   bool        `json:"migrate_memberships"`
+	HasFailures          bool        `json:"has_failures"`
+	Stats                EntityStats `json:"stats"`
+}
+
+// ListEntitiesInput defines parameters for listing bulk import entities.
+// When BulkImportID > 0, entities are scoped to that import; otherwise all
+// entities visible to the caller are returned.
+type ListEntitiesInput struct {
+	BulkImportID int64  `json:"bulk_import_id,omitempty" jsonschema:"Bulk import ID. If omitted, returns entities across all imports."`
+	Status       string `json:"status,omitempty"          jsonschema:"Filter by entity status: created, started, finished, timeout, failed, canceled"`
+	toolutil.PaginationInput
+}
+
+// ListEntitiesOutput holds the paginated list of bulk import entities.
+type ListEntitiesOutput struct {
+	toolutil.HintableOutput
+	Entities   []EntitySummary           `json:"entities"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// ListEntities returns bulk import entities, optionally scoped to a single import.
+func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEntitiesInput) (ListEntitiesOutput, error) {
+	opts := &gl.ListBulkImportsEntitiesOptions{
+		ListOptions: gl.ListOptions{
+			Page:    int64(input.Page),
+			PerPage: int64(input.PerPage),
+		},
+	}
+	if input.Status != "" {
+		opts.Status = new(input.Status)
+	}
+	var (
+		entities []*gl.BulkImportEntity
+		resp     *gl.Response
+		err      error
+	)
+	if input.BulkImportID > 0 {
+		entities, resp, err = client.GL().BulkImports.ListBulkImportsEntitiesByID(input.BulkImportID, opts, gl.WithContext(ctx))
+	} else {
+		entities, resp, err = client.GL().BulkImports.ListBulkImportsEntities(opts, gl.WithContext(ctx))
+	}
+	if err != nil {
+		return ListEntitiesOutput{}, toolutil.WrapErr("bulk_import_entity_list", err)
+	}
+	out := ListEntitiesOutput{Pagination: toolutil.PaginationFromResponse(resp)}
+	for _, e := range entities {
+		out.Entities = append(out.Entities, toEntitySummary(e))
+	}
+	return out, nil
+}
+
+// GetEntityInput defines parameters for retrieving a single bulk import entity.
+type GetEntityInput struct {
+	BulkImportID int64 `json:"bulk_import_id" jsonschema:"Bulk import ID,required"`
+	EntityID     int64 `json:"entity_id"      jsonschema:"Entity ID within the bulk import,required"`
+}
+
+// GetEntity retrieves a single migration entity by ID.
+func GetEntity(ctx context.Context, client *gitlabclient.Client, input GetEntityInput) (EntitySummary, error) {
+	if input.BulkImportID <= 0 {
+		return EntitySummary{}, toolutil.ErrRequiredInt64("bulk_import_entity_get", "bulk_import_id")
+	}
+	if input.EntityID <= 0 {
+		return EntitySummary{}, toolutil.ErrRequiredInt64("bulk_import_entity_get", "entity_id")
+	}
+	e, _, err := client.GL().BulkImports.GetBulkImportEntity(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
+	if err != nil {
+		return EntitySummary{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_get", err, http.StatusNotFound,
+			"verify bulk_import_id and entity_id with gitlab_bulk_import_entity_list")
+	}
+	return toEntitySummary(e), nil
+}
+
+// EntityFailure describes a single failed import record for a migration entity.
+type EntityFailure struct {
+	Relation           string `json:"relation"`
+	ExceptionMessage   string `json:"exception_message"`
+	ExceptionClass     string `json:"exception_class"`
+	CorrelationIDValue string `json:"correlation_id_value"`
+	SourceURL          string `json:"source_url"`
+	SourceTitle        string `json:"source_title"`
+	Step               string `json:"step"`
+	CreatedAt          string `json:"created_at"`
+	PipelineClass      string `json:"pipeline_class"`
+	PipelineStep       string `json:"pipeline_step"`
+}
+
+// ListEntityFailuresInput defines parameters for listing failures of a migration entity.
+type ListEntityFailuresInput struct {
+	BulkImportID int64 `json:"bulk_import_id" jsonschema:"Bulk import ID,required"`
+	EntityID     int64 `json:"entity_id"      jsonschema:"Entity ID within the bulk import,required"`
+}
+
+// ListEntityFailuresOutput holds the failure records for a migration entity.
+type ListEntityFailuresOutput struct {
+	toolutil.HintableOutput
+	BulkImportID int64           `json:"bulk_import_id"`
+	EntityID     int64           `json:"entity_id"`
+	Failures     []EntityFailure `json:"failures"`
+}
+
+// ListEntityFailures returns failed import records for a single migration entity.
+func ListEntityFailures(ctx context.Context, client *gitlabclient.Client, input ListEntityFailuresInput) (ListEntityFailuresOutput, error) {
+	if input.BulkImportID <= 0 {
+		return ListEntityFailuresOutput{}, toolutil.ErrRequiredInt64("bulk_import_entity_failures", "bulk_import_id")
+	}
+	if input.EntityID <= 0 {
+		return ListEntityFailuresOutput{}, toolutil.ErrRequiredInt64("bulk_import_entity_failures", "entity_id")
+	}
+	failures, _, err := client.GL().BulkImports.GetBulkImportEntityFailures(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
+	if err != nil {
+		return ListEntityFailuresOutput{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_failures", err, http.StatusNotFound,
+			"verify bulk_import_id and entity_id with gitlab_bulk_import_entity_list")
+	}
+	out := ListEntityFailuresOutput{BulkImportID: input.BulkImportID, EntityID: input.EntityID}
+	for _, f := range failures {
+		if f == nil {
+			continue
+		}
+		out.Failures = append(out.Failures, EntityFailure{
+			Relation:           f.Relation,
+			ExceptionMessage:   f.ExceptionMessage,
+			ExceptionClass:     f.ExceptionClass,
+			CorrelationIDValue: f.CorrelationIDValue,
+			SourceURL:          f.SourceURL,
+			SourceTitle:        f.SourceTitle,
+			Step:               f.Step,
+			CreatedAt:          f.CreatedAt.String(),
+			PipelineClass:      f.PipelineClass,
+			PipelineStep:       f.PipelineStep,
+		})
+	}
+	return out, nil
+}
+
+// toEntitySummary converts a *gl.BulkImportEntity to EntitySummary.
+func toEntitySummary(e *gl.BulkImportEntity) EntitySummary {
+	if e == nil {
+		return EntitySummary{}
+	}
+	return EntitySummary{
+		ID:                   e.ID,
+		BulkImportID:         e.BulkImportID,
+		Status:               e.Status,
+		EntityType:           e.EntityType,
+		SourceFullPath:       e.SourceFullPath,
+		DestinationFullPath:  e.DestinationFullPath,
+		DestinationName:      e.DestinationName,
+		DestinationSlug:      e.DestinationSlug,
+		DestinationNamespace: e.DestinationNamespace,
+		ParentID:             e.ParentID,
+		NamespaceID:          e.NamespaceID,
+		ProjectID:            e.ProjectID,
+		CreatedAt:            e.CreatedAt.String(),
+		UpdatedAt:            e.UpdatedAt.String(),
+		MigrateProjects:      e.MigrateProjects,
+		MigrateMemberships:   e.MigrateMemberships,
+		HasFailures:          e.HasFailures,
+		Stats: EntityStats{
+			LabelsSource:       e.Stats.Labels.Source,
+			LabelsFetched:      e.Stats.Labels.Fetched,
+			LabelsImported:     e.Stats.Labels.Imported,
+			MilestonesSource:   e.Stats.Milestones.Source,
+			MilestonesFetched:  e.Stats.Milestones.Fetched,
+			MilestonesImported: e.Stats.Milestones.Imported,
+		},
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------.

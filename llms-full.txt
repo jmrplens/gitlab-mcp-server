@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.3.1 | 1000 tools | 32 meta-tools (47 enterprise) | 44 resources | 38 prompts
+> Version 1.3.2 | 1006 tools | 32 meta-tools (47 enterprise) | 44 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -389,7 +389,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 **Admin**
 
 GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. Most actions require admin privileges. Delete/purge/revoke actions are destructive.
-Valid actions: alert_metric_image_delete, alert_metric_image_list, alert_metric_image_update, alert_metric_image_upload, app_statistics_get, appearance_get, appearance_update, application_create, application_delete, application_list, broadcast_message_create, broadcast_message_delete, broadcast_message_get, broadcast_message_list, broadcast_message_update, bulk_import_start, cluster_agent_delete, cluster_agent_get, cluster_agent_list, cluster_agent_register, cluster_agent_token_create, cluster_agent_token_get, cluster_agent_token_list, cluster_agent_token_revoke, custom_attr_delete, custom_attr_get, custom_attr_list, custom_attr_set, db_migration_mark, dependency_proxy_delete, error_tracking_create, error_tracking_delete, error_tracking_get_settings, error_tracking_list, error_tracking_update_settings, feature_delete, feature_list, feature_list_definitions, feature_set, import_bitbucket, import_bitbucket_server, import_cancel_github, import_gists, import_github, license_add, license_delete, license_get, metadata_get, plan_limits_change, plan_limits_get, secure_file_create, secure_file_delete, secure_file_get, secure_file_list, settings_get, settings_update, sidekiq_compound_metrics, sidekiq_job_stats, sidekiq_process_metrics, sidekiq_queue_metrics, system_hook_add, system_hook_delete, system_hook_get, system_hook_list, system_hook_test, terraform_state_delete, terraform_state_get, terraform_state_list, terraform_state_lock, terraform_state_unlock, terraform_version_delete, topic_create, topic_delete, topic_get, topic_list, topic_update, usage_data_metric_definitions, usage_data_non_sql_metrics, usage_data_queries, usage_data_service_ping, usage_data_track_event, usage_data_track_events
+Valid actions: alert_metric_image_delete, alert_metric_image_list, alert_metric_image_update, alert_metric_image_upload, app_statistics_get, appearance_get, appearance_update, application_create, application_delete, application_list, broadcast_message_create, broadcast_message_delete, broadcast_message_get, broadcast_message_list, broadcast_message_update, bulk_import_cancel, bulk_import_entity_failures, bulk_import_entity_get, bulk_import_entity_list, bulk_import_get, bulk_import_list, bulk_import_start, cluster_agent_delete, cluster_agent_get, cluster_agent_list, cluster_agent_register, cluster_agent_token_create, cluster_agent_token_get, cluster_agent_token_list, cluster_agent_token_revoke, custom_attr_delete, custom_attr_get, custom_attr_list, custom_attr_set, db_migration_mark, dependency_proxy_delete, error_tracking_create, error_tracking_delete, error_tracking_get_settings, error_tracking_list, error_tracking_update_settings, feature_delete, feature_list, feature_list_definitions, feature_set, import_bitbucket, import_bitbucket_server, import_cancel_github, import_gists, import_github, license_add, license_delete, license_get, metadata_get, plan_limits_change, plan_limits_get, secure_file_create, secure_file_delete, secure_file_get, secure_file_list, settings_get, settings_update, sidekiq_compound_metrics, sidekiq_job_stats, sidekiq_process_metrics, sidekiq_queue_metrics, system_hook_add, system_hook_delete, system_hook_get, system_hook_list, system_hook_test, terraform_state_delete, terraform_state_get, terraform_state_list, terraform_state_lock, terraform_state_unlock, terraform_version_delete, topic_create, topic_delete, topic_get, topic_list, topic_update, usage_data_metric_definitions, usage_data_non_sql_metrics, usage_data_queries, usage_data_service_ping, usage_data_track_event, usage_data_track_events
 
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports from GitHub/Bitbucket).
 NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
@@ -458,6 +458,12 @@ Custom attributes:
 
 Bulk import:
 - bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})
+- bulk_import_list: status, page, per_page
+- bulk_import_get: id*
+- bulk_import_cancel: id*
+- bulk_import_entity_list: bulk_import_id, status, page, per_page
+- bulk_import_entity_get: bulk_import_id*, entity_id*
+- bulk_import_entity_failures: bulk_import_id*, entity_id*
 
 Error tracking:
 - error_tracking_list: project_id*
@@ -597,6 +603,54 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"message":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"broadcast_type":{"type":"string"},"dismissable":{"type":"boolean"},"ends_at":{"type":"string"},"font":{"type":"string"},"id":{"type":"integer"},"message":{"type":"string"},"starts_at":{"type":"string"},"target_access_levels":{"items":{"type":"integer"},"type":["null","array"]},"target_path":{"type":"string"},"theme":{"type":"string"}},"required":["id","message","active","dismissable"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_cancel</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"has_failures":{"type":"boolean"},"id":{"type":"integer"},"source_type":{"type":"string"},"source_url":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","status","source_type","source_url","created_at","updated_at","has_failures"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_entity_failures</summary>
+
+```json
+{"additionalProperties":false,"properties":{"bulk_import_id":{"type":"integer"},"entity_id":{"type":"integer"},"failures":{"items":{"additionalProperties":false,"properties":{"correlation_id_value":{"type":"string"},"created_at":{"type":"string"},"exception_class":{"type":"string"},"exception_message":{"type":"string"},"pipeline_class":{"type":"string"},"pipeline_step":{"type":"string"},"relation":{"type":"string"},"source_title":{"type":"string"},"source_url":{"type":"string"},"step":{"type":"string"}},"required":["relation","exception_message","exception_class","correlation_id_value","source_url","source_title","step","created_at","pipeline_class","pipeline_step"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["bulk_import_id","entity_id","failures"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_entity_get</summary>
+
+```json
+{"additionalProperties":false,"properties":{"bulk_import_id":{"type":"integer"},"created_at":{"type":"string"},"destination_full_path":{"type":"string"},"destination_name":{"type":"string"},"destination_namespace":{"type":"string"},"destination_slug":{"type":"string"},"entity_type":{"type":"string"},"has_failures":{"type":"boolean"},"id":{"type":"integer"},"migrate_memberships":{"type":"boolean"},"migrate_projects":{"type":"boolean"},"namespace_id":{"type":["null","integer"]},"parent_id":{"type":["null","integer"]},"project_id":{"type":["null","integer"]},"source_full_path":{"type":"string"},"stats":{"additionalProperties":false,"properties":{"labels_fetched":{"type":"integer"},"labels_imported":{"type":"integer"},"labels_source":{"type":"integer"},"milestones_fetched":{"type":"integer"},"milestones_imported":{"type":"integer"},"milestones_source":{"type":"integer"}},"required":["labels_source","labels_fetched","labels_imported","milestones_source","milestones_fetched","milestones_imported"],"type":"object"},"status":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","bulk_import_id","status","entity_type","source_full_path","destination_full_path","destination_name","destination_slug","destination_namespace","created_at","updated_at","migrate_projects","migrate_memberships","has_failures","stats"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_entity_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"entities":{"items":{"additionalProperties":false,"properties":{"bulk_import_id":{"type":"integer"},"created_at":{"type":"string"},"destination_full_path":{"type":"string"},"destination_name":{"type":"string"},"destination_namespace":{"type":"string"},"destination_slug":{"type":"string"},"entity_type":{"type":"string"},"has_failures":{"type":"boolean"},"id":{"type":"integer"},"migrate_memberships":{"type":"boolean"},"migrate_projects":{"type":"boolean"},"namespace_id":{"type":["null","integer"]},"parent_id":{"type":["null","integer"]},"project_id":{"type":["null","integer"]},"source_full_path":{"type":"string"},"stats":{"additionalProperties":false,"properties":{"labels_fetched":{"type":"integer"},"labels_imported":{"type":"integer"},"labels_source":{"type":"integer"},"milestones_fetched":{"type":"integer"},"milestones_imported":{"type":"integer"},"milestones_source":{"type":"integer"}},"required":["labels_source","labels_fetched","labels_imported","milestones_source","milestones_fetched","milestones_imported"],"type":"object"},"status":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","bulk_import_id","status","entity_type","source_full_path","destination_full_path","destination_name","destination_slug","destination_namespace","created_at","updated_at","migrate_projects","migrate_memberships","has_failures","stats"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["entities","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_get</summary>
+
+```json
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"has_failures":{"type":"boolean"},"id":{"type":"integer"},"source_type":{"type":"string"},"source_url":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","status","source_type","source_url","created_at","updated_at","has_failures"],"type":"object"}
+```
+
+</details>
+
+<details><summary>bulk_import_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"migrations":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"has_failures":{"type":"boolean"},"id":{"type":"integer"},"source_type":{"type":"string"},"source_url":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","status","source_type","source_url","created_at","updated_at","has_failures"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["migrations","pagination"],"type":"object"}
 ```
 
 </details>
@@ -2313,7 +2367,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_add</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
 ```
 
 </details>
@@ -2321,7 +2375,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_edit</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
 ```
 
 </details>
@@ -2329,7 +2383,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
 ```
 
 </details>
@@ -2337,7 +2391,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
 ```
 
 </details>
@@ -8578,7 +8632,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When META_TOOLS=false, all 1000 individual tools are registered.
+When META_TOOLS=false, all 1006 individual tools are registered.
 Grouped by domain:
 
 ### access (8 tools)
@@ -9226,6 +9280,75 @@ Remove all protection rules from a GitLab branch, allowing unrestricted push, me
 - `project_id` (string) (required): Project ID or URL-encoded path,required
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+### bulk (6 tools)
+
+#### gitlab_bulk_import_cancel
+
+Cancel an in-progress bulk import migration. Returns the migration with updated status.
+
+**Parameters:**
+
+- `id` (integer) (required): Bulk import ID,required
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_bulk_import_entity_failures
+
+List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.
+
+**Parameters:**
+
+- `bulk_import_id` (integer) (required): Bulk import ID,required
+- `entity_id` (integer) (required): Entity ID within the bulk import,required
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_bulk_import_entity_get
+
+Get details of a single bulk import migration entity by bulk_import_id and entity_id.
+
+**Parameters:**
+
+- `bulk_import_id` (integer) (required): Bulk import ID,required
+- `entity_id` (integer) (required): Entity ID within the bulk import,required
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_bulk_import_entity_list
+
+List bulk import migration entities. When bulk_import_id is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.
+
+**Parameters:**
+
+- `bulk_import_id` (integer): Bulk import ID. If omitted, returns entities across all imports.
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `status` (string): Filter by entity status: created, started, finished, timeout, failed, canceled
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_bulk_import_get
+
+Get details of a single bulk import migration by ID.
+
+**Parameters:**
+
+- `id` (integer) (required): Bulk import ID,required
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_bulk_import_list
+
+List all group or project bulk import migrations visible to the caller. Optionally filter by status.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `status` (string): Filter by status: created, started, finished, timeout, failed, canceled
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 ### cancel (1 tools)
 

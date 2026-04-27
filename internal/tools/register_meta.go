@@ -2146,6 +2146,12 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"custom_attr_set":                routeAction(client, customattributes.Set),
 		"custom_attr_delete":             destructiveVoidAction(client, customattributes.Delete),
 		"bulk_import_start":              routeAction(client, bulkimports.StartMigration),
+		"bulk_import_list":               routeAction(client, bulkimports.List),
+		"bulk_import_get":                routeAction(client, bulkimports.Get),
+		"bulk_import_cancel":             routeAction(client, bulkimports.Cancel),
+		"bulk_import_entity_list":        routeAction(client, bulkimports.ListEntities),
+		"bulk_import_entity_get":         routeAction(client, bulkimports.GetEntity),
+		"bulk_import_entity_failures":    routeAction(client, bulkimports.ListEntityFailures),
 		"error_tracking_list":            routeAction(client, errortracking.ListClientKeys),
 		"error_tracking_create":          routeAction(client, errortracking.CreateClientKey),
 		"error_tracking_delete":          destructiveVoidAction(client, errortracking.DeleteClientKey),
@@ -2251,6 +2257,12 @@ Custom attributes:
 
 Bulk import:
 - bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})
+- bulk_import_list: status, page, per_page
+- bulk_import_get: id*
+- bulk_import_cancel: id*
+- bulk_import_entity_list: bulk_import_id, status, page, per_page
+- bulk_import_entity_get: bulk_import_id*, entity_id*
+- bulk_import_entity_failures: bulk_import_id*, entity_id*
 
 Error tracking:
 - error_tracking_list: project_id*

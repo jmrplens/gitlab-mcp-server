@@ -20,7 +20,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1000                                                                                                         |
+| MCP Tools (individual)    | 1006                                                                                                         |
 | Meta-mode tools           | 32 base / 47 enterprise (24 inline + 3 delegated + 1 standalone + 4 interactive + 15 enterprise inline) |
 | MCP Resources             | 44                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
@@ -435,7 +435,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1000 tools)      |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (162 sub-packages, 1006 tools)      |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (5 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

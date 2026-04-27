@@ -14,8 +14,8 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,854   |
-| Unit test functions         | 8,556   |
+| Total test functions        | 8,866   |
+| Unit test functions         | 8,568   |
 | E2E test functions          | 218     |
 | cmd test functions          | 80      |
 | Test files (internal/)      | 405     |
@@ -42,10 +42,10 @@
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
 | Core packages            |          1,310 |         76 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            222 |         17 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (163)  |          7,024 |        312 | Domain-specific tool handlers        |
+| Tool sub-packages (163)  |          7,036 |        312 | Domain-specific tool handlers        |
 | E2E integration          |            218 |         99 | Full workflow against real GitLab    |
 | cmd/server               |             80 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,854** |    **505** |                                      |
+| **Total**                |      **8,866** |    **505** |                                      |
 
 ### Core Packages
 
@@ -78,7 +78,7 @@
 | issues               |   195 |   98.6%  |    21 |
 | users                |   185 |  100.0%  |    28 |
 | samplingtools        |   162 |  100.0%  |    11 |
-| groups               |   121 |   99.0%  |    18 |
+| groups               |   122 |   99.0%  |    18 |
 | search               |   106 |  100.0%  |    11 |
 | awardemoji           |   106 |   96.2%  |    25 |
 | packages             |   104 |   95.2%  |     9 |
@@ -118,7 +118,7 @@
 | branches                 |    79 |
 | branchrules              |    14 |
 | broadcastmessages        |    28 |
-| bulkimports              |     9 |
+| bulkimports              |    20 |
 | cicatalog                |    19 |
 | cilint                   |    27 |
 | civariables              |    40 |
@@ -171,7 +171,7 @@
 | groupprotectedenvs       |    12 |
 | grouprelationsexport     |    26 |
 | groupreleases            |    14 |
-| groups                   |   121 |
+| groups                   |   122 |
 | groupsaml                |    23 |
 | groupscim                |    27 |
 | groupserviceaccounts     |    19 |
@@ -265,7 +265,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    66 |
-| **Total** (163 sub-packages) | **6,928** |
+| **Total** (163 sub-packages) | **6,940** |
 
 </details>
 
@@ -619,13 +619,13 @@ The `cleanupOrphanedProjects` function in `setup_test.go` runs at suite start to
 
 ### Meta-Tool Tests
 
-Meta-tool tests verify the action-dispatch layer that consolidates 1000 individual tools into 32 base / 47 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
+Meta-tool tests verify the action-dispatch layer that consolidates 1006 individual tools into 32 base / 47 enterprise domain meta-tools. These tests live in `internal/tools/` (the orchestration package).
 
 **What meta-tool tests cover:**
 
 - **Action routing**: Each meta-tool correctly dispatches to the underlying sub-package handler based on the `action` parameter
 - **Invalid action**: Requests with unknown actions return an error listing valid actions
-- **Metadata audit**: `TestMetadataAudit_*` tests enforce naming conventions, annotations, and tool count invariants across all 1000 tools
+- **Metadata audit**: `TestMetadataAudit_*` tests enforce naming conventions, annotations, and tool count invariants across all 1006 tools
 - **Destructive metadata consistency**: `TestDestructiveMetadataConsistency` cross-checks `ActionRoute.Destructive` metadata against `toolutil.DeleteAnnotations` on individual tools — ensures meta-tool routes and individual tools agree on which actions are destructive
 - **Markdown formatting**: `markdownForResult` delegates to the type-based registry (`toolutil.MarkdownForResult`) which invokes the formatter registered by the sub-package `init()` function
 - **next_steps enrichment**: `enrichWithHints()` correctly extracts hints from Markdown and injects them into JSON `structuredContent`

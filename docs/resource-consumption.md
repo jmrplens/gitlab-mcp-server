@@ -40,7 +40,7 @@ In HTTP mode, a single process serves all clients. The base process uses ~50 MB 
 | --- | --- |
 | `*mcp.Server` instance (struct + options + session map) | ~40 KB |
 | `*gitlabclient.Client` via `gl.NewClient()` (HTTP client + auth) | ~8 KB |
-| Tool registrations (1000 individual or 32/47 meta) | ~80 KB |
+| Tool registrations (1006 individual or 32/47 meta) | ~80 KB |
 | Resource registrations (24) | ~5 KB |
 | Prompt registrations (38) | ~5 KB |
 | **Total per unique token** | **~130 KB** |
@@ -54,7 +54,7 @@ In HTTP mode, a single process serves all clients. The base process uses ~50 MB 
 | 50 | ~6.5 MB | ~57 MB | Comfortable for a team |
 | 100 (default max) | ~13 MB | ~63 MB | Default `--max-http-clients` |
 | 500 | ~65 MB | ~115 MB | Requires `--max-http-clients=500` |
-| 1000 | ~130 MB | ~180 MB | Large deployment |
+| 1006 | ~130 MB | ~180 MB | Large deployment |
 
 ### CPU Usage
 
@@ -150,13 +150,13 @@ gitlab-mcp-server --http \
 ```bash
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
-  --max-http-clients=1000 \
+  --max-http-clients=1006 \
   --session-timeout=1h \
   --http-addr=:8080
 ```
 
 - Memory: ~180 MB
-- CPU: Light — Go handles 1000+ goroutines efficiently
+- CPU: Light — Go handles 1006+ goroutines efficiently
 
 ---
 

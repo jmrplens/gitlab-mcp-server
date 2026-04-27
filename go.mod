@@ -7,11 +7,13 @@ require (
 	charm.land/bubbletea/v2 v2.0.6
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/creativeprojects/go-selfupdate v1.5.2
+	github.com/google/jsonschema-go v0.4.3
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/shirou/gopsutil/v4 v4.26.3
-	gitlab.com/gitlab-org/api/client-go/v2 v2.20.1
+	gitlab.com/gitlab-org/api/client-go/v2 v2.21.0
 	golang.org/x/crypto v0.50.0
+	golang.org/x/time v0.15.0
 )
 
 require (
@@ -20,7 +22,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
-	github.com/charmbracelet/ultraviolet v0.0.0-20260420095748-421e4a7fa8d7 // indirect
+	github.com/charmbracelet/ultraviolet v0.0.0-20260422141423-a0f1f21775f7 // indirect
 	github.com/charmbracelet/x/ansi v0.11.7 // indirect
 	github.com/charmbracelet/x/exp/golden v0.0.0-20260406091427-a791e22d5143 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -35,7 +37,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/go-github/v74 v74.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
@@ -60,7 +61,6 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

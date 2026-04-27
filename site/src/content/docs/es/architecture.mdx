@@ -107,7 +107,7 @@ Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para l
 
 ### Modo meta-herramientas (predeterminado)
 
-Con `META_TOOLS=true` (predeterminado), el servidor expone **32 meta-herramientas por dominio** (47 con enterprise) en lugar de más de 1000 herramientas individuales. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `META_TOOLS=true` (predeterminado), el servidor expone **32 meta-herramientas por dominio** (47 con enterprise) en lugar de más de 1006 herramientas individuales. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -139,7 +139,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `META_TOOLS=false`, se exponen todas las más de 1000 herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`). Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `META_TOOLS=false`, se exponen todas las más de 1006 herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`). Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ## Componentes opcionales
 

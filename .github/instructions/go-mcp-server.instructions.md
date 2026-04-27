@@ -527,7 +527,7 @@ samplingReq := &mcp.CreateMessageRequest{
         Role:    mcp.RoleUser,
         Content: mcp.TextContent{Text: prompt},
     }},
-    MaxTokens: 1000,
+    MaxTokens: 1006,
 }
 result, err := server.CreateMessage(ctx, samplingReq)
 ```
