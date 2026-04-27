@@ -39,7 +39,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		start := time.Now()
 		out, err := GetBoard(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_board_get", start, err)
-		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatBoardMarkdown(out)), out, err)
+		result := toolutil.ToolResultWithMarkdown(FormatBoardMarkdown(out))
+		if err == nil && out.ID != 0 && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/board/%d", string(input.ProjectID), out.ID),
+				out)
+		}
+		return toolutil.WithHints(result, out, err)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

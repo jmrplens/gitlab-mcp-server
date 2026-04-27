@@ -38,7 +38,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [CLI Reference](cli-reference.md) | Complete command-line flags and usage examples |
 | [Environment Variables](env-reference.md) | All environment variables with defaults and descriptions |
 | [tools/](tools/) | Per-domain tool documentation (25 domain docs) |
-| [Resources Reference](resources-reference.md) | All 29 MCP resources with URI templates |
+| [Resources Reference](resources-reference.md) | All 44 MCP resources with URI templates |
 | [Prompts Reference](prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Capabilities](capabilities/) | 6 MCP capabilities: logging, completions, roots, progress, sampling, elicitation |
 | [Usage Examples](examples/usage-examples.md) | Real-world MCP usage scenarios |

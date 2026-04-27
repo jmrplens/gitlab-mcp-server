@@ -1237,3 +1237,20 @@ func newDeployKeysMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestDeployKeyGet_EmbedsCanonicalResource asserts gitlab_deploy_key_get
+// attaches an EmbeddedResource block with URI
+// gitlab://project/{id}/deploy_key/{key_id}.
+func TestDeployKeyGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":12,"title":"deploy","key":"ssh-rsa AAAA","fingerprint":""}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deploy_keys/12") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "deploy_key_id": 12}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_deploy_key_get", args, "gitlab://project/42/deploy_key/12", toolutil.EnableEmbeddedResources)
+}

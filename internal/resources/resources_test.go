@@ -1228,3 +1228,237 @@ func TestMilestoneResource_NotFound(t *testing.T) {
 		t.Fatal("expected error for unknown milestone IID")
 	}
 }
+
+// TestDeploymentResource_Success verifies the singleton deployment resource
+// returns deployment metadata when the GitLab API responds successfully.
+func TestDeploymentResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deployments/17") {
+			respondJSON(w, http.StatusOK, `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deployment/17"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var d DeploymentResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &d); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if d.ID != 17 || d.Status != "success" || d.Environment != "prod" {
+		t.Errorf("got %+v", d)
+	}
+}
+
+// TestEnvironmentResource_Success verifies the singleton environment
+// resource returns environment metadata.
+func TestEnvironmentResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/environments/7") {
+			respondJSON(w, http.StatusOK, `{"id":7,"name":"prod","slug":"prod","state":"available","tier":"production"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/environment/7"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var e EnvironmentResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &e); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if e.ID != 7 || e.Name != "prod" || e.Tier != "production" {
+		t.Errorf("got %+v", e)
+	}
+}
+
+// TestJobResource_Success verifies the singleton job resource returns CI
+// job metadata.
+func TestJobResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/jobs/555") {
+			respondJSON(w, http.StatusOK, `{"id":555,"name":"build","stage":"build","status":"success","ref":"main","duration":12.5,"web_url":"https://gitlab.example.com/p/-/jobs/555"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/job/555"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var j JobResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &j); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if j.ID != 555 || j.Name != "build" || j.Status != "success" {
+		t.Errorf("got %+v", j)
+	}
+}
+
+// TestSnippetResource_Success verifies the personal snippet resource.
+func TestSnippetResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/snippets/33") {
+			respondJSON(w, http.StatusOK, `{"id":33,"title":"hello","file_name":"hello.txt","description":"","visibility":"public","web_url":"https://gitlab.example.com/-/snippets/33"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://snippet/33"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var s SnippetResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &s); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if s.ID != 33 || s.Title != "hello" {
+		t.Errorf("got %+v", s)
+	}
+}
+
+// TestProjectSnippetResource_Success verifies the project snippet resource.
+func TestProjectSnippetResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/snippets/7") {
+			respondJSON(w, http.StatusOK, `{"id":7,"title":"hi","file_name":"f.txt","description":"","visibility":"private","web_url":"https://gitlab.example.com/p/-/snippets/7"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/snippet/7"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var s SnippetResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &s); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if s.ID != 7 || s.Title != "hi" {
+		t.Errorf("got %+v", s)
+	}
+}
+
+// TestFeatureFlagResource_Success verifies the feature flag resource.
+func TestFeatureFlagResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/feature_flags/experimental_ui") {
+			respondJSON(w, http.StatusOK, `{"name":"experimental_ui","description":"toggle","active":true,"version":"new_version_flag"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/feature_flag/experimental_ui"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var f FeatureFlagResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &f); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if f.Name != "experimental_ui" || !f.Active {
+		t.Errorf("got %+v", f)
+	}
+}
+
+// TestDeployKeyResource_Success verifies the deploy key resource.
+func TestDeployKeyResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deploy_keys/12") {
+			respondJSON(w, http.StatusOK, `{"id":12,"title":"deploy","key":"ssh-rsa AAAA","fingerprint":"aa:bb"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deploy_key/12"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var k DeployKeyResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &k); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if k.ID != 12 || k.Title != "deploy" {
+		t.Errorf("got %+v", k)
+	}
+}
+
+// TestBoardResource_Success verifies the issue board resource.
+func TestBoardResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/boards/3") {
+			respondJSON(w, http.StatusOK, `{"id":3,"name":"Development"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/board/3"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var b BoardResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &b); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if b.ID != 3 || b.Name != "Development" {
+		t.Errorf("got %+v", b)
+	}
+}
+
+// TestGroupMilestoneResource_Success verifies the group milestone resource
+// resolves an IID via list-with-iids and returns metadata.
+func TestGroupMilestoneResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/99/milestones" && r.URL.Query().Get("iids[]") == "5" {
+			respondJSON(w, http.StatusOK, `[{"id":100,"iid":5,"title":"v1.0","description":"first","state":"active"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/99/milestone/5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var m MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &m); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if m.IID != 5 || m.Title != "v1.0" {
+		t.Errorf("got %+v", m)
+	}
+}
+
+// TestGroupLabelResource_Success verifies the group label resource.
+func TestGroupLabelResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/labels/42") {
+			respondJSON(w, http.StatusOK, `{"id":42,"name":"bug","color":"#ff0000","description":"Bug","open_issues_count":2,"open_merge_requests_count":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/99/label/42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var l LabelResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &l); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if l.ID != 42 || l.Name != "bug" {
+		t.Errorf("got %+v", l)
+	}
+}

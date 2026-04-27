@@ -9,7 +9,7 @@ Más allá de las herramientas, GitLab MCP Server expone **recursos** y **prompt
 
 Los recursos MCP proporcionan **datos de contexto de solo lectura** que los clientes pueden solicitar en cualquier momento sin invocar una herramienta. Los recursos son útiles para proporcionar información de fondo que ayuda al LLM a tomar mejores decisiones.
 
-El servidor expone **24 recursos** en varias categorías:
+El servidor expone **44 recursos** en varias categorías:
 
 ### Recursos estáticos (3)
 
@@ -19,25 +19,42 @@ El servidor expone **24 recursos** en varias categorías:
 | `gitlab://groups`          | Todos los grupos GitLab accesibles para el usuario autenticado                                                            |
 | `gitlab://workspace/roots` | Directorios raíz del workspace del cliente MCP, para descubrimiento de proyectos vía `gitlab_resolve_project_from_remote` |
 
-### Plantillas de recursos de proyecto (8)
+### Plantillas de recursos de proyecto (23)
 
-| Recurso                                    | Descripción                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}`            | Metadatos del proyecto (nombre, namespace, visibilidad, rama predeterminada)                |
-| `gitlab://project/{project_id}/members`    | Miembros del proyecto con niveles de acceso (guest, reporter, developer, maintainer, owner) |
-| `gitlab://project/{project_id}/labels`     | Etiquetas del proyecto con colores, descripciones y conteos de issues/MRs                   |
-| `gitlab://project/{project_id}/milestones` | Milestones del proyecto con estado, fechas de vencimiento y URLs web                        |
-| `gitlab://project/{project_id}/branches`   | Ramas con estado de protección, estado de merge y flag predeterminado                       |
-| `gitlab://project/{project_id}/issues`     | Issues abiertos con etiquetas, asignados, autor y fecha de creación                         |
-| `gitlab://project/{project_id}/releases`   | Todas las releases con nombres de tags, descripciones y fechas                              |
-| `gitlab://project/{project_id}/tags`       | Tags del repositorio con mensajes, SHAs de commits y estado de protección                   |
+| Recurso                                                      | Descripción                                                                                 |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}`                              | Metadatos del proyecto (nombre, namespace, visibilidad, rama predeterminada)                |
+| `gitlab://project/{project_id}/members`                      | Miembros del proyecto con niveles de acceso (guest, reporter, developer, maintainer, owner) |
+| `gitlab://project/{project_id}/labels`                       | Etiquetas del proyecto con colores, descripciones y conteos de issues/MRs                   |
+| `gitlab://project/{project_id}/milestones`                   | Milestones del proyecto con estado, fechas de vencimiento y URLs web                        |
+| `gitlab://project/{project_id}/branches`                     | Ramas con estado de protección, estado de merge y flag predeterminado                       |
+| `gitlab://project/{project_id}/branch/{branch}`              | Una rama por nombre                                                                         |
+| `gitlab://project/{project_id}/issues`                       | Issues abiertos con etiquetas, asignados, autor y fecha de creación                         |
+| `gitlab://project/{project_id}/releases`                     | Todas las releases con nombres de tags, descripciones y fechas                              |
+| `gitlab://project/{project_id}/release/{tag_name}`           | Una release por tag                                                                         |
+| `gitlab://project/{project_id}/tags`                         | Tags del repositorio con mensajes, SHAs de commits y estado de protección                   |
+| `gitlab://project/{project_id}/tag/{tag_name}`               | Un tag por nombre                                                                           |
+| `gitlab://project/{project_id}/commit/{sha}`                 | Un commit por SHA (stats, mensaje, autor)                                                   |
+| `gitlab://project/{project_id}/file/{ref}/{+path}`           | Contenido de archivo en un ref (rama, tag o SHA)                                            |
+| `gitlab://project/{project_id}/wiki/{slug}`                  | Página wiki por slug                                                                        |
+| `gitlab://project/{project_id}/label/{label_id}`             | Una etiqueta de proyecto                                                                    |
+| `gitlab://project/{project_id}/milestone/{milestone_iid}`    | Un milestone de proyecto                                                                    |
+| `gitlab://project/{project_id}/board/{board_id}`             | Un tablero de issues                                                                        |
+| `gitlab://project/{project_id}/deployment/{deployment_id}`   | Un deployment                                                                               |
+| `gitlab://project/{project_id}/environment/{environment_id}` | Un environment                                                                              |
+| `gitlab://project/{project_id}/job/{job_id}`                 | Un job CI/CD                                                                                |
+| `gitlab://project/{project_id}/feature_flag/{name}`          | Un feature flag                                                                             |
+| `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`   | Una deploy key                                                                              |
+| `gitlab://project/{project_id}/snippet/{snippet_id}`         | Snippet a nivel de proyecto                                                                 |
 
-### Plantillas de issues y merge requests (2)
+### Plantillas de issues y merge requests (4)
 
-| Recurso                                           | Descripción                                                                   |
-| ------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}/issue/{issue_iid}` | Detalles de un issue (título, estado, etiquetas, asignados, URL web)          |
-| `gitlab://project/{project_id}/mr/{mr_iid}`       | Detalles de una merge request (título, estado, ramas, autor, estado de merge) |
+| Recurso                                                 | Descripción                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}/issue/{issue_iid}`       | Detalles de un issue (título, estado, etiquetas, asignados, URL web)          |
+| `gitlab://project/{project_id}/mr/{mr_iid}`             | Detalles de una merge request (título, estado, ramas, autor, estado de merge) |
+| `gitlab://project/{project_id}/mr/{mr_iid}/notes`       | Notas en una merge request                                                    |
+| `gitlab://project/{project_id}/mr/{mr_iid}/discussions` | Hilos de discusión en una merge request                                       |
 
 ### Plantillas de recursos CI/CD (3)
 
@@ -47,13 +64,21 @@ El servidor expone **24 recursos** en varias categorías:
 | `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | Detalles de un pipeline específico por ID numérico                              |
 | `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | Todos los jobs de un pipeline (nombre, stage, estado, duración, razón de fallo) |
 
-### Plantillas de recursos de grupo (3)
+### Plantillas de recursos de grupo (5)
 
-| Recurso                              | Descripción                                                       |
-| ------------------------------------ | ----------------------------------------------------------------- |
-| `gitlab://group/{group_id}`          | Detalles del grupo (nombre, ruta, descripción, visibilidad)       |
-| `gitlab://group/{group_id}/members`  | Miembros del grupo con niveles de acceso, incluidos los heredados |
-| `gitlab://group/{group_id}/projects` | Proyectos dentro del grupo (ID, nombre, namespace, visibilidad)   |
+| Recurso                                               | Descripción                                                       |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| `gitlab://group/{group_id}`                           | Detalles del grupo (nombre, ruta, descripción, visibilidad)       |
+| `gitlab://group/{group_id}/members`                   | Miembros del grupo con niveles de acceso, incluidos los heredados |
+| `gitlab://group/{group_id}/projects`                  | Proyectos dentro del grupo (ID, nombre, namespace, visibilidad)   |
+| `gitlab://group/{group_id}/label/{label_id}`          | Una etiqueta de grupo                                             |
+| `gitlab://group/{group_id}/milestone/{milestone_iid}` | Un milestone de grupo                                             |
+
+### Plantilla de snippet personal (1)
+
+| Recurso                         | Descripción                |
+| ------------------------------- | -------------------------- |
+| `gitlab://snippet/{snippet_id}` | Snippet personal (usuario) |
 
 ### Recursos de guías de flujo de trabajo (5)
 

@@ -736,3 +736,20 @@ func covNewMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestFeatureFlagGet_EmbedsCanonicalResource asserts
+// gitlab_feature_flag_get attaches an EmbeddedResource block with URI
+// gitlab://project/{id}/feature_flag/{name}.
+func TestFeatureFlagGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"name":"experimental_ui","description":"","active":true,"version":"new_version_flag"}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/feature_flags/experimental_ui") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "name": "experimental_ui"}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_feature_flag_get", args, "gitlab://project/42/feature_flag/experimental_ui", toolutil.EnableEmbeddedResources)
+}

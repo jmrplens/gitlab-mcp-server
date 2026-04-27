@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 1.3.1 | 1000 tools | 32 meta-tools (47 enterprise) | 24 resources | 38 prompts
+> Version 1.3.1 | 1000 tools | 32 meta-tools (47 enterprise) | 44 resources | 38 prompts
 
 ## Meta-Tools
 
@@ -21491,7 +21491,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Resources
 
-24 resources providing read-only access to GitLab data.
+44 resources providing read-only access to GitLab data.
 
 ### groups
 
@@ -21541,11 +21541,23 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **MIME**: application/json
 - **Description**: Get details for a specific GitLab group by numeric ID or URL-encoded path. Returns name, full path, description, visibility, and web URL.
 
+### group_label
+
+- **URI Template**: `gitlab://group/{group_id}/label/{label_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts.
+
 ### group_members
 
 - **URI Template**: `gitlab://group/{group_id}/members`
 - **MIME**: application/json
 - **Description**: List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.
+
+### group_milestone
+
+- **URI Template**: `gitlab://group/{group_id}/milestone/{milestone_iid}`
+- **MIME**: application/json
+- **Description**: Get details for a single group milestone by IID. Returns id, iid, title, description, state, due date, and web URL.
 
 ### group_projects
 
@@ -21559,11 +21571,59 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **MIME**: application/json
 - **Description**: Get basic metadata for a GitLab project by numeric ID or URL-encoded path. Returns name, namespace path, visibility, web URL, description, and default branch.
 
+### board
+
+- **URI Template**: `gitlab://project/{project_id}/board/{board_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project issue board by numeric ID. Returns id and name.
+
+### branch
+
+- **URI Template**: `gitlab://project/{project_id}/branch/{branch}`
+- **MIME**: application/json
+- **Description**: Get details for a single repository branch. Returns name, protection status, merge status, default flag, and web URL.
+
 ### project_branches
 
 - **URI Template**: `gitlab://project/{project_id}/branches`
 - **MIME**: application/json
 - **Description**: List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.
+
+### commit
+
+- **URI Template**: `gitlab://project/{project_id}/commit/{sha}`
+- **MIME**: application/json
+- **Description**: Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).
+
+### deploy_key
+
+- **URI Template**: `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project deploy key by numeric ID. Returns id, title, key, and fingerprint.
+
+### deployment
+
+- **URI Template**: `gitlab://project/{project_id}/deployment/{deployment_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project deployment by numeric ID. Returns id, iid, ref, sha, status, and environment name.
+
+### environment
+
+- **URI Template**: `gitlab://project/{project_id}/environment/{environment_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project environment by numeric ID. Returns id, name, slug, state, and tier.
+
+### feature_flag
+
+- **URI Template**: `gitlab://project/{project_id}/feature_flag/{name}`
+- **MIME**: application/json
+- **Description**: Get details for a single project feature flag by name. Returns name, description, active, and version.
+
+### file_blob
+
+- **URI Template**: `gitlab://project/{project_id}/file/{ref}/{+path}`
+- **MIME**: application/json
+- **Description**: Get the contents of a repository file at a specific ref (branch, tag, or SHA). Path may include slashes. Files over 1 MiB return metadata only with truncated=true. Binary files return metadata with empty content.
 
 ### issue
 
@@ -21577,6 +21637,18 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **MIME**: application/json
 - **Description**: List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.
 
+### job
+
+- **URI Template**: `gitlab://project/{project_id}/job/{job_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single CI job by numeric ID. Returns id, name, stage, status, ref, duration, and web URL.
+
+### label
+
+- **URI Template**: `gitlab://project/{project_id}/label/{label_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts.
+
 ### project_labels
 
 - **URI Template**: `gitlab://project/{project_id}/labels`
@@ -21589,6 +21661,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **MIME**: application/json
 - **Description**: List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.
 
+### milestone
+
+- **URI Template**: `gitlab://project/{project_id}/milestone/{milestone_iid}`
+- **MIME**: application/json
+- **Description**: Get details for a single project milestone by IID. Returns id, iid, title, description, state, due date, and web URL.
+
 ### project_milestones
 
 - **URI Template**: `gitlab://project/{project_id}/milestones`
@@ -21600,6 +21678,18 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}`
 - **MIME**: application/json
 - **Description**: Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.
+
+### merge_request_discussions
+
+- **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}/discussions`
+- **MIME**: application/json
+- **Description**: List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).
+
+### merge_request_notes
+
+- **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}/notes`
+- **MIME**: application/json
+- **Description**: List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.
 
 ### pipeline
 
@@ -21619,17 +21709,47 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 - **MIME**: application/json
 - **Description**: Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.
 
+### release
+
+- **URI Template**: `gitlab://project/{project_id}/release/{tag_name}`
+- **MIME**: application/json
+- **Description**: Get details for a single GitLab release by tag name. Returns tag_name, name, description, author, creation/release dates.
+
 ### project_releases
 
 - **URI Template**: `gitlab://project/{project_id}/releases`
 - **MIME**: application/json
 - **Description**: List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.
 
+### project_snippet
+
+- **URI Template**: `gitlab://project/{project_id}/snippet/{snippet_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.
+
+### tag
+
+- **URI Template**: `gitlab://project/{project_id}/tag/{tag_name}`
+- **MIME**: application/json
+- **Description**: Get details for a single Git tag. Returns name, target commit SHA, annotation message, and protection status.
+
 ### project_tags
 
 - **URI Template**: `gitlab://project/{project_id}/tags`
 - **MIME**: application/json
 - **Description**: List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.
+
+### wiki_page
+
+- **URI Template**: `gitlab://project/{project_id}/wiki/{slug}`
+- **MIME**: application/json
+- **Description**: Get a wiki page by slug. Returns title, slug, format (markdown/rdoc/asciidoc/org), and raw content. Slugs are case-sensitive and use hyphens for spaces.
+
+### snippet
+
+- **URI Template**: `gitlab://snippet/{snippet_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single personal/global snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.
 
 ### Workspace Roots
 

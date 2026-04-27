@@ -1882,3 +1882,19 @@ func newJobsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestJobGet_EmbedsCanonicalResource asserts gitlab_job_get attaches an
+// EmbeddedResource block with URI gitlab://project/{id}/job/{job_id}.
+func TestJobGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":555,"name":"build","stage":"build","status":"success","ref":"main","tag":false}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/jobs/555") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "job_id": 555}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_job_get", args, "gitlab://project/42/job/555", toolutil.EnableEmbeddedResources)
+}

@@ -231,12 +231,32 @@ Not-found responses have `IsError: true` but include actionable hints so the AI 
 
 Selected `gitlab_*_get` tools attach an additional content block of type `resource` (`mcp.EmbeddedResource`) carrying the canonical MCP resource URI for the entity returned. This lets clients that only render `Content` blocks (and ignore `StructuredContent`) still surface a stable, dereferenceable identifier the user or LLM can pass to `resources/read`, follow-up tool calls, or UI deep-links.
 
-Currently embedded by:
+Currently embedded by 22 `gitlab_*_get` handlers:
 
-- `gitlab_issue_get` → `gitlab://project/{project_id}/issue/{issue_iid}`
-- `gitlab_mr_get` → `gitlab://project/{project_id}/mr/{mr_iid}`
-- `gitlab_project_get` → `gitlab://project/{project_id}`
-- `gitlab_pipeline_get` → `gitlab://project/{project_id}/pipeline/{pipeline_id}`
+| Tool                          | Canonical URI                                            |
+| ----------------------------- | -------------------------------------------------------- |
+| `gitlab_board_get`            | `gitlab://project/{project_id}/board/{board_id}`         |
+| `gitlab_branch_get`           | `gitlab://project/{project_id}/branch/{branch_name}`     |
+| `gitlab_commit_get`           | `gitlab://project/{project_id}/commit/{sha}`             |
+| `gitlab_deploy_key_get`       | `gitlab://project/{project_id}/deploy_key/{key_id}`      |
+| `gitlab_deployment_get`       | `gitlab://project/{project_id}/deployment/{deployment_id}` |
+| `gitlab_environment_get`      | `gitlab://project/{project_id}/environment/{environment_id}` |
+| `gitlab_feature_flag_get`     | `gitlab://project/{project_id}/feature_flag/{name}`      |
+| `gitlab_group_get`            | `gitlab://group/{group_id}`                              |
+| `gitlab_group_label_get`      | `gitlab://group/{group_id}/label/{label_id}`             |
+| `gitlab_group_milestone_get`  | `gitlab://group/{group_id}/milestone/{milestone_iid}`    |
+| `gitlab_issue_get`            | `gitlab://project/{project_id}/issue/{issue_iid}`        |
+| `gitlab_job_get`              | `gitlab://project/{project_id}/job/{job_id}`             |
+| `gitlab_label_get`            | `gitlab://project/{project_id}/label/{label_id}`         |
+| `gitlab_milestone_get`        | `gitlab://project/{project_id}/milestone/{milestone_iid}`|
+| `gitlab_mr_get`               | `gitlab://project/{project_id}/mr/{mr_iid}`              |
+| `gitlab_pipeline_get`         | `gitlab://project/{project_id}/pipeline/{pipeline_id}`   |
+| `gitlab_project_get`          | `gitlab://project/{project_id}`                          |
+| `gitlab_project_snippet_get`  | `gitlab://project/{project_id}/snippet/{snippet_id}`     |
+| `gitlab_release_get`          | `gitlab://project/{project_id}/release/{tag_name}`       |
+| `gitlab_snippet_get`          | `gitlab://snippet/{snippet_id}`                          |
+| `gitlab_tag_get`              | `gitlab://project/{project_id}/tag/{tag_name}`           |
+| `gitlab_wiki_get`             | `gitlab://project/{project_id}/wiki/{slug}`              |
 
 The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Not-found responses do **not** embed (the entity does not exist).
 

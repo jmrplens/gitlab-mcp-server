@@ -1642,3 +1642,27 @@ func newGroupMilestonesMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestGroupMilestoneGet_EmbedsCanonicalResource asserts
+// gitlab_group_milestone_get attaches an EmbeddedResource block with URI
+// gitlab://group/{id}/milestone/{iid}.
+func TestGroupMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
+	const milestoneJSON = `{"id":100,"iid":5,"group_id":99,"title":"v1.0","description":"first","state":"active"}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		switch {
+		case r.URL.Path == "/api/v4/groups/99/milestones" && r.URL.Query().Get("iids[]") == "5":
+			testutil.RespondJSON(w, http.StatusOK, "["+milestoneJSON+"]")
+		case strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/milestones/100"):
+			testutil.RespondJSON(w, http.StatusOK, milestoneJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"group_id": "99", "milestone_iid": 5}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_group_milestone_get", args, "gitlab://group/99/milestone/5", toolutil.EnableEmbeddedResources)
+}

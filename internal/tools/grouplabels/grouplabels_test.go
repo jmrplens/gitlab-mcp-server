@@ -888,3 +888,20 @@ func newGroupLabelsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestGroupLabelGet_EmbedsCanonicalResource asserts
+// gitlab_group_label_get attaches an EmbeddedResource block with URI
+// gitlab://group/{id}/label/{label_id}.
+func TestGroupLabelGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":42,"name":"bug","color":"#ff0000","text_color":"#fff","description":"Bug"}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/labels/42") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"group_id": "99", "label_id": "42"}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_group_label_get", args, "gitlab://group/99/label/42", toolutil.EnableEmbeddedResources)
+}

@@ -954,3 +954,20 @@ func newEnvironmentsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestEnvironmentGet_EmbedsCanonicalResource asserts gitlab_environment_get
+// attaches an EmbeddedResource block with URI
+// gitlab://project/{id}/environment/{env_id}.
+func TestEnvironmentGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":7,"name":"prod","slug":"prod","state":"available","tier":"production"}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/environments/7") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "environment_id": 7}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_environment_get", args, "gitlab://project/42/environment/7", toolutil.EnableEmbeddedResources)
+}

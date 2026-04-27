@@ -913,3 +913,20 @@ func TestProjectUpdate_SingleFileFallback(t *testing.T) {
 		t.Error("expected non-zero ID")
 	}
 }
+
+// TestProjectSnippetGet_EmbedsCanonicalResource asserts
+// gitlab_project_snippet_get attaches an EmbeddedResource block with URI
+// gitlab://project/{id}/snippet/{snippet_id}.
+func TestProjectSnippetGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":7,"title":"hi","file_name":"f.txt","description":"","visibility":"private","author":{"id":1,"username":"u","name":"u"}}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/snippets/7") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "snippet_id": 7}
+	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_project_snippet_get", args, "gitlab://project/42/snippet/7", toolutil.EnableEmbeddedResources)
+}
