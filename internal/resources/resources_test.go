@@ -1052,3 +1052,179 @@ func TestExtractTwoParts(t *testing.T) {
 		})
 	}
 }
+
+// TestReleaseResource_Success verifies that the singleton release resource
+// returns release metadata when the GitLab API responds with a valid release
+// payload at gitlab://project/{id}/release/{tag}.
+func TestReleaseResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/releases/v1.0.0" {
+			respondJSON(w, http.StatusOK, `{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-02T00:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/release/v1.0.0"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(result.Contents))
+	}
+
+	var rel ReleaseResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &rel); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if rel.TagName != testTagV100 {
+		t.Errorf("tag_name = %q, want %q", rel.TagName, testTagV100)
+	}
+	if rel.Author != "alice" {
+		t.Errorf(fmtAuthorWant, rel.Author, "alice")
+	}
+}
+
+// TestBranchResource_Success verifies that the singleton branch resource
+// returns branch metadata when the GitLab API responds with a valid branch
+// payload at gitlab://project/{id}/branch/{name}.
+func TestBranchResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/branches/main" {
+			respondJSON(w, http.StatusOK, `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gitlab.example.com/u/p/-/tree/main"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/branch/main"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var br BranchResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &br); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if br.Name != "main" {
+		t.Errorf(fmtNameWant, br.Name, "main")
+	}
+	if !br.Default {
+		t.Error("expected default = true")
+	}
+	if !br.Protected {
+		t.Error("expected protected = true")
+	}
+}
+
+// TestTagResource_Success verifies that the singleton tag resource returns
+// tag metadata when the GitLab API responds with a valid tag payload at
+// gitlab://project/{id}/tag/{name}.
+func TestTagResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/tags/v1.0.0" {
+			respondJSON(w, http.StatusOK, `{"name":"v1.0.0","message":"Release tag","target":"abc123","protected":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/tag/v1.0.0"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var tg TagResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &tg); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if tg.Name != testTagV100 {
+		t.Errorf(fmtNameWant, tg.Name, testTagV100)
+	}
+	if tg.Target != "abc123" {
+		t.Errorf("target = %q, want abc123", tg.Target)
+	}
+	if !tg.Protected {
+		t.Error("expected protected = true")
+	}
+}
+
+// TestLabelResource_Success verifies that the singleton label resource
+// returns label metadata when the GitLab API responds with a valid label
+// payload at gitlab://project/{id}/label/{id}.
+func TestLabelResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/labels/5" {
+			respondJSON(w, http.StatusOK, `{"id":5,"name":"bug","color":"#ff0000","description":"Defect","open_issues_count":3,"open_merge_requests_count":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/label/5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var lb LabelResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &lb); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if lb.ID != 5 {
+		t.Errorf("id = %d, want 5", lb.ID)
+	}
+	if lb.Name != "bug" {
+		t.Errorf(fmtNameWant, lb.Name, "bug")
+	}
+	if lb.OpenIssuesCount != 3 {
+		t.Errorf("open_issues_count = %d, want 3", lb.OpenIssuesCount)
+	}
+}
+
+// TestMilestoneResource_Success verifies that the singleton milestone
+// resource resolves an IID via list-with-iids and returns milestone metadata
+// when the GitLab API responds with a valid payload at
+// gitlab://project/{id}/milestone/{iid}.
+func TestMilestoneResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" && r.URL.Query().Get("iids[]") == "3" {
+			respondJSON(w, http.StatusOK, `[{"id":99,"iid":3,"title":"Sprint 3","description":"Q1 goals","state":"active","web_url":"https://gitlab.example.com/u/p/-/milestones/3"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var ms MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &ms); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if ms.IID != 3 {
+		t.Errorf("iid = %d, want 3", ms.IID)
+	}
+	if ms.Title != "Sprint 3" {
+		t.Errorf(fmtTitleWant, ms.Title, "Sprint 3")
+	}
+}
+
+// TestMilestoneResource_NotFound verifies that the singleton milestone
+// resource returns ResourceNotFoundError when the IID does not exist (empty
+// list returned by GitLab).
+func TestMilestoneResource_NotFound(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/99"})
+	if err == nil {
+		t.Fatal("expected error for unknown milestone IID")
+	}
+}
