@@ -31,6 +31,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -153,6 +154,8 @@ func TestMain(m *testing.M) {
 		Version: "test",
 	}, nil)
 	tools.RegisterAll(server, glClient, enterprise)
+	resources.Register(server, glClient)
+	resources.RegisterWorkflowGuides(server)
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
