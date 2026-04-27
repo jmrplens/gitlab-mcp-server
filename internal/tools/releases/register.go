@@ -5,6 +5,7 @@ package releases
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,7 +81,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
 		if err == nil && out.TagName != "" && string(input.ProjectID) != "" {
 			toolutil.EmbedResourceJSON(result,
-				fmt.Sprintf("gitlab://project/%s/release/%s", string(input.ProjectID), out.TagName),
+				fmt.Sprintf("gitlab://project/%s/release/%s", url.PathEscape(string(input.ProjectID)), url.PathEscape(out.TagName)),
 				out)
 		}
 		return toolutil.WithHints(result, out, err)

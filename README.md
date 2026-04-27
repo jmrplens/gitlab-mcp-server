@@ -362,7 +362,7 @@ Meta-tool summary:
 | MCP Capability | Support |
 |----------------|---------|
 | **Tools** | 1000 individual / 32–47 meta |
-| **Resources** | 29 (static + templates) |
+| **Resources** | 44 (static + templates) |
 | **Prompts** | 38 templates |
 | **Completions** | Project, user, group, branch, tag |
 | **Logging** | Structured (text/JSON) + MCP notifications |

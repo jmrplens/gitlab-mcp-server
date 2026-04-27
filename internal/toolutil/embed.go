@@ -47,10 +47,10 @@ func EmbeddedResourcesEnabled() bool {
 // a compact JSON serialization of the entity (or empty if the resource is
 // addressable but the body is large).
 //
-// When result is nil or the global toggle is disabled, EmbedResource is a
-// no-op. URIs that fail RFC-3986 validation are dropped silently rather than
-// breaking the tool result; the calling handler still returns the text and
-// StructuredContent blocks.
+// When result is nil, the URI is empty, or the global toggle is disabled,
+// EmbedResource is a no-op. No further URI validation is performed; callers
+// are responsible for passing well-formed URIs that match an MCP resource
+// template registered with the server.
 func EmbedResource(result *mcp.CallToolResult, uri, mimeType, text string) {
 	if result == nil || uri == "" || !embeddedResourcesEnabled.Load() {
 		return

@@ -1120,7 +1120,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func TestBoardGet_EmbedsCanonicalResource(t *testing.T) {
 	const respJSON = `{"id":3,"name":"Development","project":{"id":42}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/boards/3") {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/boards/3" {
 			testutil.RespondJSON(w, http.StatusOK, respJSON)
 			return
 		}

@@ -2015,7 +2015,7 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 func TestCommitGet_EmbedsCanonicalResource(t *testing.T) {
 	const respJSON = `{"id":"abc123","short_id":"abc123","title":"T","message":"M","author_name":"A","author_email":"a@b","authored_date":"2026-01-01T00:00:00Z","committed_date":"2026-01-01T00:00:00Z","web_url":"https://gitlab.example.com/g/p/-/commit/abc123"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/commits/abc123") {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
 			testutil.RespondJSON(w, http.StatusOK, respJSON)
 			return
 		}

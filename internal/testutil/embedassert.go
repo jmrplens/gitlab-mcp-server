@@ -62,6 +62,9 @@ func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.Clie
 		if err != nil {
 			t.Fatalf("CallTool(%s): %v", name, err)
 		}
+		if result == nil || result.IsError {
+			t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
+		}
 		var found *mcp.EmbeddedResource
 		for _, c := range result.Content {
 			if er, ok := c.(*mcp.EmbeddedResource); ok {
@@ -88,6 +91,9 @@ func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.Clie
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 		if err != nil {
 			t.Fatalf("CallTool(%s): %v", name, err)
+		}
+		if result == nil || result.IsError {
+			t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
 		}
 		for _, c := range result.Content {
 			if _, ok := c.(*mcp.EmbeddedResource); ok {

@@ -5,6 +5,7 @@ package snippets
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -184,7 +185,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		result := toolutil.ToolResultWithMarkdown(FormatMarkdown(out))
 		if err == nil && out.ID != 0 && string(input.ProjectID) != "" {
 			toolutil.EmbedResourceJSON(result,
-				fmt.Sprintf("gitlab://project/%s/snippet/%d", string(input.ProjectID), out.ID),
+				fmt.Sprintf("gitlab://project/%s/snippet/%d", url.PathEscape(string(input.ProjectID)), out.ID),
 				out)
 		}
 		return toolutil.WithHints(result, out, err)

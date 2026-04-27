@@ -71,7 +71,7 @@ graph TD
         META[metatool<br/>32 base / 47 enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
-        RES[resources<br/>29 resource handlers]
+        RES[resources<br/>44 resource handlers]
         PROMPTS[prompts<br/>38 prompt handlers]
         LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
@@ -272,7 +272,7 @@ sequenceDiagram
 
 ### Resources (`internal/resources`)
 
-24 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
+44 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
 
 | Resource        | URI                                         | Description                        |
 | --------------- | ------------------------------------------- | ---------------------------------- |

@@ -5,6 +5,7 @@ package tags
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -35,7 +36,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		result := FormatOutputMarkdown(out)
 		if err == nil && out.Name != "" && string(input.ProjectID) != "" {
 			toolutil.EmbedResourceJSON(result,
-				fmt.Sprintf("gitlab://project/%s/tag/%s", string(input.ProjectID), out.Name),
+				fmt.Sprintf("gitlab://project/%s/tag/%s", url.PathEscape(string(input.ProjectID)), url.PathEscape(out.Name)),
 				out)
 		}
 		return toolutil.WithHints(result, out, err)
