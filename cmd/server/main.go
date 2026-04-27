@@ -67,6 +67,7 @@ type httpConfig struct {
 	enterprise         bool
 	readOnly           bool
 	safeMode           bool
+	embeddedResources  bool
 	excludeTools       string
 	ignoreScopes       bool
 	maxHTTPClients     int
@@ -108,6 +109,7 @@ func main() {
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Enable Enterprise/Premium meta-tools")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
+	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated list of tool names to exclude from registration")
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum concurrent client sessions")
@@ -331,6 +333,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		Enterprise:         hcfg.enterprise,
 		ReadOnly:           hcfg.readOnly,
 		SafeMode:           hcfg.safeMode,
+		EmbeddedResources:  hcfg.embeddedResources,
 		ExcludeTools:       config.ParseCSV(hcfg.excludeTools),
 		IgnoreScopes:       hcfg.ignoreScopes,
 		MaxHTTPClients:     hcfg.maxHTTPClients,
@@ -388,6 +391,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()
@@ -406,6 +410,7 @@ func runStdio(ctx context.Context) error {
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()

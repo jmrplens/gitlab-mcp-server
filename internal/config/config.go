@@ -64,6 +64,8 @@ type Config struct {
 	ReadOnly      bool
 	SafeMode      bool
 
+	EmbeddedResources bool // Append EmbeddedResource content blocks to get_* tool results (default true)
+
 	UploadMaxFileSize int64
 
 	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
@@ -127,6 +129,11 @@ func Load() (*Config, error) {
 	safeMode, err := parseBool(os.Getenv("GITLAB_SAFE_MODE"), false)
 	if err != nil {
 		return nil, fmt.Errorf("invalid GITLAB_SAFE_MODE value: %w", err)
+	}
+
+	embeddedResources, err := parseBool(os.Getenv("EMBEDDED_RESOURCES"), true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid EMBEDDED_RESOURCES value: %w", err)
 	}
 
 	ignoreScopes, err := parseBool(os.Getenv("GITLAB_IGNORE_SCOPES"), false)
@@ -207,6 +214,7 @@ func Load() (*Config, error) {
 		Enterprise:         enterprise,
 		ReadOnly:           readOnly,
 		SafeMode:           safeMode,
+		EmbeddedResources:  embeddedResources,
 		UploadMaxFileSize:  maxFileSize,
 		MaxHTTPClients:     maxHTTPClients,
 		SessionTimeout:     sessionTimeout,
