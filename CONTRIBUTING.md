@@ -116,8 +116,7 @@ docs(readme): update tool count after wiki tools
 
 - [ ] Code compiles: `go build ./...`
 - [ ] All tests pass: `go test ./... -count=1`
-- [ ] No lint issues: `go vet ./...` and `staticcheck ./...`
-- [ ] Code is formatted: `gofmt -w .` and `goimports -w .`
+- [ ] Static analysis is clean: `make analyze` (run `make analyze-fix` first to auto-fix `goimports`/`gofmt`/`modernize` issues)
 - [ ] New tools have tests with >80% coverage
 - [ ] Documentation is updated if public API changed
 - [ ] Commit messages follow conventional commits
@@ -126,11 +125,10 @@ docs(readme): update tool count after wiki tools
 
 1. Create a feature branch from `main`
 2. Make your changes in small, focused commits
-3. Push the branch and create a pull request
+3. Push the branch and open a pull request — reviewers are auto-requested via [CODEOWNERS](CODEOWNERS)
 4. Fill in the PR template (auto-populated from `.github/pull_request_template.md`)
-5. Assign to `@jmrplens` for review
-6. Address review feedback
-7. Squash and merge once approved
+5. Address review feedback
+6. Squash-merge once approved (the only allowed merge strategy)
 
 ### PR Size Guidelines
 
@@ -257,78 +255,34 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 ## Issue Reporting
 
-### Bug Reports
+Open an issue at <https://github.com/jmrplens/gitlab-mcp-server/issues/new/choose> and pick a template:
 
-Use the **Bug Report** issue template. Include:
+- **Bug Report** — reproducible defects
+- **Feature Request** — new functionality / new MCP tool
+- **Enhancement** — improvement to existing behavior
+- **Documentation** — missing, outdated or incorrect docs
+- **Security Issue** — use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) for non-public reports
 
-1. Steps to reproduce
-2. Expected behavior
-3. Actual behavior
-4. Environment (Go version, OS, GitLab version)
-5. Relevant logs or error messages
-
-### Feature Requests
-
-Use the **Feature Request** issue template. Include:
-
-1. Problem description
-2. Proposed solution
-3. Use cases
-4. Alternatives considered
+Templates auto-apply the relevant labels listed in [Labels](#labels).
 
 ## Labels
 
-Issues and pull requests use the following labels for categorization:
+Issue templates auto-assign labels on submission. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions):
 
-### Type Labels
+| Label              | Color     | Used by                                          |
+| ------------------ | --------- | ------------------------------------------------ |
+| `bug`              | `#d73a4a` | Bug Report, Security Issue templates             |
+| `feature`          | `#a2eeef` | Feature Request template                         |
+| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)            |
+| `documentation`    | `#0075ca` | Documentation template (GitHub default)          |
+| `security`         | `#d73a4a` | Security Issue template                          |
+| `high-priority`    | `#b60205` | Security Issue template                          |
+| `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission) |
+| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                |
+| `help wanted`      | `#008672` | Manual — community contributions welcome         |
+| `question`         | `#d876e3` | Manual — questions / discussions                 |
+| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues           |
+| `invalid`          | `#e4e669` | Manual — out of scope                            |
+| `wontfix`          | `#ffffff` | Manual — accepted but won't implement            |
 
-| Label                 | Color     | Description                           |
-| --------------------- | --------- | ------------------------------------- |
-| `type::bug`           | `#d73a4a` | Something is broken                   |
-| `type::feature`       | `#a2eeef` | New functionality                     |
-| `type::enhancement`   | `#7057ff` | Improvement to existing functionality |
-| `type::documentation` | `#0075ca` | Documentation changes                 |
-| `type::refactor`      | `#e4e669` | Code restructuring                    |
-| `type::test`          | `#bfd4f2` | Test additions or improvements        |
-| `type::chore`         | `#d4c5f9` | Maintenance, dependencies, CI         |
-
-### Priority Labels
-
-| Label                | Color     | Description          |
-| -------------------- | --------- | -------------------- |
-| `priority::critical` | `#b60205` | Must fix immediately |
-| `priority::high`     | `#d93f0b` | Important, fix soon  |
-| `priority::medium`   | `#fbca04` | Normal priority      |
-| `priority::low`      | `#0e8a16` | Nice to have         |
-
-### Status Labels
-
-| Label                  | Color     | Description               |
-| ---------------------- | --------- | ------------------------- |
-| `status::needs-triage` | `#c2e0c6` | Needs initial assessment  |
-| `status::ready`        | `#0075ca` | Ready for implementation  |
-| `status::in-progress`  | `#fbca04` | Currently being worked on |
-| `status::blocked`      | `#d73a4a` | Blocked by dependency     |
-| `status::needs-review` | `#7057ff` | Waiting for code review   |
-
-### Component Labels
-
-| Label                      | Color     | Description                                |
-| -------------------------- | --------- | ------------------------------------------ |
-| `component::tools`         | `#1d76db` | MCP tool handlers                          |
-| `component::resources`     | `#1d76db` | MCP resource handlers                      |
-| `component::prompts`       | `#1d76db` | MCP prompt handlers                        |
-| `component::capabilities`  | `#1d76db` | MCP capabilities (logging, sampling, etc.) |
-| `component::config`        | `#1d76db` | Configuration and environment              |
-| `component::gitlab-client` | `#1d76db` | GitLab API client wrapper                  |
-| `component::ci-cd`         | `#1d76db` | CI/CD pipeline and build                   |
-| `component::docs`          | `#1d76db` | Documentation                              |
-
-### Scope Labels
-
-| Label                    | Color     | Description                 |
-| ------------------------ | --------- | --------------------------- |
-| `scope::breaking-change` | `#b60205` | Contains breaking changes   |
-| `scope::security`        | `#d73a4a` | Security-related            |
-| `scope::performance`     | `#e4e669` | Performance impact          |
-| `scope::ux`              | `#a2eeef` | User experience improvement |
+Manage labels with `gh label list` / `gh label create`.
