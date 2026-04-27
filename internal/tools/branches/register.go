@@ -33,6 +33,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
+		if err == nil && out.Name != "" && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/branch/%s", string(input.ProjectID), out.Name),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 

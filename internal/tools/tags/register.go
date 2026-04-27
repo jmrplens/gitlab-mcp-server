@@ -32,7 +32,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			), Output{}, nil
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_tag_get", start, err)
-		return toolutil.WithHints(FormatOutputMarkdown(out), out, err)
+		result := FormatOutputMarkdown(out)
+		if err == nil && out.Name != "" && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/tag/%s", string(input.ProjectID), out.Name),
+				out)
+		}
+		return toolutil.WithHints(result, out, err)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
