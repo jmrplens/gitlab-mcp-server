@@ -59,7 +59,7 @@ body:
     id: server-version
     attributes:
       label: gitlab-mcp-server version
-      placeholder: "e.g., v2.1.0 or commit hash"
+      placeholder: "e.g., v1.3.1 or commit hash"
 
   - type: input
     id: gitlab-version

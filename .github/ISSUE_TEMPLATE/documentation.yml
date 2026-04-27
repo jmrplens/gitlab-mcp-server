@@ -29,10 +29,10 @@ body:
     attributes:
       label: Affected Documents
       options:
-        - label: "`docs/` (project documentation)"
+        - label: "`docs/` (developer documentation)"
         - label: "`README.md`"
         - label: "`CONTRIBUTING.md`"
-        - label: "MkDocs site (`site/docs/`)"
+        - label: "User docs site — Astro Starlight (`site/src/content/docs/en/` or `/es/`)"
 
   - type: textarea
     id: context
