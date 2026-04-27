@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- GitHub social preview card (1280×640, ratio 2:1).
+       Same visual language as site/src/assets/banner-dark.svg but
+       recomposed vertically for higher aspect-ratio crops. -->
+
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="text-glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <linearGradient id="core-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d1b69"/>
+      <stop offset="100%" stop-color="#1a1145"/>
+    </linearGradient>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0618"/>
+      <stop offset="50%" stop-color="#0E0A1F"/>
+      <stop offset="100%" stop-color="#0B0618"/>
+    </linearGradient>
+    <radialGradient id="aura1" cx="0.18" cy="0.5" r="0.35">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="aura2" cx="0.82" cy="0.5" r="0.35">
+      <stop offset="0%" stop-color="#7C3AED" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Reusable hex tile (16×24 footprint). -->
+    <symbol id="hex" viewBox="0 0 16 24" overflow="visible">
+      <path d="M0,8 L8,4 16,8 16,16 8,20 0,16Z" fill="none" stroke="#2d1b69" stroke-width="0.6"/>
+    </symbol>
+
+    <!-- Hex grid panel (240×240, ~15×10 tiles). -->
+    <pattern id="hex-grid" x="0" y="0" width="16" height="24" patternUnits="userSpaceOnUse">
+      <use href="#hex"/>
+      <use href="#hex" x="8" y="12"/>
+    </pattern>
+  </defs>
+
+  <!-- Background layers -->
+  <rect width="1280" height="640" fill="url(#bg-grad)"/>
+  <rect width="1280" height="640" fill="url(#aura1)"/>
+  <rect width="1280" height="640" fill="url(#aura2)"/>
+
+  <!-- Decorative hex grids in the four corners -->
+  <rect x="0"    y="0"   width="280" height="200" fill="url(#hex-grid)" opacity="0.35"/>
+  <rect x="1000" y="0"   width="280" height="200" fill="url(#hex-grid)" opacity="0.35"/>
+  <rect x="0"    y="440" width="280" height="200" fill="url(#hex-grid)" opacity="0.35"/>
+  <rect x="1000" y="440" width="280" height="200" fill="url(#hex-grid)" opacity="0.35"/>
+
+  <!-- Faint orbital ring around the core -->
+  <g transform="translate(640 230)" opacity="0.6">
+    <circle r="135" fill="none" stroke="#A78BFA" stroke-width="0.6" stroke-dasharray="2 6"/>
+    <circle r="170" fill="none" stroke="#A78BFA" stroke-width="0.4" stroke-dasharray="1 8" opacity="0.6"/>
+    <!-- Orbit nodes -->
+    <circle cx="135"   cy="0"     r="2.5" fill="#A78BFA"/>
+    <circle cx="-135"  cy="0"     r="2.5" fill="#A78BFA"/>
+    <circle cx="0"     cy="135"   r="2.5" fill="#A78BFA"/>
+    <circle cx="0"     cy="-135"  r="2.5" fill="#A78BFA"/>
+    <circle cx="95"    cy="95"    r="1.8" fill="#A78BFA" opacity="0.7"/>
+    <circle cx="-95"   cy="-95"   r="1.8" fill="#A78BFA" opacity="0.7"/>
+    <circle cx="-95"   cy="95"    r="1.8" fill="#A78BFA" opacity="0.7"/>
+    <circle cx="95"    cy="-95"   r="1.8" fill="#A78BFA" opacity="0.7"/>
+  </g>
+
+  <!-- MCP Core box (centered horizontally, upper half) -->
+  <g transform="translate(540 130)">
+    <rect x="0" y="0" width="200" height="200" rx="36" fill="url(#core-grad)" stroke="#A78BFA" stroke-width="1" filter="url(#glow)"/>
+    <rect x="6" y="6" width="188" height="188" rx="32" fill="none" stroke="#A78BFA" stroke-width="0.6" opacity="0.35"/>
+
+    <!-- GitLab tanuki, scaled to fill the core box -->
+    <svg x="22" y="22" width="156" height="156" viewBox="100 100 180 180">
+      <path fill="#E24329" d="M265.26416,174.37243l-.2134-.55822-21.19899-55.30908c-.4236-1.08359-1.18542-1.99642-2.17699-2.62689-.98837-.63373-2.14749-.93253-3.32305-.87014-1.1689.06239-2.29195.48925-3.20809,1.21821-.90957.73554-1.56629,1.73047-1.87493,2.85346l-14.31327,43.80662h-57.90965l-14.31327-43.80662c-.30864-1.12299-.96536-2.11791-1.87493-2.85346-.91614-.72895-2.03911-1.15582-3.20809-1.21821-1.17548-.06239-2.33468.23641-3.32297.87014-.99166.63047-1.75348,1.5433-2.17707,2.62689l-21.19891,55.31237-.21348.55493c-6.28158,16.38521-.92929,34.90803,13.05891,45.48782.02621.01641.04922.03611.07552.05582l.18719.14119,32.29094,24.17392,15.97151,12.09024,9.71951,7.34871c2.34117,1.77316,5.57877,1.77316,7.92002,0l9.71943-7.34871,15.96822-12.09024,32.48142-24.31511c.02958-.02299.05588-.04269.08538-.06568,13.97834-10.57977,19.32735-29.09604,13.04905-45.47796Z"/>
+      <path fill="#FC6D26" d="M265.26416,174.37243l-.2134-.55822c-10.5174,2.16062-20.20405,6.6099-28.49844,12.81593-.1346.0985-25.20497,19.05805-46.55171,35.19699,15.84998,11.98517,29.6477,22.40405,29.6477,22.40405l32.48142-24.31511c.02958-.02299.05588-.04269.08538-.06568,13.97834-10.57977,19.32735-29.09604,13.04905-45.47796Z"/>
+      <path fill="#FCA326" d="M160.34962,244.23117l15.97151,12.09024,9.71951,7.34871c2.34117,1.77316,5.57877,1.77316,7.92002,0l9.71943-7.34871,15.96822-12.09024s-13.79772-10.41888-29.6477-22.40405c-15.85327,11.98517-29.65099,22.40405-29.65099,22.40405Z"/>
+      <path fill="#FC6D26" d="M143.44561,186.63014c-8.29111-6.20274-17.97446-10.65531-28.49507-12.81264l-.21348.55493c-6.28158,16.38521-.92929,34.90803,13.05891,45.48782.02621.01641.04922.03611.07552.05582l.18719.14119,32.29094,24.17392s13.79772-10.41888,29.65099-22.40405c-21.34673-16.13894-46.42031-35.09848-46.55499-35.19699Z"/>
+    </svg>
+  </g>
+
+  <!-- Title -->
+  <text x="640" y="410" text-anchor="middle"
+        font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="84" font-weight="700"
+        fill="#F5F3FF" letter-spacing="-1.5"
+        filter="url(#text-glow)">
+    GitLab MCP Server
+  </text>
+
+  <!-- Subtitle -->
+  <text x="640" y="460" text-anchor="middle"
+        font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="26" fill="#A78BFA" opacity="0.92" letter-spacing="0.4">
+    The entire GitLab API as MCP tools for AI assistants
+  </text>
+
+  <!-- Feature pills (centered row) -->
+  <g transform="translate(640 510)" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="600">
+    <!-- Group is centered: total width ~880, so start at x=-440 -->
+    <g transform="translate(-440 0)">
+      <rect x="0"   y="0" width="180" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
+      <text x="90"  y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Single Binary</text>
+
+      <rect x="200" y="0" width="220" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
+      <text x="310" y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Zero Dependencies</text>
+
+      <rect x="440" y="0" width="200" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
+      <text x="540" y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Cross-Platform</text>
+
+      <rect x="660" y="0" width="180" height="44" rx="22" fill="#1a1145" stroke="#3b2780" stroke-width="0.7" opacity="0.85"/>
+      <text x="750" y="29" text-anchor="middle" font-size="18" fill="#8B7FC7" font-weight="500">stdio &amp; HTTP</text>
+    </g>
+  </g>
+
+  <!-- Stats line -->
+  <text x="640" y="592" text-anchor="middle"
+        font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="16" fill="#8B7FC7" opacity="0.85" letter-spacing="2">
+    1000 TOOLS  ·  162 DOMAINS  ·  24 RESOURCES  ·  38 PROMPTS
+  </text>
+
+  <!-- Subtle bottom accent -->
+  <rect x="440" y="615" width="400" height="1" rx="0.5" fill="#A78BFA" opacity="0.15"/>
+</svg>
