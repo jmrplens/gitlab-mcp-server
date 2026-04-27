@@ -563,8 +563,8 @@ func truncateRunes(s string, maxRunes int) string {
 // Used to cut tool descriptions at a natural boundary instead of mid-sentence.
 func firstParagraph(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.Index(s, "\n\n"); i >= 0 {
-		return strings.TrimSpace(s[:i])
+	if before, _, ok := strings.Cut(s, "\n\n"); ok {
+		return strings.TrimSpace(before)
 	}
 	return s
 }
