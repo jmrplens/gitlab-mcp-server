@@ -1397,10 +1397,18 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 
 // waitForHTTPServerReady polls /health until the HTTP server is reachable,
 // or fails fast if serveHTTP exits early with an error.
+//
+// Requires two consecutive successful probes to filter out transient startup
+// states (e.g., the listener has been bound but the HTTP handler is not yet
+// fully wired). After confirming readiness, idle connections are closed so the
+// next request from the test opens a fresh TCP connection — this prevents
+// flaky "connection refused" failures on slow CI runners caused by reusing a
+// keep-alive socket whose peer has not yet finalized accept loop setup.
 func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
 	t.Helper()
 
 	deadline := time.Now().Add(5 * time.Second)
+	consecutiveOK := 0
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-errCh:
@@ -1419,7 +1427,13 @@ func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
 		resp, doErr := testHTTPClient.Do(req)
 		if doErr == nil {
 			resp.Body.Close()
-			return
+			consecutiveOK++
+			if consecutiveOK >= 2 {
+				testHTTPClient.CloseIdleConnections()
+				return
+			}
+		} else {
+			consecutiveOK = 0
 		}
 
 		time.Sleep(20 * time.Millisecond)
