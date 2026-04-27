@@ -33,9 +33,28 @@ Capabilities are declared in `cmd/server/main.go` when constructing the MCP serv
 
 ```go
 mcp.ServerCapabilities{
-    Logging:     &mcp.LoggingCapabilities{},
+    Logging:   &mcp.LoggingCapabilities{},
+    Tools:     &mcp.ToolCapabilities{ListChanged: true},
+    Resources: &mcp.ResourceCapabilities{ListChanged: true},
+    Prompts:   &mcp.PromptCapabilities{ListChanged: true},
 }
 ```
+
+The three `ListChanged: true` flags advertise that the server will emit
+`notifications/tools/list_changed`, `notifications/resources/list_changed`, and
+`notifications/prompts/list_changed` whenever the corresponding catalog
+changes. The Go SDK debounces these notifications (10 ms window) and sends
+them automatically when `AddTool`, `AddResource`, `AddPrompt`, or their
+`Remove*` counterparts are invoked at runtime — no manual emission is
+required from handler code.
+
+In practice this server emits list-changed notifications only on dynamic
+tool exclusion via `removeExcludedTools` at startup; the catalog is
+otherwise immutable for the lifetime of a session. Auto-update replaces
+the binary process entirely, so the MCP session is reinitialised rather
+than mutated. Declaring the capability is still valuable for spec
+compliance and lets clients keep their UI in sync without polling
+`tools/list`, `resources/list`, or `prompts/list`.
 
 Client capabilities (Roots, Sampling, Elicitation) are negotiated during the MCP `initialize` handshake. The server checks for their presence before using them.
 

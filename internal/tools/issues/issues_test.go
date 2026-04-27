@@ -3039,6 +3039,68 @@ func TestRegisterTools_NoPanic(t *testing.T) {
 	RegisterTools(server, client)
 }
 
+// TestIssueGet_EmbedsCanonicalResource verifies that gitlab_issue_get attaches an
+// EmbeddedResource content block with the canonical gitlab:// URI when the embed
+// toggle is enabled (default), and omits it when disabled.
+func TestIssueGet_EmbedsCanonicalResource(t *testing.T) {
+	session := newIssueMCPSession(t)
+	ctx := context.Background()
+
+	t.Run("enabled by default", func(t *testing.T) {
+		toolutil.EnableEmbeddedResources(true)
+		t.Cleanup(func() { toolutil.EnableEmbeddedResources(true) })
+
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_issue_get",
+			Arguments: map[string]any{"project_id": testProjectID, "issue_iid": 10},
+		})
+		if err != nil {
+			t.Fatalf("CallTool: %v", err)
+		}
+		var found *mcp.EmbeddedResource
+		for _, c := range result.Content {
+			if er, ok := c.(*mcp.EmbeddedResource); ok {
+				found = er
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("expected EmbeddedResource content block, got %d blocks", len(result.Content))
+		}
+		if found.Resource == nil {
+			t.Fatalf("EmbeddedResource.Resource is nil")
+		}
+		const wantURI = "gitlab://project/42/issue/10"
+		if found.Resource.URI != wantURI {
+			t.Errorf("URI = %q, want %q", found.Resource.URI, wantURI)
+		}
+		if found.Resource.MIMEType != "application/json" {
+			t.Errorf("MIMEType = %q, want application/json", found.Resource.MIMEType)
+		}
+		if found.Resource.Text == "" {
+			t.Errorf("Text is empty, want JSON payload")
+		}
+	})
+
+	t.Run("disabled produces no embed", func(t *testing.T) {
+		toolutil.EnableEmbeddedResources(false)
+		t.Cleanup(func() { toolutil.EnableEmbeddedResources(true) })
+
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "gitlab_issue_get",
+			Arguments: map[string]any{"project_id": testProjectID, "issue_iid": 10},
+		})
+		if err != nil {
+			t.Fatalf("CallTool: %v", err)
+		}
+		for _, c := range result.Content {
+			if _, ok := c.(*mcp.EmbeddedResource); ok {
+				t.Fatalf("expected no EmbeddedResource when disabled")
+			}
+		}
+	})
+}
+
 // TestCreate_AssigneeIDSingular verifies that assignee_id (singular) is sent
 // in the HTTP request body when creating an issue.
 func TestCreate_AssigneeIDSingular(t *testing.T) {

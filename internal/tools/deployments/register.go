@@ -5,6 +5,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -45,7 +46,13 @@ func RegisterTools(server *mcp.Server, client *gitlab.Client) {
 			), Output{}, nil
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_deployment_get", start, err)
-		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
+		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
+		if err == nil && out.ID != 0 && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/deployment/%d", url.PathEscape(string(input.ProjectID)), out.ID),
+				out)
+		}
+		return toolutil.WithHints(result, out, err)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

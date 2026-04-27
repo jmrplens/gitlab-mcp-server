@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v1.3.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides 1000 individual MCP tools across 96 GitLab API domains, 32 meta-tools (47 with enterprise mode),
-24 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+44 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ tool with an "action" parameter. Key meta-tools:
 
 ## Resources
 
-24 read-only resources:
+44 read-only resources:
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review
@@ -75,21 +75,41 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab://guides/pipeline-troubleshooting: pipeline_troubleshooting
 - gitlab://user/current: current_user
 - gitlab://group/{group_id}: group
+- gitlab://group/{group_id}/label/{label_id}: group_label
 - gitlab://group/{group_id}/members: group_members
+- gitlab://group/{group_id}/milestone/{milestone_iid}: group_milestone
 - gitlab://group/{group_id}/projects: group_projects
 - gitlab://project/{project_id}: project
+- gitlab://project/{project_id}/board/{board_id}: board
+- gitlab://project/{project_id}/branch/{branch}: branch
 - gitlab://project/{project_id}/branches: project_branches
+- gitlab://project/{project_id}/commit/{sha}: commit
+- gitlab://project/{project_id}/deploy_key/{deploy_key_id}: deploy_key
+- gitlab://project/{project_id}/deployment/{deployment_id}: deployment
+- gitlab://project/{project_id}/environment/{environment_id}: environment
+- gitlab://project/{project_id}/feature_flag/{name}: feature_flag
+- gitlab://project/{project_id}/file/{ref}/{+path}: file_blob
 - gitlab://project/{project_id}/issue/{issue_iid}: issue
 - gitlab://project/{project_id}/issues: project_issues
+- gitlab://project/{project_id}/job/{job_id}: job
+- gitlab://project/{project_id}/label/{label_id}: label
 - gitlab://project/{project_id}/labels: project_labels
 - gitlab://project/{project_id}/members: project_members
+- gitlab://project/{project_id}/milestone/{milestone_iid}: milestone
 - gitlab://project/{project_id}/milestones: project_milestones
 - gitlab://project/{project_id}/mr/{mr_iid}: merge_request
+- gitlab://project/{project_id}/mr/{mr_iid}/discussions: merge_request_discussions
+- gitlab://project/{project_id}/mr/{mr_iid}/notes: merge_request_notes
 - gitlab://project/{project_id}/pipeline/{pipeline_id}: pipeline
 - gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs: pipeline_jobs
 - gitlab://project/{project_id}/pipelines/latest: latest_pipeline
+- gitlab://project/{project_id}/release/{tag_name}: release
 - gitlab://project/{project_id}/releases: project_releases
+- gitlab://project/{project_id}/snippet/{snippet_id}: project_snippet
+- gitlab://project/{project_id}/tag/{tag_name}: tag
 - gitlab://project/{project_id}/tags: project_tags
+- gitlab://project/{project_id}/wiki/{slug}: wiki_page
+- gitlab://snippet/{snippet_id}: snippet
 - gitlab://workspace/roots: Workspace Roots
 
 ## Prompts

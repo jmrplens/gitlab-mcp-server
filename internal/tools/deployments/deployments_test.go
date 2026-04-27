@@ -932,3 +932,20 @@ func newDeploymentsMCPSession(t *testing.T) *mcp.ClientSession {
 	t.Cleanup(func() { session.Close() })
 	return session
 }
+
+// TestDeploymentGet_EmbedsCanonicalResource asserts gitlab_deployment_get
+// attaches an EmbeddedResource block with URI
+// gitlab://project/{id}/deployment/{deployment_id}.
+func TestDeploymentGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deployments/17") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "deployment_id": 17}
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_deployment_get", args, "gitlab://project/42/deployment/17", toolutil.EnableEmbeddedResources)
+}

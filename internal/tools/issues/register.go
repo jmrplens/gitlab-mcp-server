@@ -48,6 +48,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_issue_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatMarkdown(out), toolutil.ContentDetail)
+		if err == nil && out.ProjectID > 0 && out.IID > 0 {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%d/issue/%d", out.ProjectID, out.IID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 

@@ -9,7 +9,7 @@ Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two ad
 
 MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for providing background information that helps the LLM make better decisions.
 
-The server exposes **24 resources** across several categories:
+The server exposes **44 resources** across several categories:
 
 ### Static resources (3)
 
@@ -19,25 +19,42 @@ The server exposes **24 resources** across several categories:
 | `gitlab://groups`          | All GitLab groups accessible to the authenticated user                                                         |
 | `gitlab://workspace/roots` | Workspace root directories from the MCP client, for project discovery via `gitlab_resolve_project_from_remote` |
 
-### Project resource templates (8)
+### Project resource templates (23)
 
-| Resource                                   | Description                                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}`            | Project metadata (name, namespace, visibility, default branch)                     |
-| `gitlab://project/{project_id}/members`    | Project members with access levels (guest, reporter, developer, maintainer, owner) |
-| `gitlab://project/{project_id}/labels`     | Project labels with colors, descriptions, and issue/MR counts                      |
-| `gitlab://project/{project_id}/milestones` | Project milestones with state, due dates, and web URLs                             |
-| `gitlab://project/{project_id}/branches`   | Branches with protection status, merge status, and default flag                    |
-| `gitlab://project/{project_id}/issues`     | Open issues with labels, assignees, author, and creation date                      |
-| `gitlab://project/{project_id}/releases`   | All releases with tag names, descriptions, and dates                               |
-| `gitlab://project/{project_id}/tags`       | Repository tags with messages, commit SHAs, and protection status                  |
+| Resource                                                     | Description                                                                        |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}`                              | Project metadata (name, namespace, visibility, default branch)                     |
+| `gitlab://project/{project_id}/members`                      | Project members with access levels (guest, reporter, developer, maintainer, owner) |
+| `gitlab://project/{project_id}/labels`                       | Project labels with colors, descriptions, and issue/MR counts                      |
+| `gitlab://project/{project_id}/milestones`                   | Project milestones with state, due dates, and web URLs                             |
+| `gitlab://project/{project_id}/branches`                     | Branches with protection status, merge status, and default flag                    |
+| `gitlab://project/{project_id}/branch/{branch}`              | Single branch by name                                                              |
+| `gitlab://project/{project_id}/issues`                       | Open issues with labels, assignees, author, and creation date                      |
+| `gitlab://project/{project_id}/releases`                     | All releases with tag names, descriptions, and dates                               |
+| `gitlab://project/{project_id}/release/{tag_name}`           | Single release by tag                                                              |
+| `gitlab://project/{project_id}/tags`                         | Repository tags with messages, commit SHAs, and protection status                  |
+| `gitlab://project/{project_id}/tag/{tag_name}`               | Single tag by name                                                                 |
+| `gitlab://project/{project_id}/commit/{sha}`                 | Single commit by SHA (stats, message, author)                                      |
+| `gitlab://project/{project_id}/file/{ref}/{+path}`           | File contents at a ref (branch, tag, or SHA)                                       |
+| `gitlab://project/{project_id}/wiki/{slug}`                  | Wiki page by slug                                                                  |
+| `gitlab://project/{project_id}/label/{label_id}`             | Single project label                                                               |
+| `gitlab://project/{project_id}/milestone/{milestone_iid}`    | Single project milestone                                                           |
+| `gitlab://project/{project_id}/board/{board_id}`             | Single issue board                                                                 |
+| `gitlab://project/{project_id}/deployment/{deployment_id}`   | Single deployment                                                                  |
+| `gitlab://project/{project_id}/environment/{environment_id}` | Single environment                                                                 |
+| `gitlab://project/{project_id}/job/{job_id}`                 | Single CI/CD job                                                                   |
+| `gitlab://project/{project_id}/feature_flag/{name}`          | Single feature flag                                                                |
+| `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`   | Single deploy key                                                                  |
+| `gitlab://project/{project_id}/snippet/{snippet_id}`         | Project-scoped snippet                                                             |
 
-### Issue & merge request templates (2)
+### Issue & merge request templates (4)
 
-| Resource                                          | Description                                                                 |
-| ------------------------------------------------- | --------------------------------------------------------------------------- |
-| `gitlab://project/{project_id}/issue/{issue_iid}` | Single issue details (title, state, labels, assignees, web URL)             |
-| `gitlab://project/{project_id}/mr/{mr_iid}`       | Single merge request details (title, state, branches, author, merge status) |
+| Resource                                                | Description                                                                 |
+| ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `gitlab://project/{project_id}/issue/{issue_iid}`       | Single issue details (title, state, labels, assignees, web URL)             |
+| `gitlab://project/{project_id}/mr/{mr_iid}`             | Single merge request details (title, state, branches, author, merge status) |
+| `gitlab://project/{project_id}/mr/{mr_iid}/notes`       | Notes on a merge request                                                    |
+| `gitlab://project/{project_id}/mr/{mr_iid}/discussions` | Discussion threads on a merge request                                       |
 
 ### CI/CD resource templates (3)
 
@@ -47,13 +64,21 @@ The server exposes **24 resources** across several categories:
 | `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | Specific pipeline details by numeric ID                                 |
 | `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | All jobs for a pipeline (name, stage, status, duration, failure reason) |
 
-### Group resource templates (3)
+### Group resource templates (5)
 
-| Resource                             | Description                                                   |
-| ------------------------------------ | ------------------------------------------------------------- |
-| `gitlab://group/{group_id}`          | Group details (name, path, description, visibility)           |
-| `gitlab://group/{group_id}/members`  | Group members with access levels, including inherited members |
-| `gitlab://group/{group_id}/projects` | Projects within a group (ID, name, namespace, visibility)     |
+| Resource                                              | Description                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `gitlab://group/{group_id}`                           | Group details (name, path, description, visibility)           |
+| `gitlab://group/{group_id}/members`                   | Group members with access levels, including inherited members |
+| `gitlab://group/{group_id}/projects`                  | Projects within a group (ID, name, namespace, visibility)     |
+| `gitlab://group/{group_id}/label/{label_id}`          | Single group label                                            |
+| `gitlab://group/{group_id}/milestone/{milestone_iid}` | Single group milestone                                        |
+
+### Personal snippet template (1)
+
+| Resource                        | Description             |
+| ------------------------------- | ----------------------- |
+| `gitlab://snippet/{snippet_id}` | Personal (user) snippet |
 
 ### Workflow guide resources (5)
 

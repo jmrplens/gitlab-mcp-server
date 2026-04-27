@@ -1114,3 +1114,19 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		})
 	}
 }
+
+// TestBoardGet_EmbedsCanonicalResource asserts gitlab_board_get attaches an
+// EmbeddedResource block with URI gitlab://project/{id}/board/{board_id}.
+func TestBoardGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":3,"name":"Development","project":{"id":42}}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/boards/3" {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"project_id": "42", "board_id": 3}
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_board_get", args, "gitlab://project/42/board/3", toolutil.EnableEmbeddedResources)
+}

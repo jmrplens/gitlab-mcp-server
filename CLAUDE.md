@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.3.1                                               |
+| Version       | 1.3.2                                               |
 
 ### Scale
 
@@ -22,7 +22,7 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1000                                                                                                         |
 | Meta-mode tools           | 32 base / 47 enterprise (24 inline + 3 delegated + 1 standalone + 4 interactive + 15 enterprise inline) |
-| MCP Resources             | 24                                                                                                           |
+| MCP Resources             | 44                                                                                                           |
 | MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
@@ -100,7 +100,7 @@ gitlab-mcp-server/
 │   │   ├── uploads/             # Project upload tools
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
-│   ├── resources/               # 24 MCP resource implementations
+│   ├── resources/               # 44 MCP resource implementations
 │   ├── prompts/                 # 38 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
 │   ├── logging/                 # MCP logging capability
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.3.1)
+└── VERSION                      # Semantic version (1.3.2)
 ```
 
 ## Key Development Patterns

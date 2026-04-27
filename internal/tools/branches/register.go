@@ -5,6 +5,7 @@ package branches
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
@@ -33,6 +34,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
+		if err == nil && out.Name != "" && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/branch/%s", url.PathEscape(string(input.ProjectID)), url.PathEscape(out.Name)),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 

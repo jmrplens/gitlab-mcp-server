@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -410,4 +411,20 @@ func TestResolveProjectLabel_ZeroProjectID(t *testing.T) {
 	if got != "" {
 		t.Errorf("resolveProjectLabel(ProjectID=0) = %q, want empty string", got)
 	}
+}
+
+// TestSnippetGet_EmbedsCanonicalResource asserts gitlab_snippet_get
+// attaches an EmbeddedResource block with URI gitlab://snippet/{id}.
+func TestSnippetGet_EmbedsCanonicalResource(t *testing.T) {
+	const respJSON = `{"id":33,"title":"hello","file_name":"hello.txt","description":"","visibility":"public","author":{"id":1,"username":"u","name":"u"}}`
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v4/snippets/33") {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
+	args := map[string]any{"snippet_id": 33}
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_snippet_get", args, "gitlab://snippet/33", toolutil.EnableEmbeddedResources)
 }

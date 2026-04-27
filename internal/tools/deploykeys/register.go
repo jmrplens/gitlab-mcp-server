@@ -5,6 +5,7 @@ package deploykeys
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,7 +39,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
 		toolutil.LogToolCallAll(ctx, req, "gitlab_deploy_key_get", start, err)
-		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out)), out, err)
+		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
+		if err == nil && out.ID != 0 && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/deploy_key/%d", url.PathEscape(string(input.ProjectID)), out.ID),
+				out)
+		}
+		return toolutil.WithHints(result, out, err)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

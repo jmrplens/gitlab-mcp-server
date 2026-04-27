@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -693,6 +694,301 @@ func TestProjectTagsResource_APIError(t *testing.T) {
 	}
 }
 
+// Commit resource tests.
+
+// TestCommitResource_Success verifies that the commit resource returns
+// commit metadata, parent SHAs, and stats when the API responds successfully.
+func TestCommitResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
+			respondJSON(w, http.StatusOK, `{"id":"abc123def456","short_id":"abc123","title":"Fix bug","message":"Fix bug\n\nDetails","author_name":"alice","author_email":"alice@example.com","authored_date":"2026-01-01T10:00:00Z","committed_date":"2026-01-01T10:05:00Z","web_url":"https://gitlab.example.com/group/project/-/commit/abc123","parent_ids":["parent1","parent2"],"stats":{"additions":10,"deletions":3,"total":13}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/commit/abc123"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var c CommitResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &c); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if c.ShortID != "abc123" {
+		t.Errorf("ShortID = %q, want abc123", c.ShortID)
+	}
+	if c.AuthorName != "alice" {
+		t.Errorf(fmtAuthorWant, c.AuthorName, "alice")
+	}
+	if c.Stats == nil || c.Stats.Total != 13 {
+		t.Errorf("expected stats.total=13, got %+v", c.Stats)
+	}
+	if len(c.ParentIDs) != 2 {
+		t.Errorf("expected 2 parents, got %d", len(c.ParentIDs))
+	}
+}
+
+// TestCommitResource_NotFound verifies that an unknown commit returns a
+// resource-not-found error.
+func TestCommitResource_NotFound(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/commit/missing"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// File blob resource tests.
+
+// TestFileBlobResource_Success verifies that base64-encoded file content is
+// decoded and returned as text along with file metadata.
+func TestFileBlobResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/files/") {
+			respondJSON(w, http.StatusOK, `{"file_name":"main.go","file_path":"src/main.go","size":11,"encoding":"base64","ref":"main","blob_id":"blob1","commit_id":"c1","last_commit_id":"c1","content":"aGVsbG8gd29ybGQ="}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/src/main.go"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var f FileBlobResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &f); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if f.FilePath != "src/main.go" {
+		t.Errorf("FilePath = %q, want src/main.go", f.FilePath)
+	}
+	if f.Content != "hello world" {
+		t.Errorf("Content = %q, want %q", f.Content, "hello world")
+	}
+	if f.ContentCategory != "text" {
+		t.Errorf("ContentCategory = %q, want text", f.ContentCategory)
+	}
+	if f.Truncated {
+		t.Error("expected Truncated=false")
+	}
+}
+
+// TestFileBlobResource_Truncated verifies that files larger than the size
+// limit return metadata with truncated=true and content omitted.
+func TestFileBlobResource_Truncated(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/files/big.bin" {
+			respondJSON(w, http.StatusOK, `{"file_name":"big.bin","file_path":"big.bin","size":2097152,"encoding":"base64","ref":"main","blob_id":"b","commit_id":"c","last_commit_id":"c","content":"AAAA"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/big.bin"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var f FileBlobResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &f); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if !f.Truncated {
+		t.Error("expected Truncated=true")
+	}
+	if f.Content != "" {
+		t.Errorf("expected empty content, got %q", f.Content)
+	}
+}
+
+// TestFileBlobResource_BadURI verifies that a malformed file URI (missing
+// path component) returns a resource-not-found error.
+func TestFileBlobResource_BadURI(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/"})
+	if err == nil {
+		t.Fatal("expected error for malformed file URI")
+	}
+}
+
+// TestExtractFileBlobURI verifies that [extractFileBlobURI] correctly splits
+// a file blob URI into project_id, ref, and path components, including paths
+// with multiple slashes.
+func TestExtractFileBlobURI(t *testing.T) {
+	tests := []struct {
+		uri, projectID, ref, path string
+	}{
+		{"gitlab://project/42/file/main/src/main.go", "42", "main", "src/main.go"},
+		{"gitlab://project/group%2Frepo/file/v1.0/README.md", "group%2Frepo", "v1.0", "README.md"},
+		{"gitlab://project/42/file/main/", "", "", ""},
+		{"gitlab://project/42/file/main", "", "", ""},
+		{"gitlab://project/42/commit/abc", "", "", ""},
+		{"", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uri, func(t *testing.T) {
+			pid, ref, path := extractFileBlobURI(tt.uri)
+			if pid != tt.projectID || ref != tt.ref || path != tt.path {
+				t.Errorf("extractFileBlobURI(%q) = (%q,%q,%q), want (%q,%q,%q)",
+					tt.uri, pid, ref, path, tt.projectID, tt.ref, tt.path)
+			}
+		})
+	}
+}
+
+// Wiki resource tests.
+
+// TestWikiResource_Success verifies that the wiki page resource returns
+// title, slug, format, and content for an existing page.
+func TestWikiResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/wikis/Home" {
+			respondJSON(w, http.StatusOK, `{"title":"Home","slug":"Home","format":"markdown","content":"# Welcome"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/wiki/Home"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var p WikiResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &p); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if p.Title != "Home" {
+		t.Errorf(fmtTitleWant, p.Title, "Home")
+	}
+	if p.Format != "markdown" {
+		t.Errorf("Format = %q, want markdown", p.Format)
+	}
+	if p.Content != "# Welcome" {
+		t.Errorf("Content = %q, want '# Welcome'", p.Content)
+	}
+}
+
+// TestWikiResource_NotFound verifies that an unknown wiki page returns a
+// resource-not-found error.
+func TestWikiResource_NotFound(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/wiki/missing"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// MR notes resource tests.
+
+// TestMergeRequestNotesResource_Success verifies that the MR notes resource
+// returns each note's id, author, body, and resolution flags.
+func TestMergeRequestNotesResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/notes" {
+			respondJSON(w, http.StatusOK, `[{"id":1,"body":"LGTM","system":false,"resolvable":true,"resolved":false,"author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},{"id":2,"body":"merged","system":true,"resolvable":false,"resolved":false,"author":{"username":"bot"},"created_at":"2026-01-02T00:00:00Z"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/notes"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var notes []MRNoteResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &notes); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(notes))
+	}
+	if notes[0].Author != "alice" {
+		t.Errorf(fmtAuthorWant, notes[0].Author, "alice")
+	}
+	if !notes[1].System {
+		t.Error("expected second note to be system")
+	}
+}
+
+// TestMergeRequestNotesResource_BadIID verifies that a non-numeric MR IID
+// returns a resource-not-found error.
+func TestMergeRequestNotesResource_BadIID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/notanumber/notes"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric MR iid")
+	}
+}
+
+// MR discussions resource tests.
+
+// TestMergeRequestDiscussionsResource_Success verifies that the MR
+// discussions resource returns thread metadata and nested notes.
+func TestMergeRequestDiscussionsResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/discussions" {
+			respondJSON(w, http.StatusOK, `[{"id":"d1","individual_note":false,"notes":[{"id":11,"body":"please fix","system":false,"resolved":false,"resolvable":true,"author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"},{"id":12,"body":"done","system":false,"resolved":true,"resolvable":true,"author":{"username":"bob"},"created_at":"2026-01-01T01:00:00Z"}]},{"id":"d2","individual_note":true,"notes":[{"id":21,"body":"comment","system":false,"resolved":false,"resolvable":false,"author":{"username":"carol"},"created_at":"2026-01-02T00:00:00Z"}]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var ds []MRDiscussionResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &ds); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(ds) != 2 {
+		t.Fatalf("expected 2 discussions, got %d", len(ds))
+	}
+	if ds[0].ID != "d1" || ds[0].IndividualNote {
+		t.Errorf("first discussion = %+v, want id=d1 individual_note=false", ds[0])
+	}
+	if len(ds[0].Notes) != 2 {
+		t.Errorf("expected 2 notes in first discussion, got %d", len(ds[0].Notes))
+	}
+	if !ds[0].Notes[1].Resolved {
+		t.Error("expected second note in first discussion to be resolved")
+	}
+	if !ds[1].IndividualNote {
+		t.Error("expected second discussion to be individual_note")
+	}
+}
+
+// TestMergeRequestDiscussionsResource_APIError verifies that a server error
+// from the discussions endpoint propagates as an error.
+func TestMergeRequestDiscussionsResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
 // URI helper tests.
 
 // TestExtractSuffix uses table-driven subtests to verify that [extractSuffix]
@@ -754,5 +1050,415 @@ func TestExtractTwoParts(t *testing.T) {
 				t.Errorf("extractTwoParts(%q, %q, %q) = (%q, %q), want (%q, %q)", tt.uri, tt.prefix, tt.sep, a, b, tt.wantA, tt.wantB)
 			}
 		})
+	}
+}
+
+// TestReleaseResource_Success verifies that the singleton release resource
+// returns release metadata when the GitLab API responds with a valid release
+// payload at gitlab://project/{id}/release/{tag}.
+func TestReleaseResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/releases/v1.0.0" {
+			respondJSON(w, http.StatusOK, `{"tag_name":"v1.0.0","name":"Release 1.0","description":"First release","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-02T00:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/release/v1.0.0"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(result.Contents))
+	}
+
+	var rel ReleaseResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &rel); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if rel.TagName != testTagV100 {
+		t.Errorf("tag_name = %q, want %q", rel.TagName, testTagV100)
+	}
+	if rel.Author != "alice" {
+		t.Errorf(fmtAuthorWant, rel.Author, "alice")
+	}
+}
+
+// TestBranchResource_Success verifies that the singleton branch resource
+// returns branch metadata when the GitLab API responds with a valid branch
+// payload at gitlab://project/{id}/branch/{name}.
+func TestBranchResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/branches/main" {
+			respondJSON(w, http.StatusOK, `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gitlab.example.com/u/p/-/tree/main"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/branch/main"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var br BranchResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &br); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if br.Name != "main" {
+		t.Errorf(fmtNameWant, br.Name, "main")
+	}
+	if !br.Default {
+		t.Error("expected default = true")
+	}
+	if !br.Protected {
+		t.Error("expected protected = true")
+	}
+}
+
+// TestTagResource_Success verifies that the singleton tag resource returns
+// tag metadata when the GitLab API responds with a valid tag payload at
+// gitlab://project/{id}/tag/{name}.
+func TestTagResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/tags/v1.0.0" {
+			respondJSON(w, http.StatusOK, `{"name":"v1.0.0","message":"Release tag","target":"abc123","protected":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/tag/v1.0.0"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var tg TagResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &tg); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if tg.Name != testTagV100 {
+		t.Errorf(fmtNameWant, tg.Name, testTagV100)
+	}
+	if tg.Target != "abc123" {
+		t.Errorf("target = %q, want abc123", tg.Target)
+	}
+	if !tg.Protected {
+		t.Error("expected protected = true")
+	}
+}
+
+// TestLabelResource_Success verifies that the singleton label resource
+// returns label metadata when the GitLab API responds with a valid label
+// payload at gitlab://project/{id}/label/{id}.
+func TestLabelResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/labels/5" {
+			respondJSON(w, http.StatusOK, `{"id":5,"name":"bug","color":"#ff0000","description":"Defect","open_issues_count":3,"open_merge_requests_count":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/label/5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var lb LabelResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &lb); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if lb.ID != 5 {
+		t.Errorf("id = %d, want 5", lb.ID)
+	}
+	if lb.Name != "bug" {
+		t.Errorf(fmtNameWant, lb.Name, "bug")
+	}
+	if lb.OpenIssuesCount != 3 {
+		t.Errorf("open_issues_count = %d, want 3", lb.OpenIssuesCount)
+	}
+}
+
+// TestMilestoneResource_Success verifies that the singleton milestone
+// resource resolves an IID via list-with-iids and returns milestone metadata
+// when the GitLab API responds with a valid payload at
+// gitlab://project/{id}/milestone/{iid}.
+func TestMilestoneResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" && r.URL.Query().Get("iids[]") == "3" {
+			respondJSON(w, http.StatusOK, `[{"id":99,"iid":3,"title":"Sprint 3","description":"Q1 goals","state":"active","web_url":"https://gitlab.example.com/u/p/-/milestones/3"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+
+	var ms MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &ms); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if ms.IID != 3 {
+		t.Errorf("iid = %d, want 3", ms.IID)
+	}
+	if ms.Title != "Sprint 3" {
+		t.Errorf(fmtTitleWant, ms.Title, "Sprint 3")
+	}
+}
+
+// TestMilestoneResource_NotFound verifies that the singleton milestone
+// resource returns ResourceNotFoundError when the IID does not exist (empty
+// list returned by GitLab).
+func TestMilestoneResource_NotFound(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/99"})
+	if err == nil {
+		t.Fatal("expected error for unknown milestone IID")
+	}
+}
+
+// TestDeploymentResource_Success verifies the singleton deployment resource
+// returns deployment metadata when the GitLab API responds successfully.
+func TestDeploymentResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deployments/17") {
+			respondJSON(w, http.StatusOK, `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deployment/17"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var d DeploymentResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &d); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if d.ID != 17 || d.Status != "success" || d.Environment != "prod" {
+		t.Errorf("got %+v", d)
+	}
+}
+
+// TestEnvironmentResource_Success verifies the singleton environment
+// resource returns environment metadata.
+func TestEnvironmentResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/environments/7") {
+			respondJSON(w, http.StatusOK, `{"id":7,"name":"prod","slug":"prod","state":"available","tier":"production"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/environment/7"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var e EnvironmentResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &e); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if e.ID != 7 || e.Name != "prod" || e.Tier != "production" {
+		t.Errorf("got %+v", e)
+	}
+}
+
+// TestJobResource_Success verifies the singleton job resource returns CI
+// job metadata.
+func TestJobResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/jobs/555") {
+			respondJSON(w, http.StatusOK, `{"id":555,"name":"build","stage":"build","status":"success","ref":"main","duration":12.5,"web_url":"https://gitlab.example.com/p/-/jobs/555"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/job/555"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var j JobResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &j); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if j.ID != 555 || j.Name != "build" || j.Status != "success" {
+		t.Errorf("got %+v", j)
+	}
+}
+
+// TestSnippetResource_Success verifies the personal snippet resource.
+func TestSnippetResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/snippets/33") {
+			respondJSON(w, http.StatusOK, `{"id":33,"title":"hello","file_name":"hello.txt","description":"","visibility":"public","web_url":"https://gitlab.example.com/-/snippets/33"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://snippet/33"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var s SnippetResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &s); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if s.ID != 33 || s.Title != "hello" {
+		t.Errorf("got %+v", s)
+	}
+}
+
+// TestProjectSnippetResource_Success verifies the project snippet resource.
+func TestProjectSnippetResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/snippets/7") {
+			respondJSON(w, http.StatusOK, `{"id":7,"title":"hi","file_name":"f.txt","description":"","visibility":"private","web_url":"https://gitlab.example.com/p/-/snippets/7"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/snippet/7"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var s SnippetResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &s); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if s.ID != 7 || s.Title != "hi" {
+		t.Errorf("got %+v", s)
+	}
+}
+
+// TestFeatureFlagResource_Success verifies the feature flag resource.
+func TestFeatureFlagResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/feature_flags/experimental_ui") {
+			respondJSON(w, http.StatusOK, `{"name":"experimental_ui","description":"toggle","active":true,"version":"new_version_flag"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/feature_flag/experimental_ui"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var f FeatureFlagResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &f); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if f.Name != "experimental_ui" || !f.Active {
+		t.Errorf("got %+v", f)
+	}
+}
+
+// TestDeployKeyResource_Success verifies the deploy key resource.
+func TestDeployKeyResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/deploy_keys/12") {
+			respondJSON(w, http.StatusOK, `{"id":12,"title":"deploy","key":"ssh-rsa AAAA","fingerprint":"aa:bb"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deploy_key/12"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var k DeployKeyResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &k); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if k.ID != 12 || k.Title != "deploy" {
+		t.Errorf("got %+v", k)
+	}
+}
+
+// TestBoardResource_Success verifies the issue board resource.
+func TestBoardResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/boards/3") {
+			respondJSON(w, http.StatusOK, `{"id":3,"name":"Development"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/board/3"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var b BoardResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &b); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if b.ID != 3 || b.Name != "Development" {
+		t.Errorf("got %+v", b)
+	}
+}
+
+// TestGroupMilestoneResource_Success verifies the group milestone resource
+// resolves an IID via list-with-iids and returns metadata.
+func TestGroupMilestoneResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/99/milestones" && r.URL.Query().Get("iids[]") == "5" {
+			respondJSON(w, http.StatusOK, `[{"id":100,"iid":5,"title":"v1.0","description":"first","state":"active"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/99/milestone/5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var m MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &m); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if m.IID != 5 || m.Title != "v1.0" {
+		t.Errorf("got %+v", m)
+	}
+}
+
+// TestGroupLabelResource_Success verifies the group label resource.
+func TestGroupLabelResource_Success(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v4/groups/99/labels/42") {
+			respondJSON(w, http.StatusOK, `{"id":42,"name":"bug","color":"#ff0000","description":"Bug","open_issues_count":2,"open_merge_requests_count":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/99/label/42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var l LabelResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &l); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if l.ID != 42 || l.Name != "bug" {
+		t.Errorf("got %+v", l)
 	}
 }

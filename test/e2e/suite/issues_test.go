@@ -7,8 +7,11 @@ package suite
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
@@ -52,6 +55,31 @@ func TestIndividual_Issues(t *testing.T) {
 		requireTrue(t, out.IID == issueIID, "expected issue IID %d, got %d", issueIID, out.IID)
 		requireTrue(t, out.State == "opened", "expected state 'opened', got %q", out.State)
 		t.Logf("Got issue #%d: %s", out.IID, out.Title)
+	})
+
+	t.Run("GetEmbedsCanonicalResource", func(t *testing.T) {
+		requireTrue(t, issueIID > 0, "issueIID not set")
+		result, err := callToolWithRetry(ctx, sess.individual, "gitlab_issue_get", issues.GetInput{
+			ProjectID: proj.pidOf(),
+			IssueIID:  issueIID,
+		})
+		requireNoError(t, err, "get issue (raw result)")
+		requireTrue(t, result != nil, "nil result")
+
+		var found *mcp.EmbeddedResource
+		for _, c := range result.Content {
+			if er, ok := c.(*mcp.EmbeddedResource); ok {
+				found = er
+				break
+			}
+		}
+		requireTrue(t, found != nil, "expected an EmbeddedResource content block in gitlab_issue_get result")
+		requireTrue(t, found.Resource != nil, "EmbeddedResource.Resource is nil")
+		wantURI := fmt.Sprintf("gitlab://project/%d/issue/%d", proj.ID, issueIID)
+		requireTrue(t, found.Resource.URI == wantURI, "embedded URI = %q, want %q", found.Resource.URI, wantURI)
+		requireTrue(t, found.Resource.MIMEType == "application/json", "embedded MIME = %q, want application/json", found.Resource.MIMEType)
+		requireTrue(t, found.Resource.Text != "", "embedded Text payload empty")
+		t.Logf("Embedded resource URI: %s", found.Resource.URI)
 	})
 
 	t.Run("List", func(t *testing.T) {

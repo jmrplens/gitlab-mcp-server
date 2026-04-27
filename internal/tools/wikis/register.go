@@ -5,6 +5,7 @@ package wikis
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -45,7 +46,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			), Output{}, nil
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_wiki_get", start, err)
-		return toolutil.WithHints(FormatOutputMarkdown(out), out, err)
+		result := FormatOutputMarkdown(out)
+		if err == nil && out.Slug != "" && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/wiki/%s", url.PathEscape(string(input.ProjectID)), url.PathEscape(out.Slug)),
+				out)
+		}
+		return toolutil.WithHints(result, out, err)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

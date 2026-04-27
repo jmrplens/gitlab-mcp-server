@@ -71,7 +71,7 @@ graph TD
         META[metatool<br/>32 base / 47 enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
-        RES[resources<br/>24 resource handlers]
+        RES[resources<br/>44 resource handlers]
         PROMPTS[prompts<br/>38 prompt handlers]
         LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
@@ -272,7 +272,7 @@ sequenceDiagram
 
 ### Resources (`internal/resources`)
 
-24 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
+44 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
 
 | Resource        | URI                                         | Description                        |
 | --------------- | ------------------------------------------- | ---------------------------------- |
@@ -293,8 +293,28 @@ sequenceDiagram
 | Milestones      | `gitlab://project/{id}/milestones`          | Project milestones                 |
 | Merge Request   | `gitlab://project/{id}/mr/{iid}`            | MR details by IID                  |
 | Branches        | `gitlab://project/{id}/branches`            | All branches                       |
+| Branch          | `gitlab://project/{id}/branch/{name}`       | Single branch by name              |
 | Releases        | `gitlab://project/{id}/releases`            | Project releases                   |
+| Release         | `gitlab://project/{id}/release/{tag}`       | Single release by tag              |
 | Tags            | `gitlab://project/{id}/tags`                | Repository tags                    |
+| Tag             | `gitlab://project/{id}/tag/{name}`          | Single repository tag              |
+| Commit          | `gitlab://project/{id}/commit/{sha}`        | Single commit by SHA               |
+| File Blob       | `gitlab://project/{id}/file/{ref}/{+path}`  | File contents at ref               |
+| Wiki Page       | `gitlab://project/{id}/wiki/{slug}`         | Wiki page by slug                  |
+| Label           | `gitlab://project/{id}/label/{label_id}`    | Single project label               |
+| Milestone       | `gitlab://project/{id}/milestone/{iid}`     | Single project milestone           |
+| Board           | `gitlab://project/{id}/board/{board_id}`    | Single issue board                 |
+| Deployment      | `gitlab://project/{id}/deployment/{did}`    | Single deployment                  |
+| Environment     | `gitlab://project/{id}/environment/{eid}`   | Single environment                 |
+| Job             | `gitlab://project/{id}/job/{job_id}`        | Single CI/CD job                   |
+| Feature Flag    | `gitlab://project/{id}/feature_flag/{name}` | Single feature flag                |
+| Deploy Key      | `gitlab://project/{id}/deploy_key/{kid}`    | Single deploy key                  |
+| Project Snippet | `gitlab://project/{id}/snippet/{sid}`       | Single project snippet             |
+| MR Notes        | `gitlab://project/{id}/mr/{iid}/notes`      | Notes on a merge request           |
+| MR Discussions  | `gitlab://project/{id}/mr/{iid}/discussions`| Discussion threads on a MR         |
+| Group Label     | `gitlab://group/{id}/label/{label_id}`      | Single group label                 |
+| Group Milestone | `gitlab://group/{id}/milestone/{iid}`       | Single group milestone             |
+| Snippet         | `gitlab://snippet/{snippet_id}`             | Personal snippet                   |
 | Git Workflow Guide | `gitlab://guides/git-workflow`           | Branching and commit best practices |
 | MR Hygiene Guide | `gitlab://guides/merge-request-hygiene`    | MR sizing and review workflow      |
 | Conventional Commits Guide | `gitlab://guides/conventional-commits` | Commit message conventions     |

@@ -5,6 +5,7 @@ package milestones
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,6 +47,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_milestone_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatMarkdown(out))
+		if err == nil && out.IID > 0 && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/milestone/%d", url.PathEscape(string(input.ProjectID)), out.IID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 

@@ -5,6 +5,7 @@ package commits
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -60,6 +61,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_commit_get", start, err)
 		result := toolutil.ToolResultAnnotated(FormatDetailMarkdown(out), toolutil.ContentDetail)
+		if err == nil && out.ID != "" && string(input.ProjectID) != "" {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://project/%s/commit/%s", url.PathEscape(string(input.ProjectID)), out.ID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 
