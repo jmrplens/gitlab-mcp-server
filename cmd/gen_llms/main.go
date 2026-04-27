@@ -322,7 +322,10 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		fmt.Fprintf(&b, "### %s (%d tools)\n\n", domain, len(tls))
 		for _, t := range tls {
 			fmt.Fprintf(&b, "#### %s\n\n", t.Name)
-			desc := truncateRunes(t.Description, 300)
+			desc := firstParagraph(t.Description)
+			if utf8.RuneCountInString(desc) > 600 {
+				desc = truncateRunes(desc, 600)
+			}
 			b.WriteString(desc)
 			b.WriteString("\n\n")
 			writeInputSchema(&b, t.InputSchema)
@@ -554,6 +557,16 @@ func truncateRunes(s string, maxRunes int) string {
 		size += w
 	}
 	return s[:size] + "..."
+}
+
+// firstParagraph returns text up to the first blank-line paragraph break (\n\n).
+// Used to cut tool descriptions at a natural boundary instead of mid-sentence.
+func firstParagraph(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "\n\n"); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
 }
 
 // firstSentence returns text up to the first sentence-ending period or newline.

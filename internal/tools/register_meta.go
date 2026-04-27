@@ -1446,7 +1446,7 @@ When to use: issue lifecycle — create, update, close, move, comment, link, tim
 
 Side effects: delete/move are irreversible; move changes URL and IID. Time tracking uses dedicated actions — do NOT pass time params to update.
 
-Returns: resource object for single-item actions; paginated list ({page, per_page, total, next_page}) for *_list / list / list_all / list_group / participants / mrs_*; GraphQL cursor pagination ({nodes, page_info}) for work_item_list; {success, message} for delete actions.
+Returns: resource object for single-item actions; paginated list ({page, per_page, total, next_page}) for *_list / list / list_all / list_group / participants / mrs_* / iteration_list_*; GraphQL cursor pagination ({nodes, page_info}) for work_item_list; {success, message} for delete actions.
 Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: Reporter+ to comment, Developer+ to edit/move), 400 (hint: state_event ∈ close/reopen; dates ISO 8601; weight integer 0–9 — Premium+).
 
 Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).
@@ -2187,7 +2187,7 @@ Valid actions: `+validActionsString(routes)+`
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports from GitHub/Bitbucket).
 NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
 
-Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
+Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list / feature_list_definitions; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
 Errors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded; system hook url must be https).
 
 Param conventions: * = required. List actions accept page, per_page.

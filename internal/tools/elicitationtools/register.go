@@ -31,7 +31,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop issue creation with guided prompts. " +
 			"NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created issue (id, iid, web_url, title, state).\n\nSee also: gitlab_issue.",
+			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state).\n\nSee also: gitlab_issue.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input IssueInput) (*mcp.CallToolResult, issues.Output, error) {
@@ -61,7 +61,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied. " +
 			"This tool is the interactive counterpart of gitlab_merge_request (action='create'); they share the same API outcome.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created MR (id, iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
+			"Returns: JSON with the created MR (id, mr_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, mergerequests.Output, error) {
@@ -83,7 +83,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_release_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_release_create"),
-		Description: "Interactively create a GitLab release: step-by-step prompts collect tag name (required, must reference an existing tag or one auto-created per project settings), " +
+		Description: "Interactively create a GitLab release: step-by-step prompts collect tag name (required, must reference an existing tag), " +
 			"release name (optional, defaults to tag name), and release notes/description (optional multiline), " +
 			"then ask for confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
 			"When to use: human-in-the-loop release publishing. " +
