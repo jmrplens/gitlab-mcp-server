@@ -195,6 +195,58 @@ func TestHTTPHandler_Initialize_ReturnsServerInfo(t *testing.T) {
 	}
 }
 
+// TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities verifies that
+// the initialize handshake reports listChanged: true for tools, resources,
+// and prompts so that MCP clients know they will receive
+// notifications/{tools,resources,prompts}/list_changed when the catalog
+// changes (e.g. dynamic registration).
+func TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities(t *testing.T) {
+	server := newTestMCPServer(t)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		return server
+	}, nil)
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
+
+	result := parseJSONRPCResponse(t, resp)
+	res, ok := result["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'result' field: %v", result)
+	}
+	caps, ok := res["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'capabilities' field: %v", res)
+	}
+
+	for _, key := range []string{"tools", "resources", "prompts"} {
+		group, gok := caps[key].(map[string]any)
+		if !gok {
+			t.Errorf("capabilities.%s missing or not an object: %v", key, caps[key])
+			continue
+		}
+		if got := group["listChanged"]; got != true {
+			t.Errorf("capabilities.%s.listChanged = %v, want true", key, got)
+		}
+	}
+}
+
 // TestHTTPHandler_ToolsList_ReturnsAllTools verifies the full MCP handshake
 // (initialize → initialized notification → tools/list) and asserts that all
 // registered tools are returned.

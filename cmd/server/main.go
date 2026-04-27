@@ -501,7 +501,10 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
 		Logger: slog.Default(),
 		Capabilities: &mcp.ServerCapabilities{
-			Logging: &mcp.LoggingCapabilities{},
+			Logging:   &mcp.LoggingCapabilities{},
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
 		},
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
