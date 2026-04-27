@@ -101,8 +101,8 @@
 
   <!-- Feature pills (centered row) -->
   <g transform="translate(640 510)" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="600">
-    <!-- Group is centered: total width ~880, so start at x=-440 -->
-    <g transform="translate(-440 0)">
+    <!-- Group is centered: total width 840 (180+220+200+180 + 3*20 gaps), so start at x=-420 -->
+    <g transform="translate(-420 0)">
       <rect x="0"   y="0" width="180" height="44" rx="22" fill="#2d1b69" stroke="#A78BFA" stroke-width="0.7" opacity="0.85"/>
       <text x="90"  y="29" text-anchor="middle" font-size="18" fill="#A78BFA">Single Binary</text>
 
