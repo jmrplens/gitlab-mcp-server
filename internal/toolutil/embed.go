@@ -28,7 +28,7 @@ func init() {
 	embeddedResourcesEnabled.Store(true)
 }
 
-// EnableEmbeddedResources toggles the global EmbedResource behaviour.
+// EnableEmbeddedResources toggles the global EmbedResource behavior.
 // When false, EmbedResource is a no-op, preserving the legacy two-block
 // (text + structuredContent) tool result shape.
 func EnableEmbeddedResources(enabled bool) {

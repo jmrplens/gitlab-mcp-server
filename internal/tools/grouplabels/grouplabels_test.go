@@ -903,5 +903,5 @@ func TestGroupLabelGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"group_id": "99", "label_id": "42"}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_group_label_get", args, "gitlab://group/99/label/42", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_group_label_get", args, "gitlab://group/99/label/42", toolutil.EnableEmbeddedResources)
 }

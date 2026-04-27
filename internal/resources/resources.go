@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -934,10 +935,10 @@ func registerProjectReleasesResource(server *mcp.Server, client *gitlabclient.Cl
 				Author:      r.Author.Username,
 			}
 			if r.CreatedAt != nil {
-				ro.CreatedAt = r.CreatedAt.Format(timeFormatISO)
+				ro.CreatedAt = r.CreatedAt.UTC().Format(timeFormatISO)
 			}
 			if r.ReleasedAt != nil {
-				ro.ReleasedAt = r.ReleasedAt.Format(timeFormatISO)
+				ro.ReleasedAt = r.ReleasedAt.UTC().Format(timeFormatISO)
 			}
 			out[i] = ro
 		}
@@ -975,7 +976,7 @@ func registerProjectTagsResource(server *mcp.Server, client *gitlabclient.Client
 				Protected: tag.Protected,
 			}
 			if tag.CreatedAt != nil {
-				to.CreatedAt = tag.CreatedAt.Format(timeFormatISO)
+				to.CreatedAt = tag.CreatedAt.UTC().Format(timeFormatISO)
 			}
 			out[i] = to
 		}
@@ -1016,10 +1017,10 @@ func registerCommitResource(server *mcp.Server, client *gitlabclient.Client) {
 			ParentIDs:   c.ParentIDs,
 		}
 		if c.AuthoredDate != nil {
-			out.AuthoredDate = c.AuthoredDate.Format(timeFormatISO)
+			out.AuthoredDate = c.AuthoredDate.UTC().Format(timeFormatISO)
 		}
 		if c.CommittedDate != nil {
-			out.CommittedDate = c.CommittedDate.Format(timeFormatISO)
+			out.CommittedDate = c.CommittedDate.UTC().Format(timeFormatISO)
 		}
 		if c.Stats != nil {
 			out.Stats = &CommitStatsOutput{
@@ -1149,10 +1150,10 @@ func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.
 				no.Author = n.Author.Username
 			}
 			if n.CreatedAt != nil {
-				no.CreatedAt = n.CreatedAt.Format(timeFormatISO)
+				no.CreatedAt = n.CreatedAt.UTC().Format(timeFormatISO)
 			}
 			if n.UpdatedAt != nil {
-				no.UpdatedAt = n.UpdatedAt.Format(timeFormatISO)
+				no.UpdatedAt = n.UpdatedAt.UTC().Format(timeFormatISO)
 			}
 			out[i] = no
 		}
@@ -1209,7 +1210,7 @@ func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabc
 					no.Author = n.Author.Username
 				}
 				if n.CreatedAt != nil {
-					no.CreatedAt = n.CreatedAt.Format(timeFormatISO)
+					no.CreatedAt = n.CreatedAt.UTC().Format(timeFormatISO)
 				}
 				dout.Notes = append(dout.Notes, no)
 			}
@@ -1247,10 +1248,10 @@ func registerReleaseResource(server *mcp.Server, client *gitlabclient.Client) {
 			Author:      r.Author.Username,
 		}
 		if r.CreatedAt != nil {
-			out.CreatedAt = r.CreatedAt.Format(timeFormatISO)
+			out.CreatedAt = r.CreatedAt.UTC().Format(timeFormatISO)
 		}
 		if r.ReleasedAt != nil {
-			out.ReleasedAt = r.ReleasedAt.Format(timeFormatISO)
+			out.ReleasedAt = r.ReleasedAt.UTC().Format(timeFormatISO)
 		}
 		return marshalResourceJSON(out)
 	})
@@ -1345,8 +1346,8 @@ func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 			Name:                   l.Name,
 			Color:                  l.Color,
 			Description:            l.Description,
-			OpenIssuesCount:        int64(l.OpenIssuesCount),
-			OpenMergeRequestsCount: int64(l.OpenMergeRequestsCount),
+			OpenIssuesCount:        l.OpenIssuesCount,
+			OpenMergeRequestsCount: l.OpenMergeRequestsCount,
 		}
 		return marshalResourceJSON(out)
 	})
@@ -1401,6 +1402,12 @@ func registerMilestoneResource(server *mcp.Server, client *gitlabclient.Client) 
 // extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}" URI
 // into its three components. The path component may contain slashes. Returns
 // empty strings if the URI does not match the expected layout.
+//
+// Limitation: when the ref itself contains a slash (e.g. "feature/new-ui"),
+// the URI is ambiguous because both segments use "/" as a separator. This
+// helper assumes refs are slash-free. Callers that need to address files on
+// branches with slashes should URL-encode the ref before constructing the
+// URI.
 func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
 	rest := extractSuffix(uri, uriProjectPrefix)
 	if rest == "" {
@@ -1412,12 +1419,11 @@ func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
 	}
 	projectID = rest[:idx]
 	tail := rest[idx+len("/file/"):]
-	slash := strings.Index(tail, "/")
-	if slash <= 0 || slash == len(tail)-1 {
+	var ok bool
+	ref, filePath, ok = strings.Cut(tail, "/")
+	if !ok || ref == "" || filePath == "" {
 		return "", "", ""
 	}
-	ref = tail[:slash]
-	filePath = tail[slash+1:]
 	return projectID, ref, filePath
 }
 
@@ -1426,7 +1432,7 @@ func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
 // content is detected via the file name and replaced with an empty string
 // so JSON responses stay textual. Returns the decoded content and a
 // human-readable category ("text" or "binary").
-func decodeFileContent(f *gl.File) (string, string) {
+func decodeFileContent(f *gl.File) (content, category string) {
 	if f == nil {
 		return "", "binary"
 	}
@@ -1440,7 +1446,7 @@ func decodeFileContent(f *gl.File) (string, string) {
 	if err != nil {
 		return "", "binary"
 	}
-	if toolutil.IsBinaryFile(f.FileName) {
+	if toolutil.IsBinaryFile(f.FileName) || !utf8.Valid(decoded) {
 		return "", "binary"
 	}
 	return string(decoded), "text"
@@ -1462,7 +1468,7 @@ func issueToResourceOutput(issue *gl.Issue) IssueResourceOutput {
 		out.Author = issue.Author.Username
 	}
 	if issue.CreatedAt != nil {
-		out.CreatedAt = issue.CreatedAt.Format(timeFormatISO)
+		out.CreatedAt = issue.CreatedAt.UTC().Format(timeFormatISO)
 	}
 	assignees := make([]string, 0, len(issue.Assignees))
 	for _, a := range issue.Assignees {
@@ -1536,7 +1542,7 @@ func pipelineToResourceOutput(p *gl.Pipeline) PipelineResourceOutput {
 
 // extractGroupTwoParts splits a "gitlab://group/{group_id}/{kind}/{value}"
 // URI into its (group_id, value) components.
-func extractGroupTwoParts(uri, kind string) (string, string) {
+func extractGroupTwoParts(uri, kind string) (groupID, value string) {
 	return extractTwoParts(uri, uriGroupPrefix, "/"+kind+"/")
 }
 
@@ -1603,7 +1609,7 @@ func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client
 			return nil, wrapErr("failed to get environment", err)
 		}
 		out := EnvironmentResourceOutput{
-			ID:    int64(env.ID),
+			ID:    env.ID,
 			Name:  env.Name,
 			Slug:  env.Slug,
 			State: env.State,
@@ -1638,7 +1644,7 @@ func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
 			return nil, wrapErr("failed to get job", err)
 		}
 		out := JobResourceOutput{
-			ID:            int64(j.ID),
+			ID:            j.ID,
 			Name:          j.Name,
 			Stage:         j.Stage,
 			Status:        j.Status,
@@ -1676,7 +1682,7 @@ func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 			return nil, wrapErr("failed to get snippet", err)
 		}
 		out := SnippetResourceOutput{
-			ID:          int64(s.ID),
+			ID:          s.ID,
 			Title:       s.Title,
 			FileName:    s.FileName,
 			Description: s.Description,
@@ -1712,7 +1718,7 @@ func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Cli
 			return nil, wrapErr("failed to get project snippet", err)
 		}
 		out := SnippetResourceOutput{
-			ID:          int64(s.ID),
+			ID:          s.ID,
 			Title:       s.Title,
 			FileName:    s.FileName,
 			Description: s.Description,
@@ -1884,8 +1890,8 @@ func registerGroupLabelResource(server *mcp.Server, client *gitlabclient.Client)
 			Name:                   l.Name,
 			Color:                  l.Color,
 			Description:            l.Description,
-			OpenIssuesCount:        int64(l.OpenIssuesCount),
-			OpenMergeRequestsCount: int64(l.OpenMergeRequestsCount),
+			OpenIssuesCount:        l.OpenIssuesCount,
+			OpenMergeRequestsCount: l.OpenMergeRequestsCount,
 		}
 		return marshalResourceJSON(out)
 	})

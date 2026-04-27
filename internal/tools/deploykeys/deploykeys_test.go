@@ -1252,5 +1252,5 @@ func TestDeployKeyGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "deploy_key_id": 12}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_deploy_key_get", args, "gitlab://project/42/deploy_key/12", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_deploy_key_get", args, "gitlab://project/42/deploy_key/12", toolutil.EnableEmbeddedResources)
 }

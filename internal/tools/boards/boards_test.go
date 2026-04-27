@@ -1128,5 +1128,5 @@ func TestBoardGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "board_id": 3}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_board_get", args, "gitlab://project/42/board/3", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_board_get", args, "gitlab://project/42/board/3", toolutil.EnableEmbeddedResources)
 }

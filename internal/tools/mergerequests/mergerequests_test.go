@@ -4201,5 +4201,5 @@ func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "mr_iid": 5}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_mr_get", args, "gitlab://project/42/mr/5", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_mr_get", args, "gitlab://project/42/mr/5", toolutil.EnableEmbeddedResources)
 }

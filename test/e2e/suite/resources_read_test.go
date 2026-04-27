@@ -45,11 +45,11 @@ import (
 // Returns 0 when no positive integer ID is found.
 func extractFirstID(text string) int64 {
 	const key = `"id":`
-	idx := strings.Index(text, key)
-	if idx < 0 {
+	_, after, ok := strings.Cut(text, key)
+	if !ok {
 		return 0
 	}
-	rest := strings.TrimLeft(text[idx+len(key):], " \t")
+	rest := strings.TrimLeft(after, " \t")
 	end := 0
 	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
 		end++

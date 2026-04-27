@@ -1013,5 +1013,5 @@ func TestLabelGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "label_id": "5"}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_label_get", args, "gitlab://project/42/label/5", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_label_get", args, "gitlab://project/42/label/5", toolutil.EnableEmbeddedResources)
 }

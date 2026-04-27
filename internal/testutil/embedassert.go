@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 // EmbedToggle is the signature of the toolutil.EnableEmbeddedResources
@@ -50,7 +51,9 @@ func NewEmbedTestSession(t *testing.T, handler http.Handler, register RegisterFn
 // URI matches wantURI and MIME type is application/json), then with the
 // toggle disabled (expecting no EmbeddedResource blocks). The toggle is
 // always restored to enabled (the production default) on test exit.
-func AssertEmbeddedResource(t *testing.T, session *mcp.ClientSession, ctx context.Context, name string, args map[string]any, wantURI string, toggle EmbedToggle) {
+//
+//nolint:revive // *testing.T is conventionally the first parameter for test helpers.
+func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.ClientSession, name string, args map[string]any, wantURI string, toggle EmbedToggle) {
 	t.Helper()
 	t.Run("enabled by default", func(t *testing.T) {
 		toggle(true)

@@ -1541,5 +1541,5 @@ func TestBranchGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "branch_name": "main"}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_branch_get", args, "gitlab://project/42/branch/main", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_branch_get", args, "gitlab://project/42/branch/main", toolutil.EnableEmbeddedResources)
 }

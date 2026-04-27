@@ -2023,5 +2023,5 @@ func TestCommitGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "sha": "abc123"}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_commit_get", args, "gitlab://project/42/commit/abc123", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_commit_get", args, "gitlab://project/42/commit/abc123", toolutil.EnableEmbeddedResources)
 }

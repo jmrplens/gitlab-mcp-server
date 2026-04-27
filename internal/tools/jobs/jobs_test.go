@@ -1896,5 +1896,5 @@ func TestJobGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "job_id": 555}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_job_get", args, "gitlab://project/42/job/555", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_job_get", args, "gitlab://project/42/job/555", toolutil.EnableEmbeddedResources)
 }

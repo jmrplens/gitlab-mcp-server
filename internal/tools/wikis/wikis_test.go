@@ -980,5 +980,5 @@ func TestWikiGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "slug": "Home"}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_wiki_get", args, "gitlab://project/42/wiki/Home", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_wiki_get", args, "gitlab://project/42/wiki/Home", toolutil.EnableEmbeddedResources)
 }

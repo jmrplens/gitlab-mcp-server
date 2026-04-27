@@ -1972,5 +1972,5 @@ func TestPipelineGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "pipeline_id": 100}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_pipeline_get", args, "gitlab://project/42/pipeline/100", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_pipeline_get", args, "gitlab://project/42/pipeline/100", toolutil.EnableEmbeddedResources)
 }

@@ -928,5 +928,5 @@ func TestProjectSnippetGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"project_id": "42", "snippet_id": 7}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_project_snippet_get", args, "gitlab://project/42/snippet/7", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_project_snippet_get", args, "gitlab://project/42/snippet/7", toolutil.EnableEmbeddedResources)
 }

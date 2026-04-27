@@ -1664,5 +1664,5 @@ func TestGroupMilestoneGet_EmbedsCanonicalResource(t *testing.T) {
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
 	args := map[string]any{"group_id": "99", "milestone_iid": 5}
-	testutil.AssertEmbeddedResource(t, session, ctx, "gitlab_group_milestone_get", args, "gitlab://group/99/milestone/5", toolutil.EnableEmbeddedResources)
+	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_group_milestone_get", args, "gitlab://group/99/milestone/5", toolutil.EnableEmbeddedResources)
 }
