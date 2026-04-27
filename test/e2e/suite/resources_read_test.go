@@ -159,7 +159,7 @@ func TestResources_ReadAll(t *testing.T) {
 	requireNoError(t, err, "create environment")
 
 	const deployEnvName = "e2e-res-deploy-env"
-	if err := callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
+	if err = callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
 		"action": "create",
 		"params": map[string]any{"project_id": pidStr, "name": deployEnvName},
 	}); err != nil {
