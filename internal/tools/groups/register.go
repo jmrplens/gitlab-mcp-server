@@ -47,6 +47,11 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_group_get", start, err)
 		result := toolutil.ToolResultWithMarkdown(FormatOutputMarkdown(out))
+		if err == nil && out.ID > 0 {
+			toolutil.EmbedResourceJSON(result,
+				fmt.Sprintf("gitlab://group/%d", out.ID),
+				out)
+		}
 		return toolutil.WithHints(result, out, err)
 	})
 
