@@ -1395,15 +1395,22 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 	return addr, errCh
 }
 
+// readinessConsecutiveSuccesses is the number of consecutive successful
+// /health probes required before waitForHTTPServerReady considers the server
+// ready. Two probes filter out a transient state where the listener is bound
+// but the HTTP handler is not yet fully wired.
+const readinessConsecutiveSuccesses = 2
+
 // waitForHTTPServerReady polls /health until the HTTP server is reachable,
 // or fails fast if serveHTTP exits early with an error.
 //
-// Requires two consecutive successful probes to filter out transient startup
-// states (e.g., the listener has been bound but the HTTP handler is not yet
-// fully wired). After confirming readiness, idle connections are closed so the
-// next request from the test opens a fresh TCP connection — this prevents
-// flaky "connection refused" failures on slow CI runners caused by reusing a
-// keep-alive socket whose peer has not yet finalized accept loop setup.
+// Requires readinessConsecutiveSuccesses consecutive successful probes to
+// filter out transient startup states (e.g., the listener has been bound but
+// the HTTP handler is not yet fully wired). After confirming readiness, idle
+// connections are closed so the next request from the test opens a fresh TCP
+// connection — this prevents flaky "connection refused" failures on slow CI
+// runners caused by reusing a keep-alive socket whose peer has not yet
+// finalized accept loop setup.
 func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
 	t.Helper()
 
@@ -1428,7 +1435,7 @@ func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
 		if doErr == nil {
 			resp.Body.Close()
 			consecutiveOK++
-			if consecutiveOK >= 2 {
+			if consecutiveOK >= readinessConsecutiveSuccesses {
 				testHTTPClient.CloseIdleConnections()
 				return
 			}

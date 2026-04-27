@@ -34,6 +34,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// maxFullDescRunes caps the length of tool descriptions in llms-full.txt to
+// keep the file scannable. When a description exceeds this limit, generation
+// falls back to its first sentence; if that is still too long, the text is
+// hard-truncated at the rune boundary.
+const maxFullDescRunes = 600
+
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -323,8 +329,12 @@ func writeLLMSFullTxt(version string, individual, metaBase, metaEnterprise []*mc
 		for _, t := range tls {
 			fmt.Fprintf(&b, "#### %s\n\n", t.Name)
 			desc := firstParagraph(t.Description)
-			if utf8.RuneCountInString(desc) > 600 {
-				desc = truncateRunes(desc, 600)
+			if utf8.RuneCountInString(desc) > maxFullDescRunes {
+				if sent := firstSentence(desc); sent != "" && utf8.RuneCountInString(sent) <= maxFullDescRunes {
+					desc = sent
+				} else {
+					desc = truncateRunes(desc, maxFullDescRunes)
+				}
 			}
 			b.WriteString(desc)
 			b.WriteString("\n\n")
