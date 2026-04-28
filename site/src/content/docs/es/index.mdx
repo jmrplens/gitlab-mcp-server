@@ -152,7 +152,7 @@ Prueba estos con tu asistente de IA una vez conectado GitLab MCP Server:
 graph LR
     A[Tú] -->|lenguaje natural| B[Cliente IA]
     B -->|protocolo MCP| C[GitLab MCP Server]
-    C -->|REST API v4| D[Instancia GitLab]
+    C -->|REST v4 + GraphQL| D[Instancia GitLab]
     D -->|respuesta JSON| C
     C -->|resultado estructurado| B
     B -->|respuesta formateada| A

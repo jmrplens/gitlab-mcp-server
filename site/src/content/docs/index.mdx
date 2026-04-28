@@ -162,13 +162,13 @@ Try these with your AI assistant once GitLab MCP Server is connected:
 graph LR
     A[You] -->|natural language| B[AI Client]
     B -->|MCP protocol| C[GitLab MCP Server]
-    C -->|REST API v4| D[GitLab Instance]
+    C -->|REST v4 + GraphQL| D[GitLab Instance]
     D -->|JSON response| C
     C -->|structured result| B
     B -->|formatted answer| A
 ```
 
-The server acts as a bridge: your AI client sends tool calls over the MCP protocol, the server translates them into GitLab REST API requests, and returns the results in both structured JSON (for the AI) and formatted Markdown (for you).
+The server acts as a bridge: your AI client sends tool calls over the MCP protocol, the server translates them into GitLab REST API v4 or GraphQL requests, and returns the results in both structured JSON (for the AI) and formatted Markdown (for you).
 
 ## Supported AI clients
 

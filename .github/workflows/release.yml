@@ -110,9 +110,24 @@ jobs:
         run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}"
 
       - name: Publish to MCP Registry
-        continue-on-error: true
+        env:
+          # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
+          # Bump when a new mcp-publisher release is verified. Server version published comes from
+          # the git tag (handled in the previous step by update-server-json-sha.sh).
+          MCP_PUBLISHER_VERSION: "v1.7.2"
+          MCP_PUBLISHER_SHA256: ""  # If empty, signature verification is skipped; populate to enforce.
         run: |
-          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          TARBALL="mcp-publisher_${MCP_PUBLISHER_VERSION#v}_linux_amd64.tar.gz"
+          URL="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${TARBALL}"
+          echo "Downloading ${URL}"
+          curl -fsSL --retry 3 -o "${TARBALL}" "${URL}"
+          if [ -n "${MCP_PUBLISHER_SHA256}" ]; then
+            echo "${MCP_PUBLISHER_SHA256}  ${TARBALL}" | sha256sum -c -
+          else
+            echo "::warning::MCP_PUBLISHER_SHA256 not set — skipping signature verification"
+          fi
+          tar xzf "${TARBALL}" mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
 
@@ -187,14 +202,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Compute build date
+        id: build-date
+        run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v7
         id: docker-push
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

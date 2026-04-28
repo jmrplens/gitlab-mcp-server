@@ -15,7 +15,7 @@ GitLab MCP Server se sitúa entre tu cliente de IA y tu instancia de GitLab, tra
 graph LR
     U[Usuario] -->|lenguaje natural| AI[Cliente IA]
     AI -->|llamadas de herramientas MCP| S[GitLab MCP Server]
-    S -->|REST API v4| G[Instancia GitLab]
+    S -->|REST v4 + GraphQL| G[Instancia GitLab]
     S -->|GraphQL API| G
     G -->|JSON| S
     S -->|resultado estructurado + markdown| AI

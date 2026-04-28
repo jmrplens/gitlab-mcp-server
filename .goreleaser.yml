@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # GoReleaser configuration for gitlab-mcp-server.
 # Docs: https://goreleaser.com
 version: 2
@@ -24,22 +25,51 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+    # Reproducible builds: stamp binary mtime from commit timestamp.
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - id: binaries
-    formats: [binary]
+    formats: [ binary ]
     name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
 
 changelog:
-  use: github-native
+  use: github
+  sort: asc
+  groups:
+    - title: "✨ Features"
+      regexp: "^.*?feat(\\(.+?\\))??!?:.+$"
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: "^.*?fix(\\(.+?\\))??!?:.+$"
+      order: 1
+    - title: "🔒 Security"
+      regexp: "^.*?(sec|security)(\\(.+?\\))??!?:.+$"
+      order: 2
+    - title: "⚡ Performance"
+      regexp: "^.*?perf(\\(.+?\\))??!?:.+$"
+      order: 3
+    - title: "📚 Documentation"
+      regexp: "^.*?docs(\\(.+?\\))??!?:.+$"
+      order: 4
+    - title: "🚧 Maintenance"
+      order: 999
+  filters:
+    exclude:
+      - "^test:"
+      - "(?i)typo"
+      - "^Merge pull request"
+      - "^Merge branch"
 
 signs:
+  # Cosign sigstore-bundle (single-file format with cert + signature).
+  # Verify with: cosign verify-blob --bundle <file>.sigstore.json <file>
   - cmd: cosign
     artifacts: checksum
-    signature: "${artifact}.bundle"
+    signature: "${artifact}.sigstore.json"
     output: true
     args:
       - sign-blob
@@ -55,6 +85,8 @@ sboms:
       - ${artifact}
       - --output
       - spdx-json=${document}
+      - --enrich
+      - all
 
 release:
   github:

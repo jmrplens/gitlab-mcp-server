@@ -1,4 +1,6 @@
 // Package gitlab provides a wrapper around the GitLab REST API v4 client.
+// Some domains additionally use the GitLab GraphQL API for endpoints not covered
+// by client-go service wrappers (see ADR-0006).
 package gitlab
 
 import (

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project implements a **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools. It is written in **Go** using the official `github.com/modelcontextprotocol/go-sdk` package and communicates with the **GitLab REST API v4**.
+This project implements a **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools. It is written in **Go** using the official `github.com/modelcontextprotocol/go-sdk` package and communicates with the **GitLab REST API v4** (primary) and **GraphQL API** (for domains without REST coverage — see ADR-0006).
 
 ## Architecture
 

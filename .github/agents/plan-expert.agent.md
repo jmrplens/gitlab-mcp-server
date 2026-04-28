@@ -31,7 +31,7 @@ You are a strategic planning expert specialized in this Go MCP server project (g
 
 ## Technology Context
 
-This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab REST API v4 operations as MCP tools:
+This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab REST API v4 and GraphQL operations as MCP tools:
 
 | Component          | Technology                                              |
 | ------------------ | ------------------------------------------------------- |

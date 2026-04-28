@@ -1,6 +1,6 @@
 ﻿# Architecture Overview
 
-This document describes the system architecture of gitlab-mcp-server, a Model Context Protocol (MCP) server that bridges AI assistants to the GitLab REST API v4.
+This document describes the system architecture of gitlab-mcp-server, a Model Context Protocol (MCP) server that bridges AI assistants to the GitLab REST API v4 and GraphQL API.
 
 > **Diataxis type**: Explanation
 > **Audience**: 👤🔧 All users
