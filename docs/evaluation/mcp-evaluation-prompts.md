@@ -708,7 +708,7 @@
 | **Expected Path** | `gitlab_mr_review` → approval actions for project=1835, merge_request_iid=15 |
 | **Expected Data** | Approval state info |
 | **Result** | |
-| **Error / Observaciones** | ha usado las claves merge_request_iid y project_id usando la accion approval_state y tambien ha probado con la accion approval_rules, ambas han devuelto: "mrApprovalState: unexpected error: 404 Not Found" "mrApprovalRules: unexpected error: 404 Not Found" y el LLM entiende que: La MR !15 de gitlab-mcp-server no tiene sistema de aprobaciones configurado y Las aprobaciones de MR son una funcionalidad de GitLab Premium, por lo que no están disponibles en esta instancia.  ¿Confirma si es correcto, y evita que genere error 404 cuando ocurre consultas que no son error directamente (los MR si tiene boton de aprobacion pero no hay reglas para obligar a que esten los MR aprobados) |
+| **Error / Notes** | The model used `merge_request_iid` and `project_id` with the `approval_state` action and also tried the `approval_rules` action; both returned: "mrApprovalState: unexpected error: 404 Not Found" and "mrApprovalRules: unexpected error: 404 Not Found". The LLM concluded that MR !15 of gitlab-mcp-server has no approval system configured and that MR approvals are a GitLab Premium feature unavailable on this instance. Confirm whether this interpretation is correct, and avoid surfacing a 404 when the MR simply has no enforced approval rules (the MR does have an approval button but no rules requiring approvals before merge). |
 
 ### P-079: List global MRs
 
@@ -1025,11 +1025,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Prompt** | "Necesito hacer un code review de la MR !12 del proyecto gitlab-mcp-server. Dame toda la información: descripción, archivos cambiados, diff, commits, y participantes." |
+| **Prompt** | "I need to code-review MR !12 of the gitlab-mcp-server project. Give me everything: description, changed files, diff, commits, and participants." |
 | **Expected Path** | Chain: MR get → MR changes → MR commits → MR participants |
 | **Expected Data** | Full MR context for review |
 | **Result** | |
-| **Error / Observaciones** | ha tenido el mismo error en gitlab_merge_request, gitlab_mr_review, ha usado merge_request_id en lugar del correcto que es merge_request_iid, el resto ok |
+| **Error / Notes** | Hit the same error in gitlab_merge_request and gitlab_mr_review: the model used `merge_request_id` instead of the correct `merge_request_iid`. Everything else worked. |
 
 ### P-126: Milestone tracking
 

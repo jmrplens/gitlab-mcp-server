@@ -215,7 +215,7 @@ func ErrFieldRequired(field string) error {
 
 // ErrRequiredInt64 returns a formatted error when a required int64 field is
 // missing or has its zero value. This catches silent deserialization failures
-// in meta-tool dispatch, where a misnamed JSON parameter (e.g. "merge_request_iid"
+// in meta-tool dispatch, where a misnamed JSON parameter (e.g. "mr_iid"
 // instead of "merge_request_iid") is silently ignored and the field defaults to 0.
 func ErrRequiredInt64(operation, field string) error {
 	return fmt.Errorf("%s: %s is required (must be > 0). Ensure you use the exact parameter name '%s' as documented in the tool description", operation, field, field)

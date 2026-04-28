@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // ProjectFixture holds identifiers for a test project created by a fixture builder.
@@ -505,7 +506,7 @@ func waitForMRReady(ctx context.Context, t *testing.T, projectID, mrIID int64) {
 	deadline := time.Now().Add(maxWait)
 	delay := 500 * time.Millisecond
 	for time.Now().Before(deadline) {
-		mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil)
+		mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(ctx))
 		if err == nil {
 			switch mr.DetailedMergeStatus {
 			case "preparing", "checking", "unchecked", "":

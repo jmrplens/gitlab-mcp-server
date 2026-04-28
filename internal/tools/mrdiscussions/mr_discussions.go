@@ -263,14 +263,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // GetInput defines parameters for getting a single discussion.
 type GetInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion,required"`
 }
 
 // UpdateNoteInput defines parameters for updating a discussion note.
 type UpdateNoteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion containing the note,required"`
 	NoteID       int64                `json:"note_id"       jsonschema:"ID of the note to update,required"`
 	Body         string               `json:"body,omitempty"     jsonschema:"New body text (Markdown). Leave empty to keep current body."`
@@ -280,7 +280,7 @@ type UpdateNoteInput struct {
 // DeleteNoteInput defines parameters for deleting a discussion note.
 type DeleteNoteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion containing the note,required"`
 	NoteID       int64                `json:"note_id"       jsonschema:"ID of the note to delete,required"`
 }

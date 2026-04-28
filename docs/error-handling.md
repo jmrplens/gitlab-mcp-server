@@ -247,10 +247,12 @@ actionable errors when LLMs mistype argument names:
 
 1. **Strict unknown-key rejection** — `strictUnmarshal` in
    `internal/toolutil/metatool.go` decodes the `params` envelope with
-   `json.Decoder.DisallowUnknownFields()`, so any key that does not map to a
-   field on the action's input struct produces an immediate error of the form
-   `json: unknown field "foo"`. This prevents the silent drop-and-default
-   behaviour of `encoding/json` and lets the LLM self-correct on misspellings.
+   `json.Decoder.DisallowUnknownFields()`. Reserved meta keys (e.g. `confirm`)
+   are stripped from the params map before unmarshalling; any other key that
+   does not map to a field on the action's input struct produces an immediate
+   error of the form `json: unknown field "foo"`. This prevents the silent
+   drop-and-default behaviour of `encoding/json` and lets the LLM self-correct
+   on misspellings.
 2. **Required-field helpers** — once a key is accepted, two helpers detect
    missing required values and emit messages that name the exact documented
    parameter:

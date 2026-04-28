@@ -13,7 +13,7 @@ operations under a single tool with an `action` parameter.
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
-NOT for: SSH/GPG keys, user-scoped PATs, or impersonation tokens (use gitlab_user), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
+NOT for: SSH/GPG keys or impersonation tokens (use gitlab_user), PAT creation (use gitlab_user create_personal_access_token / create_current_user_pat — gitlab_access exposes token_personal_* for list/get/rotate/revoke only), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
 
 Returns:
 - token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.
@@ -1796,10 +1796,10 @@ Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, ba
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
 
 Behavior:
-- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / wiki_list / epic_list / protected_*_list / release_list / ldap_link_list / saml_link_list / service_account_*_list.
-- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add / fork-equivalents are NON-idempotent (re-invocation creates a duplicate or returns 409).
-- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; service_account_pat_create returns the cleartext token only ONCE — store it immediately; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
-- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_*, epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete and service_account_pat_revoke are irreversible. archive is reversible via unarchive.
+- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / release_list (Premium+ adds wiki_list / epic_list / protected_*_list / ldap_link_list / saml_link_list / service_account_*_list).
+- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add are NON-idempotent (re-invocation creates a duplicate or returns 409).
+- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
+- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_* are irreversible. Premium+ adds destructive: epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete, service_account_pat_revoke. archive is reversible via unarchive.
 
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
 Errors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).
@@ -3336,7 +3336,7 @@ When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. N
 
 Behavior:
 - Idempotent reads: list / list_project / get / trace / artifacts / download_artifacts / download_single_artifact / download_single_artifact_by_ref / list_bridges / token_scope_get / token_scope_list_inbound / token_scope_list_groups.
-- retry / play start a NEW job run on every call (NON-idempotent — return a fresh job_id; play also passes new variables). cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.
+- retry starts a NEW job run on every call (NON-idempotent — returns a fresh job_id). play activates an existing manual job that has not yet run (same job_id; only manual jobs with rules.when=manual are eligible) and may pass new variables. cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.
 - Side effects: retry / play queue runners, consume CI minutes, and may trigger downstream pipelines and notifications. trace returns up to 100KB of log; download_artifacts streams up to 1MB inline (base64).
 - Destructive: erase clears the job log and artifacts in place (irreversible); delete_artifacts removes a single job's artifacts; delete_project_artifacts wipes ALL artifacts across the project (irreversible). token_scope_remove_* tightens trust boundaries and may break running pipelines.
 
@@ -4032,7 +4032,7 @@ Errors: 404 (hint: project_id, model_version_id and path are model-registry-scop
   - model_version_id (int, required) — registered model version ID; visible in the GitLab UI under Deploy → Model registry → <model> → Versions.
   - path (string, required) — package-relative directory of the asset (use '/' for the package root, otherwise e.g. 'artifacts/' or 'weights/').
   - filename (string, required) — exact asset filename within the package, including extension (e.g. 'model.safetensors', 'config.json').
-  - Any other input keys are silently ignored by the meta-tool router.
+  - Any unrecognized parameter name is rejected by the meta-tool router (strict unknown-field validation); only the reserved meta key 'confirm' is stripped before unmarshalling.
 
 See also: gitlab_package (generic / npm / maven / conan / pypi / nuget / container packages), gitlab_release (asset links per release), gitlab_repository (raw files in the repo).
 
@@ -4420,7 +4420,7 @@ NOT for: jobs, logs, artifacts, manual play actions (use gitlab_job), MR-specifi
 
 Behavior:
 - Idempotent reads: list / latest / get / variables / test_report / test_report_summary / trigger_list / trigger_get / resource_group_list / resource_group_get / resource_group_upcoming_jobs / schedule_list / schedule_get / schedule_list_triggered_pipelines.
-- create / retry / schedule_run / trigger_run start a NEW run on every call (NON-idempotent — produce a fresh pipeline_id). cancel is idempotent (no-op once final). update_metadata / trigger_update / resource_group_edit / schedule_update / schedule_edit_variable / schedule_take_ownership are idempotent (same input → same state).
+- create / schedule_run / trigger_run start a NEW run on every call (NON-idempotent — produce a fresh pipeline_id). retry re-queues failed/canceled jobs on the existing pipeline (same pipeline_id; continue using it for subsequent get/wait calls). cancel is idempotent (no-op once final). update_metadata / trigger_update / resource_group_edit / schedule_update / schedule_edit_variable / schedule_take_ownership are idempotent (same input → same state).
 - Side effects: create / retry / schedule_run / trigger_run queue runners, consume CI minutes, may trigger downstream pipelines, deployments and webhooks. trigger_create returns a secret token visible only ONCE — store it immediately. wait blocks server-side until terminal state or timeout.
 - Destructive: delete permanently removes the pipeline and all its jobs, artifacts, logs and traces (irreversible). trigger_delete / schedule_delete / schedule_delete_variable are irreversible.
 
@@ -16389,7 +16389,7 @@ Get a single discussion thread from a GitLab merge request by its discussion ID,
 **Parameters:**
 
 - `discussion_id` (string) (required): ID of the discussion
-- `merge_request_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16414,7 +16414,7 @@ Delete a note from a merge request discussion thread. Only the note author or pr
 **Parameters:**
 
 - `discussion_id` (string) (required): ID of the discussion containing the note
-- `merge_request_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16428,7 +16428,7 @@ Update the body or resolved status of a note within a merge request discussion t
 
 - `body` (string): New body text (Markdown). Leave empty to keep current body.
 - `discussion_id` (string) (required): ID of the discussion containing the note
-- `merge_request_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to update
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `resolved` (): Set to true to resolve, false to unresolve. Omit to leave unchanged.

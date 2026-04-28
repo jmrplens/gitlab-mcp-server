@@ -484,7 +484,7 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
 				"additionalProperties": true,
 			},
 		},

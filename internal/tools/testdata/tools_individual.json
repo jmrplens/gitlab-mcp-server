@@ -61993,7 +61993,7 @@
   },
   {
     "name": "gitlab_mr_approval_reset",
-    "description": "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
+    "description": "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -64687,7 +64687,7 @@
           "type": "string"
         },
         "merge_request_iid": {
-          "description": "Merge request internal ID,required",
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "project_id": {
@@ -65015,7 +65015,7 @@
           "type": "string"
         },
         "merge_request_iid": {
-          "description": "Merge request internal ID,required",
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "note_id": {
@@ -65081,7 +65081,7 @@
           "type": "string"
         },
         "merge_request_iid": {
-          "description": "Merge request internal ID,required",
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "note_id": {

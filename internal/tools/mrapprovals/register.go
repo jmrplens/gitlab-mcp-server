@@ -57,7 +57,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_mr_approval_reset",
 		Title:       toolutil.TitleFromName("gitlab_mr_approval_reset"),
-		Description: "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
+		Description: "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ResetInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

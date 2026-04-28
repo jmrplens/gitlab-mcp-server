@@ -1,7 +1,7 @@
 [
   {
     "name": "gitlab_access",
-    "description": "Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.\nWhen to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.\nNOT for: SSH/GPG keys, user-scoped PATs, or impersonation tokens (use gitlab_user), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.\n\nReturns:\n- token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.\n- token_*_get / token_*_create / token_*_rotate / deploy_token_get_* / deploy_token_create_* / deploy_key_get / deploy_key_add / deploy_key_update / deploy_key_enable / approve_* / request_*: token / key / request / invitation object. Create / rotate include the cleartext token only ONCE — store it securely; subsequent reads return only the metadata.\n- token_*_revoke / deploy_token_delete_* / deploy_key_delete / deny_* : {success, message}.\nErrors: 401/403 (hint: requires Maintainer+ to manage project tokens, Owner for group, admin for instance / deploy_token_list_all / deploy_key_list_all / deploy_key_add_instance), 404 (hint: token_id and deploy_key_id are scoped to the project/group), 400 (hint: scopes must be a subset of {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future ISO date).\n\nParam conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.\n\nAccess tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:\n- token_project_list / token_group_list: project_id* or group_id*\n- token_project_get / token_group_get: project_id* or group_id*, token_id*\n- token_project_create / token_group_create: project_id* or group_id*, name*, scopes*, expires_at, access_level\n- token_project_rotate / token_group_rotate: project_id* or group_id*, token_id*, expires_at\n- token_project_rotate_self / token_group_rotate_self: project_id* or group_id*, expires_at\n- token_project_revoke / token_group_revoke: project_id* or group_id*, token_id*\n- token_personal_list: user_id\n- token_personal_get: token_id*\n- token_personal_rotate: token_id*, expires_at\n- token_personal_rotate_self: expires_at\n- token_personal_revoke: token_id*\n- token_personal_revoke_self: (no params)\n\nDeploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD registry access:\n- deploy_token_list_all: (admin only)\n- deploy_token_list_project / deploy_token_list_group: project_id* or group_id*\n- deploy_token_get_project / deploy_token_get_group: project_id* or group_id*, deploy_token_id*\n- deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at\n- deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*\n\nDeploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:\n- deploy_key_list_project / deploy_key_list_user_project: project_id*\n- deploy_key_list_all: (admin only)\n- deploy_key_get: project_id*, deploy_key_id*\n- deploy_key_add: project_id*, title*, key*, can_push\n- deploy_key_update: project_id*, deploy_key_id*, title, can_push\n- deploy_key_delete: project_id*, deploy_key_id*\n- deploy_key_enable: project_id*, deploy_key_id*\n- deploy_key_add_instance: title*, key*\n\nAccess requests (request_*, approve_*, deny_*):\n- request_list_project / request_list_group: project_id* or group_id*\n- request_project / request_group: project_id* or group_id*\n- approve_project / approve_group: project_id* or group_id*, user_id*, access_level\n- deny_project / deny_group: project_id* or group_id*, user_id*\n\nInvitations (invite_*):\n- invite_list_project / invite_list_group: project_id* or group_id*\n- invite_project / invite_group: project_id* or group_id*, email*, access_level*, expires_at\n\nSee also: gitlab_user (SSH/GPG keys, user PATs), gitlab_admin (instance admin), gitlab_project (project settings)",
+    "description": "Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.\nWhen to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.\nNOT for: SSH/GPG keys or impersonation tokens (use gitlab_user), PAT creation (use gitlab_user create_personal_access_token / create_current_user_pat — gitlab_access exposes token_personal_* for list/get/rotate/revoke only), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.\n\nReturns:\n- token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.\n- token_*_get / token_*_create / token_*_rotate / deploy_token_get_* / deploy_token_create_* / deploy_key_get / deploy_key_add / deploy_key_update / deploy_key_enable / approve_* / request_*: token / key / request / invitation object. Create / rotate include the cleartext token only ONCE — store it securely; subsequent reads return only the metadata.\n- token_*_revoke / deploy_token_delete_* / deploy_key_delete / deny_* : {success, message}.\nErrors: 401/403 (hint: requires Maintainer+ to manage project tokens, Owner for group, admin for instance / deploy_token_list_all / deploy_key_list_all / deploy_key_add_instance), 404 (hint: token_id and deploy_key_id are scoped to the project/group), 400 (hint: scopes must be a subset of {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future ISO date).\n\nParam conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.\n\nAccess tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:\n- token_project_list / token_group_list: project_id* or group_id*\n- token_project_get / token_group_get: project_id* or group_id*, token_id*\n- token_project_create / token_group_create: project_id* or group_id*, name*, scopes*, expires_at, access_level\n- token_project_rotate / token_group_rotate: project_id* or group_id*, token_id*, expires_at\n- token_project_rotate_self / token_group_rotate_self: project_id* or group_id*, expires_at\n- token_project_revoke / token_group_revoke: project_id* or group_id*, token_id*\n- token_personal_list: user_id\n- token_personal_get: token_id*\n- token_personal_rotate: token_id*, expires_at\n- token_personal_rotate_self: expires_at\n- token_personal_revoke: token_id*\n- token_personal_revoke_self: (no params)\n\nDeploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD registry access:\n- deploy_token_list_all: (admin only)\n- deploy_token_list_project / deploy_token_list_group: project_id* or group_id*\n- deploy_token_get_project / deploy_token_get_group: project_id* or group_id*, deploy_token_id*\n- deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at\n- deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*\n\nDeploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:\n- deploy_key_list_project / deploy_key_list_user_project: project_id*\n- deploy_key_list_all: (admin only)\n- deploy_key_get: project_id*, deploy_key_id*\n- deploy_key_add: project_id*, title*, key*, can_push\n- deploy_key_update: project_id*, deploy_key_id*, title, can_push\n- deploy_key_delete: project_id*, deploy_key_id*\n- deploy_key_enable: project_id*, deploy_key_id*\n- deploy_key_add_instance: title*, key*\n\nAccess requests (request_*, approve_*, deny_*):\n- request_list_project / request_list_group: project_id* or group_id*\n- request_project / request_group: project_id* or group_id*\n- approve_project / approve_group: project_id* or group_id*, user_id*, access_level\n- deny_project / deny_group: project_id* or group_id*, user_id*\n\nInvitations (invite_*):\n- invite_list_project / invite_list_group: project_id* or group_id*\n- invite_project / invite_group: project_id* or group_id*, email*, access_level*, expires_at\n\nSee also: gitlab_user (SSH/GPG keys, user PATs), gitlab_admin (instance admin), gitlab_project (project settings)",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61,7 +61,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -227,7 +227,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -316,7 +316,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -398,7 +398,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -484,7 +484,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -573,7 +573,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -653,7 +653,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -748,7 +748,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -828,7 +828,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -909,7 +909,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -991,7 +991,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1153,7 +1153,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1235,7 +1235,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1336,7 +1336,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1422,7 +1422,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1510,7 +1510,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1596,7 +1596,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1662,7 +1662,7 @@
   },
   {
     "name": "gitlab_group",
-    "description": "Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.\nWhen to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).\n\nBehavior:\n- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / wiki_list / epic_list / protected_*_list / release_list / ldap_link_list / saml_link_list / service_account_*_list.\n- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add / fork-equivalents are NON-idempotent (re-invocation creates a duplicate or returns 409).\n- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; service_account_pat_create returns the cleartext token only ONCE — store it immediately; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).\n- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_*, epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete and service_account_pat_revoke are irreversible. archive is reversible via unarchive.\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.\nErrors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).\n\nParam conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.\n\nGroup CRUD:\n- list: search, owned, top_level_only (no group_id needed)\n- get: group_id*\n- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch\n- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch\n- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)\n- restore: group_id*\n- archive / unarchive: group_id* (requires Owner role)\n- search: query* (no group_id needed)\n- transfer_project: group_id*, project_id*\n\nGroup queries:\n- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared\n- members: group_id*, query (filter name/username)\n- subgroups: group_id*, search\n- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username\n\nWebhooks (hook_*):\n- hook_list: group_id*\n- hook_get / hook_delete: group_id*, hook_id*\n- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter\n- hook_edit: group_id*, hook_id*, same params as hook_add\n\nBadges (badge_*):\n- badge_list: group_id*, name\n- badge_get / badge_delete: group_id*, badge_id*\n- badge_add / badge_preview: group_id*, link_url*, image_url*, name\n- badge_edit: group_id*, badge_id*, link_url, image_url, name\n\nMembers (group_member_*):\n- group_member_get: group_id*, user_id*\n- group_member_get_inherited: group_id*, user_id* (includes inherited)\n- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at\n- group_member_remove: group_id*, user_id*\n- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at\n- group_member_unshare: group_id*, shared_with_group_id*\n\nLabels (group_label_*):\n- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups\n- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*\n- group_label_create: group_id*, name*, color*, description\n- group_label_update: group_id*, label_id*, new_name, color, description\n\nMilestones (group_milestone_*):\n- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants\n- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*\n- group_milestone_create: group_id*, title*, description, start_date, due_date\n- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event\n- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*\n\nBoards (group_board_*):\n- group_board_list: group_id*\n- group_board_get / group_board_delete: group_id*, board_id*\n- group_board_create: group_id*, name*\n- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight\n- group_board_list_lists: group_id*, board_id*\n- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*\n- group_board_create_list: group_id*, board_id*, label_id\n- group_board_update_list: group_id*, board_id*, list_id*, position\n\nUploads:\n- group_upload_list: group_id*\n- group_upload_delete_by_id: group_id*, upload_id*\n- group_upload_delete_by_secret: group_id*, secret*, filename*\n\nImport/Export:\n- group_relations_schedule / group_relations_list_status: group_id*\n- group_export_schedule / group_export_download: group_id*\n- group_import_file: name*, path*, file*, parent_id (no group_id)\n\nReleases:\n- release_list: group_id*, simple\n\nSee also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)\n\nEpics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):\n\nEpic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_discussion_list / epic_discussion_get (+ discussion_id*)\n- epic_discussion_create: body*\n- epic_discussion_add_note: discussion_id*, body*\n- epic_discussion_update_note: note_id*, body*\n- epic_discussion_delete_note: note_id*\n\nEpic CRUD (epic_*): full_path* for all.\n- epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants\n- epic_get: epic_iid*\n- epic_get_links: epic_iid* [REST]\n- epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status\n- epic_update: epic_iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status\n- epic_delete: epic_iid*\n\nEpic issues (epic_issue_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_issue_list\n- epic_issue_assign / epic_issue_remove: child_project_path*, child_iid*\n- epic_issue_update: child_id*, adjacent_id*, relative_position* (BEFORE/AFTER)\n\nEpic notes (epic_note_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_note_list / epic_note_get (+ note_id*) / epic_note_delete (+ note_id*)\n- epic_note_create: body*\n- epic_note_update: note_id*, body*\n\nEpic boards [Deprecated]:\n- epic_board_list: group_id*\n- epic_board_get: group_id*, board_id*\n\nGroup Wikis (Premium+):\n- wiki_list: group_id*, with_content\n- wiki_get: group_id*, slug*, render_html, version\n- wiki_create: group_id*, title*, content*, format (markdown/rdoc/asciidoc/org)\n- wiki_edit: group_id*, slug*, title, content, format\n- wiki_delete: group_id*, slug*\n\nProtected Branches (Premium+):\n- protected_branch_list: group_id*, search\n- protected_branch_get / protected_branch_unprotect: group_id*, branch*\n- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect\n- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect\n\nProtected Environments (Premium+):\n- protected_env_list: group_id*\n- protected_env_get / protected_env_unprotect: group_id*, environment*\n- protected_env_protect: group_id*, name*, deploy_access_levels, required_approval_count, approval_rules\n- protected_env_update: group_id*, environment*, name, deploy_access_levels, required_approval_count, approval_rules\n\nLDAP Links (Premium+):\n- ldap_link_list: group_id*\n- ldap_link_add: group_id*, cn*, group_access* (int), provider*\n- ldap_link_delete: group_id*, cn, filter, provider\n- ldap_link_delete_for_provider: group_id*, provider*, cn*\n\nSAML Links (Premium+):\n- saml_link_list: group_id*\n- saml_link_get / saml_link_delete: group_id*, saml_group_name*\n- saml_link_add: group_id*, saml_group_name*, access_level* (int)\n\nService Accounts (Premium+):\n- service_account_list: group_id*, order_by, sort\n- service_account_create: group_id*, name*, username*\n- service_account_update: group_id*, service_account_id*, name, username\n- service_account_delete: group_id*, service_account_id*, hard_delete\n- service_account_pat_list: group_id*, service_account_id*\n- service_account_pat_create: group_id*, service_account_id*, name*, scopes* (array), expires_at (YYYY-MM-DD)\n- service_account_pat_revoke: group_id*, service_account_id*, token_id*\n\nAnalytics (Premium+):\n- analytics_issues_count / analytics_mr_count / analytics_members_count: group_path* (URL-encoded)\n\nCredentials (Ultimate):\n- credential_list_pats: group_id*, search, state (active/inactive), revoked\n- credential_list_ssh_keys: group_id*\n- credential_revoke_pat: group_id*, token_id*\n- credential_delete_ssh_key: group_id*, key_id*\n\nSSH Certificates (Premium+):\n- ssh_cert_list: group_id*\n- ssh_cert_create: group_id*, key*, title*\n- ssh_cert_delete: group_id*, certificate_id*\n\nSecurity Settings (Ultimate):\n- security_settings_update: group_id*, secret_push_protection_enabled*, projects_to_exclude (array)\n\nSee also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)",
+    "description": "Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.\nWhen to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).\n\nBehavior:\n- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / release_list (Premium+ adds wiki_list / epic_list / protected_*_list / ldap_link_list / saml_link_list / service_account_*_list).\n- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add are NON-idempotent (re-invocation creates a duplicate or returns 409).\n- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).\n- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_* are irreversible. Premium+ adds destructive: epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete, service_account_pat_revoke. archive is reversible via unarchive.\n\nReturns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.\nErrors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).\n\nParam conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.\n\nGroup CRUD:\n- list: search, owned, top_level_only (no group_id needed)\n- get: group_id*\n- create: name*, path, description, visibility (private/internal/public), parent_id, request_access_enabled, lfs_enabled, default_branch\n- update: group_id*, name, path, description, visibility, request_access_enabled, lfs_enabled, default_branch\n- delete: group_id*, permanently_remove, full_path (required when permanently_remove=true)\n- restore: group_id*\n- archive / unarchive: group_id* (requires Owner role)\n- search: query* (no group_id needed)\n- transfer_project: group_id*, project_id*\n\nGroup queries:\n- projects: group_id*, search, include_subgroups (recommended for hierarchies), archived, visibility, order_by, sort, simple, owned, starred, with_shared\n- members: group_id*, query (filter name/username)\n- subgroups: group_id*, search\n- issues: group_id*, state, labels, milestone, scope, search, assignee_username, author_username\n\nWebhooks (hook_*):\n- hook_list: group_id*\n- hook_get / hook_delete: group_id*, hook_id*\n- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter\n- hook_edit: group_id*, hook_id*, same params as hook_add\n\nBadges (badge_*):\n- badge_list: group_id*, name\n- badge_get / badge_delete: group_id*, badge_id*\n- badge_add / badge_preview: group_id*, link_url*, image_url*, name\n- badge_edit: group_id*, badge_id*, link_url, image_url, name\n\nMembers (group_member_*):\n- group_member_get: group_id*, user_id*\n- group_member_get_inherited: group_id*, user_id* (includes inherited)\n- group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at\n- group_member_remove: group_id*, user_id*\n- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at\n- group_member_unshare: group_id*, shared_with_group_id*\n\nLabels (group_label_*):\n- group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups\n- group_label_get / group_label_delete / group_label_subscribe / group_label_unsubscribe: group_id*, label_id*\n- group_label_create: group_id*, name*, color*, description\n- group_label_update: group_id*, label_id*, new_name, color, description\n\nMilestones (group_milestone_*):\n- group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants\n- group_milestone_get / group_milestone_delete: group_id*, milestone_iid*\n- group_milestone_create: group_id*, title*, description, start_date, due_date\n- group_milestone_update: group_id*, milestone_iid*, title, description, start_date, due_date, state_event\n- group_milestone_issues / group_milestone_merge_requests / group_milestone_burndown: group_id*, milestone_iid*\n\nBoards (group_board_*):\n- group_board_list: group_id*\n- group_board_get / group_board_delete: group_id*, board_id*\n- group_board_create: group_id*, name*\n- group_board_update: group_id*, board_id*, name, assignee_id, milestone_id, labels, weight\n- group_board_list_lists: group_id*, board_id*\n- group_board_get_list / group_board_delete_list: group_id*, board_id*, list_id*\n- group_board_create_list: group_id*, board_id*, label_id\n- group_board_update_list: group_id*, board_id*, list_id*, position\n\nUploads:\n- group_upload_list: group_id*\n- group_upload_delete_by_id: group_id*, upload_id*\n- group_upload_delete_by_secret: group_id*, secret*, filename*\n\nImport/Export:\n- group_relations_schedule / group_relations_list_status: group_id*\n- group_export_schedule / group_export_download: group_id*\n- group_import_file: name*, path*, file*, parent_id (no group_id)\n\nReleases:\n- release_list: group_id*, simple\n\nSee also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)\n\nPremium+ behavior notes (GITLAB_ENTERPRISE=true): service_account_pat_create returns the cleartext token only ONCE — store it immediately. service_account_delete and service_account_pat_revoke are irreversible.\n\nEpics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):\n\nEpic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_discussion_list / epic_discussion_get (+ discussion_id*)\n- epic_discussion_create: body*\n- epic_discussion_add_note: discussion_id*, body*\n- epic_discussion_update_note: note_id*, body*\n- epic_discussion_delete_note: note_id*\n\nEpic CRUD (epic_*): full_path* for all.\n- epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants\n- epic_get: epic_iid*\n- epic_get_links: epic_iid* [REST]\n- epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status\n- epic_update: epic_iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status\n- epic_delete: epic_iid*\n\nEpic issues (epic_issue_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_issue_list\n- epic_issue_assign / epic_issue_remove: child_project_path*, child_iid*\n- epic_issue_update: child_id*, adjacent_id*, relative_position* (BEFORE/AFTER)\n\nEpic notes (epic_note_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.\n- epic_note_list / epic_note_get (+ note_id*) / epic_note_delete (+ note_id*)\n- epic_note_create: body*\n- epic_note_update: note_id*, body*\n\nEpic boards [Deprecated]:\n- epic_board_list: group_id*\n- epic_board_get: group_id*, board_id*\n\nGroup Wikis (Premium+):\n- wiki_list: group_id*, with_content\n- wiki_get: group_id*, slug*, render_html, version\n- wiki_create: group_id*, title*, content*, format (markdown/rdoc/asciidoc/org)\n- wiki_edit: group_id*, slug*, title, content, format\n- wiki_delete: group_id*, slug*\n\nProtected Branches (Premium+):\n- protected_branch_list: group_id*, search\n- protected_branch_get / protected_branch_unprotect: group_id*, branch*\n- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect\n- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect\n\nProtected Environments (Premium+):\n- protected_env_list: group_id*\n- protected_env_get / protected_env_unprotect: group_id*, environment*\n- protected_env_protect: group_id*, name*, deploy_access_levels, required_approval_count, approval_rules\n- protected_env_update: group_id*, environment*, name, deploy_access_levels, required_approval_count, approval_rules\n\nLDAP Links (Premium+):\n- ldap_link_list: group_id*\n- ldap_link_add: group_id*, cn*, group_access* (int), provider*\n- ldap_link_delete: group_id*, cn, filter, provider\n- ldap_link_delete_for_provider: group_id*, provider*, cn*\n\nSAML Links (Premium+):\n- saml_link_list: group_id*\n- saml_link_get / saml_link_delete: group_id*, saml_group_name*\n- saml_link_add: group_id*, saml_group_name*, access_level* (int)\n\nService Accounts (Premium+):\n- service_account_list: group_id*, order_by, sort\n- service_account_create: group_id*, name*, username*\n- service_account_update: group_id*, service_account_id*, name, username\n- service_account_delete: group_id*, service_account_id*, hard_delete\n- service_account_pat_list: group_id*, service_account_id*\n- service_account_pat_create: group_id*, service_account_id*, name*, scopes* (array), expires_at (YYYY-MM-DD)\n- service_account_pat_revoke: group_id*, service_account_id*, token_id*\n\nAnalytics (Premium+):\n- analytics_issues_count / analytics_mr_count / analytics_members_count: group_path* (URL-encoded)\n\nCredentials (Ultimate):\n- credential_list_pats: group_id*, search, state (active/inactive), revoked\n- credential_list_ssh_keys: group_id*\n- credential_revoke_pat: group_id*, token_id*\n- credential_delete_ssh_key: group_id*, key_id*\n\nSSH Certificates (Premium+):\n- ssh_cert_list: group_id*\n- ssh_cert_create: group_id*, key*, title*\n- ssh_cert_delete: group_id*, certificate_id*\n\nSecurity Settings (Ultimate):\n- security_settings_update: group_id*, secret_push_protection_enabled*, projects_to_exclude (array)\n\nSee also: gitlab_project (project-level), gitlab_user (user management), gitlab_search (cross-project search), gitlab_merge_request (MR workflows)",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1804,7 +1804,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -1886,7 +1886,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -2899,7 +2899,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -2965,7 +2965,7 @@
   },
   {
     "name": "gitlab_job",
-    "description": "Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.\nWhen to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).\n\nBehavior:\n- Idempotent reads: list / list_project / get / trace / artifacts / download_artifacts / download_single_artifact / download_single_artifact_by_ref / list_bridges / token_scope_get / token_scope_list_inbound / token_scope_list_groups.\n- retry / play start a NEW job run on every call (NON-idempotent — return a fresh job_id; play also passes new variables). cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.\n- Side effects: retry / play queue runners, consume CI minutes, and may trigger downstream pipelines and notifications. trace returns up to 100KB of log; download_artifacts streams up to 1MB inline (base64).\n- Destructive: erase clears the job log and artifacts in place (irreversible); delete_artifacts removes a single job's artifacts; delete_project_artifacts wipes ALL artifacts across the project (irreversible). token_scope_remove_* tightens trust boundaries and may break running pipelines.\n\nParam conventions: * = required. All job actions need project_id*. List actions accept page, per_page.\n\nJobs:\n- list: project_id*, pipeline_id*, scope\n- list_project: project_id*, scope, include_retried\n- get: project_id*, job_id*\n- trace: project_id*, job_id*. Returns job log (truncated to 100KB).\n- cancel / retry / erase / keep_artifacts: project_id*, job_id*\n- play: project_id*, job_id*, variables (array of {key, value, variable_type})\n- wait: project_id*, job_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)\n- list_bridges: project_id*, pipeline_id*, scope\n- delete_artifacts: project_id*, job_id*\n- delete_project_artifacts: project_id*. Deletes ALL artifacts across project.\n\nArtifact downloads (base64, max 1MB):\n- artifacts: project_id*, job_id*\n- download_artifacts: project_id*, ref_name*, job\n- download_single_artifact: project_id*, job_id*, artifact_path*\n- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job\n\nJob token scope:\n- token_scope_get / token_scope_patch: project_id*. Patch params: enabled.\n- token_scope_list_inbound: project_id*\n- token_scope_add_project / token_scope_remove_project: project_id*, target_project_id*\n- token_scope_list_groups: project_id*\n- token_scope_add_group / token_scope_remove_group: project_id*, target_group_id*\n\nSee also: gitlab_pipeline, gitlab_repository",
+    "description": "Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.\nWhen to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).\n\nBehavior:\n- Idempotent reads: list / list_project / get / trace / artifacts / download_artifacts / download_single_artifact / download_single_artifact_by_ref / list_bridges / token_scope_get / token_scope_list_inbound / token_scope_list_groups.\n- retry starts a NEW job run on every call (NON-idempotent — returns a fresh job_id). play activates an existing manual job that has not yet run (same job_id; only manual jobs with rules.when=manual are eligible) and may pass new variables. cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.\n- Side effects: retry / play queue runners, consume CI minutes, and may trigger downstream pipelines and notifications. trace returns up to 100KB of log; download_artifacts streams up to 1MB inline (base64).\n- Destructive: erase clears the job log and artifacts in place (irreversible); delete_artifacts removes a single job's artifacts; delete_project_artifacts wipes ALL artifacts across the project (irreversible). token_scope_remove_* tightens trust boundaries and may break running pipelines.\n\nParam conventions: * = required. All job actions need project_id*. List actions accept page, per_page.\n\nJobs:\n- list: project_id*, pipeline_id*, scope\n- list_project: project_id*, scope, include_retried\n- get: project_id*, job_id*\n- trace: project_id*, job_id*. Returns job log (truncated to 100KB).\n- cancel / retry / erase / keep_artifacts: project_id*, job_id*\n- play: project_id*, job_id*, variables (array of {key, value, variable_type})\n- wait: project_id*, job_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)\n- list_bridges: project_id*, pipeline_id*, scope\n- delete_artifacts: project_id*, job_id*\n- delete_project_artifacts: project_id*. Deletes ALL artifacts across project.\n\nArtifact downloads (base64, max 1MB):\n- artifacts: project_id*, job_id*\n- download_artifacts: project_id*, ref_name*, job\n- download_single_artifact: project_id*, job_id*, artifact_path*\n- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job\n\nJob token scope:\n- token_scope_get / token_scope_patch: project_id*. Patch params: enabled.\n- token_scope_list_inbound: project_id*\n- token_scope_add_project / token_scope_remove_project: project_id*, target_project_id*\n- token_scope_list_groups: project_id*\n- token_scope_add_group / token_scope_remove_group: project_id*, target_group_id*\n\nSee also: gitlab_pipeline, gitlab_repository",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3002,7 +3002,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3086,7 +3086,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3222,7 +3222,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3304,7 +3304,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3370,7 +3370,7 @@
   },
   {
     "name": "gitlab_model_registry",
-    "description": "Download ML model package files from the GitLab Model Registry. Read-only — cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.\nWhen to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.\nNOT for: generic packages (use gitlab_package), container images (use gitlab_package registry_*), release attachments (use gitlab_release link_*), training jobs or experiment tracking, model publishing or versioning (not yet exposed through MCP).\n\nReturns:\n- download: {file_name, model_version_id, size, content_base64} — binary content is base64-encoded; large models can produce very large responses.\nErrors: 404 (hint: project_id, model_version_id and path are model-registry-scoped; verify in the GitLab UI under Deploy → Model registry), 403 (hint: requires Reporter+ on the project and a Premium/Ultimate plan), 400 (hint: filename must match an asset attached to the version).\n\n- download: project_id*, model_version_id*, path*, filename*. Returns base64-encoded file content.\n  - project_id (string | int, required) — numeric ID or URL-encoded full path of the project that owns the registered model.\n  - model_version_id (int, required) — registered model version ID; visible in the GitLab UI under Deploy → Model registry → \u003cmodel\u003e → Versions.\n  - path (string, required) — package-relative directory of the asset (use '/' for the package root, otherwise e.g. 'artifacts/' or 'weights/').\n  - filename (string, required) — exact asset filename within the package, including extension (e.g. 'model.safetensors', 'config.json').\n  - Any other input keys are silently ignored by the meta-tool router.\n\nSee also: gitlab_package (generic / npm / maven / conan / pypi / nuget / container packages), gitlab_release (asset links per release), gitlab_repository (raw files in the repo).",
+    "description": "Download ML model package files from the GitLab Model Registry. Read-only — cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.\nWhen to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.\nNOT for: generic packages (use gitlab_package), container images (use gitlab_package registry_*), release attachments (use gitlab_release link_*), training jobs or experiment tracking, model publishing or versioning (not yet exposed through MCP).\n\nReturns:\n- download: {file_name, model_version_id, size, content_base64} — binary content is base64-encoded; large models can produce very large responses.\nErrors: 404 (hint: project_id, model_version_id and path are model-registry-scoped; verify in the GitLab UI under Deploy → Model registry), 403 (hint: requires Reporter+ on the project and a Premium/Ultimate plan), 400 (hint: filename must match an asset attached to the version).\n\n- download: project_id*, model_version_id*, path*, filename*. Returns base64-encoded file content.\n  - project_id (string | int, required) — numeric ID or URL-encoded full path of the project that owns the registered model.\n  - model_version_id (int, required) — registered model version ID; visible in the GitLab UI under Deploy → Model registry → \u003cmodel\u003e → Versions.\n  - path (string, required) — package-relative directory of the asset (use '/' for the package root, otherwise e.g. 'artifacts/' or 'weights/').\n  - filename (string, required) — exact asset filename within the package, including extension (e.g. 'model.safetensors', 'config.json').\n  - Any unrecognized parameter name is rejected by the meta-tool router (strict unknown-field validation); only the reserved meta key 'confirm' is stripped before unmarshalling.\n\nSee also: gitlab_package (generic / npm / maven / conan / pypi / nuget / container packages), gitlab_release (asset links per release), gitlab_repository (raw files in the repo).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3383,7 +3383,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3486,7 +3486,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3588,7 +3588,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3654,7 +3654,7 @@
   },
   {
     "name": "gitlab_pipeline",
-    "description": "Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.\nWhen to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.\nNOT for: jobs, logs, artifacts, manual play actions (use gitlab_job), MR-specific pipelines (use gitlab_merge_request 'pipelines' / 'create_pipeline'), CI lint or includes (use gitlab_template).\n\nBehavior:\n- Idempotent reads: list / latest / get / variables / test_report / test_report_summary / trigger_list / trigger_get / resource_group_list / resource_group_get / resource_group_upcoming_jobs / schedule_list / schedule_get / schedule_list_triggered_pipelines.\n- create / retry / schedule_run / trigger_run start a NEW run on every call (NON-idempotent — produce a fresh pipeline_id). cancel is idempotent (no-op once final). update_metadata / trigger_update / resource_group_edit / schedule_update / schedule_edit_variable / schedule_take_ownership are idempotent (same input → same state).\n- Side effects: create / retry / schedule_run / trigger_run queue runners, consume CI minutes, may trigger downstream pipelines, deployments and webhooks. trigger_create returns a secret token visible only ONCE — store it immediately. wait blocks server-side until terminal state or timeout.\n- Destructive: delete permanently removes the pipeline and all its jobs, artifacts, logs and traces (irreversible). trigger_delete / schedule_delete / schedule_delete_variable are irreversible.\n\nReturns:\n- list / latest / variables / test_report / test_report_summary / trigger_list / resource_group_list / resource_group_upcoming_jobs / schedule_list / schedule_list_triggered_pipelines: array(s) or aggregated payloads with pagination where applicable.\n- get / create / cancel / retry / update_metadata / wait / trigger_get / trigger_create / trigger_update / trigger_run / resource_group_get / resource_group_edit / schedule_get / schedule_create / schedule_update / schedule_run / schedule_take_ownership / schedule_create_variable / schedule_edit_variable: pipeline / trigger / resource group / schedule object.\n- delete / trigger_delete / schedule_delete / schedule_delete_variable: {success, message}.\nErrors: 404 (hint: pipeline_id and trigger/schedule IDs are project-scoped), 403 (hint: requires Maintainer+ to delete pipelines or manage triggers/schedules), 400 (hint: cron expressions must use 5 fields; cron_timezone must be a valid TZ name; create requires 'ref').\n\nParam conventions: * = required. All pipeline actions need project_id*. List actions accept page, per_page.\n\nPipelines:\n- list: project_id*, status (success/failed/running/pending/canceled), scope, source, ref, sha, username\n- get / cancel / retry / variables / test_report / test_report_summary: project_id*, pipeline_id*\n- delete: project_id*, pipeline_id*. PERMANENTLY removes pipeline and jobs.\n- latest: project_id*, ref\n- create: project_id*, ref*, variables (array of {key, value, variable_type})\n- update_metadata: project_id*, pipeline_id*, name*\n- wait: project_id*, pipeline_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)\n\nTriggers:\n- trigger_list: project_id*\n- trigger_get / trigger_delete: project_id*, trigger_id*\n- trigger_create: project_id*, description*\n- trigger_update: project_id*, trigger_id*, description\n- trigger_run: project_id*, ref*, token*, variables (map)\n\nResource groups:\n- resource_group_list: project_id*\n- resource_group_get / resource_group_edit: project_id*, key*. Edit params: process_mode.\n- resource_group_upcoming_jobs: project_id*, key*\n\nSchedules:\n- schedule_list: project_id*, scope (active/inactive)\n- schedule_get / schedule_delete / schedule_run / schedule_take_ownership: project_id*, schedule_id*\n- schedule_create: project_id*, description*, ref*, cron*, cron_timezone, active\n- schedule_update: project_id*, schedule_id*, description, ref, cron, cron_timezone, active\n- schedule_create_variable: project_id*, schedule_id*, key*, value*, variable_type (env_var/file)\n- schedule_edit_variable: project_id*, schedule_id*, key*, value*, variable_type\n- schedule_delete_variable: project_id*, schedule_id*, key*\n- schedule_list_triggered_pipelines: project_id*, schedule_id*\n\nSee also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable",
+    "description": "Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.\nWhen to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.\nNOT for: jobs, logs, artifacts, manual play actions (use gitlab_job), MR-specific pipelines (use gitlab_merge_request 'pipelines' / 'create_pipeline'), CI lint or includes (use gitlab_template).\n\nBehavior:\n- Idempotent reads: list / latest / get / variables / test_report / test_report_summary / trigger_list / trigger_get / resource_group_list / resource_group_get / resource_group_upcoming_jobs / schedule_list / schedule_get / schedule_list_triggered_pipelines.\n- create / schedule_run / trigger_run start a NEW run on every call (NON-idempotent — produce a fresh pipeline_id). retry re-queues failed/canceled jobs on the existing pipeline (same pipeline_id; continue using it for subsequent get/wait calls). cancel is idempotent (no-op once final). update_metadata / trigger_update / resource_group_edit / schedule_update / schedule_edit_variable / schedule_take_ownership are idempotent (same input → same state).\n- Side effects: create / retry / schedule_run / trigger_run queue runners, consume CI minutes, may trigger downstream pipelines, deployments and webhooks. trigger_create returns a secret token visible only ONCE — store it immediately. wait blocks server-side until terminal state or timeout.\n- Destructive: delete permanently removes the pipeline and all its jobs, artifacts, logs and traces (irreversible). trigger_delete / schedule_delete / schedule_delete_variable are irreversible.\n\nReturns:\n- list / latest / variables / test_report / test_report_summary / trigger_list / resource_group_list / resource_group_upcoming_jobs / schedule_list / schedule_list_triggered_pipelines: array(s) or aggregated payloads with pagination where applicable.\n- get / create / cancel / retry / update_metadata / wait / trigger_get / trigger_create / trigger_update / trigger_run / resource_group_get / resource_group_edit / schedule_get / schedule_create / schedule_update / schedule_run / schedule_take_ownership / schedule_create_variable / schedule_edit_variable: pipeline / trigger / resource group / schedule object.\n- delete / trigger_delete / schedule_delete / schedule_delete_variable: {success, message}.\nErrors: 404 (hint: pipeline_id and trigger/schedule IDs are project-scoped), 403 (hint: requires Maintainer+ to delete pipelines or manage triggers/schedules), 400 (hint: cron expressions must use 5 fields; cron_timezone must be a valid TZ name; create requires 'ref').\n\nParam conventions: * = required. All pipeline actions need project_id*. List actions accept page, per_page.\n\nPipelines:\n- list: project_id*, status (success/failed/running/pending/canceled), scope, source, ref, sha, username\n- get / cancel / retry / variables / test_report / test_report_summary: project_id*, pipeline_id*\n- delete: project_id*, pipeline_id*. PERMANENTLY removes pipeline and jobs.\n- latest: project_id*, ref\n- create: project_id*, ref*, variables (array of {key, value, variable_type})\n- update_metadata: project_id*, pipeline_id*, name*\n- wait: project_id*, pipeline_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)\n\nTriggers:\n- trigger_list: project_id*\n- trigger_get / trigger_delete: project_id*, trigger_id*\n- trigger_create: project_id*, description*\n- trigger_update: project_id*, trigger_id*, description\n- trigger_run: project_id*, ref*, token*, variables (map)\n\nResource groups:\n- resource_group_list: project_id*\n- resource_group_get / resource_group_edit: project_id*, key*. Edit params: process_mode.\n- resource_group_upcoming_jobs: project_id*, key*\n\nSchedules:\n- schedule_list: project_id*, scope (active/inactive)\n- schedule_get / schedule_delete / schedule_run / schedule_take_ownership: project_id*, schedule_id*\n- schedule_create: project_id*, description*, ref*, cron*, cron_timezone, active\n- schedule_update: project_id*, schedule_id*, description, ref, cron, cron_timezone, active\n- schedule_create_variable: project_id*, schedule_id*, key*, value*, variable_type (env_var/file)\n- schedule_edit_variable: project_id*, schedule_id*, key*, value*, variable_type\n- schedule_delete_variable: project_id*, schedule_id*, key*\n- schedule_list_triggered_pipelines: project_id*, schedule_id*\n\nSee also: gitlab_job (job details/logs/artifacts), gitlab_merge_request, gitlab_ci_variable",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3699,7 +3699,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3899,7 +3899,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -3981,7 +3981,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4071,7 +4071,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4190,7 +4190,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4302,7 +4302,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4390,7 +4390,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4471,7 +4471,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4585,7 +4585,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4681,7 +4681,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4768,7 +4768,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -4858,7 +4858,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -5012,7 +5012,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -5098,7 +5098,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
@@ -5182,7 +5182,7 @@
         },
         "params": {
           "additionalProperties": true,
-          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unrelated keys are ignored by the underlying handler.",
+          "description": "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
           "type": "object"
         }
       },
