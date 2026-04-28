@@ -4,6 +4,7 @@ package bulkimports
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -55,6 +56,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, MigrationSummary, error) {
 		start := time.Now()
 		out, err := Get(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_bulk_import_get", start, nil)
+			return toolutil.NotFoundResult("Bulk Import", fmt.Sprintf("ID %d", input.ID),
+				"Use gitlab_bulk_import_list to list visible migrations",
+				"Verify the migration id is correct",
+			), MigrationSummary{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_bulk_import_get", start, err)
 		if err != nil {
 			return nil, MigrationSummary{}, err
@@ -103,6 +111,13 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input GetEntityInput) (*mcp.CallToolResult, EntitySummary, error) {
 		start := time.Now()
 		out, err := GetEntity(ctx, client, input)
+		if err != nil && toolutil.IsHTTPStatus(err, 404) {
+			toolutil.LogToolCallAll(ctx, req, "gitlab_bulk_import_entity_get", start, nil)
+			return toolutil.NotFoundResult("Bulk Import Entity", fmt.Sprintf("entity %d in import %d", input.EntityID, input.BulkImportID),
+				"Use gitlab_bulk_import_entity_list with bulk_import_id to list entities",
+				"Verify both bulk_import_id and entity_id are correct",
+			), EntitySummary{}, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_bulk_import_entity_get", start, err)
 		if err != nil {
 			return nil, EntitySummary{}, err

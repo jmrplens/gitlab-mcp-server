@@ -381,6 +381,15 @@ func TestCancel_RequiresID(t *testing.T) {
 	}
 }
 
+// TestListEntities_RejectsNegativeID ensures that a negative bulk_import_id is
+// rejected rather than silently widening the query to all imports.
+func TestListEntities_RejectsNegativeID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	if _, err := ListEntities(t.Context(), client, ListEntitiesInput{BulkImportID: -1}); err == nil {
+		t.Fatal("expected error for negative bulk_import_id")
+	}
+}
+
 // TestListEntities_AllScope hits /bulk_imports/entities when no bulk_import_id
 // is supplied.
 func TestListEntities_AllScope(t *testing.T) {

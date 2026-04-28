@@ -3,7 +3,9 @@ package bulkimports
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -81,8 +83,8 @@ func StartMigration(ctx context.Context, client *gitlabclient.Client, input Star
 		Status:      resp.Status,
 		SourceType:  resp.SourceType,
 		SourceURL:   resp.SourceURL,
-		CreatedAt:   resp.CreatedAt.String(),
-		UpdatedAt:   resp.UpdatedAt.String(),
+		CreatedAt:   resp.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   resp.UpdatedAt.Format(time.RFC3339),
 		HasFailures: resp.HasFailures,
 	}, nil
 }
@@ -182,8 +184,8 @@ func toSummary(m *gl.BulkImport) MigrationSummary {
 		Status:      m.Status,
 		SourceType:  m.SourceType,
 		SourceURL:   m.SourceURL,
-		CreatedAt:   m.CreatedAt.String(),
-		UpdatedAt:   m.UpdatedAt.String(),
+		CreatedAt:   m.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   m.UpdatedAt.Format(time.RFC3339),
 		HasFailures: m.HasFailures,
 	}
 }
@@ -242,6 +244,9 @@ type ListEntitiesOutput struct {
 
 // ListEntities returns bulk import entities, optionally scoped to a single import.
 func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEntitiesInput) (ListEntitiesOutput, error) {
+	if input.BulkImportID < 0 {
+		return ListEntitiesOutput{}, fmt.Errorf("bulk_import_entity_list: bulk_import_id must be >= 0 (omit or set to 0 to list across all imports)")
+	}
 	opts := &gl.ListBulkImportsEntitiesOptions{
 		ListOptions: gl.ListOptions{
 			Page:    int64(input.Page),
@@ -347,7 +352,7 @@ func ListEntityFailures(ctx context.Context, client *gitlabclient.Client, input 
 			SourceURL:          f.SourceURL,
 			SourceTitle:        f.SourceTitle,
 			Step:               f.Step,
-			CreatedAt:          f.CreatedAt.String(),
+			CreatedAt:          f.CreatedAt.Format(time.RFC3339),
 			PipelineClass:      f.PipelineClass,
 			PipelineStep:       f.PipelineStep,
 		})
@@ -373,8 +378,8 @@ func toEntitySummary(e *gl.BulkImportEntity) EntitySummary {
 		ParentID:             e.ParentID,
 		NamespaceID:          e.NamespaceID,
 		ProjectID:            e.ProjectID,
-		CreatedAt:            e.CreatedAt.String(),
-		UpdatedAt:            e.UpdatedAt.String(),
+		CreatedAt:            e.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:            e.UpdatedAt.Format(time.RFC3339),
 		MigrateProjects:      e.MigrateProjects,
 		MigrateMemberships:   e.MigrateMemberships,
 		HasFailures:          e.HasFailures,

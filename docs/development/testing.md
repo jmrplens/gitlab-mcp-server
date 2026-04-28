@@ -42,10 +42,10 @@
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
 | Core packages            |          1,310 |         76 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            222 |         17 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (163)  |          7,036 |        312 | Domain-specific tool handlers        |
+| Tool sub-packages (163)  |          7,037 |        312 | Domain-specific tool handlers        |
 | E2E integration          |            218 |         99 | Full workflow against real GitLab    |
 | cmd/server               |             80 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,866** |    **505** |                                      |
+| **Total**                |      **8,867** |    **505** |                                      |
 
 ### Core Packages
 
@@ -99,7 +99,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 162 sub-packages (click to expand)</summary>
+<summary>All 163 sub-packages (click to expand)</summary>
 
 | Sub-package              | Tests |
 | ------------------------ | ----: |
@@ -118,7 +118,7 @@
 | branches                 |    79 |
 | branchrules              |    14 |
 | broadcastmessages        |    28 |
-| bulkimports              |    20 |
+| bulkimports              |    21 |
 | cicatalog                |    19 |
 | cilint                   |    27 |
 | civariables              |    40 |
@@ -265,7 +265,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    66 |
-| **Total** (163 sub-packages) | **6,940** |
+| **Total** (163 sub-packages) | **6,941** |
 
 </details>
 
@@ -659,7 +659,7 @@ Validation tests in `internal/tools/register_validation_test.go` ensure structur
 
 | Test                                   | Purpose                                                                                     |
 | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `TestAllSubPackagesRegistered`         | Scans all 162 sub-directories under `internal/tools/` and verifies each has a `RegisterTools` call in `register.go` (with `knownExceptions` for `serverupdate`, which registers in `cmd/server/main.go`) |
+| `TestAllSubPackagesRegistered`         | Scans all 163 sub-directories under `internal/tools/` and verifies each has a `RegisterTools` call in `register.go` (with `knownExceptions` for `serverupdate`, which registers in `cmd/server/main.go`) |
 | `TestAllMarkdownFormattersRegistered`  | Verifies all ~266 output types across 76 sub-packages have registered markdown formatters via `toolutil.RegisterMarkdown[T]` |
 | `TestAllHintReferencesValid`           | Validates all `action 'xxx'` and backtick-quoted `` `gitlab_xxx` `` references in WriteHints across all markdown.go files match registered tools/actions (1071 tools, 898 actions) |
 
