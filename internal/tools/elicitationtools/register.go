@@ -95,7 +95,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		Description: "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
 			"After invocation, the tool elicits in order:\n" +
 			"- tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').\n" +
-			"- name (string, required) — release title; defaults to tag_name when left empty by the client.\n" +
+			"- name (string, optional) — release title; defaults to tag_name when left empty.\n" +
 			"- description (string, optional, multi-line, Markdown) — release notes; leave empty to skip.\n" +
 			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop release publishing. " +

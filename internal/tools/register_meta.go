@@ -398,12 +398,12 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
 
 Behavior:
-- Idempotent reads: every get/list/*_get/*_list action plus hook_test, badge_preview, languages, repository_storage_get, statistics_get.
-- Idempotent mutations: update / *_update / *_edit / star / unstar / archive / unarchive / hook_set_*. NON-idempotent: create, fork, *_create, hook_add, hook_test (deliveries) — re-invocation creates a duplicate or queues a new job.
+- Idempotent reads: every get/list/*_get/*_list action plus badge_preview, languages, repository_storage_get, statistics_get.
+- Idempotent mutations: update / *_update / *_edit / star / unstar / archive / unarchive / hook_set_*. NON-idempotent: create, fork, *_create, hook_add, hook_test — each invocation queues a new webhook delivery.
 - Side effects: hook_add/edit/test trigger webhook deliveries; member_add/share/edit and integration_set_* notify users; transfer relocates the project and members; export_schedule / import_from_file / start_mirroring / start_housekeeping queue long-running async work (poll *_status); upload_avatar / upload mutate storage.
 - Destructive: delete (unless restore window applies), *_delete (hook/label/milestone/badge/board/integration/approval_rule/mirror/upload/pages_domain/board_list), pages_unpublish, mirror_force_push, delete_shared_group, delete_fork_relation. archive is reversible via unarchive.
 
-Returns: list/*_list actions return paginated arrays {page, per_page, total, next_page}. CRUD/get/configure/upload actions return the resource object. Pure-mutation actions (delete, *_delete, mirror_force_push, start_*, *_promote, label_subscribe/unsubscribe) return {success, message}.
+Returns: list/*_list actions return paginated arrays {page, per_page, total, next_page}. CRUD/get/configure/upload actions return the resource object — including label_subscribe (returns the updated label). Pure-mutation actions (delete, *_delete, mirror_force_push, start_*, *_promote, label_unsubscribe) return {success, message}.
 Errors: 404 (hint: project_id may be a numeric ID or URL-encoded path like 'group%2Frepo'), 403 (hint: most mutations require Maintainer+; settings/transfers require Owner; instance-level actions require admin), 400 (hint: visibility ∈ private/internal/public; merge_method ∈ merge/rebase_merge/ff; namespace_id must be writable by the caller).
 
 Param conventions: * = required. Most actions need project_id* (numeric ID or URL-encoded path like 'group/repo'). List actions accept page, per_page. Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.
@@ -961,8 +961,8 @@ When to use: file/commit operations, diffs, blame, compare, archives, submodules
 
 Behavior:
 - Idempotent reads: tree, blob, raw_blob, archive, compare, merge_base, contributors, file_get/raw/metadata/raw_metadata/blame, list_submodules, read_submodule_file, file_history, commit_list/get/diff/refs/comments/merge_requests/statuses/signature, commit_discussion_list/get, markdown_render, changelog_generate.
-- file_create / file_update / file_delete / commit_create / commit_cherry_pick / commit_revert / update_submodule / changelog_add produce new commits and are NON-idempotent (a fresh SHA is created each call, even with identical inputs); use last_commit_id on file_update/file_delete for optimistic-concurrency safety.
-- commit_status_set is idempotent per (sha, name, ref); commit_comment_create / commit_discussion_create / commit_discussion_add_note / commit_discussion_update_note append rather than replace.
+- file_create / file_update / file_delete / commit_create / commit_cherry_pick / commit_revert / update_submodule / changelog_add are NON-idempotent: when preconditions are satisfied each call produces a new commit SHA; otherwise they fail (e.g. 400 on conflict, 409 on stale last_commit_id). Use last_commit_id on file_update/file_delete for optimistic-concurrency safety.
+- commit_status_set is idempotent per (sha, name, ref); commit_comment_create / commit_discussion_create / commit_discussion_add_note append rather than replace. commit_discussion_update_note replaces the existing note body.
 - Side effects: any commit-producing action triggers webhooks, CI pipelines, and protected-branch / push-rule checks; archive returns large binary payloads (base64).
 - File delete is destructive at the working-tree level but git history is preserved.
 
@@ -1187,7 +1187,7 @@ When to use: group-level operations (groups, subgroups, members, labels, milesto
 
 Behavior:
 - Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / wiki_list / epic_list / protected_*_list / release_list / ldap_link_list / saml_link_list / service_account_*_list.
-- update / *_update / *_edit / archive / unarchive / hook_test are idempotent (same input → same state). create / *_create / hook_add / fork-equivalents are NON-idempotent (re-invocation creates a duplicate or returns 409).
+- update / *_update / *_edit / archive / unarchive are idempotent (same input → same state). create / *_create / hook_add / fork-equivalents are NON-idempotent (re-invocation creates a duplicate or returns 409).
 - Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; service_account_pat_create returns the cleartext token only ONCE — store it immediately; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
 - Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_*, epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete and service_account_pat_revoke are irreversible. archive is reversible via unarchive.
 
@@ -2197,9 +2197,9 @@ NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_g
 
 Behavior:
 - Idempotent reads: settings_get / appearance_get / *_list / *_get / sidekiq_* / app_statistics_get / metadata_get / usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions / plan_limits_get / feature_list / feature_list_definitions.
-- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / system_hook_test / error_tracking_update_settings are idempotent (same input → same state). license_add / system_hook_add / broadcast_message_create / application_create / bulk_import_start / import_from_github / import_from_bitbucket* / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).
+- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / error_tracking_update_settings are idempotent (same input → same state). license_add / system_hook_add / system_hook_test / broadcast_message_create / application_create / bulk_import_start / import_github / import_bitbucket / import_bitbucket_server / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).
 - Side effects: license_add / system_hook_add / broadcast_message_create / settings_update / feature_set apply instance-wide IMMEDIATELY (all sessions affected); bulk_import_* and import_* queue long-running async migrations — poll bulk_import_get / bulk_import_entity_* until status='finished'; usage_data_track_event posts to Snowplow when send_to_snowplow=true; application_create returns the OAuth secret only ONCE.
-- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_purge, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.
+- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_delete, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.
 
 Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list / feature_list_definitions; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
 Errors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded; system hook url must be https).
@@ -2400,7 +2400,7 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
-NOT for: SSH/GPG keys or user-scoped PATs created from the user profile (use gitlab_user), instance admin or impersonation tokens (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
+NOT for: SSH/GPG keys, user-scoped PATs, or impersonation tokens (use gitlab_user), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
 
 Returns:
 - token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.
@@ -2672,7 +2672,7 @@ Notes (project snippets only) — all need project_id*, snippet_id*:
 - note_create: body*
 - note_update: note_id*, body*
 
-Award emoji — all need project_id*, iid* (snippet emoji) or project_id*, iid*, note_id* (note emoji):
+Award emoji — all need project_id*, snippet_id* (snippet emoji) or project_id*, snippet_id*, note_id* (note emoji):
 - emoji_snippet_list / emoji_snippet_note_list: (no extra params)
 - emoji_snippet_get / emoji_snippet_note_get: award_id*
 - emoji_snippet_create / emoji_snippet_note_create: name*
