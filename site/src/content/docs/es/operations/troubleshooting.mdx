@@ -30,13 +30,13 @@ Para la referencia técnica completa, consulta [`docs/troubleshooting.md`](https
 
 ## Descubrimiento de herramientas
 
-| Síntoma                                                 | Causa                                   | Solución                                                                                           |
-| ------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| El cliente MCP muestra 1006 herramientas en lugar de 32 | Meta-herramientas desactivadas          | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio          |
-| Herramienta no encontrada en `tools/list`               | Desajuste del modo de meta-herramientas | El modo individual usa `gitlab_create_issue`, el modo meta usa `gitlab_issue` con `action: create` |
-| `unknown action` en llamada a meta-herramienta          | Parámetro de acción inválido            | Verifica las acciones válidas en [Resumen de Herramientas](/gitlab-mcp-server/tools/overview/)     |
+| Síntoma                                                     | Causa                                        | Solución                                                                                                                                                                                |
+| ----------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| El cliente MCP muestra 1006 herramientas en lugar de 32     | Meta-herramientas desactivadas               | Establece `META_TOOLS=true` (por defecto) para consolidar en meta-herramientas de dominio                                                                                               |
+| Herramienta no encontrada en `tools/list`                   | Desajuste del modo de meta-herramientas      | El modo individual usa `gitlab_create_issue`, el modo meta usa `gitlab_issue` con `action: create`                                                                                      |
+| `unknown action` en llamada a meta-herramienta              | Parámetro de acción inválido                 | Verifica las acciones válidas en [Resumen de Herramientas](/gitlab-mcp-server/tools/overview/)                                                                                          |
 | `json: unknown field "<nombre>"` desde una meta-herramienta | Parámetro mal escrito u obsoleto en `params` | Las meta-herramientas rechazan claves desconocidas. Usa los nombres exactos de la `action` elegida (p. ej. `merge_request_iid`, `issue_iid`, `epic_iid`, `work_item_iid`, `snippet_id`) |
-| Herramientas enterprise faltantes                       | Modo enterprise desactivado             | Establece `GITLAB_ENTERPRISE=true` para habilitar 15 meta-herramientas enterprise adicionales      |
+| Herramientas enterprise faltantes                           | Modo enterprise desactivado                  | Establece `GITLAB_ENTERPRISE=true` para habilitar 15 meta-herramientas enterprise adicionales                                                                                           |
 
 ## Actualización automática
 
