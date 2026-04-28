@@ -310,7 +310,7 @@ Meta-tool summary:
 | Meta-Tool | Actions | Description |
 |-----------|:-------:|-------------|
 | `gitlab_access` | 48 | Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. |
-| `gitlab_admin` | 88 | GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. |
+| `gitlab_admin` | 88 | GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, bulk imports (GitLab→GitLab migrations), error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. |
 | `gitlab_analyze` | 11 | LLM-assisted analysis of GitLab data via MCP sampling. |
 | `gitlab_branch` | 11 | Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). |
 | `gitlab_ci_catalog` | 2 | Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). |
