@@ -33,6 +33,7 @@ Common issues and solutions for gitlab-mcp-server.
 | MCP client shows 1006 tools instead of 32 | Meta-tools disabled | Set `META_TOOLS=true` (default) to use 32 base meta-tools instead of 1006 individual tools |
 | Tool not found in `tools/list` | Tool not registered, or meta-tools mode mismatch | Check if the tool exists in individual mode (`META_TOOLS=false`) or meta-tool mode (`META_TOOLS=true`) — they expose different tool names |
 | `unknown action` in meta-tool call | Invalid `action` parameter | List valid actions by calling the meta-tool with `action: "list"` or check [Meta-Tools Reference](meta-tools.md) |
+| `json: unknown field "<name>"` from a meta-tool | Misspelled or stale parameter name in `params` | Meta-tools reject unknown keys (`DisallowUnknownFields`). Use the exact parameter names listed for the chosen `action` (e.g. `merge_request_iid`, `issue_iid`, `epic_iid`, `work_item_iid`, `snippet_id`) — see [Meta-Tools Reference](meta-tools.md) |
 
 ## Pagination
 
