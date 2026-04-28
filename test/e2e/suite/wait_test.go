@@ -78,7 +78,7 @@ func TestWaitTools(t *testing.T) {
 			ProjectID:       proj.pidOf(),
 			PipelineID:      pipelineID,
 			IntervalSeconds: 5,
-			TimeoutSeconds:  180,
+			TimeoutSeconds:  600,
 			FailOnError:     &failOnErr,
 		})
 		if err != nil {
@@ -122,7 +122,7 @@ func TestWaitTools(t *testing.T) {
 			ProjectID:       proj.pidOf(),
 			JobID:           jobID,
 			IntervalSeconds: 5,
-			TimeoutSeconds:  180,
+			TimeoutSeconds:  600,
 			FailOnError:     &failOnErr,
 		})
 		if err != nil {

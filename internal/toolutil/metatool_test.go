@@ -116,6 +116,27 @@ func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_RejectsUnknownField verifies that params containing a
+// key that is not declared on the target type produce an actionable error
+// (mirroring the JSON Schema additionalProperties:false lockdown applied to
+// tools/list responses) so an LLM that mistypes a parameter name receives a
+// clear "unknown field" diagnostic instead of having the value silently
+// dropped.
+func TestUnmarshalParams_RejectsUnknownField(t *testing.T) {
+	params := map[string]any{
+		"name":           "proj",
+		"id":             float64(42),
+		"unknown_field!": "should-fail",
+	}
+	_, err := UnmarshalParams[testInput](params)
+	if err == nil {
+		t.Fatal("expected error for unknown field, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Errorf("expected error to mention 'unknown field', got: %v", err)
+	}
+}
+
 // TestCoerceNumericStrings verifies the coercion helper directly.
 func TestCoerceNumericStrings(t *testing.T) {
 	params := map[string]any{

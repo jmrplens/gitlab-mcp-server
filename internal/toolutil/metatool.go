@@ -6,6 +6,7 @@
 package toolutil
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -147,30 +148,83 @@ func RequestFromContext(ctx context.Context) *mcp.CallToolRequest {
 	return req
 }
 
+// reservedParamKeys lists meta-protocol keys that callers may set on the
+// params map but which never map to a field on the typed action input. They
+// are stripped before strict unmarshalling so they do not trigger the
+// "unknown field" rejection added by [strictUnmarshal].
+var reservedParamKeys = map[string]struct{}{
+	"confirm": {}, // bypass destructive-action elicitation prompt
+}
+
+// stripReservedKeys returns a shallow copy of params with all meta-protocol
+// keys (see [reservedParamKeys]) removed. The original map is not mutated.
+// Returns the input map unchanged when no reserved keys are present so the
+// common path stays allocation-free.
+func stripReservedKeys(params map[string]any) map[string]any {
+	hasReserved := false
+	for k := range params {
+		if _, ok := reservedParamKeys[k]; ok {
+			hasReserved = true
+			break
+		}
+	}
+	if !hasReserved {
+		return params
+	}
+	out := make(map[string]any, len(params))
+	for k, v := range params {
+		if _, ok := reservedParamKeys[k]; ok {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
 // UnmarshalParams re-serializes params map to JSON and deserializes into T.
 // LLMs frequently send numeric values as JSON strings (e.g. "17" instead of 17).
 // When standard unmarshalling fails, this function retries after coercing
 // string values that look like integers or floats into actual numbers.
+//
+// Unknown keys in params (i.e. fields that do not exist on T) are rejected
+// with an actionable error so that LLMs receive a clear diagnostic when they
+// mistype a parameter name (e.g. "iid" instead of "snippet_id"). This mirrors
+// the JSON Schema lockdown applied to tools/list responses (see
+// LockdownInputSchemas) and the MCP guidance to surface validation errors as
+// recoverable tool results so the model can self-correct. Meta-protocol keys
+// (see [reservedParamKeys]) are stripped before unmarshalling.
 func UnmarshalParams[T any](params map[string]any) (T, error) {
 	var input T
-	data, err := json.Marshal(params)
+	cleaned := stripReservedKeys(params)
+	data, err := json.Marshal(cleaned)
 	if err != nil {
 		return input, fmt.Errorf("invalid params: %w", err)
 	}
-	if err = json.Unmarshal(data, &input); err != nil {
+	if err = strictUnmarshal(data, &input); err != nil {
 		// Retry with numeric string coercion.
-		coerced := coerceNumericStrings(params)
+		coerced := coerceNumericStrings(cleaned)
 		data2, marshalErr := json.Marshal(coerced)
 		if marshalErr != nil {
 			return input, fmt.Errorf("invalid params for this action: %w", err)
 		}
-		if json.Unmarshal(data2, &input) != nil {
+		if strictUnmarshal(data2, &input) != nil {
 			// Return the original error for a clearer message.
 			return input, fmt.Errorf("invalid params for this action: %w", err)
 		}
 		return input, nil
 	}
 	return input, nil
+}
+
+// strictUnmarshal decodes JSON bytes into v while rejecting any keys that do
+// not map to a field on the target type. This produces actionable errors of
+// the form `json: unknown field "foo"` instead of silently dropping unknown
+// keys, which is critical for LLM self-correction when mistyping argument
+// names.
+func strictUnmarshal(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
 }
 
 // coerceNumericStrings returns a shallow copy of params where string values
