@@ -46,7 +46,7 @@ func TestGet_InvalidIID(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error for IID=%d, got nil", iid)
 		}
-		if !strings.Contains(err.Error(), "iid") {
+		if !strings.Contains(err.Error(), "work_item_iid") {
 			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
 		}
 	}
@@ -181,7 +181,7 @@ func TestDelete_InvalidIID(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error for IID=%d, got nil", iid)
 		}
-		if !strings.Contains(err.Error(), "iid") {
+		if !strings.Contains(err.Error(), "work_item_iid") {
 			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
 		}
 	}
@@ -1040,7 +1040,7 @@ func TestUpdate_InvalidIID(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error for IID=%d, got nil", iid)
 		}
-		if !strings.Contains(err.Error(), "iid") {
+		if !strings.Contains(err.Error(), "work_item_iid") {
 			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
 		}
 	}
@@ -1557,11 +1557,11 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_get_work_item", map[string]any{"full_path": testProjectPath, "iid": 10}},
+		{"gitlab_get_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10}},
 		{"gitlab_list_work_items", map[string]any{"full_path": testProjectPath}},
 		{"gitlab_create_work_item", map[string]any{"full_path": testProjectPath, "work_item_type_id": testTypeGID, "title": "Test"}},
-		{"gitlab_update_work_item", map[string]any{"full_path": testProjectPath, "iid": 10, "title": "Updated"}},
-		{"gitlab_delete_work_item", map[string]any{"full_path": testProjectPath, "iid": 10}},
+		{"gitlab_update_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10, "title": "Updated"}},
+		{"gitlab_delete_work_item", map[string]any{"full_path": testProjectPath, "work_item_iid": 10}},
 	}
 
 	for _, tt := range tools {
