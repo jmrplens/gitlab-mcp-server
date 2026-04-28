@@ -81,7 +81,6 @@ linters:
     # --- Bug Detection (require care; documented nolints in source) ---
     - contextcheck # Context propagation (nolints documented for startup paths)
     - errchkjson # json.Marshal/Encode error handling
-
     # --- Linters intentionally NOT enabled (false positives) ---
     # - dupword: false positives on godoc auto-generated comments split from CamelCase
     #   identifiers (IID → "i i d", SSH → "s s h", HTTPS → "h t t p s"). Auto-fix

@@ -223,6 +223,16 @@ Configuration file: [`.golangci.yml`](../../.golangci.yml) (v2 format)
 - `nilerr` — Returns `nil` when `err` is not nil
 - `nilnil` — Returns `nil, nil` without reason
 - `errname` — Sentinel error naming (`ErrFoo`)
+- `bidichk` — Dangerous bidi unicode (CVE-2021-42574 trojan source protection)
+- `iotamixing` — Mixed `iota` in `const` blocks
+- `loggercheck` — `slog`/`log` key-value pair validation
+- `makezero` — Slice append after non-zero-length `make`
+- `mirror` — `bytes`/`strings` mirror patterns (avoid unnecessary conversions)
+- `nakedret` — Naked returns in long functions
+- `nosprintfhostport` — `Sprintf` misuse for `host:port` URLs (RFC 3986)
+- `exptostd` — Replace `golang.org/x/exp` with std equivalents
+- `contextcheck` — Context propagation (documented `nolint` for startup paths)
+- `errchkjson` — `json.Marshal`/`Encode` error handling
 
 **Security** (OWASP):
 
@@ -236,13 +246,17 @@ Configuration file: [`.golangci.yml`](../../.golangci.yml) (v2 format)
 - `unparam` — Unused function parameters
 - `unused` — Unused code
 - `prealloc` — Slice pre-allocation hints
-- `copyloopvar` — Pre-Go 1.22 loop variable patterns
+- `copyloopvar` — Loop variable copies (Go 1.22+, copies not needed)
+- `testableexamples` — Examples have expected output (`// Output:` comments)
 
 **Style & Formatting**:
 
 - `misspell` — Spelling mistakes (US locale)
 - `godot` — Top-level comments end with period
 - `usestdlibvars` — Use stdlib constants over magic values
+- `goprintffuncname` — Printf-like funcs end in `f`
+- `tparallel` — `t.Parallel()` correctness
+- `thelper` — Test helpers must call `t.Helper()`
 
 **Formatters** (separate section in v2):
 
@@ -260,6 +274,7 @@ Configuration file: [`.golangci.yml`](../../.golangci.yml) (v2 format)
 | `vendor/` | All linters |
 | `cmd/server/main.go` | gosec G114 (os.Exit) |
 | `internal/testutil/` | errcheck, gosec |
+| `test/e2e/` | tparallel, thelper, contextcheck, errchkjson (sequential design with shared GitLab fixtures; cleanups use fresh contexts) |
 
 ### 6. gosec
 
