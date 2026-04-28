@@ -1,14 +1,16 @@
 name: Documentation
 description: Report missing, outdated, or incorrect documentation
 title: "[Docs]: "
-labels: ["documentation", "needs-triage"]
+labels: [ "documentation", "needs-triage" ]
 body:
   - type: checkboxes
     id: prereqs
     attributes:
       label: Prerequisites
       options:
-        - label: I have searched [existing issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue) for this documentation gap.
+        - label: I have searched [existing
+            issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue)
+            for this documentation gap.
           required: true
 
   - type: textarea
@@ -41,7 +43,8 @@ body:
         - label: "`docs/` (developer documentation)"
         - label: "`README.md`"
         - label: "`CONTRIBUTING.md`"
-        - label: "User docs site — Astro Starlight (`site/src/content/docs/en/` or `/es/`)"
+        - label: "User docs site — Astro Starlight (`site/src/content/docs/en/` or
+            `/es/`)"
 
   - type: textarea
     id: context
