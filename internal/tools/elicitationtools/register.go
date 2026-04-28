@@ -25,10 +25,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_issue_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_issue_create"),
-		Description: "Interactively create a GitLab issue: step-by-step prompts collect title (required), " +
-			"description (optional multiline), comma-separated labels, and confidentiality (boolean), " +
-			"then ask for confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\n" +
-			"When to use: human-in-the-loop issue creation with guided prompts. " +
+		Description: "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\n" +
+			"After invocation, the tool elicits in order:\n" +
+			"- title (string, required) — issue title.\n" +
+			"- description (string, optional, multi-line, Markdown) — leave empty to skip.\n" +
+			"- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n" +
+			"- confidential (boolean, optional) — yes/no confirmation; defaults to public when declined.\n" +
+			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
+			"When to use: human-in-the-loop issue creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created issue (id, issue_iid, web_url, title, state).\n\nSee also: gitlab_issue.",
@@ -53,10 +57,16 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_mr_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_mr_create"),
-		Description: "Create a GitLab merge request through step-by-step prompts: source branch (required), " +
-			"target branch (required), title (required), description (optional multiline), comma-separated labels, " +
-			"squash-on-merge flag, and remove-source-branch flag, with explicit confirmation before calling the GitLab API. " +
-			"Cancellation at any prompt aborts without creating the MR.\n\n" +
+		Description: "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\n" +
+			"After invocation, the tool elicits in order:\n" +
+			"- source_branch (string, required) — branch with the changes to merge.\n" +
+			"- target_branch (string, required) — branch to merge into (e.g. main, develop).\n" +
+			"- title (string, required) — MR title.\n" +
+			"- description (string, optional, multi-line, Markdown) — leave empty to skip.\n" +
+			"- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n" +
+			"- remove_source_branch (boolean, optional) — yes/no confirmation; default unset.\n" +
+			"- squash (boolean, optional) — yes/no confirmation; default unset.\n" +
+			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop MR creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
