@@ -659,11 +659,11 @@ func registerProjectMilestonesResource(server *mcp.Server, client *gitlabclient.
 }
 
 // registerMergeRequestResource registers the
-// "gitlab://project/{project_id}/mr/{mr_iid}" template resource that
+// "gitlab://project/{project_id}/mr/{merge_request_iid}" template resource that
 // returns details of a specific merge request by its project-scoped IID.
 func registerMergeRequestResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
-		URITemplate: "gitlab://project/{project_id}/mr/{mr_iid}",
+		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}",
 		Name:        "merge_request",
 		Title:       "Merge Request Details",
 		MIMEType:    mimeJSON,
@@ -1112,11 +1112,11 @@ func registerWikiResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerMergeRequestNotesResource registers the
-// "gitlab://project/{project_id}/mr/{mr_iid}/notes" template resource that
+// "gitlab://project/{project_id}/mr/{merge_request_iid}/notes" template resource that
 // returns the flat list of notes (comments) for a merge request.
 func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
-		URITemplate: "gitlab://project/{project_id}/mr/{mr_iid}/notes",
+		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/notes",
 		Name:        "merge_request_notes",
 		Title:       "Merge Request Notes",
 		MIMEType:    mimeJSON,
@@ -1162,12 +1162,12 @@ func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.
 }
 
 // registerMergeRequestDiscussionsResource registers the
-// "gitlab://project/{project_id}/mr/{mr_iid}/discussions" template resource
+// "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions" template resource
 // that returns the discussion threads for a merge request, each containing
 // one or more notes.
 func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
-		URITemplate: "gitlab://project/{project_id}/mr/{mr_iid}/discussions",
+		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions",
 		Name:        "merge_request_discussions",
 		Title:       "Merge Request Discussions",
 		MIMEType:    mimeJSON,

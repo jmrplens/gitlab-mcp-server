@@ -150,14 +150,14 @@ func TestAnalyzeMRChanges_EmptyProjectID(t *testing.T) {
 }
 
 // TestAnalyzeMRChanges_InvalidMRIID verifies that AnalyzeMRChanges returns
-// a validation error when mr_iid is zero or negative.
+// a validation error when merge_request_iid is zero or negative.
 func TestAnalyzeMRChanges_InvalidMRIID(t *testing.T) {
 	_, err := AnalyzeMRChanges(context.Background(), &mcp.CallToolRequest{}, nil, AnalyzeMRChangesInput{
 		ProjectID: "42",
 		MRIID:     0,
 	})
-	if err == nil || !strings.Contains(err.Error(), "mr_iid") {
-		t.Errorf("AnalyzeMRChanges() error = %v, want mr_iid validation error", err)
+	if err == nil || !strings.Contains(err.Error(), "merge_request_iid") {
+		t.Errorf("AnalyzeMRChanges() error = %v, want merge_request_iid validation error", err)
 	}
 }
 

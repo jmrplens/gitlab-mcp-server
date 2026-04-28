@@ -306,14 +306,14 @@ func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPa
 // ListInput defines parameters for listing child issues of an epic.
 type ListInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	toolutil.GraphQLPaginationInput
 }
 
 // AssignInput defines parameters for assigning an issue to an epic.
 type AssignInput struct {
 	FullPath         string `json:"full_path"          jsonschema:"Full path of the group that contains the epic,required"`
-	IID              int64  `json:"iid"                jsonschema:"Epic IID within the group,required"`
+	IID              int64  `json:"epic_iid"                jsonschema:"Epic IID within the group,required"`
 	ChildProjectPath string `json:"child_project_path" jsonschema:"Full project path of the issue to assign (e.g. my-group/my-project),required"`
 	ChildIID         int64  `json:"child_iid"          jsonschema:"IID of the issue to assign to the epic,required"`
 }
@@ -321,7 +321,7 @@ type AssignInput struct {
 // RemoveInput defines parameters for removing an issue from an epic.
 type RemoveInput struct {
 	FullPath         string `json:"full_path"          jsonschema:"Full path of the group that contains the epic,required"`
-	IID              int64  `json:"iid"                jsonschema:"Epic IID within the group,required"`
+	IID              int64  `json:"epic_iid"                jsonschema:"Epic IID within the group,required"`
 	ChildProjectPath string `json:"child_project_path" jsonschema:"Full project path of the issue to remove,required"`
 	ChildIID         int64  `json:"child_iid"          jsonschema:"IID of the issue to remove from the epic,required"`
 }
@@ -329,7 +329,7 @@ type RemoveInput struct {
 // UpdateInput defines parameters for reordering an issue within an epic.
 type UpdateInput struct {
 	FullPath         string `json:"full_path"                   jsonschema:"Full path of the group that contains the epic,required"`
-	IID              int64  `json:"iid"                         jsonschema:"Epic IID within the group,required"`
+	IID              int64  `json:"epic_iid"                         jsonschema:"Epic IID within the group,required"`
 	ChildID          string `json:"child_id"                    jsonschema:"Work item GID of the issue to reorder (from list output id field),required"`
 	AdjacentID       string `json:"adjacent_id,omitempty"       jsonschema:"Work item GID of the reference issue to position relative to"`
 	RelativePosition string `json:"relative_position,omitempty" jsonschema:"Position relative to adjacent item: BEFORE or AFTER"`
@@ -371,7 +371,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("epicIssueList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueList", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueList", "epic_iid")
 	}
 
 	vars := input.GraphQLPaginationInput.Variables()
@@ -419,7 +419,7 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 		return AssignOutput{}, errors.New("epicIssueAssign: full_path is required")
 	}
 	if input.IID <= 0 {
-		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueAssign", "iid")
+		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueAssign", "epic_iid")
 	}
 	if input.ChildProjectPath == "" {
 		return AssignOutput{}, errors.New("epicIssueAssign: child_project_path is required")
@@ -469,7 +469,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 		return AssignOutput{}, errors.New("epicIssueRemove: full_path is required")
 	}
 	if input.IID <= 0 {
-		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "iid")
+		return AssignOutput{}, toolutil.ErrRequiredInt64("epicIssueRemove", "epic_iid")
 	}
 	if input.ChildProjectPath == "" {
 		return AssignOutput{}, errors.New("epicIssueRemove: child_project_path is required")
@@ -518,7 +518,7 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 		return ListOutput{}, errors.New("epicIssueUpdate: full_path is required")
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueUpdate", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("epicIssueUpdate", "epic_iid")
 	}
 	if input.ChildID == "" {
 		return ListOutput{}, errors.New("epicIssueUpdate: child_id is required")

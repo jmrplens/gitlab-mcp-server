@@ -73,11 +73,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_epic_note_list", map[string]any{"full_path": "my-group", "iid": 10}},
-		{"gitlab_epic_note_get", map[string]any{"full_path": "my-group", "iid": 10, "note_id": 1}},
-		{"gitlab_epic_note_create", map[string]any{"full_path": "my-group", "iid": 10, "body": "comment"}},
-		{"gitlab_epic_note_update", map[string]any{"full_path": "my-group", "iid": 10, "note_id": 1, "body": "updated"}},
-		{"gitlab_epic_note_delete", map[string]any{"full_path": "my-group", "iid": 10, "note_id": 1}},
+		{"gitlab_epic_note_list", map[string]any{"full_path": "my-group", "epic_iid": 10}},
+		{"gitlab_epic_note_get", map[string]any{"full_path": "my-group", "epic_iid": 10, "note_id": 1}},
+		{"gitlab_epic_note_create", map[string]any{"full_path": "my-group", "epic_iid": 10, "body": "comment"}},
+		{"gitlab_epic_note_update", map[string]any{"full_path": "my-group", "epic_iid": 10, "note_id": 1, "body": "updated"}},
+		{"gitlab_epic_note_delete", map[string]any{"full_path": "my-group", "epic_iid": 10, "note_id": 1}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_epic_note_delete",
-		Arguments: map[string]any{"full_path": "my-group", "iid": float64(10), "note_id": float64(1)},
+		Arguments: map[string]any{"full_path": "my-group", "epic_iid": float64(10), "note_id": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -158,7 +158,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_epic_note_delete",
-		Arguments: map[string]any{"full_path": "g", "iid": float64(1), "note_id": float64(1)},
+		Arguments: map[string]any{"full_path": "g", "epic_iid": float64(1), "note_id": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)

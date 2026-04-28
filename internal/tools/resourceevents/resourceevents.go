@@ -43,14 +43,14 @@ type GetIssueLabelEventInput struct {
 // ListMRLabelEventsInput defines parameters for listing merge request label events.
 type ListMRLabelEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	toolutil.PaginationInput
 }
 
 // GetMRLabelEventInput defines parameters for getting a single MR label event.
 type GetMRLabelEventInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	LabelEventID int64                `json:"label_event_id" jsonschema:"Label event ID,required"`
 }
 
@@ -71,14 +71,14 @@ type GetIssueMilestoneEventInput struct {
 // ListMRMilestoneEventsInput defines parameters for listing MR milestone events.
 type ListMRMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	toolutil.PaginationInput
 }
 
 // GetMRMilestoneEventInput defines parameters for getting a single MR milestone event.
 type GetMRMilestoneEventInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID            int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID            int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	MilestoneEventID int64                `json:"milestone_event_id" jsonschema:"Milestone event ID,required"`
 }
 
@@ -99,14 +99,14 @@ type GetIssueStateEventInput struct {
 // ListMRStateEventsInput defines parameters for listing MR state events.
 type ListMRStateEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	toolutil.PaginationInput
 }
 
 // GetMRStateEventInput defines parameters for getting a single MR state event.
 type GetMRStateEventInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	StateEventID int64                `json:"state_event_id" jsonschema:"State event ID,required"`
 }
 
@@ -231,7 +231,7 @@ func ListMRLabelEvents(ctx context.Context, client *gitlabclient.Client, input L
 		return ListLabelEventsOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_list", "mr_iid")
+		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListLabelEventsOptions{
 		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
@@ -239,7 +239,7 @@ func ListMRLabelEvents(ctx context.Context, client *gitlabclient.Client, input L
 	events, resp, err := client.GL().ResourceLabelEvents.ListMergeRequestsLabelEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_list", err, http.StatusNotFound,
-			"verify project_id and mr_iid (per-project MR number) with gitlab_mr_get")
+			"verify project_id and merge_request_iid (per-project MR number) with gitlab_mr_get")
 	}
 	return toLabelEventsOutput(events, resp), nil
 }
@@ -250,7 +250,7 @@ func GetMRLabelEvent(ctx context.Context, client *gitlabclient.Client, input Get
 		return LabelEventOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return LabelEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_get", "mr_iid")
+		return LabelEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_get", "merge_request_iid")
 	}
 	if input.LabelEventID <= 0 {
 		return LabelEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_get", "label_event_id")
@@ -311,7 +311,7 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 		return ListMilestoneEventsOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_list", "mr_iid")
+		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListMilestoneEventsOptions{
 		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
@@ -319,7 +319,7 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListMergeMilestoneEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_list", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
 	return toMilestoneEventsOutput(events, resp), nil
 }
@@ -330,7 +330,7 @@ func GetMRMilestoneEvent(ctx context.Context, client *gitlabclient.Client, input
 		return MilestoneEventOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return MilestoneEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_get", "mr_iid")
+		return MilestoneEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_get", "merge_request_iid")
 	}
 	if input.MilestoneEventID <= 0 {
 		return MilestoneEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_get", "milestone_event_id")
@@ -391,7 +391,7 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 		return ListStateEventsOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_list", "mr_iid")
+		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListStateEventsOptions{
 		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
@@ -399,7 +399,7 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 	events, resp, err := client.GL().ResourceStateEvents.ListMergeStateEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_list", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
 	return toStateEventsOutput(events, resp), nil
 }
@@ -410,7 +410,7 @@ func GetMRStateEvent(ctx context.Context, client *gitlabclient.Client, input Get
 		return StateEventOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return StateEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_get", "mr_iid")
+		return StateEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_get", "merge_request_iid")
 	}
 	if input.StateEventID <= 0 {
 		return StateEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_get", "state_event_id")

@@ -100,9 +100,9 @@ func TestMeta_MRNotes(t *testing.T) {
 		out, err := callToolOn[mrnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"body":       "E2E note meta",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"body":              "E2E note meta",
 			},
 		})
 		requireNoError(t, err, "create MR note meta")
@@ -115,8 +115,8 @@ func TestMeta_MRNotes(t *testing.T) {
 		out, err := callToolOn[mrnotes.ListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_list",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "list MR notes meta")
@@ -127,9 +127,9 @@ func TestMeta_MRNotes(t *testing.T) {
 		out, err := callToolOn[mrnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    noteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           noteID,
 			},
 		})
 		requireNoError(t, err, "get MR note meta")
@@ -140,10 +140,10 @@ func TestMeta_MRNotes(t *testing.T) {
 		out, err := callToolOn[mrnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_update",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    noteID,
-				"body":       "E2E note meta updated",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           noteID,
+				"body":              "E2E note meta updated",
 			},
 		})
 		requireNoError(t, err, "update MR note meta")
@@ -154,9 +154,9 @@ func TestMeta_MRNotes(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_delete",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    noteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           noteID,
 			},
 		})
 		requireNoError(t, err, "delete MR note meta")

@@ -326,15 +326,15 @@ func TestMCPRound_TripNoSampling(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
 		{"gitlab_generate_release_notes", map[string]any{"project_id": "42", "from": "v1.0.0", "to": "v2.0.0"}},
 		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": float64(1)}},
-		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
 		{"gitlab_analyze_ci_configuration", map[string]any{"project_id": "42", "content_ref": "main"}},
 		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
-		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_find_technical_debt", map[string]any{"project_id": "42", "ref": "main"}},
 		{"gitlab_analyze_deployment_history", map[string]any{"project_id": "42"}},
 	}
@@ -491,15 +491,15 @@ func TestMCPRoundTrip_WithSampling(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_analyze_mr_changes", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_summarize_issue", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
 		{"gitlab_generate_release_notes", map[string]any{"project_id": "42", "from": "v1.0.0", "to": "v2.0.0"}},
 		{"gitlab_analyze_pipeline_failure", map[string]any{"project_id": "42", "pipeline_id": float64(1)}},
-		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_summarize_mr_review", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_generate_milestone_report", map[string]any{"project_id": "42", "milestone_iid": float64(1)}},
 		{"gitlab_analyze_ci_configuration", map[string]any{"project_id": "42", "content_ref": "main"}},
 		{"gitlab_analyze_issue_scope", map[string]any{"project_id": "42", "issue_iid": float64(10)}},
-		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
+		{"gitlab_review_mr_security", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
 		{"gitlab_find_technical_debt", map[string]any{"project_id": "42", "ref": "main"}},
 		{"gitlab_analyze_deployment_history", map[string]any{"project_id": "42"}},
 	}

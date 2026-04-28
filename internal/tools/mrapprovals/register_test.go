@@ -42,7 +42,7 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_approval_rule_delete",
-		Arguments: map[string]any{"project_id": "my-project", "mr_iid": float64(1), "approval_rule_id": float64(10)},
+		Arguments: map[string]any{"project_id": "my-project", "merge_request_iid": float64(1), "approval_rule_id": float64(10)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -79,7 +79,7 @@ func TestRegisterTools_ResetError(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_approval_reset",
-		Arguments: map[string]any{"project_id": "42", "mr_iid": float64(1)},
+		Arguments: map[string]any{"project_id": "42", "merge_request_iid": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -118,7 +118,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_approval_rule_delete",
-		Arguments: map[string]any{"project_id": "p", "mr_iid": float64(1), "approval_rule_id": float64(10)},
+		Arguments: map[string]any{"project_id": "p", "merge_request_iid": float64(1), "approval_rule_id": float64(10)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)

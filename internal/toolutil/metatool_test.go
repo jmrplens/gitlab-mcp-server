@@ -30,7 +30,7 @@ type testInput struct {
 // testInt64Input defines parameters for the test int64 operation.
 type testInt64Input struct {
 	ProjectID StringOrInt `json:"project_id"`
-	MRIID     int64       `json:"mr_iid"`
+	MRIID     int64       `json:"merge_request_iid"`
 	Message   string      `json:"message,omitempty"`
 }
 
@@ -68,9 +68,9 @@ func TestUnmarshalParams_InvalidType(t *testing.T) {
 // of sending numbers as JSON strings.
 func TestUnmarshalParams_CoercesStringToInt64(t *testing.T) {
 	params := map[string]any{
-		"project_id": "42",
-		"mr_iid":     "17",
-		"message":    "merge commit",
+		"project_id":        "42",
+		"merge_request_iid": "17",
+		"message":           "merge commit",
 	}
 	got, err := UnmarshalParams[testInt64Input](params)
 	if err != nil {
@@ -91,8 +91,8 @@ func TestUnmarshalParams_CoercesStringToInt64(t *testing.T) {
 // types (numbers as numbers) still work without coercion.
 func TestUnmarshalParams_CoercionNotNeeded(t *testing.T) {
 	params := map[string]any{
-		"project_id": float64(42),
-		"mr_iid":     float64(17),
+		"project_id":        float64(42),
+		"merge_request_iid": float64(17),
 	}
 	got, err := UnmarshalParams[testInt64Input](params)
 	if err != nil {
@@ -107,12 +107,33 @@ func TestUnmarshalParams_CoercionNotNeeded(t *testing.T) {
 // in int64 fields still produce an error after coercion retry.
 func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	params := map[string]any{
-		"project_id": "my-project",
-		"mr_iid":     "not-a-number",
+		"project_id":        "my-project",
+		"merge_request_iid": "not-a-number",
 	}
 	_, err := UnmarshalParams[testInt64Input](params)
 	if err == nil {
 		t.Fatal("expected error for non-numeric string in int64 field")
+	}
+}
+
+// TestUnmarshalParams_RejectsUnknownField verifies that params containing a
+// key that is not declared on the target type produce an actionable error
+// (mirroring the JSON Schema additionalProperties:false lockdown applied to
+// tools/list responses) so an LLM that mistypes a parameter name receives a
+// clear "unknown field" diagnostic instead of having the value silently
+// dropped.
+func TestUnmarshalParams_RejectsUnknownField(t *testing.T) {
+	params := map[string]any{
+		"name":           "proj",
+		"id":             float64(42),
+		"unknown_field!": "should-fail",
+	}
+	_, err := UnmarshalParams[testInput](params)
+	if err == nil {
+		t.Fatal("expected error for unknown field, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Errorf("expected error to mention 'unknown field', got: %v", err)
 	}
 }
 

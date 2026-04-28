@@ -249,7 +249,7 @@ Currently embedded by 22 `gitlab_*_get` handlers:
 | `gitlab_job_get`              | `gitlab://project/{project_id}/job/{job_id}`             |
 | `gitlab_label_get`            | `gitlab://project/{project_id}/label/{label_id}`         |
 | `gitlab_milestone_get`        | `gitlab://project/{project_id}/milestone/{milestone_iid}`|
-| `gitlab_mr_get`               | `gitlab://project/{project_id}/mr/{mr_iid}`              |
+| `gitlab_mr_get`               | `gitlab://project/{project_id}/mr/{merge_request_iid}`              |
 | `gitlab_pipeline_get`         | `gitlab://project/{project_id}/pipeline/{pipeline_id}`   |
 | `gitlab_project_get`          | `gitlab://project/{project_id}`                          |
 | `gitlab_project_snippet_get`  | `gitlab://project/{project_id}/snippet/{snippet_id}`     |

@@ -92,7 +92,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.ReviewersOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "reviewers",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "reviewers")
 		t.Logf("MR has %d reviewers", len(out.Reviewers))
@@ -102,7 +102,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.IssuesClosedOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "issues_closed",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "issues_closed")
 		t.Logf("MR would close %d issues", len(out.Issues))
@@ -113,7 +113,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "subscribe",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "subscribe")
 		t.Logf("Subscribed to MR !%d", out.IID)
@@ -123,7 +123,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "unsubscribe",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "unsubscribe")
 		t.Logf("Unsubscribed from MR !%d", out.IID)
@@ -135,9 +135,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[mergerequests.TimeStatsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "time_estimate_set",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-				"duration":   "3h",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"duration":          "3h",
 			},
 		})
 		requireNoError(t, err, "time_estimate_set")
@@ -148,7 +148,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.TimeStatsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "time_stats",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "time_stats")
 		t.Logf("Time stats: estimate=%ds, spent=%ds", out.TimeEstimate, out.TotalTimeSpent)
@@ -159,9 +159,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[mergerequests.TimeStatsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "spent_time_add",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-				"duration":   "1h",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"duration":          "1h",
 			},
 		})
 		requireNoError(t, err, "spent_time_add")
@@ -172,7 +172,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.TimeStatsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "spent_time_reset",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "spent_time_reset")
 		t.Logf("Spent time reset: %ds", out.TotalTimeSpent)
@@ -182,7 +182,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mergerequests.TimeStatsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "time_estimate_reset",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "time_estimate_reset")
 		t.Logf("Time estimate reset: %ds", out.TimeEstimate)
@@ -196,7 +196,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mrapprovals.StateOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_state",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_state")
 		t.Logf("Approval state: overwritten=%v, rules=%d", out.ApprovalRulesOverwritten, len(out.Rules))
@@ -209,7 +209,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mrapprovals.RulesOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_rules",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_rules")
 		t.Logf("MR has %d approval rules", len(out.Rules))
@@ -219,7 +219,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mrapprovals.ConfigOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_config",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_config")
 		t.Logf("Approval config for MR %d (project_id=%d)", out.IID, out.ProjectID)
@@ -235,7 +235,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "approval_rule_create",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
-				"mr_iid":             mrIID,
+				"merge_request_iid":  mrIID,
 				"name":               "test-rule",
 				"approvals_required": 1,
 			},
@@ -253,7 +253,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "approval_rule_update",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
-				"mr_iid":             mrIID,
+				"merge_request_iid":  mrIID,
 				"approval_rule_id":   approvalRuleID,
 				"name":               "updated-rule",
 				"approvals_required": 2,
@@ -270,9 +270,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_rule_delete",
 			"params": map[string]any{
-				"project_id":       proj.pidStr(),
-				"mr_iid":           mrIID,
-				"approval_rule_id": approvalRuleID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"approval_rule_id":  approvalRuleID,
 			},
 		})
 		requireNoError(t, err, "approval_rule_delete")
@@ -286,7 +286,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_reset",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_reset")
 		t.Log("Reset approvals")
@@ -297,7 +297,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[mrcontextcommits.ListOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "context_commits_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "context_commits_list")
 		t.Logf("MR has %d context commits", len(out.Commits))
@@ -310,9 +310,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"name":       "rocket",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"name":              "rocket",
 			},
 		})
 		requireNoError(t, err, "emoji_mr_create")
@@ -324,7 +324,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[awardemoji.ListOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "emoji_mr_list")
 		requireTrue(t, len(out.AwardEmoji) >= 1, "expected at least 1 MR emoji")
@@ -336,9 +336,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"award_id":   mrEmojiID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"award_id":          mrEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_mr_get")
@@ -351,9 +351,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_delete",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"award_id":   mrEmojiID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"award_id":          mrEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_mr_delete")
@@ -367,9 +367,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[mrnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "note_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-				"body":       "Note for emoji test",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"body":              "Note for emoji test",
 			},
 		})
 		requireNoError(t, err, "note_create for emoji")
@@ -383,10 +383,10 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_note_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"note_id":    mrNoteID,
-				"name":       "thumbsup",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"note_id":           mrNoteID,
+				"name":              "thumbsup",
 			},
 		})
 		requireNoError(t, err, "emoji_mr_note_create")
@@ -399,9 +399,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.ListOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_note_list",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"note_id":    mrNoteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"note_id":           mrNoteID,
 			},
 		})
 		requireNoError(t, err, "emoji_mr_note_list")
@@ -414,10 +414,10 @@ func TestMeta_MRDeep(t *testing.T) {
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_note_get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"note_id":    mrNoteID,
-				"award_id":   mrNoteEmojiID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"note_id":           mrNoteID,
+				"award_id":          mrNoteEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_mr_note_get")
@@ -430,10 +430,10 @@ func TestMeta_MRDeep(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_note_delete",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"iid":        mrIID,
-				"note_id":    mrNoteID,
-				"award_id":   mrNoteEmojiID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"note_id":           mrNoteID,
+				"award_id":          mrNoteEmojiID,
 			},
 		})
 		requireNoError(t, err, "emoji_mr_note_delete")
@@ -457,9 +457,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-				"add_labels": "e2e-mr-event-label",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"add_labels":        "e2e-mr-event-label",
 			},
 		})
 		requireNoError(t, err, "add label to MR")
@@ -481,9 +481,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id":   proj.pidStr(),
-				"mr_iid":       mrIID,
-				"milestone_id": ms.ID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"milestone_id":      ms.ID,
 			},
 		})
 		requireNoError(t, err, "set milestone on MR")
@@ -495,9 +495,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		_, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"mr_iid":      mrIID,
-				"state_event": "close",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"state_event":       "close",
 			},
 		})
 		requireNoError(t, err, "close MR for state event")
@@ -505,9 +505,9 @@ func TestMeta_MRDeep(t *testing.T) {
 		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"mr_iid":      mrIID,
-				"state_event": "reopen",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"state_event":       "reopen",
 			},
 		})
 		requireNoError(t, err, "reopen MR for state event")
@@ -519,7 +519,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[resourceevents.ListLabelEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_label_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "event_mr_label_list")
 		t.Logf("Listed %d MR label events", len(out.Events))
@@ -529,16 +529,16 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		list, err := callToolOn[resourceevents.ListLabelEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_label_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "list label events for get")
 		requireTrue(t, len(list.Events) > 0, "expected at least 1 MR label event after adding label")
 		_, err = callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_label_get",
 			"params": map[string]any{
-				"project_id":     proj.pidStr(),
-				"mr_iid":         mrIID,
-				"label_event_id": list.Events[0].ID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"label_event_id":    list.Events[0].ID,
 			},
 		})
 		requireNoError(t, err, "event_mr_label_get")
@@ -549,7 +549,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[resourceevents.ListMilestoneEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_milestone_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "event_mr_milestone_list")
 		t.Logf("Listed %d MR milestone events", len(out.Events))
@@ -559,7 +559,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		list, err := callToolOn[resourceevents.ListMilestoneEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_milestone_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "list milestone events for get")
 		requireTrue(t, len(list.Events) > 0, "expected at least 1 MR milestone event after setting milestone")
@@ -567,7 +567,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "event_mr_milestone_get",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
-				"mr_iid":             mrIID,
+				"merge_request_iid":  mrIID,
 				"milestone_event_id": list.Events[0].ID,
 			},
 		})
@@ -579,16 +579,16 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		list, err := callToolOn[resourceevents.ListStateEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_state_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "list state events for get")
 		requireTrue(t, len(list.Events) > 0, "expected at least 1 MR state event after close/reopen")
 		out, err := callToolOn[resourceevents.StateEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_state_get",
 			"params": map[string]any{
-				"project_id":     proj.pidStr(),
-				"mr_iid":         mrIID,
-				"state_event_id": list.Events[0].ID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"state_event_id":    list.Events[0].ID,
 			},
 		})
 		requireNoError(t, err, "event_mr_state_get")
@@ -600,7 +600,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		_, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "cancel_auto_merge",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "cancel_auto_merge")
 		t.Log("cancel_auto_merge completed")

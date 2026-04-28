@@ -46,13 +46,13 @@ type ListInput struct {
 // GetInput defines parameters for getting a single epic.
 type GetInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
 }
 
 // GetLinksInput defines parameters for listing child epics (REST).
 type GetLinksInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
 }
 
 // CreateInput defines parameters for creating a new epic.
@@ -73,7 +73,7 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating an existing epic.
 type UpdateInput struct {
 	FullPath       string  `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID            int64   `json:"iid" jsonschema:"Epic IID within the group,required"`
+	IID            int64   `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
 	Title          string  `json:"title,omitempty" jsonschema:"Updated epic title"`
 	Description    string  `json:"description,omitempty" jsonschema:"Updated description (Markdown supported)"`
 	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
@@ -92,7 +92,7 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting an epic.
 type DeleteInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid" jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
 }
 
 // Output represents a single epic (backed by a Work Item of type Epic).
@@ -309,7 +309,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("epicGet: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicGet", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicGet", "epic_iid")
 	}
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
@@ -330,7 +330,7 @@ func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksIn
 		return LinksOutput{}, errors.New("epicGetLinks: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "iid")
+		return LinksOutput{}, toolutil.ErrRequiredInt64("epicGetLinks", "epic_iid")
 	}
 	epics, _, err := client.GL().Epics.GetEpicLinks(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
@@ -412,7 +412,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("epicUpdate: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicUpdate", "epic_iid")
 	}
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
@@ -483,7 +483,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("epicDelete: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("epicDelete", "iid")
+		return toolutil.ErrRequiredInt64("epicDelete", "epic_iid")
 	}
 	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {

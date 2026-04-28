@@ -22,13 +22,13 @@ import (
 // SummarizeMRReviewInput defines parameters for LLM-assisted MR review summarization.
 type SummarizeMRReviewInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // SummarizeMRReviewOutput holds the LLM summary of an MR review.
 type SummarizeMRReviewOutput struct {
 	toolutil.HintableOutput
-	MRIID     int64  `json:"mr_iid"`
+	MRIID     int64  `json:"merge_request_iid"`
 	Title     string `json:"title"`
 	Summary   string `json:"summary"`
 	Model     string `json:"model"`
@@ -52,7 +52,7 @@ func SummarizeMRReview(ctx context.Context, req *mcp.CallToolRequest, client *gi
 		return SummarizeMRReviewOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return SummarizeMRReviewOutput{}, errors.New("mr_iid must be a positive integer")
+		return SummarizeMRReviewOutput{}, errors.New("merge_request_iid must be a positive integer")
 	}
 
 	tracker := progress.FromRequest(req)

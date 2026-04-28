@@ -395,7 +395,7 @@ These tools provide broader insights about project health and progress.
 | Parameter | Type | Required | Description |
 | --------- | ---- | :------: | ----------- |
 | `project_id` | string | Yes | Project ID or path |
-| `mr_iid` | int | Yes | Merge request IID |
+| `merge_request_iid` | int | Yes | Merge request IID |
 
 **Flow**: Fetch MR details → Fetch diffs → Format as Markdown → LLM analysis
 
@@ -440,7 +440,7 @@ These tools provide broader insights about project health and progress.
 | Parameter | Type | Required | Description |
 | --------- | ---- | :------: | ----------- |
 | `project_id` | string | Yes | Project ID or path |
-| `mr_iid` | int | Yes | Merge request IID |
+| `merge_request_iid` | int | Yes | Merge request IID |
 
 **Flow**: Fetch MR details → Fetch discussions → Fetch approval state → Format as Markdown → LLM summary
 
@@ -483,7 +483,7 @@ These tools provide broader insights about project health and progress.
 | Parameter | Type | Required | Description |
 | --------- | ---- | :------: | ----------- |
 | `project_id` | string | Yes | Project ID or path |
-| `mr_iid` | int | Yes | Merge request IID |
+| `merge_request_iid` | int | Yes | Merge request IID |
 
 **Flow**: Fetch MR details → Fetch code diffs → Format as Markdown → LLM security review
 
@@ -526,7 +526,7 @@ You:  "Review the code in MR !15 of gitlab-mcp-server for bugs and improvements.
 
 **What happens**:
 
-1. The AI calls `gitlab_analyze_mr_changes` with `project_id=1835, mr_iid=15`
+1. The AI calls `gitlab_analyze_mr_changes` with `project_id=1835, merge_request_iid=15`
 2. The server fetches the MR metadata and all file diffs
 3. The server formats this as a Markdown document with diff blocks for each file
 4. The AI analyzes the diffs and returns findings like:

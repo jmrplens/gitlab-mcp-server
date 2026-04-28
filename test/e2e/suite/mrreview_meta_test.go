@@ -39,7 +39,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-changes", "new.txt", "new content", "add file")
 
 	mrOut, mrErr := callToolOn[struct {
-		IID int64 `json:"mr_iid"`
+		IID int64 `json:"merge_request_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -56,14 +56,14 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	t.Run("ChangesGet", func(t *testing.T) {
 		out, err := callToolOn[mrchanges.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "changes_get",
-			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "changes_get")
 		t.Logf("Changes: %d files, truncated: %d", len(out.Changes), len(out.TruncatedFiles))
 	})
 
 	t.Run("DiffVersionsList", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		waitForMRReady(ctx, t, proj.ID, mrOut.IID)
 		var out mrchanges.DiffVersionsListOutput
 		var listErr error
 		deadline := time.Now().Add(120 * time.Second)
@@ -71,7 +71,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		for time.Now().Before(deadline) {
 			out, listErr = callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 				"action": "diff_versions_list",
-				"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
+				"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 			})
 			if listErr == nil && len(out.DiffVersions) > 0 {
 				break
@@ -94,9 +94,9 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 			vOut, err := callToolOn[mrchanges.DiffVersionOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 				"action": "diff_version_get",
 				"params": map[string]any{
-					"project_id": proj.pidStr(),
-					"mr_iid":     mrIID,
-					"version_id": versionID,
+					"project_id":        proj.pidStr(),
+					"merge_request_iid": mrIID,
+					"version_id":        versionID,
 				},
 			})
 			requireNoError(t, err, "diff_version_get")
@@ -128,7 +128,7 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-disc-note", "disc-branch.txt", "v2", "add branch file")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"mr_iid"`
+		IID int64 `json:"merge_request_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -145,9 +145,9 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 	discOut, err := callToolOn[mrdiscussions.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 		"action": "discussion_create",
 		"params": map[string]any{
-			"project_id": proj.pidStr(),
-			"mr_iid":     mrIID,
-			"body":       "Original discussion note",
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+			"body":              "Original discussion note",
 		},
 	})
 	requireNoError(t, err, "discussion_create")
@@ -157,9 +157,9 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 	discDetail, err := callToolOn[mrdiscussions.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 		"action": "discussion_get",
 		"params": map[string]any{
-			"project_id":    proj.pidStr(),
-			"mr_iid":        mrIID,
-			"discussion_id": discID,
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+			"discussion_id":     discID,
 		},
 	})
 	requireNoError(t, err, "discussion_get for note ID")
@@ -170,11 +170,11 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 	updOut, err := callToolOn[mrdiscussions.NoteOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 		"action": "discussion_note_update",
 		"params": map[string]any{
-			"project_id":    proj.pidStr(),
-			"mr_iid":        mrIID,
-			"discussion_id": discID,
-			"note_id":       noteID,
-			"body":          "Updated discussion note body",
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+			"discussion_id":     discID,
+			"note_id":           noteID,
+			"body":              "Updated discussion note body",
 		},
 	})
 	requireNoError(t, err, "discussion_note_update")
@@ -204,7 +204,7 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-draft-pub", "draft-v2.txt", "v2", "update")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"mr_iid"`
+		IID int64 `json:"merge_request_iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -221,9 +221,9 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 	draftOut, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 		"action": "draft_note_create",
 		"params": map[string]any{
-			"project_id": proj.pidStr(),
-			"mr_iid":     mrIID,
-			"note":       "Draft to publish individually",
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+			"note":              "Draft to publish individually",
 		},
 	})
 	requireNoError(t, err, "draft_note_create")
@@ -233,9 +233,9 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 	err = callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 		"action": "draft_note_publish",
 		"params": map[string]any{
-			"project_id": proj.pidStr(),
-			"mr_iid":     mrIID,
-			"note_id":    draftID,
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+			"note_id":           draftID,
 		},
 	})
 	requireNoError(t, err, "draft_note_publish")

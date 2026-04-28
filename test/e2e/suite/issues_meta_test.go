@@ -337,7 +337,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        issueIID,
+				"issue_iid":  issueIID,
 				"note_id":    noteID,
 				"name":       "thumbsup",
 			},
@@ -353,7 +353,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        issueIID,
+				"issue_iid":  issueIID,
 				"note_id":    noteID,
 			},
 		})
@@ -368,7 +368,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        issueIID,
+				"issue_iid":  issueIID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},
@@ -384,7 +384,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "emoji_issue_note_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        issueIID,
+				"issue_iid":  issueIID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},

@@ -125,7 +125,7 @@ func TestComplete_PromptUsername(t *testing.T) {
 	}
 }
 
-// TestComplete_PromptMRIID verifies that completing a prompt's mr_iid argument
+// TestComplete_PromptMRIID verifies that completing a prompt's merge_request_iid argument
 // returns merge requests filtered by IID prefix when project_id is provided.
 func TestComplete_PromptMRIID(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,7 @@ func TestComplete_PromptMRIID(t *testing.T) {
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
 		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "review_mr"},
-		Argument: mcp.CompleteParamsArgument{Name: "mr_iid", Value: "1"},
+		Argument: mcp.CompleteParamsArgument{Name: "merge_request_iid", Value: "1"},
 		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}},
 	}
 
@@ -153,14 +153,14 @@ func TestComplete_PromptMRIID(t *testing.T) {
 	}
 }
 
-// TestComplete_PromptMRIIDWithoutProjectID verifies that mr_iid completion
+// TestComplete_PromptMRIIDWithoutProjectID verifies that merge_request_iid completion
 // returns empty results when no project_id is in the resolved arguments.
 func TestComplete_PromptMRIIDWithoutProjectID(t *testing.T) {
 	h := NewHandler(newTestClient(t, http.NotFoundHandler()))
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
 		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "review_mr"},
-		Argument: mcp.CompleteParamsArgument{Name: "mr_iid", Value: "1"},
+		Argument: mcp.CompleteParamsArgument{Name: "merge_request_iid", Value: "1"},
 	}
 
 	result, err := h.Complete(context.Background(), req)
@@ -471,7 +471,7 @@ func TestComplete_PromptTagWithoutProjectID(t *testing.T) {
 }
 
 // TestComplete_ResourceMRIID verifies that completing a resource template's
-// mr_iid parameter returns matching merge requests.
+// merge_request_iid parameter returns matching merge requests.
 func TestComplete_ResourceMRIID(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/merge_requests" {
@@ -484,8 +484,8 @@ func TestComplete_ResourceMRIID(t *testing.T) {
 	h := NewHandler(client)
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
-		Ref:      &mcp.CompleteReference{Type: refResource, URI: "gitlab://{project_id}/mr/{mr_iid}"},
-		Argument: mcp.CompleteParamsArgument{Name: "mr_iid", Value: "5"},
+		Ref:      &mcp.CompleteReference{Type: refResource, URI: "gitlab://{project_id}/mr/{merge_request_iid}"},
+		Argument: mcp.CompleteParamsArgument{Name: "merge_request_iid", Value: "5"},
 		Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "10"}},
 	}
 
@@ -498,14 +498,14 @@ func TestComplete_ResourceMRIID(t *testing.T) {
 	}
 }
 
-// TestComplete_ResourceMRIIDWithoutProjectID verifies that resource mr_iid
+// TestComplete_ResourceMRIIDWithoutProjectID verifies that resource merge_request_iid
 // completion returns empty results when no project_id is resolved.
 func TestComplete_ResourceMRIIDWithoutProjectID(t *testing.T) {
 	h := NewHandler(newTestClient(t, http.NotFoundHandler()))
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
-		Ref:      &mcp.CompleteReference{Type: refResource, URI: "gitlab://{project_id}/mr/{mr_iid}"},
-		Argument: mcp.CompleteParamsArgument{Name: "mr_iid", Value: "5"},
+		Ref:      &mcp.CompleteReference{Type: refResource, URI: "gitlab://{project_id}/mr/{merge_request_iid}"},
+		Argument: mcp.CompleteParamsArgument{Name: "merge_request_iid", Value: "5"},
 	}
 
 	result, err := h.Complete(context.Background(), req)
@@ -1043,7 +1043,7 @@ func TestComplete_APIErrorPaths(t *testing.T) {
 		context *mcp.CompleteContext
 	}{
 		{"group_id", refResource, "group_id", nil},
-		{"mr_iid", refPrompt, "mr_iid", &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}}},
+		{"merge_request_iid", refPrompt, "merge_request_iid", &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}}},
 		{"issue_iid", refPrompt, "issue_iid", &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}}},
 		{"username", refPrompt, "username", nil},
 		{"from (branch+tag)", refPrompt, "from", &mcp.CompleteContext{Arguments: map[string]string{"project_id": "42"}}},

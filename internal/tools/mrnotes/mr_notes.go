@@ -19,7 +19,7 @@ import (
 // CreateInput defines parameters for adding a general comment to a merge request.
 type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Body      string               `json:"body"       jsonschema:"Comment body (Markdown supported),required"`
 }
 
@@ -52,7 +52,7 @@ type Output struct {
 // ListInput defines parameters for listing merge request notes.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"         jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"         jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by field (created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -68,7 +68,7 @@ type ListOutput struct {
 // UpdateInput defines parameters for editing a note.
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to update,required"`
 	Body      string               `json:"body"       jsonschema:"Updated comment body,required"`
 }
@@ -76,14 +76,14 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a note.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to delete,required"`
 }
 
 // GetInput defines parameters for getting a single note.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to retrieve,required"`
 }
 
@@ -136,14 +136,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, errors.New("mrNoteCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrNoteCreate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrNoteCreate", "merge_request_iid")
 	}
 	n, _, err := client.GL().Notes.CreateMergeRequestNote(string(input.ProjectID), input.MRIID, &gl.CreateMergeRequestNoteOptions{
 		Body: new(toolutil.NormalizeText(input.Body)),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteCreate", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get; creating notes requires Reporter role or higher")
+			"verify project_id and merge_request_iid with gitlab_mr_get; creating notes requires Reporter role or higher")
 	}
 	return ToOutput(n), nil
 }
@@ -159,7 +159,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("mrNotesList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mrNotesList", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mrNotesList", "merge_request_iid")
 	}
 	opts := &gl.ListMergeRequestNotesOptions{}
 	if input.OrderBy != "" {
@@ -177,7 +177,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().Notes.ListMergeRequestNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrNotesList", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {
@@ -196,7 +196,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("mrNoteUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrNoteUpdate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrNoteUpdate", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrNoteUpdate", "note_id")
@@ -220,7 +220,7 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 		return Output{}, errors.New("mrNoteGet: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrNoteGet", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrNoteGet", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrNoteGet", "note_id")
@@ -243,7 +243,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("mrNoteDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrNoteDelete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrNoteDelete", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("mrNoteDelete", "note_id")

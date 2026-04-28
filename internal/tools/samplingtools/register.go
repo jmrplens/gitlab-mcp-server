@@ -312,8 +312,6 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_analyze",
 		Title: toolutil.TitleFromName("gitlab_analyze"),
 		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
-Valid actions: ` + toolutil.ValidActionsString(routes) + `
-
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
 NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a ` + "`SamplingUnsupportedResult`" + `).
 
@@ -323,19 +321,19 @@ Returns: each action returns action-specific JSON (typically identifiers + a tex
 - review: mr_security
 - report: milestone_report
 - release_notes: release_notes
-Alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
-Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
+Alongside the resource identifiers (merge_request_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
+Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
-- mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
+- mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
 - release_notes: from_ref*, to_ref*. Generate categorized release notes between refs.
 - pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
-- mr_review: mr_iid*. Summarize review feedback and unresolved threads.
+- mr_review: merge_request_iid*. Summarize review feedback and unresolved threads.
 - milestone_report: milestone_iid*. Progress report with metrics.
 - ci_config: content_ref. Analyze CI/CD config for best practices and security.
 - issue_scope: issue_iid*. Scope, complexity, and breakdown recommendations.
-- mr_security: mr_iid*. OWASP Top 10, secrets, auth review.
+- mr_security: merge_request_iid*. OWASP Top 10, secrets, auth review.
 - technical_debt: ref. Find TODO/FIXME/HACK markers.
 - deployment_history: environment. Frequency, success rate, patterns.
 

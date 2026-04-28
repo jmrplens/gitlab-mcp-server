@@ -217,7 +217,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestMRIIDRequired_Validation validates m r i i d required validation across multiple scenarios using table-driven subtests.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when mr_iid is missing")
+		t.Fatal("API should not be called when merge_request_iid is missing")
 	}))
 
 	tests := []struct {
@@ -238,7 +238,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "mr_iid")
+			assertContains(t, tt.fn(), "merge_request_iid")
 		})
 	}
 }
@@ -402,9 +402,9 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_list_mr_context_commits", map[string]any{"project_id": "1", "mr_iid": int64(10)}},
-		{"gitlab_create_mr_context_commits", map[string]any{"project_id": "1", "mr_iid": int64(10), "commits": []any{"abc123"}}},
-		{"gitlab_delete_mr_context_commits", map[string]any{"project_id": "1", "mr_iid": int64(10), "commits": []any{"abc123"}}},
+		{"gitlab_list_mr_context_commits", map[string]any{"project_id": "1", "merge_request_iid": int64(10)}},
+		{"gitlab_create_mr_context_commits", map[string]any{"project_id": "1", "merge_request_iid": int64(10), "commits": []any{"abc123"}}},
+		{"gitlab_delete_mr_context_commits", map[string]any{"project_id": "1", "merge_request_iid": int64(10), "commits": []any{"abc123"}}},
 	}
 
 	for _, tt := range tools {
@@ -541,7 +541,7 @@ func TestMCPRoundTrip_DeleteError(t *testing.T) {
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_delete_mr_context_commits",
-		Arguments: map[string]any{"project_id": "p", "mr_iid": 1, "commits": []any{"abc"}},
+		Arguments: map[string]any{"project_id": "p", "merge_request_iid": 1, "commits": []any{"abc"}},
 	})
 	if err != nil {
 		t.Fatalf("CallTool: %v", err)

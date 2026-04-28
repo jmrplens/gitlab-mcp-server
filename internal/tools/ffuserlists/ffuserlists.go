@@ -49,7 +49,7 @@ type ListInput struct {
 // GetInput contains parameters for getting a feature flag user list.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"iid" jsonschema:"Feature flag user list internal ID,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID,required"`
 }
 
 // CreateInput contains parameters for creating a feature flag user list.
@@ -62,7 +62,7 @@ type CreateInput struct {
 // UpdateInput contains parameters for updating a feature flag user list.
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"iid" jsonschema:"Feature flag user list internal ID,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID,required"`
 	Name      string               `json:"name,omitempty" jsonschema:"New user list name"`
 	UserXIDs  string               `json:"user_xids,omitempty" jsonschema:"Comma-separated list of user external IDs"`
 }
@@ -70,7 +70,7 @@ type UpdateInput struct {
 // DeleteInput contains parameters for deleting a feature flag user list.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"iid" jsonschema:"Feature flag user list internal ID,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID,required"`
 }
 
 // ──────────────────────────────────────────────
@@ -118,14 +118,14 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID == 0 {
-		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_get", toolutil.ErrFieldRequired("iid"))
+		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_get", toolutil.ErrFieldRequired("user_list_iid"))
 	}
 	l, _, err := client.GL().FeatureFlagUserLists.GetFeatureFlagUserList(
 		string(input.ProjectID), input.IID, gl.WithContext(ctx),
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_get", err, http.StatusNotFound,
-			"verify iid with gitlab_ff_user_list_list \u2014 user lists are scoped per-project and require Premium/Ultimate")
+			"verify user_list_iid with gitlab_ff_user_list_list \u2014 user lists are scoped per-project and require Premium/Ultimate")
 	}
 	return convertUserList(l), nil
 }
@@ -165,7 +165,7 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_update", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID == 0 {
-		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_update", toolutil.ErrFieldRequired("iid"))
+		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_update", toolutil.ErrFieldRequired("user_list_iid"))
 	}
 	opts := &gl.UpdateFeatureFlagUserListOptions{
 		Name:     input.Name,
@@ -180,7 +180,7 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 				"updating feature flag user lists requires Developer+ role on a Premium/Ultimate project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_update", err, http.StatusNotFound,
-			"verify iid with gitlab_ff_user_list_list")
+			"verify user_list_iid with gitlab_ff_user_list_list")
 	}
 	return convertUserList(l), nil
 }
@@ -191,7 +191,7 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 		return toolutil.WrapErrWithMessage("ff_user_list_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID == 0 {
-		return toolutil.WrapErrWithMessage("ff_user_list_delete", toolutil.ErrFieldRequired("iid"))
+		return toolutil.WrapErrWithMessage("ff_user_list_delete", toolutil.ErrFieldRequired("user_list_iid"))
 	}
 	_, err := client.GL().FeatureFlagUserLists.DeleteFeatureFlagUserList(
 		string(input.ProjectID), input.IID, gl.WithContext(ctx),
@@ -202,7 +202,7 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 				"deleting feature flag user lists requires Developer+ role; the list cannot be in use by an enabled feature flag strategy")
 		}
 		return toolutil.WrapErrWithStatusHint("ff_user_list_delete", err, http.StatusNotFound,
-			"verify iid with gitlab_ff_user_list_list")
+			"verify user_list_iid with gitlab_ff_user_list_list")
 	}
 	return nil
 }

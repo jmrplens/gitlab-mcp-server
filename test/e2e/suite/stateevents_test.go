@@ -76,8 +76,8 @@ func TestMeta_StateEvents(t *testing.T) {
 		out, err := callToolOn[resourceevents.ListStateEventsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_state_list",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "list MR state events")

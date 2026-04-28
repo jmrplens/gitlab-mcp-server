@@ -52,9 +52,9 @@ El servidor expone **44 recursos** en varias categorías:
 | Recurso                                                 | Descripción                                                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `gitlab://project/{project_id}/issue/{issue_iid}`       | Detalles de un issue (título, estado, etiquetas, asignados, URL web)          |
-| `gitlab://project/{project_id}/mr/{mr_iid}`             | Detalles de una merge request (título, estado, ramas, autor, estado de merge) |
-| `gitlab://project/{project_id}/mr/{mr_iid}/notes`       | Notas en una merge request                                                    |
-| `gitlab://project/{project_id}/mr/{mr_iid}/discussions` | Hilos de discusión en una merge request                                       |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}`             | Detalles de una merge request (título, estado, ramas, autor, estado de merge) |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`       | Notas en una merge request                                                    |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | Hilos de discusión en una merge request                                       |
 
 ### Plantillas de recursos CI/CD (3)
 
@@ -215,7 +215,7 @@ Los prompts se solicitan mediante el método MCP `prompts/get`:
 		"name": "review_mr",
 		"arguments": {
 			"project_id": "my-group/my-project",
-			"mr_iid": "42"
+			"merge_request_iid": "42"
 		}
 	}
 }

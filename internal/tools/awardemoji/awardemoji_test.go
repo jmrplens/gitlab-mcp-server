@@ -29,6 +29,9 @@ const (
 	testEmojiStar         = "star"
 	fmtExpected1Emoji     = "expected 1 emoji, got %d"
 	testFieldIID          = "iid"
+	testFieldIssueIID     = "issue_iid"
+	testFieldMRIID        = "merge_request_iid"
+	testFieldSnippetID    = "snippet_id"
 	testFieldAwardID      = "award_id"
 	testFieldNoteID       = "note_id"
 	testPathAPIProjects   = "/api/v4/projects/"
@@ -47,7 +50,7 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
-	out, err := ListIssueAwardEmoji(t.Context(), client, ListInput{
+	out, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{
 		ProjectID: testProjectID,
 		IID:       1,
 	})
@@ -71,7 +74,7 @@ func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 
-	_, err := ListIssueAwardEmoji(t.Context(), client, ListInput{
+	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{
 		ProjectID: "",
 		IID:       1,
 	})
@@ -89,7 +92,7 @@ func TestGetIssueAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
 	}))
 
-	out, err := GetIssueAwardEmoji(t.Context(), client, GetInput{
+	out, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		AwardID:   10,
@@ -120,7 +123,7 @@ func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"thumbsup","user":{"id":1,"username":"admin"},"created_at":"2026-01-01T00:00:00Z","awardable_id":1,"awardable_type":"Issue"}`)
 	}))
 
-	out, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{
+	out, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		Name:      testEmojiThumbsup,
@@ -139,7 +142,7 @@ func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 
-	_, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{
+	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{
 		ProjectID: "",
 		IID:       1,
 		Name:      testEmojiThumbsup,
@@ -161,7 +164,7 @@ func TestDeleteIssueAwardEmoji_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		AwardID:   10,
@@ -177,7 +180,7 @@ func TestDeleteIssueAwardEmoji_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	}))
 
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		AwardID:   10,
@@ -198,7 +201,7 @@ func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":20,"name":"heart","user":{"id":2,"username":"dev"},"created_at":"2026-02-01T00:00:00Z","awardable_id":5,"awardable_type":"Note"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
-	out, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{
+	out, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		NoteID:    5,
@@ -223,7 +226,7 @@ func TestDeleteIssueNoteAwardEmoji_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	err := DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{
+	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{
 		ProjectID: testProjectID,
 		IID:       1,
 		NoteID:    5,
@@ -245,7 +248,7 @@ func TestListMRAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"rocket","user":{"id":3,"username":"user3"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
-	out, err := ListMRAwardEmoji(t.Context(), client, ListInput{
+	out, err := ListMRAwardEmoji(t.Context(), client, MRListInput{
 		ProjectID: testProjectID,
 		IID:       3,
 	})
@@ -266,7 +269,7 @@ func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 
-	_, err := CreateMRAwardEmoji(t.Context(), client, CreateInput{
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{
 		ProjectID: "",
 		IID:       3,
 		Name:      "rocket",
@@ -287,7 +290,7 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":40,"name":"100","user":{"id":4,"username":"user4"},"created_at":"2026-04-01T00:00:00Z","awardable_id":7,"awardable_type":"Snippet"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
 	}))
 
-	out, err := ListSnippetAwardEmoji(t.Context(), client, ListInput{
+	out, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{
 		ProjectID: testProjectID,
 		IID:       7,
 	})
@@ -393,10 +396,10 @@ func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListIssueAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 0})
-	assertErrContains(t, err, testFieldIID)
-	_, err = ListIssueAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: -1})
-	assertErrContains(t, err, testFieldIID)
+	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 0})
+	assertErrContains(t, err, testFieldIssueIID)
+	_, err = ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: -1})
+	assertErrContains(t, err, testFieldIssueIID)
 }
 
 // TestGetIssueAwardEmoji_InvalidIDs verifies the behavior of get issue award emoji invalid i ds.
@@ -404,9 +407,9 @@ func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetIssueAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetIssueAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 0})
+	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldIssueIID)
+	_, err = GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -415,8 +418,8 @@ func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
+	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldIssueIID)
 }
 
 // TestDeleteIssueAwardEmoji_InvalidIDs verifies the behavior of delete issue award emoji invalid i ds.
@@ -424,9 +427,9 @@ func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldIssueIID)
+	err = DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -435,9 +438,9 @@ func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
+	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
+	assertErrContains(t, err, testFieldIssueIID)
+	_, err = ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -446,11 +449,11 @@ func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetIssueNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetIssueNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldIssueIID)
+	_, err = GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	_, err = GetIssueNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	_, err = GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -459,9 +462,9 @@ func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
-	_, err = CreateIssueNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
+	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldIssueIID)
+	_, err = CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -470,11 +473,11 @@ func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldIssueIID)
+	err = DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	err = DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	err = DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -483,8 +486,8 @@ func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListMRAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 0})
-	assertErrContains(t, err, testFieldIID)
+	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 0})
+	assertErrContains(t, err, testFieldMRIID)
 }
 
 // TestGetMRAwardEmoji_InvalidIDs verifies the behavior of get m r award emoji invalid i ds.
@@ -492,9 +495,9 @@ func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetMRAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetMRAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 0})
+	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldMRIID)
+	_, err = GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -503,8 +506,8 @@ func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateMRAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: -5, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: -5, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldMRIID)
 }
 
 // TestDeleteMRAwardEmoji_InvalidIDs verifies the behavior of delete m r award emoji invalid i ds.
@@ -512,9 +515,9 @@ func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteMRAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteMRAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: -1})
+	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldMRIID)
+	err = DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: -1})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -523,9 +526,9 @@ func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListMRNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = ListMRNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
+	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
+	assertErrContains(t, err, testFieldMRIID)
+	_, err = ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -534,11 +537,11 @@ func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetMRNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetMRNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldMRIID)
+	_, err = GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	_, err = GetMRNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	_, err = GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -547,9 +550,9 @@ func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateMRNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
-	_, err = CreateMRNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
+	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldMRIID)
+	_, err = CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -558,11 +561,11 @@ func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteMRNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteMRNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldMRIID)
+	err = DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	err = DeleteMRNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	err = DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -571,8 +574,8 @@ func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListSnippetAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 0})
-	assertErrContains(t, err, testFieldIID)
+	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{ProjectID: "p", IID: 0})
+	assertErrContains(t, err, testFieldSnippetID)
 }
 
 // TestGetSnippetAwardEmoji_InvalidIDs verifies the behavior of get snippet award emoji invalid i ds.
@@ -580,9 +583,9 @@ func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetSnippetAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetSnippetAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 0})
+	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldSnippetID)
+	_, err = GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -591,8 +594,8 @@ func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateSnippetAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
+	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldSnippetID)
 }
 
 // TestDeleteSnippetAwardEmoji_InvalidIDs verifies the behavior of delete snippet award emoji invalid i ds.
@@ -600,9 +603,9 @@ func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteSnippetAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteSnippetAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
+	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
+	assertErrContains(t, err, testFieldSnippetID)
+	err = DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -611,9 +614,9 @@ func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = ListSnippetNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
+	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
+	assertErrContains(t, err, testFieldSnippetID)
+	_, err = ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -622,11 +625,11 @@ func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	_, err = GetSnippetNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldSnippetID)
+	_, err = GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	_, err = GetSnippetNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	_, err = GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -635,9 +638,9 @@ func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
-	assertErrContains(t, err, testFieldIID)
-	_, err = CreateSnippetNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
+	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldSnippetID)
+	_, err = CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldNoteID)
 }
 
@@ -646,11 +649,11 @@ func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
 	}))
-	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
-	assertErrContains(t, err, testFieldIID)
-	err = DeleteSnippetNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
+	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
+	assertErrContains(t, err, testFieldSnippetID)
+	err = DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldNoteID)
-	err = DeleteSnippetNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
+	err = DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -694,7 +697,7 @@ func covOKDelete() http.Handler {
 // TestListIssueAwardEmoji_Validation verifies the behavior of cov list issue award emoji validation.
 func TestListIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListIssueAwardEmoji(t.Context(), client, ListInput{})
+	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -703,7 +706,7 @@ func TestListIssueAwardEmoji_Validation(t *testing.T) {
 // TestListIssueAwardEmoji_APIError verifies the behavior of cov list issue award emoji a p i error.
 func TestListIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListIssueAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 1})
+	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -712,7 +715,7 @@ func TestListIssueAwardEmoji_APIError(t *testing.T) {
 // TestListIssueAwardEmoji_Success_Cov verifies the behavior of cov list issue award emoji success.
 func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
-	out, err := ListIssueAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 1})
+	out, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -724,7 +727,7 @@ func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 // TestGetIssueAwardEmoji_Validation verifies the behavior of cov get issue award emoji validation.
 func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetIssueAwardEmoji(t.Context(), client, GetInput{})
+	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -733,7 +736,7 @@ func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 // TestGetIssueAwardEmoji_APIError verifies the behavior of cov get issue award emoji a p i error.
 func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetIssueAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 1})
+	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -742,7 +745,7 @@ func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 // TestGetIssueAwardEmoji_Success_Cov verifies the behavior of cov get issue award emoji success.
 func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
-	out, err := GetIssueAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 1})
+	out, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -754,7 +757,7 @@ func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 // TestCreateIssueAwardEmoji_Validation verifies the behavior of cov create issue award emoji validation.
 func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{})
+	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -763,7 +766,7 @@ func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 // TestCreateIssueAwardEmoji_APIError verifies the behavior of cov create issue award emoji a p i error.
 func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
+	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -772,7 +775,7 @@ func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 // TestCreateIssueAwardEmoji_Success_Cov verifies the behavior of cov create issue award emoji success.
 func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
-	out, err := CreateIssueAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
+	out, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -784,7 +787,7 @@ func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 // TestDeleteIssueAwardEmoji_Validation verifies the behavior of cov delete issue award emoji validation.
 func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{})
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -793,7 +796,7 @@ func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 // TestDeleteIssueAwardEmoji_APIError_Cov verifies the behavior of cov delete issue award emoji API error.
 func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -802,7 +805,7 @@ func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 // TestDeleteIssueAwardEmoji_Success_Cov verifies the behavior of cov delete issue award emoji success.
 func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKDelete())
-	err := DeleteIssueAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -813,7 +816,7 @@ func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 // TestListIssueNoteAwardEmoji_Validation verifies the behavior of cov list issue note award emoji validation.
 func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{})
+	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -822,7 +825,7 @@ func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 // TestListIssueNoteAwardEmoji_APIError verifies the behavior of cov list issue note award emoji a p i error.
 func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
+	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -831,7 +834,7 @@ func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 // TestListIssueNoteAwardEmoji_Success_Cov verifies the behavior of cov list issue note award emoji success.
 func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
-	out, err := ListIssueNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
+	out, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -843,7 +846,7 @@ func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 // TestGetIssueNoteAwardEmoji_Validation verifies the behavior of cov get issue note award emoji validation.
 func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetIssueNoteAwardEmoji(t.Context(), client, GetOnNoteInput{})
+	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -852,7 +855,7 @@ func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 // TestGetIssueNoteAwardEmoji_APIError verifies the behavior of cov get issue note award emoji a p i error.
 func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetIssueNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -861,7 +864,7 @@ func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 // TestCreateIssueNoteAwardEmoji_Validation verifies the behavior of cov create issue note award emoji validation.
 func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{})
+	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -870,7 +873,7 @@ func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 // TestCreateIssueNoteAwardEmoji_APIError verifies the behavior of cov create issue note award emoji a p i error.
 func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
+	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -879,7 +882,7 @@ func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 // TestDeleteIssueNoteAwardEmoji_Validation verifies the behavior of cov delete issue note award emoji validation.
 func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{})
+	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -888,7 +891,7 @@ func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 // TestDeleteIssueNoteAwardEmoji_APIError verifies the behavior of cov delete issue note award emoji a p i error.
 func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteIssueNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -899,7 +902,7 @@ func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 // TestListMRAwardEmoji_Validation verifies the behavior of cov list m r award emoji validation.
 func TestListMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListMRAwardEmoji(t.Context(), client, ListInput{})
+	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -908,7 +911,7 @@ func TestListMRAwardEmoji_Validation(t *testing.T) {
 // TestListMRAwardEmoji_APIError verifies the behavior of cov list m r award emoji a p i error.
 func TestListMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListMRAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 1})
+	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -917,7 +920,7 @@ func TestListMRAwardEmoji_APIError(t *testing.T) {
 // TestListMRAwardEmoji_Success_Cov verifies the behavior of cov list MR award emoji success.
 func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
-	out, err := ListMRAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 1})
+	out, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -929,7 +932,7 @@ func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 // TestGetMRAwardEmoji_Validation verifies the behavior of cov get m r award emoji validation.
 func TestGetMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetMRAwardEmoji(t.Context(), client, GetInput{})
+	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -938,7 +941,7 @@ func TestGetMRAwardEmoji_Validation(t *testing.T) {
 // TestGetMRAwardEmoji_APIError verifies the behavior of cov get m r award emoji a p i error.
 func TestGetMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetMRAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 1})
+	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -947,7 +950,7 @@ func TestGetMRAwardEmoji_APIError(t *testing.T) {
 // TestCreateMRAwardEmoji_Validation verifies the behavior of cov create m r award emoji validation.
 func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateMRAwardEmoji(t.Context(), client, CreateInput{})
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -956,7 +959,7 @@ func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 // TestCreateMRAwardEmoji_APIError verifies the behavior of cov create m r award emoji a p i error.
 func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateMRAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 1, Name: "x"})
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -965,7 +968,7 @@ func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 // TestDeleteMRAwardEmoji_Validation verifies the behavior of cov delete m r award emoji validation.
 func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteMRAwardEmoji(t.Context(), client, DeleteInput{})
+	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -974,7 +977,7 @@ func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 // TestDeleteMRAwardEmoji_APIError verifies the behavior of cov delete m r award emoji a p i error.
 func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteMRAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -985,7 +988,7 @@ func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 // TestListMRNoteAwardEmoji_Validation verifies the behavior of cov list m r note award emoji validation.
 func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListMRNoteAwardEmoji(t.Context(), client, ListOnNoteInput{})
+	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -994,7 +997,7 @@ func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 // TestListMRNoteAwardEmoji_APIError verifies the behavior of cov list m r note award emoji a p i error.
 func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListMRNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
+	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1003,7 +1006,7 @@ func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 // TestGetMRNoteAwardEmoji_Validation verifies the behavior of cov get m r note award emoji validation.
 func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetMRNoteAwardEmoji(t.Context(), client, GetOnNoteInput{})
+	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1012,7 +1015,7 @@ func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 // TestGetMRNoteAwardEmoji_APIError verifies the behavior of cov get m r note award emoji a p i error.
 func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetMRNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1021,7 +1024,7 @@ func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 // TestCreateMRNoteAwardEmoji_Validation verifies the behavior of cov create m r note award emoji validation.
 func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateMRNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{})
+	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1030,7 +1033,7 @@ func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 // TestCreateMRNoteAwardEmoji_APIError verifies the behavior of cov create m r note award emoji a p i error.
 func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateMRNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
+	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1039,7 +1042,7 @@ func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 // TestDeleteMRNoteAwardEmoji_Validation verifies the behavior of cov delete m r note award emoji validation.
 func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteMRNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{})
+	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1048,7 +1051,7 @@ func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 // TestDeleteMRNoteAwardEmoji_APIError verifies the behavior of cov delete m r note award emoji a p i error.
 func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteMRNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1059,7 +1062,7 @@ func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 // TestListSnippetAwardEmoji_Validation verifies the behavior of cov list snippet award emoji validation.
 func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListSnippetAwardEmoji(t.Context(), client, ListInput{})
+	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1068,7 +1071,7 @@ func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 // TestListSnippetAwardEmoji_APIError verifies the behavior of cov list snippet award emoji a p i error.
 func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListSnippetAwardEmoji(t.Context(), client, ListInput{ProjectID: "p", IID: 1})
+	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{ProjectID: "p", IID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1077,7 +1080,7 @@ func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 // TestGetSnippetAwardEmoji_Validation verifies the behavior of cov get snippet award emoji validation.
 func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetSnippetAwardEmoji(t.Context(), client, GetInput{})
+	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1086,7 +1089,7 @@ func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 // TestGetSnippetAwardEmoji_APIError verifies the behavior of cov get snippet award emoji a p i error.
 func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetSnippetAwardEmoji(t.Context(), client, GetInput{ProjectID: "p", IID: 1, AwardID: 1})
+	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1095,7 +1098,7 @@ func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 // TestCreateSnippetAwardEmoji_Validation verifies the behavior of cov create snippet award emoji validation.
 func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateSnippetAwardEmoji(t.Context(), client, CreateInput{})
+	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1104,7 +1107,7 @@ func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 // TestCreateSnippetAwardEmoji_APIError verifies the behavior of cov create snippet award emoji a p i error.
 func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateSnippetAwardEmoji(t.Context(), client, CreateInput{ProjectID: "p", IID: 1, Name: "x"})
+	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{ProjectID: "p", IID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1113,7 +1116,7 @@ func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 // TestDeleteSnippetAwardEmoji_Validation verifies the behavior of cov delete snippet award emoji validation.
 func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteSnippetAwardEmoji(t.Context(), client, DeleteInput{})
+	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1122,7 +1125,7 @@ func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 // TestDeleteSnippetAwardEmoji_APIError verifies the behavior of cov delete snippet award emoji a p i error.
 func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteSnippetAwardEmoji(t.Context(), client, DeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1133,7 +1136,7 @@ func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 // TestListSnippetNoteAwardEmoji_Validation verifies the behavior of cov list snippet note award emoji validation.
 func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, ListOnNoteInput{})
+	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1142,7 +1145,7 @@ func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 // TestListSnippetNoteAwardEmoji_APIError verifies the behavior of cov list snippet note award emoji a p i error.
 func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, ListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
+	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1151,7 +1154,7 @@ func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 // TestGetSnippetNoteAwardEmoji_Validation verifies the behavior of cov get snippet note award emoji validation.
 func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, GetOnNoteInput{})
+	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1160,7 +1163,7 @@ func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 // TestGetSnippetNoteAwardEmoji_APIError verifies the behavior of cov get snippet note award emoji a p i error.
 func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, GetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1169,7 +1172,7 @@ func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 // TestCreateSnippetNoteAwardEmoji_Validation verifies the behavior of cov create snippet note award emoji validation.
 func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{})
+	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1178,7 +1181,7 @@ func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 // TestCreateSnippetNoteAwardEmoji_APIError verifies the behavior of cov create snippet note award emoji a p i error.
 func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
+	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1187,7 +1190,7 @@ func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 // TestDeleteSnippetNoteAwardEmoji_Validation verifies the behavior of cov delete snippet note award emoji validation.
 func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{})
+	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1196,7 +1199,7 @@ func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 // TestDeleteSnippetNoteAwardEmoji_APIError verifies the behavior of cov delete snippet note award emoji a p i error.
 func TestDeleteSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
-	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, DeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
 	if err == nil {
 		t.Fatal("expected API error")
 	}
@@ -1412,31 +1415,31 @@ func TestCreateAPIErrors(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("CreateIssueNoteAwardEmoji", func(t *testing.T) {
-		_, err := CreateIssueNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		_, err := CreateIssueNoteAwardEmoji(ctx, client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 	t.Run("CreateMRAwardEmoji", func(t *testing.T) {
-		_, err := CreateMRAwardEmoji(ctx, client, CreateInput{ProjectID: "p", IID: 1, Name: "star"})
+		_, err := CreateMRAwardEmoji(ctx, client, MRCreateInput{ProjectID: "p", IID: 1, Name: "star"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 	t.Run("CreateMRNoteAwardEmoji", func(t *testing.T) {
-		_, err := CreateMRNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		_, err := CreateMRNoteAwardEmoji(ctx, client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 	t.Run("CreateSnippetAwardEmoji", func(t *testing.T) {
-		_, err := CreateSnippetAwardEmoji(ctx, client, CreateInput{ProjectID: "p", IID: 1, Name: "star"})
+		_, err := CreateSnippetAwardEmoji(ctx, client, SnippetCreateInput{ProjectID: "p", IID: 1, Name: "star"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 	t.Run("CreateSnippetNoteAwardEmoji", func(t *testing.T) {
-		_, err := CreateSnippetNoteAwardEmoji(ctx, client, CreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
+		_, err := CreateSnippetNoteAwardEmoji(ctx, client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "star"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

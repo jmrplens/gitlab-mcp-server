@@ -46,7 +46,7 @@ func TestRegisterTools_DeleteNoteError(t *testing.T) {
 		Name: "gitlab_delete_epic_discussion_note",
 		Arguments: map[string]any{
 			"full_path": "42",
-			"iid":       float64(1),
+			"epic_iid":  float64(1),
 			"note_id":   float64(10),
 		},
 	})

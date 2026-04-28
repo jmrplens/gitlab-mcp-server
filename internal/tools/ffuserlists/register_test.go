@@ -41,7 +41,7 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_ff_user_list_delete",
-		Arguments: map[string]any{"project_id": "my-project", "iid": float64(10)},
+		Arguments: map[string]any{"project_id": "my-project", "user_list_iid": float64(10)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -80,7 +80,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_ff_user_list_delete",
-		Arguments: map[string]any{"project_id": "p", "iid": float64(1)},
+		Arguments: map[string]any{"project_id": "p", "user_list_iid": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)

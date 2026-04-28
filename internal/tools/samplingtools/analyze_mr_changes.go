@@ -21,13 +21,13 @@ import (
 // AnalyzeMRChangesInput defines parameters for LLM-assisted MR code review.
 type AnalyzeMRChangesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID"`
 }
 
 // AnalyzeMRChangesOutput holds the LLM analysis result for an MR.
 type AnalyzeMRChangesOutput struct {
 	toolutil.HintableOutput
-	MRIID     int64  `json:"mr_iid"`
+	MRIID     int64  `json:"merge_request_iid"`
 	Title     string `json:"title"`
 	Analysis  string `json:"analysis"`
 	Model     string `json:"model"`
@@ -51,7 +51,7 @@ func AnalyzeMRChanges(ctx context.Context, req *mcp.CallToolRequest, client *git
 		return AnalyzeMRChangesOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return AnalyzeMRChangesOutput{}, errors.New("mr_iid must be a positive integer")
+		return AnalyzeMRChangesOutput{}, errors.New("merge_request_iid must be a positive integer")
 	}
 
 	tracker := progress.FromRequest(req)

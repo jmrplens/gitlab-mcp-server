@@ -59,7 +59,7 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 		return h.completeProjectID(ctx, argValue)
 	case "group_id":
 		return h.completeGroupID(ctx, argValue)
-	case "mr_iid":
+	case "merge_request_iid":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMRIID)
 	case "issue_iid":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeIssueIID)
@@ -112,7 +112,7 @@ func (h *Handler) completeResourceArg(ctx context.Context, req *mcp.CompleteRequ
 		return h.completeProjectID(ctx, argValue)
 	case "group_id":
 		return h.completeGroupID(ctx, argValue)
-	case "mr_iid":
+	case "merge_request_iid":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMRIID)
 	case "issue_iid":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeIssueIID)

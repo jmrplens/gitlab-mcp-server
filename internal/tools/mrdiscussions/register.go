@@ -84,7 +84,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_discussion_get", start, nil)
 			return toolutil.NotFoundResult("MR Discussion", fmt.Sprintf("discussion %q on MR !%d in project %s", input.DiscussionID, input.MRIID, input.ProjectID),
 				"Use gitlab_mr_discussion_list to list discussions on this merge request",
-				"Verify the discussion_id and mr_iid are correct",
+				"Verify the discussion_id and merge_request_iid are correct",
 			), Output{}, nil
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_discussion_get", start, err)

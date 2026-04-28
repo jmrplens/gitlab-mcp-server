@@ -99,7 +99,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		waitForMRReady(ctx, t, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
 		deadline := time.Now().Add(120 * time.Second)
@@ -179,8 +179,8 @@ func TestMeta_MergeRequests(t *testing.T) {
 		out, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
 			},
 		})
 		requireNoError(t, err, "get MR meta")
@@ -203,9 +203,9 @@ func TestMeta_MergeRequests(t *testing.T) {
 		out, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
-				"title":      "E2E MR meta updated",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"title":             "E2E MR meta updated",
 			},
 		})
 		requireNoError(t, err, "update MR meta")
@@ -213,7 +213,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		waitForMRReady(ctx, t, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
 		deadline := time.Now().Add(120 * time.Second)
@@ -227,8 +227,8 @@ func TestMeta_MergeRequests(t *testing.T) {
 			out, err = callToolOn[mergerequests.CommitsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 				"action": "commits",
 				"params": map[string]any{
-					"project_id": proj.pidStr(),
-					"mr_iid":     mrIID,
+					"project_id":        proj.pidStr(),
+					"merge_request_iid": mrIID,
 				},
 			})
 			if err == nil && len(out.Commits) >= 1 {
@@ -247,8 +247,8 @@ func TestMeta_MergeRequests(t *testing.T) {
 		out, err := callToolOn[mergerequests.ParticipantsOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "participants",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
 			},
 		})
 		requireNoError(t, err, "MR participants meta")
@@ -259,8 +259,8 @@ func TestMeta_MergeRequests(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "delete",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mrIID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
 			},
 		})
 		requireNoError(t, err, "delete MR meta")

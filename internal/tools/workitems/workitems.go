@@ -109,7 +109,7 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 // GetInput is the input for getting a single work item.
 type GetInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the project or group (e.g. my-group/my-project),required"`
-	IID      int64  `json:"iid" jsonschema:"Work item IID,required"`
+	IID      int64  `json:"work_item_iid" jsonschema:"Work item IID,required"`
 }
 
 // GetOutput is the output for getting a single work item.
@@ -121,7 +121,7 @@ type GetOutput struct {
 // Get retrieves a single work item by IID.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
 	if input.IID <= 0 {
-		return GetOutput{}, toolutil.ErrRequiredInt64("get_work_item", "iid")
+		return GetOutput{}, toolutil.ErrRequiredInt64("get_work_item", "work_item_iid")
 	}
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
@@ -293,7 +293,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // UpdateInput is the input for updating a work item.
 type UpdateInput struct {
 	FullPath       string  `json:"full_path" jsonschema:"Full path of the project or group (e.g. my-group/my-project),required"`
-	IID            int64   `json:"iid" jsonschema:"Work item IID,required"`
+	IID            int64   `json:"work_item_iid" jsonschema:"Work item IID,required"`
 	Title          string  `json:"title,omitempty" jsonschema:"New title"`
 	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
 	Description    string  `json:"description,omitempty" jsonschema:"New description"`
@@ -315,7 +315,7 @@ type UpdateInput struct {
 // Update modifies an existing work item.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (GetOutput, error) {
 	if input.IID <= 0 {
-		return GetOutput{}, toolutil.ErrRequiredInt64("update_work_item", "iid")
+		return GetOutput{}, toolutil.ErrRequiredInt64("update_work_item", "work_item_iid")
 	}
 
 	opts := &gl.UpdateWorkItemOptions{}
@@ -391,13 +391,13 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // DeleteInput is the input for deleting a work item.
 type DeleteInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the project or group (e.g. my-group/my-project),required"`
-	IID      int64  `json:"iid" jsonschema:"Work item IID,required"`
+	IID      int64  `json:"work_item_iid" jsonschema:"Work item IID,required"`
 }
 
 // Delete permanently removes a work item by IID.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("delete_work_item", "iid")
+		return toolutil.ErrRequiredInt64("delete_work_item", "work_item_iid")
 	}
 	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {

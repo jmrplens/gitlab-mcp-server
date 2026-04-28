@@ -57,9 +57,9 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 | # | Name | URI Template | Description |
 |---|------|--------------|-------------|
 | 27 | `issue` | `gitlab://project/{project_id}/issue/{issue_iid}` | Get details of a specific issue by its IID (project-scoped ID). Returns title, state, labels, assignees, author, web URL, and creation date. |
-| 28 | `merge_request` | `gitlab://project/{project_id}/mr/{mr_iid}` | Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL. |
-| 29 | `merge_request_notes` | `gitlab://project/{project_id}/mr/{mr_iid}/notes` | List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps. |
-| 30 | `merge_request_discussions` | `gitlab://project/{project_id}/mr/{mr_iid}/discussions` | List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at). |
+| 28 | `merge_request` | `gitlab://project/{project_id}/mr/{merge_request_iid}` | Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL. |
+| 29 | `merge_request_notes` | `gitlab://project/{project_id}/mr/{merge_request_iid}/notes` | List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps. |
+| 30 | `merge_request_discussions` | `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at). |
 
 ### CI/CD Resources
 
@@ -104,7 +104,7 @@ Static best-practice guides that provide AI assistants with GitLab workflow know
 | `project_id` | string | Numeric project ID or URL-encoded path (e.g., `group%2Fproject`) |
 | `group_id` | string | Numeric group ID or URL-encoded path |
 | `pipeline_id` | integer | Numeric pipeline ID |
-| `mr_iid` | integer | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab) |
+| `merge_request_iid` | integer | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab) |
 | `issue_iid` | integer | Issue IID (project-scoped numeric ID, visible as `#N` in GitLab) |
 | `sha` | string | Commit SHA (full or short) |
 | `ref` | string | Branch name, tag name, or commit SHA |

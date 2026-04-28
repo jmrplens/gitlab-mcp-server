@@ -286,7 +286,7 @@ func collectMRDiscussionInfos(ctx context.Context, client *gitlabclient.Client, 
 			ListOptions: gl.ListOptions{PerPage: maxListItems},
 		}, gl.WithContext(ctx))
 		if dErr != nil {
-			slog.Warn("failed to fetch discussions", "mr_iid", mr.IID, "error", dErr)
+			slog.Warn("failed to fetch discussions", "merge_request_iid", mr.IID, "error", dErr)
 			infos = append(infos, info)
 			continue
 		}

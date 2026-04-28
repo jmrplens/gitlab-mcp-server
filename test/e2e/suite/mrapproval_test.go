@@ -8,7 +8,6 @@ package suite
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 )
@@ -63,9 +62,10 @@ func TestIndividual_MRApproval(t *testing.T) {
 
 	t.Run("Individual/MR/Merge", func(t *testing.T) {
 		drainSidekiq(ctx, t)
+		waitForMRReady(ctx, t, proj.ID, mr.IID)
 		var out mergerequests.Output
 		var err error
-		for i := range 20 {
+		for i := range 5 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.individual, "gitlab_mr_merge", mergerequests.MergeInput{
 				ProjectID:                proj.pidOf(),
 				MRIID:                    mr.IID,
@@ -75,7 +75,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 				break
 			}
 			t.Logf("merge attempt %d: %v", i+1, err)
-			time.Sleep(time.Duration(i+1) * time.Second)
+			waitForMRReady(ctx, t, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "merge MR")
 		requireTrue(t, out.State == "merged", "expected state 'merged', got %q", out.State)
@@ -98,8 +98,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		_, err := callToolOn[mergerequests.PipelinesOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "pipelines",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta MR pipelines")
@@ -110,9 +110,9 @@ func TestMeta_MRApproval(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "rebase",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"skip_ci":    true,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"skip_ci":           true,
 			},
 		})
 		requireNoError(t, err, "meta MR rebase")
@@ -123,8 +123,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		out, err := callToolOn[mergerequests.ApproveOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approve",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta approve MR")
@@ -135,8 +135,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "unapprove",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta unapprove MR")
@@ -145,14 +145,15 @@ func TestMeta_MRApproval(t *testing.T) {
 
 	t.Run("Meta/MR/Merge", func(t *testing.T) {
 		drainSidekiq(ctx, t)
+		waitForMRReady(ctx, t, proj.ID, mr.IID)
 		var out mergerequests.Output
 		var err error
-		for i := range 20 {
+		for i := range 5 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 				"action": "merge",
 				"params": map[string]any{
 					"project_id":                  proj.pidStr(),
-					"mr_iid":                      mr.IID,
+					"merge_request_iid":           mr.IID,
 					"should_remove_source_branch": true,
 				},
 			})
@@ -160,7 +161,7 @@ func TestMeta_MRApproval(t *testing.T) {
 				break
 			}
 			t.Logf("meta merge attempt %d: %v", i+1, err)
-			time.Sleep(time.Duration(i+1) * time.Second)
+			waitForMRReady(ctx, t, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "meta merge MR")
 		requireTrue(t, out.State == "merged", "expected state merged, got %q", out.State)

@@ -242,14 +242,27 @@ Lower-level helpers detect specific network conditions:
 
 ## Parameter-Name Guidance Helpers
 
-When LLMs call meta-tools, misnamed JSON parameters are silently ignored during deserialization and the field defaults to its zero value. Two helpers produce error messages that guide the LLM to use the exact documented parameter name:
+Meta-tool parameter parsing combines two complementary mechanisms to surface
+actionable errors when LLMs mistype argument names:
+
+1. **Strict unknown-key rejection** — `strictUnmarshal` in
+   `internal/toolutil/metatool.go` decodes the `params` envelope with
+   `json.Decoder.DisallowUnknownFields()`. Reserved meta keys (e.g. `confirm`)
+   are stripped from the params map before unmarshalling; any other key that
+   does not map to a field on the action's input struct produces an immediate
+   error of the form `json: unknown field "foo"`. This prevents the silent
+   drop-and-default behaviour of `encoding/json` and lets the LLM self-correct
+   on misspellings.
+2. **Required-field helpers** — once a key is accepted, two helpers detect
+   missing required values and emit messages that name the exact documented
+   parameter:
 
 | Helper | Use Case | Example Output |
 | --- | --- | --- |
 | `ErrRequiredInt64(op, field)` | Required int64 field is 0 | `"milestoneGet: milestone_iid is required (must be > 0). Ensure you use the exact parameter name 'milestone_iid'..."` |
 | `ErrRequiredString(op, field)` | Required string field is empty | `"branchCreate: branch_name is required (must be non-empty). Ensure you use the exact parameter name 'branch_name'..."` |
 
-Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `merge_request_iid` vs `mr_iid`).
+Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `iid` vs `merge_request_iid`).
 
 ## Destructive Action Confirmation
 

@@ -26,7 +26,7 @@ type ListInput struct {
 
 // MergeRequestItem is a summary of a merge request associated with a deployment.
 type MergeRequestItem struct {
-	IID          int64  `json:"mr_iid"`
+	IID          int64  `json:"merge_request_iid"`
 	Title        string `json:"title"`
 	State        string `json:"state"`
 	Author       string `json:"author"`

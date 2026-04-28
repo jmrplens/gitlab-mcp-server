@@ -126,9 +126,9 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note":       "E2E draft note meta",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note":              "E2E draft note meta",
 			},
 		})
 		requireNoError(t, err, "create draft note meta")
@@ -141,8 +141,8 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		out, err := callToolOn[mrdraftnotes.ListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_list",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "list draft notes meta")
@@ -153,9 +153,9 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    noteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           noteID,
 			},
 		})
 		requireNoError(t, err, "get draft note meta")
@@ -166,10 +166,10 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_update",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    noteID,
-				"note":       "E2E draft meta updated",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           noteID,
+				"note":              "E2E draft meta updated",
 			},
 		})
 		requireNoError(t, err, "update draft note meta")
@@ -183,9 +183,9 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		out, err := callToolOn[mrdraftnotes.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note":       "E2E draft note meta to delete",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note":              "E2E draft note meta to delete",
 			},
 		})
 		requireNoError(t, err, "create draft note meta for delete")
@@ -199,9 +199,9 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_delete",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"note_id":    deleteNoteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"note_id":           deleteNoteID,
 			},
 		})
 		requireNoError(t, err, "delete draft note meta")
@@ -212,8 +212,8 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_publish_all",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "publish all draft notes meta")

@@ -427,10 +427,10 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		args map[string]any
 	}{
 		{"list", "gitlab_ff_user_list_list", map[string]any{"project_id": "42"}},
-		{"get", "gitlab_ff_user_list_get", map[string]any{"project_id": "42", "iid": float64(10)}},
+		{"get", "gitlab_ff_user_list_get", map[string]any{"project_id": "42", "user_list_iid": float64(10)}},
 		{"create", "gitlab_ff_user_list_create", map[string]any{"project_id": "42", "name": "test", "user_xids": "u1"}},
-		{"update", "gitlab_ff_user_list_update", map[string]any{"project_id": "42", "iid": float64(10), "name": "updated"}},
-		{"delete", "gitlab_ff_user_list_delete", map[string]any{"project_id": "42", "iid": float64(10)}},
+		{"update", "gitlab_ff_user_list_update", map[string]any{"project_id": "42", "user_list_iid": float64(10), "name": "updated"}},
+		{"delete", "gitlab_ff_user_list_delete", map[string]any{"project_id": "42", "user_list_iid": float64(10)}},
 	}
 
 	for _, tt := range tools {

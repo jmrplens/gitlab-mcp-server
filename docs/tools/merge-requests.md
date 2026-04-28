@@ -320,7 +320,7 @@ Get the approval configuration for a GitLab merge request including required app
 
 ### `gitlab_mr_approval_reset`
 
-Reset all approvals on a GitLab merge request. Requires project_id and mr_iid.
+Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -341,7 +341,7 @@ Update an existing approval rule on a GitLab merge request. Modify the rule name
 
 ### `gitlab_mr_approval_rule_delete`
 
-Delete an approval rule from a GitLab merge request. Requires project_id, mr_iid, and approval_rule_id.
+Delete an approval rule from a GitLab merge request. Requires project_id, merge_request_iid, and approval_rule_id.
 
 | Annotation | **Delete** |
 | ---------- | ---------- |

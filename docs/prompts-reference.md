@@ -16,10 +16,10 @@ These prompts are registered directly in `internal/prompts/prompts.go`.
 
 | # | Name | Arguments | Description |
 |---|------|-----------|-------------|
-| 1 | `summarize_mr_changes` | `project_id`*, `mr_iid`* | Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). |
-| 2 | `review_mr` | `project_id`*, `mr_iid`* | Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics and a review plan. Full diffs included. |
-| 3 | `suggest_mr_reviewers` | `project_id`*, `mr_iid`* | Suggest suitable merge request reviewers based on the files changed and active project members. Excludes the MR author. |
-| 4 | `mr_risk_assessment` | `project_id`*, `mr_iid`* | Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size, changed files, sensitive patterns, and conflict status. |
+| 1 | `summarize_mr_changes` | `project_id`*, `merge_request_iid`* | Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). |
+| 2 | `review_mr` | `project_id`*, `merge_request_iid`* | Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics and a review plan. Full diffs included. |
+| 3 | `suggest_mr_reviewers` | `project_id`*, `merge_request_iid`* | Suggest suitable merge request reviewers based on the files changed and active project members. Excludes the MR author. |
+| 4 | `mr_risk_assessment` | `project_id`*, `merge_request_iid`* | Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size, changed files, sensitive patterns, and conflict status. |
 
 ### Project Overview
 
@@ -114,7 +114,7 @@ Project configuration audit prompts. Registered in `internal/prompts/prompt_audi
 | Argument | Type | Description |
 |----------|------|-------------|
 | `project_id` | string (required) | Project ID (numeric) or URL-encoded path (e.g. `group/project`) |
-| `mr_iid` | string (required) | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab) |
+| `merge_request_iid` | string (required) | Merge request IID (project-scoped numeric ID, visible as `!N` in GitLab) |
 | `group_id` | string (required) | Group ID (numeric) or URL-encoded path |
 | `username` | string | GitLab username (defaults to authenticated user when omitted) |
 | `days` | string | Number of days to look back (default varies by prompt: 7 or 30) |

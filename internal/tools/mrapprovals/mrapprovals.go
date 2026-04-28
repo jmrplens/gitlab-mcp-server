@@ -23,32 +23,32 @@ import (
 // of a merge request.
 type StateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // RulesInput defines parameters for listing the approval rules
 // of a merge request.
 type RulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // ConfigInput defines parameters for getting approval configuration.
 type ConfigInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // ResetInput defines parameters for resetting approvals on a merge request.
 type ResetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // CreateRuleInput defines parameters for creating an MR approval rule.
 type CreateRuleInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                 int64                `json:"mr_iid"                   jsonschema:"Merge request internal ID,required"`
+	MRIID                 int64                `json:"merge_request_iid"                   jsonschema:"Merge request internal ID,required"`
 	Name                  string               `json:"name"                     jsonschema:"Rule name,required"`
 	ApprovalsRequired     int64                `json:"approvals_required"       jsonschema:"Number of approvals required,required"`
 	ApprovalProjectRuleID int64                `json:"approval_project_rule_id" jsonschema:"Project-level approval rule ID to inherit from"`
@@ -59,7 +59,7 @@ type CreateRuleInput struct {
 // UpdateRuleInput defines parameters for updating an MR approval rule.
 type UpdateRuleInput struct {
 	ProjectID         toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID             int64                `json:"mr_iid"             jsonschema:"Merge request internal ID,required"`
+	MRIID             int64                `json:"merge_request_iid"             jsonschema:"Merge request internal ID,required"`
 	ApprovalRuleID    int64                `json:"approval_rule_id"   jsonschema:"Approval rule ID,required"`
 	Name              string               `json:"name"               jsonschema:"Rule name"`
 	ApprovalsRequired *int64               `json:"approvals_required" jsonschema:"Number of approvals required"`
@@ -70,7 +70,7 @@ type UpdateRuleInput struct {
 // DeleteRuleInput defines parameters for deleting an MR approval rule.
 type DeleteRuleInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"       jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID          int64                `json:"mr_iid"           jsonschema:"Merge request internal ID,required"`
+	MRIID          int64                `json:"merge_request_iid"           jsonschema:"Merge request internal ID,required"`
 	ApprovalRuleID int64                `json:"approval_rule_id" jsonschema:"Approval rule ID,required"`
 }
 
@@ -119,7 +119,7 @@ type Approver struct {
 type ConfigOutput struct {
 	toolutil.HintableOutput
 	ID                   int64      `json:"id"`
-	IID                  int64      `json:"mr_iid"`
+	IID                  int64      `json:"merge_request_iid"`
 	ProjectID            int64      `json:"project_id"`
 	Title                string     `json:"title"`
 	State                string     `json:"state"`
@@ -222,7 +222,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 		return StateOutput{}, errors.New("mrApprovalState: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return StateOutput{}, toolutil.ErrRequiredInt64("mrApprovalState", "mr_iid")
+		return StateOutput{}, toolutil.ErrRequiredInt64("mrApprovalState", "merge_request_iid")
 	}
 	state, _, err := client.GL().MergeRequestApprovals.GetApprovalState(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -250,7 +250,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 		return RulesOutput{}, errors.New("mrApprovalRules: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return RulesOutput{}, toolutil.ErrRequiredInt64("mrApprovalRules", "mr_iid")
+		return RulesOutput{}, toolutil.ErrRequiredInt64("mrApprovalRules", "merge_request_iid")
 	}
 	rules, _, err := client.GL().MergeRequestApprovals.GetApprovalRules(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -277,7 +277,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 		return ConfigOutput{}, errors.New("mrApprovalConfig: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return ConfigOutput{}, toolutil.ErrRequiredInt64("mrApprovalConfig", "mr_iid")
+		return ConfigOutput{}, toolutil.ErrRequiredInt64("mrApprovalConfig", "merge_request_iid")
 	}
 	cfg, _, err := client.GL().MergeRequestApprovals.GetConfiguration(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -299,7 +299,7 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 		return errors.New("mrApprovalReset: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrApprovalReset", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrApprovalReset", "merge_request_iid")
 	}
 	_, err := client.GL().MergeRequestApprovals.ResetApprovalsOfMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -318,7 +318,7 @@ func CreateRule(ctx context.Context, client *gitlabclient.Client, input CreateRu
 		return RuleOutput{}, errors.New("mrApprovalRuleCreate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return RuleOutput{}, toolutil.ErrRequiredInt64("mrApprovalRuleCreate", "mr_iid")
+		return RuleOutput{}, toolutil.ErrRequiredInt64("mrApprovalRuleCreate", "merge_request_iid")
 	}
 	if input.Name == "" {
 		return RuleOutput{}, errors.New("mrApprovalRuleCreate: name is required")
@@ -355,7 +355,7 @@ func UpdateRule(ctx context.Context, client *gitlabclient.Client, input UpdateRu
 		return RuleOutput{}, errors.New("mrApprovalRuleUpdate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return RuleOutput{}, toolutil.ErrRequiredInt64("mrApprovalRuleUpdate", "mr_iid")
+		return RuleOutput{}, toolutil.ErrRequiredInt64("mrApprovalRuleUpdate", "merge_request_iid")
 	}
 	if input.ApprovalRuleID <= 0 {
 		return RuleOutput{}, toolutil.ErrRequiredInt64("mrApprovalRuleUpdate", "approval_rule_id")
@@ -392,7 +392,7 @@ func DeleteRule(ctx context.Context, client *gitlabclient.Client, input DeleteRu
 		return errors.New("mrApprovalRuleDelete: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrApprovalRuleDelete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrApprovalRuleDelete", "merge_request_iid")
 	}
 	if input.ApprovalRuleID <= 0 {
 		return toolutil.ErrRequiredInt64("mrApprovalRuleDelete", "approval_rule_id")

@@ -64,10 +64,10 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_epic_issue_list", map[string]any{"full_path": testFullPath, "iid": 1}},
-		{"gitlab_epic_issue_assign", map[string]any{"full_path": testFullPath, "iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
-		{"gitlab_epic_issue_remove", map[string]any{"full_path": testFullPath, "iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
-		{"gitlab_epic_issue_update", map[string]any{"full_path": testFullPath, "iid": 1, "child_id": "gid://gitlab/WorkItem/10", "adjacent_id": "gid://gitlab/WorkItem/20", "relative_position": "BEFORE"}},
+		{"gitlab_epic_issue_list", map[string]any{"full_path": testFullPath, "epic_iid": 1}},
+		{"gitlab_epic_issue_assign", map[string]any{"full_path": testFullPath, "epic_iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
+		{"gitlab_epic_issue_remove", map[string]any{"full_path": testFullPath, "epic_iid": 1, "child_project_path": "child-group/child-project", "child_iid": 42}},
+		{"gitlab_epic_issue_update", map[string]any{"full_path": testFullPath, "epic_iid": 1, "child_id": "gid://gitlab/WorkItem/10", "adjacent_id": "gid://gitlab/WorkItem/20", "relative_position": "BEFORE"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

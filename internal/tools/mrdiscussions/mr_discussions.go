@@ -32,7 +32,7 @@ type DiffPosition struct {
 // CreateInput defines parameters for creating a discussion (inline or general).
 type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Body      string               `json:"body"       jsonschema:"Discussion body,required"`
 	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Diff position for inline comments. Omit for general MR discussions."`
 }
@@ -67,7 +67,7 @@ type Output struct {
 // ResolveInput defines parameters for resolving/unresolving a discussion.
 type ResolveInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"   jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid"       jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID        int64                `json:"merge_request_iid"       jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion to resolve,required"`
 	Resolved     bool                 `json:"resolved"      jsonschema:"True to resolve, false to unresolve,required"`
 }
@@ -75,7 +75,7 @@ type ResolveInput struct {
 // ReplyInput defines parameters for replying to an existing discussion.
 type ReplyInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion to reply to,required"`
 	Body         string               `json:"body"          jsonschema:"Reply body,required"`
 }
@@ -83,7 +83,7 @@ type ReplyInput struct {
 // ListInput defines parameters for listing discussions.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	toolutil.PaginationInput
 }
 
@@ -145,7 +145,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, errors.New("mrDiscussionCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionCreate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionCreate", "merge_request_iid")
 	}
 	if input.Position != nil {
 		if err := validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
@@ -195,7 +195,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 		return Output{}, errors.New("mrDiscussionResolve: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionResolve", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionResolve", "merge_request_iid")
 	}
 	d, _, err := client.GL().Discussions.ResolveMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.ResolveMergeRequestDiscussionOptions{
 		Resolved: new(input.Resolved),
@@ -217,7 +217,7 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 		return NoteOutput{}, errors.New("mrDiscussionReply: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionReply", "mr_iid")
+		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionReply", "merge_request_iid")
 	}
 	n, _, err := client.GL().Discussions.AddMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.AddMergeRequestDiscussionNoteOptions{
 		Body: new(toolutil.NormalizeText(input.Body)),
@@ -239,7 +239,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("mrDiscussionList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mrDiscussionList", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mrDiscussionList", "merge_request_iid")
 	}
 	opts := &gl.ListMergeRequestDiscussionsOptions{}
 	if input.Page > 0 {
@@ -251,7 +251,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get")
+			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
 	out := make([]Output, len(discussions))
 	for i, d := range discussions {
@@ -263,14 +263,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // GetInput defines parameters for getting a single discussion.
 type GetInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion,required"`
 }
 
 // UpdateNoteInput defines parameters for updating a discussion note.
 type UpdateNoteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion containing the note,required"`
 	NoteID       int64                `json:"note_id"       jsonschema:"ID of the note to update,required"`
 	Body         string               `json:"body,omitempty"     jsonschema:"New body text (Markdown). Leave empty to keep current body."`
@@ -280,7 +280,7 @@ type UpdateNoteInput struct {
 // DeleteNoteInput defines parameters for deleting a discussion note.
 type DeleteNoteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID        int64                `json:"mr_iid"        jsonschema:"Merge request internal ID,required"`
+	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion containing the note,required"`
 	NoteID       int64                `json:"note_id"       jsonschema:"ID of the note to delete,required"`
 }
@@ -294,7 +294,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("mrDiscussionGet: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionGet", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionGet", "merge_request_iid")
 	}
 	d, _, err := client.GL().Discussions.GetMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
@@ -313,7 +313,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, errors.New("mrDiscussionNoteUpdate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionNoteUpdate", "mr_iid")
+		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionNoteUpdate", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionNoteUpdate", "note_id")
@@ -346,7 +346,7 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 		return errors.New("mrDiscussionNoteDelete: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrDiscussionNoteDelete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrDiscussionNoteDelete", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("mrDiscussionNoteDelete", "note_id")

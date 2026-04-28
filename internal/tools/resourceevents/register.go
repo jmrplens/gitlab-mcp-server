@@ -243,16 +243,16 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 Actions:
 - list_issue_label_events: List label events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_label_event: Get a single issue label event. Params: project_id, issue_iid, label_event_id (all required)
-- list_mr_label_events: List label events for a MR. Params: project_id, mr_iid (required), page, per_page
-- get_mr_label_event: Get a single MR label event. Params: project_id, mr_iid, label_event_id (all required)
+- list_mr_label_events: List label events for a MR. Params: project_id, merge_request_iid (required), page, per_page
+- get_mr_label_event: Get a single MR label event. Params: project_id, merge_request_iid, label_event_id (all required)
 - list_issue_milestone_events: List milestone events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_milestone_event: Get a single issue milestone event. Params: project_id, issue_iid, milestone_event_id (all required)
-- list_mr_milestone_events: List milestone events for a MR. Params: project_id, mr_iid (required), page, per_page
-- get_mr_milestone_event: Get a single MR milestone event. Params: project_id, mr_iid, milestone_event_id (all required)
+- list_mr_milestone_events: List milestone events for a MR. Params: project_id, merge_request_iid (required), page, per_page
+- get_mr_milestone_event: Get a single MR milestone event. Params: project_id, merge_request_iid, milestone_event_id (all required)
 - list_issue_state_events: List state events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_state_event: Get a single issue state event. Params: project_id, issue_iid, state_event_id (all required)
-- list_mr_state_events: List state events for a MR. Params: project_id, mr_iid (required), page, per_page
-- get_mr_state_event: Get a single MR state event. Params: project_id, mr_iid, state_event_id (all required)
+- list_mr_state_events: List state events for a MR. Params: project_id, merge_request_iid (required), page, per_page
+- get_mr_state_event: Get a single MR state event. Params: project_id, merge_request_iid, state_event_id (all required)
 - list_issue_iteration_events: List iteration events for an issue. Params: project_id, issue_iid (required), page, per_page
 - get_issue_iteration_event: Get a single issue iteration event. Params: project_id, issue_iid, iteration_event_id (all required)
 - list_issue_weight_events: List weight events for an issue. Params: project_id, issue_iid (required), page, per_page`,
