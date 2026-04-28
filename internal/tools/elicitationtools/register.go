@@ -53,13 +53,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_mr_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_mr_create"),
-		Description: "Interactively create a GitLab merge request: step-by-step prompts collect source branch (required), " +
+		Description: "Create a GitLab merge request through step-by-step prompts: source branch (required), " +
 			"target branch (required), title (required), description (optional multiline), comma-separated labels, " +
-			"squash-on-merge flag, and remove-source-branch flag, then ask for confirmation before calling the GitLab API. " +
+			"squash-on-merge flag, and remove-source-branch flag, with explicit confirmation before calling the GitLab API. " +
 			"Cancellation at any prompt aborts without creating the MR.\n\n" +
-			"When to use: human-in-the-loop MR creation where branches and metadata should be picked interactively. " +
-			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied. " +
-			"This tool is the interactive counterpart of gitlab_merge_request (action='create'); they share the same API outcome.\n\n" +
+			"When to use: human-in-the-loop MR creation. " +
+			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created MR (id, mr_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
 		Annotations: toolutil.CreateAnnotations,
@@ -83,9 +82,9 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_release_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_release_create"),
-		Description: "Interactively create a GitLab release: step-by-step prompts collect tag name (required, must reference an existing tag), " +
+		Description: "Create a GitLab release through step-by-step prompts: tag name (required, must reference an existing tag), " +
 			"release name (optional, defaults to tag name), and release notes/description (optional multiline), " +
-			"then ask for confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
+			"with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
 			"When to use: human-in-the-loop release publishing. " +
 			"NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\n" +
@@ -112,11 +111,10 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_project_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_project_create"),
-		Description: "Interactively create a GitLab project: step-by-step prompts collect name (required), " +
+		Description: "Create a GitLab project through step-by-step prompts: name (required), " +
 			"description (optional), visibility (private/internal/public), initialize-with-README flag, and default branch name, " +
-			"then ask for confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
-			"When to use: human-in-the-loop project creation. " +
-			"NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
+			"with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
+			"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group.",
 		Annotations: toolutil.CreateAnnotations,

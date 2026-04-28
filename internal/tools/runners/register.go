@@ -338,7 +338,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_runner",
 		Title: toolutil.TitleFromName("gitlab_runner"),
-		Description: `Manage GitLab CI/CD runners and runner controllers: instance / group / project runner CRUD, registration tokens, job assignments, and runner controllers (admin, experimental). Remove / delete / revoke and reset_token actions are destructive (revoking the registration token forces all runners to re-register).
+		Description: `Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token forces all runners to re-register.
 Valid actions: ` + toolutil.ValidActionsString(routes) + `
 
 When to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.

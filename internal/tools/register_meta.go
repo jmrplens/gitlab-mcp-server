@@ -769,7 +769,7 @@ func registerMergeRequestMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"event_mr_state_get":               routeAction(client, resourceevents.GetMRStateEvent),
 	}
 
-	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge requests: create, list, get, update, merge, approve, rebase, delete. Also manages approval rules/settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todo creation, related issues, award emoji, and resource events. Delete permanently removes an MR.
+	addMetaTool(server, "gitlab_merge_request", `Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -983,7 +983,8 @@ Behavior:
 - Side effects: any commit-producing action triggers webhooks, CI pipelines, and protected-branch / push-rule checks; archive returns large binary payloads (base64).
 - File delete is destructive at the working-tree level but git history is preserved.
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
+Errors: 404 (hint: confirm project_id, ref/sha, and file_path — paths are URL-encoded), 403 (hint: file_create/file_update/file_delete and commit_* require Developer+; protected branches may need Maintainer+), 400 (hint: file_update/file_delete accept last_commit_id for optimistic concurrency; commit_create needs at least one entry in actions).
 
 Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
 
@@ -1209,7 +1210,8 @@ Behavior:
 - Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; service_account_pat_create returns the cleartext token only ONCE — store it immediately; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
 - Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_*, epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete and service_account_pat_revoke are irreversible. archive is reversible via unarchive.
 
-Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
+Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation.
+Errors: 404 (hint: group_id can be numeric ID or URL-encoded full path), 403 (hint: most mutations require Maintainer+; group_member_share, transfer_project and service_account_* require Owner), 400 (hint: visibility ∈ private/internal/public; permanently_remove=true requires full_path).
 
 Param conventions: * = required. Most actions need group_id* (numeric ID or URL-encoded path like 'group/subgroup'). List actions accept page, per_page.
 
@@ -1593,7 +1595,7 @@ func registerPipelineMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"schedule_list_triggered_pipelines": routeAction(client, pipelineschedules.ListTriggeredPipelines),
 	}
 
-	addMetaTool(server, "gitlab_pipeline", `Manage GitLab CI/CD pipelines: list, get, create, retry, cancel, delete, and wait for completion. Also manages trigger tokens, resource groups, test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
+	addMetaTool(server, "gitlab_pipeline", `Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -1680,7 +1682,7 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"token_scope_remove_group":        destructiveVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
-	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs: list, get, retry, cancel, erase, play manual jobs, wait for completion, download artifacts/logs, and manage CI/CD job token scope. Erase/delete actions are destructive.
+	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
@@ -2224,7 +2226,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, bulk imports (GitLab→GitLab migrations), error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. Most actions require admin privileges. Delete/purge/revoke actions are destructive.
+	addMetaTool(server, "gitlab_admin", `GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -2418,8 +2420,8 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: manage deploy keys, deploy tokens, access tokens (project / group / personal), access requests, and invitations.
-NOT for: SSH/GPG keys or user-scoped PATs created from the user profile (use gitlab_user), instance admin tokens or impersonation tokens (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA / MFA flows.
+When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
+NOT for: SSH/GPG keys or user-scoped PATs created from the user profile (use gitlab_user), instance admin or impersonation tokens (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
 
 Returns:
 - token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.
@@ -2689,17 +2691,17 @@ Discussions (threaded):
 - discussion_update_note: snippet_id*, discussion_id*, note_id*, body*
 - discussion_delete_note: snippet_id*, discussion_id*, note_id*
 
-Notes (project snippets only):
-- note_list: project_id*, snippet_id*, order_by, sort
-- note_get / note_delete: project_id*, snippet_id*, note_id*
-- note_create: project_id*, snippet_id*, body*
-- note_update: project_id*, snippet_id*, note_id*, body*
+Notes (project snippets only) — all need project_id*, snippet_id*:
+- note_list: order_by, sort
+- note_get / note_delete: note_id*
+- note_create: body*
+- note_update: note_id*, body*
 
-Award emoji:
-- emoji_snippet_list / emoji_snippet_create / emoji_snippet_delete: project_id*, iid*, name* (create), award_id* (delete)
-- emoji_snippet_get: project_id*, iid*, award_id*
-- emoji_snippet_note_list / emoji_snippet_note_create / emoji_snippet_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (delete)
-- emoji_snippet_note_get: project_id*, iid*, note_id*, award_id*
+Award emoji — all need project_id*, iid* (snippet emoji) or project_id*, iid*, note_id* (note emoji):
+- emoji_snippet_list / emoji_snippet_note_list: (no extra params)
+- emoji_snippet_get / emoji_snippet_note_get: award_id*
+- emoji_snippet_create / emoji_snippet_note_create: name*
+- emoji_snippet_delete / emoji_snippet_note_delete: award_id*
 
 See also: gitlab_repository (project files and commits), gitlab_wiki (long-form project docs), gitlab_project (project membership and visibility), gitlab_custom_emoji (define group-level custom emoji).`, routes, toolutil.IconSnippet)
 }
