@@ -1790,8 +1790,8 @@ func registerUserMeta(server *mcp.Server, client *gitlabclient.Client, enterpris
 		routes["list_service_accounts"] = routeAction(client, users.ListServiceAccounts)
 	}
 
-	desc := `Manage GitLab users: CRUD, SSH/GPG keys, emails, PATs, impersonation tokens, status, todos, events, notifications, namespaces, and avatars. Delete/block/ban/reject actions are destructive.
-When to use: user CRUD, SSH/GPG key management, PATs, todos, events, notifications, namespaces. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance admin (use gitlab_admin).
+	desc := `User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
+When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).
 
 Param conventions: * = required. User IDs are integers. List actions accept page, per_page. Actions ending in _for_user take the same params as the base action plus user_id*. Plain ssh_keys / gpg_keys / emails (no suffix) operate on the current authenticated user with no params.
 
