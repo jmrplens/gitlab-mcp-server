@@ -496,33 +496,33 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 // never leaves the transitional state within maxWait, it logs and returns so
 // that the test's own assertion produces the actionable failure message.
 func waitForMRReady(ctx context.Context, t *testing.T, projectID, mrIID int64) {
-t.Helper()
-if sess.glClient == nil {
-return
-}
-drainSidekiq(ctx, t)
-const maxWait = 120 * time.Second
-deadline := time.Now().Add(maxWait)
-delay := 500 * time.Millisecond
-for time.Now().Before(deadline) {
-mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil)
-if err == nil {
-switch mr.DetailedMergeStatus {
-case "preparing", "checking", "unchecked", "":
-// still computing; continue polling
-default:
-t.Logf("MR !%d ready in project %d: detailed_merge_status=%s", mrIID, projectID, mr.DetailedMergeStatus)
-return
-}
-}
-select {
-case <-ctx.Done():
-return
-case <-time.After(delay):
-}
-if delay < 2*time.Second {
-delay *= 2
-}
-}
-t.Logf("MR !%d not ready after %s (continuing; final assertion will report state)", mrIID, maxWait)
+	t.Helper()
+	if sess.glClient == nil {
+		return
+	}
+	drainSidekiq(ctx, t)
+	const maxWait = 120 * time.Second
+	deadline := time.Now().Add(maxWait)
+	delay := 500 * time.Millisecond
+	for time.Now().Before(deadline) {
+		mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil)
+		if err == nil {
+			switch mr.DetailedMergeStatus {
+			case "preparing", "checking", "unchecked", "":
+			// still computing; continue polling
+			default:
+				t.Logf("MR !%d ready in project %d: detailed_merge_status=%s", mrIID, projectID, mr.DetailedMergeStatus)
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+		if delay < 2*time.Second {
+			delay *= 2
+		}
+	}
+	t.Logf("MR !%d not ready after %s (continuing; final assertion will report state)", mrIID, maxWait)
 }

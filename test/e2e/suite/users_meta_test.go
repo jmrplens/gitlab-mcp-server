@@ -215,7 +215,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 		username := sess.username
 		out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "namespace_search",
-			"params": map[string]any{"search": username},
+			"params": map[string]any{"query": username},
 		})
 		requireNoError(t, err, "namespace_search")
 		t.Logf("Namespace search '%s': %d results", username, len(out.Namespaces))
@@ -240,7 +240,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 		requireNoError(t, err, "get current user")
 		out, err := callToolOn[namespaces.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "namespace_get",
-			"params": map[string]any{"namespace_id": strconv.FormatInt(usr.ID, 10)},
+			"params": map[string]any{"id": strconv.FormatInt(usr.ID, 10)},
 		})
 		requireNoError(t, err, "namespace_get")
 		requireTrue(t, out.ID > 0, "namespace_get: expected ID > 0")
