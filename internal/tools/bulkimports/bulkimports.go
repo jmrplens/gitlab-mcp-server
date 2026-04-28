@@ -126,7 +126,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		},
 	}
 	if input.Status != "" {
-		opts.Status = new(input.Status)
+		opts.Status = &input.Status
 	}
 	imports, resp, err := client.GL().BulkImports.ListBulkImports(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -152,7 +152,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Migr
 	m, _, err := client.GL().BulkImports.GetBulkImport(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return MigrationSummary{}, toolutil.WrapErrWithStatusHint("bulk_import_get", err, http.StatusNotFound,
-			"verify the migration id with gitlab_bulk_import_list")
+			"verify the migration id with gitlab_list_bulk_imports")
 	}
 	return toSummary(m), nil
 }
@@ -254,7 +254,7 @@ func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEn
 		},
 	}
 	if input.Status != "" {
-		opts.Status = new(input.Status)
+		opts.Status = &input.Status
 	}
 	var (
 		entities []*gl.BulkImportEntity
@@ -293,7 +293,7 @@ func GetEntity(ctx context.Context, client *gitlabclient.Client, input GetEntity
 	e, _, err := client.GL().BulkImports.GetBulkImportEntity(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
 	if err != nil {
 		return EntitySummary{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_get", err, http.StatusNotFound,
-			"verify bulk_import_id and entity_id with gitlab_bulk_import_entity_list")
+			"verify bulk_import_id and entity_id with gitlab_list_bulk_import_entities")
 	}
 	return toEntitySummary(e), nil
 }
@@ -337,7 +337,7 @@ func ListEntityFailures(ctx context.Context, client *gitlabclient.Client, input 
 	failures, _, err := client.GL().BulkImports.GetBulkImportEntityFailures(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
 	if err != nil {
 		return ListEntityFailuresOutput{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_failures", err, http.StatusNotFound,
-			"verify bulk_import_id and entity_id with gitlab_bulk_import_entity_list")
+			"verify bulk_import_id and entity_id with gitlab_list_bulk_import_entities")
 	}
 	out := ListEntityFailuresOutput{BulkImportID: input.BulkImportID, EntityID: input.EntityID}
 	for _, f := range failures {

@@ -412,42 +412,42 @@ Start a new group or project bulk import migration (admin). Requires source GitL
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-### `gitlab_bulk_import_list`
+### `gitlab_list_bulk_imports`
 
 List all group or project bulk import migrations visible to the caller. Optionally filter by status.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_bulk_import_get`
+### `gitlab_get_bulk_import`
 
 Get details of a single bulk import migration by ID.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_bulk_import_cancel`
+### `gitlab_cancel_bulk_import`
 
 Cancel an in-progress bulk import migration. Returns the migration with updated status.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-### `gitlab_bulk_import_entity_list`
+### `gitlab_list_bulk_import_entities`
 
 List bulk import migration entities. When `bulk_import_id` is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_bulk_import_entity_get`
+### `gitlab_get_bulk_import_entity`
 
 Get details of a single bulk import migration entity by `bulk_import_id` and `entity_id`.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_bulk_import_entity_failures`
+### `gitlab_list_bulk_import_entity_failures`
 
 List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.
 
@@ -777,12 +777,12 @@ Download and apply the latest MCP server update. On Linux/macOS the binary is re
 | 42 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
 | 43 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
 | 44 | `gitlab_start_bulk_import` | Bulk Imports | Create |
-| 45 | `gitlab_bulk_import_list` | Bulk Imports | Read |
-| 46 | `gitlab_bulk_import_get` | Bulk Imports | Read |
-| 47 | `gitlab_bulk_import_cancel` | Bulk Imports | Update |
-| 48 | `gitlab_bulk_import_entity_list` | Bulk Imports | Read |
-| 49 | `gitlab_bulk_import_entity_get` | Bulk Imports | Read |
-| 50 | `gitlab_bulk_import_entity_failures` | Bulk Imports | Read |
+| 45 | `gitlab_list_bulk_imports` | Bulk Imports | Read |
+| 46 | `gitlab_get_bulk_import` | Bulk Imports | Read |
+| 47 | `gitlab_cancel_bulk_import` | Bulk Imports | Update |
+| 48 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
+| 49 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
+| 50 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
 | 51 | `gitlab_get_avatar` | Avatar | Read |
 | 52 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
 | 53 | `gitlab_pages_get` | Pages | Read |

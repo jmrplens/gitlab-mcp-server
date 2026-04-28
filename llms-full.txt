@@ -9281,9 +9281,9 @@ Remove all protection rules from a GitLab branch, allowing unrestricted push, me
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### bulk (6 tools)
+### cancel (2 tools)
 
-#### gitlab_bulk_import_cancel
+#### gitlab_cancel_bulk_import
 
 Cancel an in-progress bulk import migration. Returns the migration with updated status.
 
@@ -9292,65 +9292,6 @@ Cancel an in-progress bulk import migration. Returns the migration with updated 
 - `id` (integer) (required): Bulk import ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_bulk_import_entity_failures
-
-List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.
-
-**Parameters:**
-
-- `bulk_import_id` (integer) (required): Bulk import ID
-- `entity_id` (integer) (required): Entity ID within the bulk import
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_bulk_import_entity_get
-
-Get details of a single bulk import migration entity by bulk_import_id and entity_id.
-
-**Parameters:**
-
-- `bulk_import_id` (integer) (required): Bulk import ID
-- `entity_id` (integer) (required): Entity ID within the bulk import
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_bulk_import_entity_list
-
-List bulk import migration entities. When bulk_import_id is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.
-
-**Parameters:**
-
-- `bulk_import_id` (integer): Bulk import ID. If omitted, returns entities across all imports.
-- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `status` (string): Filter by entity status: created, started, finished, timeout, failed, canceled
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_bulk_import_get
-
-Get details of a single bulk import migration by ID.
-
-**Parameters:**
-
-- `id` (integer) (required): Bulk import ID
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-#### gitlab_bulk_import_list
-
-List all group or project bulk import migrations visible to the caller. Optionally filter by status.
-
-**Parameters:**
-
-- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `status` (string): Filter by status: created, started, finished, timeout, failed, canceled
-
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
-
-### cancel (1 tools)
 
 #### gitlab_cancel_github_import
 
@@ -11720,7 +11661,7 @@ Generate polished release notes using LLM-assisted analysis via MCP sampling. Co
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### get (87 tools)
+### get (89 tools)
 
 #### gitlab_get_appearance
 
@@ -11752,6 +11693,27 @@ Get a specific broadcast message by ID. Requires admin access.
 **Parameters:**
 
 - `id` (integer) (required): Broadcast message ID
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_get_bulk_import
+
+Get details of a single bulk import migration by ID.
+
+**Parameters:**
+
+- `id` (integer) (required): Bulk import ID
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_get_bulk_import_entity
+
+Get details of a single bulk import migration entity by bulk_import_id and entity_id.
+
+**Parameters:**
+
+- `bulk_import_id` (integer) (required): Bulk import ID
+- `entity_id` (integer) (required): Entity ID within the bulk import
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15009,7 +14971,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (75 tools)
+### list (78 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -15068,6 +15030,42 @@ List all broadcast messages. Requires admin access.
 
 - `page` (integer): Page number
 - `per_page` (integer): Items per page
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_list_bulk_import_entities
+
+List bulk import migration entities. When bulk_import_id is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.
+
+**Parameters:**
+
+- `bulk_import_id` (integer): Bulk import ID. If omitted, returns entities across all imports.
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `status` (string): Filter by entity status: created, started, finished, timeout, failed, canceled
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_list_bulk_import_entity_failures
+
+List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.
+
+**Parameters:**
+
+- `bulk_import_id` (integer) (required): Bulk import ID
+- `entity_id` (integer) (required): Entity ID within the bulk import
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_list_bulk_imports
+
+List all group or project bulk import migrations visible to the caller. Optionally filter by status.
+
+**Parameters:**
+
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `status` (string): Filter by status: created, started, finished, timeout, failed, canceled
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

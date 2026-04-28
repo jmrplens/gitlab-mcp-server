@@ -110,13 +110,13 @@ func TestRegisterTools_SuccessPaths(t *testing.T) {
 			"access_token": "glpat-test",
 			"entities":     []any{map[string]any{"source_type": "group_entity", "source_full_path": "g", "destination_slug": "g", "destination_namespace": "root"}},
 		}},
-		{"gitlab_bulk_import_list", map[string]any{}},
-		{"gitlab_bulk_import_get", map[string]any{"id": 1}},
-		{"gitlab_bulk_import_cancel", map[string]any{"id": 1}},
-		{"gitlab_bulk_import_entity_list", map[string]any{"bulk_import_id": 1}},
-		{"gitlab_bulk_import_entity_list", map[string]any{}},
-		{"gitlab_bulk_import_entity_get", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
-		{"gitlab_bulk_import_entity_failures", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
+		{"gitlab_list_bulk_imports", map[string]any{}},
+		{"gitlab_get_bulk_import", map[string]any{"id": 1}},
+		{"gitlab_cancel_bulk_import", map[string]any{"id": 1}},
+		{"gitlab_list_bulk_import_entities", map[string]any{"bulk_import_id": 1}},
+		{"gitlab_list_bulk_import_entities", map[string]any{}},
+		{"gitlab_get_bulk_import_entity", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
+		{"gitlab_list_bulk_import_entity_failures", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -141,12 +141,12 @@ func TestFormatGetMarkdown_FailuresAndStatusHints(t *testing.T) {
 	if !strings.Contains(got, "Failures detected") {
 		t.Errorf("expected failures hint; got %q", got)
 	}
-	if !strings.Contains(got, "gitlab_bulk_import_cancel") {
+	if !strings.Contains(got, "gitlab_cancel_bulk_import") {
 		t.Errorf("expected cancel hint for in-progress migration; got %q", got)
 	}
 
 	got = FormatGetMarkdown(MigrationSummary{ID: 2, Status: "created"})
-	if !strings.Contains(got, "gitlab_bulk_import_cancel") {
+	if !strings.Contains(got, "gitlab_cancel_bulk_import") {
 		t.Errorf("expected cancel hint for created status; got %q", got)
 	}
 }
@@ -207,8 +207,8 @@ func TestListEntityFailures_Validation(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NotFoundResults verifies that gitlab_bulk_import_get and
-// gitlab_bulk_import_entity_get return informational NotFoundResult (IsError
+// TestRegisterTools_NotFoundResults verifies that gitlab_get_bulk_import and
+// gitlab_get_bulk_import_entity return informational NotFoundResult (IsError
 // with hints) rather than transport errors when the API returns 404.
 func TestRegisterTools_NotFoundResults(t *testing.T) {
 	mux := http.NewServeMux()
@@ -222,8 +222,8 @@ func TestRegisterTools_NotFoundResults(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_bulk_import_get", map[string]any{"id": 999}},
-		{"gitlab_bulk_import_entity_get", map[string]any{"bulk_import_id": 999, "entity_id": 1}},
+		{"gitlab_get_bulk_import", map[string]any{"id": 999}},
+		{"gitlab_get_bulk_import_entity", map[string]any{"bulk_import_id": 999, "entity_id": 1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -254,12 +254,12 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_bulk_import_list", map[string]any{}},
-		{"gitlab_bulk_import_get", map[string]any{"id": 1}},
-		{"gitlab_bulk_import_cancel", map[string]any{"id": 1}},
-		{"gitlab_bulk_import_entity_list", map[string]any{"bulk_import_id": 1}},
-		{"gitlab_bulk_import_entity_get", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
-		{"gitlab_bulk_import_entity_failures", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
+		{"gitlab_list_bulk_imports", map[string]any{}},
+		{"gitlab_get_bulk_import", map[string]any{"id": 1}},
+		{"gitlab_cancel_bulk_import", map[string]any{"id": 1}},
+		{"gitlab_list_bulk_import_entities", map[string]any{"bulk_import_id": 1}},
+		{"gitlab_get_bulk_import_entity", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
+		{"gitlab_list_bulk_import_entity_failures", map[string]any{"bulk_import_id": 1, "entity_id": 7}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -3,7 +3,7 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 operations as tools for AI assistants.
 
 gitlab-mcp-server v1.3.3 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides 1006 individual MCP tools across 97 GitLab API domains, 32 meta-tools (47 with enterprise mode),
+It provides 1006 individual MCP tools across 96 GitLab API domains, 32 meta-tools (47 with enterprise mode),
 44 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start

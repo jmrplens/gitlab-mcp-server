@@ -13,15 +13,15 @@ import (
 func FormatStartMigrationMarkdown(out MigrationOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Bulk Import Migration Started\n\n")
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Status | %s |\n", out.Status)
+	sb.WriteString(toolutil.TblFieldValue)
+	fmt.Fprintf(&sb, toolutil.TblRowID, out.ID)
+	fmt.Fprintf(&sb, toolutil.TblRowStatus, out.Status)
 	fmt.Fprintf(&sb, "| Source Type | %s |\n", out.SourceType)
 	fmt.Fprintf(&sb, "| Source URL | %s |\n", toolutil.EscapeMdTableCell(out.SourceURL))
-	fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
-	fmt.Fprintf(&sb, "| Updated At | %s |\n", toolutil.FormatTime(out.UpdatedAt))
-	fmt.Fprintf(&sb, "| Has Failures | %v |\n", out.HasFailures)
-	toolutil.WriteHints(&sb, "Monitor migration progress with gitlab_bulk_import_get")
+	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(out.CreatedAt))
+	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(out.UpdatedAt))
+	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, out.HasFailures)
+	toolutil.WriteHints(&sb, "Monitor migration progress with gitlab_get_bulk_import")
 	return sb.String()
 }
 
@@ -44,8 +44,8 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WritePagination(&sb, out.Pagination)
 	toolutil.WriteHints(&sb,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_bulk_import_get with id for full details",
-		"Use gitlab_bulk_import_entity_list to inspect entities of a migration",
+		"Use gitlab_get_bulk_import with id for full details",
+		"Use gitlab_list_bulk_import_entities to inspect entities of a migration",
 	)
 	return sb.String()
 }
@@ -54,20 +54,20 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatGetMarkdown(out MigrationSummary) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Bulk Import Migration #%d\n\n", out.ID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Status | %s |\n", out.Status)
+	sb.WriteString(toolutil.TblFieldValue)
+	fmt.Fprintf(&sb, toolutil.TblRowID, out.ID)
+	fmt.Fprintf(&sb, toolutil.TblRowStatus, out.Status)
 	fmt.Fprintf(&sb, "| Source Type | %s |\n", out.SourceType)
 	fmt.Fprintf(&sb, "| Source URL | %s |\n", toolutil.EscapeMdTableCell(out.SourceURL))
-	fmt.Fprintf(&sb, "| Has Failures | %v |\n", out.HasFailures)
-	fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
-	fmt.Fprintf(&sb, "| Updated At | %s |\n", toolutil.FormatTime(out.UpdatedAt))
-	hints := []string{"Use gitlab_bulk_import_entity_list with bulk_import_id to inspect entities"}
+	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, out.HasFailures)
+	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(out.CreatedAt))
+	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(out.UpdatedAt))
+	hints := []string{"Use gitlab_list_bulk_import_entities with bulk_import_id to inspect entities"}
 	if out.HasFailures {
-		hints = append(hints, "Failures detected — use gitlab_bulk_import_entity_failures for diagnostics")
+		hints = append(hints, "Failures detected — use gitlab_list_bulk_import_entity_failures for diagnostics")
 	}
 	if out.Status == "started" || out.Status == "created" {
-		hints = append(hints, "Use gitlab_bulk_import_cancel to abort an in-progress migration")
+		hints = append(hints, "Use gitlab_cancel_bulk_import to abort an in-progress migration")
 	}
 	toolutil.WriteHints(&sb, hints...)
 	return sb.String()
@@ -93,8 +93,8 @@ func FormatListEntitiesMarkdown(out ListEntitiesOutput) string {
 	toolutil.WritePagination(&sb, out.Pagination)
 	toolutil.WriteHints(&sb,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_bulk_import_entity_get for full details on a single entity",
-		"Use gitlab_bulk_import_entity_failures to inspect failure diagnostics",
+		"Use gitlab_get_bulk_import_entity for full details on a single entity",
+		"Use gitlab_list_bulk_import_entity_failures to inspect failure diagnostics",
 	)
 	return sb.String()
 }
@@ -103,24 +103,24 @@ func FormatListEntitiesMarkdown(out ListEntitiesOutput) string {
 func FormatGetEntityMarkdown(e EntitySummary) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Bulk Import Entity #%d\n\n", e.ID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", e.ID)
+	sb.WriteString(toolutil.TblFieldValue)
+	fmt.Fprintf(&sb, toolutil.TblRowID, e.ID)
 	fmt.Fprintf(&sb, "| Bulk Import ID | %d |\n", e.BulkImportID)
-	fmt.Fprintf(&sb, "| Status | %s |\n", e.Status)
+	fmt.Fprintf(&sb, toolutil.TblRowStatus, e.Status)
 	fmt.Fprintf(&sb, "| Entity Type | %s |\n", e.EntityType)
 	fmt.Fprintf(&sb, "| Source | %s |\n", toolutil.EscapeMdTableCell(e.SourceFullPath))
 	fmt.Fprintf(&sb, "| Destination | %s |\n", toolutil.EscapeMdTableCell(e.DestinationFullPath))
 	fmt.Fprintf(&sb, "| Migrate Projects | %v |\n", e.MigrateProjects)
 	fmt.Fprintf(&sb, "| Migrate Memberships | %v |\n", e.MigrateMemberships)
-	fmt.Fprintf(&sb, "| Has Failures | %v |\n", e.HasFailures)
-	fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(e.CreatedAt))
-	fmt.Fprintf(&sb, "| Updated At | %s |\n", toolutil.FormatTime(e.UpdatedAt))
+	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, e.HasFailures)
+	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(e.CreatedAt))
+	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(e.UpdatedAt))
 	sb.WriteString("\n### Stats\n\n")
 	sb.WriteString("| Relation | Source | Fetched | Imported |\n|---|---|---|---|\n")
 	fmt.Fprintf(&sb, "| Labels | %d | %d | %d |\n", e.Stats.LabelsSource, e.Stats.LabelsFetched, e.Stats.LabelsImported)
 	fmt.Fprintf(&sb, "| Milestones | %d | %d | %d |\n", e.Stats.MilestonesSource, e.Stats.MilestonesFetched, e.Stats.MilestonesImported)
 	if e.HasFailures {
-		toolutil.WriteHints(&sb, "Failures detected — use gitlab_bulk_import_entity_failures for diagnostics")
+		toolutil.WriteHints(&sb, "Failures detected — use gitlab_list_bulk_import_entity_failures for diagnostics")
 	}
 	return sb.String()
 }
