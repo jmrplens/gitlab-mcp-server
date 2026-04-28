@@ -15,66 +15,194 @@ import (
 // hintEmojiOwnerOnly is the hint shared by all emoji delete handlers.
 const hintEmojiOwnerOnly = "only the user who awarded the emoji can remove it"
 
-// Common Input/Output types.
+// Issue Input types.
 
-// ListInput is the common input for listing award emoji on a resource.
-type ListInput struct {
+// IssueListInput is the input for listing award emoji on an issue.
+type IssueListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
 	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
 }
 
-// ListOnNoteInput is the input for listing award emoji on a note.
-type ListOnNoteInput struct {
+// IssueListOnNoteInput is the input for listing award emoji on an issue note.
+type IssueListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
 	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
 }
 
-// GetInput is the common input for getting a single award emoji.
-type GetInput struct {
+// IssueGetInput is the input for getting a single award emoji on an issue.
+type IssueGetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
 
-// GetOnNoteInput is the input for getting an award emoji on a note.
-type GetOnNoteInput struct {
+// IssueGetOnNoteInput is the input for getting an award emoji on an issue note.
+type IssueGetOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
 
-// CreateInput is the common input for creating an award emoji.
-type CreateInput struct {
+// IssueCreateInput is the input for creating an award emoji on an issue.
+type IssueCreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
 }
 
-// CreateOnNoteInput is the input for creating an award emoji on a note.
-type CreateOnNoteInput struct {
+// IssueCreateOnNoteInput is the input for creating an award emoji on an issue note.
+type IssueCreateOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
 }
 
-// DeleteInput is the common input for deleting an award emoji.
-type DeleteInput struct {
+// IssueDeleteInput is the input for deleting an award emoji from an issue.
+type IssueDeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
 
-// DeleteOnNoteInput is the input for deleting an award emoji on a note.
-type DeleteOnNoteInput struct {
+// IssueDeleteOnNoteInput is the input for deleting an award emoji from an issue note.
+type IssueDeleteOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"iid" jsonschema:"Issue IID or MR IID or Snippet ID,required"`
+	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// MR Input types.
+
+// MRListInput is the input for listing award emoji on a merge request.
+type MRListInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
+	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+}
+
+// MRListOnNoteInput is the input for listing award emoji on a merge request note.
+type MRListOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
+	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+}
+
+// MRGetInput is the input for getting a single award emoji on a merge request.
+type MRGetInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// MRGetOnNoteInput is the input for getting an award emoji on a merge request note.
+type MRGetOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// MRCreateInput is the input for creating an award emoji on a merge request.
+type MRCreateInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
+}
+
+// MRCreateOnNoteInput is the input for creating an award emoji on a merge request note.
+type MRCreateOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
+}
+
+// MRDeleteInput is the input for deleting an award emoji from a merge request.
+type MRDeleteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// MRDeleteOnNoteInput is the input for deleting an award emoji from a merge request note.
+type MRDeleteOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// Snippet Input types.
+
+// SnippetListInput is the input for listing award emoji on a project snippet.
+type SnippetListInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
+	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+}
+
+// SnippetListOnNoteInput is the input for listing award emoji on a snippet note.
+type SnippetListOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
+	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+}
+
+// SnippetGetInput is the input for getting a single award emoji on a snippet.
+type SnippetGetInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// SnippetGetOnNoteInput is the input for getting an award emoji on a snippet note.
+type SnippetGetOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// SnippetCreateInput is the input for creating an award emoji on a snippet.
+type SnippetCreateInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
+}
+
+// SnippetCreateOnNoteInput is the input for creating an award emoji on a snippet note.
+type SnippetCreateOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
+	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
+}
+
+// SnippetDeleteInput is the input for deleting an award emoji from a snippet.
+type SnippetDeleteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
+	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
+}
+
+// SnippetDeleteOnNoteInput is the input for deleting an award emoji from a snippet note.
+type SnippetDeleteOnNoteInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
@@ -101,29 +229,29 @@ type ListOutput struct {
 // Issue Award Emoji Handlers.
 
 // ListIssueAwardEmoji lists all award emoji on an issue.
-func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueListInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("issue_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("issue_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("issue_emoji_list", "issue_iid")
 	}
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_emoji_list", err, 404,
-			"verify the issue exists with gitlab_issue_get (correct project_id and iid)")
+			"verify the issue exists with gitlab_issue_get (correct project_id and issue_iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetIssueAwardEmoji gets a single award emoji on an issue.
-func GetIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+func GetIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueGetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("issue_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_get", "issue_iid")
 	}
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_get", "award_id")
@@ -136,12 +264,12 @@ func GetIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 // CreateIssueAwardEmoji creates an award emoji on an issue.
-func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueCreateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("issue_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("issue_emoji_create", "issue_iid")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
@@ -153,12 +281,12 @@ func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 }
 
 // DeleteIssueAwardEmoji deletes an award emoji from an issue.
-func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
+func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueDeleteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("issue_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("issue_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("issue_emoji_delete", "issue_iid")
 	}
 	if input.AwardID <= 0 {
 		return toolutil.ErrRequiredInt64("issue_emoji_delete", "award_id")
@@ -179,12 +307,12 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 // Issue Note Award Emoji Handlers.
 
 // ListIssueNoteAwardEmoji lists all award emoji on an issue note.
-func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListOnNoteInput) (ListOutput, error) {
+func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueListOnNoteInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("issue_note_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("issue_note_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("issue_note_emoji_list", "issue_iid")
 	}
 	if input.NoteID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("issue_note_emoji_list", "note_id")
@@ -193,18 +321,18 @@ func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	emojis, resp, err := client.GL().AwardEmoji.ListIssuesAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_note_emoji_list", err, 404,
-			"verify the issue and note exist with gitlab_issue_note_get (correct project_id, iid, note_id)")
+			"verify the issue and note exist with gitlab_issue_note_get (correct project_id, issue_iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetIssueNoteAwardEmoji gets a single award emoji on an issue note.
-func GetIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetOnNoteInput) (Output, error) {
+func GetIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueGetOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("issue_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "issue_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_get", "note_id")
@@ -220,12 +348,12 @@ func GetIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 }
 
 // CreateIssueNoteAwardEmoji creates an award emoji on an issue note.
-func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateOnNoteInput) (Output, error) {
+func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueCreateOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("issue_note_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_create", "issue_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issue_note_emoji_create", "note_id")
@@ -240,12 +368,12 @@ func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 }
 
 // DeleteIssueNoteAwardEmoji deletes an award emoji from an issue note.
-func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteOnNoteInput) error {
+func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueDeleteOnNoteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("issue_note_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("issue_note_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("issue_note_emoji_delete", "issue_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("issue_note_emoji_delete", "note_id")
@@ -269,29 +397,29 @@ func DeleteIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 // MR Award Emoji Handlers.
 
 // ListMRAwardEmoji lists all award emoji on a merge request.
-func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRListInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("mr_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "mr_iid")
 	}
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_emoji_list", err, 404,
-			"verify the merge request exists with gitlab_mr_get (correct project_id and iid)")
+			"verify the merge request exists with gitlab_mr_get (correct project_id and mr_iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetMRAwardEmoji gets a single award emoji on a merge request.
-func GetMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+func GetMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRGetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "mr_iid")
 	}
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "award_id")
@@ -304,12 +432,12 @@ func GetMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input Get
 }
 
 // CreateMRAwardEmoji creates an award emoji on a merge request.
-func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRCreateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_create", "mr_iid")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
@@ -321,12 +449,12 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 // DeleteMRAwardEmoji deletes an award emoji from a merge request.
-func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
+func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRDeleteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("mr_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("mr_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("mr_emoji_delete", "mr_iid")
 	}
 	if input.AwardID <= 0 {
 		return toolutil.ErrRequiredInt64("mr_emoji_delete", "award_id")
@@ -347,12 +475,12 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 // MR Note Award Emoji Handlers.
 
 // ListMRNoteAwardEmoji lists all award emoji on a merge request note.
-func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListOnNoteInput) (ListOutput, error) {
+func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRListOnNoteInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("mr_note_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "mr_iid")
 	}
 	if input.NoteID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "note_id")
@@ -361,18 +489,18 @@ func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_note_emoji_list", err, 404,
-			"verify the MR and note exist with gitlab_mr_note_get (correct project_id, iid, note_id)")
+			"verify the MR and note exist with gitlab_mr_note_get (correct project_id, mr_iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetMRNoteAwardEmoji gets a single award emoji on a merge request note.
-func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetOnNoteInput) (Output, error) {
+func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRGetOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "mr_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "note_id")
@@ -388,12 +516,12 @@ func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 }
 
 // CreateMRNoteAwardEmoji creates an award emoji on a merge request note.
-func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateOnNoteInput) (Output, error) {
+func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRCreateOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "mr_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "note_id")
@@ -408,12 +536,12 @@ func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 }
 
 // DeleteMRNoteAwardEmoji deletes an award emoji from a merge request note.
-func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteOnNoteInput) error {
+func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRDeleteOnNoteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("mr_note_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "mr_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "note_id")
@@ -437,29 +565,29 @@ func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 // Snippet Award Emoji Handlers.
 
 // ListSnippetAwardEmoji lists all award emoji on a snippet.
-func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetListInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_emoji_list", "snippet_id")
 	}
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_emoji_list", err, 404,
-			"verify the snippet exists with gitlab_project_snippet_get (correct project_id and iid)")
+			"verify the snippet exists with gitlab_project_snippet_get (correct project_id and snippet_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetSnippetAwardEmoji gets a single award emoji on a snippet.
-func GetSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+func GetSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetGetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("snippet_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_get", "snippet_id")
 	}
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_get", "award_id")
@@ -472,12 +600,12 @@ func GetSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 // CreateSnippetAwardEmoji creates an award emoji on a snippet.
-func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetCreateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("snippet_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("snippet_emoji_create", "snippet_id")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
@@ -489,12 +617,12 @@ func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 }
 
 // DeleteSnippetAwardEmoji deletes an award emoji from a snippet.
-func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
+func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetDeleteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("snippet_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("snippet_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("snippet_emoji_delete", "snippet_id")
 	}
 	if input.AwardID <= 0 {
 		return toolutil.ErrRequiredInt64("snippet_emoji_delete", "award_id")
@@ -515,12 +643,12 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 // Snippet Note Award Emoji Handlers.
 
 // ListSnippetNoteAwardEmoji lists all award emoji on a snippet note.
-func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input ListOnNoteInput) (ListOutput, error) {
+func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetListOnNoteInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("snippet_note_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_note_emoji_list", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_note_emoji_list", "snippet_id")
 	}
 	if input.NoteID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_note_emoji_list", "note_id")
@@ -529,18 +657,18 @@ func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client,
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_note_emoji_list", err, 404,
-			"verify the snippet and note exist with gitlab_snippet_note_get (correct project_id, iid, note_id)")
+			"verify the snippet and note exist with gitlab_snippet_note_get (correct project_id, snippet_id, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
 
 // GetSnippetNoteAwardEmoji gets a single award emoji on a snippet note.
-func GetSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input GetOnNoteInput) (Output, error) {
+func GetSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetGetOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("snippet_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "snippet_id")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_get", "note_id")
@@ -556,12 +684,12 @@ func GetSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, 
 }
 
 // CreateSnippetNoteAwardEmoji creates an award emoji on a snippet note.
-func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input CreateOnNoteInput) (Output, error) {
+func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetCreateOnNoteInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("snippet_note_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_create", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_create", "snippet_id")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_note_emoji_create", "note_id")
@@ -576,12 +704,12 @@ func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Clien
 }
 
 // DeleteSnippetNoteAwardEmoji deletes an award emoji from a snippet note.
-func DeleteSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input DeleteOnNoteInput) error {
+func DeleteSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetDeleteOnNoteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.WrapErrWithMessage("snippet_note_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("snippet_note_emoji_delete", "iid")
+		return toolutil.ErrRequiredInt64("snippet_note_emoji_delete", "snippet_id")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("snippet_note_emoji_delete", "note_id")
