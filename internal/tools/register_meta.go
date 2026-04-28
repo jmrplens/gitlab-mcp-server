@@ -3054,6 +3054,11 @@ Returns:
 Errors: 404 (hint: project_id, model_version_id and path are model-registry-scoped; verify in the GitLab UI under Deploy → Model registry), 403 (hint: requires Reporter+ on the project and a Premium/Ultimate plan), 400 (hint: filename must match an asset attached to the version).
 
 - download: project_id*, model_version_id*, path*, filename*. Returns base64-encoded file content.
+  - project_id (string | int, required) — numeric ID or URL-encoded full path of the project that owns the registered model.
+  - model_version_id (int, required) — registered model version ID; visible in the GitLab UI under Deploy → Model registry → <model> → Versions.
+  - path (string, required) — package-relative directory of the asset (use '/' for the package root, otherwise e.g. 'artifacts/' or 'weights/').
+  - filename (string, required) — exact asset filename within the package, including extension (e.g. 'model.safetensors', 'config.json').
+  - Any other input keys are silently ignored by the meta-tool router.
 
 See also: gitlab_package (generic / npm / maven / conan / pypi / nuget / container packages), gitlab_release (asset links per release), gitlab_repository (raw files in the repo).`, routes, toolutil.IconPackage)
 }

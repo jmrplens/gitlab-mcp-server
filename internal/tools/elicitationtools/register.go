@@ -92,9 +92,12 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_release_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_release_create"),
-		Description: "Create a GitLab release through step-by-step prompts: tag name (required, must reference an existing tag), " +
-			"release name (optional, defaults to tag name), and release notes/description (optional multiline), " +
-			"with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
+		Description: "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\n" +
+			"After invocation, the tool elicits in order:\n" +
+			"- tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').\n" +
+			"- name (string, required) — release title; defaults to tag_name when left empty by the client.\n" +
+			"- description (string, optional, multi-line, Markdown) — release notes; leave empty to skip.\n" +
+			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop release publishing. " +
 			"NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\n" +
@@ -121,9 +124,14 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "gitlab_interactive_project_create",
 		Title: toolutil.TitleFromName("gitlab_interactive_project_create"),
-		Description: "Create a GitLab project through step-by-step prompts: name (required), " +
-			"description (optional), visibility (private/internal/public), initialize-with-README flag, and default branch name, " +
-			"with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
+		Description: "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project.\n\n" +
+			"After invocation, the tool elicits in order:\n" +
+			"- name (string, required) — project display name and (when path is omitted) URL slug.\n" +
+			"- description (string, optional) — leave empty to skip.\n" +
+			"- visibility (enum, required) — one of private, internal, public.\n" +
+			"- initialize_with_readme (boolean, optional) — yes/no confirmation; defaults to false when declined.\n" +
+			"- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n" +
+			"- confirm (boolean, required) — final yes/no review of the assembled summary.\n\n" +
 			"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
 			"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group.",
