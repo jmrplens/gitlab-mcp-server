@@ -859,12 +859,12 @@ func TestMCPRoundTrip_AllTools(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
-		{"list", "gitlab_list_epic_discussions", map[string]any{"full_path": testFullPath, "iid": float64(5)}},
-		{"get", "gitlab_get_epic_discussion", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex"}},
-		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "iid": float64(5), "body": "new thread"}},
-		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
-		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100), "body": "updated"}},
-		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100)}},
+		{"list", "gitlab_list_epic_discussions", map[string]any{"full_path": testFullPath, "epic_iid": float64(5)}},
+		{"get", "gitlab_get_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex"}},
+		{"create", "gitlab_create_epic_discussion", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}},
+		{"add_note", "gitlab_add_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
+		{"update_note", "gitlab_update_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}},
+		{"delete_note", "gitlab_delete_epic_discussion_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}},
 	}
 
 	for _, tt := range tools {
@@ -902,12 +902,12 @@ func TestMCPRoundTrip_MetaTool(t *testing.T) {
 		action string
 		params map[string]any
 	}{
-		{"list", "list", map[string]any{"full_path": testFullPath, "iid": float64(5)}},
-		{"get", "get", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex"}},
-		{"create", "create", map[string]any{"full_path": testFullPath, "iid": float64(5), "body": "new thread"}},
-		{"add_note", "add_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
-		{"update_note", "update_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100), "body": "updated"}},
-		{"delete_note", "delete_note", map[string]any{"full_path": testFullPath, "iid": float64(5), "note_id": float64(100)}},
+		{"list", "list", map[string]any{"full_path": testFullPath, "epic_iid": float64(5)}},
+		{"get", "get", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex"}},
+		{"create", "create", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "body": "new thread"}},
+		{"add_note", "add_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "discussion_id": "d1hex", "body": "reply"}},
+		{"update_note", "update_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100), "body": "updated"}},
+		{"delete_note", "delete_note", map[string]any{"full_path": testFullPath, "epic_iid": float64(5), "note_id": float64(100)}},
 	}
 
 	for _, tt := range actions {

@@ -284,28 +284,28 @@ func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPa
 // ListInput defines parameters for listing epic discussions.
 type ListInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	toolutil.GraphQLPaginationInput
 }
 
 // GetInput defines parameters for getting a single epic discussion.
 type GetInput struct {
 	FullPath     string `json:"full_path"     jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID          int64  `json:"iid"           jsonschema:"Epic IID within the group,required"`
+	IID          int64  `json:"epic_iid"           jsonschema:"Epic IID within the group,required"`
 	DiscussionID string `json:"discussion_id" jsonschema:"Discussion ID,required"`
 }
 
 // CreateInput defines parameters for creating an epic discussion.
 type CreateInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	Body     string `json:"body"      jsonschema:"Discussion body (Markdown supported),required"`
 }
 
 // AddNoteInput defines parameters for adding a note to an epic discussion.
 type AddNoteInput struct {
 	FullPath     string `json:"full_path"     jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID          int64  `json:"iid"           jsonschema:"Epic IID within the group,required"`
+	IID          int64  `json:"epic_iid"           jsonschema:"Epic IID within the group,required"`
 	DiscussionID string `json:"discussion_id" jsonschema:"Discussion ID to reply to,required"`
 	Body         string `json:"body"          jsonschema:"Note body (Markdown supported),required"`
 }
@@ -313,7 +313,7 @@ type AddNoteInput struct {
 // UpdateNoteInput defines parameters for updating an epic discussion note.
 type UpdateNoteInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"Note ID to update,required"`
 	Body     string `json:"body"      jsonschema:"Updated note body,required"`
 }
@@ -321,7 +321,7 @@ type UpdateNoteInput struct {
 // DeleteNoteInput defines parameters for deleting an epic discussion note.
 type DeleteNoteInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"Note ID to delete,required"`
 }
 
@@ -363,7 +363,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("epicDiscussionList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("epicDiscussionList", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("epicDiscussionList", "epic_iid")
 	}
 
 	vars := input.GraphQLPaginationInput.Variables()
@@ -419,7 +419,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("epicDiscussionGet: full_path is required")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionGet", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionGet", "epic_iid")
 	}
 	if input.DiscussionID == "" {
 		return Output{}, errors.New("epicDiscussionGet: discussion_id is required")
@@ -476,7 +476,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, errors.New("epicDiscussionCreate: full_path is required")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionCreate", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicDiscussionCreate", "epic_iid")
 	}
 	if input.Body == "" {
 		return Output{}, errors.New("epicDiscussionCreate: body is required")
@@ -536,7 +536,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, errors.New("epicDiscussionAddNote: full_path is required")
 	}
 	if input.IID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionAddNote", "iid")
+		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionAddNote", "epic_iid")
 	}
 	if input.DiscussionID == "" {
 		return NoteOutput{}, errors.New("epicDiscussionAddNote: discussion_id is required")
@@ -593,7 +593,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, errors.New("epicDiscussionUpdateNote: full_path is required")
 	}
 	if input.IID <= 0 {
-		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionUpdateNote", "iid")
+		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionUpdateNote", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("epicDiscussionUpdateNote", "note_id")
@@ -642,7 +642,7 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 		return errors.New("epicDiscussionDeleteNote: full_path is required")
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("epicDiscussionDeleteNote", "iid")
+		return toolutil.ErrRequiredInt64("epicDiscussionDeleteNote", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("epicDiscussionDeleteNote", "note_id")

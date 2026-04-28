@@ -237,28 +237,28 @@ func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPa
 // ListInput defines parameters for listing epic notes.
 type ListInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	toolutil.GraphQLPaginationInput
 }
 
 // GetInput defines parameters for getting a single epic note.
 type GetInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"ID of the note to retrieve,required"`
 }
 
 // CreateInput defines parameters for creating a note on an epic.
 type CreateInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	Body     string `json:"body"      jsonschema:"Note body (Markdown supported),required"`
 }
 
 // UpdateInput defines parameters for updating an epic note.
 type UpdateInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"ID of the note to update,required"`
 	Body     string `json:"body"      jsonschema:"Updated note body (Markdown supported),required"`
 }
@@ -266,7 +266,7 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting an epic note.
 type DeleteInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
-	IID      int64  `json:"iid"       jsonschema:"Epic IID within the group,required"`
+	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"ID of the note to delete,required"`
 }
 
@@ -298,7 +298,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("epicNoteList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("epicNoteList", "iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("epicNoteList", "epic_iid")
 	}
 
 	vars := input.GraphQLPaginationInput.Variables()
@@ -349,7 +349,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("epicNoteGet: full_path is required")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteGet", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicNoteGet", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicNoteGet", "note_id")
@@ -400,7 +400,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, errors.New("epicNoteCreate: full_path is required")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteCreate", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicNoteCreate", "epic_iid")
 	}
 	if input.Body == "" {
 		return Output{}, errors.New("epicNoteCreate: body is required")
@@ -451,7 +451,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("epicNoteUpdate: full_path is required")
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("epicNoteUpdate", "iid")
+		return Output{}, toolutil.ErrRequiredInt64("epicNoteUpdate", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("epicNoteUpdate", "note_id")
@@ -500,7 +500,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("epicNoteDelete: full_path is required")
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("epicNoteDelete", "iid")
+		return toolutil.ErrRequiredInt64("epicNoteDelete", "epic_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("epicNoteDelete", "note_id")

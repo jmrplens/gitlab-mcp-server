@@ -99,11 +99,11 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_epic_list", map[string]any{"full_path": "my-group"}},
-		{"gitlab_epic_get", map[string]any{"full_path": "my-group", "iid": float64(1)}},
-		{"gitlab_epic_get_links", map[string]any{"full_path": "my-group", "iid": float64(1)}},
+		{"gitlab_epic_get", map[string]any{"full_path": "my-group", "epic_iid": float64(1)}},
+		{"gitlab_epic_get_links", map[string]any{"full_path": "my-group", "epic_iid": float64(1)}},
 		{"gitlab_epic_create", map[string]any{"full_path": "my-group", "title": "New Epic"}},
-		{"gitlab_epic_update", map[string]any{"full_path": "my-group", "iid": float64(1), "title": "Updated"}},
-		{"gitlab_epic_delete", map[string]any{"full_path": "my-group", "iid": float64(1)}},
+		{"gitlab_epic_update", map[string]any{"full_path": "my-group", "epic_iid": float64(1), "title": "Updated"}},
+		{"gitlab_epic_delete", map[string]any{"full_path": "my-group", "epic_iid": float64(1)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
@@ -146,7 +146,7 @@ func TestRegisterTools_DeleteError(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_epic_delete",
-		Arguments: map[string]any{"full_path": "my-group", "iid": float64(1)},
+		Arguments: map[string]any{"full_path": "my-group", "epic_iid": float64(1)},
 	})
 	if err != nil {
 		t.Fatalf("CallTool returned transport error: %v", err)
@@ -180,7 +180,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_epic_delete",
-		Arguments: map[string]any{"full_path": "my-group", "iid": float64(1), "_confirm": "no"},
+		Arguments: map[string]any{"full_path": "my-group", "epic_iid": float64(1), "_confirm": "no"},
 	})
 	if err != nil {
 		t.Fatalf("CallTool returned transport error: %v", err)

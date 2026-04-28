@@ -226,7 +226,7 @@ func TestGet_MissingIID(t *testing.T) {
 	if err == nil {
 		t.Fatal("Get() expected error for missing iid, got nil")
 	}
-	if !strings.Contains(err.Error(), "iid") {
+	if !strings.Contains(err.Error(), "epic_iid") {
 		t.Errorf("expected error to mention 'iid', got: %v", err)
 	}
 }
