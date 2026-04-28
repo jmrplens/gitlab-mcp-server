@@ -1637,11 +1637,11 @@ type DependencyInput struct {
 type DependencyOutput struct {
 	toolutil.HintableOutput
 	ID                   int64  `json:"id"`
-	BlockingMRID         int64  `json:"blocking_mr_id"`
-	BlockingMRIID        int64  `json:"blocking_mr_iid"`
-	BlockingMRTitle      string `json:"blocking_mr_title"`
-	BlockingMRState      string `json:"blocking_mr_state"`
-	BlockingMRProjectID  int64  `json:"blocking_mr_project_id"`
+	BlockingMRID         int64  `json:"blocking_merge_request_id"`
+	BlockingMRIID        int64  `json:"blocking_merge_request_iid"`
+	BlockingMRTitle      string `json:"blocking_merge_request_title"`
+	BlockingMRState      string `json:"blocking_merge_request_state"`
+	BlockingMRProjectID  int64  `json:"blocking_merge_request_project_id"`
 	BlockingSourceBranch string `json:"blocking_source_branch"`
 	BlockingTargetBranch string `json:"blocking_target_branch"`
 	ProjectID            int64  `json:"project_id"`

@@ -63900,19 +63900,19 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "blocking_mr_id": {
+              "blocking_merge_request_id": {
                 "type": "integer"
               },
-              "blocking_mr_iid": {
+              "blocking_merge_request_iid": {
                 "type": "integer"
               },
-              "blocking_mr_project_id": {
+              "blocking_merge_request_project_id": {
                 "type": "integer"
               },
-              "blocking_mr_state": {
+              "blocking_merge_request_state": {
                 "type": "string"
               },
-              "blocking_mr_title": {
+              "blocking_merge_request_title": {
                 "type": "string"
               },
               "blocking_source_branch": {
@@ -63939,11 +63939,11 @@
             },
             "required": [
               "id",
-              "blocking_mr_id",
-              "blocking_mr_iid",
-              "blocking_mr_title",
-              "blocking_mr_state",
-              "blocking_mr_project_id",
+              "blocking_merge_request_id",
+              "blocking_merge_request_iid",
+              "blocking_merge_request_title",
+              "blocking_merge_request_state",
+              "blocking_merge_request_project_id",
               "blocking_source_branch",
               "blocking_target_branch",
               "project_id"
@@ -64006,19 +64006,19 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "blocking_mr_id": {
+        "blocking_merge_request_id": {
           "type": "integer"
         },
-        "blocking_mr_iid": {
+        "blocking_merge_request_iid": {
           "type": "integer"
         },
-        "blocking_mr_project_id": {
+        "blocking_merge_request_project_id": {
           "type": "integer"
         },
-        "blocking_mr_state": {
+        "blocking_merge_request_state": {
           "type": "string"
         },
-        "blocking_mr_title": {
+        "blocking_merge_request_title": {
           "type": "string"
         },
         "blocking_source_branch": {
@@ -64045,11 +64045,11 @@
       },
       "required": [
         "id",
-        "blocking_mr_id",
-        "blocking_mr_iid",
-        "blocking_mr_title",
-        "blocking_mr_state",
-        "blocking_mr_project_id",
+        "blocking_merge_request_id",
+        "blocking_merge_request_iid",
+        "blocking_merge_request_title",
+        "blocking_merge_request_state",
+        "blocking_merge_request_project_id",
         "blocking_source_branch",
         "blocking_target_branch",
         "project_id"

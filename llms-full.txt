@@ -3754,7 +3754,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>dependencies_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"dependencies":{"items":{"additionalProperties":false,"properties":{"blocking_mr_id":{"type":"integer"},"blocking_mr_iid":{"type":"integer"},"blocking_mr_project_id":{"type":"integer"},"blocking_mr_state":{"type":"string"},"blocking_mr_title":{"type":"string"},"blocking_source_branch":{"type":"string"},"blocking_target_branch":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"}},"required":["id","blocking_mr_id","blocking_mr_iid","blocking_mr_title","blocking_mr_state","blocking_mr_project_id","blocking_source_branch","blocking_target_branch","project_id"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["dependencies"],"type":"object"}
+{"additionalProperties":false,"properties":{"dependencies":{"items":{"additionalProperties":false,"properties":{"blocking_merge_request_id":{"type":"integer"},"blocking_merge_request_iid":{"type":"integer"},"blocking_merge_request_project_id":{"type":"integer"},"blocking_merge_request_state":{"type":"string"},"blocking_merge_request_title":{"type":"string"},"blocking_source_branch":{"type":"string"},"blocking_target_branch":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"}},"required":["id","blocking_merge_request_id","blocking_merge_request_iid","blocking_merge_request_title","blocking_merge_request_state","blocking_merge_request_project_id","blocking_source_branch","blocking_target_branch","project_id"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["dependencies"],"type":"object"}
 ```
 
 </details>
@@ -3762,7 +3762,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>dependency_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"blocking_mr_id":{"type":"integer"},"blocking_mr_iid":{"type":"integer"},"blocking_mr_project_id":{"type":"integer"},"blocking_mr_state":{"type":"string"},"blocking_mr_title":{"type":"string"},"blocking_source_branch":{"type":"string"},"blocking_target_branch":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"}},"required":["id","blocking_mr_id","blocking_mr_iid","blocking_mr_title","blocking_mr_state","blocking_mr_project_id","blocking_source_branch","blocking_target_branch","project_id"],"type":"object"}
+{"additionalProperties":false,"properties":{"blocking_merge_request_id":{"type":"integer"},"blocking_merge_request_iid":{"type":"integer"},"blocking_merge_request_project_id":{"type":"integer"},"blocking_merge_request_state":{"type":"string"},"blocking_merge_request_title":{"type":"string"},"blocking_source_branch":{"type":"string"},"blocking_target_branch":{"type":"string"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"}},"required":["id","blocking_merge_request_id","blocking_merge_request_iid","blocking_merge_request_title","blocking_merge_request_state","blocking_merge_request_project_id","blocking_source_branch","blocking_target_branch","project_id"],"type":"object"}
 ```
 
 </details>
