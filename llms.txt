@@ -97,9 +97,9 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab://project/{project_id}/members: project_members
 - gitlab://project/{project_id}/milestone/{milestone_iid}: milestone
 - gitlab://project/{project_id}/milestones: project_milestones
-- gitlab://project/{project_id}/mr/{mr_iid}: merge_request
-- gitlab://project/{project_id}/mr/{mr_iid}/discussions: merge_request_discussions
-- gitlab://project/{project_id}/mr/{mr_iid}/notes: merge_request_notes
+- gitlab://project/{project_id}/mr/{merge_request_iid}: merge_request
+- gitlab://project/{project_id}/mr/{merge_request_iid}/discussions: merge_request_discussions
+- gitlab://project/{project_id}/mr/{merge_request_iid}/notes: merge_request_notes
 - gitlab://project/{project_id}/pipeline/{pipeline_id}: pipeline
 - gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs: pipeline_jobs
 - gitlab://project/{project_id}/pipelines/latest: latest_pipeline

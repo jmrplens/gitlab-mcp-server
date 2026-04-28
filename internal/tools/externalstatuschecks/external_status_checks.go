@@ -118,7 +118,7 @@ func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, i
 // ListProjectMRInput defines parameters for the ListProjectMRExternalStatusChecks action.
 type ListProjectMRInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	toolutil.PaginationInput
 }
 
@@ -131,7 +131,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 		return ListMergeStatusCheckOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return ListMergeStatusCheckOutput{}, toolutil.ErrRequiredInt64("listProjectMRExternalStatusChecks", "mr_iid")
+		return ListMergeStatusCheckOutput{}, toolutil.ErrRequiredInt64("listProjectMRExternalStatusChecks", "merge_request_iid")
 	}
 	opts := &gl.ListProjectMergeRequestExternalStatusChecksOptions{}
 	if input.Page > 0 {
@@ -143,7 +143,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectMergeRequestExternalStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectMRExternalStatusChecks", err, http.StatusNotFound,
-			"verify mr_iid (project-scoped, not the global ID) with gitlab_mr_list; requires Maintainer role + Premium/Ultimate")
+			"verify merge_request_iid (project-scoped, not the global ID) with gitlab_mr_list; requires Maintainer role + Premium/Ultimate")
 	}
 	items := make([]MergeStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -296,7 +296,7 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 // RetryProjectInput defines parameters for the RetryFailedExternalStatusCheckForProjectMR action.
 type RetryProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	CheckID   int64                `json:"check_id"   jsonschema:"External status check ID to retry,required"`
 }
 
@@ -309,7 +309,7 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 		return toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("retryFailedExternalStatusCheckForProjectMR", "mr_iid")
+		return toolutil.ErrRequiredInt64("retryFailedExternalStatusCheckForProjectMR", "merge_request_iid")
 	}
 	if input.CheckID <= 0 {
 		return toolutil.ErrRequiredInt64("retryFailedExternalStatusCheckForProjectMR", "check_id")
@@ -325,7 +325,7 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 // SetProjectStatusInput defines parameters for the SetProjectMRExternalStatusCheckStatus action.
 type SetProjectStatusInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                 int64                `json:"mr_iid"                    jsonschema:"Merge request internal ID,required"`
+	MRIID                 int64                `json:"merge_request_iid"                    jsonschema:"Merge request internal ID,required"`
 	SHA                   string               `json:"sha"                       jsonschema:"Head SHA of the merge request source branch,required"`
 	ExternalStatusCheckID int64                `json:"external_status_check_id"  jsonschema:"External status check ID to update,required"`
 	Status                string               `json:"status"                    jsonschema:"Status value (e.g. passed, failed),required"`
@@ -340,7 +340,7 @@ func SetProjectMRExternalStatusCheckStatus(ctx context.Context, client *gitlabcl
 		return toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("setProjectMRExternalStatusCheckStatus", "mr_iid")
+		return toolutil.ErrRequiredInt64("setProjectMRExternalStatusCheckStatus", "merge_request_iid")
 	}
 	if input.SHA == "" {
 		return toolutil.ErrFieldRequired("sha")

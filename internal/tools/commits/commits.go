@@ -709,7 +709,7 @@ type MRsByCommitInput struct {
 // BasicMROutput represents a basic merge request associated with a commit.
 type BasicMROutput struct {
 	ID           int64  `json:"id"`
-	IID          int64  `json:"mr_iid"`
+	IID          int64  `json:"merge_request_iid"`
 	Title        string `json:"title"`
 	State        string `json:"state"`
 	SourceBranch string `json:"source_branch"`

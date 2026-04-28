@@ -572,7 +572,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 	ctx := context.Background()
 	pid := toolutil.StringOrInt("42")
-	const wantSubstr = "mr_iid"
+	const wantSubstr = "merge_request_iid"
 
 	t.Run("List", func(t *testing.T) {
 		_, err := List(ctx, client, ListInput{ProjectID: pid, MRIID: 0})
@@ -1160,7 +1160,7 @@ func TestRegisterTools_GetNotFound(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_draft_note_get",
-		Arguments: map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 999},
+		Arguments: map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 999},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -1183,13 +1183,13 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_draft_note_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_draft_note_get", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 10}},
-		{"gitlab_mr_draft_note_create", map[string]any{"project_id": "42", "mr_iid": 1, "note": "new draft"}},
-		{"gitlab_mr_draft_note_update", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 10, "note": "updated"}},
-		{"gitlab_mr_draft_note_delete", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 10}},
-		{"gitlab_mr_draft_note_publish", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 10}},
-		{"gitlab_mr_draft_note_publish_all", map[string]any{"project_id": "42", "mr_iid": 1}},
+		{"gitlab_mr_draft_note_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_draft_note_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 10}},
+		{"gitlab_mr_draft_note_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "note": "new draft"}},
+		{"gitlab_mr_draft_note_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 10, "note": "updated"}},
+		{"gitlab_mr_draft_note_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 10}},
+		{"gitlab_mr_draft_note_publish", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 10}},
+		{"gitlab_mr_draft_note_publish_all", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 	}
 
 	for _, tt := range tools {

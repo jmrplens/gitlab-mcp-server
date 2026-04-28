@@ -348,7 +348,7 @@ func TestListMRLabelEvents_InvalidIID(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := ListMRLabelEvents(context.Background(), client, ListMRLabelEventsInput{ProjectID: "p", MRIID: 0})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRLabelEvent_InvalidIDs verifies the behavior of get m r label event invalid i ds.
@@ -357,7 +357,7 @@ func TestGetMRLabelEvent_InvalidIDs(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := GetMRLabelEvent(context.Background(), client, GetMRLabelEventInput{ProjectID: "p", MRIID: 0, LabelEventID: 1})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRLabelEvent(context.Background(), client, GetMRLabelEventInput{ProjectID: "p", MRIID: 1, LabelEventID: 0})
 	assertErrContains(t, err, "label_event_id")
 }
@@ -368,7 +368,7 @@ func TestListMRMilestoneEvents_InvalidIID(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := ListMRMilestoneEvents(context.Background(), client, ListMRMilestoneEventsInput{ProjectID: "p", MRIID: 0})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRMilestoneEvent_InvalidIDs verifies the behavior of get m r milestone event invalid i ds.
@@ -377,7 +377,7 @@ func TestGetMRMilestoneEvent_InvalidIDs(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := GetMRMilestoneEvent(context.Background(), client, GetMRMilestoneEventInput{ProjectID: "p", MRIID: 0, MilestoneEventID: 1})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRMilestoneEvent(context.Background(), client, GetMRMilestoneEventInput{ProjectID: "p", MRIID: 1, MilestoneEventID: 0})
 	assertErrContains(t, err, "milestone_event_id")
 }
@@ -388,7 +388,7 @@ func TestListMRStateEvents_InvalidIID(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := ListMRStateEvents(context.Background(), client, ListMRStateEventsInput{ProjectID: "p", MRIID: 0})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRStateEvent_InvalidIDs verifies the behavior of get m r state event invalid i ds.
@@ -397,7 +397,7 @@ func TestGetMRStateEvent_InvalidIDs(t *testing.T) {
 		t.Fatal(errNoReachAPI)
 	}))
 	_, err := GetMRStateEvent(context.Background(), client, GetMRStateEventInput{ProjectID: "p", MRIID: 0, StateEventID: 1})
-	assertErrContains(t, err, "mr_iid")
+	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRStateEvent(context.Background(), client, GetMRStateEventInput{ProjectID: "p", MRIID: 1, StateEventID: 0})
 	assertErrContains(t, err, "state_event_id")
 }
@@ -1016,16 +1016,16 @@ func TestMCPRound_Trip(t *testing.T) {
 	}{
 		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
 		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "label_event_id": 10}},
-		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "mr_iid": 1, "label_event_id": 10}},
+		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "label_event_id": 10}},
 		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
 		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "milestone_event_id": 30}},
-		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "mr_iid": 1, "milestone_event_id": 30}},
+		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "milestone_event_id": 30}},
 		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": 1}},
 		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": 1, "state_event_id": 40}},
-		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "mr_iid": 1, "state_event_id": 40}},
+		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "state_event_id": 40}},
 	}
 
 	for _, tc := range tests {

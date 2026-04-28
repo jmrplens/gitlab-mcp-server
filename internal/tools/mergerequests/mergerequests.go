@@ -24,7 +24,7 @@ import (
 )
 
 // hintVerifyMR is the 404 hint shared by MR tools.
-const hintVerifyMR = "verify project_id and mr_iid with gitlab_mr_get"
+const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_mr_get"
 
 // CreateInput defines parameters for creating a merge request.
 type CreateInput struct {
@@ -55,7 +55,7 @@ type CreateInput struct {
 type Output struct {
 	toolutil.HintableOutput
 	ID                          int64           `json:"id"`
-	IID                         int64           `json:"mr_iid"`
+	IID                         int64           `json:"merge_request_iid"`
 	ProjectID                   int64           `json:"project_id"`
 	ProjectPath                 string          `json:"project_path,omitempty"`
 	SourceProjectID             int64           `json:"source_project_id,omitempty"`
@@ -126,7 +126,7 @@ type DiffRefsOutput struct {
 // GetInput defines parameters for retrieving a merge request.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // ListInput defines filters for listing merge requests.
@@ -162,7 +162,7 @@ type ListOutput struct {
 // UpdateInput defines parameters for updating a merge request.
 type UpdateInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"                    jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID              int64                `json:"mr_iid"                        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID              int64                `json:"merge_request_iid"                        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Title              string               `json:"title,omitempty"               jsonschema:"New title"`
 	Description        string               `json:"description,omitempty"         jsonschema:"New description"`
 	TargetBranch       string               `json:"target_branch,omitempty"       jsonschema:"New target branch"`
@@ -183,7 +183,7 @@ type UpdateInput struct {
 // MergeInput defines parameters for merging a merge request.
 type MergeInput struct {
 	ProjectID                toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                    int64                `json:"mr_iid"                                  jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID                    int64                `json:"merge_request_iid"                                  jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	MergeCommitMessage       string               `json:"merge_commit_message,omitempty"           jsonschema:"Custom merge commit message"`
 	Squash                   *bool                `json:"squash,omitempty"                         jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
 	ShouldRemoveSourceBranch *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
@@ -195,7 +195,7 @@ type MergeInput struct {
 // ApproveInput defines parameters for approving a merge request.
 type ApproveInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // ApproveOutput holds the approval state after approve/unapprove.
@@ -438,13 +438,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("mrGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrGet", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrGet", "merge_request_iid")
 	}
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrGet", err,
-				"verify project_id and mr_iid (the project-scoped IID, not the global merge_request_id); use gitlab_mr_list to find existing MRs")
+				"verify project_id and merge_request_iid (the project-scoped IID, not the global merge_request_id); use gitlab_mr_list to find existing MRs")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrGet", err)
 	}
@@ -599,14 +599,14 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("mrUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "merge_request_iid")
 	}
 	opts := buildUpdateOpts(input)
 	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrUpdate", err,
-				"verify project_id and mr_iid. Use gitlab_mr_list to check available MRs")
+				"verify project_id and merge_request_iid. Use gitlab_mr_list to check available MRs")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrUpdate", err)
 	}
@@ -626,7 +626,7 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 		return Output{}, errors.New("mrMerge: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrMerge", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrMerge", "merge_request_iid")
 	}
 
 	// Always pre-fetch the MR to detect enforced project merge settings.
@@ -685,7 +685,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 		return ApproveOutput{}, errors.New("mrApprove: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return ApproveOutput{}, toolutil.ErrRequiredInt64("mrApprove", "mr_iid")
+		return ApproveOutput{}, toolutil.ErrRequiredInt64("mrApprove", "merge_request_iid")
 	}
 	approvals, _, err := client.GL().MergeRequestApprovals.ApproveMergeRequest(string(input.ProjectID), input.MRIID, &gl.ApproveMergeRequestOptions{}, gl.WithContext(ctx))
 	if err != nil {
@@ -716,13 +716,13 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 		return errors.New("mrUnapprove: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrUnapprove", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrUnapprove", "merge_request_iid")
 	}
 	_, err := client.GL().MergeRequestApprovals.UnapproveMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return toolutil.WrapErrWithHint("mrUnapprove", err,
-				"verify project_id and mr_iid; unapproval requires you to have previously approved the MR (use gitlab_mr_approve first if you have not)")
+				"verify project_id and merge_request_iid; unapproval requires you to have previously approved the MR (use gitlab_mr_approve first if you have not)")
 		}
 		return toolutil.WrapErrWithMessage("mrUnapprove", err)
 	}
@@ -732,7 +732,7 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 // CommitsInput defines parameters for listing commits in a merge request.
 type CommitsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	toolutil.PaginationInput
 }
 
@@ -752,7 +752,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		return CommitsOutput{}, errors.New("mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return CommitsOutput{}, toolutil.ErrRequiredInt64("mrCommits", "mr_iid")
+		return CommitsOutput{}, toolutil.ErrRequiredInt64("mrCommits", "merge_request_iid")
 	}
 
 	opts := &gl.GetMergeRequestCommitsOptions{}
@@ -766,7 +766,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 	commitList, resp, err := client.GL().MergeRequests.GetMergeRequestCommits(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return CommitsOutput{}, toolutil.WrapErrWithStatusHint("mrCommits", err, http.StatusNotFound,
-			"verify project_id and mr_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get")
+			"verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get")
 	}
 
 	out := make([]commits.Output, len(commitList))
@@ -779,7 +779,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 // PipelinesInput defines parameters for listing pipelines of a merge request.
 type PipelinesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // PipelinesOutput holds the list of pipelines for a merge request.
@@ -797,13 +797,13 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 		return PipelinesOutput{}, errors.New("mrPipelines: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return PipelinesOutput{}, toolutil.ErrRequiredInt64("mrPipelines", "mr_iid")
+		return PipelinesOutput{}, toolutil.ErrRequiredInt64("mrPipelines", "merge_request_iid")
 	}
 
 	pipelineList, _, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return PipelinesOutput{}, toolutil.WrapErrWithStatusHint("mrPipelines", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get \u2014 the MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
+			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 the MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
 	}
 
 	out := make([]pipelines.Output, len(pipelineList))
@@ -816,7 +816,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 // DeleteInput defines parameters for deleting a merge request.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID to delete (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID to delete (project-scoped, not 'merge_request_id'),required"`
 }
 
 // Delete permanently deletes a merge request.
@@ -828,7 +828,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("mrDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrDelete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrDelete", "merge_request_iid")
 	}
 
 	_, err := client.GL().MergeRequests.DeleteMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
@@ -845,7 +845,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 // RebaseInput defines parameters for rebasing a merge request.
 type RebaseInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"        jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"            jsonschema:"Merge request IID to rebase (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"            jsonschema:"Merge request IID to rebase (project-scoped, not 'merge_request_id'),required"`
 	SkipCI    bool                 `json:"skip_ci,omitempty"  jsonschema:"Skip triggering CI pipeline after rebase"`
 }
 
@@ -864,7 +864,7 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 		return RebaseOutput{}, errors.New("mrRebase: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return RebaseOutput{}, toolutil.ErrRequiredInt64("mrRebase", "mr_iid")
+		return RebaseOutput{}, toolutil.ErrRequiredInt64("mrRebase", "merge_request_iid")
 	}
 
 	opts := &gl.RebaseMergeRequestOptions{}
@@ -1094,7 +1094,7 @@ func buildGroupListOptions(input ListGroupInput) *gl.ListGroupMergeRequestsOptio
 // ParticipantsInput defines parameters for listing MR participants.
 type ParticipantsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // ParticipantOutput represents a single MR participant.
@@ -1122,7 +1122,7 @@ func Participants(ctx context.Context, client *gitlabclient.Client, input Partic
 		return ParticipantsOutput{}, errors.New("mrParticipants: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("mrParticipants", "mr_iid")
+		return ParticipantsOutput{}, toolutil.ErrRequiredInt64("mrParticipants", "merge_request_iid")
 	}
 	users, _, err := client.GL().MergeRequests.GetMergeRequestParticipants(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1170,12 +1170,12 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 		return ReviewersOutput{}, errors.New("mrReviewers: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return ReviewersOutput{}, toolutil.ErrRequiredInt64("mrReviewers", "mr_iid")
+		return ReviewersOutput{}, toolutil.ErrRequiredInt64("mrReviewers", "merge_request_iid")
 	}
 	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get \u2014 use gitlab_mr_update with reviewer_ids to assign reviewers")
+			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 use gitlab_mr_update with reviewer_ids to assign reviewers")
 	}
 	out := make([]ReviewerOutput, len(reviewers))
 	for i, r := range reviewers {
@@ -1205,7 +1205,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 // CreatePipelineInput defines parameters for creating a pipeline for a merge request.
 type CreatePipelineInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // CreatePipeline triggers a new pipeline for the specified merge request.
@@ -1217,7 +1217,7 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 		return pipelines.Output{}, errors.New("mrCreatePipeline: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return pipelines.Output{}, toolutil.ErrRequiredInt64("mrCreatePipeline", "mr_iid")
+		return pipelines.Output{}, toolutil.ErrRequiredInt64("mrCreatePipeline", "merge_request_iid")
 	}
 	pi, _, err := client.GL().MergeRequests.CreateMergeRequestPipeline(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1242,7 +1242,7 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 // IssuesClosedInput defines parameters for listing issues that close on merge.
 type IssuesClosedInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	toolutil.PaginationInput
 }
 
@@ -1263,7 +1263,7 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 		return IssuesClosedOutput{}, errors.New("mrIssuesClosed: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return IssuesClosedOutput{}, toolutil.ErrRequiredInt64("mrIssuesClosed", "mr_iid")
+		return IssuesClosedOutput{}, toolutil.ErrRequiredInt64("mrIssuesClosed", "merge_request_iid")
 	}
 	opts := &gl.GetIssuesClosedOnMergeOptions{}
 	if input.Page > 0 {
@@ -1275,7 +1275,7 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 	issueList, resp, err := client.GL().MergeRequests.GetIssuesClosedOnMerge(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return IssuesClosedOutput{}, toolutil.WrapErrWithStatusHint("mrIssuesClosed", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get \u2014 only issues referenced via 'Closes #N' in MR description/commits are returned")
+			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 only issues referenced via 'Closes #N' in MR description/commits are returned")
 	}
 	out := make([]issues.Output, len(issueList))
 	for i, issue := range issueList {
@@ -1298,7 +1298,7 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 		return Output{}, errors.New("mrCancelAutoMerge: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrCancelAutoMerge", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrCancelAutoMerge", "merge_request_iid")
 	}
 	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1326,7 +1326,7 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input GetInput)
 		return Output{}, errors.New("mrSubscribe: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrSubscribe", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrSubscribe", "merge_request_iid")
 	}
 	mr, _, err := client.GL().MergeRequests.SubscribeToMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1351,7 +1351,7 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input GetInpu
 		return Output{}, errors.New("mrUnsubscribe: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrUnsubscribe", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrUnsubscribe", "merge_request_iid")
 	}
 	mr, _, err := client.GL().MergeRequests.UnsubscribeFromMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1393,7 +1393,7 @@ func timeStatsToOutput(ts *gl.TimeStats) TimeStatsOutput {
 // SetTimeEstimateInput defines parameters for setting a time estimate on an MR.
 type SetTimeEstimateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Duration  string               `json:"duration"   jsonschema:"Human-readable duration (e.g. 3h30m, 1w2d),required"`
 }
 
@@ -1406,7 +1406,7 @@ func SetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input Set
 		return TimeStatsOutput{}, errors.New("mrSetTimeEstimate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrSetTimeEstimate", "mr_iid")
+		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrSetTimeEstimate", "merge_request_iid")
 	}
 	if input.Duration == "" {
 		return TimeStatsOutput{}, errors.New("mrSetTimeEstimate: duration is required")
@@ -1429,7 +1429,7 @@ func ResetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input G
 		return TimeStatsOutput{}, errors.New("mrResetTimeEstimate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrResetTimeEstimate", "mr_iid")
+		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrResetTimeEstimate", "merge_request_iid")
 	}
 	ts, _, err := client.GL().MergeRequests.ResetTimeEstimate(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1442,7 +1442,7 @@ func ResetTimeEstimate(ctx context.Context, client *gitlabclient.Client, input G
 // AddSpentTimeInput defines parameters for adding spent time to an MR.
 type AddSpentTimeInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Duration  string               `json:"duration"   jsonschema:"Human-readable duration (e.g. 1h, 30m, 1w2d),required"`
 	Summary   string               `json:"summary,omitempty" jsonschema:"Optional summary of work done"`
 }
@@ -1456,7 +1456,7 @@ func AddSpentTime(ctx context.Context, client *gitlabclient.Client, input AddSpe
 		return TimeStatsOutput{}, errors.New("mrAddSpentTime: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrAddSpentTime", "mr_iid")
+		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrAddSpentTime", "merge_request_iid")
 	}
 	if input.Duration == "" {
 		return TimeStatsOutput{}, errors.New("mrAddSpentTime: duration is required")
@@ -1482,7 +1482,7 @@ func ResetSpentTime(ctx context.Context, client *gitlabclient.Client, input GetI
 		return TimeStatsOutput{}, errors.New("mrResetSpentTime: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrResetSpentTime", "mr_iid")
+		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrResetSpentTime", "merge_request_iid")
 	}
 	ts, _, err := client.GL().MergeRequests.ResetSpentTime(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1501,7 +1501,7 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 		return TimeStatsOutput{}, errors.New("mrGetTimeStats: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrGetTimeStats", "mr_iid")
+		return TimeStatsOutput{}, toolutil.ErrRequiredInt64("mrGetTimeStats", "merge_request_iid")
 	}
 	ts, _, err := client.GL().MergeRequests.GetTimeSpent(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1518,7 +1518,7 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 // RelatedIssuesInput defines parameters for listing issues related to an MR.
 type RelatedIssuesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	toolutil.PaginationInput
 }
 
@@ -1538,7 +1538,7 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 		return RelatedIssuesOutput{}, errors.New("mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return RelatedIssuesOutput{}, toolutil.ErrRequiredInt64("mrRelatedIssues", "mr_iid")
+		return RelatedIssuesOutput{}, toolutil.ErrRequiredInt64("mrRelatedIssues", "merge_request_iid")
 	}
 	opts := &gl.ListRelatedIssuesOptions{}
 	if input.Page > 0 {
@@ -1550,7 +1550,7 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 	issueList, resp, err := client.GL().MergeRequests.ListRelatedIssues(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return RelatedIssuesOutput{}, toolutil.WrapErrWithStatusHint("mrRelatedIssues", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get \u2014 only issues referenced in MR description/commits/notes are returned")
+			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 only issues referenced in MR description/commits/notes are returned")
 	}
 	out := make([]issues.Output, len(issueList))
 	for i, issue := range issueList {
@@ -1566,7 +1566,7 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 // CreateTodoInput defines parameters for creating a to-do item on a merge request.
 type CreateTodoInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // CreateTodoOutput holds the created to-do item details.
@@ -1592,7 +1592,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		return CreateTodoOutput{}, errors.New("mrCreateTodo: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return CreateTodoOutput{}, toolutil.ErrRequiredInt64("mrCreateTodo", "mr_iid")
+		return CreateTodoOutput{}, toolutil.ErrRequiredInt64("mrCreateTodo", "merge_request_iid")
 	}
 	todo, _, err := client.GL().MergeRequests.CreateTodo(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
@@ -1629,7 +1629,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 // DependencyInput defines parameters for creating a merge request dependency.
 type DependencyInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                  int64                `json:"mr_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one"`
 }
 
@@ -1678,7 +1678,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		return DependencyOutput{}, errors.New("mrCreateDependency: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "mr_iid")
+		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "merge_request_iid")
 	}
 	dep, _, err := client.GL().MergeRequests.CreateMergeRequestDependency(string(input.ProjectID), input.MRIID,
 		gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, gl.WithContext(ctx))
@@ -1692,7 +1692,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists \u2014 use gitlab_mr_get_dependencies to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
+			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
 	}
 	return dependencyToOutput(dep), nil
 }
@@ -1700,7 +1700,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 // DeleteDependencyInput defines parameters for deleting a merge request dependency.
 type DeleteDependencyInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                  int64                `json:"mr_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the blocking merge request to remove"`
 }
 
@@ -1713,7 +1713,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 		return errors.New("mrDeleteDependency: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("mrDeleteDependency", "mr_iid")
+		return toolutil.ErrRequiredInt64("mrDeleteDependency", "merge_request_iid")
 	}
 	_, err := client.GL().MergeRequests.DeleteMergeRequestDependency(string(input.ProjectID), input.MRIID, input.BlockingMergeRequestID, gl.WithContext(ctx))
 	if err != nil {
@@ -1730,7 +1730,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 // GetDependenciesInput defines parameters for listing merge request dependencies.
 type GetDependenciesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 }
 
 // GetDependencies retrieves all dependencies (blockers) for a merge request.
@@ -1742,7 +1742,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 		return DependenciesOutput{}, errors.New("mrGetDependencies: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return DependenciesOutput{}, toolutil.ErrRequiredInt64("mrGetDependencies", "mr_iid")
+		return DependenciesOutput{}, toolutil.ErrRequiredInt64("mrGetDependencies", "merge_request_iid")
 	}
 	deps, _, err := client.GL().MergeRequests.GetMergeRequestDependencies(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {

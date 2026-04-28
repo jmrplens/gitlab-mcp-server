@@ -286,7 +286,7 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestMRIIDRequired_Validation verifies that all functions requiring mr_iid
+// TestMRIIDRequired_Validation verifies that all functions requiring merge_request_iid
 // return an error when MRIID is 0.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -296,7 +296,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 	ctx := context.Background()
 	pid := toolutil.StringOrInt(testProjectID)
-	const wantSubstr = "mr_iid"
+	const wantSubstr = "merge_request_iid"
 
 	t.Run("Create", func(t *testing.T) {
 		_, err := Create(ctx, client, CreateInput{ProjectID: pid, MRIID: 0, Body: "test"})
@@ -724,11 +724,11 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_note_create", map[string]any{"project_id": "42", "mr_iid": 1, "body": "comment"}},
-		{"gitlab_mr_notes_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_note_update", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 200, "body": "updated"}},
-		{"gitlab_mr_note_get", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 200}},
-		{"gitlab_mr_note_delete", map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 200}},
+		{"gitlab_mr_note_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "body": "comment"}},
+		{"gitlab_mr_notes_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_note_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 200, "body": "updated"}},
+		{"gitlab_mr_note_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 200}},
+		{"gitlab_mr_note_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 200}},
 	}
 
 	for _, tt := range tools {

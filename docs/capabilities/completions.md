@@ -108,7 +108,7 @@ These completers require a `project_id` context, which is extracted from previou
 | `branch`, `source_branch`, `target_branch` | List branches matching prefix | `feat` → `feature/login`, `feature/signup` |
 | `from`, `to`, `ref` | Branches + tags matching prefix | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch` |
 | `tag` | List tags matching prefix | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7` |
-| `mr_iid` | List open MRs, filter by IID prefix | `1` → `15`, `14` (titles fetched separately by client) |
+| `merge_request_iid` | List open MRs, filter by IID prefix | `1` → `15`, `14` (titles fetched separately by client) |
 | `issue_iid` | List open issues, filter by IID | `3` → `33`, `34` |
 | `pipeline_id` | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556` |
 | `sha` | Recent commits, filter by SHA prefix | `ddc` → `ddcc2f13` |
@@ -184,11 +184,11 @@ The server returns both branches and tags matching the prefix:
 
 ### Completing an MR IID
 
-When reviewing a merge request, the `mr_iid` argument shows open MRs:
+When reviewing a merge request, the `merge_request_iid` argument shows open MRs:
 
 ```text
 Tool: gitlab_analyze_mr_changes
-Argument: mr_iid = "1" (user types partial)
+Argument: merge_request_iid = "1" (user types partial)
 ```
 
 The server lists open MRs with titles so the user can identify the right one:
@@ -232,7 +232,7 @@ The server returns at most 10 results per request. The user types more character
 
 ### Do completions work for resource URIs too?
 
-Yes. The server supports completions for resource URI template parameters (`project_id`, `group_id`, `mr_iid`, `issue_iid`). This enables clients to autocomplete when browsing MCP resources.
+Yes. The server supports completions for resource URI template parameters (`project_id`, `group_id`, `merge_request_iid`, `issue_iid`). This enables clients to autocomplete when browsing MCP resources.
 
 ## References
 

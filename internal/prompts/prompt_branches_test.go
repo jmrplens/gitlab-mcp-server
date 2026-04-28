@@ -73,7 +73,7 @@ func TestReviewMR_LongDiffNotTruncated(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -102,7 +102,7 @@ func TestReviewMREmptyDescriptionAnd_EmptyDiff(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -135,7 +135,7 @@ func TestSuggestMRReviewers_NilAuthor(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -184,7 +184,7 @@ func TestMRRisk_AssessmentNewAndDeletedFiles(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "mr_risk_assessment",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -245,7 +245,7 @@ func TestReviewMRDiffs_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgDiffsAPIFail)
@@ -267,7 +267,7 @@ func TestSuggestMRReviewersDiffs_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgDiffsAPIFail)
@@ -291,7 +291,7 @@ func TestSuggestMRReviewersMembers_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal("expected error when members API fails")
@@ -313,7 +313,7 @@ func TestMRRiskAssessmentDiffs_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "mr_risk_assessment",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgDiffsAPIFail)

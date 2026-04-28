@@ -22,7 +22,7 @@ import (
 // ListInput defines parameters for listing draft notes in a merge request.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: id (default)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort: asc or desc (default)"`
 	toolutil.PaginationInput
@@ -31,7 +31,7 @@ type ListInput struct {
 // GetInput defines parameters for retrieving a single draft note.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 }
 
@@ -50,7 +50,7 @@ type DiffPosition struct {
 // CreateInput defines parameters for creating a draft note.
 type CreateInput struct {
 	ProjectID             toolutil.StringOrInt `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                 int64                `json:"mr_iid"                            jsonschema:"Merge request internal ID,required"`
+	MRIID                 int64                `json:"merge_request_iid"                            jsonschema:"Merge request internal ID,required"`
 	Note                  string               `json:"note"                              jsonschema:"Note body text (Markdown),required"`
 	CommitID              string               `json:"commit_id,omitempty"               jsonschema:"SHA of the commit to comment on"`
 	InReplyToDiscussionID string               `json:"in_reply_to_discussion_id,omitempty" jsonschema:"Discussion ID to reply to"`
@@ -61,7 +61,7 @@ type CreateInput struct {
 // UpdateInput defines parameters for updating a draft note.
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown)"`
 	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments"`
@@ -70,21 +70,21 @@ type UpdateInput struct {
 // DeleteInput defines parameters for deleting a draft note.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 }
 
 // PublishInput defines parameters for publishing a single draft note.
 type PublishInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 }
 
 // PublishAllInput defines parameters for publishing all draft notes.
 type PublishAllInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("draftNoteList: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("draftNoteList", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("draftNoteList", "merge_request_iid")
 	}
 	opts := &gl.ListDraftNotesOptions{
 		ListOptions: gl.ListOptions{
@@ -204,7 +204,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().DraftNotes.ListDraftNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("draftNoteList", err, http.StatusNotFound,
-			"verify project_id and mr_iid with gitlab_mr_list; draft notes are visible only to their author until published")
+			"verify project_id and merge_request_iid with gitlab_mr_list; draft notes are visible only to their author until published")
 	}
 	out := ListOutput{
 		DraftNotes: make([]Output, 0, len(notes)),
@@ -225,7 +225,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("draftNoteGet: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("draftNoteGet", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("draftNoteGet", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("draftNoteGet", "note_id")
@@ -247,7 +247,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, errors.New("draftNoteCreate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("draftNoteCreate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("draftNoteCreate", "merge_request_iid")
 	}
 	if input.Note == "" {
 		return Output{}, errors.New("draftNoteCreate: note is required")
@@ -289,7 +289,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("draftNoteUpdate: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("draftNoteUpdate", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("draftNoteUpdate", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("draftNoteUpdate", "note_id")
@@ -323,7 +323,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("draftNoteDelete: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("draftNoteDelete", "mr_iid")
+		return toolutil.ErrRequiredInt64("draftNoteDelete", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("draftNoteDelete", "note_id")
@@ -345,7 +345,7 @@ func Publish(ctx context.Context, client *gitlabclient.Client, input PublishInpu
 		return errors.New("draftNotePublish: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("draftNotePublish", "mr_iid")
+		return toolutil.ErrRequiredInt64("draftNotePublish", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("draftNotePublish", "note_id")
@@ -367,12 +367,12 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 		return errors.New("draftNotePublishAll: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return toolutil.ErrRequiredInt64("draftNotePublishAll", "mr_iid")
+		return toolutil.ErrRequiredInt64("draftNotePublishAll", "merge_request_iid")
 	}
 	_, err := client.GL().DraftNotes.PublishAllDraftNotes(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublishAll", err, http.StatusForbidden,
-			"publishes all current user's draft notes on the MR \u2014 cannot be undone; verify project_id + mr_iid; use gitlab_mr_draft_note_list first to review pending drafts")
+			"publishes all current user's draft notes on the MR \u2014 cannot be undone; verify project_id + merge_request_iid; use gitlab_mr_draft_note_list first to review pending drafts")
 	}
 	return nil
 }

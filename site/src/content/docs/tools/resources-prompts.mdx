@@ -52,9 +52,9 @@ The server exposes **44 resources** across several categories:
 | Resource                                                | Description                                                                 |
 | ------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `gitlab://project/{project_id}/issue/{issue_iid}`       | Single issue details (title, state, labels, assignees, web URL)             |
-| `gitlab://project/{project_id}/mr/{mr_iid}`             | Single merge request details (title, state, branches, author, merge status) |
-| `gitlab://project/{project_id}/mr/{mr_iid}/notes`       | Notes on a merge request                                                    |
-| `gitlab://project/{project_id}/mr/{mr_iid}/discussions` | Discussion threads on a merge request                                       |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}`             | Single merge request details (title, state, branches, author, merge status) |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`       | Notes on a merge request                                                    |
+| `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions` | Discussion threads on a merge request                                       |
 
 ### CI/CD resource templates (3)
 
@@ -215,7 +215,7 @@ Prompts are requested via the `prompts/get` MCP method:
 		"name": "review_mr",
 		"arguments": {
 			"project_id": "my-group/my-project",
-			"mr_iid": "42"
+			"merge_request_iid": "42"
 		}
 	}
 }

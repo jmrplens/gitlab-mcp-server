@@ -24,7 +24,7 @@ const fmtFilesChanged = "- **Files changed**: %d\n"
 // Reusable prompt argument names and descriptions.
 const (
 	argProjectID  = "project_id"
-	argMRIID      = "mr_iid"
+	argMRIID      = "merge_request_iid"
 	descProjectID = "Project ID (numeric) or URL-encoded path (e.g. 'group/project')"
 	descMRIID     = "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)"
 

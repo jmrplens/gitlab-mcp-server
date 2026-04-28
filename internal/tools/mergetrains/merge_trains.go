@@ -31,13 +31,13 @@ type ListBranchInput struct {
 // GetInput defines parameters for getting a merge request on a merge train.
 type GetInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MergeRequestID int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MergeRequestID int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 }
 
 // AddInput defines parameters for adding a merge request to a merge train.
 type AddInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MergeRequestID int64                `json:"mr_iid" jsonschema:"Merge request internal ID,required"`
+	MergeRequestID int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
 	AutoMerge      bool                 `json:"auto_merge,omitempty" jsonschema:"Enable auto-merge when pipeline succeeds"`
 	SHA            string               `json:"sha,omitempty" jsonschema:"Head SHA of the merge request to verify"`
 	Squash         bool                 `json:"squash,omitempty" jsonschema:"Squash commits when merging"`
@@ -172,11 +172,11 @@ func GetMergeRequestOnMergeTrain(ctx context.Context, client *gitlabclient.Clien
 		return Output{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MergeRequestID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("gitlab_get_merge_request_on_merge_train", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("gitlab_get_merge_request_on_merge_train", "merge_request_iid")
 	}
 	train, _, err := client.GL().MergeTrains.GetMergeRequestOnAMergeTrain(string(input.ProjectID), input.MergeRequestID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_merge_request_on_merge_train", err, http.StatusNotFound, "verify project_id and mr_iid \u2014 the MR must be on a merge train")
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_merge_request_on_merge_train", err, http.StatusNotFound, "verify project_id and merge_request_iid \u2014 the MR must be on a merge train")
 	}
 	return toOutput(train), nil
 }
@@ -187,7 +187,7 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MergeRequestID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("gitlab_add_merge_request_to_merge_train", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("gitlab_add_merge_request_to_merge_train", "merge_request_iid")
 	}
 	opts := &gl.AddMergeRequestToMergeTrainOptions{}
 	if input.AutoMerge {

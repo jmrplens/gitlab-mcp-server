@@ -99,7 +99,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_retry_failed_external_status_check_for_project_mr",
 		Title:       toolutil.TitleFromName("gitlab_retry_failed_external_status_check_for_project_mr"),
-		Description: "Retry a failed external status check for a project merge request. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
+		Description: "Retry a failed external status check for a project merge request. Requires project_id, merge_request_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input RetryProjectInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -115,7 +115,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_set_project_mr_external_status_check_status",
 		Title:       toolutil.TitleFromName("gitlab_set_project_mr_external_status_check_status"),
-		Description: "Set the status of an external status check for a project merge request. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
+		Description: "Set the status of an external status check for a project merge request. Requires project_id, merge_request_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconSecurity,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input SetProjectStatusInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

@@ -84,18 +84,18 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		// Label events
 		{"gitlab_issue_label_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
 		{"gitlab_issue_label_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "label_event_id": float64(1)}},
-		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
-		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "mr_iid": float64(1), "label_event_id": float64(1)}},
+		{"gitlab_mr_label_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
+		{"gitlab_mr_label_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "label_event_id": float64(1)}},
 		// Milestone events
 		{"gitlab_issue_milestone_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
 		{"gitlab_issue_milestone_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "milestone_event_id": float64(1)}},
-		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
-		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "mr_iid": float64(1), "milestone_event_id": float64(1)}},
+		{"gitlab_mr_milestone_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
+		{"gitlab_mr_milestone_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "milestone_event_id": float64(1)}},
 		// State events
 		{"gitlab_issue_state_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
 		{"gitlab_issue_state_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "state_event_id": float64(1)}},
-		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "mr_iid": float64(1)}},
-		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "mr_iid": float64(1), "state_event_id": float64(1)}},
+		{"gitlab_mr_state_event_list", map[string]any{"project_id": "42", "merge_request_iid": float64(1)}},
+		{"gitlab_mr_state_event_get", map[string]any{"project_id": "42", "merge_request_iid": float64(1), "state_event_id": float64(1)}},
 		// Iteration events (enterprise)
 		{"gitlab_issue_iteration_event_list", map[string]any{"project_id": "42", "issue_iid": float64(1)}},
 		{"gitlab_issue_iteration_event_get", map[string]any{"project_id": "42", "issue_iid": float64(1), "iteration_event_id": float64(1)}},

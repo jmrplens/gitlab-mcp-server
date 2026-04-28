@@ -98,8 +98,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		_, err := callToolOn[mergerequests.PipelinesOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "pipelines",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta MR pipelines")
@@ -110,9 +110,9 @@ func TestMeta_MRApproval(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "rebase",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"skip_ci":    true,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"skip_ci":           true,
 			},
 		})
 		requireNoError(t, err, "meta MR rebase")
@@ -123,8 +123,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		out, err := callToolOn[mergerequests.ApproveOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approve",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta approve MR")
@@ -135,8 +135,8 @@ func TestMeta_MRApproval(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "unapprove",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "meta unapprove MR")
@@ -153,7 +153,7 @@ func TestMeta_MRApproval(t *testing.T) {
 				"action": "merge",
 				"params": map[string]any{
 					"project_id":                  proj.pidStr(),
-					"mr_iid":                      mr.IID,
+					"merge_request_iid":           mr.IID,
 					"should_remove_source_branch": true,
 				},
 			})

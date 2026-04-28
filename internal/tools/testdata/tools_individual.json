@@ -1417,7 +1417,7 @@
           "description": "Enable auto-merge when pipeline succeeds",
           "type": "boolean"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -1436,7 +1436,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -2415,7 +2415,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
         },
@@ -2426,7 +2426,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -2436,11 +2436,11 @@
         "analysis": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "model": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -2459,7 +2459,7 @@
         }
       },
       "required": [
-        "mr_iid",
+        "merge_request_iid",
         "title",
         "analysis",
         "model",
@@ -6507,7 +6507,7 @@
               "id": {
                 "type": "integer"
               },
-              "mr_iid": {
+              "merge_request_iid": {
                 "type": "integer"
               },
               "source_branch": {
@@ -6528,7 +6528,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "title",
               "state",
               "source_branch",
@@ -9473,7 +9473,7 @@
             "array"
           ]
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID,required",
           "type": "integer"
         },
@@ -9484,7 +9484,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "commits"
       ],
       "type": "object"
@@ -12375,7 +12375,7 @@
             "array"
           ]
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID,required",
           "type": "integer"
         },
@@ -12386,7 +12386,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "commits"
       ],
       "type": "object"
@@ -24748,7 +24748,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -24759,7 +24759,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -40700,7 +40700,7 @@
   },
   {
     "name": "gitlab_interactive_mr_create",
-    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required) — branch with the changes to merge.\n- target_branch (string, required) — branch to merge into (e.g. main, develop).\n- title (string, required) — MR title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n- remove_source_branch (boolean, optional) — yes/no confirmation; default unset.\n- squash (boolean, optional) — yes/no confirmation; default unset.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\nReturns: JSON with the created MR (id, mr_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
+    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required) — branch with the changes to merge.\n- target_branch (string, required) — branch to merge into (e.g. main, develop).\n- title (string, required) — MR title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n- remove_source_branch (boolean, optional) — yes/no confirmation; default unset.\n- squash (boolean, optional) — yes/no confirmation; default unset.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\nReturns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -40824,6 +40824,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -40838,9 +40841,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -40947,7 +40947,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -44680,7 +44680,7 @@
               "id": {
                 "type": "integer"
               },
-              "mr_iid": {
+              "merge_request_iid": {
                 "type": "integer"
               },
               "source_branch": {
@@ -44701,7 +44701,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "title",
               "state",
               "source_branch",
@@ -44817,7 +44817,7 @@
               "id": {
                 "type": "integer"
               },
-              "mr_iid": {
+              "merge_request_iid": {
                 "type": "integer"
               },
               "source_branch": {
@@ -44838,7 +44838,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "title",
               "state",
               "source_branch",
@@ -52108,11 +52108,11 @@
               "author": {
                 "type": "string"
               },
+              "merge_request_iid": {
+                "type": "integer"
+              },
               "merged_at": {
                 "type": "string"
-              },
-              "mr_iid": {
-                "type": "integer"
               },
               "source_branch": {
                 "type": "string"
@@ -52131,7 +52131,7 @@
               }
             },
             "required": [
-              "mr_iid",
+              "merge_request_iid",
               "title",
               "state",
               "author",
@@ -56326,7 +56326,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID,required",
           "type": "integer"
         },
@@ -56337,7 +56337,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -57746,7 +57746,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -57765,7 +57765,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -61809,7 +61809,7 @@
           "description": "Human-readable duration (e.g. 1h, 30m, 1w2d),required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -61824,7 +61824,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "duration"
       ],
       "type": "object"
@@ -61874,7 +61874,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -61885,7 +61885,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -61931,7 +61931,7 @@
         "id": {
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "type": "integer"
         },
         "next_steps": {
@@ -61970,7 +61970,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "state",
@@ -61993,11 +61993,11 @@
   },
   {
     "name": "gitlab_mr_approval_reset",
-    "description": "Reset all approvals on a GitLab merge request. Requires project_id and mr_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
+    "description": "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62008,7 +62008,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -62067,7 +62067,7 @@
             "array"
           ]
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62092,7 +62092,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "name",
         "approvals_required",
         "approval_project_rule_id",
@@ -62190,7 +62190,7 @@
   },
   {
     "name": "gitlab_mr_approval_rule_delete",
-    "description": "Delete an approval rule from a GitLab merge request. Requires project_id, mr_iid, and approval_rule_id.\n\nReturns: confirmation message. See also: gitlab_mr_approval_rules.",
+    "description": "Delete an approval rule from a GitLab merge request. Requires project_id, merge_request_iid, and approval_rule_id.\n\nReturns: confirmation message. See also: gitlab_mr_approval_rules.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -62198,7 +62198,7 @@
           "description": "Approval rule ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62209,7 +62209,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "approval_rule_id"
       ],
       "type": "object"
@@ -62272,7 +62272,7 @@
             "array"
           ]
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62297,7 +62297,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "approval_rule_id",
         "name",
         "approvals_required",
@@ -62400,7 +62400,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62411,7 +62411,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -62534,7 +62534,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -62545,7 +62545,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -62672,7 +62672,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -62683,7 +62683,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -62728,7 +62728,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -62739,7 +62739,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -62853,6 +62853,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -62867,9 +62870,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -62976,7 +62976,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -63009,7 +63009,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -63020,7 +63020,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63077,7 +63077,7 @@
             "array"
           ]
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "type": "integer"
         },
         "next_steps": {
@@ -63100,7 +63100,7 @@
         }
       },
       "required": [
-        "mr_iid",
+        "merge_request_iid",
         "changes"
       ],
       "type": "object"
@@ -63118,7 +63118,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63137,7 +63137,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63511,6 +63511,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -63525,9 +63528,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -63634,7 +63634,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -63666,7 +63666,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63677,7 +63677,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63753,7 +63753,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63764,7 +63764,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63826,7 +63826,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID to delete (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63837,7 +63837,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63878,7 +63878,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63889,7 +63889,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -63987,7 +63987,7 @@
           "description": "ID of the merge request that blocks this one",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -63998,7 +63998,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "blocking_merge_request_id"
       ],
       "type": "object"
@@ -64071,7 +64071,7 @@
           "description": "ID of the blocking merge request to remove",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -64082,7 +64082,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "blocking_merge_request_id"
       ],
       "type": "object"
@@ -64124,7 +64124,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -64143,7 +64143,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "version_id"
       ],
       "type": "object"
@@ -64286,7 +64286,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -64305,7 +64305,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -64512,7 +64512,7 @@
           "description": "Discussion body,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -64567,7 +64567,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "body"
       ],
       "type": "object"
@@ -64686,7 +64686,7 @@
           "description": "ID of the discussion,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -64697,7 +64697,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "discussion_id"
       ],
       "type": "object"
@@ -64814,7 +64814,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -64833,7 +64833,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -65014,7 +65014,7 @@
           "description": "ID of the discussion containing the note,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65029,7 +65029,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "discussion_id",
         "note_id"
       ],
@@ -65080,7 +65080,7 @@
           "description": "ID of the discussion containing the note,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65102,7 +65102,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "discussion_id",
         "note_id"
       ],
@@ -65195,7 +65195,7 @@
           "description": "ID of the discussion to reply to,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -65206,7 +65206,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "discussion_id",
         "body"
       ],
@@ -65294,7 +65294,7 @@
           "description": "ID of the discussion to resolve,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -65309,7 +65309,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "discussion_id",
         "resolved"
       ],
@@ -65434,7 +65434,7 @@
           "description": "Discussion ID to reply to",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65500,7 +65500,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note"
       ],
       "type": "object"
@@ -65594,7 +65594,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65609,7 +65609,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -65651,7 +65651,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65666,7 +65666,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -65762,7 +65762,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65789,7 +65789,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -65945,7 +65945,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -65960,7 +65960,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -66002,7 +66002,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -66013,7 +66013,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -66054,7 +66054,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -66117,7 +66117,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -66212,7 +66212,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66227,7 +66227,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "name"
       ],
       "type": "object"
@@ -66291,7 +66291,7 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66302,7 +66302,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "award_id"
       ],
       "type": "object"
@@ -66348,7 +66348,7 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66359,7 +66359,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "award_id"
       ],
       "type": "object"
@@ -66421,7 +66421,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66440,7 +66440,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -66562,7 +66562,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66573,7 +66573,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -66687,6 +66687,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -66701,9 +66704,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -66810,7 +66810,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -66844,7 +66844,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -66863,7 +66863,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -67091,7 +67091,7 @@
           "description": "Label event ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -67102,7 +67102,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "label_event_id"
       ],
       "type": "object"
@@ -67194,7 +67194,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -67213,7 +67213,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -67574,6 +67574,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_request_iid": {
+                "type": "integer"
+              },
               "merge_status": {
                 "type": "string"
               },
@@ -67588,9 +67591,6 @@
               },
               "milestone": {
                 "type": "string"
-              },
-              "mr_iid": {
-                "type": "integer"
               },
               "next_steps": {
                 "items": {
@@ -67697,7 +67697,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "project_id",
               "title",
               "description",
@@ -67984,6 +67984,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_request_iid": {
+                "type": "integer"
+              },
               "merge_status": {
                 "type": "string"
               },
@@ -67998,9 +68001,6 @@
               },
               "milestone": {
                 "type": "string"
-              },
-              "mr_iid": {
-                "type": "integer"
               },
               "next_steps": {
                 "items": {
@@ -68107,7 +68107,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "project_id",
               "title",
               "description",
@@ -68401,6 +68401,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_request_iid": {
+                "type": "integer"
+              },
               "merge_status": {
                 "type": "string"
               },
@@ -68415,9 +68418,6 @@
               },
               "milestone": {
                 "type": "string"
-              },
-              "mr_iid": {
-                "type": "integer"
               },
               "next_steps": {
                 "items": {
@@ -68524,7 +68524,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "project_id",
               "title",
               "description",
@@ -68626,7 +68626,7 @@
           "description": "Custom merge commit message",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -68659,7 +68659,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -68773,6 +68773,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -68787,9 +68790,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -68896,7 +68896,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -68929,12 +68929,12 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "milestone_event_id": {
-          "description": "Milestone event ID,required",
+        "merge_request_iid": {
+          "description": "Merge request internal ID,required",
           "type": "integer"
         },
-        "mr_iid": {
-          "description": "Merge request internal ID,required",
+        "milestone_event_id": {
+          "description": "Milestone event ID,required",
           "type": "integer"
         },
         "project_id": {
@@ -68944,7 +68944,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "milestone_event_id"
       ],
       "type": "object"
@@ -69015,7 +69015,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -69034,7 +69034,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -69169,7 +69169,7 @@
           "description": "Comment body (Markdown supported),required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69180,7 +69180,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "body"
       ],
       "type": "object"
@@ -69283,7 +69283,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69298,7 +69298,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -69340,7 +69340,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69359,7 +69359,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id",
         "name"
       ],
@@ -69424,7 +69424,7 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69439,7 +69439,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id",
         "award_id"
       ],
@@ -69486,7 +69486,7 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69501,7 +69501,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id",
         "award_id"
       ],
@@ -69564,7 +69564,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69587,7 +69587,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -69710,7 +69710,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69725,7 +69725,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id"
       ],
       "type": "object"
@@ -69834,7 +69834,7 @@
           "description": "Updated comment body,required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69849,7 +69849,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "note_id",
         "body"
       ],
@@ -69954,7 +69954,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -69981,7 +69981,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70146,7 +70146,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70157,7 +70157,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70228,7 +70228,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70239,7 +70239,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70341,7 +70341,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -70352,14 +70352,14 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "type": "integer"
         },
         "next_steps": {
@@ -70376,7 +70376,7 @@
         }
       },
       "required": [
-        "mr_iid",
+        "merge_request_iid",
         "raw_diff"
       ],
       "type": "object"
@@ -70394,7 +70394,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID to rebase (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70409,7 +70409,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70446,7 +70446,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70465,7 +70465,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70689,7 +70689,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70700,7 +70700,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70749,7 +70749,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70760,7 +70760,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70809,7 +70809,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70820,7 +70820,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -70901,7 +70901,7 @@
           "description": "Human-readable duration (e.g. 3h30m, 1w2d),required",
           "type": "string"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -70912,7 +70912,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "duration"
       ],
       "type": "object"
@@ -70962,7 +70962,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -70977,7 +70977,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "state_event_id"
       ],
       "type": "object"
@@ -71040,7 +71040,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -71059,7 +71059,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -71182,7 +71182,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -71193,7 +71193,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -71307,6 +71307,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -71321,9 +71324,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -71430,7 +71430,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -71463,7 +71463,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -71474,7 +71474,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -71524,7 +71524,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -71535,7 +71535,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -71576,7 +71576,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
@@ -71587,7 +71587,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -71701,6 +71701,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -71715,9 +71718,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -71824,7 +71824,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -71897,12 +71897,12 @@
           "description": "Comma-separated label names to replace all labels on the merge request",
           "type": "string"
         },
-        "milestone_id": {
-          "description": "Milestone ID (0 to unset)",
+        "merge_request_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
-        "mr_iid": {
-          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
+        "milestone_id": {
+          "description": "Milestone ID (0 to unset)",
           "type": "integer"
         },
         "project_id": {
@@ -71952,7 +71952,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
@@ -72066,6 +72066,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "merge_status": {
           "type": "string"
         },
@@ -72080,9 +72083,6 @@
         },
         "milestone": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -72189,7 +72189,7 @@
       },
       "required": [
         "id",
-        "mr_iid",
+        "merge_request_iid",
         "project_id",
         "title",
         "description",
@@ -98211,7 +98211,7 @@
   },
   {
     "name": "gitlab_retry_failed_external_status_check_for_project_mr",
-    "description": "Retry a failed external status check for a project merge request. Requires project_id, mr_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
+    "description": "Retry a failed external status check for a project merge request. Requires project_id, merge_request_iid, and check_id.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98219,7 +98219,7 @@
           "description": "External status check ID to retry,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -98230,7 +98230,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "check_id"
       ],
       "type": "object"
@@ -98488,7 +98488,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -98499,18 +98499,18 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "model": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -98532,7 +98532,7 @@
         }
       },
       "required": [
-        "mr_iid",
+        "merge_request_iid",
         "title",
         "review",
         "model",
@@ -102805,6 +102805,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_request_iid": {
+                "type": "integer"
+              },
               "merge_status": {
                 "type": "string"
               },
@@ -102819,9 +102822,6 @@
               },
               "milestone": {
                 "type": "string"
-              },
-              "mr_iid": {
-                "type": "integer"
               },
               "next_steps": {
                 "items": {
@@ -102928,7 +102928,7 @@
             },
             "required": [
               "id",
-              "mr_iid",
+              "merge_request_iid",
               "project_id",
               "title",
               "description",
@@ -104494,7 +104494,7 @@
   },
   {
     "name": "gitlab_set_project_mr_external_status_check_status",
-    "description": "Set the status of an external status check for a project merge request. Requires project_id, mr_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
+    "description": "Set the status of an external status check for a project merge request. Requires project_id, merge_request_iid, sha, external_status_check_id, and status.\n\nReturns: confirmation message. See also: gitlab_list_project_mr_external_status_checks.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -104502,7 +104502,7 @@
           "description": "External status check ID to update,required",
           "type": "integer"
         },
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -104521,7 +104521,7 @@
       },
       "required": [
         "project_id",
-        "mr_iid",
+        "merge_request_iid",
         "sha",
         "external_status_check_id",
         "status"
@@ -107489,7 +107489,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "mr_iid": {
+        "merge_request_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -107500,18 +107500,18 @@
       },
       "required": [
         "project_id",
-        "mr_iid"
+        "merge_request_iid"
       ],
       "type": "object"
     },
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "merge_request_iid": {
+          "type": "integer"
+        },
         "model": {
           "type": "string"
-        },
-        "mr_iid": {
-          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -107533,7 +107533,7 @@
         }
       },
       "required": [
-        "mr_iid",
+        "merge_request_iid",
         "title",
         "summary",
         "model",

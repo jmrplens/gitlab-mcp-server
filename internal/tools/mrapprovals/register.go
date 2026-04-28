@@ -57,7 +57,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_mr_approval_reset",
 		Title:       toolutil.TitleFromName("gitlab_mr_approval_reset"),
-		Description: "Reset all approvals on a GitLab merge request. Requires project_id and mr_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
+		Description: "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules_list.",
 		Annotations: toolutil.UpdateAnnotations,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input ResetInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {
@@ -99,7 +99,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "gitlab_mr_approval_rule_delete",
 		Title:       toolutil.TitleFromName("gitlab_mr_approval_rule_delete"),
-		Description: "Delete an approval rule from a GitLab merge request. Requires project_id, mr_iid, and approval_rule_id.\n\nReturns: confirmation message. See also: gitlab_mr_approval_rules.",
+		Description: "Delete an approval rule from a GitLab merge request. Requires project_id, merge_request_iid, and approval_rule_id.\n\nReturns: confirmation message. See also: gitlab_mr_approval_rules.",
 		Annotations: toolutil.DeleteAnnotations,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input DeleteRuleInput) (*mcp.CallToolResult, toolutil.DeleteOutput, error) {

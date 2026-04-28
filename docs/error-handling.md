@@ -249,7 +249,7 @@ When LLMs call meta-tools, misnamed JSON parameters are silently ignored during 
 | `ErrRequiredInt64(op, field)` | Required int64 field is 0 | `"milestoneGet: milestone_iid is required (must be > 0). Ensure you use the exact parameter name 'milestone_iid'..."` |
 | `ErrRequiredString(op, field)` | Required string field is empty | `"branchCreate: branch_name is required (must be non-empty). Ensure you use the exact parameter name 'branch_name'..."` |
 
-Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `merge_request_iid` vs `mr_iid`).
+Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `merge_request_iid` vs `merge_request_iid`).
 
 ## Destructive Action Confirmation
 

@@ -35,7 +35,7 @@ func TestSummarizeMRChangesPrompt_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "summarize_mr_changes",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
@@ -51,7 +51,7 @@ func TestReviewMRPrompt_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
@@ -85,7 +85,7 @@ func TestSuggestMRReviewersPrompt_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
@@ -186,7 +186,7 @@ func TestMRRiskAssessmentPrompt_APIError(t *testing.T) {
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "mr_risk_assessment",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "1"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "1"},
 	})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)

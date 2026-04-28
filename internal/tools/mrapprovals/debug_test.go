@@ -489,13 +489,13 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_approval_state", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_approval_rules", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_approval_config", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_approval_reset", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_approval_rule_create", map[string]any{"project_id": "42", "mr_iid": 1, "name": "R", "approvals_required": 1, "approval_project_rule_id": 0, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_update", map[string]any{"project_id": "42", "mr_iid": 1, "approval_rule_id": 5, "name": "U", "approvals_required": 1, "user_ids": []any{}, "group_ids": []any{}}},
-		{"gitlab_mr_approval_rule_delete", map[string]any{"project_id": "42", "mr_iid": 1, "approval_rule_id": 5}},
+		{"gitlab_mr_approval_state", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_approval_rules", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_approval_config", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_approval_reset", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_approval_rule_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "name": "R", "approvals_required": 1, "approval_project_rule_id": 0, "user_ids": []any{}, "group_ids": []any{}}},
+		{"gitlab_mr_approval_rule_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5, "name": "U", "approvals_required": 1, "user_ids": []any{}, "group_ids": []any{}}},
+		{"gitlab_mr_approval_rule_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "approval_rule_id": 5}},
 	}
 
 	for _, tt := range tools {

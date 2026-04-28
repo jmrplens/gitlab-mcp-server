@@ -21,13 +21,13 @@ import (
 // ReviewMRSecurityInput defines parameters for LLM-assisted MR security review.
 type ReviewMRSecurityInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // ReviewMRSecurityOutput holds the LLM security review of an MR.
 type ReviewMRSecurityOutput struct {
 	toolutil.HintableOutput
-	MRIID     int64  `json:"mr_iid"`
+	MRIID     int64  `json:"merge_request_iid"`
 	Title     string `json:"title"`
 	Review    string `json:"review"`
 	Model     string `json:"model"`
@@ -54,7 +54,7 @@ func ReviewMRSecurity(ctx context.Context, req *mcp.CallToolRequest, client *git
 		return ReviewMRSecurityOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.MRIID <= 0 {
-		return ReviewMRSecurityOutput{}, errors.New("mr_iid must be a positive integer")
+		return ReviewMRSecurityOutput{}, errors.New("merge_request_iid must be a positive integer")
 	}
 
 	tracker := progress.FromRequest(req)

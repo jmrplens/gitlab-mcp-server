@@ -379,7 +379,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 	ctx := context.Background()
 	pid := toolutil.StringOrInt(testProjectID)
-	const wantSubstr = "mr_iid"
+	const wantSubstr = "merge_request_iid"
 
 	t.Run("Create", func(t *testing.T) {
 		_, err := Create(ctx, client, CreateInput{ProjectID: pid, MRIID: 0, Body: "test"})
@@ -921,13 +921,13 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_discussion_create", map[string]any{"project_id": "42", "mr_iid": 1, "body": "new discussion"}},
-		{"gitlab_mr_discussion_resolve", map[string]any{"project_id": "42", "mr_iid": 1, "discussion_id": "abc123", "resolved": true}},
-		{"gitlab_mr_discussion_reply", map[string]any{"project_id": "42", "mr_iid": 1, "discussion_id": "abc123", "body": "reply"}},
-		{"gitlab_mr_discussion_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_discussion_get", map[string]any{"project_id": "42", "mr_iid": 1, "discussion_id": "abc123"}},
-		{"gitlab_mr_discussion_note_update", map[string]any{"project_id": "42", "mr_iid": 1, "discussion_id": "abc123", "note_id": 300, "body": "updated"}},
-		{"gitlab_mr_discussion_note_delete", map[string]any{"project_id": "42", "mr_iid": 1, "discussion_id": "abc123", "note_id": 300}},
+		{"gitlab_mr_discussion_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "body": "new discussion"}},
+		{"gitlab_mr_discussion_resolve", map[string]any{"project_id": "42", "merge_request_iid": 1, "discussion_id": "abc123", "resolved": true}},
+		{"gitlab_mr_discussion_reply", map[string]any{"project_id": "42", "merge_request_iid": 1, "discussion_id": "abc123", "body": "reply"}},
+		{"gitlab_mr_discussion_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_discussion_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "discussion_id": "abc123"}},
+		{"gitlab_mr_discussion_note_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "discussion_id": "abc123", "note_id": 300, "body": "updated"}},
+		{"gitlab_mr_discussion_note_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "discussion_id": "abc123", "note_id": 300}},
 	}
 
 	for _, tt := range tools {

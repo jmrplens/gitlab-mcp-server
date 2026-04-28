@@ -29,7 +29,7 @@ type CommitItem struct {
 // ListInput is the input for listing MR context commits.
 type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MergeRequest int64                `json:"mr_iid"     jsonschema:"Merge request IID,required"`
+	MergeRequest int64                `json:"merge_request_iid"     jsonschema:"Merge request IID,required"`
 }
 
 // ListOutput is the output for listing MR context commits.
@@ -47,11 +47,11 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("list_mr_context_commits: project_id is required")
 	}
 	if input.MergeRequest <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("list_mr_context_commits", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("list_mr_context_commits", "merge_request_iid")
 	}
 	commits, _, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and mr_iid with gitlab_list_merge_requests")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
 	}
 	items := make([]CommitItem, 0, len(commits))
 	for _, c := range commits {
@@ -75,7 +75,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // CreateInput is the input for creating MR context commits.
 type CreateInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MergeRequest int64                `json:"mr_iid"     jsonschema:"Merge request IID,required"`
+	MergeRequest int64                `json:"merge_request_iid"     jsonschema:"Merge request IID,required"`
 	Commits      []string             `json:"commits"    jsonschema:"List of commit SHAs to add as context,required"`
 }
 
@@ -88,7 +88,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return ListOutput{}, errors.New("create_mr_context_commits: project_id is required")
 	}
 	if input.MergeRequest <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("create_mr_context_commits", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("create_mr_context_commits", "merge_request_iid")
 	}
 	opts := &gl.CreateMergeRequestContextCommitsOptions{
 		Commits: &input.Commits,
@@ -119,7 +119,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // DeleteInput is the input for deleting MR context commits.
 type DeleteInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MergeRequest int64                `json:"mr_iid"     jsonschema:"Merge request IID,required"`
+	MergeRequest int64                `json:"merge_request_iid"     jsonschema:"Merge request IID,required"`
 	Commits      []string             `json:"commits"    jsonschema:"List of commit SHAs to remove from context,required"`
 }
 
@@ -132,7 +132,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("delete_mr_context_commits: project_id is required")
 	}
 	if input.MergeRequest <= 0 {
-		return toolutil.ErrRequiredInt64("delete_mr_context_commits", "mr_iid")
+		return toolutil.ErrRequiredInt64("delete_mr_context_commits", "merge_request_iid")
 	}
 	opts := &gl.DeleteMergeRequestContextCommitsOptions{
 		Commits: &input.Commits,

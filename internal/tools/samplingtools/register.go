@@ -321,19 +321,19 @@ Returns: each action returns action-specific JSON (typically identifiers + a tex
 - review: mr_security
 - report: milestone_report
 - release_notes: release_notes
-Alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
-Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
+Alongside the resource identifiers (merge_request_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
+Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
-- mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
+- mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
 - release_notes: from_ref*, to_ref*. Generate categorized release notes between refs.
 - pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
-- mr_review: mr_iid*. Summarize review feedback and unresolved threads.
+- mr_review: merge_request_iid*. Summarize review feedback and unresolved threads.
 - milestone_report: milestone_iid*. Progress report with metrics.
 - ci_config: content_ref. Analyze CI/CD config for best practices and security.
 - issue_scope: issue_iid*. Scope, complexity, and breakdown recommendations.
-- mr_security: mr_iid*. OWASP Top 10, secrets, auth review.
+- mr_security: merge_request_iid*. OWASP Top 10, secrets, auth review.
 - technical_debt: ref. Find TODO/FIXME/HACK markers.
 - deployment_history: environment. Frequency, success rate, patterns.
 

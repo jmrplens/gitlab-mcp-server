@@ -93,7 +93,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":        issue.IID,
+				"issue_iid":  issue.IID,
 				"name":       "thumbsup",
 			},
 		})
@@ -108,7 +108,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":        issue.IID,
+				"issue_iid":  issue.IID,
 			},
 		})
 		requireNoError(t, err, "meta list emoji")
@@ -121,7 +121,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":        issue.IID,
+				"issue_iid":  issue.IID,
 				"award_id":   awardID,
 			},
 		})
@@ -135,7 +135,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			"action": "emoji_issue_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"issue_iid":        issue.IID,
+				"issue_iid":  issue.IID,
 				"award_id":   awardID,
 			},
 		})

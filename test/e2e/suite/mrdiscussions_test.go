@@ -116,9 +116,9 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		out, err := callToolOn[mrdiscussions.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_create",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
-				"body":       "E2E discussion meta",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"body":              "E2E discussion meta",
 			},
 		})
 		requireNoError(t, err, "create MR discussion meta")
@@ -133,8 +133,8 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		out, err := callToolOn[mrdiscussions.ListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_list",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"mr_iid":     mr.IID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
 			},
 		})
 		requireNoError(t, err, "list MR discussions meta")
@@ -145,9 +145,9 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		out, err := callToolOn[mrdiscussions.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_get",
 			"params": map[string]any{
-				"project_id":    proj.pidStr(),
-				"mr_iid":        mr.IID,
-				"discussion_id": discussionID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"discussion_id":     discussionID,
 			},
 		})
 		requireNoError(t, err, "get MR discussion meta")
@@ -158,10 +158,10 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		out, err := callToolOn[mrdiscussions.NoteOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_reply",
 			"params": map[string]any{
-				"project_id":    proj.pidStr(),
-				"mr_iid":        mr.IID,
-				"discussion_id": discussionID,
-				"body":          "E2E reply meta",
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"discussion_id":     discussionID,
+				"body":              "E2E reply meta",
 			},
 		})
 		requireNoError(t, err, "reply MR discussion meta")
@@ -172,10 +172,10 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		out, err := callToolOn[mrdiscussions.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_resolve",
 			"params": map[string]any{
-				"project_id":    proj.pidStr(),
-				"mr_iid":        mr.IID,
-				"discussion_id": discussionID,
-				"resolved":      true,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"discussion_id":     discussionID,
+				"resolved":          true,
 			},
 		})
 		requireNoError(t, err, "resolve MR discussion meta")
@@ -186,10 +186,10 @@ func TestMeta_MRDiscussions(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "discussion_note_delete",
 			"params": map[string]any{
-				"project_id":    proj.pidStr(),
-				"mr_iid":        mr.IID,
-				"discussion_id": discussionID,
-				"note_id":       noteID,
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"discussion_id":     discussionID,
+				"note_id":           noteID,
 			},
 		})
 		requireNoError(t, err, "delete MR discussion note meta")

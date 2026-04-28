@@ -95,13 +95,13 @@ func TestSummarizeMRReview_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestSummarizeMRReview_InvalidMRIID verifies mr_iid validation.
+// TestSummarizeMRReview_InvalidMRIID verifies merge_request_iid validation.
 func TestSummarizeMRReview_InvalidMRIID(t *testing.T) {
 	_, err := SummarizeMRReview(context.Background(), &mcp.CallToolRequest{}, nil, SummarizeMRReviewInput{
 		ProjectID: "42", MRIID: 0,
 	})
-	if err == nil || !strings.Contains(err.Error(), "mr_iid") {
-		t.Errorf("error = %v, want mr_iid validation error", err)
+	if err == nil || !strings.Contains(err.Error(), "merge_request_iid") {
+		t.Errorf("error = %v, want merge_request_iid validation error", err)
 	}
 }
 

@@ -634,7 +634,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "Dame los detalles de la merge request !15 del proyecto gitlab-mcp-server." |
-| **Expected Path** | `gitlab_merge_request` → action `get` with project=1835, mr_iid=15 |
+| **Expected Path** | `gitlab_merge_request` → action `get` with project=1835, merge_request_iid=15 |
 | **Expected Data** | "feat(samplingtools): modularize sampling tools...", state=merged, source=feature/sampling-tools-modularization |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -644,7 +644,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Qué archivos se modificaron en la MR !12 del proyecto gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_mr_review` → changes/diff for project 1835, mr_iid=12 |
+| **Expected Path** | `gitlab_mr_review` → changes/diff for project 1835, merge_request_iid=12 |
 | **Expected Data** | Changes in internal/gitlab/client.go and test files |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -654,7 +654,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Cuántos commits tiene la MR !15 de gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_merge_request` → action `commits` for project 1835, mr_iid=15 |
+| **Expected Path** | `gitlab_merge_request` → action `commits` for project 1835, merge_request_iid=15 |
 | **Expected Data** | List of commits in that MR |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -675,7 +675,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Tiene pipelines la MR !15 del proyecto gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_merge_request` → action `pipelines` for project 1835, mr_iid=15 |
+| **Expected Path** | `gitlab_merge_request` → action `pipelines` for project 1835, merge_request_iid=15 |
 | **Expected Data** | Pipeline list (may be empty since project doesn't have CI) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -685,7 +685,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Qué issues cierra o está relacionada la MR !10 del proyecto gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_merge_request` → action `related_issues` or `issues_closed` for project=1835, mr_iid=10 |
+| **Expected Path** | `gitlab_merge_request` → action `related_issues` or `issues_closed` for project=1835, merge_request_iid=10 |
 | **Expected Data** | Related issues (if any) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -695,7 +695,7 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Quiénes participaron en la MR !14 del proyecto gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_merge_request` → action `participants` for project=1835, mr_iid=14 |
+| **Expected Path** | `gitlab_merge_request` → action `participants` for project=1835, merge_request_iid=14 |
 | **Expected Data** | testuser (author and merger) |
 | **Result** | |
 | **Error / Observaciones** | _Rellenar solo si hay error o comportamiento inesperado_ |
@@ -705,10 +705,10 @@
 | Field | Value |
 |-------|-------|
 | **Prompt** | "¿Cuál es el estado de aprobación de la MR !15 en gitlab-mcp-server?" |
-| **Expected Path** | `gitlab_mr_review` → approval actions for project=1835, mr_iid=15 |
+| **Expected Path** | `gitlab_mr_review` → approval actions for project=1835, merge_request_iid=15 |
 | **Expected Data** | Approval state info |
 | **Result** | |
-| **Error / Observaciones** | ha usado las claves mr_iid y project_id usando la accion approval_state y tambien ha probado con la accion approval_rules, ambas han devuelto: "mrApprovalState: unexpected error: 404 Not Found" "mrApprovalRules: unexpected error: 404 Not Found" y el LLM entiende que: La MR !15 de gitlab-mcp-server no tiene sistema de aprobaciones configurado y Las aprobaciones de MR son una funcionalidad de GitLab Premium, por lo que no están disponibles en esta instancia.  ¿Confirma si es correcto, y evita que genere error 404 cuando ocurre consultas que no son error directamente (los MR si tiene boton de aprobacion pero no hay reglas para obligar a que esten los MR aprobados) |
+| **Error / Observaciones** | ha usado las claves merge_request_iid y project_id usando la accion approval_state y tambien ha probado con la accion approval_rules, ambas han devuelto: "mrApprovalState: unexpected error: 404 Not Found" "mrApprovalRules: unexpected error: 404 Not Found" y el LLM entiende que: La MR !15 de gitlab-mcp-server no tiene sistema de aprobaciones configurado y Las aprobaciones de MR son una funcionalidad de GitLab Premium, por lo que no están disponibles en esta instancia.  ¿Confirma si es correcto, y evita que genere error 404 cuando ocurre consultas que no son error directamente (los MR si tiene boton de aprobacion pero no hay reglas para obligar a que esten los MR aprobados) |
 
 ### P-079: List global MRs
 
@@ -1029,7 +1029,7 @@
 | **Expected Path** | Chain: MR get → MR changes → MR commits → MR participants |
 | **Expected Data** | Full MR context for review |
 | **Result** | |
-| **Error / Observaciones** | ha tenido el mismo error en gitlab_merge_request, gitlab_mr_review, ha usado merge_request_id en lugar del correcto que es mr_iid, el resto ok |
+| **Error / Observaciones** | ha tenido el mismo error en gitlab_merge_request, gitlab_mr_review, ha usado merge_request_id en lugar del correcto que es merge_request_iid, el resto ok |
 
 ### P-126: Milestone tracking
 

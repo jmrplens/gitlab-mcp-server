@@ -30,7 +30,7 @@ const (
 	fmtExpected1Emoji     = "expected 1 emoji, got %d"
 	testFieldIID          = "iid"
 	testFieldIssueIID     = "issue_iid"
-	testFieldMRIID        = "mr_iid"
+	testFieldMRIID        = "merge_request_iid"
 	testFieldSnippetID    = "snippet_id"
 	testFieldAwardID      = "award_id"
 	testFieldNoteID       = "note_id"

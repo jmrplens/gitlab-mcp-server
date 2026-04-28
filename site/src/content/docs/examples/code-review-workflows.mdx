@@ -23,7 +23,7 @@ Returns: MR titles, authors, branches, labels, and review status.
 **Prompt**: "Show me the file changes in MR !42"
 
 ```
-gitlab_merge_request → action: changes, project_id: "my-group/backend", mr_iid: 42
+gitlab_merge_request → action: changes, project_id: "my-group/backend", merge_request_iid: 42
 ```
 
 Returns: list of changed files with additions, deletions, and full diffs.
@@ -34,7 +34,7 @@ Returns: list of changed files with additions, deletions, and full diffs.
 
 ```
 gitlab_merge_request → action: approval_state, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 Returns: approval rules, required approvals, current approvals, and eligible approvers.
@@ -45,7 +45,7 @@ Returns: approval rules, required approvals, current approvals, and eligible app
 
 ```
 gitlab_merge_request → action: approve, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 ---
@@ -92,7 +92,7 @@ Returns: key discussion points, unresolved threads, action items, and overall re
 
 ```
 gitlab_merge_request → action: note_create, project_id: "my-group/backend",
-  mr_iid: 42, body: "The error handling in auth.go needs a retry mechanism"
+  merge_request_iid: 42, body: "The error handling in auth.go needs a retry mechanism"
 ```
 
 ### Create a discussion thread
@@ -101,7 +101,7 @@ gitlab_merge_request → action: note_create, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: discussion_create, project_id: "my-group/backend",
-  mr_iid: 42, body: "Let's discuss the database migration strategy..."
+  merge_request_iid: 42, body: "Let's discuss the database migration strategy..."
 ```
 
 ### List unresolved threads
@@ -110,7 +110,7 @@ gitlab_merge_request → action: discussion_create, project_id: "my-group/backen
 
 ```
 gitlab_merge_request → action: discussion_list, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 Filter the results for threads where `resolved: false` to find outstanding review items.
@@ -121,7 +121,7 @@ Filter the results for threads where `resolved: false` to find outstanding revie
 
 ```
 gitlab_merge_request → action: draft_note_create, project_id: "my-group/backend",
-  mr_iid: 42, note: "Consider using a context timeout here..."
+  merge_request_iid: 42, note: "Consider using a context timeout here..."
 ```
 
 Draft notes are only visible to you until you publish them all at once with `action: draft_note_publish_all`.
@@ -146,7 +146,7 @@ gitlab_merge_request → action: create, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: merge, project_id: "my-group/backend",
-  mr_iid: 42, squash: true
+  merge_request_iid: 42, squash: true
 ```
 
 ### Rebase before merge
@@ -155,7 +155,7 @@ gitlab_merge_request → action: merge, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: rebase, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 ### Close without merging
@@ -164,7 +164,7 @@ gitlab_merge_request → action: rebase, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: update, project_id: "my-group/backend",
-  mr_iid: 99, state_event: "close"
+  merge_request_iid: 99, state_event: "close"
 ```
 
 ---

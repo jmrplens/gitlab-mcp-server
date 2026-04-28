@@ -72,13 +72,13 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_list_project_status_checks", map[string]any{"project_id": "42"}},
-		{"gitlab_list_project_mr_external_status_checks", map[string]any{"project_id": "42", "mr_iid": 1}},
+		{"gitlab_list_project_mr_external_status_checks", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 		{"gitlab_list_project_external_status_checks", map[string]any{"project_id": "42"}},
 		{"gitlab_create_project_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
 		{"gitlab_delete_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
 		{"gitlab_update_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_retry_failed_external_status_check_for_project_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
-		{"gitlab_set_project_mr_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc123", "external_status_check_id": 1, "status": "passed"}},
+		{"gitlab_retry_failed_external_status_check_for_project_mr", map[string]any{"project_id": "42", "merge_request_iid": 1, "check_id": 1}},
+		{"gitlab_set_project_mr_external_status_check_status", map[string]any{"project_id": "42", "merge_request_iid": 1, "sha": "abc123", "external_status_check_id": 1, "status": "passed"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,8 +128,8 @@ func TestRegisterTools_MutationErrors(t *testing.T) {
 		{"gitlab_create_project_external_status_check", map[string]any{"project_id": "42", "name": "check", "external_url": "https://ci.example.com"}},
 		{"gitlab_delete_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
 		{"gitlab_update_project_external_status_check", map[string]any{"project_id": "42", "check_id": 1}},
-		{"gitlab_retry_failed_external_status_check_for_project_mr", map[string]any{"project_id": "42", "mr_iid": 1, "check_id": 1}},
-		{"gitlab_set_project_mr_external_status_check_status", map[string]any{"project_id": "42", "mr_iid": 1, "sha": "abc", "external_status_check_id": 1, "status": "passed"}},
+		{"gitlab_retry_failed_external_status_check_for_project_mr", map[string]any{"project_id": "42", "merge_request_iid": 1, "check_id": 1}},
+		{"gitlab_set_project_mr_external_status_check_status", map[string]any{"project_id": "42", "merge_request_iid": 1, "sha": "abc", "external_status_check_id": 1, "status": "passed"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

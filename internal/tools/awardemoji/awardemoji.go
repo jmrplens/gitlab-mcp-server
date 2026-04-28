@@ -84,7 +84,7 @@ type IssueDeleteOnNoteInput struct {
 // MRListInput is the input for listing award emoji on a merge request.
 type MRListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
 	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
 }
@@ -92,7 +92,7 @@ type MRListInput struct {
 // MRListOnNoteInput is the input for listing award emoji on a merge request note.
 type MRListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
 	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
@@ -101,14 +101,14 @@ type MRListOnNoteInput struct {
 // MRGetInput is the input for getting a single award emoji on a merge request.
 type MRGetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
 
 // MRGetOnNoteInput is the input for getting an award emoji on a merge request note.
 type MRGetOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
@@ -116,14 +116,14 @@ type MRGetOnNoteInput struct {
 // MRCreateInput is the input for creating an award emoji on a merge request.
 type MRCreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
 }
 
 // MRCreateOnNoteInput is the input for creating an award emoji on a merge request note.
 type MRCreateOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	Name      string               `json:"name" jsonschema:"Emoji name without colons (e.g. thumbsup),required"`
 }
@@ -131,14 +131,14 @@ type MRCreateOnNoteInput struct {
 // MRDeleteInput is the input for deleting an award emoji from a merge request.
 type MRDeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
 
 // MRDeleteOnNoteInput is the input for deleting an award emoji from a merge request note.
 type MRDeleteOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IID       int64                `json:"mr_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
 	AwardID   int64                `json:"award_id" jsonschema:"Award emoji ID,required"`
 }
@@ -402,13 +402,13 @@ func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MR
 		return ListOutput{}, toolutil.WrapErrWithMessage("mr_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "merge_request_iid")
 	}
 	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_emoji_list", err, 404,
-			"verify the merge request exists with gitlab_mr_get (correct project_id and mr_iid)")
+			"verify the merge request exists with gitlab_mr_get (correct project_id and merge_request_iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -419,7 +419,7 @@ func GetMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRG
 		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "merge_request_iid")
 	}
 	if input.AwardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_get", "award_id")
@@ -437,7 +437,7 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.WrapErrWithMessage("mr_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_create", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_emoji_create", "merge_request_iid")
 	}
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
@@ -454,7 +454,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 		return toolutil.WrapErrWithMessage("mr_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("mr_emoji_delete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mr_emoji_delete", "merge_request_iid")
 	}
 	if input.AwardID <= 0 {
 		return toolutil.ErrRequiredInt64("mr_emoji_delete", "award_id")
@@ -480,7 +480,7 @@ func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 		return ListOutput{}, toolutil.WrapErrWithMessage("mr_note_emoji_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "mr_iid")
+		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("mr_note_emoji_list", "note_id")
@@ -489,7 +489,7 @@ func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, inpu
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote(string(input.ProjectID), input.IID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_note_emoji_list", err, 404,
-			"verify the MR and note exist with gitlab_mr_note_get (correct project_id, mr_iid, note_id)")
+			"verify the MR and note exist with gitlab_mr_note_get (correct project_id, merge_request_iid, note_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -500,7 +500,7 @@ func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_get", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_get", "note_id")
@@ -521,7 +521,7 @@ func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 		return Output{}, toolutil.WrapErrWithMessage("mr_note_emoji_create", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mr_note_emoji_create", "note_id")
@@ -541,7 +541,7 @@ func DeleteMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 		return toolutil.WrapErrWithMessage("mr_note_emoji_delete", toolutil.ErrFieldRequired("project_id"))
 	}
 	if input.IID <= 0 {
-		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "mr_iid")
+		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "merge_request_iid")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("mr_note_emoji_delete", "note_id")

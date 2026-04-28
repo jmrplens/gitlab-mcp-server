@@ -100,17 +100,17 @@ User: "List my projects"
 #### Review a Merge Request
 
 ```text
-1. gitlab_get_merge_request(project_id="42", mr_iid=15)
-2. gitlab_list_mr_changes(project_id="42", mr_iid=15)
-3. Prompt: review_mr(project_id="42", mr_iid="15")
+1. gitlab_get_merge_request(project_id="42", merge_request_iid=15)
+2. gitlab_list_mr_changes(project_id="42", merge_request_iid=15)
+3. Prompt: review_mr(project_id="42", merge_request_iid="15")
    → Returns structured code review with risk categorization
 ```
 
 #### Approve and Merge
 
 ```text
-1. gitlab_approve_merge_request(project_id="42", mr_iid=15)
-2. gitlab_accept_merge_request(project_id="42", mr_iid=15, squash=true)
+1. gitlab_approve_merge_request(project_id="42", merge_request_iid=15)
+2. gitlab_accept_merge_request(project_id="42", merge_request_iid=15, squash=true)
 ```
 
 ### 3. Issue Management
@@ -218,7 +218,7 @@ Available meta-tool domains: `project`, `branch`, `tag`, `release`, `merge_reque
 When the MCP client supports sampling, these tools delegate analysis to the LLM:
 
 ```text
-gitlab_analyze_mr_changes(project_id="42", mr_iid=15)
+gitlab_analyze_mr_changes(project_id="42", merge_request_iid=15)
 → Sends MR diff data to LLM for code review analysis
 
 gitlab_summarize_issue(project_id="42", issue_iid=10)

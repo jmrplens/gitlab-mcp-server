@@ -30,7 +30,7 @@ type testInput struct {
 // testInt64Input defines parameters for the test int64 operation.
 type testInt64Input struct {
 	ProjectID StringOrInt `json:"project_id"`
-	MRIID     int64       `json:"mr_iid"`
+	MRIID     int64       `json:"merge_request_iid"`
 	Message   string      `json:"message,omitempty"`
 }
 
@@ -68,9 +68,9 @@ func TestUnmarshalParams_InvalidType(t *testing.T) {
 // of sending numbers as JSON strings.
 func TestUnmarshalParams_CoercesStringToInt64(t *testing.T) {
 	params := map[string]any{
-		"project_id": "42",
-		"mr_iid":     "17",
-		"message":    "merge commit",
+		"project_id":        "42",
+		"merge_request_iid": "17",
+		"message":           "merge commit",
 	}
 	got, err := UnmarshalParams[testInt64Input](params)
 	if err != nil {
@@ -91,8 +91,8 @@ func TestUnmarshalParams_CoercesStringToInt64(t *testing.T) {
 // types (numbers as numbers) still work without coercion.
 func TestUnmarshalParams_CoercionNotNeeded(t *testing.T) {
 	params := map[string]any{
-		"project_id": float64(42),
-		"mr_iid":     float64(17),
+		"project_id":        float64(42),
+		"merge_request_iid": float64(17),
 	}
 	got, err := UnmarshalParams[testInt64Input](params)
 	if err != nil {
@@ -107,8 +107,8 @@ func TestUnmarshalParams_CoercionNotNeeded(t *testing.T) {
 // in int64 fields still produce an error after coercion retry.
 func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	params := map[string]any{
-		"project_id": "my-project",
-		"mr_iid":     "not-a-number",
+		"project_id":        "my-project",
+		"merge_request_iid": "not-a-number",
 	}
 	_, err := UnmarshalParams[testInt64Input](params)
 	if err == nil {

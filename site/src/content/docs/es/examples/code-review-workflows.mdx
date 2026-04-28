@@ -23,7 +23,7 @@ Devuelve: títulos de MRs, autores, ramas, etiquetas y estado de revisión.
 **Prompt**: "Muéstrame los cambios de archivos en el MR !42"
 
 ```
-gitlab_merge_request → action: changes, project_id: "my-group/backend", mr_iid: 42
+gitlab_merge_request → action: changes, project_id: "my-group/backend", merge_request_iid: 42
 ```
 
 Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs completos.
@@ -34,7 +34,7 @@ Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs com
 
 ```
 gitlab_merge_request → action: approval_state, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 Devuelve: reglas de aprobación, aprobaciones requeridas, aprobaciones actuales y aprobadores elegibles.
@@ -45,7 +45,7 @@ Devuelve: reglas de aprobación, aprobaciones requeridas, aprobaciones actuales 
 
 ```
 gitlab_merge_request → action: approve, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 ---
@@ -92,7 +92,7 @@ Devuelve: puntos clave de discusión, hilos sin resolver, elementos de acción y
 
 ```
 gitlab_merge_request → action: note_create, project_id: "my-group/backend",
-  mr_iid: 42, body: "El manejo de errores en auth.go necesita un mecanismo de reintento"
+  merge_request_iid: 42, body: "El manejo de errores en auth.go necesita un mecanismo de reintento"
 ```
 
 ### Crear un hilo de discusión
@@ -101,7 +101,7 @@ gitlab_merge_request → action: note_create, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: discussion_create, project_id: "my-group/backend",
-  mr_iid: 42, body: "Discutamos la estrategia de migración de base de datos..."
+  merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..."
 ```
 
 ### Listar hilos sin resolver
@@ -110,7 +110,7 @@ gitlab_merge_request → action: discussion_create, project_id: "my-group/backen
 
 ```
 gitlab_merge_request → action: discussion_list, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 Filtra los resultados por hilos donde `resolved: false` para encontrar elementos pendientes de revisión.
@@ -121,7 +121,7 @@ Filtra los resultados por hilos donde `resolved: false` para encontrar elementos
 
 ```
 gitlab_merge_request → action: draft_note_create, project_id: "my-group/backend",
-  mr_iid: 42, note: "Considera usar un context timeout aquí..."
+  merge_request_iid: 42, note: "Considera usar un context timeout aquí..."
 ```
 
 Las notas borrador solo son visibles para ti hasta que las publiques todas a la vez con `action: draft_note_publish_all`.
@@ -146,7 +146,7 @@ gitlab_merge_request → action: create, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: merge, project_id: "my-group/backend",
-  mr_iid: 42, squash: true
+  merge_request_iid: 42, squash: true
 ```
 
 ### Rebase antes de fusionar
@@ -155,7 +155,7 @@ gitlab_merge_request → action: merge, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: rebase, project_id: "my-group/backend",
-  mr_iid: 42
+  merge_request_iid: 42
 ```
 
 ### Cerrar sin fusionar
@@ -164,7 +164,7 @@ gitlab_merge_request → action: rebase, project_id: "my-group/backend",
 
 ```
 gitlab_merge_request → action: update, project_id: "my-group/backend",
-  mr_iid: 99, state_event: "close"
+  merge_request_iid: 99, state_event: "close"
 ```
 
 ---

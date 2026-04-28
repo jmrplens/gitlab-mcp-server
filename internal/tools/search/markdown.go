@@ -63,7 +63,7 @@ func FormatMRsMarkdown(out MergeRequestsOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_merge_request action 'get' with project_id and mr_iid to see full details")
+		"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
 	return b.String()
 }
 

@@ -274,7 +274,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestMRIIDRequired_Validation validates m r i i d required validation across multiple scenarios using table-driven subtests.
 func TestMRIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when mr_iid is missing")
+		t.Fatal("API should not be called when merge_request_iid is missing")
 	}))
 
 	tests := []struct {
@@ -300,7 +300,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "mr_iid")
+			assertContains(t, tt.fn(), "merge_request_iid")
 		})
 	}
 }
@@ -727,10 +727,10 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_changes_get", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_diff_versions_list", map[string]any{"project_id": "42", "mr_iid": 1}},
-		{"gitlab_mr_diff_version_get", map[string]any{"project_id": "42", "mr_iid": 1, "version_id": 2}},
-		{"gitlab_mr_raw_diffs", map[string]any{"project_id": "42", "mr_iid": 1}},
+		{"gitlab_mr_changes_get", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_diff_versions_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_diff_version_get", map[string]any{"project_id": "42", "merge_request_iid": 1, "version_id": 2}},
+		{"gitlab_mr_raw_diffs", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 	}
 
 	for _, tt := range tools {

@@ -673,7 +673,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 	ctx := context.Background()
 	pid := toolutil.StringOrInt("42")
-	const wantSubstr = "mr_iid"
+	const wantSubstr = "merge_request_iid"
 
 	t.Run("State", func(t *testing.T) {
 		_, err := State(ctx, client, StateInput{ProjectID: pid, MRIID: 0})

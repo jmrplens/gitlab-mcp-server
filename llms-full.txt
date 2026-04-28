@@ -1121,19 +1121,19 @@ Returns: each action returns action-specific JSON (typically identifiers + a tex
 - review: mr_security
 - report: milestone_report
 - release_notes: release_notes
-Alongside the resource identifiers (mr_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
-Errors: 404 (hint: project_id, mr_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), `SamplingUnsupportedResult` when the client did not advertise sampling capability.
+Alongside the resource identifiers (merge_request_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
+Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), `SamplingUnsupportedResult` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
-- mr_changes: mr_iid*. Analyze MR code changes for quality, bugs, improvements.
+- mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
 - release_notes: from_ref*, to_ref*. Generate categorized release notes between refs.
 - pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
-- mr_review: mr_iid*. Summarize review feedback and unresolved threads.
+- mr_review: merge_request_iid*. Summarize review feedback and unresolved threads.
 - milestone_report: milestone_iid*. Progress report with metrics.
 - ci_config: content_ref. Analyze CI/CD config for best practices and security.
 - issue_scope: issue_iid*. Scope, complexity, and breakdown recommendations.
-- mr_security: mr_iid*. OWASP Top 10, secrets, auth review.
+- mr_security: merge_request_iid*. OWASP Top 10, secrets, auth review.
 - technical_debt: ref. Find TODO/FIXME/HACK markers.
 - deployment_history: environment. Frequency, success rate, patterns.
 
@@ -1579,7 +1579,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>deployment_merge_requests</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"merged_at":{"type":"string"},"mr_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["mr_iid","title","state","author","source_branch","target_branch","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"merge_request_iid":{"type":"integer"},"merged_at":{"type":"string"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["merge_request_iid","title","state","author","source_branch","target_branch","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -2736,7 +2736,7 @@ When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creat
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.
 
-Returns: JSON with the created MR (id, mr_iid, web_url, title, source_branch, target_branch, state).
+Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state).
 
 See also: gitlab_merge_request, gitlab_branch.
 
@@ -3146,7 +3146,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>mrs_closing</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"mr_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","mr_iid","title","state","source_branch","target_branch","author","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"merge_request_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","title","state","source_branch","target_branch","author","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3154,7 +3154,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>mrs_related</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"mr_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","mr_iid","title","state","source_branch","target_branch","author","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"merge_request_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","title","state","source_branch","target_branch","author","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3555,59 +3555,59 @@ Returns:
 - time_estimate_set / spent_time_add / time_stats / time_estimate_reset / spent_time_reset: {time_estimate, total_time_spent, human_time_estimate, human_total_time_spent}.
 - subscribe / unsubscribe / cancel_auto_merge / create_pipeline: updated MR or pipeline object.
 - delete / unapprove / approval_reset / approval_rule_delete / context_commits_delete / dependency_delete / emoji_*_delete: {success, message}.
-Errors: 404 (hint: confirm project_id and mr_iid — mr_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
+Errors: 404 (hint: confirm project_id and merge_request_iid — merge_request_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
 
-Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
+Param conventions: * = required. Most actions need project_id*, merge_request_iid*. List actions accept page, per_page.
 
 IMPORTANT for create: target_branch* — if user doesn't specify, retrieve project's default_branch via gitlab_project get; do NOT assume 'main'.
 IMPORTANT for merge: auto-detects project squash/delete-branch settings — do NOT set squash or should_remove_source_branch unless user explicitly asks.
 
 MR lifecycle:
 - create: project_id*, source_branch*, target_branch*, title*, description, assignee_id, assignee_ids, reviewer_ids, labels (comma-separated), milestone_id, remove_source_branch, squash, allow_collaboration, target_project_id (forks)
-- get: project_id*, mr_iid*
+- get: project_id*, merge_request_iid*
 - list: project_id*, state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft, iids, created_after/before, updated_after/before, order_by, sort
 - list_global / list_group: same filters as list. list_group needs group_id* instead of project_id.
-- update: project_id*, mr_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
-- merge: project_id*, mr_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
-- approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, mr_iid*
+- update: project_id*, merge_request_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
+- merge: project_id*, merge_request_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
+- approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, merge_request_iid*
 - rebase also accepts: skip_ci
-- commits / pipelines / issues_closed: project_id*, mr_iid*
-- subscribe / unsubscribe: project_id*, mr_iid*
+- commits / pipelines / issues_closed: project_id*, merge_request_iid*
+- subscribe / unsubscribe: project_id*, merge_request_iid*
 
 Approvals:
-- approval_state / approval_rules / approval_config / approval_reset: project_id*, mr_iid*
-- approval_rule_create: project_id*, mr_iid*, name*, approvals_required*, approval_project_rule_id, user_ids, group_ids
-- approval_rule_update: project_id*, mr_iid*, approval_rule_id*, name, approvals_required, user_ids, group_ids
-- approval_rule_delete: project_id*, mr_iid*, approval_rule_id*
+- approval_state / approval_rules / approval_config / approval_reset: project_id*, merge_request_iid*
+- approval_rule_create: project_id*, merge_request_iid*, name*, approvals_required*, approval_project_rule_id, user_ids, group_ids
+- approval_rule_update: project_id*, merge_request_iid*, approval_rule_id*, name, approvals_required, user_ids, group_ids
+- approval_rule_delete: project_id*, merge_request_iid*, approval_rule_id*
 - approval_settings_group_get / approval_settings_group_update: group_id*. Update params: allow_author_approval, allow_committer_approval, allow_overrides_approver_list_per_mr, retain_approvals_on_push, require_reauthentication_to_approve
 - approval_settings_project_get / approval_settings_project_update: project_id*. Same params + selective_code_owner_removals.
 
 Time tracking:
-- time_estimate_set / spent_time_add: project_id*, mr_iid*, duration* (e.g. '3h30m', '1w2d'). spent_time_add also accepts summary.
-- time_estimate_reset / spent_time_reset / time_stats: project_id*, mr_iid*
+- time_estimate_set / spent_time_add: project_id*, merge_request_iid*, duration* (e.g. '3h30m', '1w2d'). spent_time_add also accepts summary.
+- time_estimate_reset / spent_time_reset / time_stats: project_id*, merge_request_iid*
 
 Context commits:
-- context_commits_list / context_commits_create / context_commits_delete: project_id*, mr_iid*. create/delete need commits ([]string)*.
+- context_commits_list / context_commits_create / context_commits_delete: project_id*, merge_request_iid*. create/delete need commits ([]string)*.
 
 MR dependencies (blocking MRs):
-- dependencies_list: project_id*, mr_iid* — list MRs that block this MR from merging.
-- dependency_create: project_id*, mr_iid*, blocking_merge_request_id* (global ID of the blocking MR).
-- dependency_delete: project_id*, mr_iid*, blocking_merge_request_id*.
+- dependencies_list: project_id*, merge_request_iid* — list MRs that block this MR from merging.
+- dependency_create: project_id*, merge_request_iid*, blocking_merge_request_id* (global ID of the blocking MR).
+- dependency_delete: project_id*, merge_request_iid*, blocking_merge_request_id*.
 
 Todos and related issues:
-- create_todo: project_id*, mr_iid* — add this MR to the authenticated user's to-do list.
-- related_issues: project_id*, mr_iid* — list issues mentioned or linked from the MR (paginated).
+- create_todo: project_id*, merge_request_iid* — add this MR to the authenticated user's to-do list.
+- related_issues: project_id*, merge_request_iid* — list issues mentioned or linked from the MR (paginated).
 
 Award emoji:
-- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, mr_iid*, name* (create), award_id* (get/delete)
-- emoji_mr_get: project_id*, mr_iid*, award_id*
-- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, mr_iid*, note_id*, name* (create), award_id* (get/delete)
-- emoji_mr_note_get: project_id*, mr_iid*, note_id*, award_id*
+- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, merge_request_iid*, name* (create), award_id* (get/delete)
+- emoji_mr_get: project_id*, merge_request_iid*, award_id*
+- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, merge_request_iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_mr_note_get: project_id*, merge_request_iid*, note_id*, award_id*
 
 Resource events:
-- event_mr_label_list / event_mr_label_get: project_id*, mr_iid*, label_event_id* (get)
-- event_mr_milestone_list / event_mr_milestone_get: project_id*, mr_iid*, milestone_event_id* (get)
-- event_mr_state_list / event_mr_state_get: project_id*, mr_iid*, state_event_id* (get)
+- event_mr_label_list / event_mr_label_get: project_id*, merge_request_iid*, label_event_id* (get)
+- event_mr_milestone_list / event_mr_milestone_get: project_id*, merge_request_iid*, milestone_event_id* (get)
+- event_mr_state_list / event_mr_state_get: project_id*, merge_request_iid*, state_event_id* (get)
 
 See also: gitlab_mr_review (comments, discussions, diffs, raw diffs, draft notes), gitlab_pipeline, gitlab_branch, gitlab_issue (linked/related issue lifecycle)
 
@@ -3618,7 +3618,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>approval_config</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"approvals_before_merge":{"type":"integer"},"approvals_left":{"type":"integer"},"approvals_required":{"type":"integer"},"approved":{"type":"boolean"},"approved_by":{"items":{"additionalProperties":false,"properties":{"approved_at":{"type":"string"},"name":{"type":"string"}},"required":["name"],"type":"object"},"type":["null","array"]},"has_approval_rules":{"type":"boolean"},"id":{"type":"integer"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"},"state":{"type":"string"},"suggested_approvers":{"items":{"type":"string"},"type":["null","array"]},"title":{"type":"string"},"user_can_approve":{"type":"boolean"},"user_has_approved":{"type":"boolean"}},"required":["id","mr_iid","project_id","title","state","approved","approvals_required","approvals_left","approvals_before_merge","has_approval_rules","user_has_approved","user_can_approve"],"type":"object"}
+{"additionalProperties":false,"properties":{"approvals_before_merge":{"type":"integer"},"approvals_left":{"type":"integer"},"approvals_required":{"type":"integer"},"approved":{"type":"boolean"},"approved_by":{"items":{"additionalProperties":false,"properties":{"approved_at":{"type":"string"},"name":{"type":"string"}},"required":["name"],"type":"object"},"type":["null","array"]},"has_approval_rules":{"type":"boolean"},"id":{"type":"integer"},"merge_request_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"integer"},"state":{"type":"string"},"suggested_approvers":{"items":{"type":"string"},"type":["null","array"]},"title":{"type":"string"},"user_can_approve":{"type":"boolean"},"user_has_approved":{"type":"boolean"}},"required":["id","merge_request_iid","project_id","title","state","approved","approvals_required","approvals_left","approvals_before_merge","has_approval_rules","user_has_approved","user_can_approve"],"type":"object"}
 ```
 
 </details>
@@ -3698,7 +3698,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>cancel_auto_merge</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -3730,7 +3730,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -3866,7 +3866,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -3882,7 +3882,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3890,7 +3890,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>list_global</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3898,7 +3898,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>list_group</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3906,7 +3906,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>merge</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -3970,7 +3970,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -4002,7 +4002,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>unsubscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -4010,7 +4010,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"}
 ```
 
 </details>
@@ -4064,9 +4064,9 @@ Returns:
 - changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
 - raw_diffs: {raw_diff: string} — full unified diff for the MR head; ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
-Errors: 404 not found (hint: check note_id/discussion_id and mr_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
+Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
 
-Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
+Param conventions: * = required. All actions need project_id*, merge_request_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
 
 Notes (general comments):
 - note_list: order_by (created_at/updated_at), sort
@@ -4085,7 +4085,7 @@ Discussions (threaded, can be inline via position):
 
 Changes and diff versions:
 - changes_get: returns file diffs; check truncated_files
-- raw_diffs: project_id*, mr_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
+- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
 - diff_versions_list: list MR diff revisions
 - diff_version_get: version_id*, unidiff (bool)
 
@@ -4106,7 +4106,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>changes_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"changes":{"items":{"additionalProperties":false,"properties":{"a_mode":{"type":"string"},"b_mode":{"type":"string"},"deleted_file":{"type":"boolean"},"diff":{"type":"string"},"generated_file":{"type":"boolean"},"new_file":{"type":"boolean"},"new_path":{"type":"string"},"old_path":{"type":"string"},"renamed_file":{"type":"boolean"}},"required":["old_path","new_path","diff","new_file","renamed_file","deleted_file","a_mode","b_mode","generated_file"],"type":"object"},"type":["null","array"]},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"truncated_files":{"items":{"type":"string"},"type":["null","array"]}},"required":["mr_iid","changes"],"type":"object"}
+{"additionalProperties":false,"properties":{"changes":{"items":{"additionalProperties":false,"properties":{"a_mode":{"type":"string"},"b_mode":{"type":"string"},"deleted_file":{"type":"boolean"},"diff":{"type":"string"},"generated_file":{"type":"boolean"},"new_file":{"type":"boolean"},"new_path":{"type":"string"},"old_path":{"type":"string"},"renamed_file":{"type":"boolean"}},"required":["old_path","new_path","diff","new_file","renamed_file","deleted_file","a_mode","b_mode","generated_file"],"type":"object"},"type":["null","array"]},"merge_request_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"truncated_files":{"items":{"type":"string"},"type":["null","array"]}},"required":["merge_request_iid","changes"],"type":"object"}
 ```
 
 </details>
@@ -4242,7 +4242,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>raw_diffs</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"raw_diff":{"type":"string"}},"required":["mr_iid","raw_diff"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_request_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"raw_diff":{"type":"string"}},"required":["merge_request_iid","raw_diff"],"type":"object"}
 ```
 
 </details>
@@ -5968,7 +5968,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>commit_merge_requests</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"mr_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","mr_iid","title","state","source_branch","target_branch","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["merge_requests"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"author":{"type":"string"},"id":{"type":"integer"},"merge_request_iid":{"type":"integer"},"source_branch":{"type":"string"},"state":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","title","state","source_branch","target_branch","web_url"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["merge_requests"],"type":"object"}
 ```
 
 </details>
@@ -6470,7 +6470,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 <details><summary>merge_requests</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"mr_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","mr_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"merge_requests":{"items":{"additionalProperties":false,"properties":{"allow_collaboration":{"type":"boolean"},"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"blocking_discussions_resolved":{"type":"boolean"},"changes_count":{"type":"string"},"closed_at":{"type":"string"},"closed_by":{"type":"string"},"created_at":{"type":"string"},"description":{"type":"string"},"diff_refs":{"additionalProperties":false,"properties":{"base_sha":{"type":"string"},"head_sha":{"type":"string"},"start_sha":{"type":"string"}},"required":["base_sha","head_sha","start_sha"],"type":["null","object"]},"discussion_locked":{"type":"boolean"},"diverged_commits_count":{"type":"integer"},"downvotes":{"type":"integer"},"draft":{"type":"boolean"},"first_contribution":{"type":"boolean"},"force_remove_source_branch":{"type":"boolean"},"has_conflicts":{"type":"boolean"},"head_pipeline_id":{"type":"integer"},"id":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"latest_build_finished_at":{"type":"string"},"latest_build_started_at":{"type":"string"},"merge_after":{"type":"string"},"merge_commit_sha":{"type":"string"},"merge_error":{"type":"string"},"merge_request_iid":{"type":"integer"},"merge_status":{"type":"string"},"merge_when_pipeline_succeeds":{"type":"boolean"},"merged_at":{"type":"string"},"merged_by":{"type":"string"},"milestone":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_id":{"type":"integer"},"pipeline_name":{"type":"string"},"pipeline_web_url":{"type":"string"},"prepared_at":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"rebase_in_progress":{"type":"boolean"},"references":{"type":"string"},"reviewers":{"items":{"type":"string"},"type":["null","array"]},"sha":{"type":"string"},"should_remove_source_branch":{"type":"boolean"},"source_branch":{"type":"string"},"source_project_id":{"type":"integer"},"squash":{"type":"boolean"},"squash_commit_sha":{"type":"string"},"squash_on_merge":{"type":"boolean"},"state":{"type":"string"},"subscribed":{"type":"boolean"},"target_branch":{"type":"string"},"target_project_id":{"type":"integer"},"task_completion_count":{"type":"integer"},"task_completion_total":{"type":"integer"},"time_estimate":{"type":"integer"},"title":{"type":"string"},"total_time_spent":{"type":"integer"},"updated_at":{"type":"string"},"upvotes":{"type":"integer"},"user_notes_count":{"type":"integer"},"web_url":{"type":"string"}},"required":["id","merge_request_iid","project_id","title","description","state","source_branch","target_branch","web_url","merge_status","draft","has_conflicts","blocking_discussions_resolved","discussion_locked","assignees","reviewers","labels","created_at","updated_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["merge_requests","pagination"],"type":"object"}
 ```
 
 </details>
@@ -8048,13 +8048,13 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 Param conventions: * = required.
 
 - list_project_checks: project_id*, page, per_page
-- list_project_mr_checks: project_id*, mr_iid*, page, per_page
+- list_project_mr_checks: project_id*, merge_request_iid*, page, per_page
 - list_project: project_id*, page, per_page
 - create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids
 - delete_project: project_id*, check_id*
 - update_project: project_id*, check_id*, name, external_url, shared_secret, protected_branch_ids
-- retry_project: project_id*, mr_iid*, check_id*
-- set_project_mr_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
+- retry_project: project_id*, merge_request_iid*, check_id*
+- set_project_mr_status: project_id*, merge_request_iid*, sha*, external_status_check_id*, status*
 
 See also: gitlab_merge_request
 
@@ -8279,8 +8279,8 @@ Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: project_id*, target_branch*, scope, sort, page, per_page
-- get: project_id*, mr_iid*
-- add: project_id*, mr_iid*, auto_merge (bool), sha, squash (bool)
+- get: project_id*, merge_request_iid*
+- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline
 
@@ -8887,7 +8887,7 @@ Add a merge request to a merge train.
 **Parameters:**
 
 - `auto_merge` (boolean): Enable auto-merge when pipeline succeeds
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string): Head SHA of the merge request to verify
 - `squash` (boolean): Squash commits when merging
@@ -9036,7 +9036,7 @@ Analyze a GitLab merge request using LLM-assisted code review via MCP sampling. 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9914,7 +9914,7 @@ Add context commits to a merge request. Context commits are additional commits r
 **Parameters:**
 
 - `commits` () (required): List of commit SHAs to add as context
-- `mr_iid` (integer) (required): Merge request IID
+- `merge_request_iid` (integer) (required): Merge request IID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -10425,7 +10425,7 @@ Remove context commits from a merge request. Provide the list of commit SHAs to 
 **Parameters:**
 
 - `commits` () (required): List of commit SHAs to remove from context
-- `mr_iid` (integer) (required): Merge request IID
+- `merge_request_iid` (integer) (required): Merge request IID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -12132,7 +12132,7 @@ Get the merge train status for a specific merge request.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15570,7 +15570,7 @@ List context commits associated with a merge request. Context commits are additi
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID
+- `merge_request_iid` (integer) (required): Merge request IID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15692,7 +15692,7 @@ List external status checks for a project merge request. Returns: paginated list
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16112,7 +16112,7 @@ Add spent time to a GitLab merge request. Duration uses human-readable format (e
 **Parameters:**
 
 - `duration` (string) (required): Human-readable duration (e.g. 1h, 30m, 1w2d)
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `summary` (string): Optional summary of work done
 
@@ -16124,18 +16124,18 @@ Get the approval configuration for a merge request: total required approvals, li
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_approval_reset
 
-Reset all approvals on a GitLab merge request. Requires project_id and mr_iid.
+Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16149,7 +16149,7 @@ Create an approval rule on a GitLab merge request. Specify the rule name, requir
 - `approval_project_rule_id` (integer) (required): Project-level approval rule ID to inherit from
 - `approvals_required` (integer) (required): Number of approvals required
 - `group_ids` () (required): Group IDs eligible to approve
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `name` (string) (required): Rule name
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `user_ids` () (required): User IDs eligible to approve
@@ -16158,12 +16158,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_mr_approval_rule_delete
 
-Delete an approval rule from a GitLab merge request. Requires project_id, mr_iid, and approval_rule_id.
+Delete an approval rule from a GitLab merge request. Requires project_id, merge_request_iid, and approval_rule_id.
 
 **Parameters:**
 
 - `approval_rule_id` (integer) (required): Approval rule ID
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16177,7 +16177,7 @@ Update an existing approval rule on a GitLab merge request. Modify the rule name
 - `approval_rule_id` (integer) (required): Approval rule ID
 - `approvals_required` () (required): Number of approvals required
 - `group_ids` () (required): Group IDs eligible to approve
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `name` (string) (required): Rule name
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `user_ids` () (required): User IDs eligible to approve
@@ -16190,7 +16190,7 @@ List the approval rules configured for a merge request: rule names, types (regul
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16201,7 +16201,7 @@ Get the overall approval state of a merge request: whether it is approved, which
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16212,7 +16212,7 @@ Approve a GitLab merge request. Adds the authenticated user's approval to the me
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16223,7 +16223,7 @@ Cancel the 'merge when pipeline succeeds' (auto-merge) setting on a GitLab merge
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16234,7 +16234,7 @@ Get the current file diffs (changes) for a merge request. This is the primary to
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16245,7 +16245,7 @@ List all commits in a GitLab merge request. Returns commit ID, title, author, da
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16281,7 +16281,7 @@ Create a new pipeline for a GitLab merge request. Triggers a CI/CD pipeline run 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -16292,7 +16292,7 @@ Create a to-do item on a GitLab merge request for the authenticated user. Adds t
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -16303,7 +16303,7 @@ Permanently delete a GitLab merge request. This action cannot be undone. Require
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID to delete (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID to delete (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16314,7 +16314,7 @@ List all merge request dependencies (blockers) for a GitLab merge request. Retur
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16326,7 +16326,7 @@ Create a merge request dependency (blocker). The specified blocking MR must be m
 **Parameters:**
 
 - `blocking_merge_request_id` (integer) (required): ID of the merge request that blocks this one
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -16338,7 +16338,7 @@ Remove a merge request dependency (blocker). The specified blocking MR will no l
 **Parameters:**
 
 - `blocking_merge_request_id` (integer) (required): ID of the blocking merge request to remove
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16349,7 +16349,7 @@ Get a single merge request diff version with its commits and file diffs. Use the
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `unidiff` (boolean): Return diffs in unified diff format (default: false)
 - `version_id` (integer) (required): Diff version ID
@@ -16362,7 +16362,7 @@ List all diff versions (historical snapshots) of a merge request. Returns versio
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16376,7 +16376,7 @@ Start a new threaded discussion on a GitLab merge request. For a general discuss
 **Parameters:**
 
 - `body` (string) (required): Discussion body
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `position` (): Diff position for inline comments. Omit for general MR discussions.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16389,7 +16389,7 @@ Get a single discussion thread from a GitLab merge request by its discussion ID,
 **Parameters:**
 
 - `discussion_id` (string) (required): ID of the discussion
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16400,7 +16400,7 @@ List all discussion threads on a GitLab merge request including inline diff comm
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16414,7 +16414,7 @@ Delete a note from a merge request discussion thread. Only the note author or pr
 **Parameters:**
 
 - `discussion_id` (string) (required): ID of the discussion containing the note
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16428,7 +16428,7 @@ Update the body or resolved status of a note within a merge request discussion t
 
 - `body` (string): New body text (Markdown). Leave empty to keep current body.
 - `discussion_id` (string) (required): ID of the discussion containing the note
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): ID of the note to update
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `resolved` (): Set to true to resolve, false to unresolve. Omit to leave unchanged.
@@ -16443,7 +16443,7 @@ Add a reply to an existing discussion thread on a GitLab merge request. The repl
 
 - `body` (string) (required): Reply body
 - `discussion_id` (string) (required): ID of the discussion to reply to
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -16455,7 +16455,7 @@ Resolve or unresolve a discussion thread on a GitLab merge request. Resolved dis
 **Parameters:**
 
 - `discussion_id` (string) (required): ID of the discussion to resolve
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `resolved` (boolean) (required): True to resolve, false to unresolve
 
@@ -16469,7 +16469,7 @@ Create a new draft note (pending review comment) on a GitLab merge request. Supp
 
 - `commit_id` (string): SHA of the commit to comment on
 - `in_reply_to_discussion_id` (string): Discussion ID to reply to
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string) (required): Note body text (Markdown)
 - `position` (): Diff position for inline comments on specific lines. Omit for general MR comments.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16483,7 +16483,7 @@ Permanently delete a draft note from a GitLab merge request. Only the draft auth
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): Draft note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16495,7 +16495,7 @@ Get a single draft note from a GitLab merge request by its ID. Returns the note 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): Draft note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16507,7 +16507,7 @@ List all draft notes (pending review comments) on a GitLab merge request. Draft 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `order_by` (string): Order by: id (default)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
@@ -16522,7 +16522,7 @@ Publish a single draft note on a GitLab merge request, making it visible to all 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note_id` (integer) (required): Draft note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16534,7 +16534,7 @@ Publish all pending draft notes on a GitLab merge request at once, making them v
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16545,7 +16545,7 @@ Update the body text of an existing draft note on a GitLab merge request. Only t
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string): Updated note body text (Markdown)
 - `note_id` (integer) (required): Draft note ID
 - `position` (): Updated diff position for inline comments
@@ -16559,7 +16559,7 @@ Add an award emoji reaction to a merge request.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16572,7 +16572,7 @@ Delete an award emoji from a merge request.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16584,7 +16584,7 @@ Get a single award emoji on a merge request.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16595,7 +16595,7 @@ List all award emoji on a merge request.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16608,7 +16608,7 @@ Retrieve detailed information about a GitLab merge request by its IID (project-s
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16619,7 +16619,7 @@ List all issues that would be closed when a GitLab merge request is merged. Retu
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16633,7 +16633,7 @@ Get a single label event for a merge request.
 **Parameters:**
 
 - `label_event_id` (integer) (required): Label event ID
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16644,7 +16644,7 @@ List label events for a merge request. Shows when labels were added or removed.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16745,7 +16745,7 @@ Merge an accepted GitLab merge request into its target branch. Supports optional
 
 - `auto_merge` (): Automatically merge when pipeline succeeds (auto-merge)
 - `merge_commit_message` (string): Custom merge commit message
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string): Head SHA of the merge request — merge only if HEAD matches (safety check)
 - `should_remove_source_branch` (): Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults
@@ -16760,8 +16760,8 @@ Get a single milestone event for a merge request.
 
 **Parameters:**
 
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `milestone_event_id` (integer) (required): Milestone event ID
-- `mr_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16772,7 +16772,7 @@ List milestone events for a merge request. Shows when milestones were added or r
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16786,7 +16786,7 @@ Add a comment (note) to a GitLab merge request. The comment appears in the merge
 **Parameters:**
 
 - `body` (string) (required): Comment body (Markdown supported)
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -16797,7 +16797,7 @@ Permanently delete a comment from a GitLab merge request. Only the note author o
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to delete
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16809,7 +16809,7 @@ Add an award emoji reaction to a merge request note.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16823,7 +16823,7 @@ Delete an award emoji from a merge request note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16836,7 +16836,7 @@ Get a single award emoji on a merge request note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16848,7 +16848,7 @@ List all award emoji on a merge request note.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
@@ -16862,7 +16862,7 @@ Get a single comment (note) from a GitLab merge request by its note ID, includin
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to retrieve
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16875,7 +16875,7 @@ Edit the body text of an existing comment on a GitLab merge request. Only the no
 **Parameters:**
 
 - `body` (string) (required): Updated comment body
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to update
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16887,7 +16887,7 @@ List all comments (notes) on a GitLab merge request ordered by creation date. In
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `order_by` (string): Order by field (created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
@@ -16902,7 +16902,7 @@ List all participants (users who have interacted via comments, approvals, or com
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16913,7 +16913,7 @@ List all pipelines associated with a GitLab merge request. Returns pipeline ID, 
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16924,7 +16924,7 @@ Get the raw unified-diff output for a merge request in plain-text git-apply form
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16935,7 +16935,7 @@ Rebase a merge request's source branch against its target branch. Optionally ski
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID to rebase (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID to rebase (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `skip_ci` (boolean): Skip triggering CI pipeline after rebase
 
@@ -16947,7 +16947,7 @@ List all issues related to a GitLab merge request (mentioned or linked). Returns
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16960,7 +16960,7 @@ Reset the total spent time for a GitLab merge request to zero. Returns updated t
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16971,7 +16971,7 @@ Reset the time estimate for a GitLab merge request to zero. Returns updated time
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -16982,7 +16982,7 @@ List the explicitly assigned reviewers of a GitLab merge request with their revi
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16994,7 +16994,7 @@ Set the time estimate for a GitLab merge request using a human-readable duration
 **Parameters:**
 
 - `duration` (string) (required): Human-readable duration (e.g. 3h30m, 1w2d)
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -17005,7 +17005,7 @@ Get a single state event for a merge request.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `state_event_id` (integer) (required): State event ID
 
@@ -17017,7 +17017,7 @@ List state events for a merge request. Shows when the MR was opened, closed, mer
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -17030,7 +17030,7 @@ Subscribe to a GitLab merge request to receive notifications. Returns the update
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -17041,7 +17041,7 @@ Get time tracking statistics for a GitLab merge request including estimated time
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17052,7 +17052,7 @@ Remove the authenticated user's approval from a GitLab merge request.
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -17063,7 +17063,7 @@ Unsubscribe from a GitLab merge request to stop receiving notifications. Returns
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -17081,8 +17081,8 @@ Update a GitLab merge request's title, description, target branch, assignees, re
 - `description` (string): New description
 - `discussion_locked` (): Lock discussions on the merge request
 - `labels` (string): Comma-separated label names to replace all labels on the merge request
+- `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `milestone_id` (integer): Milestone ID (0 to unset)
-- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `remove_labels` (string): Comma-separated label names to remove
 - `remove_source_branch` (): Delete source branch after merge. Only set if explicitly requested
@@ -19836,12 +19836,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_retry_failed_external_status_check_for_project_mr
 
-Retry a failed external status check for a project merge request. Requires project_id, mr_iid, and check_id.
+Retry a failed external status check for a project merge request. Requires project_id, merge_request_iid, and check_id.
 
 **Parameters:**
 
 - `check_id` (integer) (required): External status check ID to retry
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -19866,7 +19866,7 @@ Perform a security-focused review of a GitLab merge request using LLM-assisted a
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -20611,12 +20611,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_set_project_mr_external_status_check_status
 
-Set the status of an external status check for a project merge request. Requires project_id, mr_iid, sha, external_status_check_id, and status.
+Set the status of an external status check for a project merge request. Requires project_id, merge_request_iid, sha, external_status_check_id, and status.
 
 **Parameters:**
 
 - `external_status_check_id` (integer) (required): External status check ID to update
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string) (required): Head SHA of the merge request source branch
 - `status` (string) (required): Status value (e.g. passed, failed)
@@ -20979,7 +20979,7 @@ Summarize a GitLab merge request review using LLM-assisted analysis via MCP samp
 
 **Parameters:**
 
-- `mr_iid` (integer) (required): Merge request internal ID
+- `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -21818,19 +21818,19 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### merge_request
 
-- **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}`
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}`
 - **MIME**: application/json
 - **Description**: Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.
 
 ### merge_request_discussions
 
-- **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}/discussions`
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions`
 - **MIME**: application/json
 - **Description**: List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).
 
 ### merge_request_notes
 
-- **URI Template**: `gitlab://project/{project_id}/mr/{mr_iid}/notes`
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`
 - **MIME**: application/json
 - **Description**: List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.
 
@@ -22031,7 +22031,7 @@ Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on siz
 **Arguments:**
 
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `mr_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### my_activity_summary
 
@@ -22117,7 +22117,7 @@ Generate a structured code review for a merge request. Files are categorized by 
 **Arguments:**
 
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `mr_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### reviewer_workload
 
@@ -22143,7 +22143,7 @@ Suggest suitable merge request reviewers based on the files changed and the list
 **Arguments:**
 
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `mr_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### summarize_mr_changes
 
@@ -22152,7 +22152,7 @@ Summarize the changed files and key modifications in a merge request. Lists each
 **Arguments:**
 
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-- `mr_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
 
 ### summarize_open_mrs
 

@@ -119,7 +119,7 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with a mr_iid to see full details",
+		"Use action 'get' with a merge_request_iid to see full details",
 		"Use action 'create' to open a new merge request",
 		"Use gitlab_mr_review action 'changes_get' to review MR diffs",
 	)

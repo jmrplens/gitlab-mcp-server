@@ -41,7 +41,7 @@ func TestSummarizeMRChangesPrompt_Success(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "summarize_mr_changes",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "5"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -56,7 +56,7 @@ func TestSummarizeMRChangesPrompt_Success(t *testing.T) {
 }
 
 // TestSummarizeMRChangesPrompt_MissingArgs verifies that the
-// summarize_mr_changes prompt returns an error when the required mr_iid
+// summarize_mr_changes prompt returns an error when the required merge_request_iid
 // argument is missing from the request.
 func TestSummarizeMRChangesPrompt_MissingArgs(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -68,7 +68,7 @@ func TestSummarizeMRChangesPrompt_MissingArgs(t *testing.T) {
 		Arguments: map[string]string{"project_id": "42"},
 	})
 	if err == nil {
-		t.Fatal("expected error for missing mr_iid")
+		t.Fatal("expected error for missing merge_request_iid")
 	}
 }
 
@@ -90,7 +90,7 @@ func TestReviewMRPrompt_Success(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "5"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -136,7 +136,7 @@ func TestReviewMR_PromptCategorizedFiles(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "5"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -216,7 +216,7 @@ func TestSuggestMRReviewersPrompt_Success(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "5"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)
@@ -492,7 +492,7 @@ func TestMRRiskAssessmentPrompt_Success(t *testing.T) {
 
 	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "mr_risk_assessment",
-		Arguments: map[string]string{"project_id": "42", "mr_iid": "5"},
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpectedErr, err)

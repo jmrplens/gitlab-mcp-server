@@ -70,7 +70,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop MR creation. " +
 			"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
-			"Returns: JSON with the created MR (id, mr_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
+			"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state).\n\nSee also: gitlab_merge_request, gitlab_branch.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input MRInput) (*mcp.CallToolResult, mergerequests.Output, error) {

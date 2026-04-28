@@ -123,7 +123,7 @@ func TestListProjectMRExternalStatusChecks_MissingFields(t *testing.T) {
 	}
 	_, err = ListProjectMRExternalStatusChecks(context.Background(), client, ListProjectMRInput{ProjectID: "1"})
 	if err == nil {
-		t.Fatal("expected error for missing mr_iid")
+		t.Fatal("expected error for missing merge_request_iid")
 	}
 }
 
@@ -377,7 +377,7 @@ func TestRetryFailedExternalStatusCheckForProjectMR_MissingFields(t *testing.T) 
 		input RetryProjectInput
 	}{
 		{"missing project_id", RetryProjectInput{MRIID: 10, CheckID: 42}},
-		{"missing mr_iid", RetryProjectInput{ProjectID: "1", CheckID: 42}},
+		{"missing merge_request_iid", RetryProjectInput{ProjectID: "1", CheckID: 42}},
 		{"missing check_id", RetryProjectInput{ProjectID: "1", MRIID: 10}},
 	}
 	for _, tt := range tests {
@@ -419,7 +419,7 @@ func TestSetProjectMRExternalStatusCheckStatus_MissingFields(t *testing.T) {
 		input SetProjectStatusInput
 	}{
 		{"missing project_id", SetProjectStatusInput{MRIID: 10, SHA: "abc", ExternalStatusCheckID: 1, Status: "passed"}},
-		{"missing mr_iid", SetProjectStatusInput{ProjectID: "1", SHA: "abc", ExternalStatusCheckID: 1, Status: "passed"}},
+		{"missing merge_request_iid", SetProjectStatusInput{ProjectID: "1", SHA: "abc", ExternalStatusCheckID: 1, Status: "passed"}},
 		{"missing sha", SetProjectStatusInput{ProjectID: "1", MRIID: 10, ExternalStatusCheckID: 1, Status: "passed"}},
 		{"missing check_id", SetProjectStatusInput{ProjectID: "1", MRIID: 10, SHA: "abc", Status: "passed"}},
 		{"missing status", SetProjectStatusInput{ProjectID: "1", MRIID: 10, SHA: "abc", ExternalStatusCheckID: 1}},

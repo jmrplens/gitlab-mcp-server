@@ -768,59 +768,59 @@ Returns:
 - time_estimate_set / spent_time_add / time_stats / time_estimate_reset / spent_time_reset: {time_estimate, total_time_spent, human_time_estimate, human_total_time_spent}.
 - subscribe / unsubscribe / cancel_auto_merge / create_pipeline: updated MR or pipeline object.
 - delete / unapprove / approval_reset / approval_rule_delete / context_commits_delete / dependency_delete / emoji_*_delete: {success, message}.
-Errors: 404 (hint: confirm project_id and mr_iid — mr_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
+Errors: 404 (hint: confirm project_id and merge_request_iid — merge_request_iid is project-scoped, not the global ID), 403 (hint: requires Reporter+ to comment, Developer+ to merge, configured approvers to approve), 405/409 on merge (hint: WIP/draft, unresolved threads, failing pipelines or pending approvals — see approval_state).
 
-Param conventions: * = required. Most actions need project_id*, mr_iid*. List actions accept page, per_page.
+Param conventions: * = required. Most actions need project_id*, merge_request_iid*. List actions accept page, per_page.
 
 IMPORTANT for create: target_branch* — if user doesn't specify, retrieve project's default_branch via gitlab_project get; do NOT assume 'main'.
 IMPORTANT for merge: auto-detects project squash/delete-branch settings — do NOT set squash or should_remove_source_branch unless user explicitly asks.
 
 MR lifecycle:
 - create: project_id*, source_branch*, target_branch*, title*, description, assignee_id, assignee_ids, reviewer_ids, labels (comma-separated), milestone_id, remove_source_branch, squash, allow_collaboration, target_project_id (forks)
-- get: project_id*, mr_iid*
+- get: project_id*, merge_request_iid*
 - list: project_id*, state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft, iids, created_after/before, updated_after/before, order_by, sort
 - list_global / list_group: same filters as list. list_group needs group_id* instead of project_id.
-- update: project_id*, mr_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
-- merge: project_id*, mr_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
-- approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, mr_iid*
+- update: project_id*, merge_request_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
+- merge: project_id*, merge_request_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
+- approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, merge_request_iid*
 - rebase also accepts: skip_ci
-- commits / pipelines / issues_closed: project_id*, mr_iid*
-- subscribe / unsubscribe: project_id*, mr_iid*
+- commits / pipelines / issues_closed: project_id*, merge_request_iid*
+- subscribe / unsubscribe: project_id*, merge_request_iid*
 
 Approvals:
-- approval_state / approval_rules / approval_config / approval_reset: project_id*, mr_iid*
-- approval_rule_create: project_id*, mr_iid*, name*, approvals_required*, approval_project_rule_id, user_ids, group_ids
-- approval_rule_update: project_id*, mr_iid*, approval_rule_id*, name, approvals_required, user_ids, group_ids
-- approval_rule_delete: project_id*, mr_iid*, approval_rule_id*
+- approval_state / approval_rules / approval_config / approval_reset: project_id*, merge_request_iid*
+- approval_rule_create: project_id*, merge_request_iid*, name*, approvals_required*, approval_project_rule_id, user_ids, group_ids
+- approval_rule_update: project_id*, merge_request_iid*, approval_rule_id*, name, approvals_required, user_ids, group_ids
+- approval_rule_delete: project_id*, merge_request_iid*, approval_rule_id*
 - approval_settings_group_get / approval_settings_group_update: group_id*. Update params: allow_author_approval, allow_committer_approval, allow_overrides_approver_list_per_mr, retain_approvals_on_push, require_reauthentication_to_approve
 - approval_settings_project_get / approval_settings_project_update: project_id*. Same params + selective_code_owner_removals.
 
 Time tracking:
-- time_estimate_set / spent_time_add: project_id*, mr_iid*, duration* (e.g. '3h30m', '1w2d'). spent_time_add also accepts summary.
-- time_estimate_reset / spent_time_reset / time_stats: project_id*, mr_iid*
+- time_estimate_set / spent_time_add: project_id*, merge_request_iid*, duration* (e.g. '3h30m', '1w2d'). spent_time_add also accepts summary.
+- time_estimate_reset / spent_time_reset / time_stats: project_id*, merge_request_iid*
 
 Context commits:
-- context_commits_list / context_commits_create / context_commits_delete: project_id*, mr_iid*. create/delete need commits ([]string)*.
+- context_commits_list / context_commits_create / context_commits_delete: project_id*, merge_request_iid*. create/delete need commits ([]string)*.
 
 MR dependencies (blocking MRs):
-- dependencies_list: project_id*, mr_iid* — list MRs that block this MR from merging.
-- dependency_create: project_id*, mr_iid*, blocking_merge_request_id* (global ID of the blocking MR).
-- dependency_delete: project_id*, mr_iid*, blocking_merge_request_id*.
+- dependencies_list: project_id*, merge_request_iid* — list MRs that block this MR from merging.
+- dependency_create: project_id*, merge_request_iid*, blocking_merge_request_id* (global ID of the blocking MR).
+- dependency_delete: project_id*, merge_request_iid*, blocking_merge_request_id*.
 
 Todos and related issues:
-- create_todo: project_id*, mr_iid* — add this MR to the authenticated user's to-do list.
-- related_issues: project_id*, mr_iid* — list issues mentioned or linked from the MR (paginated).
+- create_todo: project_id*, merge_request_iid* — add this MR to the authenticated user's to-do list.
+- related_issues: project_id*, merge_request_iid* — list issues mentioned or linked from the MR (paginated).
 
 Award emoji:
-- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, mr_iid*, name* (create), award_id* (get/delete)
-- emoji_mr_get: project_id*, mr_iid*, award_id*
-- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, mr_iid*, note_id*, name* (create), award_id* (get/delete)
-- emoji_mr_note_get: project_id*, mr_iid*, note_id*, award_id*
+- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, merge_request_iid*, name* (create), award_id* (get/delete)
+- emoji_mr_get: project_id*, merge_request_iid*, award_id*
+- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, merge_request_iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_mr_note_get: project_id*, merge_request_iid*, note_id*, award_id*
 
 Resource events:
-- event_mr_label_list / event_mr_label_get: project_id*, mr_iid*, label_event_id* (get)
-- event_mr_milestone_list / event_mr_milestone_get: project_id*, mr_iid*, milestone_event_id* (get)
-- event_mr_state_list / event_mr_state_get: project_id*, mr_iid*, state_event_id* (get)
+- event_mr_label_list / event_mr_label_get: project_id*, merge_request_iid*, label_event_id* (get)
+- event_mr_milestone_list / event_mr_milestone_get: project_id*, merge_request_iid*, milestone_event_id* (get)
+- event_mr_state_list / event_mr_state_get: project_id*, merge_request_iid*, state_event_id* (get)
 
 See also: gitlab_mr_review (comments, discussions, diffs, raw diffs, draft notes), gitlab_pipeline, gitlab_branch, gitlab_issue (linked/related issue lifecycle)`, routes, toolutil.IconMR)
 }
@@ -871,9 +871,9 @@ Returns:
 - changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
 - raw_diffs: {raw_diff: string} — full unified diff for the MR head; ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
-Errors: 404 not found (hint: check note_id/discussion_id and mr_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
+Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
 
-Param conventions: * = required. All actions need project_id*, mr_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
+Param conventions: * = required. All actions need project_id*, merge_request_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
 
 Notes (general comments):
 - note_list: order_by (created_at/updated_at), sort
@@ -892,7 +892,7 @@ Discussions (threaded, can be inline via position):
 
 Changes and diff versions:
 - changes_get: returns file diffs; check truncated_files
-- raw_diffs: project_id*, mr_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
+- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
 - diff_versions_list: list MR diff revisions
 - diff_version_get: version_id*, unidiff (bool)
 
@@ -2742,8 +2742,8 @@ Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: project_id*, target_branch*, scope, sort, page, per_page
-- get: project_id*, mr_iid*
-- add: project_id*, mr_iid*, auto_merge (bool), sha, squash (bool)
+- get: project_id*, merge_request_iid*
+- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline`, routes, toolutil.IconMR)
 }
@@ -2831,13 +2831,13 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 Param conventions: * = required.
 
 - list_project_checks: project_id*, page, per_page
-- list_project_mr_checks: project_id*, mr_iid*, page, per_page
+- list_project_mr_checks: project_id*, merge_request_iid*, page, per_page
 - list_project: project_id*, page, per_page
 - create_project: project_id*, name*, external_url*, shared_secret, protected_branch_ids
 - delete_project: project_id*, check_id*
 - update_project: project_id*, check_id*, name, external_url, shared_secret, protected_branch_ids
-- retry_project: project_id*, mr_iid*, check_id*
-- set_project_mr_status: project_id*, mr_iid*, sha*, external_status_check_id*, status*
+- retry_project: project_id*, merge_request_iid*, check_id*
+- set_project_mr_status: project_id*, merge_request_iid*, sha*, external_status_check_id*, status*
 
 See also: gitlab_merge_request`, routes, toolutil.IconSecurity)
 }

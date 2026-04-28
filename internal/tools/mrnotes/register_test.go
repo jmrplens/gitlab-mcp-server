@@ -43,7 +43,7 @@ func TestRegisterTools_DeleteConfirmDeclined(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_note_delete",
-		Arguments: map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 1},
+		Arguments: map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 1},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -78,7 +78,7 @@ func TestRegisterTools_GetNotFound(t *testing.T) {
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "gitlab_mr_note_get",
-		Arguments: map[string]any{"project_id": "42", "mr_iid": 1, "note_id": 999},
+		Arguments: map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 999},
 	})
 	if err != nil {
 		t.Fatalf("CallTool error: %v", err)
@@ -143,10 +143,10 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"gitlab_mr_notes_list", map[string]any{"project_id": "1", "mr_iid": 1}},
-		{"gitlab_mr_note_get", map[string]any{"project_id": "1", "mr_iid": 1, "note_id": 1}},
-		{"gitlab_mr_note_create", map[string]any{"project_id": "1", "mr_iid": 1, "body": "x"}},
-		{"gitlab_mr_note_update", map[string]any{"project_id": "1", "mr_iid": 1, "note_id": 1, "body": "x"}},
+		{"gitlab_mr_notes_list", map[string]any{"project_id": "1", "merge_request_iid": 1}},
+		{"gitlab_mr_note_get", map[string]any{"project_id": "1", "merge_request_iid": 1, "note_id": 1}},
+		{"gitlab_mr_note_create", map[string]any{"project_id": "1", "merge_request_iid": 1, "body": "x"}},
+		{"gitlab_mr_note_update", map[string]any{"project_id": "1", "merge_request_iid": 1, "note_id": 1, "body": "x"}},
 	}
 
 	for _, tt := range tools {

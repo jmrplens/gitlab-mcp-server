@@ -17,12 +17,12 @@ import (
 )
 
 // hintVerifyMR is the 404 hint shared by MR-changes tools.
-const hintVerifyMR = "verify project_id and mr_iid with gitlab_list_merge_requests"
+const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_list_merge_requests"
 
 // GetInput defines parameters for listing changed files in a merge request.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // FileDiffOutput represents a single file diff in a merge request.
@@ -41,7 +41,7 @@ type FileDiffOutput struct {
 // Output holds the list of file diffs for a merge request.
 type Output struct {
 	toolutil.HintableOutput
-	MRIID          int64            `json:"mr_iid"`
+	MRIID          int64            `json:"merge_request_iid"`
 	Changes        []FileDiffOutput `json:"changes"`
 	TruncatedFiles []string         `json:"truncated_files,omitempty"`
 }
@@ -73,7 +73,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("mrChangesGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrChangesGet", "mr_iid")
+		return Output{}, toolutil.ErrRequiredInt64("mrChangesGet", "merge_request_iid")
 	}
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, &gl.ListMergeRequestDiffsOptions{}, gl.WithContext(ctx))
 	if err != nil {
@@ -101,14 +101,14 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 // DiffVersionsListInput defines parameters for listing MR diff versions.
 type DiffVersionsListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	toolutil.PaginationInput
 }
 
 // DiffVersionGetInput defines parameters for getting a single MR diff version.
 type DiffVersionGetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"      jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"      jsonschema:"Merge request internal ID,required"`
 	VersionID int64                `json:"version_id"  jsonschema:"Diff version ID,required"`
 	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format (default: false)"`
 }
@@ -194,7 +194,7 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 		return DiffVersionsListOutput{}, errors.New("mrDiffVersionsList: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return DiffVersionsListOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionsList", "mr_iid")
+		return DiffVersionsListOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionsList", "merge_request_iid")
 	}
 	opts := &gl.GetMergeRequestDiffVersionsOptions{
 		ListOptions: gl.ListOptions{
@@ -226,7 +226,7 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 		return DiffVersionOutput{}, errors.New("mrDiffVersionGet: project_id is required")
 	}
 	if input.MRIID <= 0 {
-		return DiffVersionOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionGet", "mr_iid")
+		return DiffVersionOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionGet", "merge_request_iid")
 	}
 	if input.VersionID <= 0 {
 		return DiffVersionOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionGet", "version_id")
@@ -254,13 +254,13 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 // RawDiffsInput defines parameters for retrieving raw diffs of a merge request.
 type RawDiffsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"mr_iid"     jsonschema:"Merge request internal ID,required"`
+	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 }
 
 // RawDiffsOutput holds the raw unified-diff output for a merge request.
 type RawDiffsOutput struct {
 	toolutil.HintableOutput
-	MRIID   int64  `json:"mr_iid"`
+	MRIID   int64  `json:"merge_request_iid"`
 	RawDiff string `json:"raw_diff"`
 }
 
@@ -274,7 +274,7 @@ func RawDiffs(ctx context.Context, client *gitlabclient.Client, input RawDiffsIn
 		return RawDiffsOutput{}, errors.New("mrRawDiffs: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.MRIID <= 0 {
-		return RawDiffsOutput{}, toolutil.ErrRequiredInt64("mrRawDiffs", "mr_iid")
+		return RawDiffsOutput{}, toolutil.ErrRequiredInt64("mrRawDiffs", "merge_request_iid")
 	}
 	raw, _, err := client.GL().MergeRequests.ShowMergeRequestRawDiffs(
 		string(input.ProjectID), input.MRIID, &gl.ShowMergeRequestRawDiffsOptions{}, gl.WithContext(ctx))

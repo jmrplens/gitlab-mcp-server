@@ -1259,10 +1259,10 @@ func TestMRGetTimeStats_MissingProject(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MRIID validation tests — ensures all functions reject mr_iid <= 0
+// MRIID validation tests — ensures all functions reject merge_request_iid <= 0
 // ---------------------------------------------------------------------------.
 
-// TestMRIIDRequired_Validation verifies that all functions requiring mr_iid
+// TestMRIIDRequired_Validation verifies that all functions requiring merge_request_iid
 // return an error when MRIID is 0 (the zero value when the parameter is
 // missing or has the wrong name in meta-tool dispatch).
 func TestMRIIDRequired_Validation(t *testing.T) {
@@ -1273,7 +1273,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 	ctx := context.Background()
 	pid := toolutil.StringOrInt(testProjectID)
-	const wantSubstr = "mr_iid"
+	const wantSubstr = "merge_request_iid"
 
 	t.Run("Get", func(t *testing.T) {
 		_, err := Get(ctx, client, GetInput{ProjectID: pid, MRIID: 0})
@@ -2858,35 +2858,35 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_mr_create", map[string]any{"project_id": pid, "source_branch": testBranchFeat, "target_branch": testBranchMain, "title": "Test"}},
-		{"gitlab_mr_get", map[string]any{"project_id": pid, "mr_iid": 1}},
+		{"gitlab_mr_get", map[string]any{"project_id": pid, "merge_request_iid": 1}},
 		{"gitlab_mr_list", map[string]any{"project_id": pid}},
-		{"gitlab_mr_update", map[string]any{"project_id": pid, "mr_iid": 1, "title": "Updated"}},
-		{"gitlab_mr_merge", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_approve", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_unapprove", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_commits", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_pipelines", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_delete", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_rebase", map[string]any{"project_id": pid, "mr_iid": 1}},
+		{"gitlab_mr_update", map[string]any{"project_id": pid, "merge_request_iid": 1, "title": "Updated"}},
+		{"gitlab_mr_merge", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_approve", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_unapprove", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_commits", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_pipelines", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_delete", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_rebase", map[string]any{"project_id": pid, "merge_request_iid": 1}},
 		{"gitlab_mr_list_global", map[string]any{}},
 		{"gitlab_mr_list_group", map[string]any{"group_id": "99"}},
-		{"gitlab_mr_participants", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_reviewers", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_create_pipeline", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_issues_closed", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_cancel_auto_merge", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_subscribe", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_unsubscribe", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_set_time_estimate", map[string]any{"project_id": pid, "mr_iid": 1, "duration": "3h"}},
-		{"gitlab_mr_reset_time_estimate", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_add_spent_time", map[string]any{"project_id": pid, "mr_iid": 1, "duration": "1h"}},
-		{"gitlab_mr_reset_spent_time", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_time_stats", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_related_issues", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_create_todo", map[string]any{"project_id": pid, "mr_iid": 1}},
-		{"gitlab_mr_dependency_create", map[string]any{"project_id": pid, "mr_iid": 1, "blocking_merge_request_id": 100}},
-		{"gitlab_mr_dependency_delete", map[string]any{"project_id": pid, "mr_iid": 1, "blocking_merge_request_id": 100}},
-		{"gitlab_mr_dependencies_list", map[string]any{"project_id": pid, "mr_iid": 1}},
+		{"gitlab_mr_participants", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_reviewers", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_create_pipeline", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_issues_closed", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_cancel_auto_merge", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_subscribe", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_unsubscribe", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_set_time_estimate", map[string]any{"project_id": pid, "merge_request_iid": 1, "duration": "3h"}},
+		{"gitlab_mr_reset_time_estimate", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_add_spent_time", map[string]any{"project_id": pid, "merge_request_iid": 1, "duration": "1h"}},
+		{"gitlab_mr_reset_spent_time", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_time_stats", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_related_issues", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_create_todo", map[string]any{"project_id": pid, "merge_request_iid": 1}},
+		{"gitlab_mr_dependency_create", map[string]any{"project_id": pid, "merge_request_iid": 1, "blocking_merge_request_id": 100}},
+		{"gitlab_mr_dependency_delete", map[string]any{"project_id": pid, "merge_request_iid": 1, "blocking_merge_request_id": 100}},
+		{"gitlab_mr_dependencies_list", map[string]any{"project_id": pid, "merge_request_iid": 1}},
 	}
 
 	for _, tt := range tools {
@@ -4200,6 +4200,6 @@ func TestMRGet_EmbedsCanonicalResource(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	session, ctx := testutil.NewEmbedTestSession(t, handler, RegisterTools)
-	args := map[string]any{"project_id": "42", "mr_iid": 5}
+	args := map[string]any{"project_id": "42", "merge_request_iid": 5}
 	testutil.AssertEmbeddedResource(t, ctx, session, "gitlab_mr_get", args, "gitlab://project/42/mr/5", toolutil.EnableEmbeddedResources)
 }

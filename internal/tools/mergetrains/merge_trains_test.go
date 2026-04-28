@@ -271,12 +271,12 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "returns error when mr_iid is zero",
+			name:    "returns error when merge_request_iid is zero",
 			input:   GetInput{ProjectID: "42", MergeRequestID: 0},
 			wantErr: true,
 		},
 		{
-			name:    "returns error when mr_iid is negative",
+			name:    "returns error when merge_request_iid is negative",
 			input:   GetInput{ProjectID: "42", MergeRequestID: -1},
 			wantErr: true,
 		},
@@ -377,12 +377,12 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "returns error when mr_iid is zero",
+			name:    "returns error when merge_request_iid is zero",
 			input:   AddInput{ProjectID: "42", MergeRequestID: 0},
 			wantErr: true,
 		},
 		{
-			name:    "returns error when mr_iid is negative",
+			name:    "returns error when merge_request_iid is negative",
 			input:   AddInput{ProjectID: "42", MergeRequestID: -1},
 			wantErr: true,
 		},

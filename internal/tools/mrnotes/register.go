@@ -67,7 +67,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_get", start, nil)
 			return toolutil.NotFoundResult("MR Note", fmt.Sprintf("note %d on MR !%d in project %s", input.NoteID, input.MRIID, input.ProjectID),
 				"Use gitlab_mr_notes_list to list notes on this merge request",
-				"Verify the note_id and mr_iid are correct",
+				"Verify the note_id and merge_request_iid are correct",
 			), Output{}, nil
 		}
 		toolutil.LogToolCallAll(ctx, req, "gitlab_mr_note_get", start, err)

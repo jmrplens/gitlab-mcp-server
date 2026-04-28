@@ -95,7 +95,7 @@ func TestMeta_Epics(t *testing.T) {
 			"action": "epic_get",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_get")
@@ -111,7 +111,7 @@ func TestMeta_Epics(t *testing.T) {
 			"action": "epic_update",
 			"params": map[string]any{
 				"full_path":   groupPath,
-				"epic_iid":         epicIID,
+				"epic_iid":    epicIID,
 				"description": "Updated by E2E test",
 			},
 		})
@@ -127,7 +127,7 @@ func TestMeta_Epics(t *testing.T) {
 			"action": "epic_delete",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_delete")
@@ -188,7 +188,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 			"action": "epic_note_create",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"body":      "E2E test note body",
 			},
 		})
@@ -206,7 +206,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 			"action": "epic_note_list",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_note_list")
@@ -221,7 +221,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 			"action": "epic_note_get",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"note_id":   noteID,
 			},
 		})
@@ -237,7 +237,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 			"action": "epic_note_update",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"note_id":   noteID,
 				"body":      "Updated E2E note body",
 			},
@@ -254,7 +254,7 @@ func TestMeta_EpicNotes(t *testing.T) {
 			"action": "epic_note_delete",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"note_id":   noteID,
 			},
 		})
@@ -317,7 +317,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_create",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"body":      "E2E discussion thread",
 			},
 		})
@@ -336,7 +336,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_list",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_discussion_list")
@@ -351,7 +351,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_get",
 			"params": map[string]any{
 				"full_path":     groupPath,
-				"epic_iid":           epicIID,
+				"epic_iid":      epicIID,
 				"discussion_id": discussionID,
 			},
 		})
@@ -368,7 +368,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_add_note",
 			"params": map[string]any{
 				"full_path":     groupPath,
-				"epic_iid":           epicIID,
+				"epic_iid":      epicIID,
 				"discussion_id": discussionID,
 				"body":          "E2E reply note",
 			},
@@ -387,7 +387,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_update_note",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"note_id":   replyNoteID,
 				"body":      "Updated E2E reply",
 			},
@@ -404,7 +404,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			"action": "epic_discussion_delete_note",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 				"note_id":   replyNoteID,
 			},
 		})
@@ -507,7 +507,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			"action": "epic_issue_assign",
 			"params": map[string]any{
 				"full_path":          groupPath,
-				"epic_iid":                epicIID,
+				"epic_iid":           epicIID,
 				"child_project_path": projOut.PathWithNamespace,
 				"child_iid":          issueIID,
 			},
@@ -524,7 +524,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			"action": "epic_issue_list",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_issue_list")
@@ -546,7 +546,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			"action": "epic_issue_remove",
 			"params": map[string]any{
 				"full_path":          groupPath,
-				"epic_iid":                epicIID,
+				"epic_iid":           epicIID,
 				"child_project_path": projOut.PathWithNamespace,
 				"child_iid":          issueIID,
 			},
@@ -562,7 +562,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			"action": "epic_issue_list",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_issue_list (empty)")
@@ -589,7 +589,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 		"action": "epic_issue_assign",
 		"params": map[string]any{
 			"full_path":          groupPath,
-			"epic_iid":                epicIID,
+			"epic_iid":           epicIID,
 			"child_project_path": projOut.PathWithNamespace,
 			"child_iid":          issueIID,
 		},
@@ -600,7 +600,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 		"action": "epic_issue_assign",
 		"params": map[string]any{
 			"full_path":          groupPath,
-			"epic_iid":                epicIID,
+			"epic_iid":           epicIID,
 			"child_project_path": projOut.PathWithNamespace,
 			"child_iid":          issue2IID,
 		},
@@ -612,7 +612,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 		"action": "epic_issue_list",
 		"params": map[string]any{
 			"full_path": groupPath,
-			"epic_iid":       epicIID,
+			"epic_iid":  epicIID,
 		},
 	})
 	requireNoError(t, setupErr, "list issues for reorder")
@@ -636,7 +636,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			"action": "epic_issue_update",
 			"params": map[string]any{
 				"full_path":         groupPath,
-				"epic_iid":               epicIID,
+				"epic_iid":          epicIID,
 				"child_id":          childGID,
 				"adjacent_id":       adjacentGID,
 				"relative_position": "AFTER",
@@ -699,7 +699,7 @@ func TestMeta_EpicLinks(t *testing.T) {
 			"action": "epic_get_links",
 			"params": map[string]any{
 				"full_path": groupPath,
-				"epic_iid":       epicIID,
+				"epic_iid":  epicIID,
 			},
 		})
 		requireNoError(t, err, "epic_get_links")
