@@ -209,6 +209,28 @@ jobs:
           failure-threshold: warning
           ignore: DL3008,DL3018
 
+  server-json-schema:
+    name: server.json schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install jsonschema
+        run: pip install --quiet jsonschema
+      - name: Validate server.json against MCP Registry schema (2025-12-11)
+        run: |
+          set -euo pipefail
+          SCHEMA_URL=$(jq -r '."$schema"' server.json)
+          echo "Schema referenced by server.json: $SCHEMA_URL"
+          curl -fsSL "$SCHEMA_URL" -o /tmp/mcp-schema.json
+          python3 -c "import json,jsonschema; \
+            schema=json.load(open('/tmp/mcp-schema.json')); \
+            inst=json.load(open('server.json')); \
+            jsonschema.validate(inst, schema); \
+            print('server.json: VALID against', schema.get('\$id'))"
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
