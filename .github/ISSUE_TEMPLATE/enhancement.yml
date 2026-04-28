@@ -1,7 +1,16 @@
 name: Enhancement
 description: Suggest an improvement to existing functionality
+title: "[Enhancement]: "
 labels: ["enhancement", "needs-triage"]
 body:
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I have searched [existing issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue) and this enhancement has not been proposed.
+          required: true
+
   - type: textarea
     id: summary
     attributes:

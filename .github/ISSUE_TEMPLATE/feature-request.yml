@@ -1,7 +1,18 @@
 name: Feature Request
 description: Suggest a new feature or MCP tool
+title: "[Feature]: "
 labels: ["feature", "needs-triage"]
 body:
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I have searched [existing issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue) and this feature has not been requested.
+          required: true
+        - label: If this proposes a new MCP tool, I have checked the [tool catalog](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/tools/README.md) and confirmed it does not exist.
+          required: true
+
   - type: textarea
     id: problem
     attributes:

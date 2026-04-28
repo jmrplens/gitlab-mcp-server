@@ -1,7 +1,16 @@
 name: Documentation
 description: Report missing, outdated, or incorrect documentation
+title: "[Docs]: "
 labels: ["documentation", "needs-triage"]
 body:
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I have searched [existing issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue) for this documentation gap.
+          required: true
+
   - type: textarea
     id: summary
     attributes:
