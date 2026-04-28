@@ -43,7 +43,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project get")
-		requireTrue(t, out.ID > 0, "project ID should be positive")
+		requireTruef(t, out.ID > 0, "project ID should be positive")
 		t.Logf("Got project %d: %s", out.ID, out.Name)
 	})
 
@@ -53,7 +53,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"membership": true},
 		})
 		requireNoError(t, err, "meta project list")
-		requireTrue(t, len(out.Projects) >= 1, "expected at least 1 project")
+		requireTruef(t, len(out.Projects) >= 1, "expected at least 1 project")
 		t.Logf("Listed %d projects", len(out.Projects))
 	})
 
@@ -66,7 +66,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project update")
-		requireTrue(t, out.Description == "Updated by E2E projects_meta_test", "description mismatch")
+		requireTruef(t, out.Description == "Updated by E2E projects_meta_test", "description mismatch")
 		t.Logf("Updated project %d", out.ID)
 	})
 
@@ -76,7 +76,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"user_id": sess.username},
 		})
 		requireNoError(t, err, "meta project list_user_projects")
-		requireTrue(t, len(out.Projects) >= 1, "expected at least 1 user project")
+		requireTruef(t, len(out.Projects) >= 1, "expected at least 1 user project")
 		t.Logf("Listed %d user projects", len(out.Projects))
 	})
 
@@ -87,7 +87,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project star")
-		requireTrue(t, out.ID > 0, "project ID should be positive after star")
+		requireTruef(t, out.ID > 0, "project ID should be positive after star")
 		t.Logf("Starred project %d", out.ID)
 	})
 
@@ -107,7 +107,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project archive")
-		requireTrue(t, out.Archived, "project should be archived")
+		requireTruef(t, out.Archived, "project should be archived")
 		t.Logf("Archived project %d", out.ID)
 	})
 
@@ -117,7 +117,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project unarchive")
-		requireTrue(t, !out.Archived, "project should not be archived")
+		requireTruef(t, !out.Archived, "project should not be archived")
 		t.Logf("Unarchived project %d", out.ID)
 	})
 
@@ -137,7 +137,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project list_users")
-		requireTrue(t, len(out.Users) >= 1, "expected at least 1 project user")
+		requireTruef(t, len(out.Users) >= 1, "expected at least 1 project user")
 		t.Logf("Listed %d project users", len(out.Users))
 	})
 
@@ -185,7 +185,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "name": forkName, "path": forkName},
 		})
 		requireNoError(t, err, "fork")
-		requireTrue(t, out.ID > 0, "forked project ID should be positive")
+		requireTruef(t, out.ID > 0, "forked project ID should be positive")
 		t.Logf("Forked project → %d", out.ID)
 
 		// Cleanup fork
@@ -243,7 +243,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_add")
-		requireTrue(t, out.ID > 0, "hook ID should be positive")
+		requireTruef(t, out.ID > 0, "hook ID should be positive")
 		hookID = out.ID
 		t.Logf("Added hook %d", hookID)
 	})
@@ -254,12 +254,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project hook_list")
-		requireTrue(t, len(out.Hooks) >= 1, "expected at least 1 hook")
+		requireTruef(t, len(out.Hooks) >= 1, "expected at least 1 hook")
 		t.Logf("Listed %d hooks", len(out.Hooks))
 	})
 
 	t.Run("HookGet", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[projects.HookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_get",
 			"params": map[string]any{
@@ -268,12 +268,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_get")
-		requireTrue(t, out.ID == hookID, "expected hook %d, got %d", hookID, out.ID)
+		requireTruef(t, out.ID == hookID, "expected hook %d, got %d", hookID, out.ID)
 		t.Logf("Got hook %d", out.ID)
 	})
 
 	t.Run("HookEdit", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[projects.HookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_edit",
 			"params": map[string]any{
@@ -284,12 +284,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_edit")
-		requireTrue(t, out.ID == hookID, "expected hook %d, got %d", hookID, out.ID)
+		requireTruef(t, out.ID == hookID, "expected hook %d, got %d", hookID, out.ID)
 		t.Logf("Edited hook %d", out.ID)
 	})
 
 	t.Run("HookSetCustomHeader", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_set_custom_header",
 			"params": map[string]any{
@@ -304,7 +304,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 	})
 
 	t.Run("HookDeleteCustomHeader", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_delete_custom_header",
 			"params": map[string]any{
@@ -318,7 +318,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 	})
 
 	t.Run("HookSetURLVariable", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		// Hook URL does not contain {variable} template — expected to fail
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_set_url_variable",
@@ -329,12 +329,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 				"value":      "test-value",
 			},
 		})
-		requireTrue(t, err != nil, "expected error: hook URL has no {variable} template")
+		requireTruef(t, err != nil, "expected error: hook URL has no {variable} template")
 		t.Logf("Expected error for URL variable without template: %v", err)
 	})
 
 	t.Run("HookDeleteURLVariable", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		// URL variable was never set — expected to fail
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_delete_url_variable",
@@ -344,12 +344,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 				"key":        "e2e_var",
 			},
 		})
-		requireTrue(t, err != nil, "expected error: URL variable was never set")
+		requireTruef(t, err != nil, "expected error: URL variable was never set")
 		t.Logf("Expected error for delete of non-existent URL variable: %v", err)
 	})
 
 	t.Run("HookTest", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		// Webhook URL points to unreachable endpoint — expected to fail
 		_, err := callToolOn[projects.TriggerTestHookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_test",
@@ -359,12 +359,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 				"trigger":    "push_events",
 			},
 		})
-		requireTrue(t, err != nil, "expected error: webhook endpoint unreachable")
+		requireTruef(t, err != nil, "expected error: webhook endpoint unreachable")
 		t.Logf("Expected error for unreachable hook test: %v", err)
 	})
 
 	t.Run("HookDelete", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_delete",
 			"params": map[string]any{
@@ -403,12 +403,12 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "label create")
-		requireTrue(t, out.Name == labelName, "label name mismatch")
+		requireTruef(t, out.Name == labelName, "label name mismatch")
 		t.Logf("Created label %q", labelName)
 	})
 
 	t.Run("LabelGet", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		out, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_get",
 			"params": map[string]any{
@@ -417,12 +417,12 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "label get")
-		requireTrue(t, out.Name == labelName, "expected label %q", labelName)
+		requireTruef(t, out.Name == labelName, "expected label %q", labelName)
 		t.Logf("Got label %q", out.Name)
 	})
 
 	t.Run("LabelSubscribe", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		out, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_subscribe",
 			"params": map[string]any{
@@ -431,12 +431,12 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "label subscribe")
-		requireTrue(t, out.Subscribed, "expected label to be subscribed")
+		requireTruef(t, out.Subscribed, "expected label to be subscribed")
 		t.Logf("Subscribed to label %q", out.Name)
 	})
 
 	t.Run("LabelUnsubscribe", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_unsubscribe",
 			"params": map[string]any{
@@ -449,7 +449,7 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 	})
 
 	t.Run("LabelPromote", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		// Personal project cannot promote labels to group level
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_promote",
@@ -458,7 +458,7 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 				"label_id":   labelName,
 			},
 		})
-		requireTrue(t, err != nil, "expected error: personal project cannot promote labels")
+		requireTruef(t, err != nil, "expected error: personal project cannot promote labels")
 		t.Logf("Expected error for label promote on personal project: %v", err)
 	})
 }
@@ -497,12 +497,12 @@ func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "milestone_list")
-		requireTrue(t, len(out.Milestones) >= 1, "expected at least 1 milestone")
+		requireTruef(t, len(out.Milestones) >= 1, "expected at least 1 milestone")
 		t.Logf("Listed %d milestones", len(out.Milestones))
 	})
 
 	t.Run("MilestoneIssues", func(t *testing.T) {
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		out, err := callToolOn[milestones.MilestoneIssuesOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "milestone_issues",
 			"params": map[string]any{
@@ -515,7 +515,7 @@ func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 	})
 
 	t.Run("MilestoneMergeRequests", func(t *testing.T) {
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		out, err := callToolOn[milestones.MilestoneMergeRequestsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "milestone_merge_requests",
 			"params": map[string]any{
@@ -550,7 +550,7 @@ func TestMeta_ProjectMembersDeep(t *testing.T) {
 				"user_id":    1,
 			},
 		})
-		requireTrue(t, err != nil, "expected error: personal project has no inherited members")
+		requireTruef(t, err != nil, "expected error: personal project has no inherited members")
 		t.Logf("Expected error for inherited member on personal project: %v", err)
 	})
 }
@@ -581,13 +581,13 @@ func TestMeta_ProjectBadgesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "badge_add")
-		requireTrue(t, out.Badge.ID > 0, "badge ID should be positive")
+		requireTruef(t, out.Badge.ID > 0, "badge ID should be positive")
 		badgeID = out.Badge.ID
 		t.Logf("Added badge %d", badgeID)
 	})
 
 	t.Run("BadgeGet", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.GetProjectOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "badge_get",
 			"params": map[string]any{
@@ -596,7 +596,7 @@ func TestMeta_ProjectBadgesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "badge_get")
-		requireTrue(t, out.Badge.ID == badgeID, "expected badge %d, got %d", badgeID, out.Badge.ID)
+		requireTruef(t, out.Badge.ID == badgeID, "expected badge %d, got %d", badgeID, out.Badge.ID)
 		t.Logf("Got badge %d", out.Badge.ID)
 	})
 
@@ -639,13 +639,13 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board_create")
-		requireTrue(t, out.ID > 0, "board ID should be positive")
+		requireTruef(t, out.ID > 0, "board ID should be positive")
 		boardID = out.ID
 		t.Logf("Created board %d", boardID)
 	})
 
 	t.Run("BoardUpdate", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 		out, err := callToolOn[boards.BoardOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_update",
 			"params": map[string]any{
@@ -655,12 +655,12 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board_update")
-		requireTrue(t, out.ID == boardID, "board ID mismatch")
+		requireTruef(t, out.ID == boardID, "board ID mismatch")
 		t.Logf("Updated board %d", boardID)
 	})
 
 	t.Run("BoardListList", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 		out, err := callToolOn[boards.ListBoardListsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_list_list",
 			"params": map[string]any{
@@ -673,7 +673,7 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 	})
 
 	t.Run("BoardListCreate", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 
 		// Create a label first (board lists need a label)
 		lbl, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
@@ -695,13 +695,13 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board_list_create")
-		requireTrue(t, out.ID > 0, "board list ID should be positive")
+		requireTruef(t, out.ID > 0, "board list ID should be positive")
 		listID = out.ID
 		t.Logf("Created board list %d", listID)
 	})
 
 	t.Run("BoardListGet", func(t *testing.T) {
-		requireTrue(t, listID > 0, "listID not set")
+		requireTruef(t, listID > 0, "listID not set")
 		out, err := callToolOn[boards.BoardListOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_list_get",
 			"params": map[string]any{
@@ -711,12 +711,12 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board_list_get")
-		requireTrue(t, out.ID == listID, "expected list %d, got %d", listID, out.ID)
+		requireTruef(t, out.ID == listID, "expected list %d, got %d", listID, out.ID)
 		t.Logf("Got board list %d", out.ID)
 	})
 
 	t.Run("BoardListUpdate", func(t *testing.T) {
-		requireTrue(t, listID > 0, "listID not set")
+		requireTruef(t, listID > 0, "listID not set")
 		_, err := callToolOn[boards.BoardListOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_list_update",
 			"params": map[string]any{
@@ -727,12 +727,12 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		// Single list cannot be repositioned — GitLab returns "List could not be moved!"
-		requireTrue(t, err != nil, "board_list_update with single list should return an error")
+		requireTruef(t, err != nil, "board_list_update with single list should return an error")
 		t.Logf("Expected error for single-list reposition: %v", err)
 	})
 
 	t.Run("BoardListDelete", func(t *testing.T) {
-		requireTrue(t, listID > 0, "listID not set")
+		requireTruef(t, listID > 0, "listID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_list_delete",
 			"params": map[string]any{
@@ -802,7 +802,7 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_create")
-		requireTrue(t, out.ID > 0, "rule ID should be positive")
+		requireTruef(t, out.ID > 0, "rule ID should be positive")
 		ruleID = out.ID
 		t.Logf("Created approval rule %d", ruleID)
 	})
@@ -831,7 +831,7 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_get")
-		requireTrue(t, out.ID == ruleID, "rule ID mismatch")
+		requireTruef(t, out.ID == ruleID, "rule ID mismatch")
 		t.Logf("Got approval rule %d", out.ID)
 	})
 
@@ -948,7 +948,7 @@ func TestMeta_ProjectPages(t *testing.T) {
 			"action": "pages_get",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTrue(t, err != nil, "expected error: Pages not configured in test environment")
+		requireTruef(t, err != nil, "expected error: Pages not configured in test environment")
 		t.Logf("Expected error for pages_get: %v", err)
 	})
 
@@ -958,7 +958,7 @@ func TestMeta_ProjectPages(t *testing.T) {
 			"action": "pages_domain_list_all",
 			"params": map[string]any{},
 		})
-		requireTrue(t, err != nil, "expected error: Pages not configured")
+		requireTruef(t, err != nil, "expected error: Pages not configured")
 		t.Logf("Expected error for pages_domain_list_all: %v", err)
 	})
 
@@ -968,7 +968,7 @@ func TestMeta_ProjectPages(t *testing.T) {
 			"action": "pages_domain_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTrue(t, err != nil, "expected error: Pages not configured")
+		requireTruef(t, err != nil, "expected error: Pages not configured")
 		t.Logf("Expected error for pages_domain_list: %v", err)
 	})
 }
@@ -991,7 +991,7 @@ func TestMeta_ProjectMirroring(t *testing.T) {
 			"action": "pull_mirror_get",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTrue(t, err != nil, "expected error: no mirror configured")
+		requireTruef(t, err != nil, "expected error: no mirror configured")
 		t.Logf("Expected error for pull_mirror_get without mirror: %v", err)
 	})
 }

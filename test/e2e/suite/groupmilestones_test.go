@@ -33,7 +33,7 @@ func TestMeta_GroupMilestones(t *testing.T) {
 		},
 	})
 	requireNoError(t, grpErr, "create group for milestones")
-	requireTrue(t, grp.ID > 0, "group ID should be positive")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
 	groupID := grp.ID
 	t.Logf("Created group %d (%s) for milestone tests", groupID, grp.FullPath)
 
@@ -57,13 +57,13 @@ func TestMeta_GroupMilestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group milestone create")
-		requireTrue(t, out.IID > 0, "expected positive group milestone IID")
+		requireTruef(t, out.IID > 0, "expected positive group milestone IID")
 		milestoneIID = out.IID
 		t.Logf("Created group milestone %s (IID=%d)", out.Title, out.IID)
 	})
 
 	t.Run("Meta/GroupMilestone/List", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[groupmilestones.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_list",
 			"params": map[string]any{
@@ -71,12 +71,12 @@ func TestMeta_GroupMilestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group milestone list")
-		requireTrue(t, len(out.Milestones) >= 1, "expected at least 1 group milestone")
+		requireTruef(t, len(out.Milestones) >= 1, "expected at least 1 group milestone")
 		t.Logf("Listed %d group milestone(s)", len(out.Milestones))
 	})
 
 	t.Run("Meta/GroupMilestone/Get", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[groupmilestones.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_get",
 			"params": map[string]any{
@@ -85,12 +85,12 @@ func TestMeta_GroupMilestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group milestone get")
-		requireTrue(t, out.IID == milestoneIID, "group milestone IID mismatch")
+		requireTruef(t, out.IID == milestoneIID, "group milestone IID mismatch")
 		t.Logf("Got group milestone %s (IID=%d)", out.Title, out.IID)
 	})
 
 	t.Run("Meta/GroupMilestone/Delete", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_delete",
 			"params": map[string]any{

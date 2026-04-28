@@ -317,7 +317,7 @@ func TestMeta_GroupSCIM(t *testing.T) {
 		},
 	})
 	requireNoError(t, grpErr, "create group for SCIM tests")
-	requireTrue(t, grp.ID > 0, "group ID should be positive")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
 	groupID := strconv.FormatInt(grp.ID, 10)
 	t.Logf("Created group %d (%s) for SCIM tests", grp.ID, grp.FullPath)
 
@@ -363,7 +363,7 @@ func TestMeta_EnterpriseUsers(t *testing.T) {
 		},
 	})
 	requireNoError(t, grpErr, "create group for enterprise users")
-	requireTrue(t, grp.ID > 0, "group ID should be positive")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
 	groupID := strconv.FormatInt(grp.ID, 10)
 	t.Logf("Created group %d (%s) for enterprise user tests", grp.ID, grp.FullPath)
 

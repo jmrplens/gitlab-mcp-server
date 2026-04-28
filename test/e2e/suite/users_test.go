@@ -27,8 +27,8 @@ func TestIndividual_Users(t *testing.T) {
 	t.Run("Current", func(t *testing.T) {
 		out, err := callToolOn[users.Output](ctx, sess.individual, "gitlab_user_current", users.CurrentInput{})
 		requireNoError(t, err, "get current user")
-		requireTrue(t, out.ID > 0, "expected user ID > 0, got %d", out.ID)
-		requireTrue(t, out.Username != "", "expected non-empty username")
+		requireTruef(t, out.ID > 0, "expected user ID > 0, got %d", out.ID)
+		requireTruef(t, out.Username != "", "expected non-empty username")
 		userID = out.ID
 		t.Logf("Current user: %s (ID=%d)", out.Username, userID)
 	})
@@ -36,7 +36,7 @@ func TestIndividual_Users(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		out, err := callToolOn[users.ListOutput](ctx, sess.individual, "gitlab_list_users", users.ListInput{})
 		requireNoError(t, err, "list users")
-		requireTrue(t, len(out.Users) >= 1, "expected >=1 user, got %d", len(out.Users))
+		requireTruef(t, len(out.Users) >= 1, "expected >=1 user, got %d", len(out.Users))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestIndividual_Users(t *testing.T) {
 			UserID: userID,
 		})
 		requireNoError(t, err, "get user")
-		requireTrue(t, out.ID == userID, "expected user ID %d, got %d", userID, out.ID)
+		requireTruef(t, out.ID == userID, "expected user ID %d, got %d", userID, out.ID)
 	})
 }
 
@@ -67,7 +67,7 @@ func TestMeta_Users(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "get current user meta")
-		requireTrue(t, out.ID > 0, "expected user ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected user ID > 0, got %d", out.ID)
 		userID = out.ID
 		t.Logf("Current user (meta): %s (ID=%d)", out.Username, userID)
 	})
@@ -78,7 +78,7 @@ func TestMeta_Users(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "list users meta")
-		requireTrue(t, len(out.Users) >= 1, "expected >=1 user, got %d", len(out.Users))
+		requireTruef(t, len(out.Users) >= 1, "expected >=1 user, got %d", len(out.Users))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -89,6 +89,6 @@ func TestMeta_Users(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get user meta")
-		requireTrue(t, out.ID == userID, "expected user ID %d, got %d", userID, out.ID)
+		requireTruef(t, out.ID == userID, "expected user ID %d, got %d", userID, out.ID)
 	})
 }

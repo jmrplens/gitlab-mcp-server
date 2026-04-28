@@ -31,7 +31,7 @@ func TestIndividual_Members(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list members")
-		requireTrue(t, len(out.Members) >= 1, "expected at least 1 member (owner)")
+		requireTruef(t, len(out.Members) >= 1, "expected at least 1 member (owner)")
 		t.Logf("Listed %d members", len(out.Members))
 	})
 
@@ -40,7 +40,7 @@ func TestIndividual_Members(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list members for get")
-		requireTrue(t, len(out.Members) >= 1, "expected members")
+		requireTruef(t, len(out.Members) >= 1, "expected members")
 
 		ownerID := out.Members[0].ID
 
@@ -49,7 +49,7 @@ func TestIndividual_Members(t *testing.T) {
 			UserID:    ownerID,
 		})
 		requireNoError(t, err, "get member")
-		requireTrue(t, member.ID == ownerID, "expected owner ID %d", ownerID)
+		requireTruef(t, member.ID == ownerID, "expected owner ID %d", ownerID)
 		t.Logf("Got member %s (access level %d)", member.Username, member.AccessLevel)
 	})
 }
@@ -73,7 +73,7 @@ func TestMeta_Members(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list members")
-		requireTrue(t, len(out.Members) >= 1, "expected at least 1 member")
+		requireTruef(t, len(out.Members) >= 1, "expected at least 1 member")
 		t.Logf("Listed %d members via meta-tool", len(out.Members))
 	})
 
@@ -83,7 +83,7 @@ func TestMeta_Members(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list members for get")
-		requireTrue(t, len(list.Members) >= 1, "expected members")
+		requireTruef(t, len(list.Members) >= 1, "expected members")
 
 		ownerID := list.Members[0].ID
 
@@ -92,7 +92,7 @@ func TestMeta_Members(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "user_id": ownerID},
 		})
 		requireNoError(t, err, "meta get member")
-		requireTrue(t, member.ID == ownerID, "expected owner ID %d", ownerID)
+		requireTruef(t, member.ID == ownerID, "expected owner ID %d", ownerID)
 		t.Logf("Got member %s via meta-tool", member.Username)
 	})
 }

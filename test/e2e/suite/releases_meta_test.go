@@ -83,8 +83,8 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "link_get")
-		requireTrue(t, out.ID == linkID, "link_get: ID mismatch")
-		requireTrue(t, out.Name == "E2E Link", "link_get: name mismatch")
+		requireTruef(t, out.ID == linkID, "link_get: ID mismatch")
+		requireTruef(t, out.Name == "E2E Link", "link_get: name mismatch")
 		t.Logf("Got link %d: %s", out.ID, out.Name)
 	})
 
@@ -99,7 +99,7 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "link_update")
-		requireTrue(t, out.Name == "E2E Link Updated", "link_update: name not updated")
+		requireTruef(t, out.Name == "E2E Link Updated", "link_update: name not updated")
 		t.Logf("Updated link %d: %s", out.ID, out.Name)
 	})
 
@@ -116,7 +116,7 @@ func TestMeta_ReleaseLinksExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "link_create_batch")
-		requireTrue(t, len(out.Created) == 2, "link_create_batch: expected 2 created links, got %d", len(out.Created))
+		requireTruef(t, len(out.Created) == 2, "link_create_batch: expected 2 created links, got %d", len(out.Created))
 		t.Logf("Batch created %d links", len(out.Created))
 	})
 }

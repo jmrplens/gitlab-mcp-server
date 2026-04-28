@@ -77,7 +77,7 @@ func TestMeta_JobTokenScope(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_scope_add_project")
-		requireTrue(t, out.TargetProjectID == proj2.ID, "target project ID mismatch")
+		requireTruef(t, out.TargetProjectID == proj2.ID, "target project ID mismatch")
 		t.Logf("Added project %d to allowlist", proj2.ID)
 	})
 
@@ -110,7 +110,7 @@ func TestMeta_JobTokenScope(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_scope_add_group")
-		requireTrue(t, out.TargetGroupID == grpOut.ID, "target group ID mismatch")
+		requireTruef(t, out.TargetGroupID == grpOut.ID, "target group ID mismatch")
 		t.Logf("Added group %d to allowlist", grpOut.ID)
 	})
 

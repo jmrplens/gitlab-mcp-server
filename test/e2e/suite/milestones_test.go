@@ -34,24 +34,24 @@ func TestIndividual_Milestones(t *testing.T) {
 			Description: "E2E test milestone",
 		})
 		requireNoError(t, err, "milestone create")
-		requireTrue(t, out.IID > 0, "milestone IID should be positive")
+		requireTruef(t, out.IID > 0, "milestone IID should be positive")
 		milestoneIID = out.IID
 		t.Logf("Created milestone: %s (IID=%d)", out.Title, out.IID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[milestones.Output](ctx, sess.individual, "gitlab_milestone_get", milestones.GetInput{
 			ProjectID:    proj.pidOf(),
 			MilestoneIID: milestoneIID,
 		})
 		requireNoError(t, err, "milestone get")
-		requireTrue(t, out.Title == "e2e-milestone-v1", "expected title e2e-milestone-v1, got %s", out.Title)
+		requireTruef(t, out.Title == "e2e-milestone-v1", "expected title e2e-milestone-v1, got %s", out.Title)
 		t.Logf("Got milestone: %s (state=%s)", out.Title, out.State)
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[milestones.Output](ctx, sess.individual, "gitlab_milestone_update", milestones.UpdateInput{
 			ProjectID:    proj.pidOf(),
 			MilestoneIID: milestoneIID,
@@ -59,12 +59,12 @@ func TestIndividual_Milestones(t *testing.T) {
 			StateEvent:   "close",
 		})
 		requireNoError(t, err, "milestone update")
-		requireTrue(t, out.State == "closed", "expected state closed, got %s", out.State)
+		requireTruef(t, out.State == "closed", "expected state closed, got %s", out.State)
 		t.Logf("Updated milestone: %s (state=%s)", out.Title, out.State)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_milestone_delete", milestones.DeleteInput{
 			ProjectID:    proj.pidOf(),
 			MilestoneIID: milestoneIID,
@@ -97,13 +97,13 @@ func TestMeta_Milestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta milestone create")
-		requireTrue(t, out.IID > 0, "expected positive milestone IID")
+		requireTruef(t, out.IID > 0, "expected positive milestone IID")
 		milestoneIID = out.IID
 		t.Logf("Created milestone: %s (IID=%d)", out.Title, out.IID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[milestones.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "milestone_get",
 			"params": map[string]any{
@@ -112,12 +112,12 @@ func TestMeta_Milestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta milestone get")
-		requireTrue(t, out.IID == milestoneIID, "milestone IID mismatch")
+		requireTruef(t, out.IID == milestoneIID, "milestone IID mismatch")
 		t.Logf("Got milestone: %s (state=%s)", out.Title, out.State)
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		out, err := callToolOn[milestones.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "milestone_update",
 			"params": map[string]any{
@@ -127,12 +127,12 @@ func TestMeta_Milestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta milestone update")
-		requireTrue(t, out.IID == milestoneIID, "milestone IID mismatch after update")
+		requireTruef(t, out.IID == milestoneIID, "milestone IID mismatch after update")
 		t.Logf("Updated milestone: %s", out.Title)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, milestoneIID > 0, "milestoneIID not set")
+		requireTruef(t, milestoneIID > 0, "milestoneIID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "milestone_delete",
 			"params": map[string]any{

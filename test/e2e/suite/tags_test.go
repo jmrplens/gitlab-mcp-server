@@ -36,7 +36,7 @@ func TestIndividual_Tags(t *testing.T) {
 			Message:   "E2E tag test",
 		})
 		requireNoError(t, err, "create tag")
-		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
 		t.Logf("Created tag %s (target=%s)", out.Name, out.Target)
 	})
 
@@ -48,8 +48,8 @@ func TestIndividual_Tags(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "get tag")
-		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
-		requireTrue(t, out.Target != "", "tag target should not be empty")
+		requireTruef(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Target != "", "tag target should not be empty")
 		t.Logf("Got tag %s (target=%s)", out.Name, out.Target)
 	})
 
@@ -60,7 +60,7 @@ func TestIndividual_Tags(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "list tags")
-		requireTrue(t, len(out.Tags) >= 1, "expected at least 1 tag, got %d", len(out.Tags))
+		requireTruef(t, len(out.Tags) >= 1, "expected at least 1 tag, got %d", len(out.Tags))
 
 		found := false
 		for _, tag := range out.Tags {
@@ -69,7 +69,7 @@ func TestIndividual_Tags(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "tag %q not found in list", tagName)
+		requireTruef(t, found, "tag %q not found in list", tagName)
 		t.Logf("Listed %d tags", len(out.Tags))
 	})
 
@@ -109,7 +109,7 @@ func TestMeta_Tags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta tag create")
-		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
 		t.Logf("Created tag %s", out.Name)
 	})
 
@@ -124,8 +124,8 @@ func TestMeta_Tags(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "meta tag get")
-		requireTrue(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
-		requireTrue(t, out.Target != "", "tag target should not be empty")
+		requireTruef(t, out.Name == tagName, "expected tag %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Target != "", "tag target should not be empty")
 		t.Logf("Got tag %s (target=%s)", out.Name, out.Target)
 	})
 
@@ -139,7 +139,7 @@ func TestMeta_Tags(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "meta tag list")
-		requireTrue(t, len(out.Tags) >= 1, "expected at least 1 tag")
+		requireTruef(t, len(out.Tags) >= 1, "expected at least 1 tag")
 
 		found := false
 		for _, tag := range out.Tags {
@@ -148,7 +148,7 @@ func TestMeta_Tags(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "tag %q not found", tagName)
+		requireTruef(t, found, "tag %q not found", tagName)
 		t.Logf("Listed %d tags", len(out.Tags))
 	})
 

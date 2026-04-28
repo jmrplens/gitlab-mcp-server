@@ -58,7 +58,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 
 	// ── Core operations ──────────────────────────────────────────────────
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "update",
 			"params": map[string]any{
@@ -76,12 +76,12 @@ func TestMeta_GroupDeep(t *testing.T) {
 			"params": map[string]any{"query": grpName},
 		})
 		requireNoError(t, err, "group search")
-		requireTrue(t, len(out.Groups) >= 1, "expected at least 1 group in search")
+		requireTruef(t, len(out.Groups) >= 1, "expected at least 1 group in search")
 		t.Logf("Search found %d groups", len(out.Groups))
 	})
 
 	t.Run("Projects", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.ListProjectsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "projects",
 			"params": map[string]any{"group_id": groupIDStr},
@@ -96,7 +96,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_add",
 			"params": map[string]any{
@@ -114,13 +114,13 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[groups.HookListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_list",
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "hook_list")
-		requireTrue(t, len(out.Hooks) >= 1, "expected at least 1 hook")
+		requireTruef(t, len(out.Hooks) >= 1, "expected at least 1 hook")
 		t.Logf("Listed %d hooks", len(out.Hooks))
 	})
 
@@ -128,13 +128,13 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_get",
 			"params": map[string]any{"group_id": groupIDStr, "hook_id": hookID},
 		})
 		requireNoError(t, err, "hook_get")
-		requireTrue(t, out.ID == hookID, "hook ID mismatch")
+		requireTruef(t, out.ID == hookID, "hook ID mismatch")
 		t.Logf("Got hook %d", out.ID)
 	})
 
@@ -142,7 +142,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_edit",
 			"params": map[string]any{
@@ -160,7 +160,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "hook_delete",
 			"params": map[string]any{"group_id": groupIDStr, "hook_id": hookID},
@@ -172,7 +172,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	// ── Badges ───────────────────────────────────────────────────────────
 	var badgeID int64
 	t.Run("BadgeAdd", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[badges.AddGroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_add",
 			"params": map[string]any{
@@ -187,29 +187,29 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("BadgeList", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[badges.ListGroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_list",
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "badge_list")
-		requireTrue(t, len(out.Badges) >= 1, "expected at least 1 badge")
+		requireTruef(t, len(out.Badges) >= 1, "expected at least 1 badge")
 		t.Logf("Listed %d badges", len(out.Badges))
 	})
 
 	t.Run("BadgeGet", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.GetGroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_get",
 			"params": map[string]any{"group_id": groupIDStr, "badge_id": badgeID},
 		})
 		requireNoError(t, err, "badge_get")
-		requireTrue(t, out.Badge.ID == badgeID, "badge ID mismatch")
+		requireTruef(t, out.Badge.ID == badgeID, "badge ID mismatch")
 		t.Logf("Got badge %d", out.Badge.ID)
 	})
 
 	t.Run("BadgeEdit", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.EditGroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_edit",
 			"params": map[string]any{
@@ -224,7 +224,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("BadgePreview", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[badges.PreviewGroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_preview",
 			"params": map[string]any{
@@ -238,7 +238,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("BadgeDelete", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "badge_delete",
 			"params": map[string]any{"group_id": groupIDStr, "badge_id": badgeID},
@@ -249,7 +249,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 
 	// ── Members ──────────────────────────────────────────────────────────
 	t.Run("GroupMemberGet", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		// User ID 1 (root) is NOT a member of a freshly created group by e2e-tester
 		_, err := callToolOn[groupmembers.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_member_get",
@@ -258,12 +258,12 @@ func TestMeta_GroupDeep(t *testing.T) {
 				"user_id":  "1",
 			},
 		})
-		requireTrue(t, err != nil, "expected error: user 1 is not a member of the group")
+		requireTruef(t, err != nil, "expected error: user 1 is not a member of the group")
 		t.Logf("Expected error for non-member user: %v", err)
 	})
 
 	t.Run("GroupMemberGetInherited", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		// Standalone group has no inherited members
 		_, err := callToolOn[groupmembers.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_member_get_inherited",
@@ -272,14 +272,14 @@ func TestMeta_GroupDeep(t *testing.T) {
 				"user_id":  "1",
 			},
 		})
-		requireTrue(t, err != nil, "expected error: user 1 is not an inherited member")
+		requireTruef(t, err != nil, "expected error: user 1 is not an inherited member")
 		t.Logf("Expected error for non-inherited member: %v", err)
 	})
 
 	// ── Labels deep ──────────────────────────────────────────────────────
 	var labelName string
 	t.Run("LabelCreate", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		labelName = uniqueName("lbl")
 		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_create",
@@ -294,18 +294,18 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("LabelList", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		out, err := callToolOn[grouplabels.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_list",
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "label list")
-		requireTrue(t, len(out.Labels) >= 1, "expected at least 1 label")
+		requireTruef(t, len(out.Labels) >= 1, "expected at least 1 label")
 		t.Logf("Listed %d labels", len(out.Labels))
 	})
 
 	t.Run("LabelGet", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_get",
 			"params": map[string]any{
@@ -318,7 +318,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("LabelUpdate", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_update",
 			"params": map[string]any{
@@ -334,7 +334,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("LabelSubscribe", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_subscribe",
 			"params": map[string]any{
@@ -347,7 +347,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("LabelUnsubscribe", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_unsubscribe",
 			"params": map[string]any{
@@ -360,7 +360,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("LabelDelete", func(t *testing.T) {
-		requireTrue(t, labelName != "", "labelName not set")
+		requireTruef(t, labelName != "", "labelName not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_delete",
 			"params": map[string]any{
@@ -375,7 +375,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	// ── Milestones deep ──────────────────────────────────────────────────
 	var milestoneID int64
 	t.Run("MilestoneGet", func(t *testing.T) {
-		requireTrue(t, groupID > 0, "groupID not set")
+		requireTruef(t, groupID > 0, "groupID not set")
 		// Create a milestone to get
 		out, err := callToolOn[groupmilestones.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_create",
@@ -395,12 +395,12 @@ func TestMeta_GroupDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "milestone get")
-		requireTrue(t, got.IID == milestoneID, "milestone IID mismatch")
+		requireTruef(t, got.IID == milestoneID, "milestone IID mismatch")
 		t.Logf("Got milestone IID %d: %s", got.IID, got.Title)
 	})
 
 	t.Run("MilestoneUpdate", func(t *testing.T) {
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		out, err := callToolOn[groupmilestones.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_update",
 			"params": map[string]any{
@@ -414,7 +414,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("MilestoneIssues", func(t *testing.T) {
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		out, err := callToolOn[groupmilestones.IssuesOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_issues",
 			"params": map[string]any{
@@ -427,7 +427,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	})
 
 	t.Run("MilestoneMergeRequests", func(t *testing.T) {
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		out, err := callToolOn[groupmilestones.MergeRequestsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_merge_requests",
 			"params": map[string]any{
@@ -443,7 +443,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		requireTrue(t, milestoneID > 0, "milestoneID not set")
+		requireTruef(t, milestoneID > 0, "milestoneID not set")
 		_, err := callToolOn[groupmilestones.BurndownChartEventsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_milestone_burndown",
 			"params": map[string]any{
@@ -460,7 +460,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 		var boardID int64
 
 		t.Run("BoardCreate", func(t *testing.T) {
-			requireTrue(t, groupID > 0, "groupID not set")
+			requireTruef(t, groupID > 0, "groupID not set")
 			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "group_board_create",
 				"params": map[string]any{
@@ -474,13 +474,13 @@ func TestMeta_GroupDeep(t *testing.T) {
 		})
 
 		t.Run("BoardList", func(t *testing.T) {
-			requireTrue(t, groupID > 0, "groupID not set")
+			requireTruef(t, groupID > 0, "groupID not set")
 			out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "group_board_list",
 				"params": map[string]any{"group_id": groupIDStr},
 			})
 			requireNoError(t, err, "group_board_list")
-			requireTrue(t, len(out.Boards) > 0, "expected at least 1 group board")
+			requireTruef(t, len(out.Boards) > 0, "expected at least 1 group board")
 			t.Logf("Listed %d group boards", len(out.Boards))
 			if boardID == 0 && len(out.Boards) > 0 {
 				boardID = out.Boards[0].ID
@@ -496,7 +496,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
 			})
 			requireNoError(t, err, "board_get")
-			requireTrue(t, out.ID == boardID, "board ID mismatch")
+			requireTruef(t, out.ID == boardID, "board ID mismatch")
 			t.Logf("Got board %d: %s", out.ID, out.Name)
 		})
 

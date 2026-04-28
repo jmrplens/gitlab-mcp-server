@@ -42,19 +42,19 @@ func TestIndividual_AccessTokens(t *testing.T) {
 			ExpiresAt: expiresAtNextYear(),
 		})
 		requireNoError(t, err, "create project access token")
-		requireTrue(t, out.ID > 0, "expected token ID")
+		requireTruef(t, out.ID > 0, "expected token ID")
 		tokenID = out.ID
 		t.Logf("Created token %d", tokenID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		out, err := callToolOn[accesstokens.Output](ctx, sess.individual, "gitlab_project_access_token_get", accesstokens.ProjectGetInput{
 			ProjectID: proj.pidOf(),
 			TokenID:   tokenID,
 		})
 		requireNoError(t, err, "get project access token")
-		requireTrue(t, out.ID == tokenID, "expected ID %d", tokenID)
+		requireTruef(t, out.ID == tokenID, "expected ID %d", tokenID)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -62,11 +62,11 @@ func TestIndividual_AccessTokens(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list project access tokens")
-		requireTrue(t, len(out.Tokens) >= 1, "expected at least 1 token")
+		requireTruef(t, len(out.Tokens) >= 1, "expected at least 1 token")
 	})
 
 	t.Run("Revoke", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_project_access_token_revoke", accesstokens.ProjectRevokeInput{
 			ProjectID: proj.pidOf(),
 			TokenID:   tokenID,
@@ -101,19 +101,19 @@ func TestMeta_AccessTokens(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create token")
-		requireTrue(t, out.ID > 0, "expected token ID")
+		requireTruef(t, out.ID > 0, "expected token ID")
 		tokenID = out.ID
 		t.Logf("Created token %d via meta-tool", tokenID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		out, err := callToolOn[accesstokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "token_project_get",
 			"params": map[string]any{"project_id": proj.pidStr(), "token_id": tokenID},
 		})
 		requireNoError(t, err, "meta get token")
-		requireTrue(t, out.ID == tokenID, "expected ID %d", tokenID)
+		requireTruef(t, out.ID == tokenID, "expected ID %d", tokenID)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -122,11 +122,11 @@ func TestMeta_AccessTokens(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list tokens")
-		requireTrue(t, len(out.Tokens) >= 1, "expected at least 1 token")
+		requireTruef(t, len(out.Tokens) >= 1, "expected at least 1 token")
 	})
 
 	t.Run("Revoke", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "token_project_revoke",
 			"params": map[string]any{"project_id": proj.pidStr(), "token_id": tokenID},

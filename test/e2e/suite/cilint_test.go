@@ -32,7 +32,7 @@ func TestIndividual_CILint(t *testing.T) {
 			Content:   "stages:\n  - build\nbuild_job:\n  stage: build\n  script:\n    - echo hello",
 		})
 		requireNoError(t, err, "CI lint content")
-		requireTrue(t, out.Valid, "expected valid CI config, got invalid: %v", out.Errors)
+		requireTruef(t, out.Valid, "expected valid CI config, got invalid: %v", out.Errors)
 	})
 
 	t.Run("LintProject", func(t *testing.T) {
@@ -40,7 +40,7 @@ func TestIndividual_CILint(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "CI lint project")
-		requireTrue(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
+		requireTruef(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
 		t.Logf("CI lint project: valid=%v, errors=%v", out.Valid, out.Errors)
 	})
 }
@@ -67,7 +67,7 @@ func TestMeta_CILint(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "CI lint content meta")
-		requireTrue(t, out.Valid, "expected valid CI config, got invalid: %v", out.Errors)
+		requireTruef(t, out.Valid, "expected valid CI config, got invalid: %v", out.Errors)
 	})
 
 	t.Run("LintProject", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestMeta_CILint(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "CI lint project meta")
-		requireTrue(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
+		requireTruef(t, !out.Valid, "expected CI lint to return invalid for project without .gitlab-ci.yml")
 		t.Logf("CI lint project: valid=%v, errors=%v", out.Valid, out.Errors)
 	})
 }

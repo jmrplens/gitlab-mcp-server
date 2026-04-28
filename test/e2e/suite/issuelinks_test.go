@@ -39,7 +39,7 @@ func TestIndividual_IssueLinks(t *testing.T) {
 			TargetIssueIID:  fmt.Sprintf("%d", issue2.IID),
 		})
 		requireNoError(t, err, "create issue link")
-		requireTrue(t, out.ID > 0, "expected link ID")
+		requireTruef(t, out.ID > 0, "expected link ID")
 		linkID = out.ID
 		t.Logf("Created issue link %d", linkID)
 	})
@@ -50,22 +50,22 @@ func TestIndividual_IssueLinks(t *testing.T) {
 			IssueIID:  int(issue1.IID),
 		})
 		requireNoError(t, err, "list issue links")
-		requireTrue(t, len(out.Relations) >= 1, "expected at least 1 link")
+		requireTruef(t, len(out.Relations) >= 1, "expected at least 1 link")
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, linkID > 0, "linkID not set")
+		requireTruef(t, linkID > 0, "linkID not set")
 		out, err := callToolOn[issuelinks.Output](ctx, sess.individual, "gitlab_issue_link_get", issuelinks.GetInput{
 			ProjectID:   proj.pidOf(),
 			IssueIID:    int(issue1.IID),
 			IssueLinkID: linkID,
 		})
 		requireNoError(t, err, "get issue link")
-		requireTrue(t, out.ID == linkID, "expected link ID %d", linkID)
+		requireTruef(t, out.ID == linkID, "expected link ID %d", linkID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, linkID > 0, "linkID not set")
+		requireTruef(t, linkID > 0, "linkID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_issue_link_delete", issuelinks.DeleteInput{
 			ProjectID:   proj.pidOf(),
 			IssueIID:    int(issue1.IID),
@@ -103,7 +103,7 @@ func TestMeta_IssueLinks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create issue link")
-		requireTrue(t, out.ID > 0, "expected link ID")
+		requireTruef(t, out.ID > 0, "expected link ID")
 		linkID = out.ID
 		t.Logf("Created issue link %d via meta-tool", linkID)
 	})
@@ -117,11 +117,11 @@ func TestMeta_IssueLinks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta list issue links")
-		requireTrue(t, len(out.Relations) >= 1, "expected at least 1 link")
+		requireTruef(t, len(out.Relations) >= 1, "expected at least 1 link")
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, linkID > 0, "linkID not set")
+		requireTruef(t, linkID > 0, "linkID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "link_delete",
 			"params": map[string]any{

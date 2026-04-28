@@ -36,7 +36,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			Note:      "E2E draft note",
 		})
 		requireNoError(t, err, "create draft note")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		noteID = out.ID
 		t.Logf("Created draft note %d", noteID)
 	})
@@ -47,7 +47,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			MRIID:     mr.IID,
 		})
 		requireNoError(t, err, "list draft notes")
-		requireTrue(t, len(out.DraftNotes) >= 1, "expected >=1 draft note, got %d", len(out.DraftNotes))
+		requireTruef(t, len(out.DraftNotes) >= 1, "expected >=1 draft note, got %d", len(out.DraftNotes))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			NoteID:    noteID,
 		})
 		requireNoError(t, err, "get draft note")
-		requireTrue(t, out.Note == "E2E draft note", "expected note %q, got %q", "E2E draft note", out.Note)
+		requireTruef(t, out.Note == "E2E draft note", "expected note %q, got %q", "E2E draft note", out.Note)
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			Note:      "E2E draft note updated",
 		})
 		requireNoError(t, err, "update draft note")
-		requireTrue(t, out.Note == "E2E draft note updated", "expected updated note, got %q", out.Note)
+		requireTruef(t, out.Note == "E2E draft note updated", "expected updated note, got %q", out.Note)
 	})
 
 	// Create a second draft note and delete it to exercise the destructive delete path.
@@ -81,13 +81,13 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			Note:      "E2E draft note to delete",
 		})
 		requireNoError(t, err, "create draft note for delete")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		deleteNoteID = out.ID
 		t.Logf("Created draft note %d (for deletion)", deleteNoteID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, deleteNoteID > 0, "deleteNoteID not set")
+		requireTruef(t, deleteNoteID > 0, "deleteNoteID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_mr_draft_note_delete", mrdraftnotes.DeleteInput{
 			ProjectID: proj.pidOf(),
 			MRIID:     mr.IID,
@@ -132,7 +132,7 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create draft note meta")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		noteID = out.ID
 		t.Logf("Created draft note (meta) %d", noteID)
 	})
@@ -146,7 +146,7 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list draft notes meta")
-		requireTrue(t, len(out.DraftNotes) >= 1, "expected >=1 draft note, got %d", len(out.DraftNotes))
+		requireTruef(t, len(out.DraftNotes) >= 1, "expected >=1 draft note, got %d", len(out.DraftNotes))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -159,7 +159,7 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get draft note meta")
-		requireTrue(t, out.Note == "E2E draft note meta", "expected note %q, got %q", "E2E draft note meta", out.Note)
+		requireTruef(t, out.Note == "E2E draft note meta", "expected note %q, got %q", "E2E draft note meta", out.Note)
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -173,7 +173,7 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "update draft note meta")
-		requireTrue(t, out.Note == "E2E draft meta updated", "expected updated note, got %q", out.Note)
+		requireTruef(t, out.Note == "E2E draft meta updated", "expected updated note, got %q", out.Note)
 	})
 
 	// Create a second draft note and delete it to exercise the destructive delete path.
@@ -189,13 +189,13 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create draft note meta for delete")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		deleteNoteID = out.ID
 		t.Logf("Created draft note (meta) %d (for deletion)", deleteNoteID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, deleteNoteID > 0, "deleteNoteID not set")
+		requireTruef(t, deleteNoteID > 0, "deleteNoteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "draft_note_delete",
 			"params": map[string]any{

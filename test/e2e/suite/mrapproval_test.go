@@ -78,7 +78,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 			waitForMRReady(ctx, t, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "merge MR")
-		requireTrue(t, out.State == "merged", "expected state 'merged', got %q", out.State)
+		requireTruef(t, out.State == "merged", "expected state 'merged', got %q", out.State)
 		t.Logf("Merged MR !%d", mr.IID)
 	})
 }
@@ -164,7 +164,7 @@ func TestMeta_MRApproval(t *testing.T) {
 			waitForMRReady(ctx, t, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "meta merge MR")
-		requireTrue(t, out.State == "merged", "expected state merged, got %q", out.State)
+		requireTruef(t, out.State == "merged", "expected state merged, got %q", out.State)
 		t.Logf("Merged MR !%d via meta-tool", mr.IID)
 	})
 }

@@ -37,9 +37,9 @@ func TestIndividual_MRDiscussions(t *testing.T) {
 			Body:      "E2E discussion thread",
 		})
 		requireNoError(t, err, "create MR discussion")
-		requireTrue(t, out.ID != "", "expected discussion ID, got empty")
+		requireTruef(t, out.ID != "", "expected discussion ID, got empty")
 		discussionID = out.ID
-		requireTrue(t, len(out.Notes) >= 1, "expected >=1 note in discussion")
+		requireTruef(t, len(out.Notes) >= 1, "expected >=1 note in discussion")
 		noteID = out.Notes[0].ID
 		t.Logf("Created discussion %s (note %d)", discussionID, noteID)
 	})
@@ -50,7 +50,7 @@ func TestIndividual_MRDiscussions(t *testing.T) {
 			MRIID:     mr.IID,
 		})
 		requireNoError(t, err, "list MR discussions")
-		requireTrue(t, len(out.Discussions) >= 1, "expected >=1 discussion, got %d", len(out.Discussions))
+		requireTruef(t, len(out.Discussions) >= 1, "expected >=1 discussion, got %d", len(out.Discussions))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestIndividual_MRDiscussions(t *testing.T) {
 			DiscussionID: discussionID,
 		})
 		requireNoError(t, err, "get MR discussion")
-		requireTrue(t, out.ID == discussionID, "expected discussion %q, got %q", discussionID, out.ID)
+		requireTruef(t, out.ID == discussionID, "expected discussion %q, got %q", discussionID, out.ID)
 	})
 
 	t.Run("Reply", func(t *testing.T) {
@@ -71,7 +71,7 @@ func TestIndividual_MRDiscussions(t *testing.T) {
 			Body:         "E2E reply",
 		})
 		requireNoError(t, err, "reply to MR discussion")
-		requireTrue(t, out.ID > 0, "expected reply note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected reply note ID > 0, got %d", out.ID)
 	})
 
 	t.Run("Resolve", func(t *testing.T) {
@@ -122,9 +122,9 @@ func TestMeta_MRDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create MR discussion meta")
-		requireTrue(t, out.ID != "", "expected discussion ID, got empty")
+		requireTruef(t, out.ID != "", "expected discussion ID, got empty")
 		discussionID = out.ID
-		requireTrue(t, len(out.Notes) >= 1, "expected >=1 note")
+		requireTruef(t, len(out.Notes) >= 1, "expected >=1 note")
 		noteID = out.Notes[0].ID
 		t.Logf("Created discussion (meta) %s", discussionID)
 	})
@@ -138,7 +138,7 @@ func TestMeta_MRDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list MR discussions meta")
-		requireTrue(t, len(out.Discussions) >= 1, "expected >=1 discussion, got %d", len(out.Discussions))
+		requireTruef(t, len(out.Discussions) >= 1, "expected >=1 discussion, got %d", len(out.Discussions))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestMeta_MRDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get MR discussion meta")
-		requireTrue(t, out.ID == discussionID, "expected discussion %q, got %q", discussionID, out.ID)
+		requireTruef(t, out.ID == discussionID, "expected discussion %q, got %q", discussionID, out.ID)
 	})
 
 	t.Run("Reply", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestMeta_MRDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "reply MR discussion meta")
-		requireTrue(t, out.ID > 0, "expected reply note ID > 0")
+		requireTruef(t, out.ID > 0, "expected reply note ID > 0")
 	})
 
 	t.Run("Resolve", func(t *testing.T) {

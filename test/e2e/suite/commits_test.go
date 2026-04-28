@@ -37,7 +37,7 @@ func TestIndividual_Commits(t *testing.T) {
 			RefName:   defaultBranch,
 		})
 		requireNoError(t, err, "list commits")
-		requireTrue(t, len(out.Commits) >= 1, "expected at least 1 commit, got %d", len(out.Commits))
+		requireTruef(t, len(out.Commits) >= 1, "expected at least 1 commit, got %d", len(out.Commits))
 		t.Logf("Listed %d commits on %s", len(out.Commits), defaultBranch)
 	})
 
@@ -47,8 +47,8 @@ func TestIndividual_Commits(t *testing.T) {
 			SHA:       cfix.SHA,
 		})
 		requireNoError(t, err, "get commit")
-		requireTrue(t, out.ID == cfix.SHA, "expected SHA %s, got %s", cfix.SHA, out.ID)
-		requireTrue(t, out.Title != "", "commit title should not be empty")
+		requireTruef(t, out.ID == cfix.SHA, "expected SHA %s, got %s", cfix.SHA, out.ID)
+		requireTruef(t, out.Title != "", "commit title should not be empty")
 		t.Logf("Got commit %s: %s", out.ShortID, out.Title)
 	})
 
@@ -58,7 +58,7 @@ func TestIndividual_Commits(t *testing.T) {
 			SHA:       cfix.SHA,
 		})
 		requireNoError(t, err, "get commit diff")
-		requireTrue(t, len(out.Diffs) >= 1, "expected at least 1 diff, got %d", len(out.Diffs))
+		requireTruef(t, len(out.Diffs) >= 1, "expected at least 1 diff, got %d", len(out.Diffs))
 		t.Logf("Commit %s has %d file diffs", cfix.SHA[:8], len(out.Diffs))
 	})
 
@@ -69,7 +69,7 @@ func TestIndividual_Commits(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get file")
-		requireTrue(t, out.FileName == testFileMainGo, "expected file %s, got %s", testFileMainGo, out.FileName)
+		requireTruef(t, out.FileName == testFileMainGo, "expected file %s, got %s", testFileMainGo, out.FileName)
 		t.Logf("Got file %s (size=%d)", out.FileName, out.Size)
 	})
 }
@@ -100,7 +100,7 @@ func TestMeta_Commits(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta commit list")
-		requireTrue(t, len(out.Commits) >= 1, "expected at least 1 commit")
+		requireTruef(t, len(out.Commits) >= 1, "expected at least 1 commit")
 		t.Logf("Listed %d commits via meta-tool", len(out.Commits))
 	})
 
@@ -113,8 +113,8 @@ func TestMeta_Commits(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta commit get")
-		requireTrue(t, out.ID == cfix.SHA, "expected SHA %s, got %s", cfix.SHA, out.ID)
-		requireTrue(t, out.Title != "", "commit title should not be empty")
+		requireTruef(t, out.ID == cfix.SHA, "expected SHA %s, got %s", cfix.SHA, out.ID)
+		requireTruef(t, out.Title != "", "commit title should not be empty")
 		t.Logf("Got commit %s via meta-tool: %s", out.ShortID, out.Title)
 	})
 
@@ -127,7 +127,7 @@ func TestMeta_Commits(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta commit diff")
-		requireTrue(t, len(out.Diffs) >= 1, "expected at least 1 diff")
+		requireTruef(t, len(out.Diffs) >= 1, "expected at least 1 diff")
 		t.Logf("Commit %s has %d diffs via meta-tool", cfix.SHA[:8], len(out.Diffs))
 	})
 
@@ -141,7 +141,7 @@ func TestMeta_Commits(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file get")
-		requireTrue(t, out.FileName == testFileMainGo, "expected %s, got %s", testFileMainGo, out.FileName)
+		requireTruef(t, out.FileName == testFileMainGo, "expected %s, got %s", testFileMainGo, out.FileName)
 		t.Logf("Got file %s via meta-tool (size=%d)", out.FileName, out.Size)
 	})
 }

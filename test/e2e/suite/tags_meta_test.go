@@ -54,7 +54,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protect tag")
-		requireTrue(t, out.Name == tagName, "protect: name mismatch")
+		requireTruef(t, out.Name == tagName, "protect: name mismatch")
 		t.Logf("Protected tag: %s", out.Name)
 	})
 
@@ -64,7 +64,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "list_protected")
-		requireTrue(t, len(out.Tags) >= 1, "list_protected: expected at least 1 protected tag")
+		requireTruef(t, len(out.Tags) >= 1, "list_protected: expected at least 1 protected tag")
 		t.Logf("Protected tags: %d", len(out.Tags))
 	})
 
@@ -77,7 +77,7 @@ func TestMeta_TagsProtected(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get_protected")
-		requireTrue(t, out.Name == tagName, "get_protected: name mismatch")
+		requireTruef(t, out.Name == tagName, "get_protected: name mismatch")
 	})
 
 	t.Run("Unprotect", func(t *testing.T) {

@@ -53,19 +53,19 @@ func TestIndividual_DeployKeys(t *testing.T) {
 			Key:       sshKey,
 		})
 		requireNoError(t, err, "add deploy key")
-		requireTrue(t, out.ID > 0, "expected key ID")
+		requireTruef(t, out.ID > 0, "expected key ID")
 		keyID = out.ID
 		t.Logf("Added deploy key %d", keyID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		out, err := callToolOn[deploykeys.Output](ctx, sess.individual, "gitlab_deploy_key_get", deploykeys.GetInput{
 			ProjectID:   proj.pidOf(),
 			DeployKeyID: keyID,
 		})
 		requireNoError(t, err, "get deploy key")
-		requireTrue(t, out.ID == keyID, "expected ID %d", keyID)
+		requireTruef(t, out.ID == keyID, "expected ID %d", keyID)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -73,22 +73,22 @@ func TestIndividual_DeployKeys(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list deploy keys")
-		requireTrue(t, len(out.DeployKeys) >= 1, "expected at least 1 key")
+		requireTruef(t, len(out.DeployKeys) >= 1, "expected at least 1 key")
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		out, err := callToolOn[deploykeys.Output](ctx, sess.individual, "gitlab_deploy_key_update", deploykeys.UpdateInput{
 			ProjectID:   proj.pidOf(),
 			DeployKeyID: keyID,
 			Title:       "e2e-deploy-key-updated",
 		})
 		requireNoError(t, err, "update deploy key")
-		requireTrue(t, out.Title == "e2e-deploy-key-updated", "expected updated title")
+		requireTruef(t, out.Title == "e2e-deploy-key-updated", "expected updated title")
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_deploy_key_delete", deploykeys.DeleteInput{
 			ProjectID:   proj.pidOf(),
 			DeployKeyID: keyID,
@@ -122,19 +122,19 @@ func TestMeta_DeployKeys(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta add deploy key")
-		requireTrue(t, out.ID > 0, "expected key ID")
+		requireTruef(t, out.ID > 0, "expected key ID")
 		keyID = out.ID
 		t.Logf("Added deploy key %d via meta-tool", keyID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		out, err := callToolOn[deploykeys.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_get",
 			"params": map[string]any{"project_id": proj.pidStr(), "deploy_key_id": keyID},
 		})
 		requireNoError(t, err, "meta get deploy key")
-		requireTrue(t, out.ID == keyID, "expected ID %d", keyID)
+		requireTruef(t, out.ID == keyID, "expected ID %d", keyID)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -143,11 +143,11 @@ func TestMeta_DeployKeys(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list deploy keys")
-		requireTrue(t, len(out.DeployKeys) >= 1, "expected at least 1 key")
+		requireTruef(t, len(out.DeployKeys) >= 1, "expected at least 1 key")
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		out, err := callToolOn[deploykeys.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_update",
 			"params": map[string]any{
@@ -157,11 +157,11 @@ func TestMeta_DeployKeys(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta update deploy key")
-		requireTrue(t, out.Title == "e2e-meta-key-updated", "expected updated title")
+		requireTruef(t, out.Title == "e2e-meta-key-updated", "expected updated title")
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "deploy_key_id": keyID},

@@ -23,7 +23,7 @@ func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 	if sess.individual != nil {
 		indResult, err := sess.individual.ListTools(ctx, nil)
 		requireNoError(t, err, "ListTools individual")
-		requireTrue(t, len(indResult.Tools) > 0, "expected individual tools, got 0")
+		requireTruef(t, len(indResult.Tools) > 0, "expected individual tools, got 0")
 
 		var missing int
 		for _, tool := range indResult.Tools {
@@ -49,7 +49,7 @@ func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 	if sess.meta != nil {
 		metaResult, err := sess.meta.ListTools(ctx, nil)
 		requireNoError(t, err, "ListTools meta")
-		requireTrue(t, len(metaResult.Tools) > 0, "expected meta-tools, got 0")
+		requireTruef(t, len(metaResult.Tools) > 0, "expected meta-tools, got 0")
 
 		var missing int
 		for _, tool := range metaResult.Tools {
@@ -84,7 +84,7 @@ func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 	ctx := context.Background()
 	result, err := sess.meta.ListTools(ctx, nil)
 	requireNoError(t, err, "ListTools meta")
-	requireTrue(t, len(result.Tools) > 0, "expected meta-tools, got 0")
+	requireTruef(t, len(result.Tools) > 0, "expected meta-tools, got 0")
 
 	var withSchema, withoutSchema int
 	for _, tool := range result.Tools {
@@ -96,7 +96,7 @@ func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 		}
 	}
 	t.Logf("Meta-tools: %d with OutputSchema, %d without", withSchema, withoutSchema)
-	requireTrue(t, withoutSchema == 0, "found %d meta-tools without OutputSchema", withoutSchema)
+	requireTruef(t, withoutSchema == 0, "found %d meta-tools without OutputSchema", withoutSchema)
 }
 
 // TestSchema_PaginationHasMore verifies that paginated list tool responses

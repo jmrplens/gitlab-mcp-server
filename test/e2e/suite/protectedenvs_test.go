@@ -35,7 +35,7 @@ func TestMeta_ProtectedEnvs(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta protected env protect")
-		requireTrue(t, out.Name == envName, "expected protected env name %q, got %q", envName, out.Name)
+		requireTruef(t, out.Name == envName, "expected protected env name %q, got %q", envName, out.Name)
 		t.Logf("Protected environment: %s", out.Name)
 	})
 
@@ -47,7 +47,7 @@ func TestMeta_ProtectedEnvs(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta protected env list")
-		requireTrue(t, len(out.Environments) >= 1, "expected at least 1 protected environment")
+		requireTruef(t, len(out.Environments) >= 1, "expected at least 1 protected environment")
 		t.Logf("Listed %d protected environment(s)", len(out.Environments))
 	})
 
@@ -60,7 +60,7 @@ func TestMeta_ProtectedEnvs(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta protected env get")
-		requireTrue(t, out.Name == envName, "protected env name mismatch")
+		requireTruef(t, out.Name == envName, "protected env name mismatch")
 		t.Logf("Got protected environment: %s", out.Name)
 	})
 

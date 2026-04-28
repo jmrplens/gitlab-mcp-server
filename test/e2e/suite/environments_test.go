@@ -33,19 +33,19 @@ func TestIndividual_Environments(t *testing.T) {
 			Name:      "e2e-staging",
 		})
 		requireNoError(t, err, "create environment")
-		requireTrue(t, out.Name == "e2e-staging", "expected name e2e-staging, got %s", out.Name)
+		requireTruef(t, out.Name == "e2e-staging", "expected name e2e-staging, got %s", out.Name)
 		envID = out.ID
 		t.Logf("Created environment %s (ID=%d)", out.Name, out.ID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.individual, "gitlab_environment_get", environments.GetInput{
 			ProjectID:     proj.pidOf(),
 			EnvironmentID: envID,
 		})
 		requireNoError(t, err, "get environment")
-		requireTrue(t, out.ID == envID, "expected ID %d, got %d", envID, out.ID)
+		requireTruef(t, out.ID == envID, "expected ID %d, got %d", envID, out.ID)
 		t.Logf("Got environment %s", out.Name)
 	})
 
@@ -54,24 +54,24 @@ func TestIndividual_Environments(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list environments")
-		requireTrue(t, len(out.Environments) >= 1, "expected at least 1 environment, got %d", len(out.Environments))
+		requireTruef(t, len(out.Environments) >= 1, "expected at least 1 environment, got %d", len(out.Environments))
 		t.Logf("Listed %d environments", len(out.Environments))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.individual, "gitlab_environment_update", environments.UpdateInput{
 			ProjectID:     proj.pidOf(),
 			EnvironmentID: envID,
 			ExternalURL:   "https://staging.example.com",
 		})
 		requireNoError(t, err, "update environment")
-		requireTrue(t, out.ExternalURL == "https://staging.example.com", "expected external URL")
+		requireTruef(t, out.ExternalURL == "https://staging.example.com", "expected external URL")
 		t.Logf("Updated environment %s", out.Name)
 	})
 
 	t.Run("Stop", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.individual, "gitlab_environment_stop", environments.StopInput{
 			ProjectID:     proj.pidOf(),
 			EnvironmentID: envID,
@@ -81,7 +81,7 @@ func TestIndividual_Environments(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_environment_delete", environments.DeleteInput{
 			ProjectID:     proj.pidOf(),
 			EnvironmentID: envID,
@@ -111,19 +111,19 @@ func TestMeta_Environments(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "name": "e2e-meta-staging"},
 		})
 		requireNoError(t, err, "meta create environment")
-		requireTrue(t, out.Name == "e2e-meta-staging", "expected name e2e-meta-staging")
+		requireTruef(t, out.Name == "e2e-meta-staging", "expected name e2e-meta-staging")
 		envID = out.ID
 		t.Logf("Created environment %s (ID=%d) via meta-tool", out.Name, out.ID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "get",
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},
 		})
 		requireNoError(t, err, "meta get environment")
-		requireTrue(t, out.ID == envID, "expected ID %d", envID)
+		requireTruef(t, out.ID == envID, "expected ID %d", envID)
 		t.Logf("Got environment %s via meta-tool", out.Name)
 	})
 
@@ -133,12 +133,12 @@ func TestMeta_Environments(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list environments")
-		requireTrue(t, len(out.Environments) >= 1, "expected at least 1 environment")
+		requireTruef(t, len(out.Environments) >= 1, "expected at least 1 environment")
 		t.Logf("Listed %d environments via meta-tool", len(out.Environments))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "update",
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID, "external_url": "https://meta-staging.example.com"},
@@ -148,7 +148,7 @@ func TestMeta_Environments(t *testing.T) {
 	})
 
 	t.Run("Stop", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		out, err := callToolOn[environments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "stop",
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},
@@ -158,7 +158,7 @@ func TestMeta_Environments(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, envID > 0, "envID not set")
+		requireTruef(t, envID > 0, "envID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},

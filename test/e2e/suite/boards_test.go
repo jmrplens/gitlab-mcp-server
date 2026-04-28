@@ -30,13 +30,13 @@ func TestMeta_Boards(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board create")
-		requireTrue(t, out.ID > 0, "expected positive board ID")
+		requireTruef(t, out.ID > 0, "expected positive board ID")
 		boardID = out.ID
 		t.Logf("Created board %d (%s)", out.ID, out.Name)
 	})
 
 	t.Run("Meta/Board/List", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 		out, err := callToolOn[boards.ListBoardsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_list",
 			"params": map[string]any{
@@ -44,12 +44,12 @@ func TestMeta_Boards(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board list")
-		requireTrue(t, len(out.Boards) >= 1, "expected at least 1 board")
+		requireTruef(t, len(out.Boards) >= 1, "expected at least 1 board")
 		t.Logf("Listed %d board(s)", len(out.Boards))
 	})
 
 	t.Run("Meta/Board/Get", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 		out, err := callToolOn[boards.BoardOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_get",
 			"params": map[string]any{
@@ -58,12 +58,12 @@ func TestMeta_Boards(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board get")
-		requireTrue(t, out.ID == boardID, "board ID mismatch")
+		requireTruef(t, out.ID == boardID, "board ID mismatch")
 		t.Logf("Got board %d (%s)", out.ID, out.Name)
 	})
 
 	t.Run("Meta/Board/Delete", func(t *testing.T) {
-		requireTrue(t, boardID > 0, "boardID not set")
+		requireTruef(t, boardID > 0, "boardID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "board_delete",
 			"params": map[string]any{

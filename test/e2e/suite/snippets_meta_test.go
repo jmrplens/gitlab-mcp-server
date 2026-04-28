@@ -60,7 +60,7 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create")
-		requireTrue(t, out.ID > 0, "create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "create: expected ID > 0")
 		snippetID = out.ID
 		t.Logf("Created personal snippet %d", snippetID)
 	})
@@ -74,7 +74,7 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 	}()
 
 	t.Run("FileContent", func(t *testing.T) {
-		requireTrue(t, snippetID > 0, "snippetID not set")
+		requireTruef(t, snippetID > 0, "snippetID not set")
 		out, err := callToolOn[snippets.FileContentOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "file_content",
 			"params": map[string]any{
@@ -84,7 +84,7 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_content")
-		requireTrue(t, out.Content != "", "file_content: empty content")
+		requireTruef(t, out.Content != "", "file_content: empty content")
 	})
 }
 
@@ -113,7 +113,7 @@ func TestMeta_SnippetsProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "project_create")
-		requireTrue(t, out.ID > 0, "project_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "project_create: expected ID > 0")
 		snippetID = out.ID
 		t.Logf("Created project snippet %d", snippetID)
 	})
@@ -135,11 +135,11 @@ func TestMeta_SnippetsProject(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "project_list")
-		requireTrue(t, len(out.Snippets) > 0, "project_list: expected at least 1")
+		requireTruef(t, len(out.Snippets) > 0, "project_list: expected at least 1")
 	})
 
 	t.Run("ProjectGet", func(t *testing.T) {
-		requireTrue(t, snippetID > 0, "snippetID not set")
+		requireTruef(t, snippetID > 0, "snippetID not set")
 		out, err := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "project_get",
 			"params": map[string]any{
@@ -148,11 +148,11 @@ func TestMeta_SnippetsProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "project_get")
-		requireTrue(t, out.ID == snippetID, "project_get: ID mismatch")
+		requireTruef(t, out.ID == snippetID, "project_get: ID mismatch")
 	})
 
 	t.Run("ProjectContent", func(t *testing.T) {
-		requireTrue(t, snippetID > 0, "snippetID not set")
+		requireTruef(t, snippetID > 0, "snippetID not set")
 		out, err := callToolOn[snippets.ContentOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "project_content",
 			"params": map[string]any{
@@ -161,11 +161,11 @@ func TestMeta_SnippetsProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "project_content")
-		requireTrue(t, out.Content != "", "project_content: empty content")
+		requireTruef(t, out.Content != "", "project_content: empty content")
 	})
 
 	t.Run("ProjectUpdate", func(t *testing.T) {
-		requireTrue(t, snippetID > 0, "snippetID not set")
+		requireTruef(t, snippetID > 0, "snippetID not set")
 		out, err := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "project_update",
 			"params": map[string]any{
@@ -175,7 +175,7 @@ func TestMeta_SnippetsProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "project_update")
-		requireTrue(t, out.Title == "updated-snippet", "project_update: title mismatch")
+		requireTruef(t, out.Title == "updated-snippet", "project_update: title mismatch")
 	})
 }
 
@@ -225,7 +225,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "discussion_create")
-		requireTrue(t, out.ID != "", "discussion_create: empty ID")
+		requireTruef(t, out.ID != "", "discussion_create: empty ID")
 		discID = out.ID
 		if len(out.Notes) > 0 {
 			noteID = out.Notes[0].ID
@@ -239,11 +239,11 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "snippet_id": snippetIDStr},
 		})
 		requireNoError(t, err, "discussion_list")
-		requireTrue(t, len(out.Discussions) > 0, "discussion_list: expected at least 1")
+		requireTruef(t, len(out.Discussions) > 0, "discussion_list: expected at least 1")
 	})
 
 	t.Run("DiscussionGet", func(t *testing.T) {
-		requireTrue(t, discID != "", "discID not set")
+		requireTruef(t, discID != "", "discID not set")
 		out, err := callToolOn[snippetdiscussions.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_get",
 			"params": map[string]any{
@@ -253,11 +253,11 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "discussion_get")
-		requireTrue(t, out.ID == discID, "discussion_get: ID mismatch")
+		requireTruef(t, out.ID == discID, "discussion_get: ID mismatch")
 	})
 
 	t.Run("DiscussionAddNote", func(t *testing.T) {
-		requireTrue(t, discID != "", "discID not set")
+		requireTruef(t, discID != "", "discID not set")
 		out, err := callToolOn[snippetdiscussions.NoteOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_add_note",
 			"params": map[string]any{
@@ -268,12 +268,12 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "discussion_add_note")
-		requireTrue(t, out.ID > 0, "discussion_add_note: expected ID > 0")
+		requireTruef(t, out.ID > 0, "discussion_add_note: expected ID > 0")
 		t.Logf("Added note %d to discussion %s", out.ID, discID)
 	})
 
 	t.Run("DiscussionUpdateNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[snippetdiscussions.NoteOutput](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_update_note",
 			"params": map[string]any{
@@ -285,11 +285,11 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "discussion_update_note")
-		requireTrue(t, out.ID == noteID, "discussion_update_note: ID mismatch")
+		requireTruef(t, out.ID == noteID, "discussion_update_note: ID mismatch")
 	})
 
 	t.Run("DiscussionDeleteNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "discussion_delete_note",
 			"params": map[string]any{
@@ -346,7 +346,7 @@ func TestMeta_SnippetNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "note_create")
-		requireTrue(t, out.ID > 0, "note_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "note_create: expected ID > 0")
 		noteID = out.ID
 		t.Logf("Created snippet note %d", noteID)
 	})
@@ -360,11 +360,11 @@ func TestMeta_SnippetNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "note_list")
-		requireTrue(t, len(out.Notes) > 0, "note_list: expected at least 1")
+		requireTruef(t, len(out.Notes) > 0, "note_list: expected at least 1")
 	})
 
 	t.Run("NoteGet", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[snippetnotes.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "note_get",
 			"params": map[string]any{
@@ -374,11 +374,11 @@ func TestMeta_SnippetNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "note_get")
-		requireTrue(t, out.ID == noteID, "note_get: ID mismatch")
+		requireTruef(t, out.ID == noteID, "note_get: ID mismatch")
 	})
 
 	t.Run("NoteUpdate", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[snippetnotes.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "note_update",
 			"params": map[string]any{
@@ -389,11 +389,11 @@ func TestMeta_SnippetNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "note_update")
-		requireTrue(t, out.ID == noteID, "note_update: ID mismatch")
+		requireTruef(t, out.ID == noteID, "note_update: ID mismatch")
 	})
 
 	t.Run("NoteDelete", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "note_delete",
 			"params": map[string]any{
@@ -450,7 +450,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_create")
-		requireTrue(t, out.ID > 0, "emoji_snippet_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "emoji_snippet_create: expected ID > 0")
 		emojiID = out.ID
 		t.Logf("Created snippet emoji %d", emojiID)
 	})
@@ -464,11 +464,11 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_list")
-		requireTrue(t, len(out.AwardEmoji) > 0, "emoji_snippet_list: expected at least 1")
+		requireTruef(t, len(out.AwardEmoji) > 0, "emoji_snippet_list: expected at least 1")
 	})
 
 	t.Run("EmojiSnippetGet", func(t *testing.T) {
-		requireTrue(t, emojiID > 0, "emojiID not set")
+		requireTruef(t, emojiID > 0, "emojiID not set")
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "emoji_snippet_get",
 			"params": map[string]any{
@@ -478,11 +478,11 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_get")
-		requireTrue(t, out.ID == emojiID, "emoji_snippet_get: ID mismatch")
+		requireTruef(t, out.ID == emojiID, "emoji_snippet_get: ID mismatch")
 	})
 
 	t.Run("EmojiSnippetDelete", func(t *testing.T) {
-		requireTrue(t, emojiID > 0, "emojiID not set")
+		requireTruef(t, emojiID > 0, "emojiID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "emoji_snippet_delete",
 			"params": map[string]any{
@@ -519,7 +519,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_note_create")
-		requireTrue(t, out.ID > 0, "emoji_snippet_note_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "emoji_snippet_note_create: expected ID > 0")
 		noteEmojiID = out.ID
 		t.Logf("Created snippet note emoji %d", noteEmojiID)
 	})
@@ -534,11 +534,11 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_note_list")
-		requireTrue(t, len(out.AwardEmoji) > 0, "emoji_snippet_note_list: expected at least 1")
+		requireTruef(t, len(out.AwardEmoji) > 0, "emoji_snippet_note_list: expected at least 1")
 	})
 
 	t.Run("EmojiSnippetNoteGet", func(t *testing.T) {
-		requireTrue(t, noteEmojiID > 0, "noteEmojiID not set")
+		requireTruef(t, noteEmojiID > 0, "noteEmojiID not set")
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "emoji_snippet_note_get",
 			"params": map[string]any{
@@ -549,11 +549,11 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_note_get")
-		requireTrue(t, out.ID == noteEmojiID, "emoji_snippet_note_get: ID mismatch")
+		requireTruef(t, out.ID == noteEmojiID, "emoji_snippet_note_get: ID mismatch")
 	})
 
 	t.Run("EmojiSnippetNoteDelete", func(t *testing.T) {
-		requireTrue(t, noteEmojiID > 0, "noteEmojiID not set")
+		requireTruef(t, noteEmojiID > 0, "noteEmojiID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "emoji_snippet_note_delete",
 			"params": map[string]any{

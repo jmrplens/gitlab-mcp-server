@@ -53,7 +53,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": schedID},
 		})
 		requireNoError(t, err, "get schedule")
-		requireTrue(t, out.ID == schedOut.ID, "get: schedule ID mismatch")
+		requireTruef(t, out.ID == schedOut.ID, "get: schedule ID mismatch")
 		t.Logf("Got schedule %d: %s", out.ID, out.Description)
 	})
 
@@ -81,7 +81,7 @@ func TestMeta_PipelineSchedulesExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "edit_variable")
-		requireTrue(t, out.Key == varKey, "edit_variable: key mismatch")
+		requireTruef(t, out.Key == varKey, "edit_variable: key mismatch")
 		t.Logf("Edited variable %s", out.Key)
 	})
 

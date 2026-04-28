@@ -61,6 +61,30 @@ linters:
     # --- Performance ---
     - perfsprint # fmt.Sprintf → strconv when possible
 
+    # --- Bug Detection (drop-in safe, no findings on current codebase) ---
+    - bidichk # Dangerous bidi unicode (CVE-2021-42574 trojan source protection)
+    - copyloopvar # Loop variable copies (Go 1.22+, copies not needed)
+    - exptostd # Replace golang.org/x/exp with std equivalents
+    - iotamixing # Mixed iota in const blocks
+    - loggercheck # slog/log key-value pair validation
+    - makezero # Slice append after non-zero-length make
+    - mirror # bytes/strings mirror patterns (avoid unnecessary conversions)
+    - nakedret # Naked returns in long functions
+    - nosprintfhostport # Sprintf misuse for host:port URLs (RFC 3986 compliance)
+    - testableexamples # Examples have expected output (Output: comments)
+
+    # --- Style ---
+    - goprintffuncname # Printf-like funcs end in 'f'
+    - tparallel # t.Parallel() correctness (excluded for test/e2e/, sequential by design)
+    # --- Linters intentionally NOT enabled (false positives) ---
+    # - dupword: false positives on godoc auto-generated comments split from CamelCase
+    #   identifiers (IID → "i i d", SSH → "s s h", HTTPS → "h t t p s"). Auto-fix
+    #   removes letters that are part of the identifier.
+    # - gocheckcompilerdirectives: false positive on //go:fix inline (valid Go 1.24+
+    #   directive used by gopls/go fix tooling, not yet recognized by the linter).
+    # - contextcheck, errchkjson, thelper: real findings, deferred to a separate
+    #   refactor — too noisy to bundle with infrastructure changes.
+
   settings:
     govet:
       enable-all: true
@@ -193,6 +217,13 @@ linters:
         linters:
           - errcheck
           - gosec
+
+      # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
+      # Disable t.Parallel() requirement for the e2e suite.
+      - path: "test/e2e/"
+        linters:
+          - tparallel
+          - thelper
 
 output:
   formats:

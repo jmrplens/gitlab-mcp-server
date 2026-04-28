@@ -36,7 +36,7 @@ func TestIndividual_Labels(t *testing.T) {
 			Color:     "#428BCA",
 		})
 		requireNoError(t, err, "label create")
-		requireTrue(t, out.ID > 0, "label ID should be positive")
+		requireTruef(t, out.ID > 0, "label ID should be positive")
 		labelID = out.ID
 		t.Logf("Created label: %s (ID=%d, color=%s)", out.Name, out.ID, out.Color)
 	})
@@ -46,24 +46,24 @@ func TestIndividual_Labels(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "label list")
-		requireTrue(t, len(out.Labels) >= 1, "expected at least 1 label, got %d", len(out.Labels))
+		requireTruef(t, len(out.Labels) >= 1, "expected at least 1 label, got %d", len(out.Labels))
 		t.Logf("Listed %d labels", len(out.Labels))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		out, err := callToolOn[labels.Output](ctx, sess.individual, "gitlab_label_update", labels.UpdateInput{
 			ProjectID:   proj.pidOf(),
 			LabelID:     toolutil.StringOrInt(strconv.FormatInt(labelID, 10)),
 			Description: "Updated by E2E",
 		})
 		requireNoError(t, err, "label update")
-		requireTrue(t, out.Description == "Updated by E2E", "expected updated description")
+		requireTruef(t, out.Description == "Updated by E2E", "expected updated description")
 		t.Logf("Updated label: %s", out.Name)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_label_delete", labels.DeleteInput{
 			ProjectID: proj.pidOf(),
 			LabelID:   toolutil.StringOrInt(strconv.FormatInt(labelID, 10)),
@@ -97,7 +97,7 @@ func TestMeta_Labels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta label create")
-		requireTrue(t, out.ID > 0, "expected positive label ID")
+		requireTruef(t, out.ID > 0, "expected positive label ID")
 		labelID = out.ID
 		t.Logf("Created label: %s (ID=%d)", out.Name, out.ID)
 	})
@@ -110,12 +110,12 @@ func TestMeta_Labels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta label list")
-		requireTrue(t, len(out.Labels) >= 1, "expected at least 1 label")
+		requireTruef(t, len(out.Labels) >= 1, "expected at least 1 label")
 		t.Logf("Listed %d labels via meta-tool", len(out.Labels))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		out, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_update",
 			"params": map[string]any{
@@ -125,12 +125,12 @@ func TestMeta_Labels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta label update")
-		requireTrue(t, out.ID == labelID, "label ID mismatch after update")
+		requireTruef(t, out.ID == labelID, "label ID mismatch after update")
 		t.Logf("Updated label: %s (color=%s)", out.Name, out.Color)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_delete",
 			"params": map[string]any{

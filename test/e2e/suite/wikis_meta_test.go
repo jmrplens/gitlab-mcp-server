@@ -48,7 +48,7 @@ func TestMeta_WikiUploadAttachment(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "upload_attachment")
-		requireTrue(t, out.FileName != "", "upload_attachment: expected filename in output")
+		requireTruef(t, out.FileName != "", "upload_attachment: expected filename in output")
 		t.Logf("Uploaded attachment: %s (path=%s)", out.FileName, out.FilePath)
 	})
 }

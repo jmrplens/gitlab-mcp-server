@@ -55,7 +55,7 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "registry_rule_create")
-		requireTrue(t, out.ID > 0, "registry_rule_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "registry_rule_create: expected ID > 0")
 		t.Logf("Created registry rule %d", out.ID)
 
 		// Clean up
@@ -101,7 +101,7 @@ func TestMeta_PackagesProtectionRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protection_rule_create")
-		requireTrue(t, createOut.ID > 0, "protection_rule_create: expected ID > 0")
+		requireTruef(t, createOut.ID > 0, "protection_rule_create: expected ID > 0")
 		ruleID := createOut.ID
 		t.Logf("Created package protection rule %d", ruleID)
 
@@ -118,7 +118,7 @@ func TestMeta_PackagesProtectionRules(t *testing.T) {
 		if err != nil {
 			t.Logf("protection_rule_update may have limitations: %v", err)
 		} else {
-			requireTrue(t, updateOut.ID == ruleID, "protection_rule_update: ID mismatch")
+			requireTruef(t, updateOut.ID == ruleID, "protection_rule_update: ID mismatch")
 		}
 
 		// Delete
