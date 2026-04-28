@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "MCP server exposing 1000 GitLab REST API and GraphQL operations as tools for AI assistants.",
-  "version": "1.3.2",
+  "description": "MCP server exposing 1006 GitLab REST API and GraphQL operations as tools for AI assistants.",
+  "version": "1.3.3",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -31,8 +31,8 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-linux-amd64",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-linux-amd64",
+      "version": "1.3.3",
       "fileSha256": "9fa3002fba55f935b981550cf6956e101f8b8bd3398692731b49040db0374b3b",
       "transport": {
         "type": "stdio"
@@ -137,8 +137,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-linux-arm64",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-linux-arm64",
+      "version": "1.3.3",
       "fileSha256": "af49b9417d2f5fb2dfed8253a12d2975cd3aa5928dbd33bb5cff1a42a87c659d",
       "transport": {
         "type": "stdio"
@@ -243,8 +243,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-darwin-amd64",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-darwin-amd64",
+      "version": "1.3.3",
       "fileSha256": "31beb8e7c86742432fb6cf068af8f618d9c412e61806911e3f3527c3fd246306",
       "transport": {
         "type": "stdio"
@@ -349,8 +349,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-darwin-arm64",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-darwin-arm64",
+      "version": "1.3.3",
       "fileSha256": "074fd56efb388f5246a29e389c8ff8241f97ce21597af88474d6454d56a41923",
       "transport": {
         "type": "stdio"
@@ -455,8 +455,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-windows-amd64.exe",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-windows-amd64.exe",
+      "version": "1.3.3",
       "fileSha256": "cd387ed1ffe061031b2b43cbbd979bf1896ea7bc5f646d4d3bb25b80ee224cf4",
       "transport": {
         "type": "stdio"
@@ -561,8 +561,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.2/gitlab-mcp-server-windows-arm64.exe",
-      "version": "1.3.2",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v1.3.3/gitlab-mcp-server-windows-arm64.exe",
+      "version": "1.3.3",
       "fileSha256": "d587f59157f2851672489981354ccce788cca80bc1cb71aae141cd39301871c9",
       "transport": {
         "type": "stdio"

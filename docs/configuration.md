@@ -27,7 +27,7 @@ These are the settings every user needs to get started.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1000) |
+| `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -196,7 +196,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
 | **Meta-tools** (default) | `META_TOOLS=true` | 32 base / 47 enterprise | Most users — lower token usage |
-| **Individual tools** | `META_TOOLS=false` | 1000 separate tools | Clients that need granular tool selection |
+| **Individual tools** | `META_TOOLS=false` | 1006 separate tools | Clients that need granular tool selection |
 
 See [Meta-Tools](meta-tools.md) for the complete domain-action mapping.
 

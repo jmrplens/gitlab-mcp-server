@@ -72,31 +72,40 @@ type DeleteHookInput struct {
 	HookID  int64                `json:"hook_id"  jsonschema:"Hook ID to delete,required"`
 }
 
+// HookURLVariable represents a templated webhook URL variable used to substitute
+// placeholders like {var_name} in a webhook URL with secret values resolved
+// server-side. Only the key is returned by the API; the value is masked.
+type HookURLVariable struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
+}
+
 // HookOutput represents a GitLab group webhook.
 type HookOutput struct {
 	toolutil.HintableOutput
-	ID                       int64  `json:"id"`
-	URL                      string `json:"url"`
-	Name                     string `json:"name,omitempty"`
-	Description              string `json:"description,omitempty"`
-	GroupID                  int64  `json:"group_id"`
-	PushEvents               bool   `json:"push_events"`
-	TagPushEvents            bool   `json:"tag_push_events"`
-	MergeRequestsEvents      bool   `json:"merge_requests_events"`
-	IssuesEvents             bool   `json:"issues_events"`
-	NoteEvents               bool   `json:"note_events"`
-	JobEvents                bool   `json:"job_events"`
-	PipelineEvents           bool   `json:"pipeline_events"`
-	WikiPageEvents           bool   `json:"wiki_page_events"`
-	DeploymentEvents         bool   `json:"deployment_events"`
-	ReleasesEvents           bool   `json:"releases_events"`
-	SubGroupEvents           bool   `json:"subgroup_events"`
-	MemberEvents             bool   `json:"member_events"`
-	ConfidentialIssuesEvents bool   `json:"confidential_issues_events"`
-	ConfidentialNoteEvents   bool   `json:"confidential_note_events"`
-	EnableSSLVerification    bool   `json:"enable_ssl_verification"`
-	AlertStatus              string `json:"alert_status,omitempty"`
-	CreatedAt                string `json:"created_at,omitempty"`
+	ID                       int64             `json:"id"`
+	URL                      string            `json:"url"`
+	Name                     string            `json:"name,omitempty"`
+	Description              string            `json:"description,omitempty"`
+	GroupID                  int64             `json:"group_id"`
+	PushEvents               bool              `json:"push_events"`
+	TagPushEvents            bool              `json:"tag_push_events"`
+	MergeRequestsEvents      bool              `json:"merge_requests_events"`
+	IssuesEvents             bool              `json:"issues_events"`
+	NoteEvents               bool              `json:"note_events"`
+	JobEvents                bool              `json:"job_events"`
+	PipelineEvents           bool              `json:"pipeline_events"`
+	WikiPageEvents           bool              `json:"wiki_page_events"`
+	DeploymentEvents         bool              `json:"deployment_events"`
+	ReleasesEvents           bool              `json:"releases_events"`
+	SubGroupEvents           bool              `json:"subgroup_events"`
+	MemberEvents             bool              `json:"member_events"`
+	ConfidentialIssuesEvents bool              `json:"confidential_issues_events"`
+	ConfidentialNoteEvents   bool              `json:"confidential_note_events"`
+	EnableSSLVerification    bool              `json:"enable_ssl_verification"`
+	AlertStatus              string            `json:"alert_status,omitempty"`
+	URLVariables             []HookURLVariable `json:"url_variables,omitempty"`
+	CreatedAt                string            `json:"created_at,omitempty"`
 }
 
 // HookListOutput holds a paginated list of group hooks.
@@ -130,6 +139,12 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
 		EnableSSLVerification:    h.EnableSSLVerification,
 		AlertStatus:              h.AlertStatus,
+	}
+	if len(h.URLVariables) > 0 {
+		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
+		for i, v := range h.URLVariables {
+			out.URLVariables[i] = HookURLVariable{Key: v.Key, Value: v.Value}
+		}
 	}
 	if h.CreatedAt != nil {
 		out.CreatedAt = h.CreatedAt.Format(time.RFC3339)

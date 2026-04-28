@@ -4433,6 +4433,64 @@
     }
   },
   {
+    "name": "gitlab_cancel_bulk_import",
+    "description": "Cancel an in-progress bulk import migration. Returns the migration with updated status.\n\nReturns: migration summary with id and status.\n\nSee also: gitlab_get_bulk_import, gitlab_list_bulk_imports.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Bulk import ID,required",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "has_failures": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "source_type": {
+          "type": "string"
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "source_type",
+        "source_url",
+        "created_at",
+        "updated_at",
+        "has_failures"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_cancel_github_import",
     "description": "Cancel an ongoing GitHub project import\n\nReturns: JSON with cancellation result.\n\nSee also: gitlab_import_from_github, gitlab_get_project_import_status",
     "inputSchema": {
@@ -21523,6 +21581,208 @@
     }
   },
   {
+    "name": "gitlab_get_bulk_import",
+    "description": "Get details of a single bulk import migration by ID.\n\nReturns: migration with id, status, source_type, source_url, has_failures, and timestamps.\n\nSee also: gitlab_list_bulk_imports, gitlab_list_bulk_import_entities, gitlab_cancel_bulk_import.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Bulk import ID,required",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "has_failures": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "source_type": {
+          "type": "string"
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "source_type",
+        "source_url",
+        "created_at",
+        "updated_at",
+        "has_failures"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_get_bulk_import_entity",
+    "description": "Get details of a single bulk import migration entity by bulk_import_id and entity_id.\n\nReturns: entity with id, status, type, source/destination paths, migration flags, and per-relation stats.\n\nSee also: gitlab_list_bulk_import_entities, gitlab_list_bulk_import_entity_failures.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "bulk_import_id": {
+          "description": "Bulk import ID,required",
+          "type": "integer"
+        },
+        "entity_id": {
+          "description": "Entity ID within the bulk import,required",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bulk_import_id",
+        "entity_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "bulk_import_id": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "destination_full_path": {
+          "type": "string"
+        },
+        "destination_name": {
+          "type": "string"
+        },
+        "destination_namespace": {
+          "type": "string"
+        },
+        "destination_slug": {
+          "type": "string"
+        },
+        "entity_type": {
+          "type": "string"
+        },
+        "has_failures": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "migrate_memberships": {
+          "type": "boolean"
+        },
+        "migrate_projects": {
+          "type": "boolean"
+        },
+        "namespace_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "parent_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "project_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "source_full_path": {
+          "type": "string"
+        },
+        "stats": {
+          "additionalProperties": false,
+          "properties": {
+            "labels_fetched": {
+              "type": "integer"
+            },
+            "labels_imported": {
+              "type": "integer"
+            },
+            "labels_source": {
+              "type": "integer"
+            },
+            "milestones_fetched": {
+              "type": "integer"
+            },
+            "milestones_imported": {
+              "type": "integer"
+            },
+            "milestones_source": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "labels_source",
+            "labels_fetched",
+            "labels_imported",
+            "milestones_source",
+            "milestones_fetched",
+            "milestones_imported"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "bulk_import_id",
+        "status",
+        "entity_type",
+        "source_full_path",
+        "destination_full_path",
+        "destination_name",
+        "destination_slug",
+        "destination_namespace",
+        "created_at",
+        "updated_at",
+        "migrate_projects",
+        "migrate_memberships",
+        "has_failures",
+        "stats"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_get_catalog_resource",
     "description": "Get a CI/CD Catalog resource by GID or project full path. Returns: full resource details including README, released versions, components with their input parameters and include paths. See also: gitlab_list_catalog_resources, gitlab_template.",
     "inputSchema": {
@@ -30964,6 +31224,27 @@
         "url": {
           "type": "string"
         },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "wiki_page_events": {
           "type": "boolean"
         }
@@ -31268,6 +31549,27 @@
         "url": {
           "type": "string"
         },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "wiki_page_events": {
           "type": "boolean"
         }
@@ -31395,6 +31697,27 @@
         },
         "url": {
           "type": "string"
+        },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -31531,6 +31854,27 @@
               },
               "url": {
                 "type": "string"
+              },
+              "url_variables": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "wiki_page_events": {
                 "type": "boolean"
@@ -50395,6 +50739,447 @@
       },
       "required": [
         "messages",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_bulk_import_entities",
+    "description": "List bulk import migration entities. When bulk_import_id is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.\n\nReturns: paginated list of entities with id, status, type, source/destination paths, and per-relation stats.\n\nSee also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entity_failures.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "bulk_import_id": {
+          "description": "Bulk import ID. If omitted, returns entities across all imports.",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "status": {
+          "description": "Filter by entity status: created, started, finished, timeout, failed, canceled",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bulk_import_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "destination_full_path": {
+                "type": "string"
+              },
+              "destination_name": {
+                "type": "string"
+              },
+              "destination_namespace": {
+                "type": "string"
+              },
+              "destination_slug": {
+                "type": "string"
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "has_failures": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "migrate_memberships": {
+                "type": "boolean"
+              },
+              "migrate_projects": {
+                "type": "boolean"
+              },
+              "namespace_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "parent_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "project_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "source_full_path": {
+                "type": "string"
+              },
+              "stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "labels_fetched": {
+                    "type": "integer"
+                  },
+                  "labels_imported": {
+                    "type": "integer"
+                  },
+                  "labels_source": {
+                    "type": "integer"
+                  },
+                  "milestones_fetched": {
+                    "type": "integer"
+                  },
+                  "milestones_imported": {
+                    "type": "integer"
+                  },
+                  "milestones_source": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "labels_source",
+                  "labels_fetched",
+                  "labels_imported",
+                  "milestones_source",
+                  "milestones_fetched",
+                  "milestones_imported"
+                ],
+                "type": "object"
+              },
+              "status": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "bulk_import_id",
+              "status",
+              "entity_type",
+              "source_full_path",
+              "destination_full_path",
+              "destination_name",
+              "destination_slug",
+              "destination_namespace",
+              "created_at",
+              "updated_at",
+              "migrate_projects",
+              "migrate_memberships",
+              "has_failures",
+              "stats"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "entities",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_bulk_import_entity_failures",
+    "description": "List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.\n\nReturns: list of failures with relation, exception class/message, pipeline class/step, and source url.\n\nSee also: gitlab_get_bulk_import_entity.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "bulk_import_id": {
+          "description": "Bulk import ID,required",
+          "type": "integer"
+        },
+        "entity_id": {
+          "description": "Entity ID within the bulk import,required",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bulk_import_id",
+        "entity_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "bulk_import_id": {
+          "type": "integer"
+        },
+        "entity_id": {
+          "type": "integer"
+        },
+        "failures": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "correlation_id_value": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "exception_class": {
+                "type": "string"
+              },
+              "exception_message": {
+                "type": "string"
+              },
+              "pipeline_class": {
+                "type": "string"
+              },
+              "pipeline_step": {
+                "type": "string"
+              },
+              "relation": {
+                "type": "string"
+              },
+              "source_title": {
+                "type": "string"
+              },
+              "source_url": {
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "relation",
+              "exception_message",
+              "exception_class",
+              "correlation_id_value",
+              "source_url",
+              "source_title",
+              "step",
+              "created_at",
+              "pipeline_class",
+              "pipeline_step"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "bulk_import_id",
+        "entity_id",
+        "failures"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_bulk_imports",
+    "description": "List all group or project bulk import migrations visible to the caller. Optionally filter by status.\n\nReturns: paginated list of migrations with id, status, source_type, source_url, has_failures, and timestamps.\n\nSee also: gitlab_get_bulk_import, gitlab_list_bulk_import_entities.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "status": {
+          "description": "Filter by status: created, started, finished, timeout, failed, canceled",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "migrations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "has_failures": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "source_type": {
+                "type": "string"
+              },
+              "source_url": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "source_type",
+              "source_url",
+              "created_at",
+              "updated_at",
+              "has_failures"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "migrations",
         "pagination"
       ],
       "type": "object"
@@ -106315,7 +107100,7 @@
   },
   {
     "name": "gitlab_start_bulk_import",
-    "description": "Start a new group or project bulk import migration (admin). Requires source GitLab URL, access token, and entities to migrate.\n\nReturns: JSON with the migration details.\n\nSee also: gitlab_import_from_github, gitlab_schedule_group_export",
+    "description": "Start a new group or project bulk import migration (admin). Requires source GitLab URL, access token, and entities to migrate.\n\nReturns: JSON with the migration details.\n\nSee also: gitlab_list_bulk_imports, gitlab_get_bulk_import, gitlab_import_from_github, gitlab_schedule_group_export",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

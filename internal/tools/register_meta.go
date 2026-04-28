@@ -2146,6 +2146,12 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"custom_attr_set":                routeAction(client, customattributes.Set),
 		"custom_attr_delete":             destructiveVoidAction(client, customattributes.Delete),
 		"bulk_import_start":              routeAction(client, bulkimports.StartMigration),
+		"bulk_import_list":               routeAction(client, bulkimports.List),
+		"bulk_import_get":                routeAction(client, bulkimports.Get),
+		"bulk_import_cancel":             routeAction(client, bulkimports.Cancel),
+		"bulk_import_entity_list":        routeAction(client, bulkimports.ListEntities),
+		"bulk_import_entity_get":         routeAction(client, bulkimports.GetEntity),
+		"bulk_import_entity_failures":    routeAction(client, bulkimports.ListEntityFailures),
 		"error_tracking_list":            routeAction(client, errortracking.ListClientKeys),
 		"error_tracking_create":          routeAction(client, errortracking.CreateClientKey),
 		"error_tracking_delete":          destructiveVoidAction(client, errortracking.DeleteClientKey),
@@ -2181,10 +2187,10 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. Most actions require admin privileges. Delete/purge/revoke actions are destructive.
+	addMetaTool(server, "gitlab_admin", `GitLab self-managed instance administration: topics, settings, appearance, broadcast messages, instance feature flags, license, system hooks, Sidekiq metrics, plan limits, usage data, DB migrations, OAuth applications, custom attributes, bulk imports (GitLab→GitLab migrations), error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external imports. Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 Valid actions: `+validActionsString(routes)+`
 
-When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports from GitHub/Bitbucket).
+When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
 NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
 
 Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list / feature_list_definitions; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
@@ -2251,6 +2257,12 @@ Custom attributes:
 
 Bulk import:
 - bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})
+- bulk_import_list: status, page, per_page
+- bulk_import_get: id*
+- bulk_import_cancel: id*
+- bulk_import_entity_list: bulk_import_id, status, page, per_page
+- bulk_import_entity_get: bulk_import_id*, entity_id*
+- bulk_import_entity_failures: bulk_import_id*, entity_id*
 
 Error tracking:
 - error_tracking_list: project_id*

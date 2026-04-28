@@ -88,7 +88,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1000
+		const expectedTools = 1006
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -104,7 +104,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 857
+		const expectedTools = 863
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -1119,6 +1119,12 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_snippet_note_update":                               true,
 		"gitlab_snippet_update":                                    true,
 		"gitlab_start_bulk_import":                                 true,
+		"gitlab_list_bulk_imports":                                 true,
+		"gitlab_get_bulk_import":                                   true,
+		"gitlab_cancel_bulk_import":                                true,
+		"gitlab_list_bulk_import_entities":                         true,
+		"gitlab_get_bulk_import_entity":                            true,
+		"gitlab_list_bulk_import_entity_failures":                  true,
 		"gitlab_subgroups_list":                                    true,
 		"gitlab_summarize_issue":                                   true,
 		"gitlab_summarize_mr_review":                               true,

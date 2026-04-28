@@ -19,8 +19,25 @@ const (
 // TblFieldValue is the standard "| Field | Value |" detail table header+separator.
 const TblFieldValue = "| Field | Value |\n| --- | --- |\n"
 
-// FmtMdH3 is a heading-3 format string with trailing blank line.
-const FmtMdH3 = "### %s\n\n"
+// Table row format constants for common detail-table fields. Each pairs with
+// TblFieldValue and is shared across sub-packages to avoid duplicated literals.
+const (
+	TblRowID          = "| ID | %d |\n"
+	TblRowStatus      = "| Status | %s |\n"
+	TblRowCreatedAt   = "| Created At | %s |\n"
+	TblRowUpdatedAt   = "| Updated At | %s |\n"
+	TblRowHasFailures = "| Has Failures | %v |\n"
+)
+
+// Headings format string with trailing blank line.
+const (
+	FmtMdH1 = "# %s\n\n"
+	FmtMdH2 = "## %s\n\n"
+	FmtMdH3 = "### %s\n\n"
+	FmtMdH4 = "#### %s\n\n"
+	FmtMdH5 = "##### %s\n\n"
+	FmtMdH6 = "###### %s\n\n"
+)
 
 // Markdown format constants for repeated table separators and field patterns.
 const (

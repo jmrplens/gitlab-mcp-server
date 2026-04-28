@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -205,7 +206,11 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 		if info.Enterprise {
 			name += " 🏢"
 		}
-		fmt.Fprintf(&b, "| %s | %d | %s |\n", name, info.Actions, info.Description)
+		actions := strconv.Itoa(info.Actions)
+		if info.Actions == 0 {
+			actions = "—"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", name, actions, info.Description)
 	}
 
 	fmt.Fprintf(&b, "\n**%d base** / **%d with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.\n",

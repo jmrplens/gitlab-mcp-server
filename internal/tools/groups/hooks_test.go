@@ -276,3 +276,27 @@ func TestDeleteHook_InvalidHookID(t *testing.T) {
 		t.Errorf(fmtExpectedHookIDError, err)
 	}
 }
+
+// TestGetHook_URLVariables verifies that URL variables (added in
+// gitlab.com/gitlab-org/api/client-go/v2 v2.21.0) are surfaced in the output.
+func TestGetHook_URLVariables(t *testing.T) {
+	body := `{"id":10,"url":"https://example.com/hook","group_id":99,"push_events":true,"enable_ssl_verification":true,"url_variables":[{"key":"token","value":""},{"key":"api_key","value":""}]}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroupHook10 {
+			testutil.RespondJSON(w, http.StatusOK, body)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetHook(context.Background(), client, GetHookInput{GroupID: "99", HookID: 10})
+	if err != nil {
+		t.Fatalf("GetHook: %v", err)
+	}
+	if len(out.URLVariables) != 2 {
+		t.Fatalf("URLVariables len = %d, want 2", len(out.URLVariables))
+	}
+	if out.URLVariables[0].Key != "token" || out.URLVariables[1].Key != "api_key" {
+		t.Errorf("URLVariables = %+v", out.URLVariables)
+	}
+}
