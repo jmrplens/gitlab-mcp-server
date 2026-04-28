@@ -230,7 +230,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 			return StateOutput{}, fmt.Errorf("mrApprovalState: merge request approval features require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return StateOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalState", err, http.StatusNotFound,
-			"verify project_id + merge_request_iid with gitlab_mr_list; approval rules require Premium/Ultimate license")
+			"verify project_id + mr_iid with gitlab_mr_list; approval rules require Premium/Ultimate license")
 	}
 	out := StateOutput{
 		ApprovalRulesOverwritten: state.ApprovalRulesOverwritten,
@@ -258,7 +258,7 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return RulesOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRules", err, http.StatusNotFound,
-			"verify project_id + merge_request_iid with gitlab_mr_list; rules-per-MR require Premium/Ultimate")
+			"verify project_id + mr_iid with gitlab_mr_list; rules-per-MR require Premium/Ultimate")
 	}
 	out := RulesOutput{}
 	for _, r := range rules {
@@ -285,7 +285,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 			return ConfigOutput{}, fmt.Errorf("mrApprovalConfig: merge request approval configuration requires GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
-			"requires Maintainer role; approvals_required is deprecated \u2014 prefer approval rules; verify project_id + merge_request_iid")
+			"requires Maintainer role; approvals_required is deprecated \u2014 prefer approval rules; verify project_id + mr_iid")
 	}
 	return configToOutput(cfg), nil
 }
@@ -304,7 +304,7 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 	_, err := client.GL().MergeRequestApprovals.ResetApprovalsOfMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusForbidden,
-			"requires Maintainer role; resets all approvals on the MR \u2014 cannot be undone; verify project_id + merge_request_iid")
+			"requires Maintainer role; resets all approvals on the MR \u2014 cannot be undone; verify project_id + mr_iid")
 	}
 	return nil
 }

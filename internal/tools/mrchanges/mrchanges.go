@@ -17,7 +17,7 @@ import (
 )
 
 // hintVerifyMR is the 404 hint shared by MR-changes tools.
-const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_list_merge_requests"
+const hintVerifyMR = "verify project_id and mr_iid with gitlab_list_merge_requests"
 
 // GetInput defines parameters for listing changed files in a merge request.
 type GetInput struct {

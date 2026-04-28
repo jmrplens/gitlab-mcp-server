@@ -176,7 +176,7 @@ mcp_call() {
 ISSUES=$(mcp_call "gitlab_list_issues" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
 echo "Open issues: ${ISSUES}"
 
-MR_DETAILS=$(mcp_call "gitlab_get_merge_request" '{"project_id":"'"${CI_PROJECT_ID}"'","merge_request_iid":"'"${CI_MERGE_REQUEST_IID}"'"}')
+MR_DETAILS=$(mcp_call "gitlab_get_merge_request" '{"project_id":"'"${CI_PROJECT_ID}"'","mr_iid":"'"${CI_MERGE_REQUEST_IID}"'"}')
 echo "MR details: ${MR_DETAILS}"
 ```
 

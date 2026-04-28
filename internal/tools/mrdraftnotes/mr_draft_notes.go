@@ -204,7 +204,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().DraftNotes.ListDraftNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("draftNoteList", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_list; draft notes are visible only to their author until published")
+			"verify project_id and mr_iid with gitlab_mr_list; draft notes are visible only to their author until published")
 	}
 	out := ListOutput{
 		DraftNotes: make([]Output, 0, len(notes)),
@@ -372,7 +372,7 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	_, err := client.GL().DraftNotes.PublishAllDraftNotes(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublishAll", err, http.StatusForbidden,
-			"publishes all current user's draft notes on the MR \u2014 cannot be undone; verify project_id + merge_request_iid; use gitlab_mr_draft_note_list first to review pending drafts")
+			"publishes all current user's draft notes on the MR \u2014 cannot be undone; verify project_id + mr_iid; use gitlab_mr_draft_note_list first to review pending drafts")
 	}
 	return nil
 }

@@ -51,7 +51,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	commits, _, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and merge_request_iid with gitlab_list_merge_requests")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and mr_iid with gitlab_list_merge_requests")
 	}
 	items := make([]CommitItem, 0, len(commits))
 	for _, c := range commits {
