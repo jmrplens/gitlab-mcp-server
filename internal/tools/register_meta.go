@@ -812,10 +812,10 @@ Todos and related issues:
 - related_issues: project_id*, mr_iid* — list issues mentioned or linked from the MR (paginated).
 
 Award emoji:
-- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, iid*, name* (create), award_id* (get/delete)
-- emoji_mr_get: project_id*, iid*, award_id*
-- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (get/delete)
-- emoji_mr_note_get: project_id*, iid*, note_id*, award_id*
+- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, mr_iid*, name* (create), award_id* (get/delete)
+- emoji_mr_get: project_id*, mr_iid*, award_id*
+- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, mr_iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_mr_note_get: project_id*, mr_iid*, note_id*, award_id*
 
 Resource events:
 - event_mr_label_list / event_mr_label_get: project_id*, mr_iid*, label_event_id* (get)
@@ -1276,7 +1276,7 @@ See also: gitlab_project (project-level), gitlab_user (user management), gitlab_
 
 Epics (Premium+ — GITLAB_ENTERPRISE=true. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
 
-Epic discussions (epic_discussion_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+Epic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
 - epic_discussion_list / epic_discussion_get (+ discussion_id*)
 - epic_discussion_create: body*
 - epic_discussion_add_note: discussion_id*, body*
@@ -1285,18 +1285,18 @@ Epic discussions (epic_discussion_*): full_path*, iid* for all. GraphQL paginati
 
 Epic CRUD (epic_*): full_path* for all.
 - epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants
-- epic_get: iid*
-- epic_get_links: iid* [REST]
+- epic_get: epic_iid*
+- epic_get_links: epic_iid* [REST]
 - epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status
-- epic_update: iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
-- epic_delete: iid*
+- epic_update: epic_iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
+- epic_delete: epic_iid*
 
-Epic issues (epic_issue_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+Epic issues (epic_issue_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
 - epic_issue_list
 - epic_issue_assign / epic_issue_remove: child_project_path*, child_iid*
 - epic_issue_update: child_id*, adjacent_id*, relative_position* (BEFORE/AFTER)
 
-Epic notes (epic_note_*): full_path*, iid* for all. GraphQL pagination: first, after, last, before.
+Epic notes (epic_note_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
 - epic_note_list / epic_note_get (+ note_id*) / epic_note_delete (+ note_id*)
 - epic_note_create: body*
 - epic_note_update: note_id*, body*
@@ -1449,7 +1449,7 @@ Side effects: delete/move are irreversible; move changes URL and IID. Time track
 Returns: resource object for single-item actions; paginated list ({page, per_page, total, next_page}) for *_list / list / list_all / list_group / participants / mrs_* / iteration_list_*; GraphQL cursor pagination ({nodes, page_info}) for work_item_list; {success, message} for delete actions.
 Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: Reporter+ to comment, Developer+ to edit/move), 400 (hint: state_event ∈ close/reopen; dates ISO 8601; weight integer 0–9 — Premium+).
 
-Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).
+Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + work_item_iid* (GraphQL).
 
 Issue CRUD:
 - create: project_id*, title*, description, assignee_id, assignee_ids ([]int), labels (comma-separated), milestone_id, due_date (YYYY-MM-DD), confidential, issue_type (issue/incident/test_case/task), weight, epic_id
@@ -1496,17 +1496,17 @@ Discussions (discussion_*): project_id*, issue_iid* for all.
 
 Work Items (work_item_*): full_path* for all. Use types=["Epic"] to list epics (replaces deprecated epic_list).
 - work_item_list: state, search, types, author_username, label_name, confidential, sort, first, after
-- work_item_get: iid*
+- work_item_get: work_item_iid*
 - work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type}
-- work_item_update: iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
-- work_item_delete: iid* (permanent)
+- work_item_update: work_item_iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
+- work_item_delete: work_item_iid* (permanent)
 
 Statistics:
 - statistics_get: global issue stats (optional filters same as list)
 - statistics_get_group: group_id*
 - statistics_get_project: project_id*
 
-Award emoji (emoji_issue_*): project_id*, iid* for all.
+Award emoji (emoji_issue_*): project_id*, issue_iid* for all.
 - emoji_issue_list / emoji_issue_get (+ award_id*) / emoji_issue_delete (+ award_id*)
 - emoji_issue_create: name*
 - emoji_issue_note_list / emoji_issue_note_get: note_id*, (+ award_id* for get)
@@ -2719,9 +2719,9 @@ Feature flags (feature_flag_*):
 
 User lists (ff_user_list_*) — named sets of user IDs referenced by gitlabUserList strategies:
 - ff_user_list_list: project_id*, page, per_page
-- ff_user_list_get / ff_user_list_delete: project_id*, iid*
+- ff_user_list_get / ff_user_list_delete: project_id*, user_list_iid*
 - ff_user_list_create: project_id*, name*, user_xids* (comma-separated user IDs)
-- ff_user_list_update: project_id*, iid*, name, user_xids
+- ff_user_list_update: project_id*, user_list_iid*, name, user_xids
 
 See also: gitlab_environment (environment scopes referenced by strategies), gitlab_admin (instance-level feature flags), gitlab_project (project membership and settings).`, routes, toolutil.IconConfig)
 }

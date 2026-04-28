@@ -892,18 +892,18 @@
           "description": "Discussion ID to reply to,required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "discussion_id",
         "body"
       ],
@@ -8073,18 +8073,18 @@
           "description": "Discussion body (Markdown supported),required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "body"
       ],
       "type": "object"
@@ -11452,13 +11452,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "note_id": {
           "description": "Note ID to delete,required",
@@ -11467,7 +11467,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "note_id"
       ],
       "type": "object"
@@ -13119,14 +13119,14 @@
           "description": "Full path of the project or group (e.g. my-group/my-project),required",
           "type": "string"
         },
-        "iid": {
+        "work_item_iid": {
           "description": "Work item IID,required",
           "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "work_item_iid"
       ],
       "type": "object"
     },
@@ -17625,18 +17625,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -17677,18 +17677,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -17833,18 +17833,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -17938,18 +17938,18 @@
           "description": "Full project path of the issue to assign (e.g. my-group/my-project),required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group that contains the epic,required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "child_project_path",
         "child_iid"
       ],
@@ -17999,6 +17999,10 @@
           "description": "Cursor for backward pagination (from previous response start_cursor)",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
           "type": [
@@ -18010,10 +18014,6 @@
           "description": "Full path of the group (e.g. my-group or my-group/sub-group),required",
           "type": "string"
         },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
-        },
         "last": {
           "description": "Number of items from the end (backward pagination)",
           "type": [
@@ -18024,7 +18024,7 @@
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -18141,18 +18141,18 @@
           "description": "Full project path of the issue to remove,required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group that contains the epic,required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "child_project_path",
         "child_iid"
       ],
@@ -18203,13 +18203,13 @@
           "description": "Work item GID of the issue to reorder (from list output id field),required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group that contains the epic,required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "relative_position": {
           "description": "Position relative to adjacent item: BEFORE or AFTER",
@@ -18218,7 +18218,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "child_id"
       ],
       "type": "object"
@@ -18564,18 +18564,18 @@
           "description": "Note body (Markdown supported),required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "body"
       ],
       "type": "object"
@@ -18631,13 +18631,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "note_id": {
           "description": "ID of the note to delete,required",
@@ -18646,7 +18646,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "note_id"
       ],
       "type": "object"
@@ -18688,13 +18688,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "note_id": {
           "description": "ID of the note to retrieve,required",
@@ -18703,7 +18703,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "note_id"
       ],
       "type": "object"
@@ -18769,6 +18769,10 @@
           "description": "Cursor for backward pagination (from previous response start_cursor)",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
           "type": [
@@ -18780,10 +18784,6 @@
           "description": "Full path of the group (e.g. my-group or my-group/sub-group),required",
           "type": "string"
         },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
-        },
         "last": {
           "description": "Number of items from the end (backward pagination)",
           "type": [
@@ -18794,7 +18794,7 @@
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -18902,13 +18902,13 @@
           "description": "Updated note body (Markdown supported),required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "note_id": {
           "description": "ID of the note to update,required",
@@ -18917,7 +18917,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "note_id",
         "body"
       ],
@@ -19007,6 +19007,10 @@
           "description": "Due date (YYYY-MM-DD)",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
@@ -19014,10 +19018,6 @@
         "health_status": {
           "description": "Health status (onTrack/needsAttention/atRisk)",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "parent_id": {
           "description": "Global ID of the parent epic work item",
@@ -19062,7 +19062,7 @@
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -19975,18 +19975,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Feature flag user list internal ID,required",
-          "type": "integer"
-        },
         "project_id": {
           "description": "Project ID or path,required",
           "type": "string"
+        },
+        "user_list_iid": {
+          "description": "Feature flag user list internal ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid"
+        "user_list_iid"
       ],
       "type": "object"
     },
@@ -20027,18 +20027,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Feature flag user list internal ID,required",
-          "type": "integer"
-        },
         "project_id": {
           "description": "Project ID or path,required",
           "type": "string"
+        },
+        "user_list_iid": {
+          "description": "Feature flag user list internal ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid"
+        "user_list_iid"
       ],
       "type": "object"
     },
@@ -20237,10 +20237,6 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Feature flag user list internal ID,required",
-          "type": "integer"
-        },
         "name": {
           "description": "New user list name",
           "type": "string"
@@ -20249,6 +20245,10 @@
           "description": "Project ID or path,required",
           "type": "string"
         },
+        "user_list_iid": {
+          "description": "Feature flag user list internal ID,required",
+          "type": "integer"
+        },
         "user_xids": {
           "description": "Comma-separated list of user external IDs",
           "type": "string"
@@ -20256,7 +20256,7 @@
       },
       "required": [
         "project_id",
-        "iid"
+        "user_list_iid"
       ],
       "type": "object"
     },
@@ -22647,18 +22647,18 @@
           "description": "Discussion ID,required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "discussion_id"
       ],
       "type": "object"
@@ -28598,14 +28598,14 @@
           "description": "Full path of the project or group (e.g. my-group/my-project),required",
           "type": "string"
         },
-        "iid": {
+        "work_item_iid": {
           "description": "Work item IID,required",
           "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "work_item_iid"
       ],
       "type": "object"
     },
@@ -41767,8 +41767,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "name": {
@@ -41782,7 +41782,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "name"
       ],
       "type": "object"
@@ -41846,8 +41846,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "project_id": {
@@ -41857,7 +41857,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "award_id"
       ],
       "type": "object"
@@ -41903,8 +41903,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "project_id": {
@@ -41914,7 +41914,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "award_id"
       ],
       "type": "object"
@@ -41976,8 +41976,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "page": {
@@ -41995,7 +41995,7 @@
       },
       "required": [
         "project_id",
-        "iid"
+        "issue_iid"
       ],
       "type": "object"
     },
@@ -45086,8 +45086,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "name": {
@@ -45105,7 +45105,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "note_id",
         "name"
       ],
@@ -45170,8 +45170,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "note_id": {
@@ -45185,7 +45185,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "note_id",
         "award_id"
       ],
@@ -45232,8 +45232,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "note_id": {
@@ -45247,7 +45247,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "note_id",
         "award_id"
       ],
@@ -45310,8 +45310,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "issue_iid": {
+          "description": "Issue IID (project-scoped internal ID),required",
           "type": "integer"
         },
         "note_id": {
@@ -45333,7 +45333,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "issue_iid",
         "note_id"
       ],
       "type": "object"
@@ -52650,6 +52650,10 @@
           "description": "Cursor for backward pagination (from previous response start_cursor)",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
           "type": [
@@ -52661,10 +52665,6 @@
           "description": "Full path of the group (e.g. my-group or my-group/sub-group),required",
           "type": "string"
         },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
-        },
         "last": {
           "description": "Number of items from the end (backward pagination)",
           "type": [
@@ -52675,7 +52675,7 @@
       },
       "required": [
         "full_path",
-        "iid"
+        "epic_iid"
       ],
       "type": "object"
     },
@@ -66212,8 +66212,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "name": {
@@ -66227,7 +66227,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "name"
       ],
       "type": "object"
@@ -66291,8 +66291,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "project_id": {
@@ -66302,7 +66302,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "award_id"
       ],
       "type": "object"
@@ -66348,8 +66348,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "project_id": {
@@ -66359,7 +66359,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "award_id"
       ],
       "type": "object"
@@ -66421,8 +66421,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "page": {
@@ -66440,7 +66440,7 @@
       },
       "required": [
         "project_id",
-        "iid"
+        "mr_iid"
       ],
       "type": "object"
     },
@@ -69340,8 +69340,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "name": {
@@ -69359,7 +69359,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "note_id",
         "name"
       ],
@@ -69424,8 +69424,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "note_id": {
@@ -69439,7 +69439,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "note_id",
         "award_id"
       ],
@@ -69486,8 +69486,8 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "note_id": {
@@ -69501,7 +69501,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "note_id",
         "award_id"
       ],
@@ -69564,8 +69564,8 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
+        "mr_iid": {
+          "description": "Merge request IID (project-scoped, not 'merge_request_id'),required",
           "type": "integer"
         },
         "note_id": {
@@ -69587,7 +69587,7 @@
       },
       "required": [
         "project_id",
-        "iid",
+        "mr_iid",
         "note_id"
       ],
       "type": "object"
@@ -104955,10 +104955,6 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "name": {
           "description": "Emoji name without colons (e.g. thumbsup),required",
           "type": "string"
@@ -104966,11 +104962,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "name"
       ],
       "type": "object"
@@ -105034,18 +105034,18 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "award_id"
       ],
       "type": "object"
@@ -105091,18 +105091,18 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "award_id"
       ],
       "type": "object"
@@ -105164,10 +105164,6 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "page": {
           "description": "Page number for pagination (default 1)",
           "type": "integer"
@@ -105179,11 +105175,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid"
+        "snippet_id"
       ],
       "type": "object"
     },
@@ -106235,10 +106235,6 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "name": {
           "description": "Emoji name without colons (e.g. thumbsup),required",
           "type": "string"
@@ -106250,11 +106246,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "note_id",
         "name"
       ],
@@ -106319,10 +106319,6 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "note_id": {
           "description": "Note ID,required",
           "type": "integer"
@@ -106330,11 +106326,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "note_id",
         "award_id"
       ],
@@ -106381,10 +106381,6 @@
           "description": "Award emoji ID,required",
           "type": "integer"
         },
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "note_id": {
           "description": "Note ID,required",
           "type": "integer"
@@ -106392,11 +106388,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "note_id",
         "award_id"
       ],
@@ -106459,10 +106459,6 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "iid": {
-          "description": "Issue IID or MR IID or Snippet ID,required",
-          "type": "integer"
-        },
         "note_id": {
           "description": "Note ID,required",
           "type": "integer"
@@ -106478,11 +106474,15 @@
         "project_id": {
           "description": "Project ID or URL-encoded path,required",
           "type": "string"
+        },
+        "snippet_id": {
+          "description": "Snippet ID,required",
+          "type": "integer"
         }
       },
       "required": [
         "project_id",
-        "iid",
+        "snippet_id",
         "note_id"
       ],
       "type": "object"
@@ -109502,13 +109502,13 @@
           "description": "Updated note body,required",
           "type": "string"
         },
+        "epic_iid": {
+          "description": "Epic IID within the group,required",
+          "type": "integer"
+        },
         "full_path": {
           "description": "Full path of the group (e.g. my-group),required",
           "type": "string"
-        },
-        "iid": {
-          "description": "Epic IID within the group,required",
-          "type": "integer"
         },
         "note_id": {
           "description": "Note ID to update,required",
@@ -109517,7 +109517,7 @@
       },
       "required": [
         "full_path",
-        "iid",
+        "epic_iid",
         "note_id",
         "body"
       ],
@@ -110922,10 +110922,6 @@
           "description": "Health status (onTrack/needsAttention/atRisk)",
           "type": "string"
         },
-        "iid": {
-          "description": "Work item IID,required",
-          "type": "integer"
-        },
         "iteration_id": {
           "description": "Global ID of the iteration",
           "type": [
@@ -110979,11 +110975,15 @@
             "null",
             "integer"
           ]
+        },
+        "work_item_iid": {
+          "description": "Work item IID,required",
+          "type": "integer"
         }
       },
       "required": [
         "full_path",
-        "iid"
+        "work_item_iid"
       ],
       "type": "object"
     },
