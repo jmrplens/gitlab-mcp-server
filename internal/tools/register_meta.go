@@ -2346,6 +2346,24 @@ Imports:
 - import_gists: personal_access_token*
 - dependency_proxy_delete: group_id* — purges the group's dependency proxy cache
 
+Parameter constraints (beyond schema):
+- broadcast_message_create.broadcast_type ∈ {banner, notification}; theme is a CSS hex color (e.g. '#E75E40'); target_access_levels uses GitLab numeric levels [10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner]; starts_at/ends_at are ISO 8601 timestamps and ends_at MUST be > starts_at.
+- feature_set.value accepts 'true' / 'false' / a 0–100 integer (percentage of time/actors) / 'actor:<id>'; the optional key disambiguates 'percentage_of_time' vs 'percentage_of_actors'; user/group/namespace/project/repository scope the gate and are mutually-exclusive with each other.
+- plan_limits_change.*_max_file_size are sizes in BYTES; 0 disables the limit. Omitted fields keep their current value (partial update).
+- license_add.license is the Base64 of the raw .gitlab-license file (not the file path).
+- system_hook_add.url MUST be https when enable_ssl_verification=true; token is sent as X-Gitlab-Token on every delivery.
+- application_create.scopes is a SPACE-separated string of OAuth scopes (e.g. 'api read_user'); confidential=false enables PKCE for public clients. The client_secret is returned ONCE on creation and cannot be retrieved later.
+- cluster_agent_token_create returns the token ONCE; revoke + re-create to rotate.
+- secure_file_create.content is Base64-encoded; max size 5 MiB.
+- custom_attr_set.resource_type ∈ {user, group, project} and (resource_type, resource_id, key) is a unique upsert key.
+- bulk_import_start.entities[].source_type ∈ {group_entity, project_entity}; migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.
+- import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.
+- usage_data_track_event: namespace_id and project_id are mutually-exclusive context refs (provide at most one); send_to_snowplow=false keeps the event internal to GitLab.
+- db_migration_mark.database ∈ {main, ci}; defaults to 'main'. Marking a non-applied migration corrupts schema_migrations — verify first via metadata_get.
+- terraform_state_lock fails if the state is already locked; unlock breaks any active client session holding the lock.
+- topic_create.name must be globally unique (slug); title is the display name shown in the UI.
+- List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).
+
 See also: gitlab_user (user CRUD), gitlab_server (MCP server health and updates), gitlab_group / gitlab_project (group/project admin), gitlab_access (tokens, deploy keys, access requests).`, routes, toolutil.IconServer)
 }
 
