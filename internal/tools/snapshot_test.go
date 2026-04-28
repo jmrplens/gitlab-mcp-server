@@ -179,8 +179,14 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 		if string(wSnap.OutputSchema) != string(gSnap.OutputSchema) {
 			diffs = append(diffs, "CHANGED "+name+" outputSchema:\n  old: "+string(wSnap.OutputSchema)+"\n  new: "+string(gSnap.OutputSchema))
 		}
-		wAnn, _ := json.Marshal(wSnap.Annotations)
-		gAnn, _ := json.Marshal(gSnap.Annotations)
+		wAnn, err := json.Marshal(wSnap.Annotations)
+		if err != nil {
+			t.Fatalf("marshal want annotations for %s: %v", name, err)
+		}
+		gAnn, err := json.Marshal(gSnap.Annotations)
+		if err != nil {
+			t.Fatalf("marshal got annotations for %s: %v", name, err)
+		}
 		if string(wAnn) != string(gAnn) {
 			diffs = append(diffs, "CHANGED "+name+" annotations:\n  old: "+string(wAnn)+"\n  new: "+string(gAnn))
 		}

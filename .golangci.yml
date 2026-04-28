@@ -76,14 +76,18 @@ linters:
     # --- Style ---
     - goprintffuncname # Printf-like funcs end in 'f'
     - tparallel # t.Parallel() correctness (excluded for test/e2e/, sequential by design)
+    - thelper # Test helpers must call t.Helper()
+
+    # --- Bug Detection (require care; documented nolints in source) ---
+    - contextcheck # Context propagation (nolints documented for startup paths)
+    - errchkjson # json.Marshal/Encode error handling
+
     # --- Linters intentionally NOT enabled (false positives) ---
     # - dupword: false positives on godoc auto-generated comments split from CamelCase
     #   identifiers (IID → "i i d", SSH → "s s h", HTTPS → "h t t p s"). Auto-fix
     #   removes letters that are part of the identifier.
     # - gocheckcompilerdirectives: false positive on //go:fix inline (valid Go 1.24+
     #   directive used by gopls/go fix tooling, not yet recognized by the linter).
-    # - contextcheck, errchkjson, thelper: real findings, deferred to a separate
-    #   refactor — too noisy to bundle with infrastructure changes.
 
   settings:
     govet:
@@ -219,11 +223,15 @@ linters:
           - gosec
 
       # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
-      # Disable t.Parallel() requirement for the e2e suite.
+      # Disable t.Parallel() requirement and context propagation strictness for the
+      # e2e suite — fixtures use fresh contexts in t.Cleanup, polling helpers carry
+      # their own deadlines, and mock auth probes intentionally decouple ctx.
       - path: "test/e2e/"
         linters:
           - tparallel
           - thelper
+          - contextcheck
+          - errchkjson
 
 output:
   formats:

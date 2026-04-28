@@ -174,7 +174,10 @@ func TestHandleConfigure_EmptyTokenFallsBackToExisting(t *testing.T) {
 		LogLevel:        "info",
 		SelectedClients: []int{},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +238,10 @@ func TestHandleConfigure_InvalidLogLevel(t *testing.T) {
 		LogLevel:        "invalid-level",
 		SelectedClients: []int{},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -279,7 +285,10 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 		LogLevel:        "debug",
 		SelectedClients: []int{},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -361,7 +370,10 @@ func TestHandleConfigure_WithJetBrainsClient(t *testing.T) {
 		LogLevel:        "info",
 		SelectedClients: []int{jbIdx},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -413,7 +425,10 @@ func TestHandleConfigure_WithOutOfRangeClient(t *testing.T) {
 		LogLevel:        "info",
 		SelectedClients: []int{-1, 999},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -467,7 +482,10 @@ func TestHandleConfigure_InstallPathWithBinaryName(t *testing.T) {
 		LogLevel:        "info",
 		SelectedClients: []int{},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -524,7 +542,10 @@ func TestHandleConfigure_WithRegularClient(t *testing.T) {
 		LogLevel:        "info",
 		SelectedClients: []int{vsCodeIdx},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, mErr := json.Marshal(reqBody)
+	if mErr != nil {
+		t.Fatalf("marshal request: %v", mErr)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)

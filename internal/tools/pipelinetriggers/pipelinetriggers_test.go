@@ -243,7 +243,10 @@ func TestRunTrigger_WithVariables(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	vars, _ := json.Marshal(map[string]string{"ENV": "prod"})
+	vars, err := json.Marshal(map[string]string{"ENV": "prod"})
+	if err != nil {
+		t.Fatalf("marshal variables: %v", err)
+	}
 	out, err := RunTrigger(context.Background(), client, RunInput{
 		ProjectID: "1",
 		Ref:       "main",

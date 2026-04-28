@@ -274,7 +274,7 @@ func tokenSuffix(token string) string {
 // call. Entries that fail validation are evicted. Cancel the context to stop.
 func (p *ServerPool) StartRevalidation(ctx context.Context) {
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context
 	}
 
 	if p.revalidateInterval <= 0 {

@@ -1443,7 +1443,7 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 	go func() {
 		errCh <- serveHTTP(ctx, cfg, addr)
 	}()
-	waitForHTTPServerReady(t, addr, errCh)
+	waitForHTTPServerReady(t, addr, errCh) //nolint:contextcheck // test helper: uses its own probe deadline
 	return addr, errCh
 }
 

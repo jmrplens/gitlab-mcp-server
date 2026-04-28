@@ -34,6 +34,7 @@ func TestToOutput(t *testing.T) {
 			name:  "nil attestation returns zero output",
 			input: nil,
 			validate: func(t *testing.T, got Output) {
+				t.Helper()
 				if got.ID != 0 {
 					t.Errorf("ID = %d, want 0", got.ID)
 				}
@@ -59,6 +60,7 @@ func TestToOutput(t *testing.T) {
 				ExpireAt:      &now,
 			},
 			validate: func(t *testing.T, got Output) {
+				t.Helper()
 				if got.ID != 42 {
 					t.Errorf("ID = %d, want 42", got.ID)
 				}
@@ -92,6 +94,7 @@ func TestToOutput(t *testing.T) {
 				Status: "pending",
 			},
 			validate: func(t *testing.T, got Output) {
+				t.Helper()
 				if got.CreatedAt != "" {
 					t.Errorf("CreatedAt = %q, want empty", got.CreatedAt)
 				}
