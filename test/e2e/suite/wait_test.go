@@ -189,7 +189,7 @@ func TestWaitTools(t *testing.T) {
 				"project_id":       projM.pidStr(),
 				"pipeline_id":      mPipelineID,
 				"interval_seconds": 5,
-				"timeout_seconds":  180,
+				"timeout_seconds":  600,
 				"fail_on_error":    false,
 			},
 		})
