@@ -3,7 +3,7 @@ package bulkimports
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"time"
 
@@ -245,7 +245,7 @@ type ListEntitiesOutput struct {
 // ListEntities returns bulk import entities, optionally scoped to a single import.
 func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEntitiesInput) (ListEntitiesOutput, error) {
 	if input.BulkImportID < 0 {
-		return ListEntitiesOutput{}, fmt.Errorf("bulk_import_entity_list: bulk_import_id must be >= 0 (omit or set to 0 to list across all imports)")
+		return ListEntitiesOutput{}, errors.New("bulk_import_entity_list: bulk_import_id must be >= 0 (omit or set to 0 to list across all imports)")
 	}
 	opts := &gl.ListBulkImportsEntitiesOptions{
 		ListOptions: gl.ListOptions{
