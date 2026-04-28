@@ -230,7 +230,6 @@ linters:
           - tparallel
           - thelper
           - contextcheck
-          - errchkjson
 
 output:
   formats:

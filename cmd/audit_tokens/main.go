@@ -172,7 +172,7 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 		b, err := json.Marshal(t)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
-			continue
+			os.Exit(1)
 		}
 		tokens := len(b) / bytesPerTok
 		domain := extractDomain(t.Name)
@@ -218,7 +218,7 @@ func measureResources(client *gitlabclient.Client) int {
 			b, mErr := json.Marshal(r)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "marshal resource %s: %v\n", r.Name, mErr)
-				continue
+				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 			}
 			totalBytes += len(b)
 		}
@@ -230,7 +230,7 @@ func measureResources(client *gitlabclient.Client) int {
 			b, mErr := json.Marshal(t)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "marshal template %s: %v\n", t.Name, mErr)
-				continue
+				os.Exit(1)
 			}
 			totalBytes += len(b)
 		}
@@ -266,7 +266,7 @@ func measurePrompts(client *gitlabclient.Client) int {
 			b, mErr := json.Marshal(pr)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
-				continue
+				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 			}
 			totalBytes += len(b)
 		}

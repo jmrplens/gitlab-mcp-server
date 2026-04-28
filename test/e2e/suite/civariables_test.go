@@ -104,7 +104,7 @@ func TestMeta_CIVariables(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "key": varKey, "value": varValue},
 		})
 		requireNoError(t, err, "meta create CI variable")
-		requireTruef(t, out.Key == varKey, "expected key %s", varKey)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %s", varKey, out.Key)
 		t.Logf("Created CI variable %s via meta-tool", out.Key)
 	})
 
@@ -114,7 +114,7 @@ func TestMeta_CIVariables(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "key": varKey},
 		})
 		requireNoError(t, err, "meta get CI variable")
-		requireTruef(t, out.Key == varKey, "expected key %s", varKey)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %s", varKey, out.Key)
 		t.Logf("Got CI variable %s via meta-tool", out.Key)
 	})
 
@@ -124,7 +124,7 @@ func TestMeta_CIVariables(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list CI variables")
-		requireTruef(t, len(out.Variables) >= 1, "expected at least 1 variable")
+		requireTruef(t, len(out.Variables) >= 1, "expected at least 1 variable, got %d", len(out.Variables))
 		t.Logf("Listed %d CI variables via meta-tool", len(out.Variables))
 	})
 

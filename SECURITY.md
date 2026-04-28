@@ -155,7 +155,7 @@ The remainder of this document describes how the server handles security-sensiti
 ### Release Integrity
 
 - Release binaries are built from tagged commits and published via GoReleaser.
-- Checksums (`checksums.txt`) and a GPG-signed `checksums.txt.asc` are attached to every GitHub Release.
+- Checksums (`checksums.txt`) and a Cosign/Sigstore signature bundle (`checksums.txt.sigstore.json`) are attached to every GitHub Release. Verify with [`cosign`](https://docs.sigstore.dev/cosign/installation/) using the keyless GitHub OIDC identity of this repository.
 - The auto-update mechanism verifies integrity against published checksums before replacing the running binary.
 
 ## Security Best Practices for Deployment

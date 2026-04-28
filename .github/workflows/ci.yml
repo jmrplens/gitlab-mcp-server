@@ -224,7 +224,18 @@ jobs:
           set -euo pipefail
           SCHEMA_URL=$(jq -r '."$schema"' server.json)
           echo "Schema referenced by server.json: $SCHEMA_URL"
-          curl -fsSL "$SCHEMA_URL" -o /tmp/mcp-schema.json
+          # SSRF guard: only allow the official MCP Registry schema host.
+          # Prevents an attacker from changing $schema in a PR to probe
+          # arbitrary URLs from the runner.
+          ALLOWED_PREFIX="https://static.modelcontextprotocol.io/"
+          case "$SCHEMA_URL" in
+            "$ALLOWED_PREFIX"*) ;;
+            *)
+              echo "::error::Schema URL must start with $ALLOWED_PREFIX (got: $SCHEMA_URL)"
+              exit 1
+              ;;
+          esac
+          curl -fsSL --proto '=https' --tlsv1.2 "$SCHEMA_URL" -o /tmp/mcp-schema.json
           python3 -c "import json,jsonschema; \
             schema=json.load(open('/tmp/mcp-schema.json')); \
             inst=json.load(open('server.json')); \

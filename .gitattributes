@@ -5,7 +5,7 @@
 * text=auto eol=lf
 
 # Go source files
-*.go text eol=lf
+*.go text eol=lf diff=golang
 *.mod text eol=lf
 *.sum text eol=lf
 
@@ -54,9 +54,6 @@ VERSION text eol=lf
 # Cryptographic keys
 *.asc text eol=lf
 *.pub text eol=lf
-
-# Better diff hunks for Go source
-*.go diff=golang
 
 # Binary files — no conversion
 *.exe binary

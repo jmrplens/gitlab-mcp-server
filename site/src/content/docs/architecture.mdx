@@ -16,7 +16,6 @@ graph LR
     U[User] -->|natural language| AI[AI Client]
     AI -->|MCP tool calls| S[GitLab MCP Server]
     S -->|REST v4 + GraphQL| G[GitLab Instance]
-    S -->|GraphQL API| G
     G -->|JSON| S
     S -->|structured result + markdown| AI
     AI -->|formatted answer| U

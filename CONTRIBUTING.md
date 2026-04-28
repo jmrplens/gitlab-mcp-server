@@ -264,7 +264,8 @@ Open an issue at <https://github.com/jmrplens/gitlab-mcp-server/issues/new/choos
 - **Feature Request** — new functionality / new MCP tool
 - **Enhancement** — improvement to existing behavior
 - **Documentation** — missing, outdated or incorrect docs
-- **Security Issue** — use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) for non-public reports
+
+For **security issues**, do not open a public issue — report privately via [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) (see [SECURITY.md](SECURITY.md)).
 
 Templates auto-apply the relevant labels listed in [Labels](#labels).
 
@@ -274,12 +275,12 @@ Issue templates auto-assign labels on submission. The repo uses a flat label set
 
 | Label              | Color     | Used by                                          |
 | ------------------ | --------- | ------------------------------------------------ |
-| `bug`              | `#d73a4a` | Bug Report, Security Issue templates             |
+| `bug`              | `#d73a4a` | Bug Report template                              |
 | `feature`          | `#a2eeef` | Feature Request template                         |
 | `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)            |
 | `documentation`    | `#0075ca` | Documentation template (GitHub default)          |
-| `security`         | `#d73a4a` | Security Issue template                          |
-| `high-priority`    | `#b60205` | Security Issue template                          |
+| `security`         | `#d73a4a` | Manual — applied to GitHub Security Advisories   |
+| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories   |
 | `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission) |
 | `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                |
 | `help wanted`      | `#008672` | Manual — community contributions welcome         |
