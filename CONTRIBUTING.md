@@ -2,6 +2,9 @@
 
 Thank you for your interest in contributing to gitlab-mcp-server! This guide covers the process for submitting changes, reporting issues, and following project conventions.
 
+By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
+For security issues, please follow the [Security Policy](SECURITY.md) instead of opening a public issue.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -206,7 +209,7 @@ go test -tags e2e -timeout 300s ./test/e2e/suite/
 This project ships with **7 AI agents** and **18 skills** for GitHub Copilot and compatible assistants. Key workflows for contributors:
 
 - **Adding new tools**: Use the `create-mcp-tool` skill — it scaffolds the full tool lifecycle (struct, handler, registration, tests, docs).
-- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach 90%+ coverage.
+- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach the 80% coverage target.
 - **Code quality reviews**: Use the `review-and-refactor` skill for code quality + OWASP security + MCP pattern checks.
 
 See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instruction files.

@@ -1,8 +1,11 @@
-.PHONY: build build-all run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
+.PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
+       run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
        lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
-       analyze analyze-fix analyze-report install-tools audit-output audit-tokens gen-llms gen-readme \
+       analyze analyze-fix analyze-report install-tools \
+       audit-output audit-tokens audit-tools audit-metrics audit-test-names \
+       gen-llms gen-readme \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
        inspector inspector-stop help
@@ -42,7 +45,7 @@ version: build
 build:
 	go build -trimpath -buildmode=pie -ldflags="$(LDFLAGS)" -o dist/$(BINARY_NAME)$(BINARY_EXT) $(CMD_PATH)
 
-build-all: build-linx-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64
+build-all: build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64
 
 build-linux-amd64:
 	$(call MKDIR_P,dist)
@@ -476,6 +479,18 @@ audit-output:
 ## Reports per-tool token counts, domain totals, and mode comparison.
 audit-tokens:
 	go run ./cmd/audit_tokens/
+
+## audit-tools: audit MCP tool metadata violations (naming, annotations).
+audit-tools:
+	go run ./cmd/audit_tools/
+
+## audit-metrics: report MCP tool metrics (tool/resource/prompt counts).
+audit-metrics:
+	go run ./cmd/audit_metrics/
+
+## audit-test-names: audit test function naming convention compliance.
+audit-test-names:
+	go run ./cmd/audit_test_names/
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Prefer 'make goimports' over 'make fmt' — goimports is a superset of gofmt.
