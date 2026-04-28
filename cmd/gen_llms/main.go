@@ -483,6 +483,7 @@ func writeInputSchema(b *strings.Builder, schema any) {
 		}
 		typ, _ := prop["type"].(string)
 		desc, _ := prop["description"].(string)
+		desc = strings.TrimSuffix(desc, ",required")
 		req := ""
 		if required[name] {
 			req = " (required)"
