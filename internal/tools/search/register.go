@@ -193,8 +193,6 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		Name:  "gitlab_search",
 		Title: toolutil.TitleFromName("gitlab_search"),
 		Description: `Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
-Valid actions: ` + toolutil.ValidActionsString(routes) + `
-
 When to use: full-text search across the supplied scope. Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
 NOT for: discovering a project from a git remote (use gitlab_discover_project), listing labels / milestones / issues with structured filters (use gitlab_project, gitlab_issue, gitlab_merge_request — those support filters like state/labels/milestone), reading file contents (use gitlab_repository file_get).
 
