@@ -430,11 +430,11 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 	})
 	requireNoError(t, snipErr, "create snippet for emoji")
 	// The emoji endpoints use IID, which for project snippets should match
-	snippetIID := snipOut.ID
+	snippetID := snipOut.ID
 	defer func() {
 		_ = callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
 			"action": "project_delete",
-			"params": map[string]any{"project_id": proj.pidStr(), "snippet_id": snippetIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "snippet_id": snippetID},
 		})
 	}()
 
@@ -445,7 +445,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"name":       "thumbsup",
 			},
 		})
@@ -460,7 +460,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_list")
@@ -473,7 +473,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"award_id":   emojiID,
 			},
 		})
@@ -487,7 +487,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"award_id":   emojiID,
 			},
 		})
@@ -499,7 +499,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 		"action": "note_create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
-			"snippet_id": snippetIID,
+			"snippet_id": snippetID,
 			"body":       "emoji note target",
 		},
 	})
@@ -513,7 +513,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"note_id":    noteID,
 				"name":       "heart",
 			},
@@ -529,7 +529,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"note_id":    noteID,
 			},
 		})
@@ -543,7 +543,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},
@@ -558,7 +558,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"snippet_id":        snippetIID,
+				"snippet_id": snippetID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},
