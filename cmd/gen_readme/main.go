@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -205,7 +206,7 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 		if info.Enterprise {
 			name += " 🏢"
 		}
-		actions := fmt.Sprintf("%d", info.Actions)
+		actions := strconv.Itoa(info.Actions)
 		if info.Actions == 0 {
 			actions = "—"
 		}
