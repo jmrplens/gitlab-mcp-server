@@ -64,8 +64,8 @@ func TestRegisterTools_CallThroughMCP(t *testing.T) {
 	}{
 		{"gitlab_list_project_merge_trains", map[string]any{"project_id": "42"}},
 		{"gitlab_list_merge_request_in_merge_train", map[string]any{"project_id": "42", "target_branch": "main"}},
-		{"gitlab_get_merge_request_on_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
-		{"gitlab_add_merge_request_to_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
+		{"gitlab_get_merge_request_on_merge_train", map[string]any{"project_id": "42", "mr_iid": float64(10)}},
+		{"gitlab_add_merge_request_to_merge_train", map[string]any{"project_id": "42", "mr_iid": float64(10)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

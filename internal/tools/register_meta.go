@@ -2742,8 +2742,8 @@ Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: project_id*, target_branch*, scope, sort, page, per_page
-- get: project_id*, merge_request_iid*
-- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)
+- get: project_id*, mr_iid*
+- add: project_id*, mr_iid*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline`, routes, toolutil.IconMR)
 }

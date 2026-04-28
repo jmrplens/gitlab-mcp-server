@@ -1417,7 +1417,7 @@
           "description": "Enable auto-merge when pipeline succeeds",
           "type": "boolean"
         },
-        "merge_request_iid": {
+        "mr_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -1436,7 +1436,7 @@
       },
       "required": [
         "project_id",
-        "merge_request_iid"
+        "mr_iid"
       ],
       "type": "object"
     },
@@ -24748,7 +24748,7 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "merge_request_iid": {
+        "mr_iid": {
           "description": "Merge request internal ID,required",
           "type": "integer"
         },
@@ -24759,7 +24759,7 @@
       },
       "required": [
         "project_id",
-        "merge_request_iid"
+        "mr_iid"
       ],
       "type": "object"
     },

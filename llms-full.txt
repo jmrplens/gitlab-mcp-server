@@ -8279,8 +8279,8 @@ Param conventions: * = required. All actions need project_id*.
 
 - list_project: project_id*, scope (active/complete), sort (asc/desc), page, per_page
 - list_branch: project_id*, target_branch*, scope, sort, page, per_page
-- get: project_id*, merge_request_iid*
-- add: project_id*, merge_request_iid*, auto_merge (bool), sha, squash (bool)
+- get: project_id*, mr_iid*
+- add: project_id*, mr_iid*, auto_merge (bool), sha, squash (bool)
 
 See also: gitlab_merge_request, gitlab_pipeline
 
@@ -8887,7 +8887,7 @@ Add a merge request to a merge train.
 **Parameters:**
 
 - `auto_merge` (boolean): Enable auto-merge when pipeline succeeds
-- `merge_request_iid` (integer) (required): Merge request internal ID
+- `mr_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string): Head SHA of the merge request to verify
 - `squash` (boolean): Squash commits when merging
@@ -12132,7 +12132,7 @@ Get the merge train status for a specific merge request.
 
 **Parameters:**
 
-- `merge_request_iid` (integer) (required): Merge request internal ID
+- `mr_iid` (integer) (required): Merge request internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
