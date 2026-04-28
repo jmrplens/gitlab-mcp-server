@@ -1714,9 +1714,9 @@ Feature flags (feature_flag_*):
 
 User lists (ff_user_list_*) — named sets of user IDs referenced by gitlabUserList strategies:
 - ff_user_list_list: project_id*, page, per_page
-- ff_user_list_get / ff_user_list_delete: project_id*, iid*
+- ff_user_list_get / ff_user_list_delete: project_id*, user_list_iid*
 - ff_user_list_create: project_id*, name*, user_xids* (comma-separated user IDs)
-- ff_user_list_update: project_id*, iid*, name, user_xids
+- ff_user_list_update: project_id*, user_list_iid*, name, user_xids
 
 See also: gitlab_environment (environment scopes referenced by strategies), gitlab_admin (instance-level feature flags), gitlab_project (project membership and settings).
 
@@ -2802,7 +2802,7 @@ Side effects: delete/move are irreversible; move changes URL and IID. Time track
 Returns: resource object for single-item actions; paginated list ({page, per_page, total, next_page}) for *_list / list / list_all / list_group / participants / mrs_* / iteration_list_*; GraphQL cursor pagination ({nodes, page_info}) for work_item_list; {success, message} for delete actions.
 Errors: 404 (hint: issue_iid is project-scoped — supply project_id; for list_all use scope/iids), 403 (hint: Reporter+ to comment, Developer+ to edit/move), 400 (hint: state_event ∈ close/reopen; dates ISO 8601; weight integer 0–9 — Premium+).
 
-Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + iid* (GraphQL).
+Param conventions: * = required. Most actions need project_id* + issue_iid*. List actions accept page, per_page. Work item actions use full_path* + work_item_iid* (GraphQL).
 
 Issue CRUD:
 - create: project_id*, title*, description, assignee_id, assignee_ids ([]int), labels (comma-separated), milestone_id, due_date (YYYY-MM-DD), confidential, issue_type (issue/incident/test_case/task), weight, epic_id
@@ -2849,17 +2849,17 @@ Discussions (discussion_*): project_id*, issue_iid* for all.
 
 Work Items (work_item_*): full_path* for all. Use types=["Epic"] to list epics (replaces deprecated epic_list).
 - work_item_list: state, search, types, author_username, label_name, confidential, sort, first, after
-- work_item_get: iid*
+- work_item_get: work_item_iid*
 - work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type}
-- work_item_update: iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
-- work_item_delete: iid* (permanent)
+- work_item_update: work_item_iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
+- work_item_delete: work_item_iid* (permanent)
 
 Statistics:
 - statistics_get: global issue stats (optional filters same as list)
 - statistics_get_group: group_id*
 - statistics_get_project: project_id*
 
-Award emoji (emoji_issue_*): project_id*, iid* for all.
+Award emoji (emoji_issue_*): project_id*, issue_iid* for all.
 - emoji_issue_list / emoji_issue_get (+ award_id*) / emoji_issue_delete (+ award_id*)
 - emoji_issue_create: name*
 - emoji_issue_note_list / emoji_issue_note_get: note_id*, (+ award_id* for get)
@@ -3599,10 +3599,10 @@ Todos and related issues:
 - related_issues: project_id*, mr_iid* — list issues mentioned or linked from the MR (paginated).
 
 Award emoji:
-- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, iid*, name* (create), award_id* (get/delete)
-- emoji_mr_get: project_id*, iid*, award_id*
-- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, iid*, note_id*, name* (create), award_id* (get/delete)
-- emoji_mr_note_get: project_id*, iid*, note_id*, award_id*
+- emoji_mr_list / emoji_mr_create / emoji_mr_delete: project_id*, mr_iid*, name* (create), award_id* (get/delete)
+- emoji_mr_get: project_id*, mr_iid*, award_id*
+- emoji_mr_note_list / emoji_mr_note_create / emoji_mr_note_delete: project_id*, mr_iid*, note_id*, name* (create), award_id* (get/delete)
+- emoji_mr_note_get: project_id*, mr_iid*, note_id*, award_id*
 
 Resource events:
 - event_mr_label_list / event_mr_label_get: project_id*, mr_iid*, label_event_id* (get)
@@ -8807,8 +8807,8 @@ Add a reply note to an existing epic discussion thread via the Work Items GraphQ
 
 - `body` (string) (required): Note body (Markdown supported)
 - `discussion_id` (string) (required): Discussion ID to reply to
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -9754,8 +9754,8 @@ Create a new discussion thread on a group epic via the Work Items GraphQL API.
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -10227,8 +10227,8 @@ Delete a note from an epic discussion thread via the Work Items GraphQL API.
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 - `note_id` (integer) (required): Note ID to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -10589,7 +10589,7 @@ Permanently delete a work item by IID. This action cannot be undone. Experimenta
 **Parameters:**
 
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)
-- `iid` (integer) (required): Work item IID
+- `work_item_iid` (integer) (required): Work item IID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -11193,8 +11193,8 @@ Permanently delete an epic from a GitLab group (via Work Items GraphQL API).
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -11204,8 +11204,8 @@ Get a single group epic by its IID (via Work Items GraphQL API). Returns title, 
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -11215,8 +11215,8 @@ Get all child epics of a parent epic (via REST API). Returns the list of sub-epi
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -11228,8 +11228,8 @@ Assign an existing issue to a GitLab group epic via the Work Items GraphQL API. 
 
 - `child_iid` (integer) (required): IID of the issue to assign to the epic
 - `child_project_path` (string) (required): Full project path of the issue to assign (e.g. my-group/my-project)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group that contains the epic
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -11241,9 +11241,9 @@ List all child issues of a GitLab group epic via the Work Items GraphQL API. Sup
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
 - `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `first` (): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `iid` (integer) (required): Epic IID within the group
 - `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -11256,8 +11256,8 @@ Remove an issue from a GitLab group epic via the Work Items GraphQL API. Clears 
 
 - `child_iid` (integer) (required): IID of the issue to remove from the epic
 - `child_project_path` (string) (required): Full project path of the issue to remove
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group that contains the epic
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -11269,8 +11269,8 @@ Reorder an issue within a GitLab group epic via the Work Items GraphQL API. Move
 
 - `adjacent_id` (string): Work item GID of the reference issue to position relative to
 - `child_id` (string) (required): Work item GID of the issue to reorder (from list output id field)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group that contains the epic
-- `iid` (integer) (required): Epic IID within the group
 - `relative_position` (string): Position relative to adjacent item: BEFORE or AFTER
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -11302,8 +11302,8 @@ Add a comment (note) to a GitLab group epic via the Work Items GraphQL API. Supp
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -11313,8 +11313,8 @@ Permanently delete a comment from a GitLab group epic via the Work Items GraphQL
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 - `note_id` (integer) (required): ID of the note to delete
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -11325,8 +11325,8 @@ Get a single comment (note) from a GitLab group epic by its note ID via the Work
 
 **Parameters:**
 
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 - `note_id` (integer) (required): ID of the note to retrieve
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -11339,9 +11339,9 @@ List all comments (notes) on a GitLab group epic via the Work Items GraphQL API.
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
 - `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `first` (): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `iid` (integer) (required): Epic IID within the group
 - `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -11353,8 +11353,8 @@ Edit the body text of an existing comment on a GitLab group epic via the Work It
 **Parameters:**
 
 - `body` (string) (required): Updated note body (Markdown supported)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 - `note_id` (integer) (required): ID of the note to update
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -11370,9 +11370,9 @@ Update an existing group epic (via Work Items GraphQL API). Can modify title, de
 - `color` (string): Epic color (hex format)
 - `description` (string): Updated description (Markdown supported)
 - `due_date` (string): Due date (YYYY-MM-DD)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
-- `iid` (integer) (required): Epic IID within the group
 - `parent_id` (): Global ID of the parent epic work item
 - `remove_label_ids` (): Global IDs of labels to remove
 - `start_date` (string): Start date (YYYY-MM-DD)
@@ -11470,8 +11470,8 @@ Delete a feature flag user list.
 
 **Parameters:**
 
-- `iid` (integer) (required): Feature flag user list internal ID
 - `project_id` (string) (required): Project ID or path
+- `user_list_iid` (integer) (required): Feature flag user list internal ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -11481,8 +11481,8 @@ Get a single feature flag user list by IID.
 
 **Parameters:**
 
-- `iid` (integer) (required): Feature flag user list internal ID
 - `project_id` (string) (required): Project ID or path
+- `user_list_iid` (integer) (required): Feature flag user list internal ID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -11505,9 +11505,9 @@ Update a feature flag user list.
 
 **Parameters:**
 
-- `iid` (integer) (required): Feature flag user list internal ID
 - `name` (string): New user list name
 - `project_id` (string) (required): Project ID or path
+- `user_list_iid` (integer) (required): Feature flag user list internal ID
 - `user_xids` (string): Comma-separated list of user external IDs
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -11861,8 +11861,8 @@ Get a single discussion thread on a group epic via the Work Items GraphQL API.
 **Parameters:**
 
 - `discussion_id` (string) (required): Discussion ID
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -12581,7 +12581,7 @@ Get a single work item by IID. Experimental: the Work Items API may introduce br
 **Parameters:**
 
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)
-- `iid` (integer) (required): Work item IID
+- `work_item_iid` (integer) (required): Work item IID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14098,7 +14098,7 @@ Add an award emoji reaction to a project issue.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -14111,7 +14111,7 @@ Delete an award emoji from a project issue.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -14123,7 +14123,7 @@ Get a single award emoji on a project issue.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14134,7 +14134,7 @@ List all award emoji on a project issue.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -14431,7 +14431,7 @@ Add an award emoji reaction to a project issue note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -14445,7 +14445,7 @@ Delete an award emoji from a project issue note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -14458,7 +14458,7 @@ Get a single award emoji on a project issue note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -14470,7 +14470,7 @@ List all award emoji on a project issue note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `issue_iid` (integer) (required): Issue IID (project-scoped internal ID)
 - `note_id` (integer) (required): Note ID
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
@@ -15253,9 +15253,9 @@ List discussion threads on a group epic via the Work Items GraphQL API.
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
 - `before` (string): Cursor for backward pagination (from previous response start_cursor)
+- `epic_iid` (integer) (required): Epic IID within the group
 - `first` (): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
-- `iid` (integer) (required): Epic IID within the group
 - `last` (): Number of items from the end (backward pagination)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16559,7 +16559,7 @@ Add an award emoji reaction to a merge request.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16572,7 +16572,7 @@ Delete an award emoji from a merge request.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -16584,7 +16584,7 @@ Get a single award emoji on a merge request.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -16595,7 +16595,7 @@ List all award emoji on a merge request.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16809,7 +16809,7 @@ Add an award emoji reaction to a merge request note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -16823,7 +16823,7 @@ Delete an award emoji from a merge request note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16836,7 +16836,7 @@ Get a single award emoji on a merge request note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -16848,7 +16848,7 @@ List all award emoji on a merge request note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
+- `mr_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): Note ID
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
@@ -20692,9 +20692,9 @@ Add an award emoji reaction to a project snippet.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -20705,8 +20705,8 @@ Delete an award emoji from a project snippet.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -20717,8 +20717,8 @@ Get a single award emoji on a project snippet.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20728,10 +20728,10 @@ List all award emoji on a project snippet.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20822,10 +20822,10 @@ Add an award emoji reaction to a project snippet note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `name` (string) (required): Emoji name without colons (e.g. thumbsup)
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -20836,9 +20836,9 @@ Delete an award emoji from a project snippet note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -20849,9 +20849,9 @@ Get a single award emoji on a project snippet note.
 **Parameters:**
 
 - `award_id` (integer) (required): Award emoji ID
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `note_id` (integer) (required): Note ID
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20861,11 +20861,11 @@ List all award emoji on a project snippet note.
 
 **Parameters:**
 
-- `iid` (integer) (required): Issue IID or MR IID or Snippet ID
 - `note_id` (integer) (required): Note ID
 - `page` (integer): Page number for pagination (default 1)
 - `per_page` (integer): Number of items per page (default 20, max 100)
 - `project_id` (string) (required): Project ID or URL-encoded path
+- `snippet_id` (integer) (required): Snippet ID
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -21291,8 +21291,8 @@ Update an existing note in an epic discussion thread via the Work Items GraphQL 
 **Parameters:**
 
 - `body` (string) (required): Updated note body
+- `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
-- `iid` (integer) (required): Epic IID within the group
 - `note_id` (integer) (required): Note ID to update
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -21486,7 +21486,6 @@ Update an existing work item by IID. Supports changing title, state (CLOSE/REOPE
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
-- `iid` (integer) (required): Work item IID
 - `iteration_id` (): Global ID of the iteration
 - `milestone_id` (): Global ID of the milestone
 - `parent_id` (): Global ID of the parent work item
@@ -21496,6 +21495,7 @@ Update an existing work item by IID. Supports changing title, state (CLOSE/REOPE
 - `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string): New title
 - `weight` (): Weight of the work item
+- `work_item_iid` (integer) (required): Work item IID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
