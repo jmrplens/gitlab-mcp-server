@@ -89,6 +89,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 			"When to use: human-in-the-loop release publishing. " +
 			"NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\n" +
 			descElicitRequired + " If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\n" +
+			"Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent — re-running with the same tag returns 409 (release already exists). Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\n" +
 			"Returns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release, gitlab_tag.",
 		Annotations: toolutil.CreateAnnotations,
 		Icons:       toolutil.IconConfig,

@@ -399,6 +399,12 @@ Valid actions: ` + validActionsString(routes) + `
 
 When to use: project-level CRUD, settings, members, labels, milestones, webhooks, boards, integrations, Pages, mirrors, approval rules. NOT for: file content/commits (use gitlab_repository), branches (use gitlab_branch), wiki pages (use gitlab_wiki), issues (use gitlab_issue), MRs (use gitlab_merge_request).
 
+Behavior:
+- Idempotent reads: get/list/*_list/*_get, hook_test, badge_preview, languages, repository_storage_get, statistics_get.
+- update / *_update / *_edit / star / unstar / archive / unarchive / hook_set_* are idempotent (same input → same state); fork creates a new project on every call (non-idempotent).
+- Side effects: hook_add/edit/test trigger webhook deliveries; member_add/share/edit and integration_set_* notify users; transfer relocates the project and members; export_schedule / import_from_file / start_mirroring / start_housekeeping queue long-running async work (poll *_status); upload_avatar / upload mutate storage and return URLs.
+- Destructive (irreversible): delete (unless restore window applies), hook_delete, label_delete, milestone_delete, badge_delete, board_delete, integration_delete, pages_unpublish, pages_domain_delete, approval_rule_delete, mirror_delete, mirror_force_push, delete_shared_group, delete_fork_relation, upload_delete; archive is reversible via unarchive.
+
 Returns:
 - list / list_* / *_list / members / list_forks / list_starrers / list_groups / hook_list / label_list / milestone_list / badge_list / board_list / board_list_list / integration_list / pages_domain_list / pages_domain_list_all / approval_rule_list / mirror_list / list_invited_groups / upload_list: arrays with pagination {page, per_page, total, next_page}.
 - get / create / update / fork / transfer / star / unstar / archive / unarchive / restore / member_get / member_inherited / member_add / member_edit / hook_get / hook_add / hook_edit / hook_test / label_* / milestone_* (non-list) / badge_get / badge_add / badge_edit / badge_preview / board_get / board_create / board_update / board_list_get / board_list_create / board_list_update / integration_get / integration_set_jira / pages_get / pages_update / pages_domain_get / pages_domain_create / pages_domain_update / approval_config_get / approval_config_change / approval_rule_get / approval_rule_create / approval_rule_update / pull_mirror_get / pull_mirror_configure / mirror_get / mirror_get_public_key / mirror_add / mirror_edit / repository_storage_get / statistics_get / languages / share_with_group / upload / upload_avatar / download_avatar / create_for_user / create_fork_relation / export_status / export_download / import_from_file / import_status / export_schedule: resource object.
@@ -970,6 +976,13 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: file/commit operations, diffs, blame, compare, archives, submodules, markdown rendering. NOT for: branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
 
+Behavior:
+- Idempotent reads: tree, blob, raw_blob, archive, compare, merge_base, contributors, file_get/raw/metadata/raw_metadata/blame, list_submodules, read_submodule_file, file_history, commit_list/get/diff/refs/comments/merge_requests/statuses/signature, commit_discussion_list/get, markdown_render, changelog_generate.
+- file_create / file_update / file_delete / commit_create / commit_cherry_pick / commit_revert / update_submodule / changelog_add produce new commits and are NON-idempotent (a fresh SHA is created each call, even with identical inputs); use last_commit_id on file_update/file_delete for optimistic-concurrency safety.
+- commit_status_set is idempotent per (sha, name, ref); commit_comment_create / commit_discussion_create / commit_discussion_add_note / commit_discussion_update_note append rather than replace.
+- Side effects: any commit-producing action triggers webhooks, CI pipelines, and protected-branch / push-rule checks; archive returns large binary payloads (base64).
+- File delete is destructive at the working-tree level but git history is preserved.
+
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
 Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
@@ -1189,6 +1202,12 @@ func registerGroupMeta(server *mcp.Server, client *gitlabclient.Client, enterpri
 Valid actions: ` + validActionsString(routes) + `
 
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
+
+Behavior:
+- Idempotent reads: get / list / projects / members / subgroups / issues / search / *_list / *_get / hook_list / badge_list / group_label_list / group_milestone_list / group_board_list / wiki_list / epic_list / protected_*_list / release_list / ldap_link_list / saml_link_list / service_account_*_list.
+- update / *_update / *_edit / archive / unarchive / hook_test are idempotent (same input → same state). create / *_create / hook_add / fork-equivalents are NON-idempotent (re-invocation creates a duplicate or returns 409).
+- Side effects: group_member_add / group_member_share / group_member_edit may notify the invited user/group; hook_add / hook_edit trigger webhook deliveries; transfer_project moves repository data and re-permissions members; service_account_pat_create returns the cleartext token only ONCE — store it immediately; ldap/saml link mutations re-evaluate group membership on next sign-in (read-after-write may lag).
+- Destructive: delete cascades to subgroups, projects, members, issues, MRs (irreversible when permanently_remove=true; restore window applies otherwise); hook_delete, badge_delete, group_label_delete, group_milestone_delete, group_board_delete, group_upload_delete_*, epic_delete, wiki_delete, protected_*_unprotect, ldap_link_delete*, saml_link_delete, service_account_delete and service_account_pat_revoke are irreversible. archive is reversible via unarchive.
 
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
 
@@ -1580,6 +1599,12 @@ Valid actions: `+validActionsString(routes)+`
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
 NOT for: jobs, logs, artifacts, manual play actions (use gitlab_job), MR-specific pipelines (use gitlab_merge_request 'pipelines' / 'create_pipeline'), CI lint or includes (use gitlab_template).
 
+Behavior:
+- Idempotent reads: list / latest / get / variables / test_report / test_report_summary / trigger_list / trigger_get / resource_group_list / resource_group_get / resource_group_upcoming_jobs / schedule_list / schedule_get / schedule_list_triggered_pipelines.
+- create / retry / schedule_run / trigger_run start a NEW run on every call (NON-idempotent — produce a fresh pipeline_id). cancel is idempotent (no-op once final). update_metadata / trigger_update / resource_group_edit / schedule_update / schedule_edit_variable / schedule_take_ownership are idempotent (same input → same state).
+- Side effects: create / retry / schedule_run / trigger_run queue runners, consume CI minutes, may trigger downstream pipelines, deployments and webhooks. trigger_create returns a secret token visible only ONCE — store it immediately. wait blocks server-side until terminal state or timeout.
+- Destructive: delete permanently removes the pipeline and all its jobs, artifacts, logs and traces (irreversible). trigger_delete / schedule_delete / schedule_delete_variable are irreversible.
+
 Returns:
 - list / latest / variables / test_report / test_report_summary / trigger_list / resource_group_list / resource_group_upcoming_jobs / schedule_list / schedule_list_triggered_pipelines: array(s) or aggregated payloads with pagination where applicable.
 - get / create / cancel / retry / update_metadata / wait / trigger_get / trigger_create / trigger_update / trigger_run / resource_group_get / resource_group_edit / schedule_get / schedule_create / schedule_update / schedule_run / schedule_take_ownership / schedule_create_variable / schedule_edit_variable: pipeline / trigger / resource group / schedule object.
@@ -1659,6 +1684,12 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 Valid actions: `+validActionsString(routes)+`
 
 When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
+
+Behavior:
+- Idempotent reads: list / list_project / get / trace / artifacts / download_artifacts / download_single_artifact / download_single_artifact_by_ref / list_bridges / token_scope_get / token_scope_list_inbound / token_scope_list_groups.
+- retry / play start a NEW job run on every call (NON-idempotent — return a fresh job_id; play also passes new variables). cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.
+- Side effects: retry / play queue runners, consume CI minutes, and may trigger downstream pipelines and notifications. trace returns up to 100KB of log; download_artifacts streams up to 1MB inline (base64).
+- Destructive: erase clears the job log and artifacts in place (irreversible); delete_artifacts removes a single job's artifacts; delete_project_artifacts wipes ALL artifacts across the project (irreversible). token_scope_remove_* tightens trust boundaries and may break running pipelines.
 
 Param conventions: * = required. All job actions need project_id*. List actions accept page, per_page.
 
@@ -1952,6 +1983,12 @@ Valid actions: `+validActionsString(routes)+`
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
 NOT for: CI/CD variables scoped to environments (use gitlab_ci_variable), pipelines/jobs (use gitlab_pipeline / gitlab_job), feature flag rollout strategies (use gitlab_feature_flags).
 
+Behavior:
+- Idempotent reads: list / get / protected_list / protected_get / freeze_list / freeze_get / deployment_list / deployment_get / deployment_merge_requests.
+- update / protected_update / freeze_update / deployment_update are idempotent (same input → same state). create / protected_protect / freeze_create / deployment_create are NON-idempotent on duplicate (project_id, name) — return 409. deployment_approve_or_reject is single-shot per (deployment_id, user) and cannot be reversed.
+- Side effects: stop runs the on-stop CI job (unless force=true) and terminates any review-app resources; deployment_approve_or_reject may release queued CI jobs awaiting a manual gate; freeze_create immediately blocks deploys that match the cron window.
+- Destructive: delete and stop are destructive — stop cannot be reversed without re-deploying; deployment_delete removes the deployment audit record (history loss).
+
 Returns: resource object (environment / protection / freeze / deployment) for *_get/*_create/*_update/*_protect; paginated array for *_list; updated deployment with approval state for deployment_approve_or_reject; MR list for deployment_merge_requests; {success, message} for *_delete/*_unprotect/stop.
 Errors: 404 not found, 403 forbidden (hint: protect/unprotect require Maintainer+), 400 invalid params (hint: tier ∈ production/staging/testing/development/other; freeze cron timezone must be valid TZ name).
 
@@ -2192,6 +2229,12 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
 NOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).
+
+Behavior:
+- Idempotent reads: settings_get / appearance_get / *_list / *_get / sidekiq_* / app_statistics_get / metadata_get / usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions / plan_limits_get / feature_list / feature_list_definitions.
+- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / system_hook_test / error_tracking_update_settings are idempotent (same input → same state). license_add / system_hook_add / broadcast_message_create / application_create / bulk_import_start / import_from_github / import_from_bitbucket* / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).
+- Side effects: license_add / system_hook_add / broadcast_message_create / settings_update / feature_set apply instance-wide IMMEDIATELY (all sessions affected); bulk_import_* and import_* queue long-running async migrations — poll bulk_import_get / bulk_import_entity_* until status='finished'; usage_data_track_event posts to Snowplow when send_to_snowplow=true; application_create returns the OAuth secret only ONCE.
+- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_purge, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.
 
 Returns: resource object for *_get/*_create/*_update/*_set/*_add; metrics object for Sidekiq/usage_data/app_statistics/metadata; paginated array for *_list / feature_list_definitions; {success, message} for *_delete/*_revoke/*_purge/*_unlock.
 Errors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded; system hook url must be https).
@@ -2513,6 +2556,12 @@ Valid actions: `+validActionsString(routes)+`
 
 When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
 NOT for: release asset links — these are managed by gitlab_release link_*; secure files (use gitlab_admin secure_file_*); ML model registry artifacts (use gitlab_model_registry); upload general project attachments (use gitlab_project upload).
+
+Behavior:
+- Idempotent reads: list / file_list / registry_list_project / registry_list_group / registry_get / registry_tag_list / registry_tag_get / registry_rule_list / protection_rule_list / download.
+- publish / publish_directory / publish_and_link create a NEW package version (NON-idempotent — re-publishing the same (package_name, package_version, file_name) returns 400/409 or creates a duplicate file depending on package_type). registry_rule_update / protection_rule_update are idempotent; *_create are non-idempotent on duplicate keys.
+- Side effects: publish_and_link also creates a release link visible to release subscribers; download streams large files to disk when output_path is set; protection_rule_create / registry_rule_create take effect immediately and may block subsequent publish/delete calls.
+- Destructive: delete (entire package), file_delete (single file), registry_delete (entire image repo), registry_tag_delete / registry_tag_delete_bulk (image tags — name_regex_delete may match many tags) and *_rule_delete are irreversible. Protection rules can return 403 ('forbidden by protection rule') instead of executing the delete.
 
 Returns:
 - list / file_list / registry_list_project / registry_list_group / registry_tag_list / registry_rule_list / protection_rule_list: arrays with pagination.
