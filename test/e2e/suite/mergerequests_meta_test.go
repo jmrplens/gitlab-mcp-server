@@ -311,7 +311,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"name":       "rocket",
 			},
 		})
@@ -324,7 +324,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireTrue(t, mrIID > 0, "mrIID not set")
 		out, err := callToolOn[awardemoji.ListOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "emoji_mr_list",
-			"params": map[string]any{"project_id": proj.pidStr(), "iid": mrIID},
+			"params": map[string]any{"project_id": proj.pidStr(), "mr_iid": mrIID},
 		})
 		requireNoError(t, err, "emoji_mr_list")
 		requireTrue(t, len(out.AwardEmoji) >= 1, "expected at least 1 MR emoji")
@@ -337,7 +337,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"award_id":   mrEmojiID,
 			},
 		})
@@ -352,7 +352,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"award_id":   mrEmojiID,
 			},
 		})
@@ -384,7 +384,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_note_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"note_id":    mrNoteID,
 				"name":       "thumbsup",
 			},
@@ -400,7 +400,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_note_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"note_id":    mrNoteID,
 			},
 		})
@@ -415,7 +415,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_note_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"note_id":    mrNoteID,
 				"award_id":   mrNoteEmojiID,
 			},
@@ -431,7 +431,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "emoji_mr_note_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        mrIID,
+				"mr_iid":        mrIID,
 				"note_id":    mrNoteID,
 				"award_id":   mrNoteEmojiID,
 			},

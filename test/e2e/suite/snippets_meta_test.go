@@ -445,7 +445,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"name":       "thumbsup",
 			},
 		})
@@ -460,7 +460,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 			},
 		})
 		requireNoError(t, err, "emoji_snippet_list")
@@ -473,7 +473,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"award_id":   emojiID,
 			},
 		})
@@ -487,7 +487,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"award_id":   emojiID,
 			},
 		})
@@ -513,7 +513,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"note_id":    noteID,
 				"name":       "heart",
 			},
@@ -529,7 +529,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"note_id":    noteID,
 			},
 		})
@@ -543,7 +543,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},
@@ -558,7 +558,7 @@ func TestMeta_SnippetEmoji(t *testing.T) {
 			"action": "emoji_snippet_note_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"iid":        snippetIID,
+				"snippet_iid":        snippetIID,
 				"note_id":    noteID,
 				"award_id":   noteEmojiID,
 			},
