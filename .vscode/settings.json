@@ -1,8 +1,6 @@
 {
     "gopls": {
-        "build.buildFlags": [
-            "-tags=e2e"
-        ],
+        "build.buildFlags": ["-tags=e2e"],
         "ui.semanticTokens": true,
         // Delegate staticcheck to golangci-lint (on save) to avoid duplicate/inconsistent
         // diagnostics — .golangci.yml excludes ST1000, ST1016, QF1008 that gopls would flag.
@@ -19,9 +17,7 @@
     "go.lintOnSave": "package",
     "go.lintTool": "golangci-lint",
     "go.formatTool": "goimports",
-    "go.testFlags": [
-        "-count=1"
-    ],
+    "go.testFlags": ["-count=1"],
     "go.testTimeout": "300s",
     "editor.formatOnSave": true,
     "[go]": {
@@ -273,5 +269,5 @@
         "go:S1135": {
             "level": "off"
         }
-    },
+    }
 }
