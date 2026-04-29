@@ -5,6 +5,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -173,10 +174,10 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 		if wSnap.Description != gSnap.Description {
 			diffs = append(diffs, "CHANGED "+name+" description:\n  old: "+wSnap.Description+"\n  new: "+gSnap.Description)
 		}
-		if string(wSnap.InputSchema) != string(gSnap.InputSchema) {
+		if !rawJSONEqual(wSnap.InputSchema, gSnap.InputSchema) {
 			diffs = append(diffs, "CHANGED "+name+" inputSchema:\n  old: "+string(wSnap.InputSchema)+"\n  new: "+string(gSnap.InputSchema))
 		}
-		if string(wSnap.OutputSchema) != string(gSnap.OutputSchema) {
+		if !rawJSONEqual(wSnap.OutputSchema, gSnap.OutputSchema) {
 			diffs = append(diffs, "CHANGED "+name+" outputSchema:\n  old: "+string(wSnap.OutputSchema)+"\n  new: "+string(gSnap.OutputSchema))
 		}
 		wAnn, err := json.Marshal(wSnap.Annotations)
@@ -193,7 +194,21 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 	}
 
 	slices.Sort(diffs)
+	if len(diffs) == 0 {
+		return
+	}
 
 	t.Errorf("Tool snapshots changed (%s). Found %d difference(s):\n%s\n\nRun with UPDATE_TOOLSNAPS=true to update golden files.",
 		goldenPath, len(diffs), strings.Join(diffs, "\n"))
+}
+
+func rawJSONEqual(want, got json.RawMessage) bool {
+	var compactWant, compactGot bytes.Buffer
+	if err := json.Compact(&compactWant, want); err != nil {
+		return string(want) == string(got)
+	}
+	if err := json.Compact(&compactGot, got); err != nil {
+		return string(want) == string(got)
+	}
+	return bytes.Equal(compactWant.Bytes(), compactGot.Bytes())
 }
