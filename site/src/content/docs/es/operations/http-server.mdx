@@ -241,7 +241,54 @@ curl -X POST http://localhost:8080/mcp \
 </TabItem>
 </Tabs>
 
-## Despliegue con Docker Compose
+## Despliegue con Docker
+
+El proyecto publica una imagen Docker multi-arquitectura en [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) para `linux/amd64` y `linux/arm64`. La imagen se ejecuta como usuario no-root (UID 10001), expone el puerto 8080 e incluye un endpoint `/health` para orquestadores.
+
+### Inicio rápido con `docker run`
+
+<Tabs>
+<TabItem label="Instancia única">
+
+```bash
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.ejemplo.com
+```
+
+</TabItem>
+<TabItem label="Multi-instancia">
+
+```bash
+# Omitir --gitlab-url; los clientes envían la cabecera GITLAB-URL por petición
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
+```
+
+</TabItem>
+</Tabs>
+
+:::tip
+Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.3.4`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
+:::
+
+### Docker Compose
 
 ```yaml
 services:
@@ -257,6 +304,20 @@ services:
       - "--max-http-clients=200"
       - "--session-timeout=1h"
       # O modo multi-instancia (eliminar --gitlab-url, los clientes envían la cabecera GITLAB-URL)
+    # Endurecimiento de seguridad (mínimo privilegio, OWASP Docker security)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 ```
 
@@ -265,6 +326,28 @@ Iniciar el servicio:
 ```bash
 docker compose up -d
 ```
+
+:::note
+Un [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) de referencia se incluye en la raíz del repositorio. Lee la configuración desde un archivo `.env` y aplica el mismo endurecimiento mostrado arriba.
+:::
+
+### Modelo de seguridad de la imagen
+
+La imagen sigue las guías OWASP Docker Top 10:
+
+| Propiedad               | Valor                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Imagen base             | `alpine:3.23` (mínima, parcheada regularmente)                                |
+| Usuario                 | `appuser` (UID 10001, no-root)                                                |
+| Sistema de archivos     | Solo lectura con `tmpfs` escribible para `/tmp`                               |
+| Capabilities            | Todas eliminadas (`--cap-drop=ALL`)                                           |
+| Escalada de privilegios | Deshabilitada (`no-new-privileges:true`)                                      |
+| Flags de compilación    | `-trimpath -buildmode=pie` (binario PIE, sin rutas de fuente en stack traces) |
+| Etiquetas OCI           | `org.opencontainers.image.*` con versión, commit, URL de origen               |
+
+### Auto-actualización dentro de contenedores
+
+La auto-actualización está **deshabilitada por defecto** en despliegues Docker. La inmutabilidad del contenedor es el patrón recomendado: descargar una imagen con etiqueta nueva y reiniciar el contenedor. Si necesitas actualizaciones in-situ (ej. en un despliegue de host único sin un mirror de registro de imágenes), establece `--auto-update=true` y monta la ruta del binario como un volumen escribible.
 
 ## Verificación de salud
 

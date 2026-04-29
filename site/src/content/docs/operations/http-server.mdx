@@ -241,7 +241,54 @@ curl -X POST http://localhost:8080/mcp \
 </TabItem>
 </Tabs>
 
-## Docker Compose deployment
+## Docker deployment
+
+The project publishes a multi-arch Docker image at [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) for `linux/amd64` and `linux/arm64`. The image runs as a non-root user (UID 10001), exposes port 8080, and ships a built-in `/health` endpoint for orchestrators.
+
+### Quick start with `docker run`
+
+<Tabs>
+<TabItem label="Single instance">
+
+```bash
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.example.com
+```
+
+</TabItem>
+<TabItem label="Multi-instance">
+
+```bash
+# Omit --gitlab-url; clients send the GITLAB-URL header per request
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
+```
+
+</TabItem>
+</Tabs>
+
+:::tip
+Pin the image to a specific version (e.g. `ghcr.io/jmrplens/gitlab-mcp-server:1.3.4`) in production. The `latest` tag tracks the newest release and may shift unexpectedly.
+:::
+
+### Docker Compose
 
 ```yaml
 services:
@@ -257,6 +304,20 @@ services:
       - "--max-http-clients=200"
       - "--session-timeout=1h"
       # Or multi-instance mode (remove --gitlab-url, clients send GITLAB-URL header)
+    # Security hardening (least privilege, OWASP Docker security)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 ```
 
@@ -265,6 +326,28 @@ Start the service:
 ```bash
 docker compose up -d
 ```
+
+:::note
+A reference [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) is shipped at the repository root. It reads configuration from a `.env` file and applies the same hardening shown above.
+:::
+
+### Image security model
+
+The image follows OWASP Docker Top 10 guidance:
+
+| Property             | Value                                                                    |
+| -------------------- | ------------------------------------------------------------------------ |
+| Base image           | `alpine:3.23` (minimal, regularly patched)                               |
+| User                 | `appuser` (UID 10001, non-root)                                          |
+| Filesystem           | Read-only with writable `tmpfs` for `/tmp`                               |
+| Capabilities         | All dropped (`--cap-drop=ALL`)                                           |
+| Privilege escalation | Disabled (`no-new-privileges:true`)                                      |
+| Build flags          | `-trimpath -buildmode=pie` (PIE binary, no source paths in stack traces) |
+| OCI labels           | `org.opencontainers.image.*` populated with version, commit, source URL  |
+
+### Auto-update inside containers
+
+Auto-update is **disabled by default** in Docker deployments. Container immutability is the recommended pattern: pull a newer image tag and restart the container. If you need in-place updates (e.g. on a single-host deployment without an image registry mirror), set `--auto-update=true` and mount the binary path as a writable volume.
 
 ## Health check
 
