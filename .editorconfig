@@ -14,9 +14,13 @@ indent_size = 4
 [*.go]
 indent_style = tab
 
-[*.{yml,yaml,json,jsonc,md}]
+[*.{yml,yaml,md}]
 indent_style = space
 indent_size = 2
+
+[*.json*]
+indent_style = space
+indent_size = 4
 
 [Makefile]
 indent_style = tab

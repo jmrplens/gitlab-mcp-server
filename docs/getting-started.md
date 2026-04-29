@@ -158,13 +158,13 @@ See [Meta-Tools](meta-tools.md) for the full reference.
 
 ## Alternative: Open Plugins (Cursor / Claude Code)
 
-The repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json` + `.mcp.json`) so the server can be installed in a single step on conformant hosts:
+The repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json` + `mcp.json`) so the server can be installed in a single step on conformant hosts:
 
 ```bash
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The bundled `.mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. The host passes these environment variables through to the container:
+The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. The host passes these environment variables through to the container:
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
@@ -177,7 +177,7 @@ The bundled `.mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab
 | `GITLAB_SAFE_MODE`       | No       | Preview mutating tool inputs (default `false`)           |
 | `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)        |
 
-The Open Plugins spec starts every entry in `.mcp.json` automatically and does not support runtime variants, so the manifest ships with a single Docker entry. To use the native binary instead, edit the local copy of `.mcp.json` (typically under `.agents/plugins/gitlab-mcp-server/`) after installation and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
+The Open Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 
 ---
 
