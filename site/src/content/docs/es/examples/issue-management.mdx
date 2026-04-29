@@ -3,9 +3,43 @@ title: Ejemplos de gestión de issues
 description: Ejemplos de triaje de issues, seguimiento y gestión de proyectos con GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="Flujos CI/CD"
+		href="/gitlab-mcp-server/es/examples/ci-cd-workflows/"
+		description="Gestión y monitorización de pipelines"
+	/>
+	<LinkCard
+		title="Revisión de Código"
+		href="/gitlab-mcp-server/es/examples/code-review-workflows/"
+		description="Revisión de MRs, análisis con IA y discusiones"
+	/>
+	<LinkCard
+		title="Ejemplos de Uso"
+		href="/gitlab-mcp-server/es/examples/usage/"
+		description="Referencia rápida para todos los dominios"
+	/>
+</CardGrid>
+
 Ejemplos paso a paso para flujos de gestión de issues y triaje de proyectos. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
 
 ## Triaje de issues
+
+```mermaid
+flowchart LR
+    A[Ver Issues<br/>Abiertos] --> B[Asignar y<br/>Etiquetar]
+    B --> C[Vincular Issues<br/>Relacionados]
+    C --> D[Seguir en<br/>Milestone]
+    D --> E{Resuelto?}
+    E -->|Sí| F[Cerrar Issue]
+    E -->|No| G[Añadir Comentario<br/>y Discutir]
+    G --> B
+
+    style A fill:#3b82f6,color:#fff
+    style F fill:#22c55e,color:#fff
+```
 
 ### Ver issues abiertos
 

@@ -3,9 +3,43 @@ title: Issue Management Examples
 description: Issue triage, tracking, and project management examples using GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="CI/CD Workflows"
+		href="/gitlab-mcp-server/examples/ci-cd-workflows/"
+		description="Pipeline management and monitoring"
+	/>
+	<LinkCard
+		title="Code Review Workflows"
+		href="/gitlab-mcp-server/examples/code-review-workflows/"
+		description="MR review, AI analysis, and discussions"
+	/>
+	<LinkCard
+		title="Usage Examples"
+		href="/gitlab-mcp-server/examples/usage/"
+		description="Quick reference for all domains"
+	/>
+</CardGrid>
+
 Step-by-step examples for issue management and project triage workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
 
 ## Issue triage
+
+```mermaid
+flowchart LR
+    A[View Open<br/>Issues] --> B[Assign &<br/>Label]
+    B --> C[Link Related<br/>Issues]
+    C --> D[Track in<br/>Milestone]
+    D --> E{Resolved?}
+    E -->|Yes| F[Close Issue]
+    E -->|No| G[Add Comment<br/>& Discuss]
+    G --> B
+
+    style A fill:#3b82f6,color:#fff
+    style F fill:#22c55e,color:#fff
+```
 
 ### View open issues
 

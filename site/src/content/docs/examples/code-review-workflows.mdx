@@ -3,9 +3,54 @@ title: Code Review Workflow Examples
 description: Merge request review and code analysis examples using GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="CI/CD Workflows"
+		href="/gitlab-mcp-server/examples/ci-cd-workflows/"
+		description="Pipeline management and monitoring"
+	/>
+	<LinkCard
+		title="Issue Management"
+		href="/gitlab-mcp-server/examples/issue-management/"
+		description="Triage, tracking, and project management"
+	/>
+	<LinkCard
+		title="Usage Examples"
+		href="/gitlab-mcp-server/examples/usage/"
+		description="Quick reference for all domains"
+	/>
+</CardGrid>
+
 Step-by-step examples for merge request review workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
 
 ## MR review workflow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant AI as AI Assistant
+    participant MCP as MCP Server
+    participant GL as GitLab API
+
+    U->>AI: "Review MR !42"
+    AI->>MCP: gitlab_merge_request (action: list)
+    MCP->>GL: GET /projects/:id/merge_requests
+    GL-->>MCP: MR list
+    MCP-->>AI: Open MRs
+    AI->>MCP: gitlab_merge_request (action: changes)
+    MCP->>GL: GET /merge_requests/:iid/changes
+    GL-->>MCP: Diff data
+    MCP-->>AI: File changes
+    AI->>MCP: gitlab_analyze_mr_changes (sampling)
+    MCP-->>AI: Review findings
+    AI->>MCP: gitlab_merge_request (action: note_create)
+    MCP->>GL: POST /merge_requests/:iid/notes
+    AI->>MCP: gitlab_merge_request (action: approve)
+    MCP->>GL: POST /merge_requests/:iid/approve
+    AI->>U: "Review complete, MR approved"
+```
 
 ### List MRs awaiting review
 

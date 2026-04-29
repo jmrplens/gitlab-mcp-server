@@ -3,9 +3,54 @@ title: Ejemplos de revisión de código
 description: Ejemplos de revisión de merge requests y análisis de código con GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="Flujos CI/CD"
+		href="/gitlab-mcp-server/es/examples/ci-cd-workflows/"
+		description="Gestión y monitorización de pipelines"
+	/>
+	<LinkCard
+		title="Gestión de Issues"
+		href="/gitlab-mcp-server/es/examples/issue-management/"
+		description="Triaje, seguimiento y gestión de proyectos"
+	/>
+	<LinkCard
+		title="Ejemplos de Uso"
+		href="/gitlab-mcp-server/es/examples/usage/"
+		description="Referencia rápida para todos los dominios"
+	/>
+</CardGrid>
+
 Ejemplos paso a paso para flujos de revisión de merge requests. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
 
 ## Flujo de revisión de MRs
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant AI as Asistente IA
+    participant MCP as MCP Server
+    participant GL as API de GitLab
+
+    U->>AI: "Revisa el MR !42"
+    AI->>MCP: gitlab_merge_request (action: list)
+    MCP->>GL: GET /projects/:id/merge_requests
+    GL-->>MCP: Lista de MRs
+    MCP-->>AI: MRs abiertos
+    AI->>MCP: gitlab_merge_request (action: changes)
+    MCP->>GL: GET /merge_requests/:iid/changes
+    GL-->>MCP: Datos del diff
+    MCP-->>AI: Cambios en archivos
+    AI->>MCP: gitlab_analyze_mr_changes (sampling)
+    MCP-->>AI: Hallazgos de revisión
+    AI->>MCP: gitlab_merge_request (action: note_create)
+    MCP->>GL: POST /merge_requests/:iid/notes
+    AI->>MCP: gitlab_merge_request (action: approve)
+    MCP->>GL: POST /merge_requests/:iid/approve
+    AI->>U: "Revisión completada, MR aprobado"
+```
 
 ### Listar MRs pendientes de revisión
 

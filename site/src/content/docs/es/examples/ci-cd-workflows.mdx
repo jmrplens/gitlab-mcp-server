@@ -3,9 +3,54 @@ title: Ejemplos de flujos CI/CD
 description: Ejemplos prácticos de gestión de pipelines CI/CD con GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="Revisión de Código"
+		href="/gitlab-mcp-server/es/examples/code-review-workflows/"
+		description="Revisión de MRs, análisis con IA y discusiones"
+	/>
+	<LinkCard
+		title="Gestión de Issues"
+		href="/gitlab-mcp-server/es/examples/issue-management/"
+		description="Triaje, seguimiento y gestión de proyectos"
+	/>
+	<LinkCard
+		title="Ejemplos de Uso"
+		href="/gitlab-mcp-server/es/examples/usage/"
+		description="Referencia rápida para todos los dominios"
+	/>
+</CardGrid>
+
 Ejemplos paso a paso para flujos de trabajo CI/CD comunes. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
 
 ## Monitorizar estado de pipelines
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant AI as Asistente IA
+    participant MCP as MCP Server
+    participant GL as API de GitLab
+
+    U->>AI: "Muéstrame pipelines fallidos"
+    AI->>MCP: gitlab_pipeline (action: list)
+    MCP->>GL: GET /projects/:id/pipelines
+    GL-->>MCP: Lista de pipelines
+    MCP-->>AI: Pipelines fallidos
+    AI->>U: "Se encontraron 2 pipelines fallidos"
+    U->>AI: "Muéstrame los jobs fallidos en #45892"
+    AI->>MCP: gitlab_pipeline (action: job_list)
+    MCP->>GL: GET /projects/:id/pipelines/:id/jobs
+    GL-->>MCP: Detalles de jobs
+    MCP-->>AI: Jobs fallidos
+    AI->>MCP: gitlab_pipeline (action: job_log)
+    MCP->>GL: GET /projects/:id/jobs/:id/trace
+    GL-->>MCP: Salida del log
+    MCP-->>AI: Logs del job
+    AI->>U: Análisis de causa raíz + solución
+```
 
 ### Obtener resumen de pipelines
 

@@ -3,9 +3,23 @@ title: Logging
 description: Structured logging via MCP protocol
 ---
 
+import { Badge } from "@astrojs/starlight/components";
+
 GitLab MCP Server uses **dual logging** — log messages are sent both to stderr (for terminal/file capture) and to the MCP client via the protocol's logging capability.
 
 ## Dual output
+
+```mermaid
+flowchart LR
+    A[Tool Call] --> B[Logger]
+    B --> C[stderr<br/>Human-readable / JSON]
+    B --> D[MCP notifications/message<br/>Client UI]
+
+    style A fill:#6366f1,color:#fff
+    style B fill:#8b5cf6,color:#fff
+    style C fill:#3b82f6,color:#fff
+    style D fill:#22c55e,color:#fff
+```
 
 | Destination      | Format                      | Purpose                                                       |
 | ---------------- | --------------------------- | ------------------------------------------------------------- |
@@ -16,14 +30,31 @@ This ensures logs are always visible regardless of the client's logging support.
 
 ## Log levels
 
-The server supports four log levels:
+### Stderr levels (`LOG_LEVEL`)
 
-| Level   | When Used                                                                                                     |
-| ------- | ------------------------------------------------------------------------------------------------------------- |
-| `debug` | Detailed diagnostic information — tool call parameters, API request/response details, session pool operations |
-| `info`  | Normal operational events — server startup, tool registration, update checks                                  |
-| `warn`  | Non-fatal issues — network timeouts, missing optional configuration, deprecated usage                         |
-| `error` | Failures — authentication errors, API failures, unrecoverable tool errors                                     |
+The `LOG_LEVEL` environment variable accepts four values:
+
+| Level                                   | When Used                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| <Badge text="debug" variant="note" />   | Detailed diagnostic information — tool call parameters, API request/response details, session pool operations |
+| <Badge text="info" variant="success" /> | Normal operational events — server startup, tool registration, update checks                                  |
+| <Badge text="warn" variant="caution" /> | Non-fatal issues — network timeouts, missing optional configuration, deprecated usage                         |
+| <Badge text="error" variant="danger" /> | Failures — authentication errors, API failures, unrecoverable tool errors                                     |
+
+### MCP protocol levels (RFC 5424)
+
+The MCP `notifications/message` supports all eight RFC 5424 severity levels. Clients can filter via `logging/setLevel`:
+
+| Level                                       | Severity | When Used                                         |
+| ------------------------------------------- | -------- | ------------------------------------------------- |
+| <Badge text="debug" variant="note" />       | Lowest   | Diagnostic details (tool parameters, API traces)  |
+| <Badge text="info" variant="success" />     |          | Normal events (startup, registration)             |
+| <Badge text="notice" variant="note" />      |          | Significant but normal conditions                 |
+| <Badge text="warning" variant="caution" />  |          | Potential issues (timeouts, deprecation)          |
+| <Badge text="error" variant="danger" />     |          | Operation failures (API errors, auth failures)    |
+| <Badge text="critical" variant="danger" />  |          | Critical conditions requiring immediate attention |
+| <Badge text="alert" variant="danger" />     |          | Action must be taken immediately                  |
+| <Badge text="emergency" variant="danger" /> | Highest  | System is unusable                                |
 
 ## Configuration
 

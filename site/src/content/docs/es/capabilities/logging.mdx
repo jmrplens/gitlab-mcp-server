@@ -3,9 +3,23 @@ title: Registro de Logs
 description: Registro estructurado mediante el protocolo MCP
 ---
 
+import { Badge } from "@astrojs/starlight/components";
+
 GitLab MCP Server utiliza **registro dual** — los mensajes de log se envían tanto a stderr (para captura en terminal/archivo) como al cliente MCP a través de la capacidad de logging del protocolo.
 
 ## Salida dual
+
+```mermaid
+flowchart LR
+    A[Llamada a herramienta] --> B[Logger]
+    B --> C[stderr<br/>Texto legible / JSON]
+    B --> D[MCP notifications/message<br/>Interfaz del cliente]
+
+    style A fill:#6366f1,color:#fff
+    style B fill:#8b5cf6,color:#fff
+    style C fill:#3b82f6,color:#fff
+    style D fill:#22c55e,color:#fff
+```
 
 | Destino           | Formato                 | Propósito                                                                         |
 | ----------------- | ----------------------- | --------------------------------------------------------------------------------- |
@@ -16,14 +30,31 @@ Esto garantiza que los logs siempre sean visibles independientemente del soporte
 
 ## Niveles de log
 
-El servidor soporta cuatro niveles de log:
+### Niveles de stderr (`LOG_LEVEL`)
 
-| Nivel   | Cuándo se Usa                                                                                                                                         |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug` | Información de diagnóstico detallada — parámetros de llamadas a herramientas, detalles de peticiones/respuestas API, operaciones del pool de sesiones |
-| `info`  | Eventos operativos normales — inicio del servidor, registro de herramientas, comprobaciones de actualización                                          |
-| `warn`  | Problemas no fatales — tiempos de espera de red, configuración opcional faltante, uso obsoleto                                                        |
-| `error` | Fallos — errores de autenticación, fallos de API, errores irrecuperables de herramientas                                                              |
+La variable de entorno `LOG_LEVEL` acepta cuatro valores:
+
+| Nivel                                   | Cuándo se Usa                                                                                                                                         |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <Badge text="debug" variant="note" />   | Información de diagnóstico detallada — parámetros de llamadas a herramientas, detalles de peticiones/respuestas API, operaciones del pool de sesiones |
+| <Badge text="info" variant="success" /> | Eventos operativos normales — inicio del servidor, registro de herramientas, comprobaciones de actualización                                          |
+| <Badge text="warn" variant="caution" /> | Problemas no fatales — tiempos de espera de red, configuración opcional faltante, uso obsoleto                                                        |
+| <Badge text="error" variant="danger" /> | Fallos — errores de autenticación, fallos de API, errores irrecuperables de herramientas                                                              |
+
+### Niveles del protocolo MCP (RFC 5424)
+
+Las notificaciones MCP `notifications/message` soportan los ocho niveles de severidad RFC 5424. Los clientes pueden filtrar mediante `logging/setLevel`:
+
+| Nivel                                       | Severidad | Cuándo se Usa                                                    |
+| ------------------------------------------- | --------- | ---------------------------------------------------------------- |
+| <Badge text="debug" variant="note" />       | Mínima    | Detalles de diagnóstico (parámetros de herramientas, trazas API) |
+| <Badge text="info" variant="success" />     |           | Eventos normales (inicio, registro)                              |
+| <Badge text="notice" variant="note" />      |           | Condiciones significativas pero normales                         |
+| <Badge text="warning" variant="caution" />  |           | Problemas potenciales (timeouts, deprecaciones)                  |
+| <Badge text="error" variant="danger" />     |           | Fallos en operaciones (errores API, fallos de autenticación)     |
+| <Badge text="critical" variant="danger" />  |           | Condiciones críticas que requieren atención inmediata            |
+| <Badge text="alert" variant="danger" />     |           | Se debe actuar inmediatamente                                    |
+| <Badge text="emergency" variant="danger" /> | Máxima    | El sistema no es utilizable                                      |
 
 ## Configuración
 

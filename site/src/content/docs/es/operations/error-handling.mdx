@@ -3,6 +3,8 @@ title: Manejo de Errores
 description: Clasificación de errores, diagnósticos detallados y sugerencias accionables
 ---
 
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
 :::note[Documentación para desarrolladores]
 Para la referencia técnica completa, consulta [`docs/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/error-handling.md) en el repositorio.
 :::
@@ -39,32 +41,35 @@ Los errores a nivel de red también se clasifican:
 
 El servidor usa tres funciones de envoltura de errores, elegidas según el tipo de operación:
 
-### WrapErr — Operaciones de solo lectura
+<Tabs>
+  <TabItem label="WrapErr">
+    Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
 
-Usada para operaciones `list`, `get` y `search`. Clasifica el error y lo envuelve con el nombre de la operación:
+    ```text
+    list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
+    ```
 
-```text
-list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
-```
+  </TabItem>
+  <TabItem label="WrapErrWithMessage">
+    Usada para operaciones `create`, `update` y `delete`. Incluye el detalle específico del error extraído de la respuesta de la API de GitLab:
 
-### WrapErrWithMessage — Operaciones de escritura
+    ```text
+    fileCreate: bad request — A file with this name already exists: POST .../files: 400
+    ```
 
-Usada para operaciones `create`, `update` y `delete`. Incluye el detalle específico del error extraído de la respuesta de la API de GitLab:
+    El servidor extrae el mensaje de error detallado de la respuesta de la API de GitLab, manejando formatos anidados como `{message: {base: [text]}}`, y trunca a 300 caracteres.
 
-```text
-fileCreate: bad request — A file with this name already exists: POST .../files: 400
-```
+  </TabItem>
+  <TabItem label="WrapErrWithHint">
+    Usada cuando se conoce la acción correctiva para un error específico. Añade una sugerencia accionable:
 
-El servidor extrae el mensaje de error detallado de la respuesta de la API de GitLab, manejando formatos anidados como `{message: {base: [text]}}`, y trunca a 300 caracteres.
+    ```text
+    branchProtect: conflict — Protected branch rule already exists.
+    Suggestion: use gitlab_protected_branch_get to view current rules
+    ```
 
-### WrapErrWithHint — Acciones correctivas conocidas
-
-Usada cuando se conoce la acción correctiva para un error específico. Añade una sugerencia accionable:
-
-```text
-branchProtect: conflict — Protected branch rule already exists.
-Suggestion: use gitlab_protected_branch_get to view current rules
-```
+  </TabItem>
+</Tabs>
 
 ### Árbol de decisión
 
@@ -75,6 +80,24 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Error específico con corrección conocida        | `WrapErrWithHint`       |
 | Hint específico para un código de estado        | `WrapErrWithStatusHint` |
 | Operación get que devuelve 404                  | `NotFoundResult`        |
+
+```mermaid
+flowchart TD
+    A[Operación] --> B{Tipo?}
+    B -->|Solo lectura| C[WrapErr]
+    B -->|Escritura| D{Hint conocido?}
+    D -->|No| E[WrapErrWithMessage]
+    D -->|Sí| F{Código específico?}
+    F -->|Sí| G[WrapErrWithStatusHint]
+    F -->|No| H[WrapErrWithHint]
+    B -->|GET 404| I[NotFoundResult]
+
+    style C fill:#3b82f6,color:#fff
+    style E fill:#f59e0b,color:#000
+    style G fill:#ef4444,color:#fff
+    style H fill:#ef4444,color:#fff
+    style I fill:#22c55e,color:#fff
+```
 
 ### NotFoundResult — Respuestas informativas para 404
 
@@ -130,6 +153,10 @@ La respuesta estructurada incluye:
 | **Suggestion** | Sugerencia accionable (cuando está disponible)   |
 
 ## Errores transitorios vs permanentes
+
+:::danger[No reintentar errores permanentes]
+Los errores 4xx (excepto 429) son permanentes — reintentar no cambiará el resultado. Corrige la entrada o la configuración antes de reintentar.
+:::
 
 El servidor clasifica los errores como **transitorios** (reintentables) o **permanentes**:
 

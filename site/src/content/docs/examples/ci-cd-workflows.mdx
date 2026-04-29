@@ -3,9 +3,54 @@ title: CI/CD Workflow Examples
 description: Practical CI/CD pipeline management examples using GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="Code Review Workflows"
+		href="/gitlab-mcp-server/examples/code-review-workflows/"
+		description="MR review, AI analysis, and discussions"
+	/>
+	<LinkCard
+		title="Issue Management"
+		href="/gitlab-mcp-server/examples/issue-management/"
+		description="Triage, tracking, and project management"
+	/>
+	<LinkCard
+		title="Usage Examples"
+		href="/gitlab-mcp-server/examples/usage/"
+		description="Quick reference for all domains"
+	/>
+</CardGrid>
+
 Step-by-step examples for common CI/CD workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
 
 ## Monitor pipeline health
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant AI as AI Assistant
+    participant MCP as MCP Server
+    participant GL as GitLab API
+
+    U->>AI: "Show me failed pipelines"
+    AI->>MCP: gitlab_pipeline (action: list)
+    MCP->>GL: GET /projects/:id/pipelines
+    GL-->>MCP: Pipeline list
+    MCP-->>AI: Failed pipelines
+    AI->>U: "Found 2 failed pipelines"
+    U->>AI: "Show failed jobs in #45892"
+    AI->>MCP: gitlab_pipeline (action: job_list)
+    MCP->>GL: GET /projects/:id/pipelines/:id/jobs
+    GL-->>MCP: Job details
+    MCP-->>AI: Failed jobs
+    AI->>MCP: gitlab_pipeline (action: job_log)
+    MCP->>GL: GET /projects/:id/jobs/:id/trace
+    GL-->>MCP: Log output
+    MCP-->>AI: Job logs
+    AI->>U: Root cause analysis + fix
+```
 
 ### Get pipeline overview
 
