@@ -545,6 +545,7 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	})
 
 	if cfg.MetaTools {
+		tools.SetMetaParamSchema(cfg.MetaParamSchema)
 		tools.RegisterAllMeta(server, client, cfg.Enterprise)
 		tools.RegisterMCPMeta(server, client, updater)
 	} else {

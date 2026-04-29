@@ -109,3 +109,12 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 }
 
 var validActionsString = toolutil.ValidActionsString
+
+// SetMetaParamSchema selects the meta-tool input schema strategy used by all
+// meta-tool registrations in this package and its sub-packages. Accepts
+// "opaque" (default), "compact", or "full". Unknown values are coerced to
+// opaque so misconfiguration cannot break tools/list. Must be called before
+// [RegisterAllMeta].
+func SetMetaParamSchema(mode string) {
+	toolutil.SetMetaParamSchemaMode(mode)
+}

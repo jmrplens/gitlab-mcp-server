@@ -485,11 +485,12 @@ func ValidActionsString(routes ActionMap) string {
 // Setting this as Tool.InputSchema ensures the LLM sees the exact list of
 // valid actions in the schema, enabling first-try action selection.
 //
-// This is equivalent to BuildMetaToolSchema(routes, MetaParamSchemaOpaque)
-// and is preserved as the canonical entry-point for callers that always want
-// the opaque envelope.
+// The strategy used (opaque, compact, full) is read from the package-level
+// mode set via [SetMetaParamSchemaMode]. Default is opaque. Callers that
+// always want the opaque envelope regardless of global configuration should
+// invoke [BuildMetaToolSchema] directly.
 func MetaToolSchema(routes ActionMap) map[string]any {
-	return BuildMetaToolSchema(routes, MetaParamSchemaOpaque)
+	return BuildMetaToolSchema(routes, currentMetaParamSchemaMode())
 }
 
 // Meta-tool param schema mode constants. Mirrors the values accepted by the
@@ -500,6 +501,39 @@ const (
 	MetaParamSchemaCompact = "compact"
 	MetaParamSchemaFull    = "full"
 )
+
+// metaParamSchemaMode is the package-level mode consulted by MetaToolSchema.
+// It is intended to be set exactly once at startup (before any meta-tool is
+// registered) via SetMetaParamSchemaMode. Reads/writes are guarded by a
+// mutex purely to satisfy the race detector during concurrent test setups —
+// the production lifecycle is single-writer-then-many-readers.
+var (
+	metaParamSchemaMu   sync.RWMutex
+	metaParamSchemaMode = MetaParamSchemaOpaque
+)
+
+// SetMetaParamSchemaMode selects the meta-tool input schema strategy used by
+// [MetaToolSchema]. Accepts "opaque" (default), "compact", or "full". Any
+// other value is coerced to opaque so that misconfiguration cannot break the
+// tools/list payload. Must be called before [RegisterAllMeta]; later calls
+// only affect schemas built after the call returns.
+func SetMetaParamSchemaMode(mode string) {
+	metaParamSchemaMu.Lock()
+	defer metaParamSchemaMu.Unlock()
+	switch mode {
+	case MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull:
+		metaParamSchemaMode = mode
+	default:
+		metaParamSchemaMode = MetaParamSchemaOpaque
+	}
+}
+
+// currentMetaParamSchemaMode returns the active mode for MetaToolSchema.
+func currentMetaParamSchemaMode() string {
+	metaParamSchemaMu.RLock()
+	defer metaParamSchemaMu.RUnlock()
+	return metaParamSchemaMode
+}
 
 // paramsResourceHint is appended to the description of the params property
 // in every meta-tool input schema, regardless of mode. It points the LLM at
