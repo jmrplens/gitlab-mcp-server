@@ -583,6 +583,28 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	return base
 }
 
+// MetaToolDescriptionPrefix builds a fixed-format header that should be
+// prepended to a meta-tool's user-supplied description. The header gives
+// LLMs a literal JSON usage example based on the alphabetically first action
+// and points at the gitlab://schema/meta resource for per-action params
+// schemas. Returns an empty string when routes is empty so callers degrade
+// gracefully rather than emit a malformed header.
+func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
+	if len(routes) == 0 {
+		return ""
+	}
+	actions := make([]string, 0, len(routes))
+	for name := range routes {
+		actions = append(actions, name)
+	}
+	sort.Strings(actions)
+	first := actions[0]
+	return fmt.Sprintf(
+		"Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		first, toolName,
+	)
+}
+
 // buildMetaOneOf constructs the oneOf branch list for full/compact modes.
 // Each branch pins `action` to a const and replaces `params` with the captured
 // per-action InputSchema (optionally compacted).

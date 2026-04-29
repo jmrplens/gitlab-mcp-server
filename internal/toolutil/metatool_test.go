@@ -527,6 +527,30 @@ func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
 	}
 }
 
+// TestMetaToolDescriptionPrefix_FormatsLiteralExample checks that the prefix
+// embeds the alphabetically first action and the resource pointer for the
+// given tool name. Empty routes return an empty string.
+func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
+	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
+	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
+
+	wantExample := `Example: {"action":"create","params":{...}}`
+	if !strings.Contains(got, wantExample) {
+		t.Errorf("prefix missing literal example, got: %q", got)
+	}
+	wantPointer := "gitlab://schema/meta/gitlab_widget/<action>"
+	if !strings.Contains(got, wantPointer) {
+		t.Errorf("prefix missing resource pointer, got: %q", got)
+	}
+	if !strings.HasSuffix(got, "\n\n") {
+		t.Errorf("prefix should end with blank line separator, got: %q", got)
+	}
+
+	if MetaToolDescriptionPrefix("gitlab_empty", ActionMap{}) != "" {
+		t.Error("empty routes should yield empty prefix")
+	}
+}
+
 // enrichWithHints.
 
 // TestEnrichWithHints_AddsNextSteps verifies that enrichWithHints injects

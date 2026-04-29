@@ -86,7 +86,7 @@ func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        toolutil.TitleFromName(name),
-		Description:  desc,
+		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
 		Annotations:  toolutil.DeriveAnnotationsWithTitle(name, routes),
 		Icons:        icons,
 		InputSchema:  toolutil.MetaToolSchema(routes),
@@ -100,7 +100,7 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        toolutil.TitleFromName(name),
-		Description:  desc,
+		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
 		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
 		Icons:        icons,
 		InputSchema:  toolutil.MetaToolSchema(routes),
