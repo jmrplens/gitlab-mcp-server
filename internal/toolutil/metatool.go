@@ -43,10 +43,13 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
 // without string parsing. OutputSchema holds the JSON Schema for the
-// action's typed output (nil for void actions).
+// action's typed output (nil for void actions). InputSchema holds the
+// JSON Schema for the action's typed params (nil for routes constructed
+// via the untyped Route/DestructiveRoute constructors).
 type ActionRoute struct {
 	Handler      ActionFunc
 	Destructive  bool
+	InputSchema  map[string]any
 	OutputSchema map[string]any
 }
 
@@ -287,53 +290,67 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 }
 
 // RouteAction wraps a typed function as a non-destructive ActionRoute
-// and attaches the JSON Schema for the output type R.
+// and attaches the JSON Schema for the input type T and output type R.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  false,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
-// OutputSchema is nil because the action returns no data.
+// OutputSchema is nil because the action returns no data; InputSchema is
+// captured from T.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	return Route(WrapVoidAction(client, fn))
+	return ActionRoute{
+		Handler:     WrapVoidAction(client, fn),
+		Destructive: false,
+		InputSchema: schemaForType(reflect.TypeFor[T]()),
+	}
 }
 
 // RouteActionWithRequest wraps a typed function that needs the MCP request
-// as a non-destructive ActionRoute and attaches the output schema.
+// as a non-destructive ActionRoute and attaches input/output schemas.
 func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  false,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // DestructiveAction wraps a typed function as a destructive ActionRoute
-// and attaches the output schema.
+// and attaches input/output schemas.
 func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
-// OutputSchema is nil because the action returns no data.
+// OutputSchema is nil because the action returns no data; InputSchema is
+// captured from T.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	return DestructiveRoute(WrapVoidAction(client, fn))
+	return ActionRoute{
+		Handler:     WrapVoidAction(client, fn),
+		Destructive: true,
+		InputSchema: schemaForType(reflect.TypeFor[T]()),
+	}
 }
 
 // DestructiveActionWithRequest wraps a typed function that needs the MCP request
-// as a destructive ActionRoute and attaches the output schema.
+// as a destructive ActionRoute and attaches input/output schemas.
 func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
