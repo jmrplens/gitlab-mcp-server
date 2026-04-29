@@ -72,8 +72,8 @@ func TestMetaSchemaIndex_ListsAllToolsSorted(t *testing.T) {
 	}
 
 	var index MetaSchemaIndex
-	if err := json.Unmarshal([]byte(result.Contents[0].Text), &index); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if uErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); uErr != nil {
+		t.Fatalf("unmarshal: %v", uErr)
 	}
 	if index.URITemplate != "gitlab://schema/meta/{tool}/{action}" {
 		t.Errorf("uri_template = %q", index.URITemplate)
@@ -129,8 +129,8 @@ func TestMetaSchemaTemplate_FallbackForMissingSchema(t *testing.T) {
 		t.Fatalf("read fallback: %v", err)
 	}
 	var got map[string]any
-	if err := json.Unmarshal([]byte(result.Contents[0].Text), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if uErr := json.Unmarshal([]byte(result.Contents[0].Text), &got); uErr != nil {
+		t.Fatalf("unmarshal: %v", uErr)
 	}
 	if got["type"] != "object" {
 		t.Errorf("fallback should declare type=object, got %v", got)
@@ -163,13 +163,13 @@ func TestMetaSchemaTemplate_NotFound(t *testing.T) {
 }
 
 // TestParseMetaSchemaURI covers the pure URI parser logic without going
-// through the MCP transport. Avoids accidental behavioural drift between
+// through the MCP transport. Avoids accidental behavioral drift between
 // transport-tested cases and helper-only edge cases.
 func TestParseMetaSchemaURI(t *testing.T) {
 	cases := []struct {
-		uri          string
-		wantTool     string
-		wantAction   string
+		uri        string
+		wantTool   string
+		wantAction string
 	}{
 		{"gitlab://schema/meta/foo/bar", "foo", "bar"},
 		{"gitlab://schema/meta/foo/", "", ""},
@@ -199,8 +199,8 @@ func TestMetaSchemaIndex_EmptyRegistry(t *testing.T) {
 		t.Fatalf("read empty index: %v", err)
 	}
 	var index MetaSchemaIndex
-	if err := json.Unmarshal([]byte(result.Contents[0].Text), &index); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if uErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); uErr != nil {
+		t.Fatalf("unmarshal: %v", uErr)
 	}
 	if len(index.Tools) != 0 {
 		t.Errorf("empty registry should yield zero tools, got %d", len(index.Tools))

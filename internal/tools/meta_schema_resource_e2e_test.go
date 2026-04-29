@@ -92,8 +92,8 @@ func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
 	}
 
 	var schema map[string]any
-	if err := json.Unmarshal([]byte(body), &schema); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
+	if uErr := json.Unmarshal([]byte(body), &schema); uErr != nil {
+		t.Fatalf("schema is not valid JSON: %v", uErr)
 	}
 	if schema["type"] != "object" {
 		t.Errorf("type = %v, want object", schema["type"])

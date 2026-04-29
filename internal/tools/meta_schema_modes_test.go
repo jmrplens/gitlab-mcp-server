@@ -1,4 +1,4 @@
-// meta_schema_modes_test.go verifies that meta-tool dispatch behaviour is
+// meta_schema_modes_test.go verifies that meta-tool dispatch behavior is
 // invariant across the three META_PARAM_SCHEMA modes: the InputSchema sent
 // to the LLM differs (opaque envelope vs structured oneOf), but the same
 // {action, params} payload must reach the same handler and produce the

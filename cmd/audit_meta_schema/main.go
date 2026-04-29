@@ -32,6 +32,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -42,8 +49,7 @@ func main() {
 	cfg := &config.Config{GitLabURL: srv.URL, GitLabToken: "spike-token"}
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("client: %w", err)
 	}
 
 	// Register both base and enterprise meta-tools so MetaRoutes() returns
@@ -57,22 +63,19 @@ func main() {
 	// schema served, so this is the same number a client sees.
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
+	if _, cerr := server.Connect(ctx, st, nil); cerr != nil {
+		return fmt.Errorf("server connect: %w", cerr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "spike-cli", Version: "0"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("client connect: %w", err)
 	}
 	defer session.Close()
 
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "list tools: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("list tools: %w", err)
 	}
 	currentByName := map[string]map[string]any{}
 	for _, t := range listed.Tools {
@@ -82,7 +85,10 @@ func main() {
 		// Re-marshal/unmarshal so we measure the same JSON bytes the
 		// transport ships, and so our candidate schemas use comparable
 		// generic map types.
-		raw, _ := json.Marshal(t.InputSchema)
+		raw, mErr := json.Marshal(t.InputSchema)
+		if mErr != nil {
+			continue
+		}
 		var m map[string]any
 		_ = json.Unmarshal(raw, &m)
 		currentByName[t.Name] = m
@@ -110,13 +116,22 @@ func main() {
 	for _, name := range names {
 		rmap := routes[name]
 		opaque := currentByName[name]
-		opaqueJSON, _ := json.Marshal(opaque)
+		opaqueJSON, mErr := json.Marshal(opaque)
+		if mErr != nil {
+			continue
+		}
 
 		full := buildOneOfSchema(rmap, false /*compact=*/)
 		compact := buildOneOfSchema(rmap, true)
 
-		fullJSON, _ := json.Marshal(full)
-		compactJSON, _ := json.Marshal(compact)
+		fullJSON, mErr := json.Marshal(full)
+		if mErr != nil {
+			continue
+		}
+		compactJSON, mErr := json.Marshal(compact)
+		if mErr != nil {
+			continue
+		}
 
 		r := row{
 			name:      name,
@@ -155,6 +170,7 @@ func main() {
 	fmt.Println()
 	fmt.Printf("Full / opaque   ratio: %.1fx\n", float64(totalFull)/float64(totalOpaque))
 	fmt.Printf("Compact / opaque ratio: %.1fx\n", float64(totalCompact)/float64(totalOpaque))
+	return nil
 }
 
 // buildOneOfSchema constructs a JSON Schema with a oneOf branch per action.
@@ -211,7 +227,7 @@ func buildOneOfSchema(rmap toolutil.ActionMap, compact bool) map[string]any {
 // compactSchema returns a copy of the given JSON Schema with descriptions
 // removed and only property name/type retained. Inlines top-level $ref by
 // looking it up in $defs once, then drops $defs entirely. Best-effort: any
-// shape we don't recognise is preserved verbatim.
+// shape we don't recognize is preserved verbatim.
 func compactSchema(s map[string]any) map[string]any {
 	if s == nil {
 		return nil
@@ -232,10 +248,10 @@ func compactSchema(s map[string]any) map[string]any {
 			continue
 		}
 		entry := map[string]any{}
-		if t, ok := pm["type"]; ok {
+		if t, has := pm["type"]; has {
 			entry["type"] = t
 		}
-		if e, ok := pm["enum"]; ok {
+		if e, has := pm["enum"]; has {
 			entry["enum"] = e
 		}
 		compactProps[k] = entry

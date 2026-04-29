@@ -1,6 +1,6 @@
 # MCP Resources Reference
 
-This document lists all **44 MCP resources** exposed by gitlab-mcp-server. Resources provide read-only, URI-addressable data that MCP clients can subscribe to or fetch on demand.
+This document lists all **46 MCP resources** exposed by gitlab-mcp-server. Resources provide read-only, URI-addressable data that MCP clients can subscribe to or fetch on demand.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, AI assistant users
@@ -10,7 +10,7 @@ All resources return `application/json` MIME type.
 
 ---
 
-## Static Resources (3)
+## Static Resources (4)
 
 Static resources have a fixed URI and require no parameters.
 
@@ -19,8 +19,9 @@ Static resources have a fixed URI and require no parameters.
 | 1 | `current_user` | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL. |
 | 2 | `groups` | `gitlab://groups` | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL. |
 | 3 | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
+| 4 | `meta_schema_index` | `gitlab://schema/meta/` | Catalog of every registered meta-tool and its actions. Use the `gitlab://schema/meta/{tool}/{action}` template to fetch the JSON Schema for a specific action's `params`. |
 
-## Resource Templates (36)
+## Resource Templates (37)
 
 Resource templates use URI variables (e.g., `{project_id}`) that the client fills in at request time.
 
@@ -84,6 +85,12 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 | # | Name | URI Template | Description |
 |---|------|--------------|-------------|
 | 39 | `snippet` | `gitlab://snippet/{snippet_id}` | Get a personal (user-scoped) snippet. Returns title, file name, visibility, and web URL. |
+
+### Meta-Tool Schema
+
+| # | Name | URI Template | Description |
+|---|------|--------------|-------------|
+| 40 | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Always available regardless of `META_PARAM_SCHEMA` mode. |
 
 ## Workflow Guide Resources (5)
 
