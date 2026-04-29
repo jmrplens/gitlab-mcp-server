@@ -349,6 +349,74 @@ La imagen sigue las guías OWASP Docker Top 10:
 
 La auto-actualización está **deshabilitada por defecto** en despliegues Docker. La inmutabilidad del contenedor es el patrón recomendado: descargar una imagen con etiqueta nueva y reiniciar el contenedor. Si necesitas actualizaciones in-situ (ej. en un despliegue de host único sin un mirror de registro de imágenes), establece `--auto-update=true` y monta la ruta del binario como un volumen escribible.
 
+## Despliegue en Fly.io
+
+[Fly.io](https://fly.io/) es una plataforma gestionada que ejecuta imágenes Docker globalmente con TLS integrado, enrutamiento anycast y escalado de máquinas por región. El repositorio incluye un [`fly.toml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/fly.toml) de referencia configurado en **modo multi-instancia** — cada cliente suministra su propio token de GitLab y la cabecera `GITLAB-URL` por petición, por lo que una única app de Fly puede servir a usuarios conectados a diferentes instancias de GitLab.
+
+### Requisitos previos
+
+- Una [cuenta de Fly.io](https://fly.io/app/sign-up) y la CLI [`flyctl`](https://fly.io/docs/hands-on/install-flyctl/) instalada
+- Un clon del repositorio (o un fork con tu propio `fly.toml`)
+
+### Despliegue inicial
+
+```bash
+# 1. Iniciar sesión
+flyctl auth login
+
+# 2. Crear la app (usa un nombre único; el por defecto en fly.toml es gitlab-mcp-server)
+flyctl launch --no-deploy --copy-config --name nombre-de-tu-app
+
+# 3. Desplegar
+flyctl deploy
+```
+
+El `fly.toml` incluido usa el `Dockerfile` multi-stage de la raíz del repositorio y sobrescribe el `CMD` del contenedor con flags de modo HTTP:
+
+```toml
+[experimental]
+  cmd = [
+    "--http",
+    "--http-addr", "0.0.0.0:8080",
+    "--meta-tools",
+    "--auto-update=false",
+    "--trusted-proxy-header", "Fly-Client-IP"
+  ]
+```
+
+:::tip
+`--trusted-proxy-header=Fly-Client-IP` es crítico en Fly.io: el proxy edge de la plataforma establece esta cabecera con la IP real del cliente, y el rate limiter integrado la lee en lugar de la IP del balanceador. No habilites esta cabecera en despliegues accesibles directamente sin un proxy de confianza.
+:::
+
+### Comandos operativos
+
+```bash
+flyctl status              # Estado de máquinas y despliegues recientes
+flyctl logs                # Seguimiento en vivo de logs estructurados
+flyctl scale count 2       # Ejecutar dos máquinas (ej. para HA)
+flyctl scale memory 512    # Subir memoria a 512 MB (por defecto en fly.toml: 256 MB)
+```
+
+### Salud y TLS
+
+- El proxy de Fly sondea `GET /health` cada 30s con timeout de 5s (configurado en `[[http_service.checks]]`)
+- TLS se termina en el edge de Fly con `force_https = true` — el tráfico interno a la máquina en el puerto 8080 es HTTP
+- `auto_stop_machines = "stop"` y `min_machines_running = 0` permiten que los despliegues inactivos escalen a cero entre peticiones
+
+### Auto-actualización en Fly
+
+La auto-actualización está **deshabilitada** en la configuración incluida (`--auto-update=false`). En Fly.io, el flujo de actualización recomendado es redesplegar con una imagen nueva:
+
+```bash
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.3.4
+```
+
+Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y preserva tus secretos y configuración.
+
+### OAuth en Fly.io
+
+El `fly.toml` incluido se ejecuta en **modo de autenticación legacy** (PAT por petición). El modo OAuth también está soportado pero requiere una URL pública estable conocida al inicio para que los endpoints de descubrimiento OAuth (`/.well-known/oauth-protected-resource`) anuncien los metadatos correctos. Para habilitar OAuth, establece `--auth-mode=oauth` y `--gitlab-url=<tu-default>` en el array `cmd`, y redespliega. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para la configuración de la Aplicación OAuth de GitLab.
+
 ## Verificación de salud
 
 Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
