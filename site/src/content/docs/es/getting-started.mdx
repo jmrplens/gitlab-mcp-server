@@ -101,7 +101,7 @@ El host debe proporcionar estas variables antes de habilitar el plugin:
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
-La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker por portabilidad. Si prefieres el binario nativo, instala el plugin y después edita la copia local de `mcp.json` (normalmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
+La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker por portabilidad. Si prefieres el binario nativo, instala el plugin, localiza el directorio del plugin instalado `gitlab-mcp-server` desde la interfaz de plugins de tu host o la salida de instalación, y después edita su `mcp.json` local (habitualmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
 ```json
 {
