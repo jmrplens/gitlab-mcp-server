@@ -634,7 +634,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.Config{MetaTools: false}
+	cfg := &config.ServerConfig{MetaTools: false}
 	server := createServer(client, cfg, nil)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -761,7 +761,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 // meta-tools when MetaTools is true and returns an operational MCP server.
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.Config{MetaTools: true}
+	cfg := &config.ServerConfig{MetaTools: true}
 	server := createServer(client, cfg, nil)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -807,7 +807,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	individual := createServer(client, &config.Config{MetaTools: false}, nil)
+	individual := createServer(client, &config.ServerConfig{MetaTools: false}, nil)
 	individualSession := newInMemorySession(t, individual)
 	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -819,7 +819,7 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 		}
 	}
 
-	meta := createServer(client, &config.Config{MetaTools: true}, nil)
+	meta := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
 	metaSession := newInMemorySession(t, meta)
 	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -842,7 +842,7 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 // registry populated during registration.
 func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.Config{
+	cfg := &config.ServerConfig{
 		MetaTools:    true,
 		ExcludeTools: []string{"gitlab_runner"},
 	}
@@ -878,10 +878,10 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 // server registers a different CE/Enterprise catalog later in the same process.
 func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
-	ceServer := createServer(client, &config.Config{MetaTools: true, Enterprise: false}, nil)
+	ceServer := createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: false}, nil)
 	ceSession := newInMemorySession(t, ceServer)
 
-	_ = createServer(client, &config.Config{MetaTools: true, Enterprise: true}, nil)
+	_ = createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: true}, nil)
 
 	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
 	if err == nil {

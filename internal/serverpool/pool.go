@@ -26,13 +26,14 @@ import (
 // configuration.
 // This is provided by the caller to decouple pool management from
 // registration logic.
-type ServerFactory func(client *gitlabclient.Client, cfg *config.Config) *mcp.Server
+type ServerFactory func(client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server
 
 // poolEntry holds a server instance and its associated GitLab client,
 // along with LRU tracking and session validation metadata.
 type poolEntry struct {
 	server        *mcp.Server
 	client        *gitlabclient.Client
+	serverConfig  *config.ServerConfig
 	element       *list.Element
 	createdAt     time.Time
 	lastValidated time.Time
@@ -175,13 +176,14 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	}
 	client.SetEnterprise(p.cfg.Enterprise)
 
-	entryCfg := p.entryConfig(client)
+	entryCfg := p.entryConfig(client, gitlabURL)
 	server := p.factory(client, entryCfg)
 	element := p.lru.PushFront(key)
 	now := time.Now()
 	p.entries[key] = &poolEntry{
 		server:        server,
 		client:        client,
+		serverConfig:  entryCfg,
 		element:       element,
 		createdAt:     now,
 		lastValidated: now,
@@ -189,29 +191,42 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 
 	slog.Info("server pool: created new entry",
 		"pool_size", len(p.entries),
+		"gitlab_url", entryCfg.GitLabURL,
+		"enterprise", entryCfg.Enterprise,
+		"enterprise_source", p.enterpriseSource(),
+		"scopes_detected", entryCfg.TokenScopes != nil,
 		"token_suffix", tokenSuffix(token),
 	)
 
 	return server, nil
 }
 
-func (p *ServerPool) entryConfig(client *gitlabclient.Client) *config.Config {
-	entryCfg := *p.cfg
-	if entryCfg.AutoDetectEnterprise || !entryCfg.IgnoreScopes {
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) *config.ServerConfig {
+	entryCfg := p.cfg.ServerConfig()
+	entryCfg.GitLabURL = gitlabURL
+
+	if p.cfg.AutoDetectEnterprise || !p.cfg.IgnoreScopes {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if entryCfg.AutoDetectEnterprise {
+		if p.cfg.AutoDetectEnterprise {
 			entryCfg.Enterprise = client.DetectEnterprise(ctx, entryCfg.Enterprise)
 		}
 		client.SetEnterprise(entryCfg.Enterprise)
 
-		if entryCfg.IgnoreScopes {
-			return &entryCfg
+		if p.cfg.IgnoreScopes {
+			return entryCfg
 		}
 		entryCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 	}
-	return &entryCfg
+	return entryCfg
+}
+
+func (p *ServerPool) enterpriseSource() string {
+	if p.cfg.AutoDetectEnterprise {
+		return "detected"
+	}
+	return "configured"
 }
 
 // Size returns the current number of entries in the pool.
@@ -260,10 +275,15 @@ func (p *ServerPool) evictLRU() {
 		return
 	}
 	key, _ := back.Value.(string)
-	if _, ok := p.entries[key]; ok {
+	if entry, ok := p.entries[key]; ok {
+		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
 		delete(p.entries, key)
 		p.metrics.Evictions.Add(1)
-		slog.Info("server pool: evicted LRU entry", "pool_size", len(p.entries))
+		slog.Info("server pool: evicted LRU entry",
+			"pool_size", len(p.entries),
+			"gitlab_url", gitlabURL,
+			"enterprise", enterprise,
+		)
 	}
 	p.lru.Remove(back)
 }
@@ -367,9 +387,21 @@ func (p *ServerPool) evictByKey(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if entry, ok := p.entries[key]; ok {
+		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		delete(p.entries, key)
 		p.metrics.Evictions.Add(1)
-		slog.Info("server pool: evicted invalid entry", "pool_size", len(p.entries))
+		slog.Info("server pool: evicted invalid entry",
+			"pool_size", len(p.entries),
+			"gitlab_url", gitlabURL,
+			"enterprise", enterprise,
+		)
 	}
+}
+
+func poolEntryConfigLogValues(entry *poolEntry) (string, bool) {
+	if entry == nil || entry.serverConfig == nil {
+		return "", false
+	}
+	return entry.serverConfig.GitLabURL, entry.serverConfig.Enterprise
 }

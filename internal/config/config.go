@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -100,7 +101,6 @@ type Config struct {
 	TrustedProxyHeader string   // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 	ExcludeTools       []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
 	IgnoreScopes       bool     // When true, skip PAT scope detection and register all tools
-	TokenScopes        []string // Detected PAT scopes (populated at runtime, not from env)
 
 	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
 	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0
@@ -109,6 +109,41 @@ type Config struct {
 	// shape of the `params` object. Allowed values: "opaque" (default),
 	// "compact", "full". See [DefaultMetaParamSchema] and constants.
 	MetaParamSchema string
+}
+
+// ServerConfig is an immutable configuration snapshot used to build one MCP
+// server instance for a specific GitLab URL and credential principal.
+type ServerConfig struct {
+	GitLabURL       string
+	MetaTools       bool
+	Enterprise      bool
+	ReadOnly        bool
+	SafeMode        bool
+	ExcludeTools    []string
+	TokenScopes     []string
+	RateLimitRPS    float64
+	RateLimitBurst  int
+	MetaParamSchema string
+}
+
+// ServerConfig returns the server-scoped subset of Config. Callers may enrich
+// the returned snapshot with detected per-principal data before creating a
+// concrete MCP server instance.
+func (c *Config) ServerConfig() *ServerConfig {
+	if c == nil {
+		return &ServerConfig{}
+	}
+	return &ServerConfig{
+		GitLabURL:       c.GitLabURL,
+		MetaTools:       c.MetaTools,
+		Enterprise:      c.Enterprise,
+		ReadOnly:        c.ReadOnly,
+		SafeMode:        c.SafeMode,
+		ExcludeTools:    slices.Clone(c.ExcludeTools),
+		RateLimitRPS:    c.RateLimitRPS,
+		RateLimitBurst:  c.RateLimitBurst,
+		MetaParamSchema: c.MetaParamSchema,
+	}
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.

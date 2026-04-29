@@ -420,7 +420,7 @@ See the [Development Guide](docs/development/development.md) for cross-compilati
 ```bash
 docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 
-# Single-instance mode (default GitLab URL for all clients)
+# Single-instance mode (fixed GitLab URL for all clients)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
   -e GITLAB_URL=https://gitlab.example.com \
   -e GITLAB_SKIP_TLS_VERIFY=true \
@@ -431,7 +431,7 @@ docker run -d --name gitlab-mcp-server -p 8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers, and can optionally send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
+Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. In multi-instance mode, clients must also send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
 
 ## FAQ
 
@@ -458,7 +458,7 @@ Alternatively, set `GITLAB_SAFE_MODE=true` for a dry-run mode: mutating tools re
 <details>
 <summary><strong>What GitLab editions are supported?</strong></summary>
 
-Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_ENTERPRISE=true` to enable 15 additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.).
+Both Community Edition (CE) and Enterprise Edition (EE). Set `GITLAB_ENTERPRISE=true` in stdio mode to enable additional tools for Premium/Ultimate features (DORA metrics, vulnerabilities, compliance, etc.). In HTTP mode, `--enterprise` can force the Enterprise/Premium catalog, otherwise CE/EE is detected per token+URL pool entry when GitLab reports edition.
 </details>
 
 <details>

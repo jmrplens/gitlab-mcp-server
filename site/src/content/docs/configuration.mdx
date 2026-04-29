@@ -270,7 +270,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `--http`                 | `false`                      | Enable HTTP transport mode                                                                                 |
 | `--http-addr`            | `:8080`                      | Listen address and port                                                                                    |
-| `--gitlab-url`           | —                            | Default GitLab instance URL. Per-request override via `GITLAB-URL` header                                  |
+| `--gitlab-url`           | —                            | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                        |
 | `--skip-tls-verify`      | `false`                      | Skip TLS verification                                                                                      |
 | `--meta-tools`           | `true`                       | Enable meta-tool mode                                                                                      |
 | `--enterprise`           | `false`                      | Enable Enterprise/Premium tools                                                                            |
@@ -325,6 +325,8 @@ The server loads configuration in the following order (later sources override ea
 
 :::note
 In HTTP mode, `GITLAB_TOKEN` is not loaded from environment variables. Each client provides their own token via the HTTP request. Clients can also send a `GITLAB-URL` header to target a specific GitLab instance.
+
+When `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged. Other server policy options, including schema size (`--meta-param-schema`) and rate limits (`--rate-limit-rps`, `--rate-limit-burst`), cannot be overridden per request.
 :::
 
 ## Self-signed certificates

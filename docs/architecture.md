@@ -220,12 +220,12 @@ Infrastructure shared by all tool sub-packages:
 
 ### Server Pool (`internal/serverpool`)
 
-Manages a bounded pool of per-token+URL MCP server instances in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own isolated MCP server and GitLab client.
+Manages a bounded pool of per-token+URL MCP server instances in HTTP mode. Each unique combination of GitLab Personal Access Token and GitLab instance URL gets its own isolated MCP server, GitLab client, and server configuration snapshot. The snapshot combines global process policy with detected token scopes and CE/EE edition for that specific entry.
 
 | File         | Purpose                                                          |
 | ------------ | ---------------------------------------------------------------- |
 | `pool.go`    | `ServerPool` with LRU eviction, `GetOrCreate()`, `Close()`      |
-| `token.go`   | `ExtractToken()` — reads token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers. `ExtractGitLabURL()` — reads GitLab URL from `GITLAB-URL` header with fallback to default |
+| `token.go`   | `ExtractToken()` — reads token from `PRIVATE-TOKEN` or `Authorization: Bearer` headers. `ResolveRequestOptions()` — accepts `GITLAB-URL` only in multi-instance mode and records ignored config-like request headers |
 | `doc.go`     | Package documentation                                            |
 
 Key characteristics:

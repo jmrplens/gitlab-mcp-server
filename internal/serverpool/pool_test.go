@@ -21,7 +21,7 @@ import (
 
 // testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
 func testFactory() ServerFactory {
-	return func(client *gitlabclient.Client, _ *config.Config) *mcp.Server {
+	return func(client *gitlabclient.Client, _ *config.ServerConfig) *mcp.Server {
 		return mcp.NewServer(&mcp.Implementation{
 			Name:    "test-server",
 			Version: "0.0.0",
@@ -100,7 +100,7 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	cfg := testConfig(srv.URL)
 	cfg.IgnoreScopes = false
 	capturedScopes := make([][]string, 0, 2)
-	factory := func(_ *gitlabclient.Client, entryCfg *config.Config) *mcp.Server {
+	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
 		capturedScopes = append(capturedScopes, append([]string(nil), entryCfg.TokenScopes...))
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
 	}
@@ -122,8 +122,8 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	if len(capturedScopes[1]) != 1 || capturedScopes[1][0] != "api" {
 		t.Fatalf("second token scopes = %v, want [api]", capturedScopes[1])
 	}
-	if cfg.TokenScopes != nil {
-		t.Fatalf("shared config TokenScopes = %v, want nil", cfg.TokenScopes)
+	if scopes := cfg.ServerConfig().TokenScopes; scopes != nil {
+		t.Fatalf("shared config produced TokenScopes = %v, want nil", scopes)
 	}
 }
 
@@ -147,7 +147,7 @@ func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
 	cfg.Enterprise = true
 	cfg.AutoDetectEnterprise = true
 	captured := make([]bool, 0, 2)
-	factory := func(client *gitlabclient.Client, entryCfg *config.Config) *mcp.Server {
+	factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
 		if entryCfg.Enterprise != client.IsEnterprise() {
 			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
 		}
@@ -174,6 +174,55 @@ func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
 	}
 	if !cfg.Enterprise {
 		t.Fatalf("shared config Enterprise was mutated to false")
+	}
+}
+
+// TestGetOrCreate_EnterpriseConfigOverridesDetection verifies that explicit
+// MCP server configuration wins when enterprise auto-detection is disabled.
+func TestGetOrCreate_EnterpriseConfigOverridesDetection(t *testing.T) {
+	cases := []struct {
+		name       string
+		configured bool
+		detected   bool
+	}{
+		{name: "force enterprise", configured: true, detected: false},
+		{name: "force community", configured: false, detected: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"version":    "17.0.0",
+					"enterprise": tc.detected,
+				})
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			cfg := testConfig(srv.URL)
+			cfg.Enterprise = tc.configured
+			cfg.AutoDetectEnterprise = false
+
+			var captured bool
+			factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) *mcp.Server {
+				if entryCfg.Enterprise != client.IsEnterprise() {
+					t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
+				}
+				captured = entryCfg.Enterprise
+				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+			}
+
+			pool := New(cfg, factory)
+			if _, err := pool.GetOrCreate("glpat-forced", srv.URL); err != nil {
+				t.Fatalf("GetOrCreate() error: %v", err)
+			}
+			if captured != tc.configured {
+				t.Fatalf("captured enterprise = %v, want configured %v", captured, tc.configured)
+			}
+		})
 	}
 }
 

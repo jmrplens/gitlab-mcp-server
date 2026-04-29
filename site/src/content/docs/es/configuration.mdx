@@ -270,7 +270,7 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `--http`                 | `false`                      | Habilitar modo de transporte HTTP                                                                                      |
 | `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                                                                                          |
-| `--gitlab-url`           | —                            | URL por defecto de la instancia de GitLab. Se puede sobreescribir por solicitud mediante la cabecera `GITLAB-URL`      |
+| `--gitlab-url`           | —                            | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                                                                                |
 | `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                                                                                       |
 | `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium                                                                              |
@@ -325,6 +325,8 @@ El servidor carga la configuración en el siguiente orden (las fuentes posterior
 
 :::note
 En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. Los clientes también pueden enviar una cabecera `GITLAB-URL` para dirigirse a una instancia de GitLab específica.
+
+Cuando `--gitlab-url` está configurado, es autoritativo y los valores `GITLAB-URL` enviados por clientes se ignoran y se registran. Otras opciones de política del servidor, incluido el tamaño de esquema (`--meta-param-schema`) y los límites de tasa (`--rate-limit-rps`, `--rate-limit-burst`), no se pueden sobreescribir por petición.
 :::
 
 ## Certificados autofirmados

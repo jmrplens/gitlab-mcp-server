@@ -1,8 +1,8 @@
 //go:build e2e
 
-// gitlab_url_header_test.go tests the per-request GITLAB-URL header feature
-// in HTTP mode. Validates header extraction, URL validation, pool keying by
-// (token, URL), and fallback to the default URL when the header is absent.
+// gitlab_url_header_test.go tests the GITLAB-URL header feature in HTTP mode.
+// Validates fixed default URL enforcement, per-request URL selection when no
+// default is configured, URL validation, and pool keying by (token, URL).
 //
 // Uses mock GitLab endpoints (httptest) to avoid requiring multiple real
 // GitLab instances. The mock returns a distinct user ID per URL, allowing
@@ -38,14 +38,19 @@ func TestGitLabURLHeaderE2E(t *testing.T) {
 		testGitLabURLDefaultFallback(t)
 	})
 
-	t.Run("HeaderOverride", func(t *testing.T) {
+	t.Run("HeaderMatchesConfiguredURL", func(t *testing.T) {
 		t.Parallel()
-		testGitLabURLHeaderOverride(t)
+		testGitLabURLHeaderMatchesConfiguredURL(t)
 	})
 
-	t.Run("PoolIsolation", func(t *testing.T) {
+	t.Run("HeaderIgnoredWhenDefaultConfigured", func(t *testing.T) {
 		t.Parallel()
-		testGitLabURLPoolIsolation(t)
+		testGitLabURLHeaderIgnoredWhenDefaultConfigured(t)
+	})
+
+	t.Run("PoolIsolationWithoutDefault", func(t *testing.T) {
+		t.Parallel()
+		testGitLabURLPoolIsolationWithoutDefault(t)
 	})
 
 	t.Run("InvalidHeader", func(t *testing.T) {
@@ -92,7 +97,7 @@ func newTestMCPOverHTTP(t *testing.T, defaultGitLabURL string) (string, *serverp
 	// probeGitLabURL is a tool registered dynamically by the pool factory.
 	// It reports back the GitLab URL that the client was configured with,
 	// allowing the test to verify correct routing.
-	factory := func(_ *gitlabclient.Client, _ *config.Config) *mcp.Server {
+	factory := func(_ *gitlabclient.Client, _ *config.ServerConfig) *mcp.Server {
 		srv := mcp.NewServer(&mcp.Implementation{
 			Name:    "gitlab-url-header-e2e",
 			Version: "test",
@@ -173,45 +178,57 @@ func testGitLabURLDefaultFallback(t *testing.T) {
 	}
 }
 
-// testGitLabURLHeaderOverride verifies that the GITLAB-URL header overrides
-// the default URL and the pool creates a separate entry for it.
-func testGitLabURLHeaderOverride(t *testing.T) {
+// testGitLabURLHeaderMatchesConfiguredURL verifies that a GITLAB-URL header
+// matching the configured default is accepted and does not create a second
+// pool entry.
+func testGitLabURLHeaderMatchesConfiguredURL(t *testing.T) {
+	t.Helper()
+
+	mockGL := mockGitLabServer(t, 1, "default-user")
+	defer mockGL.Close()
+
+	mcpURL, pool, cleanup := newTestMCPOverHTTP(t, mockGL.URL)
+	defer cleanup()
+
+	token := "test-header-matches-default-token"
+
+	sid := gitlabURLMCPInitialize(t, mcpURL, token, mockGL.URL+"/")
+	gitlabURLMCPNotifyInitialized(t, mcpURL, sid, token, mockGL.URL+"/")
+	gitlabURLMCPCallTool(t, mcpURL, sid, token, mockGL.URL+"/", "url_header_probe", map[string]any{})
+
+	if size := pool.Size(); size != 1 {
+		t.Errorf("pool size = %d, want 1", size)
+	}
+}
+
+// testGitLabURLHeaderIgnoredWhenDefaultConfigured verifies that a configured
+// default GitLab URL is authoritative and ignores the per-request header.
+func testGitLabURLHeaderIgnoredWhenDefaultConfigured(t *testing.T) {
 	t.Helper()
 
 	mockDefault := mockGitLabServer(t, 1, "default-user")
 	defer mockDefault.Close()
 
-	mockOverride := mockGitLabServer(t, 2, "override-user")
-	defer mockOverride.Close()
+	mockOther := mockGitLabServer(t, 2, "other-user")
+	defer mockOther.Close()
 
 	mcpURL, pool, cleanup := newTestMCPOverHTTP(t, mockDefault.URL)
 	defer cleanup()
 
-	token := "test-header-override-token"
-
-	// First request without header → default URL.
-	sid1 := gitlabURLMCPInitialize(t, mcpURL, token, "")
-	gitlabURLMCPNotifyInitialized(t, mcpURL, sid1, token, "")
-	gitlabURLMCPCallTool(t, mcpURL, sid1, token, "", "url_header_probe", map[string]any{})
+	token := "test-header-ignored-token"
+	sid := gitlabURLMCPInitialize(t, mcpURL, token, mockOther.URL)
+	gitlabURLMCPNotifyInitialized(t, mcpURL, sid, token, mockOther.URL)
+	gitlabURLMCPCallTool(t, mcpURL, sid, token, mockOther.URL, "url_header_probe", map[string]any{})
 
 	if size := pool.Size(); size != 1 {
-		t.Fatalf("pool size after default request = %d, want 1", size)
-	}
-
-	// Second request with GITLAB-URL header → override URL.
-	sid2 := gitlabURLMCPInitialize(t, mcpURL, token, mockOverride.URL)
-	gitlabURLMCPNotifyInitialized(t, mcpURL, sid2, token, mockOverride.URL)
-	gitlabURLMCPCallTool(t, mcpURL, sid2, token, mockOverride.URL, "url_header_probe", map[string]any{})
-
-	// Pool should now have 2 entries: one for each GitLab URL.
-	if size := pool.Size(); size != 2 {
-		t.Errorf("pool size after override request = %d, want 2 (default + override)", size)
+		t.Errorf("pool size = %d, want 1 after ignored request URL", size)
 	}
 }
 
-// testGitLabURLPoolIsolation verifies that the same token with two different
-// GITLAB-URL values creates separate pool entries with independent servers.
-func testGitLabURLPoolIsolation(t *testing.T) {
+// testGitLabURLPoolIsolationWithoutDefault verifies that the same token with
+// two different GITLAB-URL values creates separate pool entries when the MCP
+// server was started without a global GitLab URL.
+func testGitLabURLPoolIsolationWithoutDefault(t *testing.T) {
 	t.Helper()
 
 	mockA := mockGitLabServer(t, 100, "user-a")
@@ -220,15 +237,15 @@ func testGitLabURLPoolIsolation(t *testing.T) {
 	mockB := mockGitLabServer(t, 200, "user-b")
 	defer mockB.Close()
 
-	mcpURL, pool, cleanup := newTestMCPOverHTTP(t, mockA.URL)
+	mcpURL, pool, cleanup := newTestMCPOverHTTP(t, "")
 	defer cleanup()
 
 	token := "glpat-test-pool-isolation"
 
-	// Request to GitLab A (via default, no header).
-	sidA := gitlabURLMCPInitialize(t, mcpURL, token, "")
-	gitlabURLMCPNotifyInitialized(t, mcpURL, sidA, token, "")
-	gitlabURLMCPCallTool(t, mcpURL, sidA, token, "", "url_header_probe", map[string]any{})
+	// Request to GitLab A via GITLAB-URL header.
+	sidA := gitlabURLMCPInitialize(t, mcpURL, token, mockA.URL)
+	gitlabURLMCPNotifyInitialized(t, mcpURL, sidA, token, mockA.URL)
+	gitlabURLMCPCallTool(t, mcpURL, sidA, token, mockA.URL, "url_header_probe", map[string]any{})
 
 	// Request to GitLab B (via GITLAB-URL header).
 	sidB := gitlabURLMCPInitialize(t, mcpURL, token, mockB.URL)
@@ -248,16 +265,13 @@ func testGitLabURLPoolIsolation(t *testing.T) {
 	}
 }
 
-// testGitLabURLInvalidHeader verifies that an invalid GITLAB-URL header
-// causes the server selector to return nil, which results in the MCP
-// handler rejecting the request.
+// testGitLabURLInvalidHeader verifies that an invalid GITLAB-URL header is
+// rejected when the server has no fixed GitLab URL and the header is the
+// effective request option.
 func testGitLabURLInvalidHeader(t *testing.T) {
 	t.Helper()
 
-	mockGL := mockGitLabServer(t, 1, "default-user")
-	defer mockGL.Close()
-
-	mcpURL, _, cleanup := newTestMCPOverHTTP(t, mockGL.URL)
+	mcpURL, _, cleanup := newTestMCPOverHTTP(t, "")
 	defer cleanup()
 
 	token := "glpat-test-invalid-header"

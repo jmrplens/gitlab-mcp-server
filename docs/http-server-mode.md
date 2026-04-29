@@ -45,19 +45,42 @@ gitlab-mcp-server --http \
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--http` | _(off)_ | Enable HTTP transport mode |
-| `--gitlab-url` | _(optional)_ | Default GitLab instance URL. Can be overridden per-request via `GITLAB-URL` header |
+| `--gitlab-url` | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
 | `--meta-tools` | `true` | Enable domain-level meta-tools (32 base, or 47 for Enterprise/Premium entries) instead of individual tools (1006) |
-| `--enterprise` | `false` | Fallback for Enterprise/Premium tools when GitLab's version endpoint does not report edition. HTTP mode auto-detects CE/EE per token+URL pool entry when possible |
+| `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
+| `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
+| `--read-only` | `false` | Expose only read-only tools |
+| `--safe-mode` | `false` | Intercept mutating tools and return a JSON preview instead of executing them |
+| `--embedded-resources` | `true` | Embed canonical MCP resource URIs in get_* tool results |
+| `--exclude-tools` | _(empty)_ | Comma-separated tool names or patterns to exclude from registration |
+| `--ignore-scopes` | `false` | Skip PAT scope detection and register all tools allowed by the configured catalog |
 | `--max-http-clients` | `100` | Maximum unique token+URL entries in the server pool |
 | `--session-timeout` | `30m` | Idle MCP session timeout |
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API) |
 | `--oauth-cache-ttl` | `15m` | How long verified OAuth tokens are cached before re-validation (1m–2h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies |
+| `--rate-limit-rps` | `0` | Per-server `tools/call` rate limit in requests per second (`0` = disabled) |
+| `--rate-limit-burst` | `40` | Token-bucket burst size when `--rate-limit-rps` > 0 |
 
-> **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it serves as the default for clients that don't send the header.
+> **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
+
+### Configuration Precedence
+
+HTTP mode has a narrow request-controlled surface. GitLab identity always comes from the request token, and the GitLab instance comes from `GITLAB-URL` only when the server was started without `--gitlab-url`. All other MCP server settings are process policy and cannot be changed per user, per session, or per JSON-RPC request.
+
+| Configuration area | Source of truth | Can a client override it? | Behavior when a client sends a matching header |
+| --- | --- | --- | --- |
+| GitLab token | `PRIVATE-TOKEN` or `Authorization: Bearer` request header | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry |
+| GitLab URL | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted | Conditional | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options` |
+| Tool catalog and behavior | `--meta-tools`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `META-PARAM-SCHEMA` or `GITLAB-SAFE-MODE` |
+| Rate limits and HTTP pool policy | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--trusted-proxy-header` | No | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS` |
+| Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl` | No | Ignored and logged in `ignored_options` |
+| Update policy and logging | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL` | No | Ignored and logged in `ignored_options` |
+
+This means options that affect the size of MCP schemas, such as `--meta-param-schema`, are fixed when each `*mcp.Server` instance is created. Options that affect throttling, such as `--rate-limit-rps` and `--rate-limit-burst`, are also copied into each pooled server entry; clients cannot increase, disable, or replace those limits through request headers or MCP parameters.
 
 ## Architecture
 
@@ -91,7 +114,8 @@ graph TD
 - Clients with the **same token and same GitLab URL** share the same `*mcp.Server` instance
 - Clients with **different tokens** or **different GitLab URLs** get completely isolated server instances
 - Each server instance has its own GitLab client authenticated with that specific token against that specific GitLab instance
-- Each server instance detects token scopes and CE/EE edition independently, so multi-instance deployments can serve CE and EE GitLab instances from the same process when the version endpoint reports `enterprise`
+- Each server instance stores its own server configuration snapshot, derived from global process settings plus detected per-token/per-instance data
+- Each server instance detects token scopes and CE/EE edition independently, so multi-instance deployments can serve CE and EE GitLab instances from the same process when the version endpoint reports `enterprise`. If `--enterprise` is explicitly set, that configured value wins and edition auto-detection is disabled.
 - Zero cross-contamination between clients by construction
 
 ### Session Key Isolation
@@ -107,13 +131,13 @@ The pool key is `SHA-256(token + "\x00" + gitlabURL)`, never the raw values. Thi
 
 Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers.
 
-Optionally, clients can also specify which GitLab instance to target using the `GITLAB-URL` header:
+When the server starts without `--gitlab-url`, clients must specify which GitLab instance to target using the `GITLAB-URL` header:
 
 ```text
 GITLAB-URL: https://gitlab.example.com
 ```
 
-If omitted, the server uses the default `--gitlab-url` value. If `--gitlab-url` was also not set at startup, the request is rejected.
+When `--gitlab-url` is set, the server always uses the configured URL. If a client still sends `GITLAB-URL`, the header is ignored and logged as a request option overridden by MCP configuration. If both `--gitlab-url` and `GITLAB-URL` are absent, the request is rejected.
 
 ### Token Headers
 
@@ -319,7 +343,7 @@ curl -X POST http://localhost:8080/mcp \
 When a client sends its first HTTP POST to `/mcp`:
 
 1. `StreamableHTTPHandler` calls the `getServer` callback
-2. `ExtractToken()` reads the token and `ExtractGitLabURL()` resolves the GitLab URL (from the `GITLAB-URL` header or the `--gitlab-url` default)
+2. `ExtractToken()` reads the token and `ResolveRequestOptions()` applies MCP configuration precedence to resolve the effective GitLab URL
 3. `ServerPool.GetOrCreate(token, gitlabURL)` hashes `(token, url)` and checks the pool
 4. If the `(token, url)` pair is new: creates a GitLab client + MCP server, registers all tools/resources/prompts
 5. Returns the `*mcp.Server` for that `(token, url)` pair
@@ -385,12 +409,12 @@ The following settings are **server-wide** — they apply to all clients regardl
 
 | Setting | Source | Description |
 | --- | --- | --- |
-| Default GitLab URL | `--gitlab-url` | Fallback when the client does not send a `GITLAB-URL` header |
+| Fixed GitLab URL | `--gitlab-url` | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL` |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
-| Meta-tools mode | `--meta-tools` | Same tool set for all clients |
+| Meta-tools mode | `--meta-tools` | Same registration mode for all clients; scope and CE/EE filtering still happen per server entry |
 | Upload limits | Compile-time defaults | Max file size |
 
-Both the **GitLab token** and **GitLab URL** can vary per client. Each unique `(token, URL)` pair creates a separate server-pool entry.
+The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.
 
 ## Comparison with Stdio Mode
 
@@ -413,9 +437,10 @@ The server logs key events to stderr in JSON format:
 
 ```json
 {"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","max_clients":100,"session_timeout":"30m0s"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"token_suffix":"...a1b2"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"token_suffix":"...c3d4"}
-{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","enterprise":false,"enterprise_source":"detected","scopes_detected":true,"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","enterprise":true,"enterprise_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
+{"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
 {"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
