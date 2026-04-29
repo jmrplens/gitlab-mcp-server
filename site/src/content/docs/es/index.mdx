@@ -1,6 +1,20 @@
 ---
 title: GitLab MCP Server
 description: Servidor MCP que conecta asistentes de IA con GitLab mediante lenguaje natural
+hero:
+  tagline: Conecta tu asistente de IA a GitLab con más de 1006 herramientas mediante el Model Context Protocol
+  image:
+    dark: ../../../assets/logo-dark.svg
+    light: ../../../assets/logo-light.svg
+  actions:
+    - text: Primeros pasos
+      link: /gitlab-mcp-server/es/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Ver en GitHub
+      link: https://github.com/jmrplens/gitlab-mcp-server
+      icon: external
+      variant: minimal
 head:
   - tag: title
     content: "GitLab MCP Server — 1006+ herramientas de GitLab para asistentes de IA"
@@ -22,7 +36,13 @@ head:
       content: "Servidor MCP que conecta asistentes de IA con GitLab mediante lenguaje natural"
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import {
+	Card,
+	CardGrid,
+	LinkCard,
+	Tabs,
+	TabItem,
+} from "@astrojs/starlight/components";
 
 **GitLab MCP Server** es un servidor [Model Context Protocol](https://modelcontextprotocol.io/) que permite a los asistentes de IA interactuar con GitLab a través de lenguaje natural. Pide a tu IA que cree issues, revise merge requests, analice pipelines y mucho más — todo sin salir de tu editor.
 
@@ -30,15 +50,15 @@ import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 En lugar de alternar entre tu editor y la interfaz web de GitLab, simplemente pregunta:
 
-```
+```text
 Muéstrame todas las merge requests abiertas en my-project que necesitan revisión
 ```
 
-```
+```text
 ¿Por qué falló el pipeline en la rama feature/auth? Resume el error y sugiere una solución
 ```
 
-```
+```text
 Crea un issue titulado "Refactorizar módulo de auth" con etiqueta de prioridad y asígnamelo
 ```
 
@@ -48,9 +68,9 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 | Característica                  | Detalles                                                                                                                                       |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **28+ Meta-herramientas**       | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases y más                       |
+| **32 Meta-herramientas**        | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases y más                       |
 | **11 Herramientas de análisis** | Análisis impulsado por IA mediante MCP sampling — diagnóstico de fallos en pipelines, revisión de seguridad de MRs, detección de deuda técnica |
-| **24 Recursos MCP**             | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor                              |
+| **44 Recursos MCP**             | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor                              |
 | **38 Prompts MCP**              | Plantillas de prompts predefinidas para informes, auditorías, análisis entre proyectos y flujos de trabajo en equipo                           |
 | **Modo HTTP multiusuario**      | Despliega como servidor compartido con aislamiento por token para entornos de equipo                                                           |
 | **GitLab CE y EE**              | Compatible con Community Edition y Enterprise Edition, incluyendo instancias autoalojadas                                                      |
@@ -80,7 +100,7 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 > El pipeline #8847 falló en la etapa `test`, job `unit-tests`:
 >
-> ```
+> ```text
 > FAIL: TestUserService_ListUsers — expected 10 results, got 15
 > ```
 >
@@ -91,35 +111,30 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 Prueba estos con tu asistente de IA una vez conectado GitLab MCP Server:
 
-**Proyectos y código**
-
-- _"Lista mis proyectos de GitLab"_
-- _"Muestra el README del proyecto my-app"_
-- _"Busca comentarios TODO en el código"_
-
-**Merge Requests y revisión de código**
-
-- _"Muestra los merge requests abiertos en my-app"_
-- _"Resume los cambios del MR !42"_
-- _"¿Es seguro mergear el MR !15? Revisa problemas de seguridad"_
-
-**Issues y planificación**
-
-- _"Lista los issues abiertos asignados a mí"_
-- _"Crea un bug report titulado 'Arreglar página de login' con etiqueta 'bug'"_
-- _"¿Cuál es el progreso del milestone v2.0?"_
-
-**CI/CD y Pipelines**
-
-- _"¿Cuál es el estado del último pipeline de my-app?"_
-- _"¿Por qué falló el último pipeline?"_
-- _"Muestra las variables CI del proyecto my-app"_
-
-**Informes y análisis**
-
-- _"Genera notas de release de v1.0 a v2.0"_
-- _"Dame un resumen de standup diario"_
-- _"Evalúa el riesgo del merge request !23"_
+<Tabs>
+	<TabItem label="Proyectos y Código">
+		- _"Lista mis proyectos de GitLab"_ - _"Muestra el README del proyecto
+		my-app"_ - _"Busca comentarios TODO en el código"_
+	</TabItem>
+	<TabItem label="Merge Requests">
+		- _"Muestra los merge requests abiertos en my-app"_ - _"Resume los cambios
+		del MR !42"_ - _"¿Es seguro mergear el MR !15? Revisa problemas de
+		seguridad"_
+	</TabItem>
+	<TabItem label="Issues y Planificación">
+		- _"Lista los issues abiertos asignados a mí"_ - _"Crea un bug report
+		titulado 'Arreglar página de login' con etiqueta 'bug'"_ - _"¿Cuál es el
+		progreso del milestone v2.0?"_
+	</TabItem>
+	<TabItem label="CI/CD y Pipelines">
+		- _"¿Cuál es el estado del último pipeline de my-app?"_ - _"¿Por qué falló
+		el último pipeline?"_ - _"Muestra las variables CI del proyecto my-app"_
+	</TabItem>
+	<TabItem label="Informes y Análisis">
+		- _"Genera notas de release de v1.0 a v2.0"_ - _"Dame un resumen de standup
+		diario"_ - _"Evalúa el riesgo del merge request !23"_
+	</TabItem>
+</Tabs>
 
 ## Comenzar
 

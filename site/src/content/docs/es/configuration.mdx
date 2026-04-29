@@ -11,6 +11,12 @@ Para la referencia técnica completa, consulta [`docs/configuration.md`](https:/
 
 GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre todas las opciones de configuración.
 
+:::tip[Orientación rápida]
+**Modo stdio** (por defecto) — configura mediante variables de entorno o un archivo `.env`. Este es el modo utilizado por las integraciones con IDE (VS Code, Cursor, Claude Desktop, etc.).
+
+**Modo HTTP** (`--http`) — configura mediante flags de CLI. Usado para despliegues compartidos/remotos (Docker, Fly.io, Kubernetes). Ir a [Flags del modo HTTP](#flags-del-modo-http).
+:::
+
 ## Variables requeridas
 
 Estas deben establecerse para que el servidor arranque en modo stdio:
@@ -203,6 +209,56 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 O usa un archivo `.env` en el directorio de trabajo.
 
 </TabItem>
+<TabItem label="Continue">
+
+Añade a `~/.continue/config.yaml` (o al `.continue/config.yaml` de tu workspace):
+
+```yaml
+mcpServers:
+  - name: gitlab
+    command: /ruta/a/gitlab-mcp-server
+    env:
+      GITLAB_URL: https://gitlab.example.com
+      GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+Recarga la ventana de Continue tras editar la configuración. Consulta la [documentación MCP de Continue](https://docs.continue.dev/customize/deep-dives/mcp) para alternativas en modo HTTP y OAuth.
+
+</TabItem>
+<TabItem label="Windsurf">
+
+Edita `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
+
+```json
+{
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
+}
+```
+
+Reinicia Windsurf o pulsa **Refresh** en el panel de Plugins para que se apliquen los cambios.
+
+</TabItem>
+<TabItem label="JetBrains AI">
+
+Los IDEs de JetBrains (IntelliJ IDEA, GoLand, PyCharm, etc.) con el plugin **AI Assistant** soportan servidores MCP en `Settings → Tools → AI Assistant → Model Context Protocol`.
+
+Añade una entrada stdio apuntando al binario:
+
+- **Nombre**: `gitlab`
+- **Comando**: `/ruta/a/gitlab-mcp-server`
+- **Variables de entorno**: `GITLAB_URL=https://gitlab.example.com`, `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`
+
+Alternativamente, crea `.idea/mcp.json` en la raíz del proyecto con la misma estructura JSON usada por VS Code / Cursor. Reinicia el IDE tras editar.
+
+</TabItem>
 </Tabs>
 
 ## Flags del modo HTTP
@@ -230,6 +286,8 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`                                                                              |
 | `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                                                                                |
 | `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                  |
+| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                             |
+| `--rate-limit-burst`     | `40`                         | Tamaño del token bucket cuando `--rate-limit-rps > 0`                                                                  |
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 **Flags generales** (modos stdio y HTTP):

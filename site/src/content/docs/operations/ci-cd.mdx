@@ -3,6 +3,8 @@ title: CI/CD Usage
 description: Use gitlab-mcp-server in CI/CD pipelines with or without an LLM
 ---
 
+import { Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/ci-cd.md) in the repository.
 :::
@@ -16,7 +18,25 @@ gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two us
 
 Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. The server supports the full 1006-tool surface when using a token with `api` scope.
 
+```mermaid
+sequenceDiagram
+    participant CI as CI/CD Job
+    participant MCP as MCP Server (stdio)
+    participant GL as GitLab API
+
+    CI->>MCP: initialize (JSON-RPC via stdin)
+    MCP-->>CI: capabilities (via stdout)
+    CI->>MCP: notifications/initialized
+    CI->>MCP: tools/call {tool, arguments}
+    MCP->>GL: REST API v4 / GraphQL
+    GL-->>MCP: JSON response
+    MCP-->>CI: CallToolResult (via stdout)
+    CI->>CI: Parse result with jq
+```
+
 ## Prerequisites
+
+<Steps>
 
 1. **Download the binary** from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases):
 
@@ -29,6 +49,8 @@ Both modes authenticate with a **Personal Access Token** (PAT) or **Project Acce
 2. **Create a Project Access Token** with `api` scope (recommended over personal PATs for CI).
 
 3. **Store the token** as a masked CI/CD variable named `MCP_PAT`.
+
+</Steps>
 
 ## Mode 1: Deterministic (No LLM)
 

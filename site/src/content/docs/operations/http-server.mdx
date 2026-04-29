@@ -52,6 +52,8 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                                                        |
 | `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                                                              |
 | `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                            |
+| `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                               |
+| `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                        |
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
@@ -64,7 +66,7 @@ Clients must provide their GitLab Personal Access Token on every HTTP request us
 
 Optionally, clients can also specify which GitLab instance to target using the `GITLAB-URL` header:
 
-```
+```http
 GITLAB-URL: https://gitlab.example.com
 ```
 
@@ -72,13 +74,13 @@ If omitted, the server uses the default `--gitlab-url` value. If `--gitlab-url` 
 
 ### Private-token header (recommended)
 
-```
+```http
 PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Authorization Bearer header
 
-```
+```http
 Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
@@ -191,6 +193,33 @@ graph TD
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
 4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
 
+## Rate limiting
+
+HTTP mode includes an optional **per-server token-bucket rate limiter** that throttles `tools/call` requests. The limiter is **disabled by default** (`--rate-limit-rps=0`) and applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
+
+### Configuration
+
+| Flag                 | Default | Meaning                                                                 |
+| -------------------- | ------- | ----------------------------------------------------------------------- |
+| `--rate-limit-rps`   | `0`     | Sustained refill rate, in requests per second. `0` disables the limiter |
+| `--rate-limit-burst` | `40`    | Maximum bucket capacity (peak burst over 1s)                            |
+
+When `--rate-limit-rps > 0`, each pool entry gets its own token bucket sized at `--rate-limit-burst` tokens, refilled at `--rate-limit-rps` per second. Only `tools/call` requests consume tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize`, and other low-cost RPCs are not rate-limited.
+
+### Behaviour on exhaustion
+
+When a request would deplete the bucket, the server returns a `CallToolResult` with `IsError: true` and a text message such as `rate limit exceeded for <tool>; retry after a short backoff`. Clients should back off (exponentially or by detecting that message) and retry. The limiter does not return HTTP 429 because the limit is enforced **after** JSON-RPC routing, inside the MCP layer.
+
+### Sizing guidance
+
+- **Single-user deployment** (typical local dev): leave disabled (`--rate-limit-rps=0`)
+- **Shared instance behind a proxy** (Fly.io, Kubernetes): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own quota, so this protects against a single noisy client without affecting others
+- **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
+
+:::caution
+Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for hard quotas. The `--trusted-proxy-header` flag is required for accurate per-IP enforcement at the proxy layer.
+:::
+
 ## Client configuration
 
 <Tabs>
@@ -241,7 +270,54 @@ curl -X POST http://localhost:8080/mcp \
 </TabItem>
 </Tabs>
 
-## Docker Compose deployment
+## Docker deployment
+
+The project publishes a multi-arch Docker image at [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) for `linux/amd64` and `linux/arm64`. The image runs as a non-root user (UID 10001), exposes port 8080, and ships a built-in `/health` endpoint for orchestrators.
+
+### Quick start with `docker run`
+
+<Tabs>
+<TabItem label="Single instance">
+
+```bash
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.example.com
+```
+
+</TabItem>
+<TabItem label="Multi-instance">
+
+```bash
+# Omit --gitlab-url; clients send the GITLAB-URL header per request
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
+```
+
+</TabItem>
+</Tabs>
+
+:::tip
+Pin the image to a specific version (e.g. `ghcr.io/jmrplens/gitlab-mcp-server:1.3.4`) in production. The `latest` tag tracks the newest release and may shift unexpectedly.
+:::
+
+### Docker Compose
 
 ```yaml
 services:
@@ -257,6 +333,20 @@ services:
       - "--max-http-clients=200"
       - "--session-timeout=1h"
       # Or multi-instance mode (remove --gitlab-url, clients send GITLAB-URL header)
+    # Security hardening (least privilege, OWASP Docker security)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 ```
 
@@ -265,6 +355,96 @@ Start the service:
 ```bash
 docker compose up -d
 ```
+
+:::note
+A reference [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) is shipped at the repository root. It reads configuration from a `.env` file and applies the same hardening shown above.
+:::
+
+### Image security model
+
+The image follows OWASP Docker Top 10 guidance:
+
+| Property             | Value                                                                    |
+| -------------------- | ------------------------------------------------------------------------ |
+| Base image           | `alpine:3.23` (minimal, regularly patched)                               |
+| User                 | `appuser` (UID 10001, non-root)                                          |
+| Filesystem           | Read-only with writable `tmpfs` for `/tmp`                               |
+| Capabilities         | All dropped (`--cap-drop=ALL`)                                           |
+| Privilege escalation | Disabled (`no-new-privileges:true`)                                      |
+| Build flags          | `-trimpath -buildmode=pie` (PIE binary, no source paths in stack traces) |
+| OCI labels           | `org.opencontainers.image.*` populated with version, commit, source URL  |
+
+### Auto-update inside containers
+
+Auto-update is **disabled by default** when using the reference `docker-compose.yml` (which sets `--auto-update=false`). Container immutability is the recommended pattern: pull a newer image tag and restart the container. If you need in-place updates (e.g. on a single-host deployment without an image registry mirror), set `--auto-update=true` and mount the binary path as a writable volume.
+
+## Fly.io deployment
+
+[Fly.io](https://fly.io/) is a managed platform that runs Docker images globally with built-in TLS, anycast routing, and per-region machine scaling. The repository ships a reference [`fly.toml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/fly.toml) configured for **multi-instance mode** — each client supplies its own GitLab token and `GITLAB-URL` header per request, so a single Fly app can serve users connecting to different GitLab instances.
+
+### Prerequisites
+
+- A [Fly.io account](https://fly.io/app/sign-up) and the [`flyctl`](https://fly.io/docs/hands-on/install-flyctl/) CLI installed
+- A clone of the repository (or a fork with your own `fly.toml`)
+
+### Initial deploy
+
+```bash
+# 1. Sign in
+flyctl auth login
+
+# 2. Create the app (use a unique name; the default in fly.toml is gitlab-mcp-server)
+flyctl launch --no-deploy --copy-config --name your-mcp-app-name
+
+# 3. Deploy
+flyctl deploy
+```
+
+The shipped `fly.toml` uses the multi-stage `Dockerfile` at the repository root and overrides the container `CMD` with HTTP-mode flags:
+
+```toml
+[experimental]
+  cmd = [
+    "--http",
+    "--http-addr", "0.0.0.0:8080",
+    "--meta-tools",
+    "--auto-update=false",
+    "--trusted-proxy-header", "Fly-Client-IP"
+  ]
+```
+
+:::tip
+`--trusted-proxy-header=Fly-Client-IP` is critical on Fly.io: the platform's edge proxy sets this header with the real client IP, and the built-in rate limiter reads it instead of the load-balancer IP. Do not enable this header on deployments that are reachable directly without a trusted proxy.
+:::
+
+### Operational commands
+
+```bash
+flyctl status              # Machine state and recent deploys
+flyctl logs                # Live tail of structured logs
+flyctl scale count 2       # Run two machines (e.g. for HA)
+flyctl scale memory 512    # Bump memory to 512 MB (default in fly.toml: 256 MB)
+```
+
+### Health and TLS
+
+- The Fly proxy probes `GET /health` every 30s with a 5s timeout (configured under `[[http_service.checks]]`)
+- TLS is terminated at the Fly edge with `force_https = true` — internal traffic to the machine on port 8080 is HTTP
+- `auto_stop_machines = "stop"` and `min_machines_running = 0` let idle deployments scale to zero between requests
+
+### Auto-update on Fly
+
+Auto-update is **disabled** in the shipped configuration (`--auto-update=false`). On Fly.io, the recommended upgrade flow is to redeploy with a new image:
+
+```bash
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.3.4
+```
+
+This replaces the running machines with the new version atomically and preserves your secrets and configuration.
+
+### OAuth on Fly.io
+
+The shipped `fly.toml` runs in **legacy auth mode** (PAT per request). OAuth mode is also supported but requires a stable public URL known at startup so the OAuth discovery endpoints (`/.well-known/oauth-protected-resource`) advertise the right metadata. To enable OAuth, set `--auth-mode=oauth` and `--gitlab-url=<your-default>` in the `cmd` array, then redeploy. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for the GitLab OAuth Application setup.
 
 ## Health check
 

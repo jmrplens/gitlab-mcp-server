@@ -3,15 +3,49 @@ title: Issue Management Examples
 description: Issue triage, tracking, and project management examples using GitLab MCP Server
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+	<LinkCard
+		title="CI/CD Workflows"
+		href="/gitlab-mcp-server/examples/ci-cd-workflows/"
+		description="Pipeline management and monitoring"
+	/>
+	<LinkCard
+		title="Code Review Workflows"
+		href="/gitlab-mcp-server/examples/code-review-workflows/"
+		description="MR review, AI analysis, and discussions"
+	/>
+	<LinkCard
+		title="Usage Examples"
+		href="/gitlab-mcp-server/examples/usage/"
+		description="Quick reference for all domains"
+	/>
+</CardGrid>
+
 Step-by-step examples for issue management and project triage workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
 
 ## Issue triage
+
+```mermaid
+flowchart LR
+    A[View Open<br/>Issues] --> B[Assign &<br/>Label]
+    B --> C[Link Related<br/>Issues]
+    C --> D[Track in<br/>Milestone]
+    D --> E{Resolved?}
+    E -->|Yes| F[Close Issue]
+    E -->|No| G[Add Comment<br/>& Discuss]
+    G --> B
+
+    style A fill:#3b82f6,color:#fff
+    style F fill:#22c55e,color:#fff
+```
 
 ### View open issues
 
 **Prompt**: "Show me all open issues in the backend project with label 'bug'"
 
-```
+```text
 gitlab_issue → action: list, project_id: "my-group/backend",
   state: "opened", labels: "bug"
 ```
@@ -22,7 +56,7 @@ Returns: issue titles, authors, labels, milestones, assignees, and creation date
 
 **Prompt**: "Assign issue #123 to johndoe and add labels 'priority::high' and 'team::backend'"
 
-```
+```text
 gitlab_issue → action: update, project_id: "my-group/backend",
   issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
 ```
@@ -31,7 +65,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 **Prompt**: "Show me all unassigned issues in the Sprint 15 milestone"
 
-```
+```text
 gitlab_issue → action: list, project_id: "my-group/backend",
   milestone: "Sprint 15", assignee_id: 0
 ```
@@ -42,7 +76,7 @@ Returns: issues without assignees that need attention before the sprint starts.
 
 **Prompt**: "Close issue #456 with a comment explaining the fix"
 
-```
+```text
 gitlab_issue → action: note_create, project_id: "my-group/backend",
   issue_iid: 456, body: "Fixed in MR !89 — the timeout was caused by..."
 gitlab_issue → action: update, project_id: "my-group/backend",
@@ -57,7 +91,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 **Prompt**: "Summarize issue #234 and all its comments"
 
-```
+```text
 gitlab_summarize_issue (sampling) → reads issue description and all notes, produces summary
 ```
 
@@ -67,7 +101,7 @@ Returns: problem statement, key discussion points, proposed solutions, current s
 
 **Prompt**: "Identify technical debt across the backend project issues"
 
-```
+```text
 gitlab_find_technical_debt (sampling) → analyzes issue patterns, labels, and staleness
 ```
 
@@ -81,7 +115,7 @@ Returns: categorized debt items (code quality, testing gaps, infrastructure, doc
 
 **Prompt**: "Link issue #100 as related to issue #200 in the backend project"
 
-```
+```text
 gitlab_issue → action: link_create, project_id: "my-group/backend",
   issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
 ```
@@ -90,7 +124,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 
 **Prompt**: "Mark issue #300 as blocking issue #400"
 
-```
+```text
 gitlab_issue → action: link_create, project_id: "my-group/backend",
   issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
 ```
@@ -99,7 +133,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 
 **Prompt**: "Show me all issues related to issue #100"
 
-```
+```text
 gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 100
 ```
 
@@ -113,7 +147,7 @@ Returns: linked issues with relationship types (relates_to, blocks, is_blocked_b
 
 **Prompt**: "Create a scoped label 'priority::critical' with red color in the backend project"
 
-```
+```text
 gitlab_label → action: create, project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
@@ -122,7 +156,7 @@ gitlab_label → action: create, project_id: "my-group/backend",
 
 **Prompt**: "Show me the progress of milestone Sprint 15"
 
-```
+```text
 gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 15
 ```
 
@@ -132,7 +166,7 @@ Returns: completion percentage, open/closed issue counts, start date, due date, 
 
 **Prompt**: "Generate a detailed report for the Q2 milestone"
 
-```
+```text
 gitlab_generate_milestone_report (sampling) → analyzes milestone issues, MRs, and velocity
 ```
 
@@ -146,7 +180,7 @@ Returns: executive summary, completion metrics, velocity trends, risk items, and
 
 **Prompt**: "Comment on issue #123: 'Reproduced on staging — the error only occurs with concurrent requests'"
 
-```
+```text
 gitlab_issue → action: note_create, project_id: "my-group/backend",
   issue_iid: 123, body: "Reproduced on staging — the error only occurs with concurrent requests"
 ```
@@ -155,7 +189,7 @@ gitlab_issue → action: note_create, project_id: "my-group/backend",
 
 **Prompt**: "Create a discussion thread on issue #123 about the proposed architecture"
 
-```
+```text
 gitlab_issue → action: discussion_create, project_id: "my-group/backend",
   issue_iid: 123, body: "Let's discuss the proposed architecture for this feature..."
 ```
@@ -164,7 +198,7 @@ gitlab_issue → action: discussion_create, project_id: "my-group/backend",
 
 **Prompt**: "Add a thumbs-up reaction to issue #123"
 
-```
+```text
 gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
   issue_iid: 123, name: "thumbsup"
 ```
@@ -177,7 +211,7 @@ gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
 
 **Prompt**: "Search for issues mentioning 'memory leak' across all my projects"
 
-```
+```text
 gitlab_search → scope: "issues", search: "memory leak"
 ```
 
@@ -187,7 +221,7 @@ Returns: matching issues across all accessible projects with titles, description
 
 **Prompt**: "Find all open issues with label 'security' in the platform group"
 
-```
+```text
 gitlab_issue → action: list, group_id: "platform",
   state: "opened", labels: "security"
 ```

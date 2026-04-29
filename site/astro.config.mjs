@@ -140,6 +140,7 @@ export default defineConfig({
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
 				light: "./src/assets/logo-light.svg",
+				alt: "GitLab MCP Server",
 				replacesTitle: false,
 			},
 			social: [

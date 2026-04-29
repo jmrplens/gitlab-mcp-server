@@ -186,7 +186,7 @@ func testGitLabURLHeaderOverride(t *testing.T) {
 	mcpURL, pool, cleanup := newTestMCPOverHTTP(t, mockDefault.URL)
 	defer cleanup()
 
-	token := "glpat-test-header-override"
+	token := "test-header-override-token"
 
 	// First request without header → default URL.
 	sid1 := gitlabURLMCPInitialize(t, mcpURL, token, "")

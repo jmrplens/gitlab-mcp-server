@@ -3,11 +3,38 @@ title: Troubleshooting
 description: Common issues and solutions
 ---
 
+import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/troubleshooting.md) in the repository.
 :::
 
 ## Connection and authentication
+
+```mermaid
+flowchart TD
+    A[Server won't start] --> B{Error message?}
+    B -->|GITLAB_TOKEN required| C[Set GITLAB_TOKEN<br/>in .env or env]
+    B -->|GITLAB_URL required| D[Set GITLAB_URL<br/>in .env or flag]
+    B -->|401 Unauthorized| E[Regenerate token<br/>with api scope]
+    B -->|403 Forbidden| F[Check token has<br/>api scope]
+    B -->|Connection refused| G{Is GitLab reachable?}
+    G -->|No| H[Check GITLAB_URL<br/>and network]
+    G -->|Yes| I{TLS error?}
+    I -->|Yes| J{Can install CA cert?}
+    J -->|Yes| J1[Add CA cert to system<br/>trust store]
+    J -->|No| J2[Set GITLAB_SKIP_TLS_VERIFY=true<br/>as last resort]
+    I -->|No| K[Enable debug logging<br/>LOG_LEVEL=debug]
+
+    style C fill:#22c55e,color:#fff
+    style D fill:#22c55e,color:#fff
+    style E fill:#22c55e,color:#fff
+    style F fill:#22c55e,color:#fff
+    style H fill:#f59e0b,color:#000
+    style J1 fill:#22c55e,color:#fff
+    style J2 fill:#f59e0b,color:#000
+    style K fill:#3b82f6,color:#fff
+```
 
 | Symptom                                | Cause                       | Solution                                                                                                                                |
 | -------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,14 +46,56 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 
 ## TLS and certificates
 
-| Symptom                                         | Cause                   | Solution                                                                                     |
-| ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
-| `x509: certificate signed by unknown authority` | Self-signed certificate | Set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode              |
-| `x509: certificate has expired`                 | Expired TLS certificate | Renew the certificate on the GitLab server, or use `GITLAB_SKIP_TLS_VERIFY=true` temporarily |
+| Symptom                                         | Cause                   | Solution                                                                                                                                                                |
+| ----------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x509: certificate signed by unknown authority` | Self-signed certificate | First try adding the CA certificate to your system trust store. If that's not possible, set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode |
+| `x509: certificate has expired`                 | Expired TLS certificate | Renew the certificate on the GitLab server, or use `GITLAB_SKIP_TLS_VERIFY=true` temporarily                                                                            |
 
 :::caution
 `GITLAB_SKIP_TLS_VERIFY=true` disables TLS verification entirely. Use it only for self-hosted instances with self-signed certificates, and never in production environments with public-facing GitLab instances.
 :::
+
+## Network and proxy
+
+### DNS resolution
+
+If the server cannot resolve your GitLab hostname:
+
+```bash
+# Verify DNS from the machine running the MCP server
+nslookup gitlab.example.com
+# or
+dig gitlab.example.com +short
+```
+
+In Docker containers, ensure your compose file or `docker run` command uses `--dns` or a custom network with proper DNS configuration. Inside Kubernetes, check CoreDNS logs and `resolv.conf` in the pod.
+
+### Corporate proxies
+
+Go's `net/http` honours the standard proxy environment variables. Set them before launching the server:
+
+```bash
+export HTTPS_PROXY=http://proxy.corp.example.com:8080
+export HTTP_PROXY=http://proxy.corp.example.com:8080
+export NO_PROXY=localhost,127.0.0.1,.internal.corp
+```
+
+| Symptom                                          | Cause                                         | Solution                                                                              |
+| ------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Connection timeout behind corporate network      | Proxy not configured                          | Set `HTTPS_PROXY` / `HTTP_PROXY`                                                      |
+| Proxy works for `curl` but not for the server    | Env vars not exported into the server process | Pass them in `.env`, Docker `environment:`, or Fly.io secrets                         |
+| `CONNECT` rejected by proxy for `api.github.com` | Proxy denies outbound to GitHub (auto-update) | Set `AUTO_UPDATE=false` or whitelist `github.com` and `objects.githubusercontent.com` |
+| Internal GitLab routed through external proxy    | `NO_PROXY` missing                            | Add your GitLab hostname to `NO_PROXY`                                                |
+
+### Reverse proxy (HTTP mode)
+
+When running the MCP server behind nginx, Caddy, or a cloud load balancer:
+
+| Symptom                                        | Cause                                            | Solution                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Rate limiter counts all requests as one client | Reads load-balancer IP instead of real client IP | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`) |
+| WebSocket or SSE disconnected                  | Proxy read timeout too short                     | Increase proxy read timeout to at least 120s for long-running MCP streams                            |
+| `502 Bad Gateway`                              | Server not listening yet                         | Add a startup probe or retry; the server needs a few seconds to initialize on first request          |
 
 ## Tool discovery
 
@@ -75,40 +144,48 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 
 ## IDE-specific issues
 
-### VS Code / GitHub Copilot
-
-| Symptom                            | Solution                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------- |
-| "Tool not found" in Copilot Chat   | Check Output panel → **MCP Logs** for errors. Verify `.vscode/mcp.json` path |
-| Server not appearing in MCP status | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify configuration           |
-| "Permission denied" on startup     | Run `chmod +x /path/to/gitlab-mcp-server` (Linux/macOS)                      |
-| Server restarts repeatedly         | Check MCP Logs for missing `GITLAB_URL` or `GITLAB_TOKEN`                    |
-
-### Cursor
-
-| Symptom                    | Solution                                                                   |
-| -------------------------- | -------------------------------------------------------------------------- |
-| Tools not listed           | Verify `.cursor/mcp.json` exists and uses `mcpServers` key (not `servers`) |
-| `${input:...}` not working | Not supported by Cursor — use environment variables instead                |
+<Tabs>
+  <TabItem label="VS Code / GitHub Copilot">
+    | Symptom                            | Solution                                                                     |
+    | ---------------------------------- | ---------------------------------------------------------------------------- |
+    | "Tool not found" in Copilot Chat   | Check Output panel → **MCP Logs** for errors. Verify `.vscode/mcp.json` path |
+    | Server not appearing in MCP status | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify configuration           |
+    | "Permission denied" on startup     | Run `chmod +x /path/to/gitlab-mcp-server` (Linux/macOS)                      |
+    | Server restarts repeatedly         | Check MCP Logs for missing `GITLAB_URL` or `GITLAB_TOKEN`                    |
+  </TabItem>
+  <TabItem label="Cursor">
+    | Symptom                    | Solution                                                                   |
+    | -------------------------- | -------------------------------------------------------------------------- |
+    | Tools not listed           | Verify `.cursor/mcp.json` exists and uses `mcpServers` key (not `servers`) |
+    | `${input:...}` not working | Not supported by Cursor — use environment variables instead                |
+  </TabItem>
+</Tabs>
 
 ## Debug mode
 
 Enable verbose logging to diagnose issues:
 
-```bash
-# Stdio mode
-LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
+<Steps>
 
-# HTTP mode (logs interleaved with server output)
-LOG_LEVEL=debug ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com 2>debug.log
-```
+1. **Set the log level** to `debug`:
 
-Debug logs include:
+   ```bash
+   # Stdio mode
+   LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 
-- Every tool call with input parameters
-- GitLab API request/response details
-- Token validation events (last 4 characters only)
-- Session pool operations (HTTP mode)
+   # HTTP mode (logs interleaved with server output)
+   LOG_LEVEL=debug ./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com 2>debug.log
+   ```
+
+2. **Reproduce the issue** by running the same operation that failed.
+
+3. **Examine the logs** — debug logs include:
+   - Every tool call with input parameters
+   - GitLab API request/response details
+   - Token validation events (last 4 characters only)
+   - Session pool operations (HTTP mode)
+
+</Steps>
 
 :::tip
 Logs go to **stderr**, JSON-RPC messages go to **stdout**. Always redirect stderr when capturing debug logs to avoid mixing with MCP protocol messages.
@@ -118,6 +195,8 @@ Logs go to **stderr**, JSON-RPC messages go to **stdout**. Always redirect stder
 
 If you cannot resolve an issue:
 
+<Steps>
+
 1. **Enable debug logging** (`LOG_LEVEL=debug`) and capture the output
 2. **Check the [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues)** for known problems
 3. **Open a new issue** with:
@@ -126,3 +205,5 @@ If you cannot resolve an issue:
    - MCP client name and version
    - Redacted debug logs (remove any tokens or sensitive data)
    - Steps to reproduce the issue
+
+</Steps>

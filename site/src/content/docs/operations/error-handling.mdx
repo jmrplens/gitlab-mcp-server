@@ -3,6 +3,8 @@ title: Error Handling
 description: Error classification, rich diagnostics, and actionable hints
 ---
 
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/error-handling.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/error-handling.md) in the repository.
 :::
@@ -37,34 +39,37 @@ Network-level errors are also classified:
 
 ## Error wrapping functions
 
-The server uses three error wrapping functions, chosen based on the operation type:
+The server uses five error handling helpers, chosen based on the operation type:
 
-### WrapErr — Read-only operations
+<Tabs>
+  <TabItem label="WrapErr">
+    **Read-only operations** — Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
 
-Used for `list`, `get`, and `search` operations. Classifies the error and wraps it with the operation name:
+    ```text
+    list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
+    ```
 
-```text
-list_issues: authentication failed — GITLAB_TOKEN may be invalid or expired
-```
+  </TabItem>
+  <TabItem label="WrapErrWithMessage">
+    **Mutating operations** — Used for `create`, `update`, and `delete` operations. Includes the specific error detail extracted from the GitLab API response:
 
-### WrapErrWithMessage — Mutating operations
+    ```text
+    fileCreate: bad request — A file with this name already exists: POST .../files: 400
+    ```
 
-Used for `create`, `update`, and `delete` operations. Includes the specific error detail extracted from the GitLab API response:
+    The server extracts the detailed error message from GitLab's API response, handling nested formats like `{message: {base: [text]}}`, and truncates at 300 characters.
 
-```text
-fileCreate: bad request — A file with this name already exists: POST .../files: 400
-```
+  </TabItem>
+  <TabItem label="WrapErrWithHint">
+    **Known corrective actions** — Used when the corrective action for a specific error is known. Appends an actionable suggestion:
 
-The server extracts the detailed error message from GitLab's API response, handling nested formats like `{message: {base: [text]}}`, and truncates at 300 characters.
+    ```text
+    branchProtect: conflict — Protected branch rule already exists.
+    Suggestion: use gitlab_protected_branch_get to view current rules
+    ```
 
-### WrapErrWithHint — Known corrective actions
-
-Used when the corrective action for a specific error is known. Appends an actionable suggestion:
-
-```text
-branchProtect: conflict — Protected branch rule already exists.
-Suggestion: use gitlab_protected_branch_get to view current rules
-```
+  </TabItem>
+</Tabs>
 
 ### Decision tree
 
@@ -75,6 +80,25 @@ Suggestion: use gitlab_protected_branch_get to view current rules
 | Specific error with known fix               | `WrapErrWithHint`       |
 | Status-specific hint (single code)          | `WrapErrWithStatusHint` |
 | Get operation returning 404                 | `NotFoundResult`        |
+
+```mermaid
+flowchart TD
+    A[Error Occurred] --> B{Operation type?}
+    B -->|list / get / search| C{Is HTTP 404<br/>on GET?}
+    C -->|Yes| D[NotFoundResult]
+    C -->|No| E[WrapErr]
+    B -->|create / update / delete| F{Known fix<br/>for this error?}
+    F -->|Yes| G{Specific HTTP<br/>status code?}
+    G -->|Yes| H[WrapErrWithStatusHint]
+    G -->|No| I[WrapErrWithHint]
+    F -->|No| J[WrapErrWithMessage]
+
+    style D fill:#3b82f6,color:#fff
+    style E fill:#6b7280,color:#fff
+    style H fill:#f59e0b,color:#000
+    style I fill:#f59e0b,color:#000
+    style J fill:#ef4444,color:#fff
+```
 
 ### NotFoundResult — Informational 404 responses
 
@@ -130,6 +154,10 @@ The structured response includes:
 | **Suggestion** | Actionable hint (when available)            |
 
 ## Transient vs permanent errors
+
+:::danger[Do not retry permanent errors]
+4xx errors (except 429) indicate a problem with the request itself — retrying will produce the same result. Fix the input parameters or configuration instead.
+:::
 
 The server classifies errors as **transient** (retryable) or **permanent**:
 
