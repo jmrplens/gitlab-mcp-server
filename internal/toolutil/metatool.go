@@ -358,6 +358,35 @@ func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn 
 // FormatResultFunc converts an action result into an MCP call tool result.
 type FormatResultFunc func(any) *mcp.CallToolResult
 
+// AddMetaTool registers an action-dispatched meta-tool with route-derived
+// annotations. Use it for meta-tools that may include mutating or destructive
+// actions; if any route is destructive, the tool receives DestructiveHint=true.
+func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         name,
+		Title:        TitleFromName(name),
+		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
+		Annotations:  DeriveAnnotationsWithTitle(name, routes),
+		Icons:        icons,
+		InputSchema:  MetaToolSchema(routes),
+		OutputSchema: MetaToolOutputSchema(),
+	}, MakeMetaHandler(name, routes, formatResult))
+}
+
+// AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
+// are all read-only list/get/search-style operations.
+func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         name,
+		Title:        TitleFromName(name),
+		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
+		Annotations:  ReadOnlyMetaAnnotationsWithTitle(name),
+		Icons:        icons,
+		InputSchema:  MetaToolSchema(routes),
+		OutputSchema: MetaToolOutputSchema(),
+	}, MakeMetaHandler(name, routes, formatResult))
+}
+
 // MakeMetaHandler creates a generic MCP tool handler that dispatches to action routes.
 // The formatResult function converts the action result into an MCP response.
 // If formatResult is nil, a default JSON formatter is used.

@@ -83,29 +83,13 @@ func makeMetaHandler(toolName string, routes actionMap) func(ctx context.Context
 // If ANY route is destructive, the tool gets DestructiveHint: true.
 // If NO route is destructive, it gets NonDestructiveMetaAnnotations.
 func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         name,
-		Title:        toolutil.TitleFromName(name),
-		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  toolutil.DeriveAnnotationsWithTitle(name, routes),
-		Icons:        icons,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, makeMetaHandler(name, routes))
+	toolutil.AddMetaTool(server, name, desc, routes, icons, markdownForResult)
 }
 
 // addReadOnlyMetaTool registers a meta-tool where all actions are read-only
 // (list/get/search only). Uses ReadOnlyMetaAnnotations with ReadOnlyHint: true.
 func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         name,
-		Title:        toolutil.TitleFromName(name),
-		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
-		Icons:        icons,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, makeMetaHandler(name, routes))
+	toolutil.AddReadOnlyMetaTool(server, name, desc, routes, icons, markdownForResult)
 }
 
 var validActionsString = toolutil.ValidActionsString

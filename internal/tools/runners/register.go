@@ -335,11 +335,8 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"controller_token_revoke": toolutil.DestructiveVoidAction(client, runnercontrollertokens.Revoke),
 	}
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_runner",
-		Title: toolutil.TitleFromName("gitlab_runner"),
-		Description: toolutil.MetaToolDescriptionPrefix("gitlab_runner", routes) + `Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
-Valid actions: ` + toolutil.ValidActionsString(routes) + `
+	toolutil.AddMetaTool(server, "gitlab_runner", `Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
+Valid actions: `+toolutil.ValidActionsString(routes)+`
 
 When to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.
 NOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitlab_job), CI variables (use gitlab_ci_variable), CI lint or templates (use gitlab_template), self-hosted GitLab Runner installation (out of scope — install via the GitLab Runner CLI).
@@ -391,10 +388,5 @@ Controller tokens:
 - controller_token_get / controller_token_rotate / controller_token_revoke: controller_id*, token_id*
 - controller_token_create: controller_id*, description
 
-See also: gitlab_pipeline, gitlab_job`,
-		Annotations:  toolutil.DeriveAnnotationsWithTitle("gitlab_runner", routes),
-		Icons:        toolutil.IconRunner,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_runner", routes, nil))
+See also: gitlab_pipeline, gitlab_job`, routes, toolutil.IconRunner, nil)
 }
