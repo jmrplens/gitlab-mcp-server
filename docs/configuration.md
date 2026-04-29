@@ -28,7 +28,7 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
-| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate |
+| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, this is a fallback; CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
 | `EXCLUDE_TOOLS` | *(empty)* | Comma-separated list of tool names to exclude from registration |
@@ -211,7 +211,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--gitlab-url` | *(optional)* | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
 | `--meta-tools` | `true` | Enable meta-tools |
-| `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
+| `--enterprise` | `false` | Fallback for Enterprise/Premium tools. HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |
 | `--session-timeout` | `30m` | Idle session timeout |
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |

@@ -34,7 +34,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/health"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -329,29 +329,30 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 
 	cfg := &config.Config{
-		GitLabURL:          hcfg.gitlabURL,
-		SkipTLSVerify:      hcfg.skipTLSVerify,
-		MetaTools:          hcfg.metaTools,
-		Enterprise:         hcfg.enterprise,
-		ReadOnly:           hcfg.readOnly,
-		SafeMode:           hcfg.safeMode,
-		EmbeddedResources:  hcfg.embeddedResources,
-		ExcludeTools:       config.ParseCSV(hcfg.excludeTools),
-		IgnoreScopes:       hcfg.ignoreScopes,
-		MaxHTTPClients:     hcfg.maxHTTPClients,
-		SessionTimeout:     hcfg.sessionTimeout,
-		RevalidateInterval: hcfg.revalidateInterval,
-		UploadMaxFileSize:  config.DefaultMaxFileSize,
-		AutoUpdate:         hcfg.autoUpdate,
-		AutoUpdateRepo:     hcfg.autoUpdateRepo,
-		AutoUpdateInterval: hcfg.autoUpdateInterval,
-		AutoUpdateTimeout:  hcfg.autoUpdateTimeout,
-		AuthMode:           hcfg.authMode,
-		OAuthCacheTTL:      hcfg.oauthCacheTTL,
-		TrustedProxyHeader: hcfg.trustedProxyHeader,
-		RateLimitRPS:       hcfg.rateLimitRPS,
-		RateLimitBurst:     hcfg.rateLimitBurst,
-		MetaParamSchema:    hcfg.metaParamSchema,
+		GitLabURL:            hcfg.gitlabURL,
+		SkipTLSVerify:        hcfg.skipTLSVerify,
+		MetaTools:            hcfg.metaTools,
+		Enterprise:           hcfg.enterprise,
+		AutoDetectEnterprise: true,
+		ReadOnly:             hcfg.readOnly,
+		SafeMode:             hcfg.safeMode,
+		EmbeddedResources:    hcfg.embeddedResources,
+		ExcludeTools:         config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:         hcfg.ignoreScopes,
+		MaxHTTPClients:       hcfg.maxHTTPClients,
+		SessionTimeout:       hcfg.sessionTimeout,
+		RevalidateInterval:   hcfg.revalidateInterval,
+		UploadMaxFileSize:    config.DefaultMaxFileSize,
+		AutoUpdate:           hcfg.autoUpdate,
+		AutoUpdateRepo:       hcfg.autoUpdateRepo,
+		AutoUpdateInterval:   hcfg.autoUpdateInterval,
+		AutoUpdateTimeout:    hcfg.autoUpdateTimeout,
+		AuthMode:             hcfg.authMode,
+		OAuthCacheTTL:        hcfg.oauthCacheTTL,
+		TrustedProxyHeader:   hcfg.trustedProxyHeader,
+		RateLimitRPS:         hcfg.rateLimitRPS,
+		RateLimitBurst:       hcfg.rateLimitBurst,
+		MetaParamSchema:      hcfg.metaParamSchema,
 	}
 
 	if cfg.AuthMode == "" {
@@ -544,12 +545,15 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		KeepAlive: 30 * time.Second,
 	})
 
+	var metaSchemaRoutes map[string]toolutil.ActionMap
 	if cfg.MetaTools {
-		tools.SetMetaParamSchema(cfg.MetaParamSchema)
-		tools.RegisterAllMeta(server, client, cfg.Enterprise)
-		tools.RegisterMCPMeta(server, client, updater)
+		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
+		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
+			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
+			gitlabtools.RegisterMCPMeta(server, client, updater)
+		})
 	} else {
-		tools.RegisterAll(server, client, cfg.Enterprise)
+		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
 		serverupdate.RegisterTools(server, updater)
 	}
 
@@ -559,7 +563,7 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 	}
 
 	if cfg.TokenScopes != nil {
-		removed := tools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
+		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
 		if removed > 0 {
 			slog.Info("scope-filtered tools", "removed", removed)
 		}
@@ -569,7 +573,7 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		removed := removeNonReadOnlyTools(server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
 	} else if cfg.SafeMode {
-		wrapped := tools.WrapMutatingToolsForSafeMode(server)
+		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
 		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
 	}
 
@@ -583,13 +587,11 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		slog.Info("registered individual tools", "tools", toolCount)
 	}
 
-	var metaSchemaRoutes map[string]toolutil.ActionMap
 	if cfg.MetaTools {
 		var routesErr error
-		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server)
+		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server, metaSchemaRoutes)
 		if routesErr != nil {
 			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
-			metaSchemaRoutes = toolutil.MetaRoutes()
 		}
 	}
 
@@ -647,8 +649,8 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		"commit", commit,
 	)
 
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client) *mcp.Server { //nolint:contextcheck // pool factory: each session gets its own ctx; introspection uses ephemeral transport
-		return createServer(client, cfg, nil)
+	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.Config) *mcp.Server {
+		return createServer(client, serverCfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
 	defer pool.Close()
@@ -679,7 +681,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		// tokens (401) before reaching the server-selector, so authLimiter
 		// is unnecessary. The server-selector only needs to extract the
 		// pre-validated token for per-token server pool lookup.
-		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
 			token := serverpool.ExtractToken(r)
 			if token == "" {
 				slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
@@ -753,7 +755,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 			}
 		}()
 
-		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
 			ip := clientIP(r, cfg.TrustedProxyHeader)
 			if authLimiter.IsBlocked(ip) {
 				slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
@@ -1204,11 +1206,11 @@ func startAutoUpdate(ctx context.Context, cfg *config.Config) {
 // countRegisteredTools returns the number of tools registered on the server
 // by connecting an ephemeral in-memory client session and calling ListTools.
 func countRegisteredTools(server *mcp.Server) (int, error) {
-	tools, err := listRegisteredTools(server, "counter")
+	registered, err := listRegisteredTools(server, "counter")
 	if err != nil {
 		return 0, err
 	}
-	return len(tools), nil
+	return len(registered), nil
 }
 
 func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, error) {
@@ -1235,7 +1237,7 @@ func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, er
 	return result.Tools, nil
 }
 
-func visibleMetaSchemaRoutes(server *mcp.Server) (map[string]toolutil.ActionMap, error) {
+func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.ActionMap) (map[string]toolutil.ActionMap, error) {
 	registeredTools, err := listRegisteredTools(server, "meta-schema-filter")
 	if err != nil {
 		return nil, err
@@ -1246,7 +1248,6 @@ func visibleMetaSchemaRoutes(server *mcp.Server) (map[string]toolutil.ActionMap,
 		visibleTools[tool.Name] = struct{}{}
 	}
 
-	routes := toolutil.MetaRoutes()
 	visibleRoutes := make(map[string]toolutil.ActionMap, len(routes))
 	for toolName, actions := range routes {
 		if _, ok := visibleTools[toolName]; ok {
@@ -1366,9 +1367,9 @@ func doToolSearch(query string, metaTools, enterprise bool) error {
 	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
 
 	if metaTools {
-		tools.RegisterAllMeta(server, nil, enterprise)
+		gitlabtools.RegisterAllMeta(server, nil, enterprise)
 	} else {
-		tools.RegisterAll(server, nil, enterprise)
+		gitlabtools.RegisterAll(server, nil, enterprise)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

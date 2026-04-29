@@ -511,6 +511,95 @@ func TestSetEnterprise_And_IsEnterprise(t *testing.T) {
 	}
 }
 
+// TestInitialize_DetectsEnterpriseFromVersion verifies that Initialize applies
+// the optional enterprise field returned by GitLab's version endpoint.
+func TestInitialize_DetectsEnterpriseFromVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/version" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"version":    "17.0.0",
+			"revision":   "abc123",
+			"enterprise": true,
+		})
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	version, err := client.Initialize(context.Background())
+	if err != nil {
+		t.Fatalf("Initialize() error: %v", err)
+	}
+	if version != "17.0.0" {
+		t.Fatalf("Initialize() version = %q, want 17.0.0", version)
+	}
+	if !client.IsEnterprise() {
+		t.Fatal("client should be enterprise when version endpoint reports enterprise=true")
+	}
+}
+
+// TestDetectEnterprise_OverridesFallback verifies that explicit edition data
+// from GitLab wins over the configured fallback.
+func TestDetectEnterprise_OverridesFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/version" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"version":    "17.0.0",
+			"enterprise": false,
+		})
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	if enterprise := client.DetectEnterprise(context.Background(), true); enterprise {
+		t.Fatal("DetectEnterprise() = true, want false from version endpoint")
+	}
+	if client.IsEnterprise() {
+		t.Fatal("client should not be enterprise after detected enterprise=false")
+	}
+}
+
+// TestDetectEnterprise_MissingFieldUsesFallback verifies graceful fallback for
+// GitLab versions that do not expose the enterprise field.
+func TestDetectEnterprise_MissingFieldUsesFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/version" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"version": "16.11.0"})
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	if enterprise := client.DetectEnterprise(context.Background(), true); !enterprise {
+		t.Fatal("DetectEnterprise() = false, want configured fallback true")
+	}
+	if !client.IsEnterprise() {
+		t.Fatal("client should keep enterprise fallback when endpoint omits edition")
+	}
+}
+
 // TestCurrentUsername_Success verifies that [Client.CurrentUsername] returns
 // the username from the /user API endpoint.
 func TestCurrentUsername_Success(t *testing.T) {
@@ -615,7 +704,7 @@ func TestPingDirect_EmptyVersion(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	_, err = client.pingDirect(context.Background())
+	err = client.pingDirect(context.Background())
 	if err == nil {
 		t.Error("pingDirect() expected error for empty version, got nil")
 	}
@@ -635,7 +724,7 @@ func TestPingDirect_NonOKStatus(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	_, err = client.pingDirect(context.Background())
+	err = client.pingDirect(context.Background())
 	if err == nil {
 		t.Error("pingDirect() expected error for 503 response, got nil")
 	}
@@ -655,7 +744,7 @@ func TestPingDirect_MalformedJSON(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	_, err = client.pingDirect(context.Background())
+	err = client.pingDirect(context.Background())
 	if err == nil {
 		t.Error("pingDirect() expected error for malformed JSON, got nil")
 	}
@@ -725,7 +814,7 @@ func TestPingDirect_NilContext(t *testing.T) {
 	}
 
 	//nolint:staticcheck // intentionally passing nil context to trigger error path
-	_, pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
+	pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
 	}

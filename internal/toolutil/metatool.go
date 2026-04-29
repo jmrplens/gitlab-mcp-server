@@ -59,8 +59,10 @@ type ActionMap map[string]ActionRoute
 // --- Meta-tool route registry ---
 
 var (
-	metaRoutesMu  sync.Mutex
-	metaRoutesMap = map[string]ActionMap{}
+	metaRoutesMu      sync.Mutex
+	metaRoutesMap     = map[string]ActionMap{}
+	metaRouteCapture  map[string]ActionMap
+	metaRouteCaptureM sync.Mutex
 )
 
 // RegisterRoutes records a meta-tool's action routes for external consumers
@@ -68,6 +70,9 @@ var (
 func RegisterRoutes(toolName string, routes ActionMap) {
 	metaRoutesMu.Lock()
 	metaRoutesMap[toolName] = routes
+	if metaRouteCapture != nil {
+		metaRouteCapture[toolName] = routes
+	}
 	metaRoutesMu.Unlock()
 }
 
@@ -75,9 +80,33 @@ func RegisterRoutes(toolName string, routes ActionMap) {
 func MetaRoutes() map[string]ActionMap {
 	metaRoutesMu.Lock()
 	defer metaRoutesMu.Unlock()
-	cp := make(map[string]ActionMap, len(metaRoutesMap))
-	maps.Copy(cp, metaRoutesMap)
-	return cp
+	return cloneMetaRoutes(metaRoutesMap)
+}
+
+// CaptureMetaRoutes runs register and returns only the meta-tool routes
+// registered during that call. The global registry is still populated for
+// audit tools, but callers that build per-server resources should prefer the
+// returned snapshot so concurrent HTTP server instances do not share schema
+// state accidentally.
+func CaptureMetaRoutes(register func()) map[string]ActionMap {
+	metaRouteCaptureM.Lock()
+	defer metaRouteCaptureM.Unlock()
+
+	metaRoutesMu.Lock()
+	metaRouteCapture = map[string]ActionMap{}
+	metaRoutesMu.Unlock()
+
+	defer func() {
+		metaRoutesMu.Lock()
+		metaRouteCapture = nil
+		metaRoutesMu.Unlock()
+	}()
+
+	register()
+
+	metaRoutesMu.Lock()
+	defer metaRoutesMu.Unlock()
+	return cloneMetaRoutes(metaRouteCapture)
 }
 
 // ClearMetaRoutes resets the registry (useful for tests).
@@ -85,6 +114,16 @@ func ClearMetaRoutes() {
 	metaRoutesMu.Lock()
 	metaRoutesMap = map[string]ActionMap{}
 	metaRoutesMu.Unlock()
+}
+
+func cloneMetaRoutes(routes map[string]ActionMap) map[string]ActionMap {
+	out := make(map[string]ActionMap, len(routes))
+	for tool, actions := range routes {
+		actionCopy := make(ActionMap, len(actions))
+		maps.Copy(actionCopy, actions)
+		out[tool] = actionCopy
+	}
+	return out
 }
 
 // Route creates a non-destructive ActionRoute without an output schema.

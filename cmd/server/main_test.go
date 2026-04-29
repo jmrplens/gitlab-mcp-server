@@ -873,6 +873,26 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 	}
 }
 
+// TestCreateServer_MetaSchemaRoutesAreServerScoped verifies that schema
+// resources keep the route set captured for their own server even if another
+// server registers a different CE/Enterprise catalog later in the same process.
+func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
+	client := newMockGitLabClient(t)
+	ceServer := createServer(client, &config.Config{MetaTools: true, Enterprise: false}, nil)
+	ceSession := newInMemorySession(t, ceServer)
+
+	_ = createServer(client, &config.Config{MetaTools: true, Enterprise: true}, nil)
+
+	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
+	if err == nil {
+		t.Fatal("CE server should not expose enterprise-only project action schema")
+	}
+	_, err = ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("CE server should still expose common project action schema: %v", err)
+	}
+}
+
 // TestPreStartAutoUpdate_InvalidMode verifies that preStartAutoUpdate
 // returns immediately when the AUTO_UPDATE value is invalid.
 func TestPreStartAutoUpdate_InvalidMode(t *testing.T) {

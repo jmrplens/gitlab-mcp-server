@@ -48,8 +48,8 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Default GitLab instance URL. Can be overridden per-request via `GITLAB-URL` header |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--meta-tools` | `true` | Enable domain-level meta-tools (32, or 47 with --enterprise) instead of individual tools (1006) |
-| `--enterprise` | `false` | Enable Enterprise/Premium meta-tools (15 additional domain tools) |
+| `--meta-tools` | `true` | Enable domain-level meta-tools (32 base, or 47 for Enterprise/Premium entries) instead of individual tools (1006) |
+| `--enterprise` | `false` | Fallback for Enterprise/Premium tools when GitLab's version endpoint does not report edition. HTTP mode auto-detects CE/EE per token+URL pool entry when possible |
 | `--max-http-clients` | `100` | Maximum unique token+URL entries in the server pool |
 | `--session-timeout` | `30m` | Idle MCP session timeout |
 | `--auth-mode` | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API) |
@@ -91,6 +91,7 @@ graph TD
 - Clients with the **same token and same GitLab URL** share the same `*mcp.Server` instance
 - Clients with **different tokens** or **different GitLab URLs** get completely isolated server instances
 - Each server instance has its own GitLab client authenticated with that specific token against that specific GitLab instance
+- Each server instance detects token scopes and CE/EE edition independently, so multi-instance deployments can serve CE and EE GitLab instances from the same process when the version endpoint reports `enterprise`
 - Zero cross-contamination between clients by construction
 
 ### Session Key Isolation

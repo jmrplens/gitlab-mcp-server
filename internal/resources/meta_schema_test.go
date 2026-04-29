@@ -1,6 +1,6 @@
 // meta_schema_test.go covers the gitlab://schema/meta/* MCP resources:
 // the index resource, the per-action template resource, URI parsing edge
-// cases, and the InputSchema lookup contract via toolutil.MetaRoutes().
+// cases, and the InputSchema lookup contract from explicit route snapshots.
 
 package resources
 

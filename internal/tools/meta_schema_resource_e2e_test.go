@@ -28,8 +28,10 @@ func metaSchemaResourceSession(t *testing.T, handler http.Handler) *mcp.ClientSe
 
 	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterAllMeta(server, client, false)
-	resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
+	metaRoutes := toolutil.CaptureMetaRoutes(func() {
+		RegisterAllMeta(server, client, false)
+	})
+	resources.RegisterMetaSchemaResources(server, metaRoutes)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

@@ -1474,6 +1474,43 @@ func TestMetaRoutes_ReturnsSnapshot(t *testing.T) {
 	}
 }
 
+// TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback verifies that
+// per-server schema resources can capture a local route catalog without
+// inheriting older global registry entries.
+func TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	RegisterRoutes("gitlab_existing", ActionMap{
+		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return "existing", nil
+		}),
+	})
+
+	captured := CaptureMetaRoutes(func() {
+		RegisterRoutes("gitlab_captured", ActionMap{
+			"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+				return "captured", nil
+			}),
+		})
+	})
+
+	if _, ok := captured["gitlab_captured"]; !ok {
+		t.Fatal("captured routes missing gitlab_captured")
+	}
+	if _, ok := captured["gitlab_existing"]; ok {
+		t.Fatal("captured routes should not include pre-existing global routes")
+	}
+	if _, ok := MetaRoutes()["gitlab_captured"]; !ok {
+		t.Fatal("CaptureMetaRoutes should still populate the global audit registry")
+	}
+
+	delete(captured["gitlab_captured"], "list")
+	if _, ok := MetaRoutes()["gitlab_captured"]["list"]; !ok {
+		t.Fatal("mutating captured inner maps should not affect the global registry")
+	}
+}
+
 // --- Coverage tests for BuildMetaToolSchema helpers and supporting paths ---
 // The following tests target branches not exercised by the higher-level
 // tests above:

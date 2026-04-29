@@ -72,13 +72,14 @@ const (
 
 // Config holds all configuration values for the MCP server.
 type Config struct {
-	GitLabURL     string
-	GitLabToken   string
-	SkipTLSVerify bool
-	MetaTools     bool
-	Enterprise    bool
-	ReadOnly      bool
-	SafeMode      bool
+	GitLabURL            string
+	GitLabToken          string
+	SkipTLSVerify        bool
+	MetaTools            bool
+	Enterprise           bool
+	AutoDetectEnterprise bool
+	ReadOnly             bool
+	SafeMode             bool
 
 	EmbeddedResources bool // Append EmbeddedResource content blocks to get_* tool results (default true)
 

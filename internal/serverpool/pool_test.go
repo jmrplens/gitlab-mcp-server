@@ -4,8 +4,10 @@ package serverpool
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,7 +21,7 @@ import (
 
 // testFactory returns a ServerFactory that creates minimal *mcp.Server instances.
 func testFactory() ServerFactory {
-	return func(client *gitlabclient.Client) *mcp.Server {
+	return func(client *gitlabclient.Client, _ *config.Config) *mcp.Server {
 		return mcp.NewServer(&mcp.Implementation{
 			Name:    "test-server",
 			Version: "0.0.0",
@@ -33,6 +35,7 @@ func testConfig(baseURL string) *config.Config {
 		GitLabURL:     baseURL,
 		GitLabToken:   "default-token",
 		SkipTLSVerify: false,
+		IgnoreScopes:  true,
 	}
 }
 
@@ -65,6 +68,112 @@ func TestGetOrCreate_NewToken(t *testing.T) {
 	}
 	if pool.Size() != 1 {
 		t.Errorf("pool.Size() = %d, want 1", pool.Size())
+	}
+}
+
+// TestGetOrCreate_DetectsScopesPerToken verifies that HTTP pool entries pass
+// token-specific scope detection into the server factory instead of mutating
+// the shared server-wide config.
+func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		if token == "" {
+			if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+				token = bearer
+			}
+		}
+		scopes := []string{"api"}
+		if token == "glpat-read" {
+			scopes = []string{"read_api"}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":     1,
+			"scopes": scopes,
+			"active": true,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = false
+	capturedScopes := make([][]string, 0, 2)
+	factory := func(_ *gitlabclient.Client, entryCfg *config.Config) *mcp.Server {
+		capturedScopes = append(capturedScopes, append([]string(nil), entryCfg.TokenScopes...))
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+	}
+	pool := New(cfg, factory)
+
+	if _, err := pool.GetOrCreate("glpat-read", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate(read token) error: %v", err)
+	}
+	if _, err := pool.GetOrCreate("glpat-api", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate(api token) error: %v", err)
+	}
+
+	if len(capturedScopes) != 2 {
+		t.Fatalf("captured %d scope sets, want 2", len(capturedScopes))
+	}
+	if len(capturedScopes[0]) != 1 || capturedScopes[0][0] != "read_api" {
+		t.Fatalf("first token scopes = %v, want [read_api]", capturedScopes[0])
+	}
+	if len(capturedScopes[1]) != 1 || capturedScopes[1][0] != "api" {
+		t.Fatalf("second token scopes = %v, want [api]", capturedScopes[1])
+	}
+	if cfg.TokenScopes != nil {
+		t.Fatalf("shared config TokenScopes = %v, want nil", cfg.TokenScopes)
+	}
+}
+
+// TestGetOrCreate_DetectsEnterprisePerEntry verifies that CE/EE detection is
+// scoped to the pool entry rather than inherited from the shared HTTP config.
+func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		enterprise := token == "glpat-ee"
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"version":    "17.0.0",
+			"enterprise": enterprise,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.Enterprise = true
+	cfg.AutoDetectEnterprise = true
+	captured := make([]bool, 0, 2)
+	factory := func(client *gitlabclient.Client, entryCfg *config.Config) *mcp.Server {
+		if entryCfg.Enterprise != client.IsEnterprise() {
+			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
+		}
+		captured = append(captured, entryCfg.Enterprise)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil)
+	}
+	pool := New(cfg, factory)
+
+	if _, err := pool.GetOrCreate("glpat-ce", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate(ce token) error: %v", err)
+	}
+	if _, err := pool.GetOrCreate("glpat-ee", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate(ee token) error: %v", err)
+	}
+
+	if len(captured) != 2 {
+		t.Fatalf("captured %d enterprise values, want 2", len(captured))
+	}
+	if captured[0] {
+		t.Fatalf("CE entry enterprise = true, want false")
+	}
+	if !captured[1] {
+		t.Fatalf("EE entry enterprise = false, want true")
+	}
+	if !cfg.Enterprise {
+		t.Fatalf("shared config Enterprise was mutated to false")
 	}
 }
 

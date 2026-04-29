@@ -86,12 +86,13 @@ func newTestMCPOverHTTP(t *testing.T, defaultGitLabURL string) (string, *serverp
 		GitLabURL:     defaultGitLabURL,
 		SkipTLSVerify: true,
 		Enterprise:    false,
+		IgnoreScopes:  true,
 	}
 
 	// probeGitLabURL is a tool registered dynamically by the pool factory.
 	// It reports back the GitLab URL that the client was configured with,
 	// allowing the test to verify correct routing.
-	factory := func(_ *gitlabclient.Client) *mcp.Server {
+	factory := func(_ *gitlabclient.Client, _ *config.Config) *mcp.Server {
 		srv := mcp.NewServer(&mcp.Implementation{
 			Name:    "gitlab-url-header-e2e",
 			Version: "test",

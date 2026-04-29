@@ -22,10 +22,11 @@ import (
 )
 
 // ServerFactory creates a fully configured [*mcp.Server] with all tools,
-// resources, and prompts registered for the given GitLab client.
+// resources, and prompts registered for the given GitLab client and per-entry
+// configuration.
 // This is provided by the caller to decouple pool management from
 // registration logic.
-type ServerFactory func(client *gitlabclient.Client) *mcp.Server
+type ServerFactory func(client *gitlabclient.Client, cfg *config.Config) *mcp.Server
 
 // poolEntry holds a server instance and its associated GitLab client,
 // along with LRU tracking and session validation metadata.
@@ -67,9 +68,9 @@ type Snapshot struct {
 }
 
 // ServerPool maintains a bounded set of [*mcp.Server] instances keyed by
-// token hash (SHA-256). When the pool reaches maxSize, the least recently
-// used entry is evicted. Entries are periodically re-validated against
-// the GitLab API; entries with revoked tokens are evicted automatically.
+// token plus GitLab URL hash (SHA-256). When the pool reaches maxSize, the
+// least recently used entry is evicted. Entries are periodically re-validated
+// against the GitLab API; entries with revoked tokens are evicted automatically.
 type ServerPool struct {
 	mu                 sync.RWMutex
 	entries            map[string]*poolEntry
@@ -174,7 +175,8 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	}
 	client.SetEnterprise(p.cfg.Enterprise)
 
-	server := p.factory(client)
+	entryCfg := p.entryConfig(client)
+	server := p.factory(client, entryCfg)
 	element := p.lru.PushFront(key)
 	now := time.Now()
 	p.entries[key] = &poolEntry{
@@ -191,6 +193,25 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	)
 
 	return server, nil
+}
+
+func (p *ServerPool) entryConfig(client *gitlabclient.Client) *config.Config {
+	entryCfg := *p.cfg
+	if entryCfg.AutoDetectEnterprise || !entryCfg.IgnoreScopes {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if entryCfg.AutoDetectEnterprise {
+			entryCfg.Enterprise = client.DetectEnterprise(ctx, entryCfg.Enterprise)
+		}
+		client.SetEnterprise(entryCfg.Enterprise)
+
+		if entryCfg.IgnoreScopes {
+			return &entryCfg
+		}
+		entryCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
+	}
+	return &entryCfg
 }
 
 // Size returns the current number of entries in the pool.

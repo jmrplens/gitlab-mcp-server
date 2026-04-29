@@ -192,10 +192,11 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 
 func measureResources(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
-	toolutil.ClearMetaRoutes()
-	tools.RegisterAllMeta(server, client, false)
+	metaRoutes := toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(server, client, false)
+	})
 	resources.Register(server, client)
-	resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
+	resources.RegisterMetaSchemaResources(server, metaRoutes)
 	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()

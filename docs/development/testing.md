@@ -14,10 +14,10 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,974   |
-| Unit test functions         | 8,676   |
+| Total test functions        | 8,981   |
+| Unit test functions         | 8,682   |
 | E2E test functions          | 218     |
-| cmd test functions          | 80      |
+| cmd test functions          | 81      |
 | Test files (internal/)      | 410     |
 | Test files (test/e2e/suite/)| 99      |
 | Tool sub-packages tested    | 163     |
@@ -40,12 +40,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,471 |         76 | autoupdate, config, gitlab, oauth…   |
+| Core packages            |          1,477 |         76 | autoupdate, config, gitlab, oauth…   |
 | Tools orchestration      |            229 |         19 | register, metatool, markdown, safemode, errors |
 | Tool sub-packages (163)  |          6,976 |        315 | Domain-specific tool handlers        |
 | E2E integration          |            218 |         99 | Full workflow against real GitLab    |
-| cmd/server               |             80 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,974** |    **510** |                                      |
+| cmd/server               |             81 |          1 | Main entry point + OAuth integration |
+| **Total**                |      **8,981** |    **510** |                                      |
 
 ### Core Packages
 
@@ -55,19 +55,19 @@
 | completions    |    91 |   94.0%  | Argument auto-completion             |
 | config         |    52 |   97.7%  | Configuration loading                |
 | elicitation    |    78 |   92.0%  | MCP elicitation capability           |
-| gitlab         |    34 |  100.0%  | GitLab API client wrapper            |
+| gitlab         |    37 |   96.6%  | GitLab API client wrapper            |
 | logging        |    16 |  100.0%  | MCP logging capability               |
 | progress       |    17 |  100.0%  | MCP progress notifications           |
 | prompts        |   202 |   96.3%  | MCP prompt implementations           |
 | resources      |   155 |   98.7%  | MCP resource implementations         |
 | roots          |    21 |   98.5%  | MCP roots capability                 |
 | sampling       |    83 |   99.5%  | MCP sampling capability              |
-| serverpool     |    38 |   97.5%  | HTTP mode server pool                |
+| serverpool     |    40 |   99.4%  | HTTP mode server pool                |
 | testutil       |    21 |   60.9%  | Shared test helpers                  |
-| toolutil       |   313 |   96.5%  | Shared tool utilities                |
+| toolutil       |   314 |   96.6%  | Shared tool utilities                |
 | wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,471**|        |                                      |
+| **Subtotal**   |**1,477**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -275,7 +275,7 @@
 
 | Package    | Coverage |
 | ---------- | -------: |
-| cmd/server |   57.5%  |
+| cmd/server |   62.5%  |
 
 ### Core Packages
 
@@ -285,7 +285,7 @@
 | completions    |   94.0%  |
 | config         |   97.6%  |
 | elicitation    |   92.0%  |
-| gitlab         |  100.0%  |
+| gitlab         |   96.6%  |
 | logging        |  100.0%  |
 | oauth          |   98.6%  |
 | progress       |  100.0%  |
@@ -295,7 +295,7 @@
 | sampling       |   99.5%  |
 | serverpool     |   99.4%  |
 | testutil       |   62.7%  |
-| toolutil       |   96.0%  |
+| toolutil       |   96.6%  |
 | wizard         |   83.1%  |
 
 ### Tool Sub-Packages
@@ -471,7 +471,7 @@ Coverage target: **>90%** per package. Exceptions:
 - **testutil** (60.9%) — Some helpers are only exercised by external tests
   (build-tagged `e2e` suite) and therefore are not counted in the package's
   own unit-test coverage report.
-- **cmd/server** (57.5%) — Main entry-point glue, signal handling, and
+- **cmd/server** (62.5%) — Main entry-point glue, signal handling, and
   HTTP server startup paths are validated end-to-end (e2e + integration)
   but not by in-process unit tests.
 - **autoupdate** (85.1%) — OS-level operations (`syscall.Exec` process

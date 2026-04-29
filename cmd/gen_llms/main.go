@@ -141,10 +141,11 @@ func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
 
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate) {
 	session, cleanup := newSession(func(server *mcp.Server) {
-		toolutil.ClearMetaRoutes()
-		tools.RegisterAllMeta(server, client, false)
+		metaRoutes := toolutil.CaptureMetaRoutes(func() {
+			tools.RegisterAllMeta(server, client, false)
+		})
 		resources.Register(server, client)
-		resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
+		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
 	})
 	defer cleanup()

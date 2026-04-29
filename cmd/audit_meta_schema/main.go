@@ -2,7 +2,7 @@
 // META_PARAM_SCHEMA mode on the meta-tool catalog.
 //
 // It registers all base + enterprise meta-tools on an in-memory MCP server,
-// retrieves the per-action route maps via toolutil.MetaRoutes(), and computes
+// captures the per-action route maps, and computes
 // three candidate schema sizes per tool:
 //
 //   - opaque:  current production schema (action enum + params:any).
@@ -52,11 +52,11 @@ func run() error {
 		return fmt.Errorf("client: %w", err)
 	}
 
-	// Register both base and enterprise meta-tools so MetaRoutes() returns
-	// every route map. Use a fresh registry to avoid cross-run pollution.
-	toolutil.ClearMetaRoutes()
+	// Register both base and enterprise meta-tools and capture every route map.
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
-	tools.RegisterAllMeta(server, client, true)
+	routes := toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(server, client, true)
+	})
 
 	// Connect once so we can retrieve the published InputSchema (the
 	// "opaque" baseline) via tools/list. The schema we send equals the
@@ -106,7 +106,6 @@ func run() error {
 	}
 	rows := []row{}
 
-	routes := toolutil.MetaRoutes()
 	names := make([]string, 0, len(routes))
 	for n := range routes {
 		names = append(names, n)
