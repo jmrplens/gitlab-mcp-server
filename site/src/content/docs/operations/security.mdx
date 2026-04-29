@@ -223,6 +223,62 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 
 See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.
 
+## Verifying release integrity
+
+Every GitHub Release ships with two integrity artifacts:
+
+- `checksums.txt` — SHA-256 hashes for every binary in the release
+- `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
+
+The auto-update mechanism verifies binaries against `checksums.txt` automatically before replacing the running process. For manual installs, verify both the signature and the checksum before running the binary.
+
+### 1. Install Cosign
+
+Follow the [official installation guide](https://docs.sigstore.dev/cosign/installation/). Quick install:
+
+```bash
+# macOS
+brew install cosign
+
+# Linux (binary release)
+curl -L https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
+chmod +x cosign && sudo mv cosign /usr/local/bin/
+```
+
+### 2. Download release artifacts
+
+From the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases), download:
+
+- The binary for your platform (e.g. `gitlab-mcp-server-linux-amd64`)
+- `checksums.txt`
+- `checksums.txt.sigstore.json`
+
+### 3. Verify the signature
+
+```bash
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  checksums.txt
+```
+
+A successful verification prints `Verified OK`. The `--certificate-identity-regexp` constraint ensures the signature was produced by a GitHub Actions workflow running in this repository, and `--certificate-oidc-issuer` pins the identity to GitHub's official OIDC issuer.
+
+:::caution
+If verification fails, **do not run the binary**. A failure indicates the checksums file was tampered with or did not originate from this repository's release pipeline.
+:::
+
+### 4. Verify the binary checksum
+
+After the signature verification succeeds, validate that your binary matches the signed checksum:
+
+```bash
+sha256sum --check --ignore-missing checksums.txt
+```
+
+Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding line for your platform).
+
 ## Best practices checklist
 
 ### Token security
@@ -239,6 +295,7 @@ See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/bl
 - ☐ Keep TLS verification enabled (`GITLAB_SKIP_TLS_VERIFY` unset or `false`)
 - ☐ Use stdio transport when possible (no network exposure)
 - ☐ Keep the server binary updated (`AUTO_UPDATE=true`)
+- ☐ Verify Cosign/Sigstore signature on first manual install ([instructions above](#verifying-release-integrity))
 - ☐ Schema lockdown: all tool input schemas enforce `additionalProperties: false` to reject unexpected fields
 
 ### HTTP mode
