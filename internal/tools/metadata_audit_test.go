@@ -179,6 +179,22 @@ func checkMetaToolActionEnum(t *testing.T, tool *mcp.Tool) {
 	checkSchemaConstraints(t, schema)
 }
 
+// hasMetaToolAction reports whether a tool uses the action+params meta-tool
+// envelope. Standalone utilities in meta mode, such as interactive creation
+// tools, intentionally do not use this envelope.
+func hasMetaToolAction(tool *mcp.Tool) bool {
+	schema, ok := tool.InputSchema.(map[string]any)
+	if !ok {
+		return false
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, ok = props["action"].(map[string]any)
+	return ok
+}
+
 // auditToolMetadata returns metadata validation flags and a list of issues for a tool.
 func auditToolMetadata(tool *mcp.Tool) (nameOK, descOK, annOK, schemaOK bool, issues []string) {
 	nameOK = toolNameRe.MatchString(tool.Name)
@@ -370,6 +386,9 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 			if len(tool.Description) < auditMinDescLen {
 				t.Errorf("description too short (%d chars, minimum %d)",
 					len(tool.Description), auditMinDescLen)
+			}
+			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "For the params schema of any action") {
+				t.Error("meta-tool description should point LLMs to the per-action schema resource")
 			}
 		})
 	}
