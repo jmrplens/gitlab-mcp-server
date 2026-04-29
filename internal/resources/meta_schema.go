@@ -70,7 +70,7 @@ func registerMetaSchemaTemplate(server *mcp.Server) {
 		Name:        "meta_action_schema",
 		Title:       "Meta-Tool Action Schema",
 		MIMEType:    mimeJSON,
-		Description: "JSON Schema for the `params` property of a specific meta-tool action. Replace {tool} with a meta-tool name (e.g. gitlab_merge_request) and {action} with one of its actions (e.g. create). Use the gitlab://schema/meta/ index resource to enumerate valid combinations.",
+		Description: "JSON Schema for the `params` property of a specific meta-tool action. Replace {tool} with a meta-tool name (e.g. gitlab_merge_request) and {action} with one of its actions (e.g. create). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations.",
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -104,8 +104,10 @@ func buildMetaSchemaIndex() MetaSchemaIndex {
 }
 
 // lookupMetaActionSchema returns the per-action params schema for the given
-// tool/action pair. Returns false when either is unknown or when the route
-// has no captured InputSchema (which would yield a misleading empty object).
+// tool/action pair. Returns false when the tool or action is unknown. When
+// the route exists but has no captured InputSchema, returns a permissive
+// fallback object schema (with `additionalProperties: true` and a guidance
+// description) and true, so clients always get a usable JSON Schema.
 func lookupMetaActionSchema(tool, action string) (map[string]any, bool) {
 	routes := toolutil.MetaRoutes()
 	actions, ok := routes[tool]

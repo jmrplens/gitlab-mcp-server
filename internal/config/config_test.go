@@ -118,6 +118,9 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 func TestLoad_MetaParamSchemaDefault(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	// Pin META_PARAM_SCHEMA to empty so a value loaded from a developer's
+	// .env file cannot override the default-case assertion below.
+	t.Setenv("META_PARAM_SCHEMA", "")
 
 	cfg, err := Load()
 	if err != nil {

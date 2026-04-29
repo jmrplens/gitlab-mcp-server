@@ -22015,7 +22015,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://schema/meta/{tool}/{action}`
 - **MIME**: application/json
-- **Description**: JSON Schema for the `params` property of a specific meta-tool action. Replace {tool} with a meta-tool name (e.g. gitlab_merge_request) and {action} with one of its actions (e.g. create). Use the gitlab://schema/meta/ index resource to enumerate valid combinations.
+- **Description**: JSON Schema for the `params` property of a specific meta-tool action. Replace {tool} with a meta-tool name (e.g. gitlab_merge_request) and {action} with one of its actions (e.g. create). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations.
 
 ### snippet
 

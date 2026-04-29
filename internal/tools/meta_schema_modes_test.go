@@ -9,6 +9,7 @@ package tools
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,8 +25,9 @@ func metaSessionWithMode(t *testing.T, mode string, handler http.Handler) *mcp.C
 }
 
 // TestMetaSchema_DispatchParity verifies that the same {action, params}
-// payload reaches the same handler and returns a non-error result in
-// opaque, compact, and full modes.
+// payload reaches the same handler in opaque, compact, and full modes and
+// returns the same response body. A successful but divergent response in
+// one mode would otherwise pass undetected.
 func TestMetaSchema_DispatchParity(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -38,6 +40,18 @@ func TestMetaSchema_DispatchParity(t *testing.T) {
 		}
 	})
 
+	collectText := func(result *mcp.CallToolResult) string {
+		t.Helper()
+		var sb strings.Builder
+		for _, c := range result.Content {
+			if tc, ok := c.(*mcp.TextContent); ok {
+				sb.WriteString(tc.Text)
+			}
+		}
+		return sb.String()
+	}
+
+	responses := map[string]string{}
 	for _, mode := range []string{"opaque", "compact", "full"} {
 		t.Run(mode, func(t *testing.T) {
 			session := metaSessionWithMode(t, mode, handler)
@@ -54,7 +68,17 @@ func TestMetaSchema_DispatchParity(t *testing.T) {
 			if result.IsError {
 				t.Fatalf("CallTool(%s) returned error result", mode)
 			}
+			responses[mode] = collectText(result)
 		})
+	}
+
+	// All three modes must return the same payload because dispatch is
+	// independent of the advertised InputSchema shape.
+	if responses["opaque"] != responses["compact"] {
+		t.Errorf("opaque vs compact response differ:\n  opaque=%q\n  compact=%q", responses["opaque"], responses["compact"])
+	}
+	if responses["opaque"] != responses["full"] {
+		t.Errorf("opaque vs full response differ:\n  opaque=%q\n  full=%q", responses["opaque"], responses["full"])
 	}
 }
 
@@ -71,6 +95,7 @@ func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
 		wantOneOf bool
 	}{
 		{"opaque", false},
+		{"compact", true},
 		{"full", true},
 	}
 	for _, c := range cases {

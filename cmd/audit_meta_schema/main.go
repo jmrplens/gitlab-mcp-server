@@ -87,10 +87,12 @@ func run() error {
 		// generic map types.
 		raw, mErr := json.Marshal(t.InputSchema)
 		if mErr != nil {
-			continue
+			return fmt.Errorf("marshal input schema for %s: %w", t.Name, mErr)
 		}
 		var m map[string]any
-		_ = json.Unmarshal(raw, &m)
+		if uErr := json.Unmarshal(raw, &m); uErr != nil {
+			return fmt.Errorf("unmarshal input schema for %s: %w", t.Name, uErr)
+		}
 		currentByName[t.Name] = m
 	}
 
@@ -118,19 +120,21 @@ func run() error {
 		opaque := currentByName[name]
 		opaqueJSON, mErr := json.Marshal(opaque)
 		if mErr != nil {
-			continue
+			return fmt.Errorf("marshal opaque schema for %s: %w", name, mErr)
 		}
 
-		full := buildOneOfSchema(rmap, false /*compact=*/)
-		compact := buildOneOfSchema(rmap, true)
+		// Reuse the production schema builder so the audit always reflects
+		// what the server actually publishes for each mode.
+		full := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaFull)
+		compact := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaCompact)
 
 		fullJSON, mErr := json.Marshal(full)
 		if mErr != nil {
-			continue
+			return fmt.Errorf("marshal full schema for %s: %w", name, mErr)
 		}
 		compactJSON, mErr := json.Marshal(compact)
 		if mErr != nil {
-			continue
+			return fmt.Errorf("marshal compact schema for %s: %w", name, mErr)
 		}
 
 		r := row{
@@ -177,114 +181,11 @@ func run() error {
 // When compact is true, each branch's params object only enumerates property
 // names with their declared type (descriptions, $defs and required dropped),
 // and additionalProperties is left true.
-func buildOneOfSchema(rmap toolutil.ActionMap, compact bool) map[string]any {
-	actionNames := make([]string, 0, len(rmap))
-	for n := range rmap {
-		actionNames = append(actionNames, n)
-	}
-	sort.Strings(actionNames)
-
-	branches := make([]any, 0, len(actionNames))
-	for _, action := range actionNames {
-		route := rmap[action]
-		params := route.InputSchema
-		if compact && params != nil {
-			params = compactSchema(params)
-		}
-		if params == nil {
-			params = map[string]any{
-				"type":                 "object",
-				"additionalProperties": true,
-			}
-		}
-		branch := map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{"const": action},
-				"params": params,
-			},
-			"required": []any{"action"},
-		}
-		branches = append(branches, branch)
-	}
-
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"action": map[string]any{
-				"type": "string",
-				"enum": actionNames,
-			},
-			"params": map[string]any{
-				"type":                 "object",
-				"additionalProperties": true,
-			},
-		},
-		"required": []any{"action"},
-		"oneOf":    branches,
-	}
-}
-
-// compactSchema returns a copy of the given JSON Schema with descriptions
-// removed and only property name/type retained. Inlines top-level $ref by
-// looking it up in $defs once, then drops $defs entirely. Best-effort: any
-// shape we don't recognize is preserved verbatim.
-func compactSchema(s map[string]any) map[string]any {
-	if s == nil {
-		return nil
-	}
-	resolved := resolveTopRef(s)
-	props, _ := resolved["properties"].(map[string]any)
-	if props == nil {
-		return map[string]any{
-			"type":                 "object",
-			"additionalProperties": true,
-		}
-	}
-	compactProps := make(map[string]any, len(props))
-	for k, v := range props {
-		pm, ok := v.(map[string]any)
-		if !ok {
-			compactProps[k] = map[string]any{}
-			continue
-		}
-		entry := map[string]any{}
-		if t, has := pm["type"]; has {
-			entry["type"] = t
-		}
-		if e, has := pm["enum"]; has {
-			entry["enum"] = e
-		}
-		compactProps[k] = entry
-	}
-	return map[string]any{
-		"type":                 "object",
-		"properties":           compactProps,
-		"additionalProperties": true,
-	}
-}
-
-// resolveTopRef returns the schema with a top-level "$ref" replaced by the
-// referenced $defs entry. If no top-level $ref is present, returns s.
-func resolveTopRef(s map[string]any) map[string]any {
-	ref, _ := s["$ref"].(string)
-	if ref == "" {
-		return s
-	}
-	defs, _ := s["$defs"].(map[string]any)
-	if defs == nil {
-		return s
-	}
-	// $ref like "#/$defs/Foo"
-	const prefix = "#/$defs/"
-	if len(ref) <= len(prefix) || ref[:len(prefix)] != prefix {
-		return s
-	}
-	target, _ := defs[ref[len(prefix):]].(map[string]any)
-	if target == nil {
-		return s
-	}
-	return target
-}
+//
+// Removed: this function and its helpers (compactSchema, resolveTopRef) were
+// duplicates of toolutil.BuildMetaToolSchema. Callers now invoke
+// toolutil.BuildMetaToolSchema directly so the audit always tracks production
+// behavior; see the loop above.
 
 func human(n int) string {
 	switch {

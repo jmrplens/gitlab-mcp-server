@@ -331,7 +331,7 @@ func parseBool(s string, defaultValue bool) (bool, error) {
 
 // parseMetaParamSchema validates the META_PARAM_SCHEMA setting. It accepts
 // "opaque", "compact" or "full" (case-insensitive). Returns defaultValue when
-// s is empty and an error when s is non-empty and unrecognised.
+// s is empty and an error when s is non-empty and unrecognized.
 func parseMetaParamSchema(s, defaultValue string) (string, error) {
 	if s == "" {
 		return defaultValue, nil

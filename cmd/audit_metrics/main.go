@@ -307,10 +307,16 @@ func printRow(label string, value int) {
 // total meta-tool InputSchema byte size each mode would produce. Useful
 // for ops to size the impact of META_PARAM_SCHEMA before flipping it.
 func printMetaSchemaModes(client *gitlabclient.Client) {
-	cfg, _ := config.Load()
-	active := "opaque"
-	if cfg != nil && cfg.MetaParamSchema != "" {
-		active = cfg.MetaParamSchema
+	// Read META_PARAM_SCHEMA directly: config.Load() requires GITLAB_URL +
+	// GITLAB_TOKEN and would silently fall back to "opaque" if they are
+	// missing, misreporting the active mode in environments where this
+	// tool is invoked without full GitLab credentials (e.g., audits).
+	active := strings.ToLower(strings.TrimSpace(os.Getenv("META_PARAM_SCHEMA")))
+	switch active {
+	case config.MetaParamSchemaCompact, config.MetaParamSchemaFull, config.MetaParamSchemaOpaque:
+		// recognized — keep as-is
+	default:
+		active = config.MetaParamSchemaOpaque
 	}
 	fmt.Printf("  Active mode (env): %s\n\n", active)
 	fmt.Printf("  %-12s %12s\n", "mode", "total bytes")

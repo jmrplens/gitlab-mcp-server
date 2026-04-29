@@ -627,7 +627,12 @@ func buildMetaOneOf(routes ActionMap, sortedActions []string, compact bool) []an
 				"action": map[string]any{"const": action},
 				"params": params,
 			},
-			"required": []any{"action"},
+			// Require both `action` and `params`. Without `params` in the
+			// required list, the per-action params schema is only checked
+			// when callers happen to include it, which silently bypasses
+			// per-action required-field validation. Actions that need no
+			// arguments still accept `{}` as a valid params value.
+			"required": []any{"action", "params"},
 		})
 	}
 	return branches
@@ -637,7 +642,7 @@ func buildMetaOneOf(routes ActionMap, sortedActions []string, compact bool) []an
 // containing only property names with their declared type and (when present)
 // enum values. Descriptions, required, and $defs are dropped. A top-level
 // $ref is resolved against the schema's own $defs once, then $defs is
-// discarded. Best-effort: shapes we don't recognise are replaced with an
+// discarded. Best-effort: shapes we don't recognize are replaced with an
 // open object schema rather than panicking.
 func compactParamsSchema(s map[string]any) map[string]any {
 	if s == nil {
@@ -659,10 +664,10 @@ func compactParamsSchema(s map[string]any) map[string]any {
 			continue
 		}
 		entry := map[string]any{}
-		if t, ok := pm["type"]; ok {
+		if t, has := pm["type"]; has {
 			entry["type"] = t
 		}
-		if e, ok := pm["enum"]; ok {
+		if e, has := pm["enum"]; has {
 			entry["enum"] = e
 		}
 		compact[k] = entry
@@ -686,7 +691,7 @@ func resolveTopLevelRef(s map[string]any) map[string]any {
 		return s
 	}
 	const prefix = "#/$defs/"
-	if len(ref) <= len(prefix) || ref[:len(prefix)] != prefix {
+	if !strings.HasPrefix(ref, prefix) {
 		return s
 	}
 	target, _ := defs[ref[len(prefix):]].(map[string]any)
