@@ -52,8 +52,8 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                                                                   |
 | `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                |
 | `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                  |
-| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                            |
-| `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                          |
+| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                             |
+| `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                           |
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
@@ -199,10 +199,10 @@ El modo HTTP incluye un **rate limiter por servidor con token bucket** opcional 
 
 ### Configuración
 
-| Flag                 | Por defecto | Significado                                                                  |
-| -------------------- | ----------- | ---------------------------------------------------------------------------- |
+| Flag                 | Por defecto | Significado                                                                       |
+| -------------------- | ----------- | --------------------------------------------------------------------------------- |
 | `--rate-limit-rps`   | `0`         | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
-| `--rate-limit-burst` | `40`        | Capacidad máxima del bucket (pico de ráfaga durante 1s)                       |
+| `--rate-limit-burst` | `40`        | Capacidad máxima del bucket (pico de ráfaga durante 1s)                           |
 
 Cuando `--rate-limit-rps > 0`, cada entrada del pool obtiene su propio token bucket dimensionado en `--rate-limit-burst` tokens, rellenado a `--rate-limit-rps` por segundo. Solo las solicitudes `tools/call` consumen tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize` y otras RPCs de bajo coste no están limitadas.
 

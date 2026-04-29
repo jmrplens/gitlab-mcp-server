@@ -11,6 +11,12 @@ For the complete technical reference, see [`docs/configuration.md`](https://gith
 
 GitLab MCP Server is configured through environment variables for stdio mode and CLI flags for HTTP mode. This page covers all configuration options.
 
+:::tip[Quick orientation]
+**Stdio mode** (default) — configure via environment variables or a `.env` file. This is the mode used by IDE integrations (VS Code, Cursor, Claude Desktop, etc.).
+
+**HTTP mode** (`--http`) — configure via CLI flags. Used for shared/remote deployments (Docker, Fly.io, Kubernetes). Jump to [HTTP mode flags](#http-mode-flags).
+:::
+
 ## Required variables
 
 These must be set for the server to start in stdio mode:
@@ -225,15 +231,15 @@ Edit `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
 
 ```json
 {
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/path/to/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -280,6 +286,8 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth`                                                                   |
 | `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (1m–2h)                                                                     |
 | `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                            |
+| `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                               |
+| `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                        |
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 **General flags** (both stdio and HTTP modes):
