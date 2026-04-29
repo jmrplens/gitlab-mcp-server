@@ -82,6 +82,7 @@ type httpConfig struct {
 	trustedProxyHeader string
 	rateLimitRPS       float64
 	rateLimitBurst     int
+	metaParamSchema    string
 }
 
 // main is an internal helper for the main package.
@@ -124,6 +125,7 @@ func main() {
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
+	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.Parse()
 
 	if showHelp {
@@ -349,6 +351,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		TrustedProxyHeader: hcfg.trustedProxyHeader,
 		RateLimitRPS:       hcfg.rateLimitRPS,
 		RateLimitBurst:     hcfg.rateLimitBurst,
+		MetaParamSchema:    hcfg.metaParamSchema,
 	}
 
 	if cfg.AuthMode == "" {
@@ -356,6 +359,14 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
+	}
+	switch cfg.MetaParamSchema {
+	case "":
+		cfg.MetaParamSchema = config.DefaultMetaParamSchema
+	case config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull:
+	default:
+		return fmt.Errorf("--meta-param-schema must be one of %q, %q, %q, got %q",
+			config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull, cfg.MetaParamSchema)
 	}
 	// OAuth mode requires a fixed --gitlab-url because the RFC 9728
 	// protected-resource metadata and token verifier are initialized at
