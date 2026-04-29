@@ -26,5 +26,5 @@
     "graphql",
     "rest-api"
   ],
-  "mcpServers": "./.plugin/mcp.json"
+  "mcpServers": "./mcp.json"
 }

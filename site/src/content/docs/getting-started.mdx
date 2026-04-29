@@ -75,7 +75,7 @@ The setup wizard supports VS Code, Claude Desktop, Cursor, and Claude Code. For 
 
 ## Install as an Open Plugin (Cursor / Claude Code)
 
-This repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json`) so the server can be installed in a single step on any conformant host (Cursor, Claude Code, OpenCode):
+This repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json`) and referenced MCP config (`mcp.json`) so the server can be installed in a single step on any conformant host (Cursor, Claude Code, OpenCode):
 
 ```bash
 # Cursor / Claude Code (when supported by your version)
@@ -101,7 +101,7 @@ The host must provide these variables before enabling the plugin:
 
 ### Prefer a native binary instead of Docker?
 
-The Open Plugins spec runs every entry in `.mcp.json` automatically, so the bundled config uses Docker for portability. If you prefer the native binary, install the plugin and then edit the local copy of `.mcp.json` after installation (typically under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
+The Open Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker for portability. If you prefer the native binary, install the plugin and then edit the local copy of `mcp.json` after installation (typically under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
 ```json
 {
