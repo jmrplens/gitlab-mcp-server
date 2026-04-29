@@ -30,15 +30,15 @@ import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 Instead of switching between your editor and GitLab's web UI, just ask:
 
-```
+```text
 Show me all open merge requests in my-project that need review
 ```
 
-```
+```text
 Why did the pipeline fail on branch feature/auth? Summarize the error and suggest a fix
 ```
 
-```
+```text
 Create an issue titled "Refactor auth module" with priority label and assign it to me
 ```
 
@@ -80,7 +80,7 @@ The server translates these requests into GitLab API calls, executes them, and r
 
 > Pipeline #8847 failed at the `test` stage, job `unit-tests`:
 >
-> ```
+> ```text
 > FAIL: TestUserService_ListUsers — expected 10 results, got 15
 > ```
 >
@@ -101,31 +101,31 @@ The server translates these requests into GitLab API calls, executes them, and r
 
 Try these with your AI assistant once GitLab MCP Server is connected:
 
-**Projects & Code**
+### Projects & Code
 
 - _"List my GitLab projects"_
 - _"Show the README of project my-app"_
 - _"Search for TODO comments across the codebase"_
 
-**Merge Requests & Code Review**
+### Merge Requests & Code Review
 
 - _"Show open merge requests in my-app"_
 - _"Summarize the changes in MR !42"_
 - _"Is MR !15 safe to merge? Check for security issues"_
 
-**Issues & Planning**
+### Issues & Planning
 
 - _"List open issues assigned to me"_
 - _"Create a bug report titled 'Fix login page' with label 'bug'"_
 - _"What's the progress on milestone v2.0?"_
 
-**CI/CD & Pipelines**
+### CI/CD & Pipelines
 
 - _"What's the latest pipeline status for my-app?"_
 - _"Why did the last pipeline fail?"_
 - _"Show the CI variables for project my-app"_
 
-**Reports & Analysis**
+### Reports & Analysis
 
 - _"Generate release notes from v1.0 to v2.0"_
 - _"Give me a daily standup summary"_
@@ -134,26 +134,26 @@ Try these with your AI assistant once GitLab MCP Server is connected:
 ## Get started
 
 <CardGrid>
-	<LinkCard
-		title="Getting Started"
-		href="/gitlab-mcp-server/getting-started/"
-		description="Install the binary and connect to your first AI client in minutes"
-	/>
-	<LinkCard
-		title="Architecture"
-		href="/gitlab-mcp-server/architecture/"
-		description="Understand how the server connects AI assistants to GitLab"
-	/>
-	<LinkCard
-		title="Configuration"
-		href="/gitlab-mcp-server/configuration/"
-		description="Environment variables, client configs, and deployment options"
-	/>
-	<LinkCard
-		title="Tools Reference"
-		href="/gitlab-mcp-server/tools/overview/"
-		description="Browse all available MCP tools by domain"
-	/>
+ <LinkCard
+  title="Getting Started"
+  href="/gitlab-mcp-server/getting-started/"
+  description="Install the binary and connect to your first AI client in minutes"
+ />
+ <LinkCard
+  title="Architecture"
+  href="/gitlab-mcp-server/architecture/"
+  description="Understand how the server connects AI assistants to GitLab"
+ />
+ <LinkCard
+  title="Configuration"
+  href="/gitlab-mcp-server/configuration/"
+  description="Environment variables, client configs, and deployment options"
+ />
+ <LinkCard
+  title="Tools Reference"
+  href="/gitlab-mcp-server/tools/overview/"
+  description="Browse all available MCP tools by domain"
+ />
 </CardGrid>
 
 ## How it works

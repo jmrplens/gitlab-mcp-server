@@ -260,16 +260,16 @@ Disparar un pipeline con variables personalizadas usando JSON-RPC:
 
 ```json
 {
-	"tool": "gitlab_pipeline",
-	"arguments": {
-		"action": "create",
-		"project": "my-group/my-project",
-		"ref": "main",
-		"variables": [
-			{ "key": "DEPLOY_ENV", "value": "staging", "variable_type": "env_var" },
-			{ "key": "CONFIG", "value": "...", "variable_type": "file" }
-		]
-	}
+ "tool": "gitlab_pipeline",
+ "arguments": {
+  "action": "create",
+  "project": "my-group/my-project",
+  "ref": "main",
+  "variables": [
+   { "key": "DEPLOY_ENV", "value": "staging", "variable_type": "env_var" },
+   { "key": "CONFIG", "value": "...", "variable_type": "file" }
+  ]
+ }
 }
 ```
 

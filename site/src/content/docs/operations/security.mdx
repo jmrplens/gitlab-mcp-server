@@ -59,16 +59,16 @@ For VS Code users, you can use input variables to avoid storing tokens in plain 
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "${input:gitlabToken}"
-			}
-		}
-	}
+ "servers": {
+  "gitlab": {
+   "type": "stdio",
+   "command": "gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "${input:gitlabToken}"
+   }
+  }
+ }
 }
 ```
 
@@ -191,7 +191,7 @@ When running in HTTP mode (`--http`), additional security considerations apply:
 
 In HTTP mode, GitLab tokens are provided per-request via headers, not environment variables. Each user session uses its own token:
 
-```
+```http
 Authorization: Bearer <gitlab-personal-access-token>
 ```
 

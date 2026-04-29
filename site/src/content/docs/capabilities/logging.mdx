@@ -45,20 +45,20 @@ When the MCP client supports logging, the server sends structured log notificati
 
 ```json
 {
-	"jsonrpc": "2.0",
-	"method": "notifications/message",
-	"params": {
-		"level": "info",
-		"logger": "gitlab-mcp-server",
-		"data": {
-			"message": "starting MCP server",
-			"transport": "stdio",
-			"version": "2.1.0",
-			"tools": 40,
-			"resources": 24,
-			"prompts": 38
-		}
-	}
+ "jsonrpc": "2.0",
+ "method": "notifications/message",
+ "params": {
+  "level": "info",
+  "logger": "gitlab-mcp-server",
+  "data": {
+   "message": "starting MCP server",
+   "transport": "stdio",
+   "version": "2.1.0",
+   "tools": 40,
+   "resources": 24,
+   "prompts": 38
+  }
+ }
 }
 ```
 

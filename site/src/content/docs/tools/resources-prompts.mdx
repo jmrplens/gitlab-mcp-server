@@ -102,10 +102,10 @@ MCP clients can request resources at any time using the `resources/read` method:
 
 ```json
 {
-	"method": "resources/read",
-	"params": {
-		"uri": "gitlab://user/current"
-	}
+ "method": "resources/read",
+ "params": {
+  "uri": "gitlab://user/current"
+ }
 }
 ```
 
@@ -210,14 +210,14 @@ Prompts are requested via the `prompts/get` MCP method:
 
 ```json
 {
-	"method": "prompts/get",
-	"params": {
-		"name": "review_mr",
-		"arguments": {
-			"project_id": "my-group/my-project",
-			"merge_request_iid": "42"
-		}
-	}
+ "method": "prompts/get",
+ "params": {
+  "name": "review_mr",
+  "arguments": {
+   "project_id": "my-group/my-project",
+   "merge_request_iid": "42"
+  }
+ }
 }
 ```
 

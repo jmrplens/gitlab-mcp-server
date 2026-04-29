@@ -66,7 +66,7 @@ Clients must provide their GitLab Personal Access Token on every HTTP request us
 
 Optionally, clients can also specify which GitLab instance to target using the `GITLAB-URL` header:
 
-```
+```http
 GITLAB-URL: https://gitlab.example.com
 ```
 
@@ -74,13 +74,13 @@ If omitted, the server uses the default `--gitlab-url` value. If `--gitlab-url` 
 
 ### Private-token header (recommended)
 
-```
+```http
 PRIVATE-TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Authorization Bearer header
 
-```
+```http
 Authorization: Bearer glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
@@ -108,16 +108,16 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oau
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "http",
-			"url": "http://your-server:8080/mcp",
-			"oauth": {
-				"clientId": "YOUR_GITLAB_APPLICATION_ID",
-				"scopes": ["api"]
-			}
-		}
-	}
+ "servers": {
+  "gitlab": {
+   "type": "http",
+   "url": "http://your-server:8080/mcp",
+   "oauth": {
+    "clientId": "YOUR_GITLAB_APPLICATION_ID",
+    "scopes": ["api"]
+   }
+  }
+ }
 }
 ```
 
@@ -229,15 +229,15 @@ Add to `.vscode/mcp.json`:
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "http",
-			"url": "http://your-server:8080/mcp",
-			"headers": {
-				"PRIVATE-TOKEN": "glpat-your-token"
-			}
-		}
-	}
+ "servers": {
+  "gitlab": {
+   "type": "http",
+   "url": "http://your-server:8080/mcp",
+   "headers": {
+    "PRIVATE-TOKEN": "glpat-your-token"
+   }
+  }
+ }
 }
 ```
 
@@ -246,14 +246,14 @@ Add to `.vscode/mcp.json`:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"url": "http://your-server:8080/mcp",
-			"headers": {
-				"PRIVATE-TOKEN": "glpat-your-token"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "url": "http://your-server:8080/mcp",
+   "headers": {
+    "PRIVATE-TOKEN": "glpat-your-token"
+   }
+  }
+ }
 }
 ```
 

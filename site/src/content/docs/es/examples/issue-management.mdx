@@ -11,7 +11,7 @@ Ejemplos paso a paso para flujos de gestión de issues y triaje de proyectos. Ca
 
 **Prompt**: "Muéstrame todos los issues abiertos en el proyecto backend con la etiqueta 'bug'"
 
-```
+```text
 gitlab_issue → action: list, project_id: "my-group/backend",
   state: "opened", labels: "bug"
 ```
@@ -22,7 +22,7 @@ Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas
 
 **Prompt**: "Asigna el issue #123 a johndoe y añade las etiquetas 'priority::high' y 'team::backend'"
 
-```
+```text
 gitlab_issue → action: update, project_id: "my-group/backend",
   issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
 ```
@@ -31,7 +31,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 **Prompt**: "Muéstrame todos los issues sin asignar en el milestone Sprint 15"
 
-```
+```text
 gitlab_issue → action: list, project_id: "my-group/backend",
   milestone: "Sprint 15", assignee_id: 0
 ```
@@ -42,7 +42,7 @@ Devuelve: issues sin asignados que necesitan atención antes de que comience el 
 
 **Prompt**: "Cierra el issue #456 con un comentario explicando la corrección"
 
-```
+```text
 gitlab_issue → action: note_create, project_id: "my-group/backend",
   issue_iid: 456, body: "Corregido en MR !89 — el timeout era causado por..."
 gitlab_issue → action: update, project_id: "my-group/backend",
@@ -57,7 +57,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 **Prompt**: "Resume el issue #234 y todos sus comentarios"
 
-```
+```text
 gitlab_summarize_issue (sampling) → lee descripción del issue y todas las notas, produce resumen
 ```
 
@@ -67,7 +67,7 @@ Devuelve: declaración del problema, puntos clave de discusión, soluciones prop
 
 **Prompt**: "Identifica la deuda técnica en los issues del proyecto backend"
 
-```
+```text
 gitlab_find_technical_debt (sampling) → analiza patrones de issues, etiquetas y antigüedad
 ```
 
@@ -81,7 +81,7 @@ Devuelve: elementos de deuda categorizados (calidad de código, brechas de testi
 
 **Prompt**: "Vincula el issue #100 como relacionado al issue #200 en el proyecto backend"
 
-```
+```text
 gitlab_issue → action: link_create, project_id: "my-group/backend",
   issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
 ```
@@ -90,7 +90,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 
 **Prompt**: "Marca el issue #300 como bloqueante del issue #400"
 
-```
+```text
 gitlab_issue → action: link_create, project_id: "my-group/backend",
   issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
 ```
@@ -99,7 +99,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 
 **Prompt**: "Muéstrame todos los issues relacionados al issue #100"
 
-```
+```text
 gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 100
 ```
 
@@ -113,7 +113,7 @@ Devuelve: issues vinculados con tipos de relación (relates_to, blocks, is_block
 
 **Prompt**: "Crea una etiqueta con ámbito 'priority::critical' con color rojo en el proyecto backend"
 
-```
+```text
 gitlab_label → action: create, project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
@@ -122,7 +122,7 @@ gitlab_label → action: create, project_id: "my-group/backend",
 
 **Prompt**: "Muéstrame el progreso del milestone Sprint 15"
 
-```
+```text
 gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 15
 ```
 
@@ -132,7 +132,7 @@ Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de
 
 **Prompt**: "Genera un informe detallado para el milestone Q2"
 
-```
+```text
 gitlab_generate_milestone_report (sampling) → analiza issues del milestone, MRs y velocidad
 ```
 
@@ -146,7 +146,7 @@ Devuelve: resumen ejecutivo, métricas de completado, tendencias de velocidad, e
 
 **Prompt**: "Comenta en el issue #123: 'Reproducido en staging — el error solo ocurre con peticiones concurrentes'"
 
-```
+```text
 gitlab_issue → action: note_create, project_id: "my-group/backend",
   issue_iid: 123, body: "Reproducido en staging — el error solo ocurre con peticiones concurrentes"
 ```
@@ -155,7 +155,7 @@ gitlab_issue → action: note_create, project_id: "my-group/backend",
 
 **Prompt**: "Crea un hilo de discusión en el issue #123 sobre la arquitectura propuesta"
 
-```
+```text
 gitlab_issue → action: discussion_create, project_id: "my-group/backend",
   issue_iid: 123, body: "Discutamos la arquitectura propuesta para esta funcionalidad..."
 ```
@@ -164,7 +164,7 @@ gitlab_issue → action: discussion_create, project_id: "my-group/backend",
 
 **Prompt**: "Añade una reacción de pulgar arriba al issue #123"
 
-```
+```text
 gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
   issue_iid: 123, name: "thumbsup"
 ```
@@ -177,7 +177,7 @@ gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
 
 **Prompt**: "Busca issues que mencionen 'memory leak' en todos mis proyectos"
 
-```
+```text
 gitlab_search → scope: "issues", search: "memory leak"
 ```
 
@@ -187,7 +187,7 @@ Devuelve: issues coincidentes en todos los proyectos accesibles con títulos, de
 
 **Prompt**: "Encuentra todos los issues abiertos con etiqueta 'security' en el grupo platform"
 
-```
+```text
 gitlab_issue → action: list, group_id: "platform",
   state: "opened", labels: "security"
 ```

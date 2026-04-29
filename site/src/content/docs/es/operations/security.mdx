@@ -59,16 +59,16 @@ Para usuarios de VS Code, puedes usar variables de entrada para evitar almacenar
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "${input:gitlabToken}"
-			}
-		}
-	}
+ "servers": {
+  "gitlab": {
+   "type": "stdio",
+   "command": "gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "${input:gitlabToken}"
+   }
+  }
+ }
 }
 ```
 
@@ -191,7 +191,7 @@ Al ejecutar en modo HTTP (`--http`), aplican consideraciones de seguridad adicio
 
 En modo HTTP, los tokens de GitLab se proporcionan por solicitud a través de cabeceras, no de variables de entorno. Cada sesión de usuario usa su propio token:
 
-```
+```http
 Authorization: Bearer <gitlab-personal-access-token>
 ```
 

@@ -48,16 +48,16 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-	"tool": "gitlab_issue",
-	"arguments": {
-		"action": "create",
-		"project": "my-group/my-project",
-		"title": "Update API documentation",
-		"description": "The REST API docs are missing the new v2 endpoints",
-		"labels": "documentation,api",
-		"assignee_ids": "42",
-		"milestone_id": 7
-	}
+ "tool": "gitlab_issue",
+ "arguments": {
+  "action": "create",
+  "project": "my-group/my-project",
+  "title": "Update API documentation",
+  "description": "The REST API docs are missing the new v2 endpoints",
+  "labels": "documentation,api",
+  "assignee_ids": "42",
+  "milestone_id": 7
+ }
 }
 ```
 
@@ -65,14 +65,14 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-	"tool": "gitlab_merge_request",
-	"arguments": {
-		"action": "list",
-		"project": "my-group/my-project",
-		"state": "opened",
-		"order_by": "updated_at",
-		"per_page": 20
-	}
+ "tool": "gitlab_merge_request",
+ "arguments": {
+  "action": "list",
+  "project": "my-group/my-project",
+  "state": "opened",
+  "order_by": "updated_at",
+  "per_page": 20
+ }
 }
 ```
 
@@ -80,12 +80,12 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-	"tool": "gitlab_search",
-	"arguments": {
-		"action": "code",
-		"search": "func handleWebhook",
-		"project": "my-group/my-project"
-	}
+ "tool": "gitlab_search",
+ "arguments": {
+  "action": "code",
+  "search": "func handleWebhook",
+  "project": "my-group/my-project"
+ }
 }
 ```
 

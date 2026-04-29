@@ -105,15 +105,15 @@ The Open Plugins spec runs every entry in `.mcp.json` automatically, so the bund
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/usr/local/bin/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "${GITLAB_URL}",
-				"GITLAB_TOKEN": "${GITLAB_TOKEN}"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/usr/local/bin/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "${GITLAB_URL}",
+    "GITLAB_TOKEN": "${GITLAB_TOKEN}"
+   }
+  }
+ }
 }
 ```
 
@@ -128,16 +128,16 @@ Create or edit `.vscode/mcp.json` in your workspace root:
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "servers": {
+  "gitlab": {
+   "type": "stdio",
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -146,24 +146,24 @@ Use VS Code input variables to avoid storing the token in plain text:
 
 ```json
 {
-	"inputs": [
-		{
-			"type": "promptString",
-			"id": "gitlab-token",
-			"description": "GitLab Personal Access Token",
-			"password": true
-		}
-	],
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "${input:gitlab-token}"
-			}
-		}
-	}
+ "inputs": [
+  {
+   "type": "promptString",
+   "id": "gitlab-token",
+   "description": "GitLab Personal Access Token",
+   "password": true
+  }
+ ],
+ "servers": {
+  "gitlab": {
+   "type": "stdio",
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "${input:gitlab-token}"
+   }
+  }
+ }
 }
 ```
 
@@ -176,15 +176,15 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -195,15 +195,15 @@ Create or edit `.cursor/mcp.json` in your project root:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -234,15 +234,15 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -264,16 +264,16 @@ Edit your Zed `settings.json` and add:
 
 ```json
 {
-	"context_servers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"args": [],
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "context_servers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "args": [],
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -284,16 +284,16 @@ Create or edit `.kiro/mcp.json` in your project root:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"args": [],
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "args": [],
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -308,15 +308,15 @@ Open the Cline sidebar → click the MCP servers icon → **Edit Global MCP**, o
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -327,15 +327,15 @@ Open the Roo Code sidebar → click the MCP servers icon → **Edit Global MCP**
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+ "mcpServers": {
+  "gitlab": {
+   "command": "/path/to/gitlab-mcp-server",
+   "env": {
+    "GITLAB_URL": "https://gitlab.example.com",
+    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+   }
+  }
+ }
 }
 ```
 
@@ -446,17 +446,17 @@ Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-excl
 
 Once configured, open your AI client and ask:
 
-```
+```text
 Who am I on GitLab?
 ```
 
 The server should return your GitLab user profile, confirming the connection is working. You can also try:
 
-```
+```text
 List my assigned merge requests
 ```
 
-```
+```text
 Show recent pipelines in my-project
 ```
 
@@ -468,6 +468,7 @@ If you get connection errors, check:
 - The `GITLAB_URL` is correct and reachable from your machine
 - The token has the `api` scope
 - For self-signed certificates, set `GITLAB_SKIP_TLS_VERIFY=true`
+
   :::
 
 ## Understanding meta-tools
@@ -478,12 +479,12 @@ For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `g
 
 ```json
 {
-	"tool": "gitlab_issue",
-	"arguments": {
-		"action": "create",
-		"project": "my-group/my-project",
-		"title": "Fix login redirect"
-	}
+ "tool": "gitlab_issue",
+ "arguments": {
+  "action": "create",
+  "project": "my-group/my-project",
+  "title": "Fix login redirect"
+ }
 }
 ```
 

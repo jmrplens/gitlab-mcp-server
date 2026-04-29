@@ -30,15 +30,15 @@ import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 En lugar de alternar entre tu editor y la interfaz web de GitLab, simplemente pregunta:
 
-```
+```text
 Muéstrame todas las merge requests abiertas en my-project que necesitan revisión
 ```
 
-```
+```text
 ¿Por qué falló el pipeline en la rama feature/auth? Resume el error y sugiere una solución
 ```
 
-```
+```text
 Crea un issue titulado "Refactorizar módulo de auth" con etiqueta de prioridad y asígnamelo
 ```
 
@@ -80,7 +80,7 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 > El pipeline #8847 falló en la etapa `test`, job `unit-tests`:
 >
-> ```
+> ```text
 > FAIL: TestUserService_ListUsers — expected 10 results, got 15
 > ```
 >
@@ -91,31 +91,31 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 Prueba estos con tu asistente de IA una vez conectado GitLab MCP Server:
 
-**Proyectos y código**
+### Proyectos y código
 
 - _"Lista mis proyectos de GitLab"_
 - _"Muestra el README del proyecto my-app"_
 - _"Busca comentarios TODO en el código"_
 
-**Merge Requests y revisión de código**
+### Merge Requests y revisión de código
 
 - _"Muestra los merge requests abiertos en my-app"_
 - _"Resume los cambios del MR !42"_
 - _"¿Es seguro mergear el MR !15? Revisa problemas de seguridad"_
 
-**Issues y planificación**
+### Issues y planificación
 
 - _"Lista los issues abiertos asignados a mí"_
 - _"Crea un bug report titulado 'Arreglar página de login' con etiqueta 'bug'"_
 - _"¿Cuál es el progreso del milestone v2.0?"_
 
-**CI/CD y Pipelines**
+### CI/CD y Pipelines
 
 - _"¿Cuál es el estado del último pipeline de my-app?"_
 - _"¿Por qué falló el último pipeline?"_
 - _"Muestra las variables CI del proyecto my-app"_
 
-**Informes y análisis**
+### Informes y análisis
 
 - _"Genera notas de release de v1.0 a v2.0"_
 - _"Dame un resumen de standup diario"_
@@ -124,26 +124,26 @@ Prueba estos con tu asistente de IA una vez conectado GitLab MCP Server:
 ## Comenzar
 
 <CardGrid>
-	<LinkCard
-		title="Primeros pasos"
-		href="/gitlab-mcp-server/getting-started/"
-		description="Instala el binario y conéctalo a tu primer cliente de IA en minutos"
-	/>
-	<LinkCard
-		title="Arquitectura"
-		href="/gitlab-mcp-server/architecture/"
-		description="Comprende cómo el servidor conecta los asistentes de IA con GitLab"
-	/>
-	<LinkCard
-		title="Configuración"
-		href="/gitlab-mcp-server/configuration/"
-		description="Variables de entorno, configuraciones de clientes y opciones de despliegue"
-	/>
-	<LinkCard
-		title="Referencia de herramientas"
-		href="/gitlab-mcp-server/tools/overview/"
-		description="Explora todas las herramientas MCP disponibles por dominio"
-	/>
+ <LinkCard
+  title="Primeros pasos"
+  href="/gitlab-mcp-server/getting-started/"
+  description="Instala el binario y conéctalo a tu primer cliente de IA en minutos"
+ />
+ <LinkCard
+  title="Arquitectura"
+  href="/gitlab-mcp-server/architecture/"
+  description="Comprende cómo el servidor conecta los asistentes de IA con GitLab"
+ />
+ <LinkCard
+  title="Configuración"
+  href="/gitlab-mcp-server/configuration/"
+  description="Variables de entorno, configuraciones de clientes y opciones de despliegue"
+ />
+ <LinkCard
+  title="Referencia de herramientas"
+  href="/gitlab-mcp-server/tools/overview/"
+  description="Explora todas las herramientas MCP disponibles por dominio"
+ />
 </CardGrid>
 
 ## Cómo funciona
