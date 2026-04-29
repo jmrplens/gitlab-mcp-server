@@ -430,6 +430,103 @@ func TestMetaToolSchema(t *testing.T) {
 	}
 }
 
+// TestMetaToolSchema_OpaqueDefault verifies that the default opaque mode
+// does NOT emit a oneOf branch list and keeps params as an open object.
+func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
+	routes := ActionMap{
+		"get":  Route(nil),
+		"list": Route(nil),
+	}
+	schema := MetaToolSchema(routes)
+	if _, has := schema["oneOf"]; has {
+		t.Error("opaque schema should not contain oneOf")
+	}
+	props := schema["properties"].(map[string]any)
+	paramsProp := props["params"].(map[string]any)
+	if paramsProp["additionalProperties"] != true {
+		t.Errorf("params.additionalProperties = %v, want true", paramsProp["additionalProperties"])
+	}
+	desc, _ := paramsProp["description"].(string)
+	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
+		t.Error("params.description should mention the schema resource URI")
+	}
+}
+
+// TestBuildMetaToolSchema_FullEmitsOneOf verifies that full mode produces
+// a oneOf branch per action with action pinned to a const.
+func TestBuildMetaToolSchema_FullEmitsOneOf(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testInput, testOutput](nil, nil),
+		"get":    RouteAction[testInput, testOutput](nil, nil),
+	}
+	schema := BuildMetaToolSchema(routes, MetaParamSchemaFull)
+
+	branches, ok := schema["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("oneOf missing or wrong type: %T", schema["oneOf"])
+	}
+	if len(branches) != 2 {
+		t.Fatalf("oneOf len = %d, want 2", len(branches))
+	}
+	wantActions := []string{"create", "get"} // sorted
+	for i, b := range branches {
+		bm := b.(map[string]any)
+		bp := bm["properties"].(map[string]any)
+		ap := bp["action"].(map[string]any)
+		if ap["const"] != wantActions[i] {
+			t.Errorf("branch[%d].action.const = %v, want %q", i, ap["const"], wantActions[i])
+		}
+		paramsBranch := bp["params"].(map[string]any)
+		// Full mode should preserve the reflected schema, which carries a
+		// type or a $ref pointing into $defs.
+		_, hasType := paramsBranch["type"]
+		_, hasRef := paramsBranch["$ref"]
+		_, hasProps := paramsBranch["properties"]
+		if !hasType && !hasRef && !hasProps {
+			t.Errorf("branch[%d].params lacks type/$ref/properties: %v", i, paramsBranch)
+		}
+	}
+}
+
+// TestBuildMetaToolSchema_CompactStripsDescriptions verifies that compact
+// mode drops description strings from params property entries.
+func TestBuildMetaToolSchema_CompactStripsDescriptions(t *testing.T) {
+	routes := ActionMap{
+		"get": RouteAction[testInput, testOutput](nil, nil),
+	}
+	schema := BuildMetaToolSchema(routes, MetaParamSchemaCompact)
+
+	branches := schema["oneOf"].([]any)
+	if len(branches) != 1 {
+		t.Fatalf("oneOf len = %d, want 1", len(branches))
+	}
+	bp := branches[0].(map[string]any)["properties"].(map[string]any)
+	paramsBranch := bp["params"].(map[string]any)
+	if paramsBranch["additionalProperties"] != true {
+		t.Errorf("compact params.additionalProperties = %v, want true", paramsBranch["additionalProperties"])
+	}
+	props, ok := paramsBranch["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("compact params has no properties map: %v", paramsBranch)
+	}
+	for name, raw := range props {
+		entry := raw.(map[string]any)
+		if _, hasDesc := entry["description"]; hasDesc {
+			t.Errorf("compact field %q retains description", name)
+		}
+	}
+}
+
+// TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque verifies unknown
+// modes silently degrade to the opaque envelope.
+func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
+	routes := ActionMap{"get": Route(nil)}
+	schema := BuildMetaToolSchema(routes, "verbose")
+	if _, has := schema["oneOf"]; has {
+		t.Error("unknown mode should not emit oneOf")
+	}
+}
+
 // enrichWithHints.
 
 // TestEnrichWithHints_AddsNextSteps verifies that enrichWithHints injects

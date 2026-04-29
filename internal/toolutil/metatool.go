@@ -484,14 +484,43 @@ func ValidActionsString(routes ActionMap) string {
 // constrained to an enum of valid action names extracted from the routes map.
 // Setting this as Tool.InputSchema ensures the LLM sees the exact list of
 // valid actions in the schema, enabling first-try action selection.
+//
+// This is equivalent to BuildMetaToolSchema(routes, MetaParamSchemaOpaque)
+// and is preserved as the canonical entry-point for callers that always want
+// the opaque envelope.
 func MetaToolSchema(routes ActionMap) map[string]any {
+	return BuildMetaToolSchema(routes, MetaParamSchemaOpaque)
+}
+
+// Meta-tool param schema mode constants. Mirrors the values accepted by the
+// META_PARAM_SCHEMA env var and --meta-param-schema CLI flag in package
+// config. Duplicated here to avoid an import cycle (config → toolutil → mcp).
+const (
+	MetaParamSchemaOpaque  = "opaque"
+	MetaParamSchemaCompact = "compact"
+	MetaParamSchemaFull    = "full"
+)
+
+// paramsResourceHint is appended to the description of the params property
+// in every meta-tool input schema, regardless of mode. It points the LLM at
+// the per-action JSON Schema available via the gitlab://schema/meta resource.
+const paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+
+// BuildMetaToolSchema returns the input schema for a meta-tool given the
+// chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
+// that callers cannot break the tools/list payload by passing a typo.
+//
+//   - opaque:  legacy {action, params:any} envelope (default).
+//   - full:    discriminated oneOf with full per-action params schemas.
+//   - compact: discriminated oneOf with descriptions and $defs stripped.
+func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
 		actions = append(actions, name)
 	}
 	sort.Strings(actions)
 
-	return map[string]any{
+	base := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"action": map[string]any{
@@ -501,13 +530,114 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation)." + paramsResourceHint,
 				"additionalProperties": true,
 			},
 		},
 		"required":             []any{"action"},
 		"additionalProperties": false,
 	}
+
+	switch mode {
+	case MetaParamSchemaFull:
+		base["oneOf"] = buildMetaOneOf(routes, actions, false)
+	case MetaParamSchemaCompact:
+		base["oneOf"] = buildMetaOneOf(routes, actions, true)
+	default:
+		// MetaParamSchemaOpaque or unknown — return the envelope unchanged.
+	}
+	return base
+}
+
+// buildMetaOneOf constructs the oneOf branch list for full/compact modes.
+// Each branch pins `action` to a const and replaces `params` with the captured
+// per-action InputSchema (optionally compacted).
+func buildMetaOneOf(routes ActionMap, sortedActions []string, compact bool) []any {
+	branches := make([]any, 0, len(sortedActions))
+	for _, action := range sortedActions {
+		route := routes[action]
+		params := route.InputSchema
+		if compact && params != nil {
+			params = compactParamsSchema(params)
+		}
+		if params == nil {
+			params = map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+			}
+		}
+		branches = append(branches, map[string]any{
+			"properties": map[string]any{
+				"action": map[string]any{"const": action},
+				"params": params,
+			},
+			"required": []any{"action"},
+		})
+	}
+	return branches
+}
+
+// compactParamsSchema returns a reduced copy of a per-action params schema
+// containing only property names with their declared type and (when present)
+// enum values. Descriptions, required, and $defs are dropped. A top-level
+// $ref is resolved against the schema's own $defs once, then $defs is
+// discarded. Best-effort: shapes we don't recognise are replaced with an
+// open object schema rather than panicking.
+func compactParamsSchema(s map[string]any) map[string]any {
+	if s == nil {
+		return nil
+	}
+	resolved := resolveTopLevelRef(s)
+	props, _ := resolved["properties"].(map[string]any)
+	if props == nil {
+		return map[string]any{
+			"type":                 "object",
+			"additionalProperties": true,
+		}
+	}
+	compact := make(map[string]any, len(props))
+	for k, v := range props {
+		pm, ok := v.(map[string]any)
+		if !ok {
+			compact[k] = map[string]any{}
+			continue
+		}
+		entry := map[string]any{}
+		if t, ok := pm["type"]; ok {
+			entry["type"] = t
+		}
+		if e, ok := pm["enum"]; ok {
+			entry["enum"] = e
+		}
+		compact[k] = entry
+	}
+	return map[string]any{
+		"type":                 "object",
+		"properties":           compact,
+		"additionalProperties": true,
+	}
+}
+
+// resolveTopLevelRef returns the schema with a top-level "$ref" replaced by
+// the referenced $defs entry. If no top-level $ref is present, returns s.
+func resolveTopLevelRef(s map[string]any) map[string]any {
+	ref, _ := s["$ref"].(string)
+	if ref == "" {
+		return s
+	}
+	defs, _ := s["$defs"].(map[string]any)
+	if defs == nil {
+		return s
+	}
+	const prefix = "#/$defs/"
+	if len(ref) <= len(prefix) || ref[:len(prefix)] != prefix {
+		return s
+	}
+	target, _ := defs[ref[len(prefix):]].(map[string]any)
+	if target == nil {
+		return s
+	}
+	return target
 }
 
 // MetaToolOutputSchema returns a permissive JSON Schema describing the result
