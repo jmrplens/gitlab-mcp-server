@@ -351,6 +351,7 @@ func Register(server *mcp.Server, client *gitlabclient.Client) {
 	registerBoardResource(server, client)
 	registerGroupMilestoneResource(server, client)
 	registerGroupLabelResource(server, client)
+	RegisterMetaSchemaResources(server)
 }
 
 // registerCurrentUserResource registers the "gitlab://user/current" static
