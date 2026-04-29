@@ -124,13 +124,13 @@ The AI sends an `action` parameter to select the operation:
 
 ```json
 {
- "tool": "gitlab_issue",
- "arguments": {
-  "action": "create",
-  "project_id": "my-org/backend",
-  "title": "Fix N+1 query in /users",
-  "labels": "bug,performance"
- }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project_id": "my-org/backend",
+		"title": "Fix N+1 query in /users",
+		"labels": "bug,performance"
+	}
 }
 ```
 
@@ -191,17 +191,17 @@ Every tool returns a dual-format response:
 
 ```json
 {
- "structuredContent": {
-  "type": "gitlab_issue",
-  "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
-  "next_steps": ["View issue details", "Add labels", "Assign to user"]
- },
- "content": [
-  {
-   "type": "text",
-   "text": "## Issue #42: Fix N+1 query\n\n**State:** opened\n**Author:** @alice\n..."
-  }
- ]
+	"structuredContent": {
+		"type": "gitlab_issue",
+		"data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+		"next_steps": ["View issue details", "Add labels", "Assign to user"]
+	},
+	"content": [
+		{
+			"type": "text",
+			"text": "## Issue #42: Fix N+1 query\n\n**State:** opened\n**Author:** @alice\n..."
+		}
+	]
 }
 ```
 

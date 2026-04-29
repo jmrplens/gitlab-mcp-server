@@ -53,22 +53,22 @@ export HTTP_PROXY=http://proxy.corp.ejemplo.com:8080
 export NO_PROXY=localhost,127.0.0.1,.internal.corp
 ```
 
-| Síntoma | Causa | Solución |
-| --- | --- | --- |
-| Timeout de conexión detrás de red corporativa | Proxy no configurado | Establece `HTTPS_PROXY` / `HTTP_PROXY` |
-| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en `.env`, Docker `environment:`, o secretos de Fly.io |
-| `CONNECT` rechazado por proxy para `api.github.com` | El proxy deniega salida a GitHub (auto-update) | Establece `AUTO_UPDATE=false` o añade `github.com` y `objects.githubusercontent.com` a la whitelist |
-| GitLab interno enrutado a través de proxy externo | Falta `NO_PROXY` | Añade tu hostname de GitLab a `NO_PROXY` |
+| Síntoma                                              | Causa                                                 | Solución                                                                                            |
+| ---------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Timeout de conexión detrás de red corporativa        | Proxy no configurado                                  | Establece `HTTPS_PROXY` / `HTTP_PROXY`                                                              |
+| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en `.env`, Docker `environment:`, o secretos de Fly.io                                      |
+| `CONNECT` rechazado por proxy para `api.github.com`  | El proxy deniega salida a GitHub (auto-update)        | Establece `AUTO_UPDATE=false` o añade `github.com` y `objects.githubusercontent.com` a la whitelist |
+| GitLab interno enrutado a través de proxy externo    | Falta `NO_PROXY`                                      | Añade tu hostname de GitLab a `NO_PROXY`                                                            |
 
 ### Proxy inverso (modo HTTP)
 
 Cuando se ejecuta el servidor MCP detrás de nginx, Caddy, o un balanceador cloud:
 
-| Síntoma | Causa | Solución |
-| --- | --- | --- |
+| Síntoma                                                          | Causa                                                     | Solución                                                                                                         |
+| ---------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | El rate limiter cuenta todas las peticiones como un solo cliente | Lee la IP del balanceador en lugar de la del cliente real | Establece `--trusted-proxy-header` a la cabecera que tu proxy establece (ej. `X-Forwarded-For`, `Fly-Client-IP`) |
-| WebSocket o SSE desconectado | Timeout de lectura del proxy demasiado corto | Aumenta el timeout de lectura del proxy a al menos 120s para streams MCP de larga duración |
-| `502 Bad Gateway` | El servidor aún no está escuchando | Añade un startup probe o reintento; el servidor necesita unos segundos para inicializarse en la primera petición |
+| WebSocket o SSE desconectado                                     | Timeout de lectura del proxy demasiado corto              | Aumenta el timeout de lectura del proxy a al menos 120s para streams MCP de larga duración                       |
+| `502 Bad Gateway`                                                | El servidor aún no está escuchando                        | Añade un startup probe o reintento; el servidor necesita unos segundos para inicializarse en la primera petición |
 
 ## Descubrimiento de herramientas
 

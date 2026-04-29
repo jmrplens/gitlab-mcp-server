@@ -108,16 +108,16 @@ gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com --auth-mode=
 
 ```json
 {
- "servers": {
-  "gitlab": {
-   "type": "http",
-   "url": "http://tu-servidor:8080/mcp",
-   "oauth": {
-    "clientId": "TU_APPLICATION_ID_DE_GITLAB",
-    "scopes": ["api"]
-   }
-  }
- }
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://tu-servidor:8080/mcp",
+			"oauth": {
+				"clientId": "TU_APPLICATION_ID_DE_GITLAB",
+				"scopes": ["api"]
+			}
+		}
+	}
 }
 ```
 
@@ -229,15 +229,15 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
- "servers": {
-  "gitlab": {
-   "type": "http",
-   "url": "http://tu-servidor:8080/mcp",
-   "headers": {
-    "PRIVATE-TOKEN": "glpat-tu-token"
-   }
-  }
- }
+	"servers": {
+		"gitlab": {
+			"type": "http",
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
 }
 ```
 
@@ -246,14 +246,14 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "url": "http://tu-servidor:8080/mcp",
-   "headers": {
-    "PRIVATE-TOKEN": "glpat-tu-token"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"url": "http://tu-servidor:8080/mcp",
+			"headers": {
+				"PRIVATE-TOKEN": "glpat-tu-token"
+			}
+		}
+	}
 }
 ```
 

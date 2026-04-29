@@ -124,13 +124,13 @@ La IA envía un parámetro `action` para seleccionar la operación:
 
 ```json
 {
- "tool": "gitlab_issue",
- "arguments": {
-  "action": "create",
-  "project_id": "my-org/backend",
-  "title": "Fix N+1 query in /users",
-  "labels": "bug,performance"
- }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project_id": "my-org/backend",
+		"title": "Fix N+1 query in /users",
+		"labels": "bug,performance"
+	}
 }
 ```
 
@@ -191,21 +191,21 @@ Cada herramienta devuelve una respuesta en formato dual:
 
 ```json
 {
- "structuredContent": {
-  "type": "gitlab_issue",
-  "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
-  "next_steps": [
-   "Ver detalles del issue",
-   "Añadir etiquetas",
-   "Asignar a usuario"
-  ]
- },
- "content": [
-  {
-   "type": "text",
-   "text": "## Issue #42: Fix N+1 query\n\n**Estado:** abierto\n**Autor:** @alice\n..."
-  }
- ]
+	"structuredContent": {
+		"type": "gitlab_issue",
+		"data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+		"next_steps": [
+			"Ver detalles del issue",
+			"Añadir etiquetas",
+			"Asignar a usuario"
+		]
+	},
+	"content": [
+		{
+			"type": "text",
+			"text": "## Issue #42: Fix N+1 query\n\n**Estado:** abierto\n**Autor:** @alice\n..."
+		}
+	]
 }
 ```
 

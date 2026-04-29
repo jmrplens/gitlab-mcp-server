@@ -105,15 +105,15 @@ La spec de Open Plugins arranca automáticamente cada entrada de `.mcp.json`, as
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/usr/local/bin/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "${GITLAB_URL}",
-    "GITLAB_TOKEN": "${GITLAB_TOKEN}"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/usr/local/bin/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "${GITLAB_URL}",
+				"GITLAB_TOKEN": "${GITLAB_TOKEN}"
+			}
+		}
+	}
 }
 ```
 
@@ -128,16 +128,16 @@ Crea o edita `.vscode/mcp.json` en la raíz de tu workspace:
 
 ```json
 {
- "servers": {
-  "gitlab": {
-   "type": "stdio",
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -146,24 +146,24 @@ Usa variables de entrada de VS Code para evitar almacenar el token en texto plan
 
 ```json
 {
- "inputs": [
-  {
-   "type": "promptString",
-   "id": "gitlab-token",
-   "description": "GitLab Personal Access Token",
-   "password": true
-  }
- ],
- "servers": {
-  "gitlab": {
-   "type": "stdio",
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "${input:gitlab-token}"
-   }
-  }
- }
+	"inputs": [
+		{
+			"type": "promptString",
+			"id": "gitlab-token",
+			"description": "GitLab Personal Access Token",
+			"password": true
+		}
+	],
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlab-token}"
+			}
+		}
+	}
 }
 ```
 
@@ -176,15 +176,15 @@ Edita `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) 
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -195,15 +195,15 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -234,15 +234,15 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -264,16 +264,16 @@ Edita tu `settings.json` de Zed y añade:
 
 ```json
 {
- "context_servers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "args": [],
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"context_servers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"args": [],
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -284,16 +284,16 @@ Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "args": [],
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"args": [],
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -308,15 +308,15 @@ Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -327,15 +327,15 @@ Abre la barra lateral de Roo Code → haz clic en el icono de servidores MCP →
 
 ```json
 {
- "mcpServers": {
-  "gitlab": {
-   "command": "/ruta/a/gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-   }
-  }
- }
+	"mcpServers": {
+		"gitlab": {
+			"command": "/ruta/a/gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+			}
+		}
+	}
 }
 ```
 
@@ -479,12 +479,12 @@ Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_cr
 
 ```json
 {
- "tool": "gitlab_issue",
- "arguments": {
-  "action": "create",
-  "project": "my-group/my-project",
-  "title": "Fix login redirect"
- }
+	"tool": "gitlab_issue",
+	"arguments": {
+		"action": "create",
+		"project": "my-group/my-project",
+		"title": "Fix login redirect"
+	}
 }
 ```
 

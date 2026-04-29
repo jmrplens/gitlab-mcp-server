@@ -59,16 +59,16 @@ For VS Code users, you can use input variables to avoid storing tokens in plain 
 
 ```json
 {
- "servers": {
-  "gitlab": {
-   "type": "stdio",
-   "command": "gitlab-mcp-server",
-   "env": {
-    "GITLAB_URL": "https://gitlab.example.com",
-    "GITLAB_TOKEN": "${input:gitlabToken}"
-   }
-  }
- }
+	"servers": {
+		"gitlab": {
+			"type": "stdio",
+			"command": "gitlab-mcp-server",
+			"env": {
+				"GITLAB_URL": "https://gitlab.example.com",
+				"GITLAB_TOKEN": "${input:gitlabToken}"
+			}
+		}
+	}
 }
 ```
 
