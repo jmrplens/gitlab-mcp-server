@@ -28,6 +28,48 @@ For the complete technical reference, see [`docs/troubleshooting.md`](https://gi
 `GITLAB_SKIP_TLS_VERIFY=true` disables TLS verification entirely. Use it only for self-hosted instances with self-signed certificates, and never in production environments with public-facing GitLab instances.
 :::
 
+## Network and proxy
+
+### DNS resolution
+
+If the server cannot resolve your GitLab hostname:
+
+```bash
+# Verify DNS from the machine running the MCP server
+nslookup gitlab.example.com
+# or
+dig gitlab.example.com +short
+```
+
+In Docker containers, ensure your compose file or `docker run` command uses `--dns` or a custom network with proper DNS configuration. Inside Kubernetes, check CoreDNS logs and `resolv.conf` in the pod.
+
+### Corporate proxies
+
+Go's `net/http` honours the standard proxy environment variables. Set them before launching the server:
+
+```bash
+export HTTPS_PROXY=http://proxy.corp.example.com:8080
+export HTTP_PROXY=http://proxy.corp.example.com:8080
+export NO_PROXY=localhost,127.0.0.1,.internal.corp
+```
+
+| Symptom | Cause | Solution |
+| --- | --- | --- |
+| Connection timeout behind corporate network | Proxy not configured | Set `HTTPS_PROXY` / `HTTP_PROXY` |
+| Proxy works for `curl` but not for the server | Env vars not exported into the server process | Pass them in `.env`, Docker `environment:`, or Fly.io secrets |
+| `CONNECT` rejected by proxy for `api.github.com` | Proxy denies outbound to GitHub (auto-update) | Set `AUTO_UPDATE=false` or whitelist `github.com` and `objects.githubusercontent.com` |
+| Internal GitLab routed through external proxy | `NO_PROXY` missing | Add your GitLab hostname to `NO_PROXY` |
+
+### Reverse proxy (HTTP mode)
+
+When running the MCP server behind nginx, Caddy, or a cloud load balancer:
+
+| Symptom | Cause | Solution |
+| --- | --- | --- |
+| Rate limiter counts all requests as one client | Reads load-balancer IP instead of real client IP | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`) |
+| WebSocket or SSE disconnected | Proxy read timeout too short | Increase proxy read timeout to at least 120s for long-running MCP streams |
+| `502 Bad Gateway` | Server not listening yet | Add a startup probe or retry; the server needs a few seconds to initialize on first request |
+
 ## Tool discovery
 
 | Symptom                                         | Cause                                     | Solution                                                                                                                                                                 |
