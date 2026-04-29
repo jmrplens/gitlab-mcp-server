@@ -27,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
@@ -191,7 +192,10 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 
 func measureResources(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	toolutil.ClearMetaRoutes()
+	tools.RegisterAllMeta(server, client, false)
 	resources.Register(server, client)
+	resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
 	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()

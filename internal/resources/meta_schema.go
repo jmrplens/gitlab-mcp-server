@@ -43,14 +43,15 @@ type MetaSchemaIndex struct {
 
 // RegisterMetaSchemaResources wires the index resource and the per-action
 // template resource into the MCP server. Both are read-only and do not need
-// a GitLab client; the data comes from toolutil.MetaRoutes() which is
-// populated as a side-effect of meta-tool registration.
-func RegisterMetaSchemaResources(server *mcp.Server) {
-	registerMetaSchemaIndex(server)
-	registerMetaSchemaTemplate(server)
+// a GitLab client; callers pass the exact meta-tool routes that are visible
+// on this server after configuration filters have been applied.
+func RegisterMetaSchemaResources(server *mcp.Server, routes map[string]toolutil.ActionMap) {
+	snapshot := cloneMetaSchemaRoutes(routes)
+	registerMetaSchemaIndex(server, snapshot)
+	registerMetaSchemaTemplate(server, snapshot)
 }
 
-func registerMetaSchemaIndex(server *mcp.Server) {
+func registerMetaSchemaIndex(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 	server.AddResource(&mcp.Resource{
 		URI:         metaSchemaIndexURI,
 		Name:        "meta_schema_index",
@@ -60,11 +61,11 @@ func registerMetaSchemaIndex(server *mcp.Server) {
 		Annotations: toolutil.ContentList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return marshalResourceJSON(buildMetaSchemaIndex())
+		return marshalResourceJSON(buildMetaSchemaIndex(routes))
 	})
 }
 
-func registerMetaSchemaTemplate(server *mcp.Server) {
+func registerMetaSchemaTemplate(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: metaSchemaTemplateURI,
 		Name:        "meta_action_schema",
@@ -78,7 +79,7 @@ func registerMetaSchemaTemplate(server *mcp.Server) {
 		if tool == "" || action == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		schema, ok := lookupMetaActionSchema(tool, action)
+		schema, ok := lookupMetaActionSchema(routes, tool, action)
 		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
@@ -86,10 +87,21 @@ func registerMetaSchemaTemplate(server *mcp.Server) {
 	})
 }
 
+func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	out := make(map[string]toolutil.ActionMap, len(routes))
+	for tool, actions := range routes {
+		actionCopy := make(toolutil.ActionMap, len(actions))
+		for action, route := range actions {
+			actionCopy[action] = route
+		}
+		out[tool] = actionCopy
+	}
+	return out
+}
+
 // buildMetaSchemaIndex builds a deterministic snapshot of all registered
 // meta-tools and their actions, sorted alphabetically.
-func buildMetaSchemaIndex() MetaSchemaIndex {
-	routes := toolutil.MetaRoutes()
+func buildMetaSchemaIndex(routes map[string]toolutil.ActionMap) MetaSchemaIndex {
 	tools := make([]MetaSchemaIndexEntry, 0, len(routes))
 	for tool, actions := range routes {
 		names := make([]string, 0, len(actions))
@@ -108,8 +120,7 @@ func buildMetaSchemaIndex() MetaSchemaIndex {
 // the route exists but has no captured InputSchema, returns a permissive
 // fallback object schema (with `additionalProperties: true` and a guidance
 // description) and true, so clients always get a usable JSON Schema.
-func lookupMetaActionSchema(tool, action string) (map[string]any, bool) {
-	routes := toolutil.MetaRoutes()
+func lookupMetaActionSchema(routes map[string]toolutil.ActionMap, tool, action string) (map[string]any, bool) {
 	actions, ok := routes[tool]
 	if !ok {
 		return nil, false

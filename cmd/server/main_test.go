@@ -101,6 +101,25 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 	return server
 }
 
+func newInMemorySession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	session, err := mcpClient.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
+}
+
 // parseJSONRPCResponse reads the HTTP response body and parses the JSON-RPC result.
 // It handles both plain JSON and SSE (text/event-stream) response formats.
 func parseJSONRPCResponse(t *testing.T, resp *http.Response) map[string]any {
@@ -780,6 +799,77 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	}
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
+
+// TestCreateServer_MetaSchemaResourcesFollowMetaMode verifies that the
+// per-action schema resources are only advertised when meta-tools are active.
+func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
+	client := newMockGitLabClient(t)
+
+	individual := createServer(client, &config.Config{MetaTools: false}, nil)
+	individualSession := newInMemorySession(t, individual)
+	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates individual: %v", err)
+	}
+	for _, tpl := range individualTemplates.ResourceTemplates {
+		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
+			t.Fatal("individual mode should not advertise meta-tool schema resources")
+		}
+	}
+
+	meta := createServer(client, &config.Config{MetaTools: true}, nil)
+	metaSession := newInMemorySession(t, meta)
+	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates meta: %v", err)
+	}
+	var found bool
+	for _, tpl := range metaTemplates.ResourceTemplates {
+		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("meta mode should advertise meta-tool schema resources")
+	}
+}
+
+// TestCreateServer_MetaSchemaRoutesFollowVisibleTools verifies that schema
+// resources mirror the post-filter tool catalog instead of the global route
+// registry populated during registration.
+func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.Config{
+		MetaTools:    true,
+		ExcludeTools: []string{"gitlab_runner"},
+	}
+	server := createServer(client, cfg, nil)
+	session := newInMemorySession(t, server)
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"})
+	if err != nil {
+		t.Fatalf("ReadResource index: %v", err)
+	}
+	var index resources.MetaSchemaIndex
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); unmarshalErr != nil {
+		t.Fatalf("unmarshal index: %v", unmarshalErr)
+	}
+	for _, entry := range index.Tools {
+		if entry.Tool == "gitlab_runner" {
+			t.Fatal("excluded meta-tool should not appear in schema index")
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_runner/list"})
+	if err == nil {
+		t.Fatal("excluded meta-tool schema should not be readable")
+	}
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_merge_request/create"})
+	if err != nil {
+		t.Fatalf("visible meta-tool schema should be readable: %v", err)
 	}
 }
 

@@ -583,7 +583,20 @@ func createServer(client *gitlabclient.Client, cfg *config.Config, updater *auto
 		slog.Info("registered individual tools", "tools", toolCount)
 	}
 
+	var metaSchemaRoutes map[string]toolutil.ActionMap
+	if cfg.MetaTools {
+		var routesErr error
+		metaSchemaRoutes, routesErr = visibleMetaSchemaRoutes(server)
+		if routesErr != nil {
+			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
+			metaSchemaRoutes = toolutil.MetaRoutes()
+		}
+	}
+
 	resources.Register(server, client)
+	if cfg.MetaTools {
+		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
+	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
 	resources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)
@@ -1191,27 +1204,56 @@ func startAutoUpdate(ctx context.Context, cfg *config.Config) {
 // countRegisteredTools returns the number of tools registered on the server
 // by connecting an ephemeral in-memory client session and calling ListTools.
 func countRegisteredTools(server *mcp.Server) (int, error) {
+	tools, err := listRegisteredTools(server, "counter")
+	if err != nil {
+		return 0, err
+	}
+	return len(tools), nil
+}
+
+func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		return 0, fmt.Errorf("server connect: %w", err)
+		return nil, fmt.Errorf("server connect: %w", err)
 	}
 	defer serverSession.Close()
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "counter", Version: "0"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: "0"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		return 0, fmt.Errorf("client connect: %w", err)
+		return nil, fmt.Errorf("client connect: %w", err)
 	}
 	defer session.Close()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("list tools: %w", err)
+		return nil, fmt.Errorf("list tools: %w", err)
 	}
-	return len(result.Tools), nil
+	return result.Tools, nil
+}
+
+func visibleMetaSchemaRoutes(server *mcp.Server) (map[string]toolutil.ActionMap, error) {
+	registeredTools, err := listRegisteredTools(server, "meta-schema-filter")
+	if err != nil {
+		return nil, err
+	}
+
+	visibleTools := make(map[string]struct{}, len(registeredTools))
+	for _, tool := range registeredTools {
+		visibleTools[tool.Name] = struct{}{}
+	}
+
+	routes := toolutil.MetaRoutes()
+	visibleRoutes := make(map[string]toolutil.ActionMap, len(routes))
+	for toolName, actions := range routes {
+		if _, ok := visibleTools[toolName]; ok {
+			visibleRoutes[toolName] = actions
+		}
+	}
+	return visibleRoutes, nil
 }
 
 // removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory

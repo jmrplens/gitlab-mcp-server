@@ -28,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 const (
@@ -186,7 +187,10 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
+	toolutil.ClearMetaRoutes()
+	tools.RegisterAllMeta(server, client, false)
 	resources.Register(server, client)
+	resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
 	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()

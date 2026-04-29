@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // metaSchemaResourceSession registers all meta-tools (which populates
@@ -28,7 +29,7 @@ func metaSchemaResourceSession(t *testing.T, handler http.Handler) *mcp.ClientSe
 	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	RegisterAllMeta(server, client, false)
-	resources.RegisterMetaSchemaResources(server)
+	resources.RegisterMetaSchemaResources(server, toolutil.MetaRoutes())
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()

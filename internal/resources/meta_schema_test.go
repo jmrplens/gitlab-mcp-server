@@ -16,19 +16,13 @@ import (
 )
 
 // metaSchemaSession spins up a dedicated MCP session with only the
-// meta-schema resources registered. It seeds toolutil.MetaRoutes with the
-// supplied fixture so each test sees a deterministic, isolated catalog.
+// meta-schema resources registered. It passes the supplied fixture directly
+// so each test sees a deterministic, isolated catalog.
 func metaSchemaSession(t *testing.T, fixture map[string]toolutil.ActionMap) *mcp.ClientSession {
 	t.Helper()
 
-	toolutil.ClearMetaRoutes()
-	for tool, actions := range fixture {
-		toolutil.RegisterRoutes(tool, actions)
-	}
-	t.Cleanup(toolutil.ClearMetaRoutes)
-
 	server := mcp.NewServer(&mcp.Implementation{Name: "meta-schema-test", Version: "0.0.1"}, nil)
-	RegisterMetaSchemaResources(server)
+	RegisterMetaSchemaResources(server, fixture)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
