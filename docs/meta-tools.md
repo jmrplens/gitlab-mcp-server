@@ -240,3 +240,21 @@ See [Output Format](output-format.md) for the complete response format specifica
 ```
 
 If the MCP client supports elicitation, the server will ask for user confirmation before executing destructive actions. Set `YOLO_MODE=true` or `AUTOPILOT=true` to skip confirmation.
+
+---
+
+## Discovering the params shape
+
+Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
+
+1. **MCP Resource** (recommended, works in every mode) — read the per-action JSON Schema:
+
+   ```text
+   gitlab://schema/meta/{tool}/{action}
+   ```
+
+   For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the JSON Schema for the `create` action's `params`. The `gitlab://schema/meta/` index resource enumerates every registered meta-tool and its actions.
+
+2. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. See [env-reference.md](env-reference.md) for size/cost trade-offs.
+
+The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.

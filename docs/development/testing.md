@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-27.
+> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-30.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -14,17 +14,17 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,866   |
-| Unit test functions         | 8,568   |
+| Total test functions        | 8,974   |
+| Unit test functions         | 8,676   |
 | E2E test functions          | 218     |
 | cmd test functions          | 80      |
-| Test files (internal/)      | 405     |
+| Test files (internal/)      | 410     |
 | Test files (test/e2e/suite/)| 99      |
 | Tool sub-packages tested    | 163     |
 | Core packages tested        | 16      |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 96.8% |
-| Overall coverage (`go test ./internal/...`)           | 97.4% |
-| Average package coverage    | ~98.0%  |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 96.9% |
+| Overall coverage (`go test ./internal/...`)           | 97.5% |
+| Average package coverage    | 97.9%   |
 
 ### Naming Convention Stats
 
@@ -40,12 +40,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,310 |         76 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            222 |         17 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (163)  |          7,037 |        312 | Domain-specific tool handlers        |
+| Core packages            |          1,471 |         76 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            229 |         19 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (163)  |          6,976 |        315 | Domain-specific tool handlers        |
 | E2E integration          |            218 |         99 | Full workflow against real GitLab    |
 | cmd/server               |             80 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,867** |    **505** |                                      |
+| **Total**                |      **8,974** |    **510** |                                      |
 
 ### Core Packages
 
@@ -53,21 +53,21 @@
 | -------------- | ----: | -------: | ------------------------------------ |
 | autoupdate     |   110 |   85.1%  | Self-update via GitLab releases      |
 | completions    |    91 |   94.0%  | Argument auto-completion             |
-| config         |    44 |   97.6%  | Configuration loading                |
+| config         |    52 |   97.7%  | Configuration loading                |
 | elicitation    |    78 |   92.0%  | MCP elicitation capability           |
 | gitlab         |    34 |  100.0%  | GitLab API client wrapper            |
 | logging        |    16 |  100.0%  | MCP logging capability               |
 | progress       |    17 |  100.0%  | MCP progress notifications           |
 | prompts        |   202 |   96.3%  | MCP prompt implementations           |
-| resources      |   119 |   98.6%  | MCP resource implementations         |
+| resources      |   155 |   98.7%  | MCP resource implementations         |
 | roots          |    21 |   98.5%  | MCP roots capability                 |
 | sampling       |    83 |   99.5%  | MCP sampling capability              |
-| serverpool     |    38 |   99.4%  | HTTP mode server pool                |
-| testutil       |    21 |   62.7%  | Shared test helpers                  |
-| toolutil       |   247 |   96.0%  | Shared tool utilities                |
+| serverpool     |    38 |   97.5%  | HTTP mode server pool                |
+| testutil       |    21 |   60.9%  | Shared test helpers                  |
+| toolutil       |   313 |   96.5%  | Shared tool utilities                |
 | wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,310**|        |                                      |
+| **Subtotal**   |**1,471**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -468,7 +468,7 @@
 
 Coverage target: **>90%** per package. Exceptions:
 
-- **testutil** (62.7%) — Some helpers are only exercised by external tests
+- **testutil** (60.9%) — Some helpers are only exercised by external tests
   (build-tagged `e2e` suite) and therefore are not counted in the package's
   own unit-test coverage report.
 - **cmd/server** (57.5%) — Main entry-point glue, signal handling, and

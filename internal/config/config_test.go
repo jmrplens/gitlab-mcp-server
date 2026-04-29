@@ -113,6 +113,66 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 	}
 }
 
+// TestLoad_MetaParamSchemaDefault verifies that [Load] defaults
+// MetaParamSchema to "opaque" when the env var is unset.
+func TestLoad_MetaParamSchemaDefault(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	// Pin META_PARAM_SCHEMA to empty so a value loaded from a developer's
+	// .env file cannot override the default-case assertion below.
+	t.Setenv("META_PARAM_SCHEMA", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.MetaParamSchema != MetaParamSchemaOpaque {
+		t.Errorf("MetaParamSchema = %q, want %q", cfg.MetaParamSchema, MetaParamSchemaOpaque)
+	}
+}
+
+// TestLoad_MetaParamSchemaValid verifies that [Load] accepts the three
+// documented values for META_PARAM_SCHEMA, case-insensitively.
+func TestLoad_MetaParamSchemaValid(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"opaque", MetaParamSchemaOpaque},
+		{"COMPACT", MetaParamSchemaCompact},
+		{"Full", MetaParamSchemaFull},
+		{" full ", MetaParamSchemaFull},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv("META_PARAM_SCHEMA", tc.input)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.MetaParamSchema != tc.want {
+				t.Errorf("MetaParamSchema = %q, want %q", cfg.MetaParamSchema, tc.want)
+			}
+		})
+	}
+}
+
+// TestLoad_MetaParamSchemaInvalid verifies that [Load] rejects
+// META_PARAM_SCHEMA values outside the allowed set.
+func TestLoad_MetaParamSchemaInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("META_PARAM_SCHEMA", "verbose")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for invalid META_PARAM_SCHEMA, got nil")
+	}
+}
+
 // Transport and HTTP addr are now CLI flags, not env vars.
 
 // TestLoad_UploadDefaults verifies upload config defaults when env vars are unset.
