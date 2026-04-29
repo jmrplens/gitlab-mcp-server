@@ -277,8 +277,8 @@ After the signature verification succeeds, validate that your binary matches the
 # Linux
 sha256sum --check --ignore-missing checksums.txt
 
-# macOS
-shasum -a 256 -c checksums.txt
+# macOS (shasum has no --ignore-missing; filter the relevant line first)
+grep "$(ls gitlab-mcp-server-*)" checksums.txt | shasum -a 256 -c
 ```
 
 Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding filename for your platform).
