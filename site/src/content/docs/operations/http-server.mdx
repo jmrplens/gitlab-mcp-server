@@ -52,6 +52,8 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                                                        |
 | `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                                                              |
 | `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                            |
+| `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                               |
+| `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                        |
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
@@ -190,6 +192,33 @@ graph TD
 2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
 4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
+
+## Rate limiting
+
+HTTP mode includes an optional **per-server token-bucket rate limiter** that throttles `tools/call` requests. The limiter is **disabled by default** (`--rate-limit-rps=0`) and applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
+
+### Configuration
+
+| Flag                 | Default | Meaning                                                                |
+| -------------------- | ------- | ---------------------------------------------------------------------- |
+| `--rate-limit-rps`   | `0`     | Sustained refill rate, in requests per second. `0` disables the limiter |
+| `--rate-limit-burst` | `40`    | Maximum bucket capacity (peak burst over 1s)                            |
+
+When `--rate-limit-rps > 0`, each pool entry gets its own token bucket sized at `--rate-limit-burst` tokens, refilled at `--rate-limit-rps` per second. Only `tools/call` requests consume tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize`, and other low-cost RPCs are not rate-limited.
+
+### Behaviour on exhaustion
+
+When a request would deplete the bucket, the server returns a JSON-RPC error with code `-32000` and message `rate limit exceeded`. Clients should back off (exponentially or by parsing the error) and retry. The limiter does not return HTTP 429 because the limit is enforced **after** JSON-RPC routing, inside the MCP layer.
+
+### Sizing guidance
+
+- **Single-user deployment** (typical local dev): leave disabled (`--rate-limit-rps=0`)
+- **Shared instance behind a proxy** (Fly.io, Kubernetes): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own quota, so this protects against a single noisy client without affecting others
+- **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
+
+:::caution
+Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for hard quotas. The `--trusted-proxy-header` flag is required for accurate per-IP enforcement at the proxy layer.
+:::
 
 ## Client configuration
 

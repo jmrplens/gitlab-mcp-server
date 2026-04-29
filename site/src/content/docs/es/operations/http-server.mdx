@@ -52,6 +52,8 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                                                                   |
 | `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                |
 | `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                  |
+| `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                            |
+| `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                          |
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
@@ -190,6 +192,33 @@ graph TD
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
 4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
+
+## Rate limiting
+
+El modo HTTP incluye un **rate limiter por servidor con token bucket** opcional que regula las solicitudes `tools/call`. El limitador está **desactivado por defecto** (`--rate-limit-rps=0`) y se aplica a cada entrada del pool de forma independiente — es decir, el ámbito es la misma clave `(token + URL de GitLab)` que usa el pool de servidores.
+
+### Configuración
+
+| Flag                 | Por defecto | Significado                                                                  |
+| -------------------- | ----------- | ---------------------------------------------------------------------------- |
+| `--rate-limit-rps`   | `0`         | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
+| `--rate-limit-burst` | `40`        | Capacidad máxima del bucket (pico de ráfaga durante 1s)                       |
+
+Cuando `--rate-limit-rps > 0`, cada entrada del pool obtiene su propio token bucket dimensionado en `--rate-limit-burst` tokens, rellenado a `--rate-limit-rps` por segundo. Solo las solicitudes `tools/call` consumen tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize` y otras RPCs de bajo coste no están limitadas.
+
+### Comportamiento al agotarse
+
+Cuando una solicitud agotaría el bucket, el servidor devuelve un error JSON-RPC con código `-32000` y mensaje `rate limit exceeded`. Los clientes deben aplicar backoff (exponencial o parseando el error) y reintentar. El limitador no devuelve HTTP 429 porque el límite se aplica **después** del enrutado JSON-RPC, dentro de la capa MCP.
+
+### Guía de dimensionado
+
+- **Despliegue de un solo usuario** (dev local típico): déjalo desactivado (`--rate-limit-rps=0`)
+- **Instancia compartida tras un proxy** (Fly.io, Kubernetes): empieza con `--rate-limit-rps=10 --rate-limit-burst=40`. Cada par token+URL obtiene su propia cuota, lo que protege frente a un único cliente ruidoso sin afectar a los demás
+- **Despliegue multi-tenant grande**: combina con rate limiting a nivel de infraestructura (Cloudflare, Caddy, nginx). El limitador a nivel MCP es una red de seguridad, no un sustituto del control en el edge
+
+:::caution
+Como el limitador hace scoping por token+URL, un cliente que rote tokens frecuentemente puede saltarlo. Usa rate limiting a nivel de infraestructura encima para cuotas duras. El flag `--trusted-proxy-header` es necesario para una aplicación precisa por IP en la capa de proxy.
+:::
 
 ## Configuración del cliente
 
