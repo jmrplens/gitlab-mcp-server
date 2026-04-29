@@ -46,10 +46,10 @@ flowchart TD
 
 ## TLS y certificados
 
-| Síntoma                                         | Causa                    | Solución                                                                                           |
-| ----------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------- |
+| Síntoma                                         | Causa                    | Solución                                                                                                                                                                             |
+| ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `x509: certificate signed by unknown authority` | Certificado autofirmado  | Primero intenta añadir el certificado CA al almacén de confianza del sistema. Si no es posible, establece `GITLAB_SKIP_TLS_VERIFY=true` en `.env` o `--skip-tls-verify` en modo HTTP |
-| `x509: certificate has expired`                 | Certificado TLS expirado | Renueva el certificado en el servidor de GitLab, o usa `GITLAB_SKIP_TLS_VERIFY=true` temporalmente |
+| `x509: certificate has expired`                 | Certificado TLS expirado | Renueva el certificado en el servidor de GitLab, o usa `GITLAB_SKIP_TLS_VERIFY=true` temporalmente                                                                                   |
 
 :::caution
 `GITLAB_SKIP_TLS_VERIFY=true` desactiva la verificación TLS completamente. Úsalo solo para instancias auto-alojadas con certificados autofirmados, y nunca en entornos de producción con instancias de GitLab públicas.
