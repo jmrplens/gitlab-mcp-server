@@ -210,7 +210,7 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	fmt.Fprintf(&b, "%d individual tools. Each meta-tool groups related operations under a single\n", len(individual))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
 	for _, t := range metaBase {
-		desc := firstSentence(t.Description)
+		desc := firstSentence(stripMetaPrefix(t.Description))
 		desc = truncateRunes(desc, 80)
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
 	}
@@ -568,6 +568,20 @@ func truncateRunes(s string, maxRunes int) string {
 		size += w
 	}
 	return s[:size] + "..."
+}
+
+// stripMetaPrefix removes the literal "Example: ..." header that
+// MetaToolDescriptionPrefix prepends to every meta-tool description, so the
+// summary lines in llms.txt show the actual user-facing description rather
+// than the per-action JSON example.
+func stripMetaPrefix(s string) string {
+	if !strings.HasPrefix(s, "Example: {") {
+		return s
+	}
+	if _, after, ok := strings.Cut(s, "\n\n"); ok {
+		return after
+	}
+	return s
 }
 
 // firstParagraph returns text up to the first blank-line paragraph break (\n\n).

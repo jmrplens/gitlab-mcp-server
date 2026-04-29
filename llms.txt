@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v1.4.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides 1006 individual MCP tools across 96 GitLab API domains, 32 meta-tools (47 with enterprise mode),
-44 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ tool with an "action" parameter. Key meta-tools:
 
 ## Resources
 
-44 read-only resources:
+46 read-only resources:
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review
@@ -73,6 +73,7 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab://guides/git-workflow: git_workflow
 - gitlab://guides/merge-request-hygiene: merge_request_hygiene
 - gitlab://guides/pipeline-troubleshooting: pipeline_troubleshooting
+- gitlab://schema/meta/: meta_schema_index
 - gitlab://user/current: current_user
 - gitlab://group/{group_id}: group
 - gitlab://group/{group_id}/label/{label_id}: group_label
@@ -109,6 +110,7 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab://project/{project_id}/tag/{tag_name}: tag
 - gitlab://project/{project_id}/tags: project_tags
 - gitlab://project/{project_id}/wiki/{slug}: wiki_page
+- gitlab://schema/meta/{tool}/{action}: meta_action_schema
 - gitlab://snippet/{snippet_id}: snippet
 - gitlab://workspace/roots: Workspace Roots
 
