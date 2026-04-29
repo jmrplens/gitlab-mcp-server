@@ -13,6 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -271,4 +272,43 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSetMetaParamSchema_PropagatesToMetaToolSchema verifies that
+// SetMetaParamSchema toggles the global mode read by toolutil.MetaToolSchema,
+// so all sub-package meta-tool registrations honor the configured mode.
+func TestSetMetaParamSchema_PropagatesToMetaToolSchema(t *testing.T) {
+	t.Cleanup(func() { SetMetaParamSchema("opaque") })
+
+	routes := actionMap{
+		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
+			return "ok", nil
+		}),
+	}
+
+	SetMetaParamSchema("full")
+	schema := toolutil.MetaToolSchema(routes)
+	if _, hasOneOf := schema["oneOf"]; !hasOneOf {
+		t.Errorf("full mode should emit oneOf, got keys=%v", keysOf(schema))
+	}
+
+	SetMetaParamSchema("opaque")
+	schema = toolutil.MetaToolSchema(routes)
+	if _, hasOneOf := schema["oneOf"]; hasOneOf {
+		t.Errorf("opaque mode should not emit oneOf, got keys=%v", keysOf(schema))
+	}
+
+	SetMetaParamSchema("garbage")
+	schema = toolutil.MetaToolSchema(routes)
+	if _, hasOneOf := schema["oneOf"]; hasOneOf {
+		t.Errorf("unknown mode should fall back to opaque, got keys=%v", keysOf(schema))
+	}
+}
+
+func keysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

@@ -30,6 +30,7 @@
 | Variable | Default | Description |
 | --- | --- | --- |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools: `true` (32 base / 47 enterprise) or `false` (1006 individual tools) |
+| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features. Gates 35 individual tool sub-packages and 15 dedicated meta-tools (plus enterprise routes in 3 base meta-tools) |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |
@@ -129,6 +130,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
 | `META_TOOLS` | `--meta-tools` | |
+| `META_PARAM_SCHEMA` | `--meta-param-schema` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |
 | `SESSION_TIMEOUT` | `--session-timeout` | |
 | `SESSION_REVALIDATE_INTERVAL` | `--revalidate-interval` | |

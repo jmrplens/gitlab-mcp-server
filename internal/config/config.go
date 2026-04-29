@@ -54,6 +54,22 @@ const (
 	DefaultRateLimitBurst = 40
 )
 
+// Meta-tool param schema modes.
+const (
+	// MetaParamSchemaOpaque keeps the legacy `params: object` envelope.
+	// This is the default and produces the smallest tools/list payload.
+	MetaParamSchemaOpaque = "opaque"
+	// MetaParamSchemaCompact emits a discriminated `oneOf` per action with
+	// descriptions and $defs stripped to reduce size.
+	MetaParamSchemaCompact = "compact"
+	// MetaParamSchemaFull emits a discriminated `oneOf` per action with the
+	// complete reflected JSON Schema for each action's params.
+	MetaParamSchemaFull = "full"
+	// DefaultMetaParamSchema is the default mode applied when neither the
+	// META_PARAM_SCHEMA env var nor the --meta-param-schema flag is set.
+	DefaultMetaParamSchema = MetaParamSchemaOpaque
+)
+
 // Config holds all configuration values for the MCP server.
 type Config struct {
 	GitLabURL     string
@@ -87,6 +103,11 @@ type Config struct {
 
 	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
 	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0
+
+	// MetaParamSchema controls how meta-tool input schemas advertise the
+	// shape of the `params` object. Allowed values: "opaque" (default),
+	// "compact", "full". See [DefaultMetaParamSchema] and constants.
+	MetaParamSchema string
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
@@ -206,6 +227,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
 	}
 
+	metaParamSchema, err := parseMetaParamSchema(os.Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
+	if err != nil {
+		return nil, fmt.Errorf("invalid META_PARAM_SCHEMA value: %w", err)
+	}
+
 	cfg := &Config{
 		GitLabURL:          os.Getenv("GITLAB_URL"),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
@@ -229,6 +255,7 @@ func Load() (*Config, error) {
 		IgnoreScopes:       ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
 		RateLimitBurst:     rateLimitBurst,
+		MetaParamSchema:    metaParamSchema,
 	}
 
 	if err = cfg.validate(); err != nil {
@@ -300,6 +327,26 @@ func parseBool(s string, defaultValue bool) (bool, error) {
 		return defaultValue, nil
 	}
 	return strconv.ParseBool(s)
+}
+
+// parseMetaParamSchema validates the META_PARAM_SCHEMA setting. It accepts
+// "opaque", "compact" or "full" (case-insensitive). Returns defaultValue when
+// s is empty and an error when s is non-empty and unrecognized.
+func parseMetaParamSchema(s, defaultValue string) (string, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case MetaParamSchemaOpaque:
+		return MetaParamSchemaOpaque, nil
+	case MetaParamSchemaCompact:
+		return MetaParamSchemaCompact, nil
+	case MetaParamSchemaFull:
+		return MetaParamSchemaFull, nil
+	default:
+		return "", fmt.Errorf("expected one of %q, %q, %q, got %q",
+			MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull, s)
+	}
 }
 
 // parseSize parses a human-friendly size string (e.g. "50MB", "10mb", "2GB",

@@ -43,10 +43,13 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
 // without string parsing. OutputSchema holds the JSON Schema for the
-// action's typed output (nil for void actions).
+// action's typed output (nil for void actions). InputSchema holds the
+// JSON Schema for the action's typed params (nil for routes constructed
+// via the untyped Route/DestructiveRoute constructors).
 type ActionRoute struct {
 	Handler      ActionFunc
 	Destructive  bool
+	InputSchema  map[string]any
 	OutputSchema map[string]any
 }
 
@@ -287,53 +290,67 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 }
 
 // RouteAction wraps a typed function as a non-destructive ActionRoute
-// and attaches the JSON Schema for the output type R.
+// and attaches the JSON Schema for the input type T and output type R.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  false,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
-// OutputSchema is nil because the action returns no data.
+// OutputSchema is nil because the action returns no data; InputSchema is
+// captured from T.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	return Route(WrapVoidAction(client, fn))
+	return ActionRoute{
+		Handler:     WrapVoidAction(client, fn),
+		Destructive: false,
+		InputSchema: schemaForType(reflect.TypeFor[T]()),
+	}
 }
 
 // RouteActionWithRequest wraps a typed function that needs the MCP request
-// as a non-destructive ActionRoute and attaches the output schema.
+// as a non-destructive ActionRoute and attaches input/output schemas.
 func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  false,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // DestructiveAction wraps a typed function as a destructive ActionRoute
-// and attaches the output schema.
+// and attaches input/output schemas.
 func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
 		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
-// OutputSchema is nil because the action returns no data.
+// OutputSchema is nil because the action returns no data; InputSchema is
+// captured from T.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
-	return DestructiveRoute(WrapVoidAction(client, fn))
+	return ActionRoute{
+		Handler:     WrapVoidAction(client, fn),
+		Destructive: true,
+		InputSchema: schemaForType(reflect.TypeFor[T]()),
+	}
 }
 
 // DestructiveActionWithRequest wraps a typed function that needs the MCP request
-// as a destructive ActionRoute and attaches the output schema.
+// as a destructive ActionRoute and attaches input/output schemas.
 func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
 		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -467,14 +484,77 @@ func ValidActionsString(routes ActionMap) string {
 // constrained to an enum of valid action names extracted from the routes map.
 // Setting this as Tool.InputSchema ensures the LLM sees the exact list of
 // valid actions in the schema, enabling first-try action selection.
+//
+// The strategy used (opaque, compact, full) is read from the package-level
+// mode set via [SetMetaParamSchemaMode]. Default is opaque. Callers that
+// always want the opaque envelope regardless of global configuration should
+// invoke [BuildMetaToolSchema] directly.
 func MetaToolSchema(routes ActionMap) map[string]any {
+	return BuildMetaToolSchema(routes, currentMetaParamSchemaMode())
+}
+
+// Meta-tool param schema mode constants. Mirrors the values accepted by the
+// META_PARAM_SCHEMA env var and --meta-param-schema CLI flag in package
+// config. Duplicated here to avoid an import cycle (config → toolutil → mcp).
+const (
+	MetaParamSchemaOpaque  = "opaque"
+	MetaParamSchemaCompact = "compact"
+	MetaParamSchemaFull    = "full"
+)
+
+// metaParamSchemaMode is the package-level mode consulted by MetaToolSchema.
+// It is intended to be set exactly once at startup (before any meta-tool is
+// registered) via SetMetaParamSchemaMode. Reads/writes are guarded by a
+// mutex purely to satisfy the race detector during concurrent test setups —
+// the production lifecycle is single-writer-then-many-readers.
+var (
+	metaParamSchemaMu   sync.RWMutex
+	metaParamSchemaMode = MetaParamSchemaOpaque
+)
+
+// SetMetaParamSchemaMode selects the meta-tool input schema strategy used by
+// [MetaToolSchema]. Accepts "opaque" (default), "compact", or "full". Any
+// other value is coerced to opaque so that misconfiguration cannot break the
+// tools/list payload. Must be called before [RegisterAllMeta]; later calls
+// only affect schemas built after the call returns.
+func SetMetaParamSchemaMode(mode string) {
+	metaParamSchemaMu.Lock()
+	defer metaParamSchemaMu.Unlock()
+	switch mode {
+	case MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull:
+		metaParamSchemaMode = mode
+	default:
+		metaParamSchemaMode = MetaParamSchemaOpaque
+	}
+}
+
+// currentMetaParamSchemaMode returns the active mode for MetaToolSchema.
+func currentMetaParamSchemaMode() string {
+	metaParamSchemaMu.RLock()
+	defer metaParamSchemaMu.RUnlock()
+	return metaParamSchemaMode
+}
+
+// paramsResourceHint is appended to the description of the params property
+// in every meta-tool input schema, regardless of mode. It points the LLM at
+// the per-action JSON Schema available via the gitlab://schema/meta resource.
+const paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+
+// BuildMetaToolSchema returns the input schema for a meta-tool given the
+// chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
+// that callers cannot break the tools/list payload by passing a typo.
+//
+//   - opaque:  legacy {action, params:any} envelope (default).
+//   - full:    discriminated oneOf with full per-action params schemas.
+//   - compact: discriminated oneOf with descriptions and $defs stripped.
+func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
 		actions = append(actions, name)
 	}
 	sort.Strings(actions)
 
-	return map[string]any{
+	base := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"action": map[string]any{
@@ -484,13 +564,141 @@ func MetaToolSchema(routes ActionMap) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation).",
+				"description":          "Action-specific parameters as a JSON object. Required and optional fields differ per action; consult this tool's description for the chosen action. Send only the fields documented for that action — unknown keys are rejected with a validation error (only reserved meta keys like `confirm` are stripped before validation)." + paramsResourceHint,
 				"additionalProperties": true,
 			},
 		},
 		"required":             []any{"action"},
 		"additionalProperties": false,
 	}
+
+	switch mode {
+	case MetaParamSchemaFull:
+		base["oneOf"] = buildMetaOneOf(routes, actions, false)
+	case MetaParamSchemaCompact:
+		base["oneOf"] = buildMetaOneOf(routes, actions, true)
+	default:
+		// MetaParamSchemaOpaque or unknown — return the envelope unchanged.
+	}
+	return base
+}
+
+// MetaToolDescriptionPrefix builds a fixed-format header that should be
+// prepended to a meta-tool's user-supplied description. The header gives
+// LLMs a literal JSON usage example based on the alphabetically first action
+// and points at the gitlab://schema/meta resource for per-action params
+// schemas. Returns an empty string when routes is empty so callers degrade
+// gracefully rather than emit a malformed header.
+func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
+	if len(routes) == 0 {
+		return ""
+	}
+	actions := make([]string, 0, len(routes))
+	for name := range routes {
+		actions = append(actions, name)
+	}
+	sort.Strings(actions)
+	first := actions[0]
+	return fmt.Sprintf(
+		"Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		first, toolName,
+	)
+}
+
+// buildMetaOneOf constructs the oneOf branch list for full/compact modes.
+// Each branch pins `action` to a const and replaces `params` with the captured
+// per-action InputSchema (optionally compacted).
+func buildMetaOneOf(routes ActionMap, sortedActions []string, compact bool) []any {
+	branches := make([]any, 0, len(sortedActions))
+	for _, action := range sortedActions {
+		route := routes[action]
+		params := route.InputSchema
+		if compact && params != nil {
+			params = compactParamsSchema(params)
+		}
+		if params == nil {
+			params = map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+			}
+		}
+		branches = append(branches, map[string]any{
+			"properties": map[string]any{
+				"action": map[string]any{"const": action},
+				"params": params,
+			},
+			// Require both `action` and `params`. Without `params` in the
+			// required list, the per-action params schema is only checked
+			// when callers happen to include it, which silently bypasses
+			// per-action required-field validation. Actions that need no
+			// arguments still accept `{}` as a valid params value.
+			"required": []any{"action", "params"},
+		})
+	}
+	return branches
+}
+
+// compactParamsSchema returns a reduced copy of a per-action params schema
+// containing only property names with their declared type and (when present)
+// enum values. Descriptions, required, and $defs are dropped. A top-level
+// $ref is resolved against the schema's own $defs once, then $defs is
+// discarded. Best-effort: shapes we don't recognize are replaced with an
+// open object schema rather than panicking.
+func compactParamsSchema(s map[string]any) map[string]any {
+	if s == nil {
+		return nil
+	}
+	resolved := resolveTopLevelRef(s)
+	props, _ := resolved["properties"].(map[string]any)
+	if props == nil {
+		return map[string]any{
+			"type":                 "object",
+			"additionalProperties": true,
+		}
+	}
+	compact := make(map[string]any, len(props))
+	for k, v := range props {
+		pm, ok := v.(map[string]any)
+		if !ok {
+			compact[k] = map[string]any{}
+			continue
+		}
+		entry := map[string]any{}
+		if t, has := pm["type"]; has {
+			entry["type"] = t
+		}
+		if e, has := pm["enum"]; has {
+			entry["enum"] = e
+		}
+		compact[k] = entry
+	}
+	return map[string]any{
+		"type":                 "object",
+		"properties":           compact,
+		"additionalProperties": true,
+	}
+}
+
+// resolveTopLevelRef returns the schema with a top-level "$ref" replaced by
+// the referenced $defs entry. If no top-level $ref is present, returns s.
+func resolveTopLevelRef(s map[string]any) map[string]any {
+	ref, _ := s["$ref"].(string)
+	if ref == "" {
+		return s
+	}
+	defs, _ := s["$defs"].(map[string]any)
+	if defs == nil {
+		return s
+	}
+	const prefix = "#/$defs/"
+	if !strings.HasPrefix(ref, prefix) {
+		return s
+	}
+	target, _ := defs[ref[len(prefix):]].(map[string]any)
+	if target == nil {
+		return s
+	}
+	return target
 }
 
 // MetaToolOutputSchema returns a permissive JSON Schema describing the result

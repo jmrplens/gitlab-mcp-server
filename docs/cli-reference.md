@@ -39,6 +39,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-gitlab-url` | string | _(optional)_ | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
+| `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. See [env-reference.md](env-reference.md) |
 | `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
 | `-safe-mode` | bool | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence |

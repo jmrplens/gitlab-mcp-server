@@ -118,7 +118,7 @@ jobs:
           MCP_PUBLISHER_SHA256: ""  # If empty, signature verification is skipped; populate to enforce.
         run: |
           set -euo pipefail
-          TARBALL="mcp-publisher_${MCP_PUBLISHER_VERSION#v}_linux_amd64.tar.gz"
+          TARBALL="mcp-publisher_linux_amd64.tar.gz"
           URL="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${TARBALL}"
           echo "Downloading ${URL}"
           curl -fsSL --retry 3 -o "${TARBALL}" "${URL}"

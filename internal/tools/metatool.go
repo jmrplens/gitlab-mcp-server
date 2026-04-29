@@ -86,7 +86,7 @@ func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        toolutil.TitleFromName(name),
-		Description:  desc,
+		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
 		Annotations:  toolutil.DeriveAnnotationsWithTitle(name, routes),
 		Icons:        icons,
 		InputSchema:  toolutil.MetaToolSchema(routes),
@@ -100,7 +100,7 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         name,
 		Title:        toolutil.TitleFromName(name),
-		Description:  desc,
+		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
 		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
 		Icons:        icons,
 		InputSchema:  toolutil.MetaToolSchema(routes),
@@ -109,3 +109,12 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 }
 
 var validActionsString = toolutil.ValidActionsString
+
+// SetMetaParamSchema selects the meta-tool input schema strategy used by all
+// meta-tool registrations in this package and its sub-packages. Accepts
+// "opaque" (default), "compact", or "full". Unknown values are coerced to
+// opaque so misconfiguration cannot break tools/list. Must be called before
+// [RegisterAllMeta].
+func SetMetaParamSchema(mode string) {
+	toolutil.SetMetaParamSchemaMode(mode)
+}
