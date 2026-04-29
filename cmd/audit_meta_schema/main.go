@@ -1,6 +1,5 @@
-// Command spike_meta_schema measures the size impact of expanding meta-tool
-// InputSchemas from an opaque {action, params:any} envelope to a discriminated
-// oneOf schema where each branch carries the per-action params shape.
+// Command audit_meta_schema reports the size impact of each
+// META_PARAM_SCHEMA mode on the meta-tool catalog.
 //
 // It registers all base + enterprise meta-tools on an in-memory MCP server,
 // retrieves the per-action route maps via toolutil.MetaRoutes(), and computes
@@ -12,7 +11,7 @@
 //   - compact: oneOf with per-action params reduced to property names + types
 //     (descriptions stripped, additionalProperties:true, no required).
 //
-// Usage: go run ./cmd/spike_meta_schema/
+// Usage: go run ./cmd/audit_meta_schema/
 package main
 
 import (
