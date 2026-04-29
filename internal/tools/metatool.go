@@ -1,5 +1,5 @@
-// metatool.go re-exports meta-tool dispatch utilities from toolutil
-// and provides makeMetaHandler which uses the domain-coupled markdownForResult.
+// metatool.go re-exports meta-tool dispatch utilities from toolutil and wires
+// meta-tool registration to the domain-coupled markdownForResult.
 
 package tools
 
@@ -72,11 +72,6 @@ func destructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx co
 // destructiveVoidAction wraps a typed void function as a destructive ActionRoute.
 func destructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) actionRoute {
 	return toolutil.DestructiveVoidAction(client, fn)
-}
-
-// makeMetaHandler creates a meta-tool handler using markdownForResult as the formatter.
-func makeMetaHandler(toolName string, routes actionMap) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-	return toolutil.MakeMetaHandler(toolName, routes, markdownForResult)
 }
 
 // addMetaTool registers a meta-tool with annotations derived from routes.

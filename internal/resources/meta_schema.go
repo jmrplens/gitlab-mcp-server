@@ -14,6 +14,7 @@ package resources
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"strings"
 
@@ -91,9 +92,7 @@ func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]tool
 	out := make(map[string]toolutil.ActionMap, len(routes))
 	for tool, actions := range routes {
 		actionCopy := make(toolutil.ActionMap, len(actions))
-		for action, route := range actions {
-			actionCopy[action] = route
-		}
+		maps.Copy(actionCopy, actions)
 		out[tool] = actionCopy
 	}
 	return out

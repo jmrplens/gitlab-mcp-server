@@ -1,19 +1,21 @@
-// meta_schema_resource_e2e_test.go validates that, after the full meta-tool
+//go:build e2e
+
+// meta_schema_resource_test.go validates that, after the full meta-tool
 // registry is wired into a server, the gitlab://schema/meta/* resources
 // expose the captured per-action InputSchemas for real meta-tools.
 
-package tools
+package suite
 
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -21,15 +23,14 @@ import (
 // toolutil.MetaRoutes) plus the meta-schema resources in a single MCP
 // server, then returns an in-memory client session. It pins mode=full so
 // per-action InputSchemas are captured with their real structured shape.
-func metaSchemaResourceSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
+func metaSchemaResourceSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-	SetMetaParamSchema("full")
-	t.Cleanup(func() { SetMetaParamSchema("opaque") })
+	tools.SetMetaParamSchema("full")
+	t.Cleanup(func() { tools.SetMetaParamSchema("opaque") })
 
-	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	metaRoutes := toolutil.CaptureMetaRoutes(func() {
-		RegisterAllMeta(server, client, false)
+		tools.RegisterAllMeta(server, sess.glClient, sess.enterprise)
 	})
 	resources.RegisterMetaSchemaResources(server, metaRoutes)
 
@@ -50,9 +51,7 @@ func metaSchemaResourceSession(t *testing.T, handler http.Handler) *mcp.ClientSe
 // TestMetaSchemaResource_ListsTemplate verifies the per-action template URI
 // is advertised via ListResourceTemplates.
 func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
-	session := metaSchemaResourceSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-	}))
+	session := metaSchemaResourceSession(t)
 
 	result, err := session.ListResourceTemplates(context.Background(), nil)
 	if err != nil {
@@ -74,9 +73,7 @@ func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
 // schema for gitlab_merge_request/create exposes the expected structural
 // fields callers actually need to construct an MR.
 func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
-	session := metaSchemaResourceSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-	}))
+	session := metaSchemaResourceSession(t)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/gitlab_merge_request/create",
@@ -106,9 +103,7 @@ func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
 // TestMetaSchemaResource_NotFound verifies unknown tool/action pairs return
 // ResourceNotFoundError when looked up via the live registry.
 func TestMetaSchemaResource_NotFound(t *testing.T) {
-	session := metaSchemaResourceSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-	}))
+	session := metaSchemaResourceSession(t)
 
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/gitlab_merge_request/nonexistent_action",
@@ -121,9 +116,7 @@ func TestMetaSchemaResource_NotFound(t *testing.T) {
 // TestMetaSchemaResource_IndexEnumeratesMetaTools verifies the index lists
 // at least the canonical meta-tools wired in RegisterAllMeta.
 func TestMetaSchemaResource_IndexEnumeratesMetaTools(t *testing.T) {
-	session := metaSchemaResourceSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-	}))
+	session := metaSchemaResourceSession(t)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/",
