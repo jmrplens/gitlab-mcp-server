@@ -203,6 +203,56 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 O usa un archivo `.env` en el directorio de trabajo.
 
 </TabItem>
+<TabItem label="Continue">
+
+Añade a `~/.continue/config.yaml` (o al `.continue/config.yaml` de tu workspace):
+
+```yaml
+mcpServers:
+  - name: gitlab
+    command: /ruta/a/gitlab-mcp-server
+    env:
+      GITLAB_URL: https://gitlab.example.com
+      GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
+```
+
+Recarga la ventana de Continue tras editar la configuración. Consulta la [documentación MCP de Continue](https://docs.continue.dev/customize/deep-dives/mcp) para alternativas en modo HTTP y OAuth.
+
+</TabItem>
+<TabItem label="Windsurf">
+
+Edita `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/ruta/a/gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+Reinicia Windsurf o pulsa **Refresh** en el panel de Plugins para que se apliquen los cambios.
+
+</TabItem>
+<TabItem label="JetBrains AI">
+
+Los IDEs de JetBrains (IntelliJ IDEA, GoLand, PyCharm, etc.) con el plugin **AI Assistant** soportan servidores MCP en `Settings → Tools → AI Assistant → Model Context Protocol`.
+
+Añade una entrada stdio apuntando al binario:
+
+- **Nombre**: `gitlab`
+- **Comando**: `/ruta/a/gitlab-mcp-server`
+- **Variables de entorno**: `GITLAB_URL=https://gitlab.example.com`, `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`
+
+Alternativamente, crea `.idea/mcp.json` en la raíz del proyecto con la misma estructura JSON usada por VS Code / Cursor. Reinicia el IDE tras editar.
+
+</TabItem>
 </Tabs>
 
 ## Flags del modo HTTP
