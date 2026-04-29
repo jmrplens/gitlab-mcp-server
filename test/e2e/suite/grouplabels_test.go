@@ -33,7 +33,7 @@ func TestMeta_GroupLabels(t *testing.T) {
 		},
 	})
 	requireNoError(t, grpErr, "create group for labels")
-	requireTrue(t, grp.ID > 0, "group ID should be positive")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
 	groupID := grp.ID
 	t.Logf("Created group %d (%s) for label tests", groupID, grp.FullPath)
 
@@ -58,13 +58,13 @@ func TestMeta_GroupLabels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group label create")
-		requireTrue(t, out.ID > 0, "expected positive group label ID")
+		requireTruef(t, out.ID > 0, "expected positive group label ID")
 		labelID = out.ID
 		t.Logf("Created group label %d (%s)", out.ID, out.Name)
 	})
 
 	t.Run("Meta/GroupLabel/List", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		out, err := callToolOn[grouplabels.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_list",
 			"params": map[string]any{
@@ -72,12 +72,12 @@ func TestMeta_GroupLabels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group label list")
-		requireTrue(t, len(out.Labels) >= 1, "expected at least 1 group label")
+		requireTruef(t, len(out.Labels) >= 1, "expected at least 1 group label")
 		t.Logf("Listed %d group label(s)", len(out.Labels))
 	})
 
 	t.Run("Meta/GroupLabel/Delete", func(t *testing.T) {
-		requireTrue(t, labelID > 0, "labelID not set")
+		requireTruef(t, labelID > 0, "labelID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "group_label_delete",
 			"params": map[string]any{

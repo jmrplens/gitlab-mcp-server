@@ -79,7 +79,7 @@ func oauthMCPNotifyInitialized(t *testing.T, serverURL, sessionID, bearerHeader 
 func oauthMCPCallTool(t *testing.T, serverURL, sessionID, bearerHeader, tool string, args map[string]any) map[string]any {
 	t.Helper()
 
-	argsJSON, _ := json.Marshal(args)
+	argsJSON, _ := json.Marshal(args) //nolint:errchkjson // map[string]any of test inputs cannot fail to marshal
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"%s","arguments":%s}}`, tool, string(argsJSON))
 	resp := doOAuthMCPRequest(t, serverURL, body, sessionID, bearerHeader)
 	defer resp.Body.Close()

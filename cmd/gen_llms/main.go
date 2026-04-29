@@ -181,7 +181,7 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	resourceCount := len(res) + len(resTpl) + 1 // +1 for workspace_roots
 
 	b.WriteString("# gitlab-mcp-server\n\n")
-	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 operations as tools for AI assistants.\n\n")
+	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.\n\n")
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides %d individual MCP tools across %d GitLab API domains, %d meta-tools (%d with enterprise mode),\n",
 		len(individual), countDomains(individual), len(metaBase), len(metaEnterprise))

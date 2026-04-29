@@ -35,7 +35,7 @@ func TestMeta_Admin(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "meta admin settings get")
-		requireTrue(t, len(out.Settings) > 0, "expected non-empty settings map, got %d keys", len(out.Settings))
+		requireTruef(t, len(out.Settings) > 0, "expected non-empty settings map, got %d keys", len(out.Settings))
 		t.Logf("Admin settings: %d keys", len(out.Settings))
 	})
 }

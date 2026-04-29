@@ -58,7 +58,7 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				"params": map[string]any{"group_id": groupIDStr},
 			})
 			requireNoError(t, err, "service_account_list (empty)")
-			requireTrue(t, len(out.Accounts) == 0, "expected 0 service accounts, got %d", len(out.Accounts))
+			requireTruef(t, len(out.Accounts) == 0, "expected 0 service accounts, got %d", len(out.Accounts))
 			t.Logf("Service accounts: %d (expected 0)", len(out.Accounts))
 		})
 
@@ -75,14 +75,14 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_create")
-			requireTrue(t, out.ID > 0, "service_account_create: expected ID > 0")
+			requireTruef(t, out.ID > 0, "service_account_create: expected ID > 0")
 			saID = out.ID
 			t.Logf("Created service account %d: %s", saID, out.Username)
 		})
 
 		// Update the service account.
 		t.Run("ServiceAccountUpdate", func(t *testing.T) {
-			requireTrue(t, saID > 0, "saID not set")
+			requireTruef(t, saID > 0, "saID not set")
 			out, err := callToolOn[groupserviceaccounts.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "service_account_update",
 				"params": map[string]any{
@@ -92,7 +92,7 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_update")
-			requireTrue(t, out.ID == saID, "service_account_update: ID mismatch")
+			requireTruef(t, out.ID == saID, "service_account_update: ID mismatch")
 			t.Logf("Updated service account %d", out.ID)
 		})
 
@@ -103,14 +103,14 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				"params": map[string]any{"group_id": groupIDStr},
 			})
 			requireNoError(t, err, "service_account_list (one)")
-			requireTrue(t, len(out.Accounts) >= 1, "expected at least 1 service account, got %d", len(out.Accounts))
+			requireTruef(t, len(out.Accounts) >= 1, "expected at least 1 service account, got %d", len(out.Accounts))
 			t.Logf("Service accounts: %d", len(out.Accounts))
 		})
 
 		// Create a PAT for the service account.
 		var patID int64
 		t.Run("ServiceAccountPATCreate", func(t *testing.T) {
-			requireTrue(t, saID > 0, "saID not set")
+			requireTruef(t, saID > 0, "saID not set")
 			out, err := callToolOn[groupserviceaccounts.PATOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "service_account_pat_create",
 				"params": map[string]any{
@@ -121,14 +121,14 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_pat_create")
-			requireTrue(t, out.ID > 0, "service_account_pat_create: expected ID > 0")
+			requireTruef(t, out.ID > 0, "service_account_pat_create: expected ID > 0")
 			patID = out.ID
 			t.Logf("Created PAT %d for service account %d", patID, saID)
 		})
 
 		// List PATs.
 		t.Run("ServiceAccountPATList", func(t *testing.T) {
-			requireTrue(t, saID > 0, "saID not set")
+			requireTruef(t, saID > 0, "saID not set")
 			out, err := callToolOn[groupserviceaccounts.ListPATOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "service_account_pat_list",
 				"params": map[string]any{
@@ -137,13 +137,13 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_pat_list")
-			requireTrue(t, len(out.Tokens) >= 1, "expected at least 1 PAT, got %d", len(out.Tokens))
+			requireTruef(t, len(out.Tokens) >= 1, "expected at least 1 PAT, got %d", len(out.Tokens))
 			t.Logf("PATs: %d", len(out.Tokens))
 		})
 
 		// Revoke PAT.
 		t.Run("ServiceAccountPATRevoke", func(t *testing.T) {
-			requireTrue(t, patID > 0, "patID not set")
+			requireTruef(t, patID > 0, "patID not set")
 			err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "service_account_pat_revoke",
 				"params": map[string]any{
@@ -158,7 +158,7 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 
 		// Delete the service account.
 		t.Run("ServiceAccountDelete", func(t *testing.T) {
-			requireTrue(t, saID > 0, "saID not set")
+			requireTruef(t, saID > 0, "saID not set")
 			err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 				"action": "service_account_delete",
 				"params": map[string]any{

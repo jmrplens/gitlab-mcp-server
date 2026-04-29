@@ -416,7 +416,7 @@ func runStdio(ctx context.Context) error {
 	autoupdate.CleanupOldBinary()
 
 	// Pre-start update: download, replace, and re-exec on Unix.
-	preStartAutoUpdate(cfg)
+	preStartAutoUpdate(cfg) //nolint:contextcheck // bootstrap: runs before request lifecycle, uses its own timeout (cfg.AutoUpdateTimeout)
 
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
@@ -457,7 +457,7 @@ func runStdio(ctx context.Context) error {
 	}
 
 	updater := newUpdaterForTools(cfg)
-	server := createServer(client, cfg, updater)
+	server := createServer(client, cfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
 	return serveStdio(ctx, server)
 }
 
@@ -622,7 +622,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		"commit", commit,
 	)
 
-	pool := serverpool.New(cfg, func(client *gitlabclient.Client) *mcp.Server {
+	pool := serverpool.New(cfg, func(client *gitlabclient.Client) *mcp.Server { //nolint:contextcheck // pool factory: each session gets its own ctx; introspection uses ephemeral transport
 		return createServer(client, cfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
@@ -632,7 +632,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 
 	// Build server-card JSON once at startup using an ephemeral MCP server
 	// so that /.well-known/mcp/server-card.json is served without authentication.
-	serverCardJSON, serverCardErr := buildServerCard(cfg)
+	serverCardJSON, serverCardErr := buildServerCard(cfg) //nolint:contextcheck // startup: ephemeral MCP server isolated from request ctx
 	if serverCardErr != nil {
 		slog.Warn("failed to build server-card.json, endpoint will return 503", "error", serverCardErr)
 	}
@@ -899,7 +899,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 // and load-balancer probes. It does not require authentication.
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(healthResponse{
+	_ = json.NewEncoder(w).Encode(healthResponse{ //nolint:errchkjson // healthcheck: client write errors are non-actionable
 		Status:  "ok",
 		Version: version,
 		Commit:  commit,

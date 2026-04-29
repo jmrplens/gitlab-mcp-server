@@ -68,15 +68,15 @@ func TestMeta_Epics(t *testing.T) {
 			},
 		})
 		requirePremiumFeature(t, err, "epic_create")
-		requireTrue(t, out.IID > 0, "epic IID should be > 0, got %d", out.IID)
-		requireTrue(t, out.Title == "E2E Epic Test", "epic title mismatch: %s", out.Title)
+		requireTruef(t, out.IID > 0, "epic IID should be > 0, got %d", out.IID)
+		requireTruef(t, out.Title == "E2E Epic Test", "epic title mismatch: %s", out.Title)
 		epicIID = out.IID
 		t.Logf("Created epic IID=%d (ID=%d)", out.IID, out.ID)
 	})
 
 	// ── List epics ───────────────────────────────────────────────────────
 	t.Run("EpicList", func(t *testing.T) {
-		requireTrue(t, epicIID > 0, "epicIID not set")
+		requireTruef(t, epicIID > 0, "epicIID not set")
 		out, err := callToolOn[epics.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_list",
 			"params": map[string]any{
@@ -84,13 +84,13 @@ func TestMeta_Epics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_list")
-		requireTrue(t, len(out.Epics) >= 1, "expected at least 1 epic, got %d", len(out.Epics))
+		requireTruef(t, len(out.Epics) >= 1, "expected at least 1 epic, got %d", len(out.Epics))
 		t.Logf("Listed %d epic(s)", len(out.Epics))
 	})
 
 	// ── Get epic ─────────────────────────────────────────────────────────
 	t.Run("EpicGet", func(t *testing.T) {
-		requireTrue(t, epicIID > 0, "epicIID not set")
+		requireTruef(t, epicIID > 0, "epicIID not set")
 		out, err := callToolOn[epics.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_get",
 			"params": map[string]any{
@@ -99,14 +99,14 @@ func TestMeta_Epics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_get")
-		requireTrue(t, out.IID == epicIID, "epic IID mismatch: want %d, got %d", epicIID, out.IID)
-		requireTrue(t, out.Title == "E2E Epic Test", "epic title mismatch: %s", out.Title)
+		requireTruef(t, out.IID == epicIID, "epic IID mismatch: want %d, got %d", epicIID, out.IID)
+		requireTruef(t, out.Title == "E2E Epic Test", "epic title mismatch: %s", out.Title)
 		t.Logf("Got epic IID=%d: %s", out.IID, out.Title)
 	})
 
 	// ── Update epic ──────────────────────────────────────────────────────
 	t.Run("EpicUpdate", func(t *testing.T) {
-		requireTrue(t, epicIID > 0, "epicIID not set")
+		requireTruef(t, epicIID > 0, "epicIID not set")
 		out, err := callToolOn[epics.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_update",
 			"params": map[string]any{
@@ -116,13 +116,13 @@ func TestMeta_Epics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_update")
-		requireTrue(t, out.Description == "Updated by E2E test", "epic description not updated: %s", out.Description)
+		requireTruef(t, out.Description == "Updated by E2E test", "epic description not updated: %s", out.Description)
 		t.Logf("Updated epic IID=%d", out.IID)
 	})
 
 	// ── Delete epic ──────────────────────────────────────────────────────
 	t.Run("EpicDelete", func(t *testing.T) {
-		requireTrue(t, epicIID > 0, "epicIID not set")
+		requireTruef(t, epicIID > 0, "epicIID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_delete",
 			"params": map[string]any{
@@ -193,15 +193,15 @@ func TestMeta_EpicNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_note_create")
-		requireTrue(t, out.ID > 0, "note ID should be > 0, got %d", out.ID)
-		requireTrue(t, out.Body == "E2E test note body", "note body mismatch: %s", out.Body)
+		requireTruef(t, out.ID > 0, "note ID should be > 0, got %d", out.ID)
+		requireTruef(t, out.Body == "E2E test note body", "note body mismatch: %s", out.Body)
 		noteID = out.ID
 		t.Logf("Created note ID=%d", noteID)
 	})
 
 	// ── List notes ───────────────────────────────────────────────────────
 	t.Run("NoteList", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[epicnotes.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_note_list",
 			"params": map[string]any{
@@ -210,13 +210,13 @@ func TestMeta_EpicNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_note_list")
-		requireTrue(t, len(out.Notes) >= 1, "expected at least 1 note, got %d", len(out.Notes))
+		requireTruef(t, len(out.Notes) >= 1, "expected at least 1 note, got %d", len(out.Notes))
 		t.Logf("Listed %d note(s)", len(out.Notes))
 	})
 
 	// ── Get note ─────────────────────────────────────────────────────────
 	t.Run("NoteGet", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[epicnotes.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_note_get",
 			"params": map[string]any{
@@ -226,13 +226,13 @@ func TestMeta_EpicNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_note_get")
-		requireTrue(t, out.ID == noteID, "note ID mismatch: want %d, got %d", noteID, out.ID)
+		requireTruef(t, out.ID == noteID, "note ID mismatch: want %d, got %d", noteID, out.ID)
 		t.Logf("Got note ID=%d: %s", out.ID, out.Body)
 	})
 
 	// ── Update note ──────────────────────────────────────────────────────
 	t.Run("NoteUpdate", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[epicnotes.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_note_update",
 			"params": map[string]any{
@@ -243,13 +243,13 @@ func TestMeta_EpicNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_note_update")
-		requireTrue(t, out.Body == "Updated E2E note body", "note body not updated: %s", out.Body)
+		requireTruef(t, out.Body == "Updated E2E note body", "note body not updated: %s", out.Body)
 		t.Logf("Updated note ID=%d", out.ID)
 	})
 
 	// ── Delete note ──────────────────────────────────────────────────────
 	t.Run("NoteDelete", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_note_delete",
 			"params": map[string]any{
@@ -322,8 +322,8 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_create")
-		requireTrue(t, out.ID != "", "discussion ID should not be empty")
-		requireTrue(t, len(out.Notes) >= 1, "discussion should have at least 1 note")
+		requireTruef(t, out.ID != "", "discussion ID should not be empty")
+		requireTruef(t, len(out.Notes) >= 1, "discussion should have at least 1 note")
 		discussionID = out.ID
 		firstNoteID = out.Notes[0].ID
 		t.Logf("Created discussion ID=%s with note ID=%d", discussionID, firstNoteID)
@@ -331,7 +331,7 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 
 	// ── List discussions ─────────────────────────────────────────────────
 	t.Run("DiscussionList", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[epicdiscussions.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_discussion_list",
 			"params": map[string]any{
@@ -340,13 +340,13 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_list")
-		requireTrue(t, len(out.Discussions) >= 1, "expected at least 1 discussion, got %d", len(out.Discussions))
+		requireTruef(t, len(out.Discussions) >= 1, "expected at least 1 discussion, got %d", len(out.Discussions))
 		t.Logf("Listed %d discussion(s)", len(out.Discussions))
 	})
 
 	// ── Get discussion ───────────────────────────────────────────────────
 	t.Run("DiscussionGet", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[epicdiscussions.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_discussion_get",
 			"params": map[string]any{
@@ -356,14 +356,14 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_get")
-		requireTrue(t, out.ID == discussionID, "discussion ID mismatch: want %s, got %s", discussionID, out.ID)
+		requireTruef(t, out.ID == discussionID, "discussion ID mismatch: want %s, got %s", discussionID, out.ID)
 		t.Logf("Got discussion ID=%s with %d note(s)", out.ID, len(out.Notes))
 	})
 
 	// ── Add note to discussion ───────────────────────────────────────────
 	var replyNoteID int64
 	t.Run("DiscussionAddNote", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[epicdiscussions.NoteOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_discussion_add_note",
 			"params": map[string]any{
@@ -374,15 +374,15 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_add_note")
-		requireTrue(t, out.ID > 0, "reply note ID should be > 0")
-		requireTrue(t, out.Body == "E2E reply note", "reply body mismatch: %s", out.Body)
+		requireTruef(t, out.ID > 0, "reply note ID should be > 0")
+		requireTruef(t, out.Body == "E2E reply note", "reply body mismatch: %s", out.Body)
 		replyNoteID = out.ID
 		t.Logf("Added reply note ID=%d to discussion %s", replyNoteID, discussionID)
 	})
 
 	// ── Update note in discussion ────────────────────────────────────────
 	t.Run("DiscussionUpdateNote", func(t *testing.T) {
-		requireTrue(t, replyNoteID > 0, "replyNoteID not set")
+		requireTruef(t, replyNoteID > 0, "replyNoteID not set")
 		out, err := callToolOn[epicdiscussions.NoteOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_discussion_update_note",
 			"params": map[string]any{
@@ -393,13 +393,13 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_update_note")
-		requireTrue(t, out.Body == "Updated E2E reply", "note body not updated: %s", out.Body)
+		requireTruef(t, out.Body == "Updated E2E reply", "note body not updated: %s", out.Body)
 		t.Logf("Updated note ID=%d", out.ID)
 	})
 
 	// ── Delete note from discussion ──────────────────────────────────────
 	t.Run("DiscussionDeleteNote", func(t *testing.T) {
-		requireTrue(t, replyNoteID > 0, "replyNoteID not set")
+		requireTruef(t, replyNoteID > 0, "replyNoteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "epic_discussion_delete_note",
 			"params": map[string]any{
@@ -513,8 +513,8 @@ func TestMeta_EpicIssues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_issue_assign")
-		requireTrue(t, out.EpicGID != "", "EpicGID should not be empty")
-		requireTrue(t, out.ChildGID != "", "ChildGID should not be empty")
+		requireTruef(t, out.EpicGID != "", "EpicGID should not be empty")
+		requireTruef(t, out.ChildGID != "", "ChildGID should not be empty")
 		t.Logf("Assigned issue to epic: EpicGID=%s ChildGID=%s", out.EpicGID, out.ChildGID)
 	})
 
@@ -528,7 +528,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_issue_list")
-		requireTrue(t, len(out.Issues) >= 1, "expected at least 1 child issue, got %d", len(out.Issues))
+		requireTruef(t, len(out.Issues) >= 1, "expected at least 1 child issue, got %d", len(out.Issues))
 		found := false
 		for _, iss := range out.Issues {
 			if iss.IID == issueIID {
@@ -536,7 +536,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "assigned issue IID=%d not found in epic children", issueIID)
+		requireTruef(t, found, "assigned issue IID=%d not found in epic children", issueIID)
 		t.Logf("Listed %d child issue(s)", len(out.Issues))
 	})
 
@@ -552,7 +552,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_issue_remove")
-		requireTrue(t, out.EpicGID != "", "EpicGID should not be empty after remove")
+		requireTruef(t, out.EpicGID != "", "EpicGID should not be empty after remove")
 		t.Logf("Removed issue from epic: EpicGID=%s", out.EpicGID)
 	})
 
@@ -566,7 +566,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_issue_list (empty)")
-		requireTrue(t, len(out.Issues) == 0, "expected 0 child issues after remove, got %d", len(out.Issues))
+		requireTruef(t, len(out.Issues) == 0, "expected 0 child issues after remove, got %d", len(out.Issues))
 		t.Log("Confirmed epic has no child issues after remove")
 	})
 
@@ -616,7 +616,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 		},
 	})
 	requireNoError(t, setupErr, "list issues for reorder")
-	requireTrue(t, len(listOut.Issues) >= 2, "expected at least 2 issues for reorder, got %d", len(listOut.Issues))
+	requireTruef(t, len(listOut.Issues) >= 2, "expected at least 2 issues for reorder, got %d", len(listOut.Issues))
 
 	// Find the GIDs.
 	var childGID, adjacentGID string
@@ -628,8 +628,8 @@ func TestMeta_EpicIssues(t *testing.T) {
 			adjacentGID = iss.ID
 		}
 	}
-	requireTrue(t, childGID != "", "could not find GID for issue IID=%d", issueIID)
-	requireTrue(t, adjacentGID != "", "could not find GID for issue IID=%d", issue2IID)
+	requireTruef(t, childGID != "", "could not find GID for issue IID=%d", issueIID)
+	requireTruef(t, adjacentGID != "", "could not find GID for issue IID=%d", issue2IID)
 
 	t.Run("EpicIssueUpdate_Reorder", func(t *testing.T) {
 		out, err := callToolOn[epicissues.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
@@ -643,7 +643,7 @@ func TestMeta_EpicIssues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_issue_update")
-		requireTrue(t, len(out.Issues) >= 2, "expected at least 2 issues after reorder, got %d", len(out.Issues))
+		requireTruef(t, len(out.Issues) >= 2, "expected at least 2 issues after reorder, got %d", len(out.Issues))
 		t.Logf("Reordered issues: %d items", len(out.Issues))
 	})
 }

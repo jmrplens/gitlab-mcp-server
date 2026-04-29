@@ -36,7 +36,7 @@ func TestIndividual_MRNotes(t *testing.T) {
 			Body:      "E2E note on MR",
 		})
 		requireNoError(t, err, "create MR note")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		noteID = out.ID
 		t.Logf("Created MR note %d", noteID)
 	})
@@ -47,7 +47,7 @@ func TestIndividual_MRNotes(t *testing.T) {
 			MRIID:     mr.IID,
 		})
 		requireNoError(t, err, "list MR notes")
-		requireTrue(t, len(out.Notes) >= 1, "expected >=1 note, got %d", len(out.Notes))
+		requireTruef(t, len(out.Notes) >= 1, "expected >=1 note, got %d", len(out.Notes))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestIndividual_MRNotes(t *testing.T) {
 			NoteID:    noteID,
 		})
 		requireNoError(t, err, "get MR note")
-		requireTrue(t, out.Body == "E2E note on MR", "expected body %q, got %q", "E2E note on MR", out.Body)
+		requireTruef(t, out.Body == "E2E note on MR", "expected body %q, got %q", "E2E note on MR", out.Body)
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestIndividual_MRNotes(t *testing.T) {
 			Body:      "E2E note updated",
 		})
 		requireNoError(t, err, "update MR note")
-		requireTrue(t, out.Body == "E2E note updated", "expected updated body, got %q", out.Body)
+		requireTruef(t, out.Body == "E2E note updated", "expected updated body, got %q", out.Body)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestMeta_MRNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create MR note meta")
-		requireTrue(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "expected note ID > 0, got %d", out.ID)
 		noteID = out.ID
 		t.Logf("Created MR note (meta) %d", noteID)
 	})
@@ -120,7 +120,7 @@ func TestMeta_MRNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list MR notes meta")
-		requireTrue(t, len(out.Notes) >= 1, "expected >=1 note, got %d", len(out.Notes))
+		requireTruef(t, len(out.Notes) >= 1, "expected >=1 note, got %d", len(out.Notes))
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestMeta_MRNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get MR note meta")
-		requireTrue(t, out.Body == "E2E note meta", "expected body %q, got %q", "E2E note meta", out.Body)
+		requireTruef(t, out.Body == "E2E note meta", "expected body %q, got %q", "E2E note meta", out.Body)
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -147,7 +147,7 @@ func TestMeta_MRNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "update MR note meta")
-		requireTrue(t, out.Body == "E2E note meta updated", "expected updated body, got %q", out.Body)
+		requireTruef(t, out.Body == "E2E note meta updated", "expected updated body, got %q", out.Body)
 	})
 
 	t.Run("Delete", func(t *testing.T) {

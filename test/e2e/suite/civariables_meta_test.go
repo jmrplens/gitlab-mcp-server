@@ -62,7 +62,7 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_create")
-		requireTrue(t, out.Key == varKey, "group_create: key mismatch")
+		requireTruef(t, out.Key == varKey, "group_create: key mismatch")
 		t.Logf("Created group variable %s", out.Key)
 	})
 	defer func() {
@@ -78,7 +78,7 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 			"params": map[string]any{"group_id": groupIDStr, "key": varKey},
 		})
 		requireNoError(t, err, "group_get")
-		requireTrue(t, out.Key == varKey, "group_get: key mismatch")
+		requireTruef(t, out.Key == varKey, "group_get: key mismatch")
 	})
 
 	t.Run("GroupUpdate", func(t *testing.T) {
@@ -91,6 +91,6 @@ func TestMeta_CIVariablesGroup(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_update")
-		requireTrue(t, out.Key == varKey, "group_update: key mismatch")
+		requireTruef(t, out.Key == varKey, "group_update: key mismatch")
 	})
 }

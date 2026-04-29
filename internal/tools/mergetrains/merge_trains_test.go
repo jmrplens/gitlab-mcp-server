@@ -31,6 +31,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 			name:  "returns trains with all fields populated",
 			input: ListProjectInput{ProjectID: "42"},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -38,6 +39,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 1 {
 					t.Fatalf("got %d trains, want 1", len(out.Trains))
 				}
@@ -92,12 +94,14 @@ func TestListProjectMergeTrains(t *testing.T) {
 			name:  "passes scope and sort query parameters",
 			input: ListProjectInput{ProjectID: "42", Scope: "active", Sort: "asc"},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertQueryParam(t, r, "scope", "active")
 				testutil.AssertQueryParam(t, r, "sort", "asc")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 0 {
 					t.Errorf("got %d trains, want 0", len(out.Trains))
 				}
@@ -119,6 +123,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 0 {
 					t.Errorf("got %d trains, want 0", len(out.Trains))
 				}
@@ -160,6 +165,7 @@ func TestListMergeRequestInMergeTrain(t *testing.T) {
 			name:  "returns trains for branch",
 			input: ListBranchInput{ProjectID: "42", TargetBranch: "main"},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/main")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -167,6 +173,7 @@ func TestListMergeRequestInMergeTrain(t *testing.T) {
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 1 {
 					t.Fatalf("got %d trains, want 1", len(out.Trains))
 				}
@@ -192,12 +199,14 @@ func TestListMergeRequestInMergeTrain(t *testing.T) {
 			name:  "passes scope and sort query parameters",
 			input: ListBranchInput{ProjectID: "42", TargetBranch: "develop", Scope: "complete", Sort: "desc"},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertQueryParam(t, r, "scope", "complete")
 				testutil.AssertQueryParam(t, r, "sort", "desc")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 0 {
 					t.Errorf("got %d trains, want 0", len(out.Trains))
 				}
@@ -246,11 +255,13 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 			name:  "returns merge train entry",
 			input: GetInput{ProjectID: "42", MergeRequestID: 5},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/merge_requests/5")
 				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged"},"target_branch":"main","status":"merged","duration":60}`)
 			},
 			validate: func(t *testing.T, out Output) {
+				t.Helper()
 				if out.TargetBranch != "main" {
 					t.Errorf("got target_branch %q, want %q", out.TargetBranch, "main")
 				}
@@ -324,6 +335,7 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 			name:  "adds MR to merge train",
 			input: AddInput{ProjectID: "42", MergeRequestID: 5},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/merge_requests/5")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -331,6 +343,7 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 1 {
 					t.Fatalf("got %d trains, want 1", len(out.Trains))
 				}
@@ -343,6 +356,7 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 			name:  "sends optional fields in request body",
 			input: AddInput{ProjectID: "42", MergeRequestID: 5, AutoMerge: true, SHA: "abc123", Squash: true},
 			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				body, err := io.ReadAll(r.Body)
 				if err != nil {
@@ -366,6 +380,7 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
 				if len(out.Trains) != 1 {
 					t.Fatalf("got %d trains, want 1", len(out.Trains))
 				}

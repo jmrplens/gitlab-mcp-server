@@ -33,7 +33,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 		},
 	})
 	requireNoError(t, grpErr, "create group for variables")
-	requireTrue(t, grp.ID > 0, "group ID should be positive")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
 	groupID := grp.ID
 	t.Logf("Created group %d (%s) for variable tests", groupID, grp.FullPath)
 
@@ -58,7 +58,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group variable create")
-		requireTrue(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
 		t.Logf("Created group variable: %s", out.Key)
 	})
 
@@ -70,7 +70,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group variable list")
-		requireTrue(t, len(out.Variables) >= 1, "expected at least 1 group variable")
+		requireTruef(t, len(out.Variables) >= 1, "expected at least 1 group variable")
 		t.Logf("Listed %d group variable(s)", len(out.Variables))
 	})
 
@@ -83,7 +83,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group variable get")
-		requireTrue(t, out.Key == varKey, "group variable key mismatch")
+		requireTruef(t, out.Key == varKey, "group variable key mismatch")
 		t.Logf("Got group variable: %s=%s", out.Key, out.Value)
 	})
 
@@ -97,7 +97,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group variable update")
-		requireTrue(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
 		t.Logf("Updated group variable: %s", out.Key)
 	})
 

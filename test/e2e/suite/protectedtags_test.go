@@ -39,7 +39,7 @@ func TestMeta_ProtectedTags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protect tag")
-		requireTrue(t, out.Name == tagName, "expected tag name %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Name == tagName, "expected tag name %q, got %q", tagName, out.Name)
 		t.Logf("Protected tag %q", out.Name)
 	})
 
@@ -51,7 +51,7 @@ func TestMeta_ProtectedTags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list protected tags")
-		requireTrue(t, len(out.Tags) >= 1, "expected at least 1 protected tag")
+		requireTruef(t, len(out.Tags) >= 1, "expected at least 1 protected tag")
 		t.Logf("Listed %d protected tag(s)", len(out.Tags))
 	})
 
@@ -64,7 +64,7 @@ func TestMeta_ProtectedTags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get protected tag")
-		requireTrue(t, out.Name == tagName, "expected tag name %q, got %q", tagName, out.Name)
+		requireTruef(t, out.Name == tagName, "expected tag name %q, got %q", tagName, out.Name)
 		t.Logf("Got protected tag %q", out.Name)
 	})
 

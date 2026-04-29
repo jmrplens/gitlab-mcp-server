@@ -61,6 +61,33 @@ linters:
     # --- Performance ---
     - perfsprint # fmt.Sprintf → strconv when possible
 
+    # --- Bug Detection (drop-in safe, no findings on current codebase) ---
+    - bidichk # Dangerous bidi unicode (CVE-2021-42574 trojan source protection)
+    - copyloopvar # Loop variable copies (Go 1.22+, copies not needed)
+    - exptostd # Replace golang.org/x/exp with std equivalents
+    - iotamixing # Mixed iota in const blocks
+    - loggercheck # slog/log key-value pair validation
+    - makezero # Slice append after non-zero-length make
+    - mirror # bytes/strings mirror patterns (avoid unnecessary conversions)
+    - nakedret # Naked returns in long functions
+    - nosprintfhostport # Sprintf misuse for host:port URLs (RFC 3986 compliance)
+    - testableexamples # Examples have expected output (Output: comments)
+
+    # --- Style ---
+    - goprintffuncname # Printf-like funcs end in 'f'
+    - tparallel # t.Parallel() correctness (excluded for test/e2e/, sequential by design)
+    - thelper # Test helpers must call t.Helper()
+
+    # --- Bug Detection (require care; documented nolints in source) ---
+    - contextcheck # Context propagation (nolints documented for startup paths)
+    - errchkjson # json.Marshal/Encode error handling
+    # --- Linters intentionally NOT enabled (false positives) ---
+    # - dupword: false positives on godoc auto-generated comments split from CamelCase
+    #   identifiers (IID → "i i d", SSH → "s s h", HTTPS → "h t t p s"). Auto-fix
+    #   removes letters that are part of the identifier.
+    # - gocheckcompilerdirectives: false positive on //go:fix inline (valid Go 1.24+
+    #   directive used by gopls/go fix tooling, not yet recognized by the linter).
+
   settings:
     govet:
       enable-all: true
@@ -193,6 +220,16 @@ linters:
         linters:
           - errcheck
           - gosec
+
+      # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
+      # Disable t.Parallel() requirement and context propagation strictness for the
+      # e2e suite — fixtures use fresh contexts in t.Cleanup, polling helpers carry
+      # their own deadlines, and mock auth probes intentionally decouple ctx.
+      - path: "test/e2e/"
+        linters:
+          - tparallel
+          - thelper
+          - contextcheck
 
 output:
   formats:

@@ -602,9 +602,9 @@ func requireNoError(t *testing.T, err error, action string) {
 	}
 }
 
-// requireTrue calls t.Fatalf with the given format string if condition
+// requireTruef calls t.Fatalf with the given format string if condition
 // is false.
-func requireTrue(t *testing.T, condition bool, format string, args ...any) {
+func requireTruef(t *testing.T, condition bool, format string, args ...any) {
 	t.Helper()
 	if !condition {
 		t.Fatalf(format, args...)

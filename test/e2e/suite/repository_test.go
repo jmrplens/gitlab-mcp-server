@@ -41,7 +41,7 @@ func TestIndividual_Repository(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "list repository tree")
-		requireTrue(t, len(out.Tree) >= 1, "expected at least 1 tree node, got %d", len(out.Tree))
+		requireTruef(t, len(out.Tree) >= 1, "expected at least 1 tree node, got %d", len(out.Tree))
 
 		found := false
 		for _, n := range out.Tree {
@@ -50,7 +50,7 @@ func TestIndividual_Repository(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "main.go not found in repository tree")
+		requireTruef(t, found, "main.go not found in repository tree")
 		t.Logf("Repository tree has %d entries", len(out.Tree))
 	})
 
@@ -61,8 +61,8 @@ func TestIndividual_Repository(t *testing.T) {
 			To:        branchName,
 		})
 		requireNoError(t, err, "compare repository")
-		requireTrue(t, len(out.Commits) >= 1, "expected at least 1 commit, got %d", len(out.Commits))
-		requireTrue(t, len(out.Diffs) >= 1, "expected at least 1 diff, got %d", len(out.Diffs))
+		requireTruef(t, len(out.Commits) >= 1, "expected at least 1 commit, got %d", len(out.Commits))
+		requireTruef(t, len(out.Diffs) >= 1, "expected at least 1 diff, got %d", len(out.Diffs))
 		t.Logf("Compare %s..%s: %d commits, %d file diffs", defaultBranch, branchName, len(out.Commits), len(out.Diffs))
 	})
 }
@@ -96,7 +96,7 @@ func TestMeta_Repository(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta repository tree")
-		requireTrue(t, len(out.Tree) >= 1, "expected at least 1 tree node")
+		requireTruef(t, len(out.Tree) >= 1, "expected at least 1 tree node")
 
 		found := false
 		for _, n := range out.Tree {
@@ -105,7 +105,7 @@ func TestMeta_Repository(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "main.go not found in tree via meta-tool")
+		requireTruef(t, found, "main.go not found in tree via meta-tool")
 		t.Logf("Repository tree has %d entries via meta-tool", len(out.Tree))
 	})
 
@@ -119,8 +119,8 @@ func TestMeta_Repository(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta repository compare")
-		requireTrue(t, len(out.Commits) >= 1, "expected at least 1 commit")
-		requireTrue(t, len(out.Diffs) >= 1, "expected at least 1 diff")
+		requireTruef(t, len(out.Commits) >= 1, "expected at least 1 commit")
+		requireTruef(t, len(out.Diffs) >= 1, "expected at least 1 diff")
 		t.Logf("Compare %s..%s via meta: %d commits, %d diffs", defaultBranch, branchName, len(out.Commits), len(out.Diffs))
 	})
 }

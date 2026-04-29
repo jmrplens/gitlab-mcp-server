@@ -34,19 +34,19 @@ func TestIndividual_Wikis(t *testing.T) {
 			Content:   "This is an E2E wiki page.",
 		})
 		requireNoError(t, err, "wiki create")
-		requireTrue(t, out.Slug != "", "wiki slug should not be empty")
+		requireTruef(t, out.Slug != "", "wiki slug should not be empty")
 		wikiSlug = out.Slug
 		t.Logf("Created wiki page: %s (slug=%s)", out.Title, out.Slug)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		out, err := callToolOn[wikis.Output](ctx, sess.individual, "gitlab_wiki_get", wikis.GetInput{
 			ProjectID: proj.pidOf(),
 			Slug:      wikiSlug,
 		})
 		requireNoError(t, err, "wiki get")
-		requireTrue(t, out.Slug == wikiSlug, "expected slug %q, got %q", wikiSlug, out.Slug)
+		requireTruef(t, out.Slug == wikiSlug, "expected slug %q, got %q", wikiSlug, out.Slug)
 		t.Logf("Got wiki page: %s", out.Title)
 	})
 
@@ -55,12 +55,12 @@ func TestIndividual_Wikis(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "wiki list")
-		requireTrue(t, len(out.WikiPages) >= 1, "expected at least 1 wiki page, got %d", len(out.WikiPages))
+		requireTruef(t, len(out.WikiPages) >= 1, "expected at least 1 wiki page, got %d", len(out.WikiPages))
 		t.Logf("Listed %d wiki pages", len(out.WikiPages))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		out, err := callToolOn[wikis.Output](ctx, sess.individual, "gitlab_wiki_update", wikis.UpdateInput{
 			ProjectID: proj.pidOf(),
 			Slug:      wikiSlug,
@@ -71,7 +71,7 @@ func TestIndividual_Wikis(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_wiki_delete", wikis.DeleteInput{
 			ProjectID: proj.pidOf(),
 			Slug:      wikiSlug,
@@ -105,13 +105,13 @@ func TestMeta_Wikis(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta wiki create")
-		requireTrue(t, out.Slug != "", "expected non-empty wiki slug")
+		requireTruef(t, out.Slug != "", "expected non-empty wiki slug")
 		wikiSlug = out.Slug
 		t.Logf("Created wiki page: %s", out.Slug)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		out, err := callToolOn[wikis.Output](ctx, sess.meta, "gitlab_wiki", map[string]any{
 			"action": "get",
 			"params": map[string]any{
@@ -120,7 +120,7 @@ func TestMeta_Wikis(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta wiki get")
-		requireTrue(t, out.Slug == wikiSlug, "expected slug %q, got %q", wikiSlug, out.Slug)
+		requireTruef(t, out.Slug == wikiSlug, "expected slug %q, got %q", wikiSlug, out.Slug)
 		t.Logf("Got wiki page: %s", out.Title)
 	})
 
@@ -132,12 +132,12 @@ func TestMeta_Wikis(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta wiki list")
-		requireTrue(t, len(out.WikiPages) > 0, "expected at least one wiki page")
+		requireTruef(t, len(out.WikiPages) > 0, "expected at least one wiki page")
 		t.Logf("Listed %d wiki pages", len(out.WikiPages))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		out, err := callToolOn[wikis.Output](ctx, sess.meta, "gitlab_wiki", map[string]any{
 			"action": "update",
 			"params": map[string]any{
@@ -147,12 +147,12 @@ func TestMeta_Wikis(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta wiki update")
-		requireTrue(t, out.Slug == wikiSlug, "slug mismatch after update")
+		requireTruef(t, out.Slug == wikiSlug, "slug mismatch after update")
 		t.Logf("Updated wiki page: %s", out.Slug)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, wikiSlug != "", "wikiSlug not set")
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_wiki", map[string]any{
 			"action": "delete",
 			"params": map[string]any{

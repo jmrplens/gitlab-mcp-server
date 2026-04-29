@@ -39,9 +39,9 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 			Body:      "E2E discussion body",
 		})
 		requireNoError(t, err, "create issue discussion")
-		requireTrue(t, out.ID != "", "expected discussion ID")
+		requireTruef(t, out.ID != "", "expected discussion ID")
 		discussionID = out.ID
-		requireTrue(t, len(out.Notes) > 0, "expected at least one note")
+		requireTruef(t, len(out.Notes) > 0, "expected at least one note")
 		noteID = out.Notes[0].ID
 		t.Logf("Created discussion %s (note %d)", discussionID, noteID)
 	})
@@ -52,22 +52,22 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 			IssueIID:  issue.IID,
 		})
 		requireNoError(t, err, "list issue discussions")
-		requireTrue(t, len(out.Discussions) >= 1, "expected at least 1 discussion")
+		requireTruef(t, len(out.Discussions) >= 1, "expected at least 1 discussion")
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.Output](ctx, sess.individual, "gitlab_get_issue_discussion", issuediscussions.GetInput{
 			ProjectID:    proj.pidOf(),
 			IssueIID:     issue.IID,
 			DiscussionID: discussionID,
 		})
 		requireNoError(t, err, "get issue discussion")
-		requireTrue(t, out.ID == discussionID, "expected discussion %s", discussionID)
+		requireTruef(t, out.ID == discussionID, "expected discussion %s", discussionID)
 	})
 
 	t.Run("AddNote", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.individual, "gitlab_add_issue_discussion_note", issuediscussions.AddNoteInput{
 			ProjectID:    proj.pidOf(),
 			IssueIID:     issue.IID,
@@ -75,12 +75,12 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 			Body:         "E2E reply note",
 		})
 		requireNoError(t, err, "add discussion note")
-		requireTrue(t, out.ID > 0, "expected note ID")
+		requireTruef(t, out.ID > 0, "expected note ID")
 		t.Logf("Added note %d", out.ID)
 	})
 
 	t.Run("UpdateNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.individual, "gitlab_update_issue_discussion_note", issuediscussions.UpdateNoteInput{
 			ProjectID:    proj.pidOf(),
 			IssueIID:     issue.IID,
@@ -89,11 +89,11 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 			Body:         "E2E updated note body",
 		})
 		requireNoError(t, err, "update discussion note")
-		requireTrue(t, out.Body == "E2E updated note body", "expected updated body")
+		requireTruef(t, out.Body == "E2E updated note body", "expected updated body")
 	})
 
 	t.Run("DeleteNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_issue_discussion_note", issuediscussions.DeleteNoteInput{
 			ProjectID:    proj.pidOf(),
 			IssueIID:     issue.IID,
@@ -133,9 +133,9 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create discussion")
-		requireTrue(t, out.ID != "", "expected discussion ID")
+		requireTruef(t, out.ID != "", "expected discussion ID")
 		discussionID = out.ID
-		requireTrue(t, len(out.Notes) > 0, "expected at least one note")
+		requireTruef(t, len(out.Notes) > 0, "expected at least one note")
 		noteID = out.Notes[0].ID
 		t.Logf("Created discussion %s via meta-tool", discussionID)
 	})
@@ -149,11 +149,11 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta list discussions")
-		requireTrue(t, len(out.Discussions) >= 1, "expected at least 1 discussion")
+		requireTruef(t, len(out.Discussions) >= 1, "expected at least 1 discussion")
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "discussion_get",
 			"params": map[string]any{
@@ -163,11 +163,11 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta get discussion")
-		requireTrue(t, out.ID == discussionID, "expected discussion %s", discussionID)
+		requireTruef(t, out.ID == discussionID, "expected discussion %s", discussionID)
 	})
 
 	t.Run("AddNote", func(t *testing.T) {
-		requireTrue(t, discussionID != "", "discussionID not set")
+		requireTruef(t, discussionID != "", "discussionID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "discussion_add_note",
 			"params": map[string]any{
@@ -178,11 +178,11 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta add note")
-		requireTrue(t, out.ID > 0, "expected note ID")
+		requireTruef(t, out.ID > 0, "expected note ID")
 	})
 
 	t.Run("UpdateNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		out, err := callToolOn[issuediscussions.NoteOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "discussion_update_note",
 			"params": map[string]any{
@@ -194,11 +194,11 @@ func TestMeta_IssueDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta update note")
-		requireTrue(t, out.Body == "E2E meta updated note", "expected updated body")
+		requireTruef(t, out.Body == "E2E meta updated note", "expected updated body")
 	})
 
 	t.Run("DeleteNote", func(t *testing.T) {
-		requireTrue(t, noteID > 0, "noteID not set")
+		requireTruef(t, noteID > 0, "noteID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "discussion_delete_note",
 			"params": map[string]any{

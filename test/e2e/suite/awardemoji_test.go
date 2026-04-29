@@ -36,7 +36,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 			Name:      "thumbsup",
 		})
 		requireNoError(t, err, "create award emoji")
-		requireTrue(t, out.ID > 0, "expected award ID")
+		requireTruef(t, out.ID > 0, "expected award ID")
 		awardID = out.ID
 		t.Logf("Created emoji %d (%s)", awardID, out.Name)
 	})
@@ -47,22 +47,22 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 			IID:       issue.IID,
 		})
 		requireNoError(t, err, "list award emoji")
-		requireTrue(t, len(out.AwardEmoji) >= 1, "expected at least 1 emoji")
+		requireTruef(t, len(out.AwardEmoji) >= 1, "expected at least 1 emoji")
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, awardID > 0, "awardID not set")
+		requireTruef(t, awardID > 0, "awardID not set")
 		out, err := callToolOn[awardemoji.Output](ctx, sess.individual, "gitlab_issue_emoji_get", awardemoji.IssueGetInput{
 			ProjectID: proj.pidOf(),
 			IID:       issue.IID,
 			AwardID:   awardID,
 		})
 		requireNoError(t, err, "get award emoji")
-		requireTrue(t, out.ID == awardID, "expected ID %d", awardID)
+		requireTruef(t, out.ID == awardID, "expected ID %d", awardID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, awardID > 0, "awardID not set")
+		requireTruef(t, awardID > 0, "awardID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_issue_emoji_delete", awardemoji.IssueDeleteInput{
 			ProjectID: proj.pidOf(),
 			IID:       issue.IID,
@@ -98,7 +98,7 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create emoji")
-		requireTrue(t, out.ID > 0, "expected award ID")
+		requireTruef(t, out.ID > 0, "expected award ID")
 		awardID = out.ID
 		t.Logf("Created emoji %d via meta-tool", awardID)
 	})
@@ -112,11 +112,11 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta list emoji")
-		requireTrue(t, len(out.AwardEmoji) >= 1, "expected at least 1 emoji")
+		requireTruef(t, len(out.AwardEmoji) >= 1, "expected at least 1 emoji")
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, awardID > 0, "awardID not set")
+		requireTruef(t, awardID > 0, "awardID not set")
 		out, err := callToolOn[awardemoji.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "emoji_issue_get",
 			"params": map[string]any{
@@ -126,11 +126,11 @@ func TestMeta_AwardEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta get emoji")
-		requireTrue(t, out.ID == awardID, "expected ID %d", awardID)
+		requireTruef(t, out.ID == awardID, "expected ID %d", awardID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, awardID > 0, "awardID not set")
+		requireTruef(t, awardID > 0, "awardID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "emoji_issue_delete",
 			"params": map[string]any{

@@ -46,8 +46,8 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "create non-admin user")
-	requireTrue(t, userOut.ID > 0, "non-admin user ID > 0")
-	requireTrue(t, !userOut.IsAdmin, "user should not be admin")
+	requireTruef(t, userOut.ID > 0, "non-admin user ID > 0")
+	requireTruef(t, !userOut.IsAdmin, "user should not be admin")
 	t.Logf("Created non-admin user %s (ID: %d)", uname, userOut.ID)
 
 	defer func() {
@@ -73,7 +73,7 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "create PAT for non-admin user")
-	requireTrue(t, patOut.Token != "", "PAT token should not be empty")
+	requireTruef(t, patOut.Token != "", "PAT token should not be empty")
 	t.Logf("Created read_api PAT for user %s", uname)
 
 	// ── Build a GitLab client with the limited-scope token ───────────────
@@ -190,7 +190,7 @@ func TestScopeFilter_AdminToken(t *testing.T) {
 		"action": "current",
 	})
 	requireNoError(t, err, "get current admin user")
-	requireTrue(t, adminUser.ID > 0, "admin user ID > 0")
+	requireTruef(t, adminUser.ID > 0, "admin user ID > 0")
 
 	// ── Create PAT with admin_mode scope for the admin user ──────────────
 	adminPAT, err := callToolOn[impersonationtokens.PATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
@@ -203,7 +203,7 @@ func TestScopeFilter_AdminToken(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "create admin_mode PAT")
-	requireTrue(t, adminPAT.Token != "", "admin PAT token should not be empty")
+	requireTruef(t, adminPAT.Token != "", "admin PAT token should not be empty")
 	t.Logf("Created api+admin_mode PAT for admin user (ID: %d)", adminUser.ID)
 
 	// ── Build client with the admin_mode token ───────────────────────────

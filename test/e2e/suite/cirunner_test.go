@@ -74,20 +74,20 @@ func TestIndividual_CIRunner(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "pipeline create")
-		requireTrue(t, out.ID > 0, "pipeline ID should be positive")
+		requireTruef(t, out.ID > 0, "pipeline ID should be positive")
 		pipelineID = out.ID
 		t.Logf("Created pipeline: ID=%d status=%s ref=%s", out.ID, out.Status, out.Ref)
 	})
 
 	t.Run("PipelineGet", func(t *testing.T) {
-		requireTrue(t, pipelineID > 0, "pipeline ID not set")
+		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
 		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_get", pipelines.GetInput{
 			ProjectID:  toolutil.StringOrInt(pidStr),
 			PipelineID: pipelineID,
 		})
 		requireNoError(t, err, "pipeline get")
-		requireTrue(t, out.ID == pipelineID, "expected pipeline ID %d, got %d", pipelineID, out.ID)
+		requireTruef(t, out.ID == pipelineID, "expected pipeline ID %d, got %d", pipelineID, out.ID)
 		t.Logf("Got pipeline: ID=%d status=%s", out.ID, out.Status)
 	})
 
@@ -96,12 +96,12 @@ func TestIndividual_CIRunner(t *testing.T) {
 			ProjectID: toolutil.StringOrInt(pidStr),
 		})
 		requireNoError(t, err, "pipeline list")
-		requireTrue(t, len(out.Pipelines) >= 1, "expected at least 1 pipeline, got %d", len(out.Pipelines))
+		requireTruef(t, len(out.Pipelines) >= 1, "expected at least 1 pipeline, got %d", len(out.Pipelines))
 		t.Logf("Listed %d pipelines", len(out.Pipelines))
 	})
 
 	t.Run("WaitAndJobList", func(t *testing.T) {
-		requireTrue(t, pipelineID > 0, "pipeline ID not set")
+		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
 		status := waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
 		t.Logf("Pipeline %d finished with status: %s", pipelineID, status)
@@ -111,50 +111,50 @@ func TestIndividual_CIRunner(t *testing.T) {
 			PipelineID: pipelineID,
 		})
 		requireNoError(t, err, "job list")
-		requireTrue(t, len(out.Jobs) >= 1, "expected at least 1 job, got %d", len(out.Jobs))
+		requireTruef(t, len(out.Jobs) >= 1, "expected at least 1 job, got %d", len(out.Jobs))
 		jobID = out.Jobs[0].ID
 		t.Logf("Listed %d jobs; first job: ID=%d name=%s status=%s", len(out.Jobs), out.Jobs[0].ID, out.Jobs[0].Name, out.Jobs[0].Status)
 	})
 
 	t.Run("JobGet", func(t *testing.T) {
-		requireTrue(t, jobID > 0, "job ID not set")
+		requireTruef(t, jobID > 0, "job ID not set")
 
 		out, err := callToolOn[jobs.Output](ctx, sess.individual, "gitlab_job_get", jobs.GetInput{
 			ProjectID: toolutil.StringOrInt(pidStr),
 			JobID:     jobID,
 		})
 		requireNoError(t, err, "job get")
-		requireTrue(t, out.ID == jobID, "expected job ID %d, got %d", jobID, out.ID)
+		requireTruef(t, out.ID == jobID, "expected job ID %d, got %d", jobID, out.ID)
 		t.Logf("Got job: ID=%d name=%s status=%s", out.ID, out.Name, out.Status)
 	})
 
 	t.Run("JobTrace", func(t *testing.T) {
-		requireTrue(t, jobID > 0, "job ID not set")
+		requireTruef(t, jobID > 0, "job ID not set")
 
 		out, err := callToolOn[jobs.TraceOutput](ctx, sess.individual, "gitlab_job_trace", jobs.TraceInput{
 			ProjectID: toolutil.StringOrInt(pidStr),
 			JobID:     jobID,
 		})
 		requireNoError(t, err, "job trace")
-		requireTrue(t, len(out.Trace) > 0, "expected non-empty job trace")
+		requireTruef(t, len(out.Trace) > 0, "expected non-empty job trace")
 		t.Logf("Got job trace: %d chars (truncated=%v)", len(out.Trace), out.Truncated)
 	})
 
 	t.Run("SamplingAnalyzePipelineFailure", func(t *testing.T) {
-		requireTrue(t, pipelineID > 0, "pipeline ID not set")
+		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
 		out, err := callToolOn[samplingtools.AnalyzePipelineFailureOutput](ctx, sess.sampling, "gitlab_analyze_pipeline_failure", samplingtools.AnalyzePipelineFailureInput{
 			ProjectID:  toolutil.StringOrInt(pidStr),
 			PipelineID: pipelineID,
 		})
 		requireNoError(t, err, "sampling analyze pipeline failure")
-		requireTrue(t, out.Analysis != "", "expected non-empty analysis")
-		requireTrue(t, out.Model == "e2e-mock-model", "expected mock model, got %q", out.Model)
+		requireTruef(t, out.Analysis != "", "expected non-empty analysis")
+		requireTruef(t, out.Model == "e2e-mock-model", "expected mock model, got %q", out.Model)
 		t.Logf("Analyzed pipeline failure: model=%s, analysis_len=%d", out.Model, len(out.Analysis))
 	})
 
 	t.Run("PipelineRetry", func(t *testing.T) {
-		requireTrue(t, pipelineID > 0, "pipeline ID not set")
+		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
 		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_retry", pipelines.ActionInput{
 			ProjectID:  toolutil.StringOrInt(pidStr),
@@ -167,7 +167,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 	})
 
 	t.Run("PipelineDelete", func(t *testing.T) {
-		requireTrue(t, pipelineID > 0, "pipeline ID not set")
+		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_pipeline_delete", pipelines.DeleteInput{
 			ProjectID:  toolutil.StringOrInt(pidStr),

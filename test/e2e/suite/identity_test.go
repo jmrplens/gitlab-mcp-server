@@ -263,7 +263,7 @@ func identityMCPNotifyInitializedWithPrivateToken(t *testing.T, serverURL, sessi
 // authentication and returns the parsed result.
 func identityMCPCallToolWithPrivateToken(t *testing.T, serverURL, sessionID, token, tool string, args map[string]any) map[string]any {
 	t.Helper()
-	argsJSON, _ := json.Marshal(args)
+	argsJSON, _ := json.Marshal(args) //nolint:errchkjson // map[string]any of test inputs cannot fail to marshal
 	body := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"` + tool + `","arguments":` + string(argsJSON) + `}}`
 	resp := doPrivateTokenMCPRequest(t, serverURL, body, sessionID, token)
 	defer resp.Body.Close()

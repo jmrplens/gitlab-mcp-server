@@ -31,13 +31,13 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze period create")
-		requireTrue(t, out.ID > 0, "expected positive freeze period ID")
+		requireTruef(t, out.ID > 0, "expected positive freeze period ID")
 		freezePeriodID = out.ID
 		t.Logf("Created freeze period %d", out.ID)
 	})
 
 	t.Run("Meta/FreezePeriod/List", func(t *testing.T) {
-		requireTrue(t, freezePeriodID > 0, "freezePeriodID not set")
+		requireTruef(t, freezePeriodID > 0, "freezePeriodID not set")
 		out, err := callToolOn[freezeperiods.ListOutput](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_list",
 			"params": map[string]any{
@@ -45,12 +45,12 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze period list")
-		requireTrue(t, len(out.FreezePeriods) >= 1, "expected at least 1 freeze period")
+		requireTruef(t, len(out.FreezePeriods) >= 1, "expected at least 1 freeze period")
 		t.Logf("Listed %d freeze period(s)", len(out.FreezePeriods))
 	})
 
 	t.Run("Meta/FreezePeriod/Get", func(t *testing.T) {
-		requireTrue(t, freezePeriodID > 0, "freezePeriodID not set")
+		requireTruef(t, freezePeriodID > 0, "freezePeriodID not set")
 		out, err := callToolOn[freezeperiods.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_get",
 			"params": map[string]any{
@@ -59,12 +59,12 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze period get")
-		requireTrue(t, out.ID == freezePeriodID, "freeze period ID mismatch")
+		requireTruef(t, out.ID == freezePeriodID, "freeze period ID mismatch")
 		t.Logf("Got freeze period %d", out.ID)
 	})
 
 	t.Run("Meta/FreezePeriod/Update", func(t *testing.T) {
-		requireTrue(t, freezePeriodID > 0, "freezePeriodID not set")
+		requireTruef(t, freezePeriodID > 0, "freezePeriodID not set")
 		out, err := callToolOn[freezeperiods.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_update",
 			"params": map[string]any{
@@ -74,12 +74,12 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze period update")
-		requireTrue(t, out.ID == freezePeriodID, "freeze period ID mismatch after update")
+		requireTruef(t, out.ID == freezePeriodID, "freeze period ID mismatch after update")
 		t.Logf("Updated freeze period %d", out.ID)
 	})
 
 	t.Run("Meta/FreezePeriod/Delete", func(t *testing.T) {
-		requireTrue(t, freezePeriodID > 0, "freezePeriodID not set")
+		requireTruef(t, freezePeriodID > 0, "freezePeriodID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_delete",
 			"params": map[string]any{

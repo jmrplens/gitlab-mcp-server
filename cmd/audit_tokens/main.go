@@ -169,7 +169,11 @@ func listTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
 func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	infos := make([]toolTokenInfo, 0, len(toolList))
 	for _, t := range toolList {
-		b, _ := json.Marshal(t)
+		b, err := json.Marshal(t)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
+			os.Exit(1)
+		}
 		tokens := len(b) / bytesPerTok
 		domain := extractDomain(t.Name)
 		infos = append(infos, toolTokenInfo{
@@ -211,7 +215,11 @@ func measureResources(client *gitlabclient.Client) int {
 	res, err := session.ListResources(ctx, nil)
 	if err == nil {
 		for _, r := range res.Resources {
-			b, _ := json.Marshal(r)
+			b, mErr := json.Marshal(r)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "marshal resource %s: %v\n", r.Name, mErr)
+				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+			}
 			totalBytes += len(b)
 		}
 	}
@@ -219,7 +227,11 @@ func measureResources(client *gitlabclient.Client) int {
 	tpl, err := session.ListResourceTemplates(ctx, nil)
 	if err == nil {
 		for _, t := range tpl.ResourceTemplates {
-			b, _ := json.Marshal(t)
+			b, mErr := json.Marshal(t)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "marshal template %s: %v\n", t.Name, mErr)
+				os.Exit(1)
+			}
 			totalBytes += len(b)
 		}
 	}
@@ -251,7 +263,11 @@ func measurePrompts(client *gitlabclient.Client) int {
 	p, err := session.ListPrompts(ctx, nil)
 	if err == nil {
 		for _, pr := range p.Prompts {
-			b, _ := json.Marshal(pr)
+			b, mErr := json.Marshal(pr)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
+				os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+			}
 			totalBytes += len(b)
 		}
 	}

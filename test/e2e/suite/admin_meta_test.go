@@ -48,7 +48,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "topic_create")
-		requireTrue(t, out.Topic.ID > 0, "topic_create: expected ID > 0")
+		requireTruef(t, out.Topic.ID > 0, "topic_create: expected ID > 0")
 		topicID = out.Topic.ID
 		t.Logf("Created topic %d: %s", topicID, topicName)
 	})
@@ -62,18 +62,18 @@ func TestMeta_AdminTopics(t *testing.T) {
 	}()
 
 	t.Run("TopicGet", func(t *testing.T) {
-		requireTrue(t, topicID > 0, "topicID not set")
+		requireTruef(t, topicID > 0, "topicID not set")
 		out, err := callToolOn[topics.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "topic_get",
 			"params": map[string]any{"topic_id": topicID},
 		})
 		requireNoError(t, err, "topic_get")
-		requireTrue(t, out.Topic.ID == topicID, "topic_get: ID mismatch")
+		requireTruef(t, out.Topic.ID == topicID, "topic_get: ID mismatch")
 		t.Logf("Got topic %d: %s", out.Topic.ID, out.Topic.Name)
 	})
 
 	t.Run("TopicUpdate", func(t *testing.T) {
-		requireTrue(t, topicID > 0, "topicID not set")
+		requireTruef(t, topicID > 0, "topicID not set")
 		out, err := callToolOn[topics.UpdateOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "topic_update",
 			"params": map[string]any{
@@ -82,7 +82,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "topic_update")
-		requireTrue(t, out.Topic.ID == topicID, "topic_update: ID mismatch")
+		requireTruef(t, out.Topic.ID == topicID, "topic_update: ID mismatch")
 	})
 }
 
@@ -104,7 +104,7 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "settings_update")
-		requireTrue(t, len(out.Settings) > 0, "settings_update: expected settings map")
+		requireTruef(t, len(out.Settings) > 0, "settings_update: expected settings map")
 		t.Logf("Settings updated (%d keys)", len(out.Settings))
 	})
 
@@ -158,7 +158,7 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "broadcast_message_create")
-		requireTrue(t, out.Message.ID > 0, "broadcast_message_create: expected ID > 0")
+		requireTruef(t, out.Message.ID > 0, "broadcast_message_create: expected ID > 0")
 		msgID = out.Message.ID
 		t.Logf("Created broadcast %d", msgID)
 	})
@@ -172,17 +172,17 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 	}()
 
 	t.Run("BroadcastGet", func(t *testing.T) {
-		requireTrue(t, msgID > 0, "msgID not set")
+		requireTruef(t, msgID > 0, "msgID not set")
 		out, err := callToolOn[broadcastmessages.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "broadcast_message_get",
 			"params": map[string]any{"id": msgID},
 		})
 		requireNoError(t, err, "broadcast_message_get")
-		requireTrue(t, out.Message.ID == msgID, "broadcast_message_get: ID mismatch")
+		requireTruef(t, out.Message.ID == msgID, "broadcast_message_get: ID mismatch")
 	})
 
 	t.Run("BroadcastUpdate", func(t *testing.T) {
-		requireTrue(t, msgID > 0, "msgID not set")
+		requireTruef(t, msgID > 0, "msgID not set")
 		out, err := callToolOn[broadcastmessages.UpdateOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "broadcast_message_update",
 			"params": map[string]any{
@@ -191,7 +191,7 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "broadcast_message_update")
-		requireTrue(t, out.Message.ID == msgID, "broadcast_message_update: ID mismatch")
+		requireTruef(t, out.Message.ID == msgID, "broadcast_message_update: ID mismatch")
 	})
 }
 
@@ -234,7 +234,7 @@ func TestMeta_AdminFeatures(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "feature_set")
-		requireTrue(t, out.Feature.Name == featureName, "feature name mismatch")
+		requireTruef(t, out.Feature.Name == featureName, "feature name mismatch")
 		t.Logf("Set feature: %s", out.Feature.Name)
 	})
 
@@ -277,7 +277,7 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "system_hook_add")
-		requireTrue(t, out.Hook.ID > 0, "system_hook_add: expected ID > 0")
+		requireTruef(t, out.Hook.ID > 0, "system_hook_add: expected ID > 0")
 		hookID = out.Hook.ID
 		t.Logf("Added system hook %d (name=%s)", hookID, out.Hook.Name)
 	})
@@ -291,17 +291,17 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 	}()
 
 	t.Run("SystemHookGet", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		out, err := callToolOn[systemhooks.GetOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "system_hook_get",
 			"params": map[string]any{"id": hookID},
 		})
 		requireNoError(t, err, "system_hook_get")
-		requireTrue(t, out.Hook.ID == hookID, "system_hook_get: ID mismatch")
+		requireTruef(t, out.Hook.ID == hookID, "system_hook_get: ID mismatch")
 	})
 
 	t.Run("SystemHookTest", func(t *testing.T) {
-		requireTrue(t, hookID > 0, "hookID not set")
+		requireTruef(t, hookID > 0, "hookID not set")
 		_, err := callToolOn[systemhooks.TestOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "system_hook_test",
 			"params": map[string]any{"id": hookID},
@@ -387,7 +387,7 @@ func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "metadata_get")
-		requireTrue(t, out.Version != "", "metadata_get: expected non-empty version")
+		requireTruef(t, out.Version != "", "metadata_get: expected non-empty version")
 		t.Logf("GitLab version: %s revision: %s", out.Version, out.Revision)
 	})
 
@@ -431,7 +431,7 @@ func TestMeta_AdminApplications(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "application_create")
-		requireTrue(t, out.ID > 0, "application_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "application_create: expected ID > 0")
 		appID = out.ID
 		t.Logf("Created application %d", appID)
 	})
@@ -509,7 +509,7 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "custom_attr_list")
-		requireTrue(t, len(out.Attributes) > 0, "custom_attr_list: expected at least 1 attribute")
+		requireTruef(t, len(out.Attributes) > 0, "custom_attr_list: expected at least 1 attribute")
 		t.Logf("Custom attributes: %d", len(out.Attributes))
 	})
 }

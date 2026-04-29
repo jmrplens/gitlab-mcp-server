@@ -49,7 +49,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 		},
 	})
 	requireNoError(t, createErr, "deployment create")
-	requireTrue(t, createOut.ID > 0, "expected deployment ID > 0")
+	requireTruef(t, createOut.ID > 0, "expected deployment ID > 0")
 	deployID := strconv.Itoa(createOut.ID)
 
 	t.Run("Get", func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deployment get")
-		requireTrue(t, out.ID > 0, "deployment get: expected ID > 0")
+		requireTruef(t, out.ID > 0, "deployment get: expected ID > 0")
 		t.Logf("Got deployment %d: status=%s, ref=%s", out.ID, out.Status, out.Ref)
 	})
 
@@ -87,7 +87,7 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 				"deployment_id": deployID,
 			},
 		})
-		requireTrue(t, err != nil, "expected error deleting completed deployment")
+		requireTruef(t, err != nil, "expected error deleting completed deployment")
 		t.Logf("Expected error for completed deployment deletion: %v", err)
 	})
 }

@@ -87,6 +87,20 @@
           "format": "boolean"
         },
         {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
           "name": "UPLOAD_MAX_FILE_SIZE",
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
@@ -188,6 +202,20 @@
         {
           "name": "GITLAB_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -299,6 +327,20 @@
           "format": "boolean"
         },
         {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
           "name": "UPLOAD_MAX_FILE_SIZE",
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
@@ -400,6 +442,20 @@
         {
           "name": "GITLAB_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"
@@ -511,6 +567,20 @@
           "format": "boolean"
         },
         {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
           "name": "UPLOAD_MAX_FILE_SIZE",
           "description": "Maximum attachment upload size in bytes or human-readable (e.g. 2GB). Default: 2147483648 (2 GB)",
           "isRequired": false,
@@ -612,6 +682,20 @@
         {
           "name": "GITLAB_SAFE_MODE",
           "description": "Safe mode: intercepts mutating tools and returns a JSON preview instead of executing (default: false)",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        },
+        {
+          "name": "EMBEDDED_RESOURCES",
+          "description": "Append EmbeddedResource content blocks (clickable links to MCP resources) to get_* tool results (default: true)",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "GITLAB_IGNORE_SCOPES",
+          "description": "Skip Personal Access Token scope detection and register all tools regardless of token permissions (default: false)",
           "isRequired": false,
           "default": "false",
           "format": "boolean"

@@ -29,7 +29,7 @@ func TestIndividual_Vulnerabilities(t *testing.T) {
 			ProjectPath: proj.Path,
 		})
 		requireNoError(t, err, "vulnerability severity_count")
-		requireTrue(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
+		requireTruef(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
 		t.Logf("Vulnerability severity counts: critical=%d high=%d medium=%d low=%d total=%d",
 			out.Critical, out.High, out.Medium, out.Low, out.Total)
 	})
@@ -63,7 +63,7 @@ func TestMeta_Vulnerabilities(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta vulnerability severity_count")
-		requireTrue(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
+		requireTruef(t, out.Total >= 0, "expected non-negative total, got %d", out.Total)
 		t.Logf("Vulnerability severity counts via meta-tool: total=%d", out.Total)
 	})
 

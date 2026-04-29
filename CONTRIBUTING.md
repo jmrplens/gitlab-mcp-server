@@ -2,6 +2,9 @@
 
 Thank you for your interest in contributing to gitlab-mcp-server! This guide covers the process for submitting changes, reporting issues, and following project conventions.
 
+By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
+For security issues, please follow the [Security Policy](SECURITY.md) instead of opening a public issue.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -206,7 +209,7 @@ go test -tags e2e -timeout 300s ./test/e2e/suite/
 This project ships with **7 AI agents** and **18 skills** for GitHub Copilot and compatible assistants. Key workflows for contributors:
 
 - **Adding new tools**: Use the `create-mcp-tool` skill — it scaffolds the full tool lifecycle (struct, handler, registration, tests, docs).
-- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach 90%+ coverage.
+- **Improving test coverage**: Use the `increase-test-coverage` skill to identify gaps and reach the 80% coverage target.
 - **Code quality reviews**: Use the `review-and-refactor` skill for code quality + OWASP security + MCP pattern checks.
 
 See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instruction files.
@@ -261,7 +264,8 @@ Open an issue at <https://github.com/jmrplens/gitlab-mcp-server/issues/new/choos
 - **Feature Request** — new functionality / new MCP tool
 - **Enhancement** — improvement to existing behavior
 - **Documentation** — missing, outdated or incorrect docs
-- **Security Issue** — use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) for non-public reports
+
+For **security issues**, do not open a public issue — report privately via [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) (see [SECURITY.md](SECURITY.md)).
 
 Templates auto-apply the relevant labels listed in [Labels](#labels).
 
@@ -271,12 +275,12 @@ Issue templates auto-assign labels on submission. The repo uses a flat label set
 
 | Label              | Color     | Used by                                          |
 | ------------------ | --------- | ------------------------------------------------ |
-| `bug`              | `#d73a4a` | Bug Report, Security Issue templates             |
+| `bug`              | `#d73a4a` | Bug Report template                              |
 | `feature`          | `#a2eeef` | Feature Request template                         |
 | `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)            |
 | `documentation`    | `#0075ca` | Documentation template (GitHub default)          |
-| `security`         | `#d73a4a` | Security Issue template                          |
-| `high-priority`    | `#b60205` | Security Issue template                          |
+| `security`         | `#d73a4a` | Manual — applied to GitHub Security Advisories   |
+| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories   |
 | `needs-triage`     | `#c2e0c6` | All issue templates (auto-applied on submission) |
 | `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                |
 | `help wanted`      | `#008672` | Manual — community contributions welcome         |

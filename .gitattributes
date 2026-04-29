@@ -5,7 +5,7 @@
 * text=auto eol=lf
 
 # Go source files
-*.go text eol=lf
+*.go text eol=lf diff=golang
 *.mod text eol=lf
 *.sum text eol=lf
 
@@ -59,8 +59,41 @@ VERSION text eol=lf
 *.exe binary
 *.dll binary
 *.gif binary
+*.gz binary
 *.ico binary
 *.jpg binary
+*.jpeg binary
+*.pdf binary
 *.png binary
+*.tar binary
 *.tar.gz binary
+*.tgz binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
 *.zip binary
+
+# Auto-generated files (GitHub language statistics, diff suppression)
+llms.txt linguist-generated=true
+llms-full.txt linguist-generated=true
+internal/tools/testdata/*.json linguist-generated=true
+go.sum linguist-generated=true
+site/pnpm-lock.yaml linguist-generated=true
+
+# Files excluded from `git archive` (release tarballs)
+.github/ export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+.editorconfig export-ignore
+.golangci.yml export-ignore
+.markdownlint-cli2.jsonc export-ignore
+.goreleaser.yml export-ignore
+plan/ export-ignore
+test/ export-ignore
+docs/ export-ignore
+site/ export-ignore
+sonar-project.properties export-ignore
+CODEOWNERS export-ignore

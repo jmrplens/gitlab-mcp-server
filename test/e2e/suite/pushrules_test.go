@@ -30,7 +30,7 @@ func TestIndividual_PushRules(t *testing.T) {
 			MaxFileSize:        int64Ptr(50),
 		})
 		requireNoError(t, err, "add push rule")
-		requireTrue(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
 		t.Logf("Added push rule %d", out.ID)
 	})
 
@@ -39,8 +39,8 @@ func TestIndividual_PushRules(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "get push rules")
-		requireTrue(t, out.ID > 0, "push rule ID should be positive")
-		requireTrue(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
+		requireTruef(t, out.ID > 0, "push rule ID should be positive")
+		requireTruef(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
 		t.Logf("Got push rules: max_file_size=%d", out.MaxFileSize)
 	})
 
@@ -50,7 +50,7 @@ func TestIndividual_PushRules(t *testing.T) {
 			MaxFileSize: int64Ptr(100),
 		})
 		requireNoError(t, err, "edit push rule")
-		requireTrue(t, out.MaxFileSize == 100, "expected max_file_size=100 after edit, got %d", out.MaxFileSize)
+		requireTruef(t, out.MaxFileSize == 100, "expected max_file_size=100 after edit, got %d", out.MaxFileSize)
 		t.Logf("Edited push rule: max_file_size=%d", out.MaxFileSize)
 	})
 
@@ -84,7 +84,7 @@ func TestMeta_PushRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta add push rule")
-		requireTrue(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
+		requireTruef(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
 		t.Logf("Added push rule %d via meta-tool", out.ID)
 	})
 
@@ -96,8 +96,8 @@ func TestMeta_PushRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta get push rules")
-		requireTrue(t, out.ID > 0, "push rule ID should be positive")
-		requireTrue(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
+		requireTruef(t, out.ID > 0, "push rule ID should be positive")
+		requireTruef(t, out.MaxFileSize == 50, "expected max_file_size=50, got %d", out.MaxFileSize)
 		t.Logf("Got push rules via meta-tool: max_file_size=%d", out.MaxFileSize)
 	})
 
@@ -110,7 +110,7 @@ func TestMeta_PushRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta edit push rule")
-		requireTrue(t, out.MaxFileSize == 100, "expected max_file_size=100, got %d", out.MaxFileSize)
+		requireTruef(t, out.MaxFileSize == 100, "expected max_file_size=100, got %d", out.MaxFileSize)
 		t.Logf("Edited push rule via meta-tool: max_file_size=%d", out.MaxFileSize)
 	})
 

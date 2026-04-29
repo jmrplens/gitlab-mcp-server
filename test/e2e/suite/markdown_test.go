@@ -22,7 +22,7 @@ func TestIndividual_MarkdownRender(t *testing.T) {
 			Text: "**bold** and _italic_",
 		})
 		requireNoError(t, err, "render markdown")
-		requireTrue(t, out.HTML != "", "expected non-empty HTML output")
+		requireTruef(t, out.HTML != "", "expected non-empty HTML output")
 		t.Logf("Rendered HTML: %s", out.HTML)
 	})
 
@@ -34,7 +34,7 @@ func TestIndividual_MarkdownRender(t *testing.T) {
 			Project: proj.Path,
 		})
 		requireNoError(t, err, "render GFM markdown")
-		requireTrue(t, out.HTML != "", "expected non-empty GFM HTML output")
+		requireTruef(t, out.HTML != "", "expected non-empty GFM HTML output")
 		t.Logf("Rendered GFM HTML: %s", out.HTML)
 	})
 }

@@ -123,7 +123,7 @@ The following documents must be generated or updated:
 (mermaid) C4 Context diagram showing:
 - MCP Clients (VS Code, Cursor, Copilot CLI, OpenCode)
 - gitlab-mcp-server MCP Server
-- GitLab REST API v4
+- GitLab REST API v4 and GraphQL API
 - GitLab Instance
 
 ## Container View

@@ -58,7 +58,7 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 			}
 		}
 		requireNoError(t, err, "latest pipeline")
-		requireTrue(t, out.ID > 0, "latest: expected ID > 0")
+		requireTruef(t, out.ID > 0, "latest: expected ID > 0")
 		t.Logf("Latest pipeline: %d (status: %s)", out.ID, out.Status)
 	})
 
@@ -131,7 +131,7 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "update_metadata")
-		requireTrue(t, out.ID == latest.ID, "update_metadata: ID mismatch")
+		requireTruef(t, out.ID == latest.ID, "update_metadata: ID mismatch")
 	})
 
 	t.Run("Cancel", func(t *testing.T) {

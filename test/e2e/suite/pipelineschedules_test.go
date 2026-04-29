@@ -36,19 +36,19 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 			Cron:        "0 1 * * *",
 		})
 		requireNoError(t, err, "create pipeline schedule")
-		requireTrue(t, out.ID > 0, "expected schedule ID")
+		requireTruef(t, out.ID > 0, "expected schedule ID")
 		scheduleID = out.ID
 		t.Logf("Created schedule %d", scheduleID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.Output](ctx, sess.individual, "gitlab_pipeline_schedule_get", pipelineschedules.GetInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
 		})
 		requireNoError(t, err, "get pipeline schedule")
-		requireTrue(t, out.ID == scheduleID, "expected ID %d, got %d", scheduleID, out.ID)
+		requireTruef(t, out.ID == scheduleID, "expected ID %d, got %d", scheduleID, out.ID)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -56,22 +56,22 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list pipeline schedules")
-		requireTrue(t, len(out.Schedules) >= 1, "expected at least 1 schedule")
+		requireTruef(t, len(out.Schedules) >= 1, "expected at least 1 schedule")
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.Output](ctx, sess.individual, "gitlab_pipeline_schedule_update", pipelineschedules.UpdateInput{
 			ProjectID:   proj.pidOf(),
 			ScheduleID:  scheduleID,
 			Description: "e2e-schedule-updated",
 		})
 		requireNoError(t, err, "update pipeline schedule")
-		requireTrue(t, out.Description == "e2e-schedule-updated", "expected updated description")
+		requireTruef(t, out.Description == "e2e-schedule-updated", "expected updated description")
 	})
 
 	t.Run("CreateVariable", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.individual, "gitlab_pipeline_schedule_create_variable", pipelineschedules.CreateVariableInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
@@ -79,11 +79,11 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 			Value:      "e2e-value",
 		})
 		requireNoError(t, err, "create schedule variable")
-		requireTrue(t, out.Key == "E2E_VAR", "expected key E2E_VAR")
+		requireTruef(t, out.Key == "E2E_VAR", "expected key E2E_VAR")
 	})
 
 	t.Run("EditVariable", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.individual, "gitlab_pipeline_schedule_edit_variable", pipelineschedules.EditVariableInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
@@ -91,11 +91,11 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 			Value:      "e2e-value-updated",
 		})
 		requireNoError(t, err, "edit schedule variable")
-		requireTrue(t, out.Value == "e2e-value-updated", "expected updated value")
+		requireTruef(t, out.Value == "e2e-value-updated", "expected updated value")
 	})
 
 	t.Run("DeleteVariable", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_pipeline_schedule_delete_variable", pipelineschedules.DeleteVariableInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
@@ -105,17 +105,17 @@ func TestIndividual_PipelineSchedules(t *testing.T) {
 	})
 
 	t.Run("TakeOwnership", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.Output](ctx, sess.individual, "gitlab_pipeline_schedule_take_ownership", pipelineschedules.TakeOwnershipInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
 		})
 		requireNoError(t, err, "take ownership")
-		requireTrue(t, out.ID == scheduleID, "expected same schedule after ownership")
+		requireTruef(t, out.ID == scheduleID, "expected same schedule after ownership")
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_pipeline_schedule_delete", pipelineschedules.DeleteInput{
 			ProjectID:  proj.pidOf(),
 			ScheduleID: scheduleID,
@@ -150,7 +150,7 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create schedule")
-		requireTrue(t, out.ID > 0, "expected schedule ID")
+		requireTruef(t, out.ID > 0, "expected schedule ID")
 		scheduleID = out.ID
 		t.Logf("Created schedule %d via meta-tool", scheduleID)
 	})
@@ -161,11 +161,11 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list schedules")
-		requireTrue(t, len(out.Schedules) >= 1, "expected at least 1 schedule")
+		requireTruef(t, len(out.Schedules) >= 1, "expected at least 1 schedule")
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_update",
 			"params": map[string]any{
@@ -175,11 +175,11 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta update schedule")
-		requireTrue(t, out.Description == "e2e-meta-schedule-updated", "expected updated description")
+		requireTruef(t, out.Description == "e2e-meta-schedule-updated", "expected updated description")
 	})
 
 	t.Run("CreateVariable", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		out, err := callToolOn[pipelineschedules.VariableOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_create_variable",
 			"params": map[string]any{
@@ -190,11 +190,11 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create variable")
-		requireTrue(t, out.Key == "META_VAR", "expected key META_VAR")
+		requireTruef(t, out.Key == "META_VAR", "expected key META_VAR")
 	})
 
 	t.Run("DeleteVariable", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_delete_variable",
 			"params": map[string]any{
@@ -207,7 +207,7 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	})
 
 	t.Run("TakeOwnership", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		_, err := callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_take_ownership",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": scheduleID},
@@ -216,7 +216,7 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	})
 
 	t.Run("Run", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		// Run may fail on CE if no runners configured — just verify the call doesn't panic
 		_, _ = callToolOn[pipelineschedules.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_run",
@@ -226,7 +226,7 @@ func TestMeta_PipelineSchedules(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, scheduleID > 0, "scheduleID not set")
+		requireTruef(t, scheduleID > 0, "scheduleID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "schedule_delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "schedule_id": scheduleID},

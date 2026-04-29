@@ -50,7 +50,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		},
 	})
 	requireNoError(t, mrErr, "create MR")
-	requireTrue(t, mrOut.IID > 0, "MR IID should be > 0")
+	requireTruef(t, mrOut.IID > 0, "MR IID should be > 0")
 	mrIID := strconv.FormatInt(mrOut.IID, 10)
 
 	t.Run("ChangesGet", func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 			}
 		}
 		requireNoError(t, listErr, "diff_versions_list")
-		requireTrue(t, len(out.DiffVersions) > 0, "expected at least 1 diff version")
+		requireTruef(t, len(out.DiffVersions) > 0, "expected at least 1 diff version")
 		t.Logf("Diff versions: %d", len(out.DiffVersions))
 
 		t.Run("DiffVersionGet", func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "diff_version_get")
-			requireTrue(t, vOut.ID > 0, "expected diff version ID > 0")
+			requireTruef(t, vOut.ID > 0, "expected diff version ID > 0")
 			t.Logf("Diff version %d: state=%s, commits=%d", vOut.ID, vOut.State, len(vOut.Commits))
 		})
 	})
@@ -163,7 +163,7 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "discussion_get for note ID")
-	requireTrue(t, len(discDetail.Notes) > 0, "expected at least one note in discussion")
+	requireTruef(t, len(discDetail.Notes) > 0, "expected at least one note in discussion")
 	noteID := strconv.FormatInt(discDetail.Notes[0].ID, 10)
 
 	// Update the note body
@@ -178,7 +178,7 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "discussion_note_update")
-	requireTrue(t, updOut.ID > 0, "expected note ID > 0 after update")
+	requireTruef(t, updOut.ID > 0, "expected note ID > 0 after update")
 	t.Logf("Updated note %d in discussion %s", updOut.ID, discID)
 }
 

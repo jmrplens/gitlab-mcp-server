@@ -2,6 +2,7 @@ services:
   gitlab-mcp-server:
     # Pin VERSION to a specific release (e.g., 1.7.7) in production; avoid :latest
     image: ${DOCKER_REGISTRY:-ghcr.io/jmrplens/gitlab-mcp-server}:${VERSION:-latest}
+    pull_policy: always
     ports:
       - "8080:8080"
     environment:
@@ -10,6 +11,9 @@ services:
       - META_TOOLS=${META_TOOLS:-true}
       - GITLAB_ENTERPRISE=${GITLAB_ENTERPRISE:-false}
       - GITLAB_READ_ONLY=${GITLAB_READ_ONLY:-false}
+      - GITLAB_SAFE_MODE=${GITLAB_SAFE_MODE:-false}
+      - AUTO_UPDATE=${AUTO_UPDATE:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     command:
       - "--http"
       - "--http-addr=0.0.0.0:8080"
@@ -20,6 +24,8 @@ services:
       - "--enterprise=${GITLAB_ENTERPRISE:-false}"
       - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"
       - "--read-only=${GITLAB_READ_ONLY:-false}"
+      - "--safe-mode=${GITLAB_SAFE_MODE:-false}"
+      - "--auto-update=${AUTO_UPDATE:-false}"
     deploy:
       resources:
         limits:
@@ -29,8 +35,22 @@ services:
           cpus: "0.25"
           memory: 64M
     restart: unless-stopped
+    # Security hardening (least privilege, OWASP Docker security)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

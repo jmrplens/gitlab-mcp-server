@@ -45,7 +45,7 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_create")
-		requireTrue(t, out.FilePath == filePath, "file_create: path mismatch")
+		requireTruef(t, out.FilePath == filePath, "file_create: path mismatch")
 		t.Logf("Created file: %s", out.FilePath)
 	})
 
@@ -59,7 +59,7 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_metadata")
-		requireTrue(t, out.FileName != "", "file_metadata: expected filename")
+		requireTruef(t, out.FileName != "", "file_metadata: expected filename")
 		t.Logf("File metadata: %s (size=%d)", out.FileName, out.Size)
 	})
 
@@ -73,7 +73,7 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_raw")
-		requireTrue(t, out.Content != "", "file_raw: expected content")
+		requireTruef(t, out.Content != "", "file_raw: expected content")
 		t.Logf("Raw content length: %d", len(out.Content))
 	})
 
@@ -87,7 +87,7 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_blame")
-		requireTrue(t, len(out.Ranges) > 0, "file_blame: expected at least 1 range")
+		requireTruef(t, len(out.Ranges) > 0, "file_blame: expected at least 1 range")
 		t.Logf("Blame ranges: %d", len(out.Ranges))
 	})
 
@@ -103,7 +103,7 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "file_update")
-		requireTrue(t, out.FilePath == filePath, "file_update: path mismatch")
+		requireTruef(t, out.FilePath == filePath, "file_update: path mismatch")
 	})
 
 	t.Run("FileDelete", func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestMeta_RepositoryExplore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "contributors")
-		requireTrue(t, len(out.Contributors) >= 1, "contributors: expected at least 1")
+		requireTruef(t, len(out.Contributors) >= 1, "contributors: expected at least 1")
 		t.Logf("Contributors: %d", len(out.Contributors))
 	})
 
@@ -150,7 +150,7 @@ func TestMeta_RepositoryExplore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "archive")
-		requireTrue(t, out.URL != "", "archive: expected URL")
+		requireTruef(t, out.URL != "", "archive: expected URL")
 		t.Logf("Archive URL: %s", out.URL)
 	})
 }
@@ -176,7 +176,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 		"params": map[string]any{"project_id": proj.pidStr(), "ref_name": "main", "per_page": 1},
 	})
 	requireNoError(t, setupErr, "commit_list for SHA")
-	requireTrue(t, len(listOut.Commits) > 0, "expected at least 1 commit")
+	requireTruef(t, len(listOut.Commits) > 0, "expected at least 1 commit")
 	sha := listOut.Commits[0].ID
 
 	t.Run("CommitRefs", func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "commit_comment_create")
-		requireTrue(t, out.Note != "", "expected comment note")
+		requireTruef(t, out.Note != "", "expected comment note")
 		t.Logf("Created commit comment: %s", out.Note)
 	})
 
@@ -208,7 +208,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "sha": sha},
 		})
 		requireNoError(t, err, "commit_comments")
-		requireTrue(t, len(out.Comments) >= 1, "expected at least 1 comment")
+		requireTruef(t, len(out.Comments) >= 1, "expected at least 1 comment")
 		t.Logf("Commit comments: %d", len(out.Comments))
 	})
 
@@ -223,7 +223,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "commit_status_set")
-		requireTrue(t, out.Status == "success", "expected status success")
+		requireTruef(t, out.Status == "success", "expected status success")
 		t.Logf("Set commit status: %s", out.Status)
 	})
 
@@ -233,7 +233,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "sha": sha},
 		})
 		requireNoError(t, err, "commit_statuses")
-		requireTrue(t, len(out.Statuses) >= 1, "expected at least 1 status")
+		requireTruef(t, len(out.Statuses) >= 1, "expected at least 1 status")
 		t.Logf("Commit statuses: %d", len(out.Statuses))
 	})
 
@@ -284,7 +284,7 @@ func TestMeta_CommitExtended(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "commit_cherry_pick")
-		requireTrue(t, out.ID != "", "cherry_pick: expected commit SHA")
+		requireTruef(t, out.ID != "", "cherry_pick: expected commit SHA")
 		t.Logf("Cherry-picked to: %s", out.ID)
 	})
 }
@@ -319,7 +319,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, discErr, "commit_discussion_create")
-		requireTrue(t, out.ID != "", "expected discussion ID")
+		requireTruef(t, out.ID != "", "expected discussion ID")
 		discID := out.ID
 		t.Logf("Created commit discussion: %s", discID)
 
@@ -329,7 +329,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				"params": map[string]any{"project_id": proj.pidStr(), "commit_sha": sha},
 			})
 			requireNoError(t, err, "commit_discussion_list")
-			requireTrue(t, len(listOut.Discussions) >= 1, "expected at least 1 discussion")
+			requireTruef(t, len(listOut.Discussions) >= 1, "expected at least 1 discussion")
 		})
 
 		t.Run("DiscussionGet", func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "commit_discussion_get")
-			requireTrue(t, gOut.ID == discID, "discussion ID mismatch")
+			requireTruef(t, gOut.ID == discID, "discussion ID mismatch")
 		})
 
 		t.Run("DiscussionAddNote", func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				},
 			})
 			requireNoError(t, noteErr, "commit_discussion_add_note")
-			requireTrue(t, nOut.ID > 0, "expected note ID")
+			requireTruef(t, nOut.ID > 0, "expected note ID")
 			noteIDForUpdate := nOut.ID
 
 			t.Run("DiscussionUpdateNote", func(t *testing.T) {

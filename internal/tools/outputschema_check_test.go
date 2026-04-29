@@ -32,7 +32,10 @@ func TestOutputSchemaPresence(t *testing.T) {
 		t.Log("WARNING: No tools have OutputSchema set")
 		// Print first tool as JSON to inspect
 		if len(result.Tools) > 0 {
-			data, _ := json.MarshalIndent(result.Tools[0], "", "  ")
+			data, mErr := json.MarshalIndent(result.Tools[0], "", "  ")
+			if mErr != nil {
+				t.Fatalf("marshal first tool: %v", mErr)
+			}
 			t.Logf("First tool JSON:\n%s", string(data)[:min(2000, len(string(data)))])
 		}
 	}

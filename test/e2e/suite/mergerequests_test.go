@@ -65,7 +65,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			Title:        "E2E MR individual",
 		})
 		requireNoError(t, err, "create MR")
-		requireTrue(t, out.IID > 0, "expected MR IID > 0, got %d", out.IID)
+		requireTruef(t, out.IID > 0, "expected MR IID > 0, got %d", out.IID)
 		mrIID = out.IID
 		t.Logf("Created MR !%d", mrIID)
 	})
@@ -76,7 +76,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			MRIID:     mrIID,
 		})
 		requireNoError(t, err, "get MR")
-		requireTrue(t, out.Title == "E2E MR individual", "expected title %q, got %q", "E2E MR individual", out.Title)
+		requireTruef(t, out.Title == "E2E MR individual", "expected title %q, got %q", "E2E MR individual", out.Title)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			State:     "opened",
 		})
 		requireNoError(t, err, "list MRs")
-		requireTrue(t, len(out.MergeRequests) >= 1, "expected >=1 MR, got %d", len(out.MergeRequests))
+		requireTruef(t, len(out.MergeRequests) >= 1, "expected >=1 MR, got %d", len(out.MergeRequests))
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			Title:     "E2E MR updated",
 		})
 		requireNoError(t, err, "update MR")
-		requireTrue(t, out.Title == "E2E MR updated", "expected updated title, got %q", out.Title)
+		requireTruef(t, out.Title == "E2E MR updated", "expected updated title, got %q", out.Title)
 	})
 
 	t.Run("Commits", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			}
 		}
 		requireNoError(t, err, "MR commits")
-		requireTrue(t, len(out.Commits) >= 1, "expected >=1 MR commit, got %d", len(out.Commits))
+		requireTruef(t, len(out.Commits) >= 1, "expected >=1 MR commit, got %d", len(out.Commits))
 	})
 
 	t.Run("Participants", func(t *testing.T) {
@@ -132,7 +132,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 			MRIID:     mrIID,
 		})
 		requireNoError(t, err, "MR participants")
-		requireTrue(t, len(out.Participants) >= 1, "expected >=1 participant, got %d", len(out.Participants))
+		requireTruef(t, len(out.Participants) >= 1, "expected >=1 participant, got %d", len(out.Participants))
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -170,7 +170,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create MR meta")
-		requireTrue(t, out.IID > 0, "expected MR IID > 0, got %d", out.IID)
+		requireTruef(t, out.IID > 0, "expected MR IID > 0, got %d", out.IID)
 		mrIID = out.IID
 		t.Logf("Created MR (meta) !%d", mrIID)
 	})
@@ -184,7 +184,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "get MR meta")
-		requireTrue(t, out.Title == "E2E MR meta", "expected title %q, got %q", "E2E MR meta", out.Title)
+		requireTruef(t, out.Title == "E2E MR meta", "expected title %q, got %q", "E2E MR meta", out.Title)
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -196,7 +196,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list MRs meta")
-		requireTrue(t, len(out.MergeRequests) >= 1, "expected >=1 MR, got %d", len(out.MergeRequests))
+		requireTruef(t, len(out.MergeRequests) >= 1, "expected >=1 MR, got %d", len(out.MergeRequests))
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "update MR meta")
-		requireTrue(t, out.Title == "E2E MR meta updated", "expected updated title, got %q", out.Title)
+		requireTruef(t, out.Title == "E2E MR meta updated", "expected updated title, got %q", out.Title)
 	})
 
 	t.Run("Commits", func(t *testing.T) {
@@ -240,7 +240,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			}
 		}
 		requireNoError(t, err, "MR commits meta")
-		requireTrue(t, len(out.Commits) >= 1, "expected >=1 MR commit via meta, got %d", len(out.Commits))
+		requireTruef(t, len(out.Commits) >= 1, "expected >=1 MR commit via meta, got %d", len(out.Commits))
 	})
 
 	t.Run("Participants", func(t *testing.T) {
@@ -252,7 +252,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "MR participants meta")
-		requireTrue(t, len(out.Participants) >= 1, "expected >=1 participant, got %d", len(out.Participants))
+		requireTruef(t, len(out.Participants) >= 1, "expected >=1 participant, got %d", len(out.Participants))
 	})
 
 	t.Run("Delete", func(t *testing.T) {

@@ -35,7 +35,7 @@ func TestMeta_CIVariablesInstance(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "instance variable create")
-		requireTrue(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
 		t.Logf("Created instance variable: %s", out.Key)
 	})
 
@@ -45,7 +45,7 @@ func TestMeta_CIVariablesInstance(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "instance variable list")
-		requireTrue(t, len(out.Variables) >= 1, "expected at least 1 instance variable")
+		requireTruef(t, len(out.Variables) >= 1, "expected at least 1 instance variable")
 		t.Logf("Instance variables: %d", len(out.Variables))
 	})
 
@@ -55,7 +55,7 @@ func TestMeta_CIVariablesInstance(t *testing.T) {
 			"params": map[string]any{"key": varKey},
 		})
 		requireNoError(t, err, "instance variable get")
-		requireTrue(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
 		t.Logf("Got instance variable: %s=%s", out.Key, out.Value)
 	})
 
@@ -68,7 +68,7 @@ func TestMeta_CIVariablesInstance(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "instance variable update")
-		requireTrue(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
 		t.Logf("Updated instance variable: %s", out.Key)
 	})
 

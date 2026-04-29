@@ -58,7 +58,7 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protected_protect")
-		requireTrue(t, out.Name == envName, "protected_protect: name mismatch")
+		requireTruef(t, out.Name == envName, "protected_protect: name mismatch")
 		t.Logf("Protected environment: %s", out.Name)
 	})
 
@@ -71,7 +71,7 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protected_get")
-		requireTrue(t, out.Name == envName, "protected_get: name mismatch")
+		requireTruef(t, out.Name == envName, "protected_get: name mismatch")
 	})
 
 	t.Run("ProtectedUnprotect", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze_create")
-		requireTrue(t, out.ID > 0, "freeze_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "freeze_create: expected ID > 0")
 		freezeID = out.ID
 		t.Logf("Created freeze period %d", freezeID)
 	})
@@ -136,7 +136,7 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 	}()
 
 	t.Run("FreezeGet", func(t *testing.T) {
-		requireTrue(t, freezeID > 0, "freezeID not set")
+		requireTruef(t, freezeID > 0, "freezeID not set")
 		out, err := callToolOn[freezeperiods.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_get",
 			"params": map[string]any{
@@ -145,11 +145,11 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze_get")
-		requireTrue(t, out.ID == freezeID, "freeze_get: ID mismatch")
+		requireTruef(t, out.ID == freezeID, "freeze_get: ID mismatch")
 	})
 
 	t.Run("FreezeUpdate", func(t *testing.T) {
-		requireTrue(t, freezeID > 0, "freezeID not set")
+		requireTruef(t, freezeID > 0, "freezeID not set")
 		out, err := callToolOn[freezeperiods.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "freeze_update",
 			"params": map[string]any{
@@ -159,7 +159,7 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze_update")
-		requireTrue(t, out.ID == freezeID, "freeze_update: ID mismatch")
+		requireTruef(t, out.ID == freezeID, "freeze_update: ID mismatch")
 	})
 }
 
@@ -209,7 +209,7 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deployment create")
-		requireTrue(t, out.ID > 0, "deployment create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "deployment create: expected ID > 0")
 		t.Logf("Created deployment %d", out.ID)
 	})
 }

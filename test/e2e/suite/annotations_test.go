@@ -25,7 +25,7 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 	ctx := context.Background()
 	result, err := sess.individual.ListTools(ctx, nil)
 	requireNoError(t, err, "ListTools individual")
-	requireTrue(t, len(result.Tools) > 0, "expected individual tools, got 0")
+	requireTruef(t, len(result.Tools) > 0, "expected individual tools, got 0")
 
 	t.Logf("Checking %d individual tools for annotation correctness", len(result.Tools))
 
@@ -114,9 +114,9 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 
 	t.Logf("Verified %d destructive tools, %d read-only tools, %d missing annotations",
 		destructiveCount, readOnlyCount, missingAnnotations)
-	requireTrue(t, destructiveCount > 0, "expected at least 1 destructive tool, found 0")
-	requireTrue(t, readOnlyCount > 0, "expected at least 1 read-only tool, found 0")
-	requireTrue(t, missingAnnotations == 0, "found %d tools with missing annotations", missingAnnotations)
+	requireTruef(t, destructiveCount > 0, "expected at least 1 destructive tool, found 0")
+	requireTruef(t, readOnlyCount > 0, "expected at least 1 read-only tool, found 0")
+	requireTruef(t, missingAnnotations == 0, "found %d tools with missing annotations", missingAnnotations)
 }
 
 // TestAnnotations_DestructiveHint_Meta verifies that meta-tools containing
@@ -132,7 +132,7 @@ func TestAnnotations_DestructiveHint_Meta(t *testing.T) {
 	ctx := context.Background()
 	result, err := sess.meta.ListTools(ctx, nil)
 	requireNoError(t, err, "ListTools meta")
-	requireTrue(t, len(result.Tools) > 0, "expected meta tools, got 0")
+	requireTruef(t, len(result.Tools) > 0, "expected meta tools, got 0")
 
 	t.Logf("Checking %d meta-tools for annotation correctness", len(result.Tools))
 
@@ -160,9 +160,9 @@ func TestAnnotations_DestructiveHint_Meta(t *testing.T) {
 
 	t.Logf("Meta-tools: %d with destructiveHint=true, %d with destructiveHint=false, %d missing annotations",
 		withDestructive, withoutDestructive, missingAnnotations)
-	requireTrue(t, withDestructive > 0, "expected at least 1 meta-tool with destructiveHint=true")
-	requireTrue(t, withoutDestructive > 0, "expected at least 1 meta-tool with destructiveHint=false")
-	requireTrue(t, missingAnnotations == 0, "found %d meta-tools with missing/nil annotations", missingAnnotations)
+	requireTruef(t, withDestructive > 0, "expected at least 1 meta-tool with destructiveHint=true")
+	requireTruef(t, withoutDestructive > 0, "expected at least 1 meta-tool with destructiveHint=false")
+	requireTruef(t, missingAnnotations == 0, "found %d meta-tools with missing/nil annotations", missingAnnotations)
 }
 
 // TestAnnotations_AllToolsHaveAnnotations verifies that every registered tool

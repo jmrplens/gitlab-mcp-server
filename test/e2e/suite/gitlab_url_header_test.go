@@ -327,7 +327,7 @@ func gitlabURLMCPNotifyInitialized(t *testing.T, serverURL, sessionID, token, gi
 // optionally the GITLAB-URL header. Returns the parsed JSON-RPC result.
 func gitlabURLMCPCallTool(t *testing.T, serverURL, sessionID, token, gitlabURL, tool string, args map[string]any) map[string]any {
 	t.Helper()
-	argsJSON, _ := json.Marshal(args)
+	argsJSON, _ := json.Marshal(args) //nolint:errchkjson // map[string]any of test inputs cannot fail to marshal
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"%s","arguments":%s}}`, tool, string(argsJSON))
 	resp := doGitLabURLMCPRequest(t, serverURL, body, sessionID, token, gitlabURL)
 	defer resp.Body.Close()

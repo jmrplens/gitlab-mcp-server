@@ -5,7 +5,7 @@
 
 ## Project Overview
 
-**gitlab-mcp-server** is a Model Context Protocol (MCP) server written in Go that exposes GitLab REST API v4 operations as MCP tools for AI assistants. It runs as a local binary communicating via stdio or HTTP transport.
+**gitlab-mcp-server** is a Model Context Protocol (MCP) server written in Go that exposes GitLab REST API v4 and GraphQL operations as MCP tools for AI assistants. It runs as a local binary communicating via stdio or HTTP transport.
 
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |

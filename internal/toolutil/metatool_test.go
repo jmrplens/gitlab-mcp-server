@@ -1161,8 +1161,14 @@ func TestSchemaForRoute_Caching(t *testing.T) {
 	if s2 == nil {
 		t.Fatal("expected non-nil schema on second call")
 	}
-	j1, _ := json.Marshal(s1)
-	j2, _ := json.Marshal(s2)
+	j1, err := json.Marshal(s1)
+	if err != nil {
+		t.Fatalf("marshal s1: %v", err)
+	}
+	j2, err := json.Marshal(s2)
+	if err != nil {
+		t.Fatalf("marshal s2: %v", err)
+	}
 	if string(j1) != string(j2) {
 		t.Errorf("cached schemas differ:\n%s\n%s", j1, j2)
 	}

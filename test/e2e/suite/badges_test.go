@@ -35,19 +35,19 @@ func TestIndividual_Badges(t *testing.T) {
 			ImageURL:  "https://img.shields.io/badge/test-passing-green",
 		})
 		requireNoError(t, err, "create badge")
-		requireTrue(t, out.Badge.ID > 0, "expected badge ID")
+		requireTruef(t, out.Badge.ID > 0, "expected badge ID")
 		badgeID = out.Badge.ID
 		t.Logf("Created badge %d", badgeID)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.GetProjectOutput](ctx, sess.individual, "gitlab_get_project_badge", badges.GetProjectInput{
 			ProjectID: proj.pidOf(),
 			BadgeID:   badgeID,
 		})
 		requireNoError(t, err, "get badge")
-		requireTrue(t, out.Badge.ID == badgeID, "expected ID %d, got %d", badgeID, out.Badge.ID)
+		requireTruef(t, out.Badge.ID == badgeID, "expected ID %d, got %d", badgeID, out.Badge.ID)
 		t.Logf("Got badge %d", out.Badge.ID)
 	})
 
@@ -56,24 +56,24 @@ func TestIndividual_Badges(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list badges")
-		requireTrue(t, len(out.Badges) >= 1, "expected at least 1 badge, got %d", len(out.Badges))
+		requireTruef(t, len(out.Badges) >= 1, "expected at least 1 badge, got %d", len(out.Badges))
 		t.Logf("Listed %d badges", len(out.Badges))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.EditProjectOutput](ctx, sess.individual, "gitlab_edit_project_badge", badges.EditProjectInput{
 			ProjectID: proj.pidOf(),
 			BadgeID:   badgeID,
 			LinkURL:   "https://example.com/badge-updated",
 		})
 		requireNoError(t, err, "update badge")
-		requireTrue(t, out.Badge.LinkURL == "https://example.com/badge-updated", "expected updated link URL")
+		requireTruef(t, out.Badge.LinkURL == "https://example.com/badge-updated", "expected updated link URL")
 		t.Logf("Updated badge %d", out.Badge.ID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_project_badge", badges.DeleteProjectInput{
 			ProjectID: proj.pidOf(),
 			BadgeID:   badgeID,
@@ -108,7 +108,7 @@ func TestMeta_Badges(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta create badge")
-		requireTrue(t, out.Badge.ID > 0, "expected badge ID")
+		requireTruef(t, out.Badge.ID > 0, "expected badge ID")
 		badgeID = out.Badge.ID
 		t.Logf("Created badge %d via meta-tool", badgeID)
 	})
@@ -119,12 +119,12 @@ func TestMeta_Badges(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta list badges")
-		requireTrue(t, len(out.Badges) >= 1, "expected at least 1 badge")
+		requireTruef(t, len(out.Badges) >= 1, "expected at least 1 badge")
 		t.Logf("Listed %d badges via meta-tool", len(out.Badges))
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		out, err := callToolOn[badges.EditProjectOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "badge_edit",
 			"params": map[string]any{
@@ -134,12 +134,12 @@ func TestMeta_Badges(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta update badge")
-		requireTrue(t, out.Badge.LinkURL == "https://example.com/meta-badge-updated", "expected updated link")
+		requireTruef(t, out.Badge.LinkURL == "https://example.com/meta-badge-updated", "expected updated link")
 		t.Logf("Updated badge %d via meta-tool", out.Badge.ID)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		requireTrue(t, badgeID > 0, "badgeID not set")
+		requireTruef(t, badgeID > 0, "badgeID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "badge_delete",
 			"params": map[string]any{"project_id": proj.pidStr(), "badge_id": badgeID},

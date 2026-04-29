@@ -15,8 +15,7 @@ GitLab MCP Server sits between your AI client and your GitLab instance, translat
 graph LR
     U[User] -->|natural language| AI[AI Client]
     AI -->|MCP tool calls| S[GitLab MCP Server]
-    S -->|REST API v4| G[GitLab Instance]
-    S -->|GraphQL API| G
+    S -->|REST v4 + GraphQL| G[GitLab Instance]
     G -->|JSON| S
     S -->|structured result + markdown| AI
     AI -->|formatted answer| U

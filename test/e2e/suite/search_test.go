@@ -36,7 +36,7 @@ func TestIndividual_Search(t *testing.T) {
 			Query:     "unique-e2e-search-token-12345",
 		})
 		requireNoError(t, err, "search code")
-		requireTrue(t, len(out.Blobs) >= 1, "expected >=1 code result, got %d", len(out.Blobs))
+		requireTruef(t, len(out.Blobs) >= 1, "expected >=1 code result, got %d", len(out.Blobs))
 	})
 
 	t.Run("Projects", func(t *testing.T) {
@@ -45,7 +45,7 @@ func TestIndividual_Search(t *testing.T) {
 		})
 		requireNoError(t, err, "search projects")
 		// At least one E2E project should be found.
-		requireTrue(t, len(out.Projects) >= 1, "expected >=1 project result, got %d", len(out.Projects))
+		requireTruef(t, len(out.Projects) >= 1, "expected >=1 project result, got %d", len(out.Projects))
 	})
 }
 
@@ -75,7 +75,7 @@ func TestMeta_Search(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "search code meta")
-		requireTrue(t, len(out.Blobs) >= 1, "expected >=1 code result, got %d", len(out.Blobs))
+		requireTruef(t, len(out.Blobs) >= 1, "expected >=1 code result, got %d", len(out.Blobs))
 	})
 
 	t.Run("Projects", func(t *testing.T) {
@@ -86,6 +86,6 @@ func TestMeta_Search(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "search projects meta")
-		requireTrue(t, len(out.Projects) >= 1, "expected >=1 project result, got %d", len(out.Projects))
+		requireTruef(t, len(out.Projects) >= 1, "expected >=1 project result, got %d", len(out.Projects))
 	})
 }

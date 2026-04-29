@@ -33,11 +33,11 @@ func TestSafeMode(t *testing.T) {
 			Description: "This issue should NOT be created",
 		})
 		requireNoError(t, err, "call gitlab_issue_create in safe mode")
-		requireTrue(t, preview.Status == "blocked", "expected status 'blocked', got %q", preview.Status)
-		requireTrue(t, preview.Mode == "safe", "expected mode 'safe', got %q", preview.Mode)
-		requireTrue(t, preview.Tool == "gitlab_issue_create", "expected tool 'gitlab_issue_create', got %q", preview.Tool)
-		requireTrue(t, len(preview.Params) > 0, "expected non-empty params")
-		requireTrue(t, preview.Hint != "", "expected non-empty hint")
+		requireTruef(t, preview.Status == "blocked", "expected status 'blocked', got %q", preview.Status)
+		requireTruef(t, preview.Mode == "safe", "expected mode 'safe', got %q", preview.Mode)
+		requireTruef(t, preview.Tool == "gitlab_issue_create", "expected tool 'gitlab_issue_create', got %q", preview.Tool)
+		requireTruef(t, len(preview.Params) > 0, "expected non-empty params")
+		requireTruef(t, preview.Hint != "", "expected non-empty hint")
 	})
 
 	t.Run("NoIssueCreated", func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestSafeMode(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list issues")
-		requireTrue(t, len(out.Issues) == 0, "expected 0 issues, got %d", len(out.Issues))
+		requireTruef(t, len(out.Issues) == 0, "expected 0 issues, got %d", len(out.Issues))
 	})
 
 	t.Run("ReadOnlyToolStillWorks", func(t *testing.T) {
@@ -55,6 +55,6 @@ func TestSafeMode(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list issues via safe-mode session")
-		requireTrue(t, len(out.Issues) == 0, "expected 0 issues via safe-mode, got %d", len(out.Issues))
+		requireTruef(t, len(out.Issues) == 0, "expected 0 issues via safe-mode, got %d", len(out.Issues))
 	})
 }

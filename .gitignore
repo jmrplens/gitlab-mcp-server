@@ -7,17 +7,34 @@ keys/*.secret.asc
 # Go build artifacts
 bin/
 dist/
-/server
-/server_bin
-/add_docs
-/audit_metrics
-/audit_tokens
-/gen_readme
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# Local CLI binaries from cmd/* (built by `go build ./cmd/<name>`)
+/audit_metrics
+/audit_output
+/audit_test_names
+/audit_tokens
+/audit_tools
+/add_docs
+/find_dupes
+/gen_docker_tools
+/gen_llms
+/gen_readme
+/gitlab-mcp-server
+
+# Go workspace lock (Go 1.18+, only relevant if go.work is added)
+go.work.sum
+
+# Profiling output
+*.prof
+*.pprof
+*.trace
+cpu.out
+mem.out
 
 # Go test artifacts
 *.test

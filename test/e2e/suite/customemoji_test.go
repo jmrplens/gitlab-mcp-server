@@ -41,7 +41,7 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 			URL:       "https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png",
 		})
 		requireNoError(t, err, "create custom emoji")
-		requireTrue(t, out.Emoji.ID != "", "expected non-empty emoji GID")
+		requireTruef(t, out.Emoji.ID != "", "expected non-empty emoji GID")
 		emojiGID = out.Emoji.ID
 		t.Logf("Created custom emoji %s (%s)", out.Emoji.Name, out.Emoji.ID)
 	})
@@ -51,12 +51,12 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 			GroupPath: groupOut.Path,
 		})
 		requireNoError(t, err, "list custom emoji")
-		requireTrue(t, len(out.Emoji) >= 1, "expected at least 1 custom emoji, got %d", len(out.Emoji))
+		requireTruef(t, len(out.Emoji) >= 1, "expected at least 1 custom emoji, got %d", len(out.Emoji))
 		t.Logf("Group %s has %d custom emoji", groupOut.Path, len(out.Emoji))
 	})
 
 	t.Run("Individual/CustomEmoji/Delete", func(t *testing.T) {
-		requireTrue(t, emojiGID != "", "emojiGID not set")
+		requireTruef(t, emojiGID != "", "emojiGID not set")
 		err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_custom_emoji", customemoji.DeleteInput{
 			ID: emojiGID,
 		})
@@ -97,7 +97,7 @@ func TestMeta_CustomEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta custom emoji create")
-		requireTrue(t, out.Emoji.ID != "", "expected non-empty emoji GID")
+		requireTruef(t, out.Emoji.ID != "", "expected non-empty emoji GID")
 		emojiGID = out.Emoji.ID
 		t.Logf("Created custom emoji (meta) %s (%s)", out.Emoji.Name, out.Emoji.ID)
 	})
@@ -110,12 +110,12 @@ func TestMeta_CustomEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta custom emoji list")
-		requireTrue(t, len(out.Emoji) >= 1, "expected at least 1 custom emoji, got %d", len(out.Emoji))
+		requireTruef(t, len(out.Emoji) >= 1, "expected at least 1 custom emoji, got %d", len(out.Emoji))
 		t.Logf("Group %s has %d custom emoji (meta)", groupOut.Path, len(out.Emoji))
 	})
 
 	t.Run("Meta/CustomEmoji/Delete", func(t *testing.T) {
-		requireTrue(t, emojiGID != "", "emojiGID not set")
+		requireTruef(t, emojiGID != "", "emojiGID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_custom_emoji", map[string]any{
 			"action": "delete",
 			"params": map[string]any{

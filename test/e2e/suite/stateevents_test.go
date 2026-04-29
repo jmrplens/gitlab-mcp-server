@@ -32,13 +32,13 @@ func TestMeta_StateEvents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "create issue for state events")
-		requireTrue(t, out.IID > 0, "expected positive issue IID")
+		requireTruef(t, out.IID > 0, "expected positive issue IID")
 		issueIID = out.IID
 		t.Logf("Created issue IID=%d for state event tests", issueIID)
 	})
 
 	t.Run("Meta/StateEvent/CloseIssue", func(t *testing.T) {
-		requireTrue(t, issueIID > 0, "issueIID not set")
+		requireTruef(t, issueIID > 0, "issueIID not set")
 		out, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",
 			"params": map[string]any{
@@ -48,12 +48,12 @@ func TestMeta_StateEvents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "close issue for state events")
-		requireTrue(t, out.State == "closed", "expected issue state 'closed', got %q", out.State)
+		requireTruef(t, out.State == "closed", "expected issue state 'closed', got %q", out.State)
 		t.Logf("Closed issue IID=%d", issueIID)
 	})
 
 	t.Run("Meta/StateEvent/ListIssueStateEvents", func(t *testing.T) {
-		requireTrue(t, issueIID > 0, "issueIID not set")
+		requireTruef(t, issueIID > 0, "issueIID not set")
 		out, err := callToolOn[resourceevents.ListStateEventsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_state_list",
 			"params": map[string]any{
@@ -62,7 +62,7 @@ func TestMeta_StateEvents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list issue state events")
-		requireTrue(t, len(out.Events) >= 1, "expected at least 1 state event")
+		requireTruef(t, len(out.Events) >= 1, "expected at least 1 state event")
 		t.Logf("Issue IID=%d has %d state event(s)", issueIID, len(out.Events))
 	})
 
@@ -86,7 +86,7 @@ func TestMeta_StateEvents(t *testing.T) {
 	})
 
 	t.Run("Meta/StateEvent/DeleteIssue", func(t *testing.T) {
-		requireTrue(t, issueIID > 0, "issueIID not set")
+		requireTruef(t, issueIID > 0, "issueIID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "delete",
 			"params": map[string]any{

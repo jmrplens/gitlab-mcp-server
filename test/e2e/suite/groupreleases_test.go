@@ -58,7 +58,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "release_list (empty)")
-		requireTrue(t, len(out.Releases) == 0, "expected 0 releases, got %d", len(out.Releases))
+		requireTruef(t, len(out.Releases) == 0, "expected 0 releases, got %d", len(out.Releases))
 		t.Logf("Releases: %d (expected 0)", len(out.Releases))
 	})
 
@@ -116,7 +116,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "release_list (with release)")
-		requireTrue(t, len(out.Releases) >= 1, "expected at least 1 release, got %d", len(out.Releases))
+		requireTruef(t, len(out.Releases) >= 1, "expected at least 1 release, got %d", len(out.Releases))
 		t.Logf("Releases: %d (expected >=1)", len(out.Releases))
 
 		found := false
@@ -126,7 +126,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 				t.Logf("Found release: tag=%s name=%s", r.TagName, r.Name)
 			}
 		}
-		requireTrue(t, found, "expected release with tag %s in group releases", tagName)
+		requireTruef(t, found, "expected release with tag %s in group releases", tagName)
 	})
 
 	// List with simple=true.
@@ -139,7 +139,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "release_list (simple)")
-		requireTrue(t, len(out.Releases) >= 1, "expected at least 1 release (simple), got %d", len(out.Releases))
+		requireTruef(t, len(out.Releases) >= 1, "expected at least 1 release (simple), got %d", len(out.Releases))
 		t.Logf("Simple releases: %d", len(out.Releases))
 	})
 }

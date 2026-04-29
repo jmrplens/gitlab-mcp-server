@@ -34,8 +34,8 @@ func TestIndividual_Uploads(t *testing.T) {
 			ContentBase64: content,
 		})
 		requireNoError(t, err, "upload file")
-		requireTrue(t, out.URL != "", "expected non-empty upload URL")
-		requireTrue(t, out.Markdown != "", "expected non-empty markdown")
+		requireTruef(t, out.URL != "", "expected non-empty upload URL")
+		requireTruef(t, out.Markdown != "", "expected non-empty markdown")
 		t.Logf("Uploaded: %s", out.URL)
 	})
 
@@ -44,7 +44,7 @@ func TestIndividual_Uploads(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list uploads")
-		requireTrue(t, len(out.Uploads) >= 1, "expected >=1 upload, got %d", len(out.Uploads))
+		requireTruef(t, len(out.Uploads) >= 1, "expected >=1 upload, got %d", len(out.Uploads))
 	})
 }
 
@@ -73,7 +73,7 @@ func TestMeta_Uploads(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "upload file meta")
-		requireTrue(t, out.URL != "", "expected non-empty upload URL")
+		requireTruef(t, out.URL != "", "expected non-empty upload URL")
 		t.Logf("Uploaded (meta): %s", out.URL)
 	})
 
@@ -85,6 +85,6 @@ func TestMeta_Uploads(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "list uploads meta")
-		requireTrue(t, len(out.Uploads) >= 1, "expected >=1 upload, got %d", len(out.Uploads))
+		requireTruef(t, len(out.Uploads) >= 1, "expected >=1 upload, got %d", len(out.Uploads))
 	})
 }

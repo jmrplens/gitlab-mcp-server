@@ -71,11 +71,11 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get text file")
-		requireTrue(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
-		requireTrue(t, out.ContentCategory == "text", "expected text category, got %s", out.ContentCategory)
-		requireTrue(t, strings.Contains(out.Content, "hello"), "text content should contain 'hello', got: %s", out.Content)
-		requireTrue(t, out.Size > 0, "expected size > 0")
-		requireTrue(t, out.CommitID != "", msgCommitIDEmpty)
+		requireTruef(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
+		requireTruef(t, out.ContentCategory == "text", "expected text category, got %s", out.ContentCategory)
+		requireTruef(t, strings.Contains(out.Content, "hello"), "text content should contain 'hello', got: %s", out.Content)
+		requireTruef(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.CommitID != "", msgCommitIDEmpty)
 		t.Logf("FileGet text: %s (size=%d, encoding=%s, category=%s)", out.FileName, out.Size, out.Encoding, out.ContentCategory)
 	})
 
@@ -87,10 +87,10 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get image file")
-		requireTrue(t, out.FileName == imgPath, "expected %s, got %s", imgPath, out.FileName)
-		requireTrue(t, out.ContentCategory == "image", "expected image category, got %s", out.ContentCategory)
-		requireTrue(t, out.Content == "", "image content field should be empty")
-		requireTrue(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.FileName == imgPath, "expected %s, got %s", imgPath, out.FileName)
+		requireTruef(t, out.ContentCategory == "image", "expected image category, got %s", out.ContentCategory)
+		requireTruef(t, out.Content == "", "image content field should be empty")
+		requireTruef(t, out.Size > 0, "expected size > 0")
 		t.Logf("FileGet image: %s (size=%d, category=%s)", out.FileName, out.Size, out.ContentCategory)
 	})
 
@@ -102,9 +102,9 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get binary file")
-		requireTrue(t, out.FileName == binPath, "expected %s, got %s", binPath, out.FileName)
-		requireTrue(t, out.ContentCategory == "binary", "expected binary category, got %s", out.ContentCategory)
-		requireTrue(t, out.Content == "", "binary content field should be empty")
+		requireTruef(t, out.FileName == binPath, "expected %s, got %s", binPath, out.FileName)
+		requireTruef(t, out.ContentCategory == "binary", "expected binary category, got %s", out.ContentCategory)
+		requireTruef(t, out.Content == "", "binary content field should be empty")
 		t.Logf("FileGet binary: %s (size=%d, category=%s)", out.FileName, out.Size, out.ContentCategory)
 	})
 
@@ -116,9 +116,9 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get raw text file")
-		requireTrue(t, out.ContentCategory == "text", "expected text category, got %s", out.ContentCategory)
-		requireTrue(t, strings.Contains(out.Content, "hello"), "raw content should contain 'hello'")
-		requireTrue(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.ContentCategory == "text", "expected text category, got %s", out.ContentCategory)
+		requireTruef(t, strings.Contains(out.Content, "hello"), "raw content should contain 'hello'")
+		requireTruef(t, out.Size > 0, "expected size > 0")
 		t.Logf("FileRaw text: %s (size=%d)", out.FilePath, out.Size)
 	})
 
@@ -130,9 +130,9 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get raw image file")
-		requireTrue(t, out.ContentCategory == "image", "expected image category, got %s", out.ContentCategory)
-		requireTrue(t, out.Content == "", "raw image content field should be empty")
-		requireTrue(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.ContentCategory == "image", "expected image category, got %s", out.ContentCategory)
+		requireTruef(t, out.Content == "", "raw image content field should be empty")
+		requireTruef(t, out.Size > 0, "expected size > 0")
 		t.Logf("FileRaw image: %s (size=%d, category=%s)", out.FilePath, out.Size, out.ContentCategory)
 	})
 
@@ -144,10 +144,10 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get file metadata")
-		requireTrue(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
-		requireTrue(t, out.Size > 0, "expected size > 0")
-		requireTrue(t, out.BlobID != "", "expected non-empty blob_id")
-		requireTrue(t, out.SHA256 != "", "expected non-empty content_sha256")
+		requireTruef(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
+		requireTruef(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.BlobID != "", "expected non-empty blob_id")
+		requireTruef(t, out.SHA256 != "", "expected non-empty content_sha256")
 		t.Logf("FileMetadata: %s (size=%d, sha256=%s)", out.FileName, out.Size, out.SHA256)
 	})
 
@@ -159,9 +159,9 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get raw file metadata")
-		requireTrue(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
-		requireTrue(t, out.Size > 0, "expected size > 0")
-		requireTrue(t, out.SHA256 != "", "expected non-empty content_sha256")
+		requireTruef(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
+		requireTruef(t, out.Size > 0, "expected size > 0")
+		requireTruef(t, out.SHA256 != "", "expected non-empty content_sha256")
 		t.Logf("FileRawMetadata: %s (size=%d, sha256=%s)", out.FileName, out.Size, out.SHA256)
 	})
 
@@ -173,9 +173,9 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get file blame")
-		requireTrue(t, out.FilePath == textPath, "expected path %s, got %s", textPath, out.FilePath)
-		requireTrue(t, len(out.Ranges) >= 1, "expected at least 1 blame range, got %d", len(out.Ranges))
-		requireTrue(t, out.Ranges[0].Commit.ID != "", "expected non-empty commit ID in blame")
+		requireTruef(t, out.FilePath == textPath, "expected path %s, got %s", textPath, out.FilePath)
+		requireTruef(t, len(out.Ranges) >= 1, "expected at least 1 blame range, got %d", len(out.Ranges))
+		requireTruef(t, out.Ranges[0].Commit.ID != "", "expected non-empty commit ID in blame")
 		t.Logf("FileBlame: %s has %d blame ranges", out.FilePath, len(out.Ranges))
 	})
 
@@ -191,8 +191,8 @@ func TestIndividual_Files(t *testing.T) {
 			CommitMessage: "create crud test file",
 		})
 		requireNoError(t, err, "create file")
-		requireTrue(t, out.FilePath == crudPath, "expected path %s, got %s", crudPath, out.FilePath)
-		requireTrue(t, out.Branch == defaultBranch, "expected branch %s, got %s", defaultBranch, out.Branch)
+		requireTruef(t, out.FilePath == crudPath, "expected path %s, got %s", crudPath, out.FilePath)
+		requireTruef(t, out.Branch == defaultBranch, "expected branch %s, got %s", defaultBranch, out.Branch)
 		t.Logf("FileCreate: %s on %s", out.FilePath, out.Branch)
 	})
 
@@ -205,7 +205,7 @@ func TestIndividual_Files(t *testing.T) {
 			CommitMessage: "update crud test file",
 		})
 		requireNoError(t, err, "update file")
-		requireTrue(t, out.FilePath == crudPath, "expected path %s, got %s", crudPath, out.FilePath)
+		requireTruef(t, out.FilePath == crudPath, "expected path %s, got %s", crudPath, out.FilePath)
 		t.Logf("FileUpdate: %s", out.FilePath)
 	})
 
@@ -216,7 +216,7 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "get updated file")
-		requireTrue(t, strings.Contains(out.Content, "updated"), "content should contain 'updated', got: %s", out.Content)
+		requireTruef(t, strings.Contains(out.Content, "updated"), "content should contain 'updated', got: %s", out.Content)
 		t.Logf("FileGet updated: content=%q", out.Content)
 	})
 
@@ -243,7 +243,7 @@ func TestIndividual_Files(t *testing.T) {
 			CommitMessage: "create file with base64 encoding",
 		})
 		requireNoError(t, err, "create file with base64 encoding")
-		requireTrue(t, out.FilePath == "b64-created.txt", "expected b64-created.txt, got %s", out.FilePath)
+		requireTruef(t, out.FilePath == "b64-created.txt", "expected b64-created.txt, got %s", out.FilePath)
 		t.Logf("FileCreate base64: %s", out.FilePath)
 
 		// Verify the decoded content.
@@ -253,7 +253,7 @@ func TestIndividual_Files(t *testing.T) {
 			Ref:       defaultBranch,
 		})
 		requireNoError(t, err, "verify base64-created file")
-		requireTrue(t, strings.Contains(got.Content, "base64 encoded create"), "content mismatch: %s", got.Content)
+		requireTruef(t, strings.Contains(got.Content, "base64 encoded create"), "content mismatch: %s", got.Content)
 		t.Logf("Verified base64-created content: %q", got.Content)
 	})
 }
@@ -297,8 +297,8 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file get text")
-		requireTrue(t, out.ContentCategory == "text", "expected text, got %s", out.ContentCategory)
-		requireTrue(t, strings.Contains(out.Content, "hello"), "text should contain 'hello'")
+		requireTruef(t, out.ContentCategory == "text", "expected text, got %s", out.ContentCategory)
+		requireTruef(t, strings.Contains(out.Content, "hello"), "text should contain 'hello'")
 		t.Logf("Meta FileGet text: %s (category=%s)", out.FileName, out.ContentCategory)
 	})
 
@@ -313,8 +313,8 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file get image")
-		requireTrue(t, out.ContentCategory == "image", "expected image, got %s", out.ContentCategory)
-		requireTrue(t, out.Content == "", "image content should be empty")
+		requireTruef(t, out.ContentCategory == "image", "expected image, got %s", out.ContentCategory)
+		requireTruef(t, out.Content == "", "image content should be empty")
 		t.Logf("Meta FileGet image: %s (category=%s)", out.FileName, out.ContentCategory)
 	})
 
@@ -329,8 +329,8 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file get binary")
-		requireTrue(t, out.ContentCategory == "binary", "expected binary, got %s", out.ContentCategory)
-		requireTrue(t, out.Content == "", "binary content should be empty")
+		requireTruef(t, out.ContentCategory == "binary", "expected binary, got %s", out.ContentCategory)
+		requireTruef(t, out.Content == "", "binary content should be empty")
 		t.Logf("Meta FileGet binary: %s (category=%s)", out.FileName, out.ContentCategory)
 	})
 
@@ -345,8 +345,8 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file raw text")
-		requireTrue(t, out.ContentCategory == "text", "expected text, got %s", out.ContentCategory)
-		requireTrue(t, strings.Contains(out.Content, "hello"), "raw content should contain 'hello'")
+		requireTruef(t, out.ContentCategory == "text", "expected text, got %s", out.ContentCategory)
+		requireTruef(t, strings.Contains(out.Content, "hello"), "raw content should contain 'hello'")
 		t.Logf("Meta FileRaw text: %s (size=%d)", out.FilePath, out.Size)
 	})
 
@@ -365,7 +365,7 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file create")
-		requireTrue(t, out.FilePath == crudPath, "expected %s, got %s", crudPath, out.FilePath)
+		requireTruef(t, out.FilePath == crudPath, "expected %s, got %s", crudPath, out.FilePath)
 		t.Logf("Meta FileCreate: %s", out.FilePath)
 	})
 
@@ -381,7 +381,7 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file update")
-		requireTrue(t, out.FilePath == crudPath, "expected %s, got %s", crudPath, out.FilePath)
+		requireTruef(t, out.FilePath == crudPath, "expected %s, got %s", crudPath, out.FilePath)
 		t.Logf("Meta FileUpdate: %s", out.FilePath)
 	})
 
@@ -395,7 +395,7 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta get updated file")
-		requireTrue(t, strings.Contains(out.Content, "meta updated"), "expected updated content, got: %s", out.Content)
+		requireTruef(t, strings.Contains(out.Content, "meta updated"), "expected updated content, got: %s", out.Content)
 		t.Logf("Meta FileGet updated: %q", out.Content)
 	})
 
@@ -424,7 +424,7 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file blame")
-		requireTrue(t, len(out.Ranges) >= 1, "expected at least 1 blame range")
+		requireTruef(t, len(out.Ranges) >= 1, "expected at least 1 blame range")
 		t.Logf("Meta FileBlame: %s has %d ranges", out.FilePath, len(out.Ranges))
 	})
 
@@ -439,8 +439,8 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file metadata")
-		requireTrue(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
-		requireTrue(t, out.SHA256 != "", "expected non-empty sha256")
+		requireTruef(t, out.FileName == textPath, "expected %s, got %s", textPath, out.FileName)
+		requireTruef(t, out.SHA256 != "", "expected non-empty sha256")
 		t.Logf("Meta FileMetadata: %s (sha256=%s)", out.FileName, out.SHA256)
 	})
 }

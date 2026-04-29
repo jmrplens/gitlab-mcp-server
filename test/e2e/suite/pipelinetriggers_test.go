@@ -30,13 +30,13 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pipeline trigger create")
-		requireTrue(t, out.ID > 0, "expected positive trigger ID")
+		requireTruef(t, out.ID > 0, "expected positive trigger ID")
 		triggerID = out.ID
 		t.Logf("Created trigger %d", out.ID)
 	})
 
 	t.Run("Meta/PipelineTrigger/List", func(t *testing.T) {
-		requireTrue(t, triggerID > 0, "triggerID not set")
+		requireTruef(t, triggerID > 0, "triggerID not set")
 		out, err := callToolOn[pipelinetriggers.ListOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "trigger_list",
 			"params": map[string]any{
@@ -44,12 +44,12 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pipeline trigger list")
-		requireTrue(t, len(out.Triggers) >= 1, "expected at least 1 trigger")
+		requireTruef(t, len(out.Triggers) >= 1, "expected at least 1 trigger")
 		t.Logf("Listed %d trigger(s)", len(out.Triggers))
 	})
 
 	t.Run("Meta/PipelineTrigger/Get", func(t *testing.T) {
-		requireTrue(t, triggerID > 0, "triggerID not set")
+		requireTruef(t, triggerID > 0, "triggerID not set")
 		out, err := callToolOn[pipelinetriggers.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "trigger_get",
 			"params": map[string]any{
@@ -58,12 +58,12 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pipeline trigger get")
-		requireTrue(t, out.ID == triggerID, "trigger ID mismatch")
+		requireTruef(t, out.ID == triggerID, "trigger ID mismatch")
 		t.Logf("Got trigger %d", out.ID)
 	})
 
 	t.Run("Meta/PipelineTrigger/Update", func(t *testing.T) {
-		requireTrue(t, triggerID > 0, "triggerID not set")
+		requireTruef(t, triggerID > 0, "triggerID not set")
 		out, err := callToolOn[pipelinetriggers.Output](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "trigger_update",
 			"params": map[string]any{
@@ -73,12 +73,12 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pipeline trigger update")
-		requireTrue(t, out.ID == triggerID, "trigger ID mismatch after update")
+		requireTruef(t, out.ID == triggerID, "trigger ID mismatch after update")
 		t.Logf("Updated trigger %d", out.ID)
 	})
 
 	t.Run("Meta/PipelineTrigger/Delete", func(t *testing.T) {
-		requireTrue(t, triggerID > 0, "triggerID not set")
+		requireTruef(t, triggerID > 0, "triggerID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "trigger_delete",
 			"params": map[string]any{

@@ -21,6 +21,8 @@
                 "-e",
                 "GITLAB_SAFE_MODE",
                 "-e",
+                "AUTO_UPDATE",
+                "-e",
                 "LOG_LEVEL",
                 "ghcr.io/jmrplens/gitlab-mcp-server:latest"
             ],
@@ -32,6 +34,7 @@
                 "GITLAB_ENTERPRISE": "${GITLAB_ENTERPRISE:-false}",
                 "GITLAB_READ_ONLY": "${GITLAB_READ_ONLY:-false}",
                 "GITLAB_SAFE_MODE": "${GITLAB_SAFE_MODE:-false}",
+                "AUTO_UPDATE": "${AUTO_UPDATE:-false}",
                 "LOG_LEVEL": "${LOG_LEVEL:-info}"
             }
         }

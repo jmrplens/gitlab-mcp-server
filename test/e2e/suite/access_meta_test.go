@@ -54,13 +54,13 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_project_create")
-		requireTrue(t, out.ID > 0, "token_project_create: expected ID > 0")
+		requireTruef(t, out.ID > 0, "token_project_create: expected ID > 0")
 		tokenID = out.ID
 		t.Logf("Created project token %d", tokenID)
 	})
 
 	t.Run("TokenProjectGet", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		out, err := callToolOn[accesstokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "token_project_get",
 			"params": map[string]any{
@@ -69,11 +69,11 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_project_get")
-		requireTrue(t, out.ID == tokenID, "token_project_get: ID mismatch")
+		requireTruef(t, out.ID == tokenID, "token_project_get: ID mismatch")
 	})
 
 	t.Run("TokenProjectRotate", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		out, err := callToolOn[accesstokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "token_project_rotate",
 			"params": map[string]any{
@@ -82,13 +82,13 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_project_rotate")
-		requireTrue(t, out.ID > 0, "token_project_rotate: expected new token ID")
+		requireTruef(t, out.ID > 0, "token_project_rotate: expected new token ID")
 		tokenID = out.ID
 		t.Logf("Rotated to token %d", tokenID)
 	})
 
 	t.Run("TokenProjectRevoke", func(t *testing.T) {
-		requireTrue(t, tokenID > 0, "tokenID not set")
+		requireTruef(t, tokenID > 0, "tokenID not set")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "token_project_revoke",
 			"params": map[string]any{
@@ -164,7 +164,7 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deploy_token_create_project")
-		requireTrue(t, out.ID > 0, "deploy_token_create_project: expected ID > 0")
+		requireTruef(t, out.ID > 0, "deploy_token_create_project: expected ID > 0")
 		dtID = out.ID
 		t.Logf("Created deploy token %d", dtID)
 	})
@@ -181,7 +181,7 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 	}()
 
 	t.Run("DeployTokenGetProject", func(t *testing.T) {
-		requireTrue(t, dtID > 0, "dtID not set")
+		requireTruef(t, dtID > 0, "dtID not set")
 		out, err := callToolOn[deploytokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_token_get_project",
 			"params": map[string]any{
@@ -190,7 +190,7 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deploy_token_get_project")
-		requireTrue(t, out.ID == dtID, "deploy_token_get_project: ID mismatch")
+		requireTruef(t, out.ID == dtID, "deploy_token_get_project: ID mismatch")
 	})
 }
 
@@ -227,7 +227,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deploy_key_add")
-		requireTrue(t, out.ID > 0, "deploy_key_add: expected ID > 0")
+		requireTruef(t, out.ID > 0, "deploy_key_add: expected ID > 0")
 		keyID = out.ID
 		t.Logf("Added deploy key %d", keyID)
 	})
@@ -247,7 +247,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 	proj2 := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("DeployKeyEnable", func(t *testing.T) {
-		requireTrue(t, keyID > 0, "keyID not set")
+		requireTruef(t, keyID > 0, "keyID not set")
 		out, err := callToolOn[deploykeys.Output](ctx, sess.meta, "gitlab_access", map[string]any{
 			"action": "deploy_key_enable",
 			"params": map[string]any{
@@ -256,7 +256,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deploy_key_enable")
-		requireTrue(t, out.ID == keyID, "deploy_key_enable: ID mismatch")
+		requireTruef(t, out.ID == keyID, "deploy_key_enable: ID mismatch")
 		t.Logf("Enabled deploy key %d on project %d", keyID, proj2.ID)
 	})
 

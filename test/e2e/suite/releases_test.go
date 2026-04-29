@@ -50,7 +50,7 @@ func TestIndividual_Releases(t *testing.T) {
 			Description: "Automated E2E test release.",
 		})
 		requireNoError(t, err, "create release")
-		requireTrue(t, out.TagName == tagName, "expected release tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected release tag %q, got %q", tagName, out.TagName)
 		t.Logf("Created release %s (%s)", out.Name, out.TagName)
 	})
 
@@ -62,7 +62,7 @@ func TestIndividual_Releases(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "get release")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Got release %s (created=%s)", out.Name, out.CreatedAt)
 	})
 
@@ -73,7 +73,7 @@ func TestIndividual_Releases(t *testing.T) {
 			Description: "Updated E2E test release.",
 		})
 		requireNoError(t, err, "update release")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Updated release %s", out.Name)
 	})
 
@@ -82,7 +82,7 @@ func TestIndividual_Releases(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "list releases")
-		requireTrue(t, len(out.Releases) >= 1, "expected at least 1 release, got %d", len(out.Releases))
+		requireTruef(t, len(out.Releases) >= 1, "expected at least 1 release, got %d", len(out.Releases))
 		t.Logf("Listed %d releases", len(out.Releases))
 	})
 
@@ -95,7 +95,7 @@ func TestIndividual_Releases(t *testing.T) {
 			LinkType:  "package",
 		})
 		requireNoError(t, err, "create release link")
-		requireTrue(t, out.ID > 0, "release link ID should be positive")
+		requireTruef(t, out.ID > 0, "release link ID should be positive")
 		releaseLinkID = out.ID
 		t.Logf("Created release link ID=%d (%s)", out.ID, out.Name)
 	})
@@ -106,7 +106,7 @@ func TestIndividual_Releases(t *testing.T) {
 			TagName:   tagName,
 		})
 		requireNoError(t, err, "list release links")
-		requireTrue(t, len(out.Links) >= 1, "expected at least 1 release link, got %d", len(out.Links))
+		requireTruef(t, len(out.Links) >= 1, "expected at least 1 release link, got %d", len(out.Links))
 
 		found := false
 		for _, l := range out.Links {
@@ -115,19 +115,19 @@ func TestIndividual_Releases(t *testing.T) {
 				break
 			}
 		}
-		requireTrue(t, found, "release link ID=%d not found in list", releaseLinkID)
+		requireTruef(t, found, "release link ID=%d not found in list", releaseLinkID)
 		t.Logf("Listed %d release links", len(out.Links))
 	})
 
 	t.Run("LinkDelete", func(t *testing.T) {
-		requireTrue(t, releaseLinkID > 0, "release link ID not set")
+		requireTruef(t, releaseLinkID > 0, "release link ID not set")
 		out, err := callToolOn[releaselinks.Output](ctx, sess.individual, "gitlab_release_link_delete", releaselinks.DeleteInput{
 			ProjectID: proj.pidOf(),
 			TagName:   tagName,
 			LinkID:    releaseLinkID,
 		})
 		requireNoError(t, err, "delete release link")
-		requireTrue(t, out.ID == releaseLinkID, "expected link ID %d, got %d", releaseLinkID, out.ID)
+		requireTruef(t, out.ID == releaseLinkID, "expected link ID %d, got %d", releaseLinkID, out.ID)
 		t.Logf("Deleted release link ID=%d", out.ID)
 	})
 
@@ -137,7 +137,7 @@ func TestIndividual_Releases(t *testing.T) {
 			TagName:   tagName,
 		})
 		requireNoError(t, err, "delete release")
-		requireTrue(t, out.TagName == tagName, "expected deleted release tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected deleted release tag %q, got %q", tagName, out.TagName)
 		t.Logf("Deleted release %s", out.TagName)
 	})
 }
@@ -182,7 +182,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release create")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Created release %s", out.Name)
 	})
 
@@ -197,7 +197,7 @@ func TestMeta_Releases(t *testing.T) {
 			})
 		})
 		requireNoError(t, err, "meta release get")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Got release %s", out.Name)
 	})
 
@@ -211,7 +211,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release update")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Updated release %s", out.Name)
 	})
 
@@ -223,7 +223,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release list")
-		requireTrue(t, len(out.Releases) >= 1, "expected at least 1 release")
+		requireTruef(t, len(out.Releases) >= 1, "expected at least 1 release")
 		t.Logf("Listed %d releases", len(out.Releases))
 	})
 
@@ -239,7 +239,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release link create")
-		requireTrue(t, out.ID > 0, "link ID should be positive")
+		requireTruef(t, out.ID > 0, "link ID should be positive")
 		releaseLinkID = out.ID
 		t.Logf("Created release link ID=%d", out.ID)
 	})
@@ -253,12 +253,12 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release link list")
-		requireTrue(t, len(out.Links) >= 1, "expected at least 1 link")
+		requireTruef(t, len(out.Links) >= 1, "expected at least 1 link")
 		t.Logf("Listed %d release links", len(out.Links))
 	})
 
 	t.Run("LinkDelete", func(t *testing.T) {
-		requireTrue(t, releaseLinkID > 0, "release link ID not set")
+		requireTruef(t, releaseLinkID > 0, "release link ID not set")
 		out, err := callToolOn[releaselinks.Output](ctx, sess.meta, "gitlab_release", map[string]any{
 			"action": "link_delete",
 			"params": map[string]any{
@@ -268,7 +268,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release link delete")
-		requireTrue(t, out.ID == releaseLinkID, "expected link ID %d, got %d", releaseLinkID, out.ID)
+		requireTruef(t, out.ID == releaseLinkID, "expected link ID %d, got %d", releaseLinkID, out.ID)
 		t.Logf("Deleted release link ID=%d", out.ID)
 	})
 
@@ -281,7 +281,7 @@ func TestMeta_Releases(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta release delete")
-		requireTrue(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
+		requireTruef(t, out.TagName == tagName, "expected tag %q, got %q", tagName, out.TagName)
 		t.Logf("Deleted release %s", out.TagName)
 	})
 }

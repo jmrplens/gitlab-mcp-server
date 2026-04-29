@@ -33,7 +33,7 @@ func TestMeta_TemplatesCIYml(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "ci_yml_list")
-		requireTrue(t, len(out.Templates) > 0, "ci_yml_list: expected templates")
+		requireTruef(t, len(out.Templates) > 0, "ci_yml_list: expected templates")
 		t.Logf("CI YAML templates: %d", len(out.Templates))
 	})
 
@@ -43,8 +43,8 @@ func TestMeta_TemplatesCIYml(t *testing.T) {
 			"params": map[string]any{"key": "Auto-DevOps"},
 		})
 		requireNoError(t, err, "ci_yml_get")
-		requireTrue(t, out.Name != "", "ci_yml_get: expected non-empty name")
-		requireTrue(t, out.Content != "", "ci_yml_get: expected non-empty content")
+		requireTruef(t, out.Name != "", "ci_yml_get: expected non-empty name")
+		requireTruef(t, out.Content != "", "ci_yml_get: expected non-empty content")
 		t.Logf("Got CI YAML template: %s", out.Name)
 	})
 }
@@ -65,7 +65,7 @@ func TestMeta_TemplatesDockerfile(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "dockerfile_list")
-		requireTrue(t, len(out.Templates) > 0, "dockerfile_list: expected templates")
+		requireTruef(t, len(out.Templates) > 0, "dockerfile_list: expected templates")
 		t.Logf("Dockerfile templates: %d", len(out.Templates))
 	})
 
@@ -75,7 +75,7 @@ func TestMeta_TemplatesDockerfile(t *testing.T) {
 			"params": map[string]any{"key": "Binary"},
 		})
 		requireNoError(t, err, "dockerfile_get")
-		requireTrue(t, out.Content != "", "dockerfile_get: expected non-empty content")
+		requireTruef(t, out.Content != "", "dockerfile_get: expected non-empty content")
 		t.Logf("Got Dockerfile template: %s", out.Name)
 	})
 }
@@ -96,7 +96,7 @@ func TestMeta_TemplatesGitignore(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "gitignore_list")
-		requireTrue(t, len(out.Templates) > 0, "gitignore_list: expected templates")
+		requireTruef(t, len(out.Templates) > 0, "gitignore_list: expected templates")
 		t.Logf("Gitignore templates: %d", len(out.Templates))
 	})
 
@@ -106,7 +106,7 @@ func TestMeta_TemplatesGitignore(t *testing.T) {
 			"params": map[string]any{"key": "Go"},
 		})
 		requireNoError(t, err, "gitignore_get")
-		requireTrue(t, out.Content != "", "gitignore_get: expected non-empty content")
+		requireTruef(t, out.Content != "", "gitignore_get: expected non-empty content")
 		t.Logf("Got gitignore template: %s", out.Name)
 	})
 }
@@ -127,7 +127,7 @@ func TestMeta_TemplatesLicense(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "license_list")
-		requireTrue(t, len(out.Licenses) > 0, "license_list: expected licenses")
+		requireTruef(t, len(out.Licenses) > 0, "license_list: expected licenses")
 		t.Logf("License templates: %d", len(out.Licenses))
 	})
 
@@ -137,7 +137,7 @@ func TestMeta_TemplatesLicense(t *testing.T) {
 			"params": map[string]any{"key": "mit"},
 		})
 		requireNoError(t, err, "license_get")
-		requireTrue(t, out.Key != "", "license_get: expected non-empty key")
+		requireTruef(t, out.Key != "", "license_get: expected non-empty key")
 		t.Logf("Got license template: %s", out.Key)
 	})
 }
