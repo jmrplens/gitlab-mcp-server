@@ -40,15 +40,15 @@ sequenceDiagram
     GL-->>MCP: Lista de MRs
     MCP-->>AI: MRs abiertos
     AI->>MCP: gitlab_merge_request (action: changes)
-    MCP->>GL: GET /merge_requests/:iid/changes
+    MCP->>GL: GET /projects/:id/merge_requests/:iid/changes
     GL-->>MCP: Datos del diff
     MCP-->>AI: Cambios en archivos
     AI->>MCP: gitlab_analyze_mr_changes (sampling)
     MCP-->>AI: Hallazgos de revisión
     AI->>MCP: gitlab_merge_request (action: note_create)
-    MCP->>GL: POST /merge_requests/:iid/notes
+    MCP->>GL: POST /projects/:id/merge_requests/:iid/notes
     AI->>MCP: gitlab_merge_request (action: approve)
-    MCP->>GL: POST /merge_requests/:iid/approve
+    MCP->>GL: POST /projects/:id/merge_requests/:iid/approve
     AI->>U: "Revisión completada, MR aprobado"
 ```
 

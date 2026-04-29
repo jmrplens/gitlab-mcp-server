@@ -208,7 +208,7 @@ When `--rate-limit-rps > 0`, each pool entry gets its own token bucket sized at 
 
 ### Behaviour on exhaustion
 
-When a request would deplete the bucket, the server returns a JSON-RPC error with code `-32000` and message `rate limit exceeded`. Clients should back off (exponentially or by parsing the error) and retry. The limiter does not return HTTP 429 because the limit is enforced **after** JSON-RPC routing, inside the MCP layer.
+When a request would deplete the bucket, the server returns a `CallToolResult` with `IsError: true` and a text message such as `rate limit exceeded for <tool>; retry after a short backoff`. Clients should back off (exponentially or by detecting that message) and retry. The limiter does not return HTTP 429 because the limit is enforced **after** JSON-RPC routing, inside the MCP layer.
 
 ### Sizing guidance
 
@@ -376,7 +376,7 @@ The image follows OWASP Docker Top 10 guidance:
 
 ### Auto-update inside containers
 
-Auto-update is **disabled by default** in Docker deployments. Container immutability is the recommended pattern: pull a newer image tag and restart the container. If you need in-place updates (e.g. on a single-host deployment without an image registry mirror), set `--auto-update=true` and mount the binary path as a writable volume.
+Auto-update is **disabled by default** when using the reference `docker-compose.yml` (which sets `--auto-update=false`). Container immutability is the recommended pattern: pull a newer image tag and restart the container. If you need in-place updates (e.g. on a single-host deployment without an image registry mirror), set `--auto-update=true` and mount the binary path as a writable volume.
 
 ## Fly.io deployment
 

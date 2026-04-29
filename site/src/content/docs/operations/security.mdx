@@ -274,10 +274,14 @@ If verification fails, **do not run the binary**. A failure indicates the checks
 After the signature verification succeeds, validate that your binary matches the signed checksum:
 
 ```bash
+# Linux
 sha256sum --check --ignore-missing checksums.txt
+
+# macOS
+shasum -a 256 -c checksums.txt
 ```
 
-Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding line for your platform).
+Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding filename for your platform).
 
 ## Best practices checklist
 

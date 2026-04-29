@@ -21,7 +21,9 @@ flowchart TD
     B -->|Connection refused| G{Is GitLab reachable?}
     G -->|No| H[Check GITLAB_URL<br/>and network]
     G -->|Yes| I{TLS error?}
-    I -->|Yes| J[Set GITLAB_SKIP_TLS_VERIFY=true]
+    I -->|Yes| J{Can install CA cert?}
+    J -->|Yes| J1[Add CA cert to system<br/>trust store]
+    J -->|No| J2[Set GITLAB_SKIP_TLS_VERIFY=true<br/>as last resort]
     I -->|No| K[Enable debug logging<br/>LOG_LEVEL=debug]
 
     style C fill:#22c55e,color:#fff
@@ -29,7 +31,8 @@ flowchart TD
     style E fill:#22c55e,color:#fff
     style F fill:#22c55e,color:#fff
     style H fill:#f59e0b,color:#000
-    style J fill:#f59e0b,color:#000
+    style J1 fill:#22c55e,color:#fff
+    style J2 fill:#f59e0b,color:#000
     style K fill:#3b82f6,color:#fff
 ```
 
@@ -45,7 +48,7 @@ flowchart TD
 
 | Symptom                                         | Cause                   | Solution                                                                                     |
 | ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
-| `x509: certificate signed by unknown authority` | Self-signed certificate | Set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode              |
+| `x509: certificate signed by unknown authority` | Self-signed certificate | First try adding the CA certificate to your system trust store. If that's not possible, set `GITLAB_SKIP_TLS_VERIFY=true` in `.env` or `--skip-tls-verify` in HTTP mode |
 | `x509: certificate has expired`                 | Expired TLS certificate | Renew the certificate on the GitLab server, or use `GITLAB_SKIP_TLS_VERIFY=true` temporarily |
 
 :::caution

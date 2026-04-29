@@ -208,7 +208,7 @@ Cuando `--rate-limit-rps > 0`, cada entrada del pool obtiene su propio token buc
 
 ### Comportamiento al agotarse
 
-Cuando una solicitud agotaría el bucket, el servidor devuelve un error JSON-RPC con código `-32000` y mensaje `rate limit exceeded`. Los clientes deben aplicar backoff (exponencial o parseando el error) y reintentar. El limitador no devuelve HTTP 429 porque el límite se aplica **después** del enrutado JSON-RPC, dentro de la capa MCP.
+Cuando una solicitud agotaría el bucket, el servidor devuelve un `CallToolResult` con `IsError: true` y un mensaje de texto como `rate limit exceeded for <tool>; retry after a short backoff`. Los clientes deben aplicar backoff (exponencial o detectando ese mensaje) y reintentar. El limitador no devuelve HTTP 429 porque el límite se aplica **después** del enrutado JSON-RPC, dentro de la capa MCP.
 
 ### Guía de dimensionado
 
@@ -376,7 +376,7 @@ La imagen sigue las guías OWASP Docker Top 10:
 
 ### Auto-actualización dentro de contenedores
 
-La auto-actualización está **deshabilitada por defecto** en despliegues Docker. La inmutabilidad del contenedor es el patrón recomendado: descargar una imagen con etiqueta nueva y reiniciar el contenedor. Si necesitas actualizaciones in-situ (ej. en un despliegue de host único sin un mirror de registro de imágenes), establece `--auto-update=true` y monta la ruta del binario como un volumen escribible.
+La auto-actualización está **deshabilitada por defecto** cuando se usa el `docker-compose.yml` de referencia (que establece `--auto-update=false`). La inmutabilidad del contenedor es el patrón recomendado: descargar una imagen con etiqueta nueva y reiniciar el contenedor. Si necesitas actualizaciones in-situ (ej. en un despliegue de host único sin un mirror de registro de imágenes), establece `--auto-update=true` y monta la ruta del binario como un volumen escribible.
 
 ## Despliegue en Fly.io
 
