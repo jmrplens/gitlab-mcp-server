@@ -16,6 +16,8 @@ import (
 // Remote mirrors are a Free-tier feature (push mirrors).
 func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 	t.Parallel()
+	RequireCapabilities(t, CapabilityExternalNetwork)
+
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

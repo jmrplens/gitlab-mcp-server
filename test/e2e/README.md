@@ -94,6 +94,7 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 | `instance-global` | Instance-wide resources such as settings, topics, broadcast messages, feature flags, system hooks, OAuth applications, Sidekiq, and metadata | Must be admin-gated and serialized when mutating global state |
 | `runner` | Pipeline and job tests that depend on the Docker CI runner | Requires Docker mode with a registered runner; avoid concurrent runner-heavy lifecycles |
 | `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
+| `external-network` | Tests that require GitLab to fetch public URLs or contact public Git remotes, such as custom emoji image imports, webhooks, and push mirrors | Disabled by default; set `E2E_EXTERNAL_NETWORK=true` only when outbound access is deterministic |
 | `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
 | `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
 | `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |

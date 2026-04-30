@@ -4,7 +4,9 @@ package suite
 
 import (
 	"context"
+	"os"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +27,7 @@ const (
 	CapabilitySafeMode         Capability = "safe-mode"
 	CapabilitySampling         Capability = "sampling"
 	CapabilityElicitation      Capability = "elicitation"
+	CapabilityExternalNetwork  Capability = "external-network"
 )
 
 var adminCapability = struct {
@@ -71,12 +74,20 @@ func RequireCapabilities(t *testing.T, caps ...Capability) {
 			if sess.elicitation == nil {
 				t.Skip("elicitation MCP session not configured")
 			}
+		case CapabilityExternalNetwork:
+			if !hasExternalNetworkCapability() {
+				t.Skip("external-network capability unavailable; set E2E_EXTERNAL_NETWORK=true to run tests that call public URLs")
+			}
 		case CapabilityInstanceGlobal, CapabilityCurrentUserState:
 			// These capabilities represent shared mutable state and are enforced by locks.
 		default:
 			t.Fatalf("unknown E2E capability %q", cap)
 		}
 	}
+}
+
+func hasExternalNetworkCapability() bool {
+	return strings.EqualFold(os.Getenv("E2E_EXTERNAL_NETWORK"), "true")
 }
 
 // RunWithCapabilities centralizes capability checks, locks, and E2E context setup.

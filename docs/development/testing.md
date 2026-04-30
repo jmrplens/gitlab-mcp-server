@@ -568,6 +568,8 @@ make test-e2e-docker
 
 Docker mode enables pipeline and job tests that require a CI runner.
 
+Tests that require GitLab to fetch public URLs or contact public Git remotes are gated behind the `external-network` capability. Set `E2E_EXTERNAL_NETWORK=true` only in environments with deterministic outbound access. Without that variable, Docker mode skips project webhook, push mirror, and custom emoji tests that depend on public network access.
+
 #### Test Reports
 
 Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.com/gotestyourself/gotestsum) to produce structured test reports in `dist/e2e-reports/`:
@@ -580,25 +582,32 @@ Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.c
 
 Docker mode files use the `e2e-docker-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
 
+The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. `make test-e2e-docker` still tears down Docker containers and volumes before returning a non-zero status on failure.
+
 Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum@latest`.
 
 #### Test Architecture
 
-The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
+The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
-| Session            | Purpose                                    |
-| ------------------ | ------------------------------------------ |
-| `session`          | Individual tools (TestFullWorkflow)         |
-| `metaSession`      | Meta-tools (TestMetaToolWorkflow)           |
-| `samplingSession`  | Sampling tools with mock LLM handler       |
-| `elicitSession`    | Elicitation tools with mock user handler   |
+| Session       | Purpose                                    |
+| ------------- | ------------------------------------------ |
+| `individual`  | Individual GitLab tools                    |
+| `meta`        | Domain meta-tools and action dispatch      |
+| `sampling`    | Sampling tools with mock LLM handler       |
+| `elicitation` | Elicitation tools with mock user handler   |
+| `safeMode`    | Mutating tools wrapped as safe-mode previews |
 
 **Workflows:**
 
-| Workflow               | Subtests | Functions | Description                                         |
-| ---------------------- | -------: | --------: | --------------------------------------------------- |
-| TestFullWorkflow       |     ~174 |       191 | Individual tools through complete project lifecycle  |
-| TestMetaToolWorkflow   |     ~151 |       156 | Same operations via meta-tools (domain dispatch)     |
+| Area                 | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| Individual tools     | Exercises domain tools directly against real GitLab       |
+| Meta-tools           | Exercises domain action dispatch through meta-tools       |
+| MCP capabilities     | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
+| Docker-only runner   | Exercises CI pipeline and job behavior with a registered runner |
+
+Latest Docker validation snapshot: `make test-e2e-docker` completed 1,142 tests with 4 external-network skips in 335.761 seconds on 2026-04-30. Test function counts and package coverage values above are unchanged by the external-network gating change.
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 

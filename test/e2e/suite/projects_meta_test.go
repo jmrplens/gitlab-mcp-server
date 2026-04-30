@@ -219,6 +219,8 @@ func TestMeta_ProjectCore(t *testing.T) {
 // gitlab_project meta-tool (hook_*).
 func TestMeta_ProjectHooks(t *testing.T) {
 	t.Parallel()
+	RequireCapabilities(t, CapabilityExternalNetwork)
+
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

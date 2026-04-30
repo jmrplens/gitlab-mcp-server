@@ -19,6 +19,9 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 | `users_meta_test.go::TestMeta_UserSSHKeyLifecycle` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Creates and deletes SSH keys for the authenticated user. |
 | `users_meta_test.go::TestMeta_UserAdmin` | `user`, `instance-global` | Yes | No, serialize admin user lifecycle | `CapabilityAdmin`, `CapabilityInstanceGlobal` | Creates, updates, blocks, deactivates, bans, and deletes users. |
 | `users_meta_test.go::TestMeta_UserServiceAccounts` | `current-user`, `user`, `enterprise` | Yes | No, serialize PAT/service-account creation | `CapabilityCurrentUserState`, `CapabilityEnterprise` | Service accounts are EE-only; current-user PAT creation needs cleanup or documented limitations. |
+| `projects_meta_test.go::TestMeta_ProjectHooks` | `external-network`, `project` | Yes | Yes, when public webhook URLs are reachable | `CapabilityExternalNetwork` | Creates project webhooks against an external endpoint and expects GitLab URL validation to accept the endpoint. |
+| `projectmirrors_test.go::TestMeta_ProjectRemoteMirrors` | `external-network`, `project` | Yes | Yes, when public Git remotes are reachable | `CapabilityExternalNetwork` | Creates push mirror configuration against an external Git remote. |
+| `customemoji_test.go::TestIndividual_CustomEmoji` / `TestMeta_CustomEmoji` | `external-network`, `group` | Yes | Yes, when public image URLs are reachable | `CapabilityExternalNetwork` | Creates custom emoji from a public image URL fetched by GitLab. |
 | `notifications_test.go::TestMeta_Notifications` | `current-user`, `project` | No | Yes | None | Read-only notification retrieval today; mutation tests belong behind current-user gates. |
 | `todos_test.go::TestIndividual_Todos` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Marks all current-user todos done through individual tools. |
 | `todos_test.go::TestMeta_Todos` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Marks all current-user todos done through meta-tools. |
@@ -40,5 +43,6 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 - `CapabilityCurrentUserState` should guard tests that mutate the authenticated user's status, todos, notification preferences, SSH keys, or personal access tokens.
 - `CapabilityRunner` should guard tests that need a registered CI runner or can consume shared runner capacity.
 - `CapabilityEnterprise` should guard Premium or Ultimate features and skip cleanly on Community Edition.
+- `CapabilityExternalNetwork` should guard tests that require GitLab to fetch public URLs or contact public Git remotes. Set `E2E_EXTERNAL_NETWORK=true` only in environments with deterministic outbound access.
 - Project-scoped and group-scoped tests can remain parallel when every created resource is test-owned and cleanup is registered.
 - Read-only metadata and MCP capability tests can remain parallel unless they create shared GitLab state.

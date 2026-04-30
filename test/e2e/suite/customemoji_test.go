@@ -18,6 +18,8 @@ import (
 // create → list → delete.
 func TestIndividual_CustomEmoji(t *testing.T) {
 	t.Parallel()
+	RequireCapabilities(t, CapabilityExternalNetwork)
+
 	ctx := context.Background()
 
 	// Create a temporary group for custom emoji.
@@ -69,6 +71,8 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 // create → list → delete.
 func TestMeta_CustomEmoji(t *testing.T) {
 	t.Parallel()
+	RequireCapabilities(t, CapabilityExternalNetwork)
+
 	ctx := context.Background()
 
 	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
