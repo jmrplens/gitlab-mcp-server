@@ -252,8 +252,8 @@ func extractFuncName(trimmed string) string {
 	return ""
 }
 
-// isTODOComment reports whether trimmed is a TODO, FIXME, or HACK comment.
-// It handles both "// TODO" and "//TODO" (with or without a space after //).
+// isTODOComment reports whether trimmed is a task-annotation comment.
+// It matches the common work-marker keywords with or without a space after //.
 func isTODOComment(trimmed string) bool {
 	if !strings.HasPrefix(trimmed, "//") {
 		return false

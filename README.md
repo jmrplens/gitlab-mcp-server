@@ -538,7 +538,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 93 |
+| Git commits | 94 |
 | Unique contributors | 2 |
 
 ### Hall of fame
