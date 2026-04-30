@@ -42,22 +42,66 @@ flowchart LR
 
 El parámetro action siempre es requerido y debe ser uno de los valores enumerados. Los parámetros adicionales dependen de la acción elegida.
 
+## Descubrir parámetros por acción
+
+Las meta-herramientas usan un sobre común:
+
+```json
+{
+  "action": "create",
+  "params": {
+    "project_id": "42"
+  }
+}
+```
+
+Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de la herramienta: los clientes ven el enum válido de `action`, mientras `params` queda como un objeto específico de la acción. Para descubrir la forma exacta de una acción concreta, lee los recursos de schema:
+
+| Recurso                                | Uso                                                                                                              |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `gitlab://schema/meta/`                | Lista todas las meta-herramientas registradas y las acciones disponibles en la configuración actual del servidor |
+| `gitlab://schema/meta/{tool}/{action}` | Devuelve el JSON Schema del objeto `params` de una acción concreta                                               |
+
+Ejemplos de lectura de recursos:
+
+```json
+{
+  "method": "resources/read",
+  "params": {
+    "uri": "gitlab://schema/meta/"
+  }
+}
+```
+
+```json
+{
+  "method": "resources/read",
+  "params": {
+    "uri": "gitlab://schema/meta/gitlab_merge_request/create"
+  }
+}
+```
+
+La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos están siempre disponibles, incluso si configuras `META_PARAM_SCHEMA=compact` o `META_PARAM_SCHEMA=full` para incluir más detalle de schema en `tools/list`.
+
 ## Ejemplos de uso
 
 ### Crear un issue
 
 ```json
 {
-	"tool": "gitlab_issue",
-	"arguments": {
-		"action": "create",
-		"project": "my-group/my-project",
-		"title": "Update API documentation",
-		"description": "The REST API docs are missing the new v2 endpoints",
-		"labels": "documentation,api",
-		"assignee_ids": "42",
-		"milestone_id": 7
-	}
+  "tool": "gitlab_issue",
+  "arguments": {
+    "action": "create",
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Update API documentation",
+      "description": "The REST API docs are missing the new v2 endpoints",
+      "labels": "documentation,api",
+      "assignee_ids": "42",
+      "milestone_id": 7
+    }
+  }
 }
 ```
 
@@ -65,14 +109,16 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-	"tool": "gitlab_merge_request",
-	"arguments": {
-		"action": "list",
-		"project": "my-group/my-project",
-		"state": "opened",
-		"order_by": "updated_at",
-		"per_page": 20
-	}
+  "tool": "gitlab_merge_request",
+  "arguments": {
+    "action": "list",
+    "params": {
+      "project_id": "my-group/my-project",
+      "state": "opened",
+      "order_by": "updated_at",
+      "per_page": 20
+    }
+  }
 }
 ```
 
@@ -80,12 +126,14 @@ El parámetro action siempre es requerido y debe ser uno de los valores enumerad
 
 ```json
 {
-	"tool": "gitlab_search",
-	"arguments": {
-		"action": "code",
-		"search": "func handleWebhook",
-		"project": "my-group/my-project"
-	}
+  "tool": "gitlab_search",
+  "arguments": {
+    "action": "code",
+    "params": {
+      "search": "func handleWebhook",
+      "project_id": "my-group/my-project"
+    }
+  }
 }
 ```
 
@@ -210,8 +258,9 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable            | Predeterminado | Descripción                                                                                               |
-| ------------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
-| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales.                    |
-| `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                    |
-| `--enterprise`      | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL. |
+| Variable            | Predeterminado | Descripción                                                                                                                                                           |
+| ------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales.                                                                                |
+| `META_PARAM_SCHEMA` | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema siguen disponibles en todos los modos. |
+| `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                |
+| `--enterprise`      | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                             |
