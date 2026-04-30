@@ -319,9 +319,6 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	// Cleanup: delete any orphaned test projects (prefix-based).
-	cleanupOrphanedProjects(glClient)
-
 	// Verify snapshot integrity in self-hosted mode.
 	if !isDockerMode() && sess.snapshot != nil {
 		if intErr := verifySnapshotIntegrity(glClient, sess.snapshot); intErr != nil {
@@ -333,6 +330,9 @@ func TestMain(m *testing.M) {
 			log.Println("e2e: snapshot integrity verified — all pre-existing resources unchanged")
 		}
 	}
+
+	// Cleanup: delete any orphaned test projects (prefix-based).
+	cleanupOrphanedProjects(glClient)
 
 	_ = session.Close()
 	serverCancel()
@@ -682,36 +682,16 @@ func snapshotState(client *gitlabclient.Client) (*resourceSnapshot, error) {
 	return snap, nil
 }
 
-// verifySnapshotIntegrity re-fetches all groups and projects and compares
-// them against the initial snapshot. Returns an error if any pre-existing
-// resource was deleted or renamed.
+// verifySnapshotIntegrity re-snapshots groups and projects and compares them
+// against the initial snapshot. Returns an error if any pre-existing resource
+// was deleted or renamed.
 func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot) error {
-	var missing []string
-
-	// Check groups still exist with same path.
-	for id, origPath := range snap.groups {
-		g, _, err := client.GL().Groups.GetGroup(int(id), &gl.GetGroupOptions{})
-		if err != nil {
-			missing = append(missing, fmt.Sprintf("group %q (ID=%d): %v", origPath, id, err))
-			continue
-		}
-		if g.FullPath != origPath {
-			missing = append(missing, fmt.Sprintf("group ID=%d renamed: %q → %q", id, origPath, g.FullPath))
-		}
+	current, err := snapshotState(client)
+	if err != nil {
+		return fmt.Errorf("snapshot current state: %w", err)
 	}
 
-	// Check projects still exist with same path.
-	for id, origPath := range snap.projects {
-		p, _, err := client.GL().Projects.GetProject(int(id), &gl.GetProjectOptions{})
-		if err != nil {
-			missing = append(missing, fmt.Sprintf("project %q (ID=%d): %v", origPath, id, err))
-			continue
-		}
-		if p.PathWithNamespace != origPath {
-			missing = append(missing, fmt.Sprintf("project ID=%d renamed: %q → %q", id, origPath, p.PathWithNamespace))
-		}
-	}
-
+	missing := snapshotIntegrityDifferences(snap, current)
 	if len(missing) > 0 {
 		return fmt.Errorf("%d pre-existing resources were modified or deleted:\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
@@ -719,21 +699,62 @@ func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot
 	return nil
 }
 
+func snapshotIntegrityDifferences(original, current *resourceSnapshot) []string {
+	var missing []string
+
+	// Check groups still exist with same path.
+	for id, origPath := range original.groups {
+		currentPath, ok := current.groups[id]
+		if !ok {
+			missing = append(missing, fmt.Sprintf("group %q (ID=%d): missing", origPath, id))
+			continue
+		}
+		if currentPath != origPath {
+			missing = append(missing, fmt.Sprintf("group ID=%d renamed: %q → %q", id, origPath, currentPath))
+		}
+	}
+
+	// Check projects still exist with same path.
+	for id, origPath := range original.projects {
+		currentPath, ok := current.projects[id]
+		if !ok {
+			missing = append(missing, fmt.Sprintf("project %q (ID=%d): missing", origPath, id))
+			continue
+		}
+		if currentPath != origPath {
+			missing = append(missing, fmt.Sprintf("project ID=%d renamed: %q → %q", id, origPath, currentPath))
+		}
+	}
+	return missing
+}
+
 // cleanupOrphanedProjects permanently deletes any projects whose name starts
 // with the E2E prefix. This catches orphans from previous failed runs,
 // including projects already marked for delayed deletion.
 func cleanupOrphanedProjects(client *gitlabclient.Client) {
 	log.Printf("e2e: cleanup: scanning orphaned projects with prefix %q for run ID %q", e2eProjectPrefix, e2eRunID)
-	opts := &gl.ListProjectsOptions{
-		Owned:                new(true),
-		IncludePendingDelete: new(true),
+	var projects []*gl.Project
+	var page int64 = 1
+	for {
+		opts := &gl.ListProjectsOptions{
+			Owned:                new(true),
+			IncludePendingDelete: new(true),
+		}
+		opts.Page = page
+		opts.PerPage = 100
+
+		pageProjects, resp, err := client.GL().Projects.ListProjects(opts)
+		if err != nil {
+			log.Printf("e2e: cleanup: failed to list projects page %d: %v", page, err)
+			return
+		}
+		projects = append(projects, pageProjects...)
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
 	}
-	opts.PerPage = 100
-	projects, _, err := client.GL().Projects.ListProjects(opts)
-	if err != nil {
-		log.Printf("e2e: cleanup: failed to list projects: %v", err)
-		return
-	}
+
 	for _, p := range projects {
 		if strings.HasPrefix(p.Name, e2eProjectPrefix) {
 			permanentlyDeleteProject(client, p)
