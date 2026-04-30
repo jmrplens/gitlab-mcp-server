@@ -404,8 +404,10 @@ ifndef GITLAB_URL
 	$(error GITLAB_URL is required. Usage: make docker-run GITLAB_URL=https://gitlab.example.com)
 endif
 	docker run --rm -p 8080:8080 \
-		-e GITLAB_URL=$(GITLAB_URL) \
-		$(BINARY_NAME):latest
+		$(BINARY_NAME):latest \
+		--http \
+		--http-addr=0.0.0.0:8080 \
+		--gitlab-url="$(GITLAB_URL)"
 
 # ─── Fly.io Deployment ───────────────────────────────────────────────────────
 # Deploys the HTTP-mode server to Fly.io using fly.toml.
@@ -497,7 +499,7 @@ audit-metrics:
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:
-	go run ./cmd/audit_test_names/
+	go run ./cmd/audit_test_names/ cmd internal test
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Prefer 'make goimports' over 'make fmt' — goimports is a superset of gofmt.

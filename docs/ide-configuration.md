@@ -37,6 +37,7 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | **HTTP OAuth** | HTTP | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
 > **Tip**: In HTTP modes, clients send a `GITLAB-URL` header only when the server was started without `--gitlab-url`. If `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
+> **Docker note**: The published Docker image starts in HTTP mode by default. If an IDE launches Docker as a stdio MCP process, pass `--http=false` after the image name and keep `docker run -i`; do not publish port 8080 in that mode.
 
 ---
 
@@ -55,6 +56,45 @@ Add to `.vscode/mcp.json`:
       "env": {
         "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "gitlab-token",
+      "description": "GitLab Personal Access Token",
+      "password": true
+    }
+  ]
+}
+```
+
+Docker stdio variant:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITLAB_URL",
+        "-e",
+        "GITLAB_TOKEN",
+        "-e",
+        "GITLAB_SKIP_TLS_VERIFY",
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
+        "--http=false"
+      ],
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "${input:gitlab-token}",
+        "GITLAB_SKIP_TLS_VERIFY": "false"
       }
     }
   },

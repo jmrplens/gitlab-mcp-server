@@ -281,7 +281,11 @@ curl -X POST http://localhost:8080/mcp \
 
 ## Docker deployment
 
-The project publishes a multi-arch Docker image at [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) for `linux/amd64` and `linux/arm64`. The image runs as a non-root user (UID 10001), exposes port 8080, and ships a built-in `/health` endpoint for orchestrators.
+The project publishes a multi-arch Docker image at [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) for `linux/amd64` and `linux/arm64`. The image runs as a non-root user (UID 10001), exposes port 8080, ships a built-in `/health` endpoint for orchestrators, and starts in HTTP mode by default.
+
+:::note
+If an IDE launches the Docker image as a stdio MCP process, pass `--http=false` after the image name instead of publishing port 8080. HTTP and stdio are separate transports.
+:::
 
 ### Quick start with `docker run`
 

@@ -152,6 +152,7 @@ Cuando se ejecuta el servidor MCP detrás de nginx, Caddy, o un balanceador clou
     | El servidor no aparece en el estado MCP | Ejecuta `Ctrl+Shift+P` → **MCP: List Servers** para verificar la configuración                  |
     | "Permission denied" al inicio           | Ejecuta `chmod +x /ruta/al/gitlab-mcp-server` (Linux/macOS)                                     |
     | El servidor se reinicia repetidamente   | Verifica MCP Logs por `GITLAB_URL` o `GITLAB_TOKEN` faltantes                                   |
+    | Espera indefinidamente a `initialize` y Docker muestra modo HTTP | Añade `--http=false` después del nombre de la imagen para modo stdio, o configura el cliente como HTTP con `http://host:8080/mcp` |
   </TabItem>
   <TabItem label="Cursor">
     | Síntoma                       | Solución                                                                          |

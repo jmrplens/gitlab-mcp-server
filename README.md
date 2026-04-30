@@ -417,21 +417,65 @@ See the [Development Guide](docs/development/development.md) for cross-compilati
 
 ## Docker
 
+The official Docker image starts in HTTP mode by default. Use one of the
+following patterns depending on how your MCP client connects.
+
+### Docker as an HTTP MCP server
+
 ```bash
 docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 
 # Single-instance mode (fixed GitLab URL for all clients)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
-  -e GITLAB_URL=https://gitlab.example.com \
-  -e GITLAB_SKIP_TLS_VERIFY=true \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --skip-tls-verify=true
 
 # Multi-instance mode (clients send GITLAB-URL header per request)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
 ```
 
 Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. In multi-instance mode, clients must also send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
+
+### Docker as a local stdio MCP process
+
+When an IDE starts Docker as a stdio MCP server, override the image's HTTP
+default by passing `--http=false` after the image name. Do not publish port 8080
+for this mode.
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITLAB_URL",
+        "-e",
+        "GITLAB_TOKEN",
+        "-e",
+        "GITLAB_SKIP_TLS_VERIFY",
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
+        "--http=false"
+      ],
+      "env": {
+        "GITLAB_URL": "https://gitlab.example.com",
+        "GITLAB_TOKEN": "${input:gitlab-token}",
+        "GITLAB_SKIP_TLS_VERIFY": "false"
+      }
+    }
+  }
+}
+```
 
 ## FAQ
 
