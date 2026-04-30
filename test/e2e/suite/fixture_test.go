@@ -18,6 +18,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
@@ -31,6 +32,17 @@ import (
 type ProjectFixture struct {
 	ID   int64
 	Path string
+}
+
+// GroupFixture holds identifiers for a test group created by a fixture builder.
+type GroupFixture struct {
+	ID   int64
+	Path string
+}
+
+// gidStr returns the group ID as a plain string for use in meta-tool params.
+func (f GroupFixture) gidStr() string {
+	return strconv.FormatInt(f.ID, 10)
 }
 
 // pidOf returns the project ID as a StringOrInt for use in individual tool inputs.
@@ -269,6 +281,44 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
 	return CreateProjectMeta(ctx, NewE2EContext(t), session)
+}
+
+// CreateGroupMeta creates a group via the gitlab_group meta-tool and registers
+// deletion in the per-test resource ledger.
+func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession, namePrefix string) GroupFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("group fixture MCP session not configured")
+	}
+	t := e2e.T
+	name := uniqueName(namePrefix)
+	out, err := callToolOn[groups.Output](ctx, session, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name": name,
+			"path": name,
+		},
+	})
+	requireNoError(t, err, "create group fixture (meta)")
+
+	id := strconv.FormatInt(out.ID, 10)
+	e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindGroup,
+		ID:        id,
+		Path:      out.FullPath,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_group", map[string]any{
+				"action": "delete",
+				"params": map[string]any{"group_id": id},
+			})
+		},
+	})
+
+	return GroupFixture{ID: out.ID, Path: out.FullPath}
 }
 
 // unprotectMain removes protection from the main branch so commits can

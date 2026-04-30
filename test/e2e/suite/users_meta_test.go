@@ -201,7 +201,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, e2e *E2EContext) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
@@ -290,33 +290,18 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 		})
 
 		t.Run("NotificationGroupGetUpdate", func(t *testing.T) {
-			// Need a group — create one for the test
-			grp, err := callToolOn[struct{ ID int64 }](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "create",
-				"params": map[string]any{
-					"name": uniqueName("notif-grp"),
-					"path": uniqueName("notif-grp"),
-				},
-			})
-			requireNoError(t, err, "create group for notification test")
-			grpIDStr := strconv.FormatInt(grp.ID, 10)
-			defer func() {
-				_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-					"action": "delete",
-					"params": map[string]any{"group_id": grpIDStr},
-				})
-			}()
+			grp := CreateGroupMeta(ctx, e2e, sess.meta, "notif-grp")
 
 			out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 				"action": "notification_group_get",
-				"params": map[string]any{"group_id": grpIDStr},
+				"params": map[string]any{"group_id": grp.gidStr()},
 			})
 			requireNoError(t, err, "notification_group_get")
 			t.Logf("Group notification level: %s", out.Level)
 
 			upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 				"action": "notification_group_update",
-				"params": map[string]any{"group_id": grpIDStr, "level": "watch"},
+				"params": map[string]any{"group_id": grp.gidStr(), "level": "watch"},
 			})
 			requireNoError(t, err, "notification_group_update")
 			t.Logf("Updated group notification level: %s", upd.Level)
