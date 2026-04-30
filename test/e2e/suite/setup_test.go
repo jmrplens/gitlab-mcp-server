@@ -832,42 +832,56 @@ func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client
 //   - Polls every 5 s.
 //   - Tolerates transient API errors (logs and retries up to 10 consecutive
 //     errors before giving up).
-//   - Logs the final status before failing so test output makes the runner
-//     state easy to diagnose.
+//   - Reports the final observed status in timeout errors so runner state is
+//     easy to diagnose.
 func waitForPipeline(t *testing.T, client *gitlabclient.Client, projectID int64, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
+	if client == nil {
+		t.Fatal("waitForPipeline: GitLab client not configured")
+	}
 	drainSidekiq(context.Background(), t, client)
 	if timeout == 0 {
 		timeout = 900 * time.Second
 	}
 	const pollInterval = 5 * time.Second
 	const maxConsecutiveErrors = 10
-	deadline := time.Now().Add(timeout)
+	pollCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	lastStatus := "unknown"
 	consecutiveErrors := 0
-	for time.Now().Before(deadline) {
-		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID)
+	err := Poll(pollCtx, pollInterval, timeout, func() (bool, string, error) {
+		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(pollCtx))
 		if err != nil {
 			consecutiveErrors++
-			t.Logf("waitForPipeline: error polling pipeline %d (%d/%d): %v", pipelineID, consecutiveErrors, maxConsecutiveErrors, err)
+			state := fmt.Sprintf("pipeline %d in project %d: last_status=%s consecutive_errors=%d/%d error=%v", pipelineID, projectID, lastStatus, consecutiveErrors, maxConsecutiveErrors, err)
 			if consecutiveErrors >= maxConsecutiveErrors {
-				t.Fatalf("waitForPipeline: pipeline %d aborted after %d consecutive API errors: %v", pipelineID, consecutiveErrors, err)
+				return false, state, fmt.Errorf("poll pipeline %d in project %d after %d consecutive API errors: %w", pipelineID, projectID, consecutiveErrors, err)
 			}
-			time.Sleep(pollInterval)
-			continue
+			return false, state, nil
 		}
 		consecutiveErrors = 0
 		lastStatus = p.Status
-		switch p.Status {
-		case "success", "failed", "canceled", "skipped":
-			t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, p.Status)
-			return p.Status
+		state := fmt.Sprintf("pipeline %d in project %d: status=%s", pipelineID, projectID, p.Status)
+		if isTerminalPipelineStatus(p.Status) {
+			return true, state, nil
 		}
-		t.Logf("waitForPipeline: pipeline %d status=%s, waiting...", pipelineID, p.Status)
-		time.Sleep(pollInterval)
+		return false, state, nil
+	})
+	if err != nil {
+		t.Fatalf("waitForPipeline: pipeline %d in project %d did not reach terminal status within %s (last status: %s): %v", pipelineID, projectID, timeout, lastStatus, err)
 	}
-	t.Fatalf("waitForPipeline: pipeline %d did not reach terminal status within %s (last status: %s)", pipelineID, timeout, lastStatus)
-	return ""
+	t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, lastStatus)
+	return lastStatus
+}
+
+func isTerminalPipelineStatus(status string) bool {
+	switch status {
+	case "success", "failed", "canceled", "skipped":
+		return true
+	default:
+		return false
+	}
 }
 
 // hasRunner returns true if a CI runner is available for pipeline tests.

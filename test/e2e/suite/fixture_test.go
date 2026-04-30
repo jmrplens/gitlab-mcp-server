@@ -496,56 +496,47 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // waitForBranchOn polls the GitLab API until the named branch exists in the
 // given project or the context is canceled. Under parallel load (~60 projects)
 // branch creation can take well over 30s, so we allow up to 90s with
-// progressive backoff. Transient errors (429, 5xx, network) are retried silently.
+// bounded polling. Transient errors (429, 5xx, network) are retried silently.
 func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID int64, branch string) {
 	t.Helper()
 	drainSidekiq(ctx, t, client)
+	requireNoError(t, waitForBranch(ctx, client, projectID, branch), fmt.Sprintf("wait for branch %s in project %d", branch, projectID))
+}
+
+func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string) error {
+	if client == nil {
+		return fmt.Errorf("gitlab client not configured")
+	}
 	pid := int(projectID)
 
 	const maxWait = 90 * time.Second
-	deadline := time.Now().Add(maxWait)
-	delay := 500 * time.Millisecond
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
 
-	for time.Now().Before(deadline) {
-		_, resp, err := client.GL().Branches.GetBranch(pid, branch)
+	return Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		_, resp, err := client.GL().Branches.GetBranch(pid, branch, gl.WithContext(pollCtx))
 		if err == nil {
-			t.Logf("Branch %q ready in project %d", branch, projectID)
-			return
+			return true, fmt.Sprintf("branch %q ready in project %d", branch, projectID), nil
 		}
 
-		retryable := false
-		if resp == nil {
-			// Network-level error (EOF, connection reset) — always retryable.
-			retryable = true
-		} else {
-			switch {
-			case resp.StatusCode == http.StatusNotFound:
-				retryable = true
-			case resp.StatusCode == http.StatusTooManyRequests:
-				retryable = true
-			case resp.StatusCode >= 500:
-				retryable = true
-			}
+		state := fmt.Sprintf("branch %q in project %d: %v", branch, projectID, err)
+		if resp != nil {
+			state = fmt.Sprintf("branch %q in project %d: HTTP %d", branch, projectID, resp.StatusCode)
 		}
-		if !retryable {
-			requireNoError(t, err, fmt.Sprintf("get branch %s in project %d", branch, projectID))
+		if !retryableBranchResponse(resp) {
+			return false, state, fmt.Errorf("get branch %q in project %d: %w", branch, projectID, err)
 		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("context canceled waiting for branch %q: %v", branch, ctx.Err())
-		case <-time.After(delay):
-		}
-
-		// Progressive backoff: 500ms → 1s → 2s (capped)
-		if delay < 2*time.Second {
-			delay *= 2
-		}
-	}
-	t.Fatalf("branch %q not available in project %d after %s", branch, projectID, maxWait)
+		return false, state, nil
+	})
 }
 
-// waitForMRReady polls the MR until the GitLab DetailedMergeStatus leaves the
+func retryableBranchResponse(resp *gl.Response) bool {
+	if resp == nil {
+		return true
+	}
+	return resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+}
+
 // waitForMRReady polls the MR until the GitLab DetailedMergeStatus leaves the
 // transitional values ("preparing", "checking", "unchecked", "") that GitLab
 // CE reports while still computing the diff and merge ref. Downstream
@@ -558,32 +549,33 @@ func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Cli
 // that the test's own assertion produces the actionable failure message.
 func waitForMRReady(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, mrIID int64) {
 	t.Helper()
-	if client == nil {
-		return
-	}
 	drainSidekiq(ctx, t, client)
+	if err := waitForMRReadyState(ctx, client, projectID, mrIID); err != nil {
+		t.Logf("MR !%d readiness wait in project %d ended: %v", mrIID, projectID, err)
+	}
+}
+
+func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, projectID, mrIID int64) error {
+	if client == nil {
+		return nil
+	}
 	const maxWait = 120 * time.Second
-	deadline := time.Now().Add(maxWait)
-	delay := 500 * time.Millisecond
-	for time.Now().Before(deadline) {
-		mr, _, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(ctx))
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	return Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		mr, _, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(pollCtx))
 		if err == nil {
 			switch mr.DetailedMergeStatus {
 			case "preparing", "checking", "unchecked", "":
-			// still computing; continue polling
+				return false, fmt.Sprintf("detailed_merge_status=%q", mr.DetailedMergeStatus), nil
 			default:
-				t.Logf("MR !%d ready in project %d: detailed_merge_status=%s", mrIID, projectID, mr.DetailedMergeStatus)
-				return
+				return true, fmt.Sprintf("detailed_merge_status=%q", mr.DetailedMergeStatus), nil
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
+		if pollCtx.Err() != nil {
+			return false, "", nil
 		}
-		if delay < 2*time.Second {
-			delay *= 2
-		}
-	}
-	t.Logf("MR !%d not ready after %s (continuing; final assertion will report state)", mrIID, maxWait)
+		return false, fmt.Sprintf("error polling MR !%d in project %d: %v", mrIID, projectID, err), nil
+	})
 }
