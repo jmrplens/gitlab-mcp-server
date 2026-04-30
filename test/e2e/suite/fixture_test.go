@@ -128,24 +128,13 @@ func isRetryableError(err error) bool {
 // the last error after all attempts are exhausted.
 func retryOnTransient[O any](ctx context.Context, t *testing.T, label string, maxRetries int, fn func() (O, error)) (O, error) {
 	t.Helper()
-	var out O
-	var err error
-	for attempt := range maxRetries {
-		out, err = fn()
+	return retryWithBackoff(ctx, t, label, maxRetries, func(int) (O, bool, string, error) {
+		out, err := fn()
 		if err == nil {
-			return out, nil
+			return out, false, "", nil
 		}
-		if attempt >= maxRetries-1 || !isRetryableError(err) {
-			break
-		}
-		t.Logf("%s: attempt %d/%d failed (retrying): %v", label, attempt+1, maxRetries, err)
-		select {
-		case <-ctx.Done():
-			return out, err
-		case <-time.After(time.Duration(attempt+1) * time.Second):
-		}
-	}
-	return out, err
+		return out, isRetryableError(err), "retryable error", err
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -165,11 +154,9 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
-	var out projects.Output
-	var err error
-	for attempt := range projectCreateRetries {
+	out, err := retryWithBackoff(ctx, t, "create project fixture", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
 		name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
-		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
+		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
 			Name:                 name,
 			Description:          "E2E: " + t.Name(),
 			Visibility:           "private",
@@ -177,15 +164,11 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 			DefaultBranch:        defaultBranch,
 		})
 		if err == nil {
-			break
+			return out, false, "", nil
 		}
 		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
-		if retryable && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-	}
+		return out, retryable, "name collision or transient network error", err
+	})
 	requireNoError(t, err, "create project fixture")
 
 	e2e.Ledger.Register(ResourceRecord{
@@ -225,11 +208,9 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
-	var out projects.Output
-	var err error
-	for attempt := range projectCreateRetries {
+	out, err := retryWithBackoff(ctx, t, "create project fixture (meta)", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
 		name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
-		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
+		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
 			"action": "create",
 			"params": map[string]any{
 				"name":                   name,
@@ -240,15 +221,11 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 			},
 		})
 		if err == nil {
-			break
+			return out, false, "", nil
 		}
 		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
-		if retryable && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-	}
+		return out, retryable, "name collision or transient network error", err
+	})
 	requireNoError(t, err, "create project fixture (meta)")
 
 	e2e.Ledger.Register(ResourceRecord{
@@ -336,7 +313,7 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
 	const maxRetries = 5
-	for attempt := range maxRetries {
+	fixture, err := retryWithBackoff(ctx, t, "commit file "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
 			ProjectID:     proj.pidOf(),
 			Branch:        branch,
@@ -346,17 +323,13 @@ func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, p
 			},
 		})
 		if err == nil {
-			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}, false, "", nil
 		}
-		if attempt < maxRetries-1 && strings.Contains(err.Error(), "only create or edit files when you are on a branch") {
-			t.Logf("commitFile %s: retry %d/%d (branch not ready)", path, attempt+1, maxRetries)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-		requireNoError(t, err, "commit file "+path)
-	}
-	t.Fatalf("commitFile %s: exhausted %d retries", path, maxRetries)
-	return CommitFixture{}
+		retryable := strings.Contains(err.Error(), "only create or edit files when you are on a branch")
+		return CommitFixture{}, retryable, "branch not ready", err
+	})
+	requireNoError(t, err, "commit file "+path)
+	return fixture
 }
 
 // commitFileMeta creates a file via the gitlab_repository meta-tool.
@@ -365,7 +338,7 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 	t.Helper()
 	const maxRetries = 8
 	needStartBranch := false
-	for attempt := range maxRetries {
+	fixture, err := retryWithBackoff(ctx, t, "commit file meta "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		params := map[string]any{
 			"project_id":     proj.pidStr(),
 			"branch":         branch,
@@ -382,27 +355,21 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 			"params": params,
 		})
 		if err == nil {
-			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}, false, "", nil
 		}
-		if attempt < maxRetries-1 {
-			errMsg := err.Error()
-			if strings.Contains(errMsg, "only create or edit files when you are on a branch") {
-				needStartBranch = true
-				t.Logf("commitFileMeta %s: retry %d/%d (branch not ready, adding start_branch)", path, attempt+1, maxRetries)
-				time.Sleep(time.Duration(attempt+1) * time.Second)
-				continue
-			}
-			if strings.Contains(errMsg, "already exists") {
-				needStartBranch = false
-				t.Logf("commitFileMeta %s: retry %d/%d (branch already exists, removing start_branch)", path, attempt+1, maxRetries)
-				time.Sleep(time.Second)
-				continue
-			}
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "only create or edit files when you are on a branch") {
+			needStartBranch = true
+			return CommitFixture{}, true, "branch not ready, adding start_branch", err
 		}
-		requireNoError(t, err, "commit file meta "+path)
-	}
-	t.Fatalf("commitFileMeta %s: exhausted %d retries", path, maxRetries)
-	return CommitFixture{}
+		if strings.Contains(errMsg, "already exists") {
+			needStartBranch = false
+			return CommitFixture{}, true, "branch already exists, removing start_branch", err
+		}
+		return CommitFixture{}, false, "", err
+	})
+	requireNoError(t, err, "commit file meta "+path)
+	return fixture
 }
 
 // createBranch creates a branch from the default branch via individual tools.
