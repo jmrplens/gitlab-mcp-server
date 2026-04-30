@@ -90,6 +90,8 @@ curl -sf "${GITLAB_URL}/api/v4/application/settings" \
     -H "Authorization: Bearer ${ROOT_TOKEN}" \
     -d "default_branch_protection=0" \
     -d "deletion_adjourned_period=1" \
+    -d "allow_local_requests_from_web_hooks_and_services=true" \
+    -d "allow_local_requests_from_system_hooks=true" \
     -d "throttle_authenticated_api_enabled=false" \
     -d "throttle_authenticated_web_enabled=false" \
     -d "throttle_unauthenticated_api_enabled=false" \
@@ -100,7 +102,7 @@ curl -sf "${GITLAB_URL}/api/v4/application/settings" \
     -d "throttle_unauthenticated_files_api_enabled=false" \
     -d "throttle_authenticated_deprecated_api_enabled=false" \
     -d "throttle_unauthenticated_deprecated_api_enabled=false" > /dev/null 2>&1
-echo "    Default branch protection disabled, deletion_adjourned_period=1, rate limiting disabled"
+echo "    Default branch protection disabled, local outbound requests enabled, deletion_adjourned_period=1, rate limiting disabled"
 
 # 2. Create test user
 echo "  [2/4] Creating test user '${TEST_USER}'..."
@@ -185,6 +187,8 @@ GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
 GITLAB_SKIP_TLS_VERIFY=true
 E2E_MODE=docker
+E2E_FIXTURE_URL=http://e2e-fixture:8080
+E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
 EOF
 
 echo ""

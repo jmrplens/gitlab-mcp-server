@@ -48,6 +48,28 @@ services:
       - runner-config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+  e2e-fixture:
+    image: nginx:alpine
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+        server {
+          listen 8080;
+          location = /hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook"}\n'; }
+          location = /hook-updated { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook-updated"}\n'; }
+          location = /emoji.png { root /usr/share/nginx/html; add_header Content-Type image/png; }
+        }
+        NGINX
+        printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -d > /usr/share/nginx/html/emoji.png
+        nginx -g 'daemon off;'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/emoji.png"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   gitlab-config:
   gitlab-logs:

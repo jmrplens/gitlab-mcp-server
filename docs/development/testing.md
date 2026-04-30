@@ -566,9 +566,7 @@ Or use the Makefile target that automates the full lifecycle:
 make test-e2e-docker
 ```
 
-Docker mode enables pipeline and job tests that require a CI runner.
-
-Tests that require GitLab to fetch public URLs or contact public Git remotes are gated behind the `external-network` capability. Set `E2E_EXTERNAL_NETWORK=true` only in environments with deterministic outbound access. Without that variable, Docker mode skips project webhook, push mirror, and custom emoji tests that depend on public network access.
+Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
 #### Test Reports
 
@@ -607,7 +605,7 @@ The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 | MCP capabilities     | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
 | Docker-only runner   | Exercises CI pipeline and job behavior with a registered runner |
 
-Latest Docker validation snapshot: `make test-e2e-docker` completed 1,142 tests with 4 external-network skips in 335.761 seconds on 2026-04-30. Test function counts and package coverage values above are unchanged by the external-network gating change.
+Latest Docker validation snapshot: `make test-e2e-docker` completed 1,166 tests with 0 skips, 0 failures, and 0 errors in 389.057 seconds on 2026-04-30. Test function counts and package coverage values above are unchanged by the fixture change.
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 

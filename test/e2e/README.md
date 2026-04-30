@@ -13,6 +13,11 @@ Requires a running GitLab instance with a Personal Access Token that has create/
 cat > .env <<EOF
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-...
+# Required when running webhook/custom-emoji tests outside Docker mode.
+# Must be reachable from the GitLab instance, not just from the test process.
+E2E_FIXTURE_URL=https://fixture.example.com
+# Optional when GitLab must reach itself through a different URL for push mirror tests.
+E2E_GITLAB_INTERNAL_URL=https://gitlab.example.com
 EOF
 
 # Run
@@ -25,7 +30,7 @@ Uses an ephemeral GitLab CE container. Requires Docker and ~4 GB RAM.
 
 All Docker infrastructure is version-controlled in this directory:
 
-- `docker-compose.yml` — GitLab CE + Runner definition
+- `docker-compose.yml` — GitLab CE + Runner + fixture service definition
 - `scripts/setup-gitlab.sh` — Creates test user, PAT, generates `test/e2e/.env.docker`
 - `scripts/register-runner.sh` — Registers CI runner
 - `scripts/wait-for-gitlab.sh` — Polls readiness endpoint
@@ -51,7 +56,7 @@ Or use the Makefile target:
 make test-e2e-docker
 ```
 
-Docker mode enables pipeline and job tests that require a CI runner.
+Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
 ## Architecture
 
@@ -94,7 +99,7 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 | `instance-global` | Instance-wide resources such as settings, topics, broadcast messages, feature flags, system hooks, OAuth applications, Sidekiq, and metadata | Must be admin-gated and serialized when mutating global state |
 | `runner` | Pipeline and job tests that depend on the Docker CI runner | Requires Docker mode with a registered runner; avoid concurrent runner-heavy lifecycles |
 | `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
-| `external-network` | Tests that require GitLab to fetch public URLs or contact public Git remotes, such as custom emoji image imports, webhooks, and push mirrors | Disabled by default; set `E2E_EXTERNAL_NETWORK=true` only when outbound access is deterministic |
+| `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
 | `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
 | `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
 | `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |

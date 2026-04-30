@@ -19,9 +19,9 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 | `users_meta_test.go::TestMeta_UserSSHKeyLifecycle` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Creates and deletes SSH keys for the authenticated user. |
 | `users_meta_test.go::TestMeta_UserAdmin` | `user`, `instance-global` | Yes | No, serialize admin user lifecycle | `CapabilityAdmin`, `CapabilityInstanceGlobal` | Creates, updates, blocks, deactivates, bans, and deletes users. |
 | `users_meta_test.go::TestMeta_UserServiceAccounts` | `current-user`, `user`, `enterprise` | Yes | No, serialize PAT/service-account creation | `CapabilityCurrentUserState`, `CapabilityEnterprise` | Service accounts are EE-only; current-user PAT creation needs cleanup or documented limitations. |
-| `projects_meta_test.go::TestMeta_ProjectHooks` | `external-network`, `project` | Yes | Yes, when public webhook URLs are reachable | `CapabilityExternalNetwork` | Creates project webhooks against an external endpoint and expects GitLab URL validation to accept the endpoint. |
-| `projectmirrors_test.go::TestMeta_ProjectRemoteMirrors` | `external-network`, `project` | Yes | Yes, when public Git remotes are reachable | `CapabilityExternalNetwork` | Creates push mirror configuration against an external Git remote. |
-| `customemoji_test.go::TestIndividual_CustomEmoji` / `TestMeta_CustomEmoji` | `external-network`, `group` | Yes | Yes, when public image URLs are reachable | `CapabilityExternalNetwork` | Creates custom emoji from a public image URL fetched by GitLab. |
+| `projects_meta_test.go::TestMeta_ProjectHooks` | `project` | Yes | Yes | None | Creates project webhooks against the Docker fixture service (`E2E_FIXTURE_URL`) so GitLab URL validation and delivery do not require public Internet access. |
+| `projectmirrors_test.go::TestMeta_ProjectRemoteMirrors` | `project` | Yes | Yes | None | Creates push mirror configuration against a second test-owned GitLab project via `E2E_GITLAB_INTERNAL_URL`. |
+| `customemoji_test.go::TestIndividual_CustomEmoji` / `TestMeta_CustomEmoji` | `group` | Yes | Yes | None | Creates custom emoji from the Docker fixture PNG (`E2E_FIXTURE_URL`) instead of a public image URL. |
 | `notifications_test.go::TestMeta_Notifications` | `current-user`, `project` | No | Yes | None | Read-only notification retrieval today; mutation tests belong behind current-user gates. |
 | `todos_test.go::TestIndividual_Todos` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Marks all current-user todos done through individual tools. |
 | `todos_test.go::TestMeta_Todos` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Marks all current-user todos done through meta-tools. |
@@ -43,6 +43,6 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 - `CapabilityCurrentUserState` should guard tests that mutate the authenticated user's status, todos, notification preferences, SSH keys, or personal access tokens.
 - `CapabilityRunner` should guard tests that need a registered CI runner or can consume shared runner capacity.
 - `CapabilityEnterprise` should guard Premium or Ultimate features and skip cleanly on Community Edition.
-- `CapabilityExternalNetwork` should guard tests that require GitLab to fetch public URLs or contact public Git remotes. Set `E2E_EXTERNAL_NETWORK=true` only in environments with deterministic outbound access.
+- `CapabilityExternalNetwork` is reserved for future tests that truly require public Internet access. Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute all non-EE tests without skips.
 - Project-scoped and group-scoped tests can remain parallel when every created resource is test-owned and cleanup is registered.
 - Read-only metadata and MCP capability tests can remain parallel unless they create shared GitLab state.
