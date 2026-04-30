@@ -1,5 +1,7 @@
 //go:build e2e
 
+// wait_helpers_test.go contains polling and retry helpers used by E2E tests to
+// absorb GitLab Docker startup lag and eventual-consistency delays.
 package suite
 
 import (
@@ -63,6 +65,8 @@ func Poll(ctx context.Context, interval time.Duration, timeout time.Duration, co
 	}
 }
 
+// pollContextError maps context cancellation into the timeout sentinel when the
+// context ended because the polling wait budget expired.
 func pollContextError(err error, timeout time.Duration, lastState string) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return pollTimeoutError(timeout, lastState)
@@ -70,10 +74,14 @@ func pollContextError(err error, timeout time.Duration, lastState string) error 
 	return fmt.Errorf("poll canceled: %w", err)
 }
 
+// pollTimeoutError wraps [ErrPollTimeout] with the configured wait budget and
+// last observed state for actionable failure messages.
 func pollTimeoutError(timeout time.Duration, lastState string) error {
 	return fmt.Errorf("%w after %s (last state: %s)", ErrPollTimeout, timeout, lastState)
 }
 
+// stopTimer stops timer and drains its channel when needed so callers can leave
+// select blocks without leaking timer state.
 func stopTimer(timer *time.Timer) {
 	if timer.Stop() {
 		return
@@ -84,10 +92,14 @@ func stopTimer(timer *time.Timer) {
 	}
 }
 
+// retryWithBackoff runs operation with a one-second base delay between
+// retryable failures.
 func retryWithBackoff[O any](ctx context.Context, t *testing.T, label string, maxRetries int, operation func(attempt int) (O, bool, string, error)) (O, error) {
 	return retryWithBackoffInterval(ctx, t, label, maxRetries, time.Second, operation)
 }
 
+// retryWithBackoffInterval runs operation until it succeeds, returns a
+// non-retryable error, exhausts maxRetries, or ctx is canceled.
 func retryWithBackoffInterval[O any](ctx context.Context, t *testing.T, label string, maxRetries int, baseDelay time.Duration, operation func(attempt int) (O, bool, string, error)) (O, error) {
 	t.Helper()
 	var output O
@@ -126,6 +138,8 @@ func retryWithBackoffInterval[O any](ctx context.Context, t *testing.T, label st
 	return output, fmt.Errorf("%s failed without executing retry operation", label)
 }
 
+// TestPoll_ImmediateSuccess verifies that Poll returns immediately when the
+// condition reports success on the first call.
 func TestPoll_ImmediateSuccess(t *testing.T) {
 	calls := 0
 	err := Poll(context.Background(), time.Millisecond, time.Second, func() (bool, string, error) {
@@ -141,6 +155,8 @@ func TestPoll_ImmediateSuccess(t *testing.T) {
 	}
 }
 
+// TestPoll_RetrySuccess verifies that Poll keeps evaluating retryable state
+// observations until a later condition call reports success.
 func TestPoll_RetrySuccess(t *testing.T) {
 	calls := 0
 	err := Poll(context.Background(), time.Millisecond, 100*time.Millisecond, func() (bool, string, error) {
@@ -159,6 +175,9 @@ func TestPoll_RetrySuccess(t *testing.T) {
 	}
 }
 
+// TestPoll_ReturnsContextCancellation verifies that Poll returns
+// [context.Canceled] without calling the condition when the context is already
+// canceled.
 func TestPoll_ReturnsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -177,6 +196,9 @@ func TestPoll_ReturnsContextCancellation(t *testing.T) {
 	}
 }
 
+// TestPoll_ReturnsTimeoutWithLastState verifies that Poll wraps
+// [ErrPollTimeout] and includes the last observed state when the wait budget is
+// exhausted.
 func TestPoll_ReturnsTimeoutWithLastState(t *testing.T) {
 	err := Poll(context.Background(), time.Millisecond, 3*time.Millisecond, func() (bool, string, error) {
 		return false, "still waiting", nil
@@ -190,6 +212,8 @@ func TestPoll_ReturnsTimeoutWithLastState(t *testing.T) {
 	}
 }
 
+// TestPoll_ReturnsConditionError verifies that Poll stops and returns a
+// non-retryable condition error unchanged for [errors.Is] checks.
 func TestPoll_ReturnsConditionError(t *testing.T) {
 	conditionErr := errors.New("condition failed")
 	err := Poll(context.Background(), time.Millisecond, time.Second, func() (bool, string, error) {
@@ -201,6 +225,8 @@ func TestPoll_ReturnsConditionError(t *testing.T) {
 	}
 }
 
+// TestRetryWithBackoffInterval_RetrySuccess verifies that retryWithBackoffInterval
+// retries a retryable failure and returns the later successful result.
 func TestRetryWithBackoffInterval_RetrySuccess(t *testing.T) {
 	attempts := 0
 	result, err := retryWithBackoffInterval(context.Background(), t, "retry test", 3, time.Millisecond, func(int) (int, bool, string, error) {
@@ -222,6 +248,9 @@ func TestRetryWithBackoffInterval_RetrySuccess(t *testing.T) {
 	}
 }
 
+// TestRetryWithBackoffInterval_ReturnsNonRetryableError verifies that
+// retryWithBackoffInterval stops immediately when operation marks an error as
+// non-retryable.
 func TestRetryWithBackoffInterval_ReturnsNonRetryableError(t *testing.T) {
 	failure := errors.New("permanent failure")
 	_, err := retryWithBackoffInterval(context.Background(), t, "retry test", 3, time.Millisecond, func(int) (int, bool, string, error) {
@@ -233,6 +262,9 @@ func TestRetryWithBackoffInterval_ReturnsNonRetryableError(t *testing.T) {
 	}
 }
 
+// TestRetryWithBackoffInterval_RespectsContextCancellation verifies that
+// retryWithBackoffInterval returns [context.Canceled] while waiting between
+// retryable attempts.
 func TestRetryWithBackoffInterval_RespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0

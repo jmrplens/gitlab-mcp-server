@@ -1,5 +1,7 @@
 //go:build e2e
 
+// user_state_test.go snapshots and restores current-user state mutated by E2E
+// tests so notification and status changes do not leak across test cases.
 package suite
 
 import (
@@ -74,6 +76,8 @@ func RestoreCurrentUserState(ctx context.Context, e2e *E2EContext, snapshot Curr
 	return errors.Join(failures...)
 }
 
+// restoreCurrentUserStatus restores the GitLab current-user status using the
+// raw GitLab client because the status update operation is user-scoped state.
 func restoreCurrentUserStatus(ctx context.Context, e2e *E2EContext, status users.StatusOutput) error {
 	if e2e.GitLab == nil {
 		return nil
@@ -93,6 +97,8 @@ func restoreCurrentUserStatus(ctx context.Context, e2e *E2EContext, status users
 	return nil
 }
 
+// restoreGlobalNotification restores the user's global notification level when
+// the snapshot contained one.
 func restoreGlobalNotification(ctx context.Context, e2e *E2EContext, notification notifications.Output) error {
 	if notification.Level == "" {
 		return nil

@@ -1,5 +1,7 @@
 //go:build e2e
 
+// capabilities_helper_test.go defines capability gates and locks used by E2E
+// tests that require optional GitLab features or shared mutable instance state.
 package suite
 
 import (
@@ -30,12 +32,16 @@ const (
 	CapabilityExternalNetwork  Capability = "external-network"
 )
 
+// adminCapability caches whether the configured GitLab token has administrator
+// privileges so admin-only tests do not probe the API repeatedly.
 var adminCapability = struct {
 	once sync.Once
 	ok   bool
 	err  error
 }{}
 
+// capabilityLocks stores process-local mutexes for capabilities that mutate
+// shared GitLab state and therefore must not run concurrently.
 var capabilityLocks = struct {
 	mu    sync.Mutex
 	locks map[Capability]*sync.Mutex
@@ -86,6 +92,8 @@ func RequireCapabilities(t *testing.T, caps ...Capability) {
 	}
 }
 
+// hasExternalNetworkCapability reports whether tests that must call public
+// Internet endpoints are explicitly enabled for the current E2E run.
 func hasExternalNetworkCapability() bool {
 	return strings.EqualFold(os.Getenv("E2E_EXTERNAL_NETWORK"), "true")
 }
@@ -102,6 +110,8 @@ func RunWithCapabilities(t *testing.T, caps []Capability, fn func(t *testing.T, 
 	fn(t, e2e)
 }
 
+// hasAdminCapability reports whether the configured GitLab user is an
+// administrator, caching the first API probe for the duration of the test run.
 func hasAdminCapability() bool {
 	adminCapability.once.Do(func() {
 		if sess.glClient == nil {
@@ -122,6 +132,8 @@ func hasAdminCapability() bool {
 	return adminCapability.ok
 }
 
+// acquireCapabilityLocks locks all serialized capabilities in deterministic
+// order and returns a cleanup function that releases them in reverse order.
 func acquireCapabilityLocks(caps []Capability) func() {
 	lockCaps := lockedCapabilities(caps)
 	for _, capability := range lockCaps {
@@ -135,6 +147,8 @@ func acquireCapabilityLocks(caps []Capability) func() {
 	}
 }
 
+// lockedCapabilities returns the subset of capabilities that require serialized
+// execution because they mutate instance-wide or current-user state.
 func lockedCapabilities(caps []Capability) []Capability {
 	seen := make(map[Capability]struct{}, len(caps))
 	for _, capability := range caps {
@@ -152,6 +166,8 @@ func lockedCapabilities(caps []Capability) []Capability {
 	return lockCaps
 }
 
+// lockForCapability returns the mutex associated with capability, creating it
+// lazily while protecting the shared lock map.
 func lockForCapability(capability Capability) *sync.Mutex {
 	capabilityLocks.mu.Lock()
 	defer capabilityLocks.mu.Unlock()
@@ -164,6 +180,9 @@ func lockForCapability(capability Capability) *sync.Mutex {
 	return lock
 }
 
+// gitLabClientUnavailableError indicates that an admin capability probe could
+// not run because the E2E GitLab client was not configured.
 type gitLabClientUnavailableError struct{}
 
+// Error returns the human-readable reason for the unavailable GitLab client.
 func (gitLabClientUnavailableError) Error() string { return "gitlab client unavailable" }

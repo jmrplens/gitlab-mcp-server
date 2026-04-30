@@ -1,3 +1,5 @@
+// resource_ledger_test.go defines the per-test resource cleanup ledger and
+// verifies that cleanup is ordered, idempotent, and safe under concurrent use.
 package suite
 
 import (
@@ -101,10 +103,19 @@ func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []er
 	return failures
 }
 
+// redactedLabel returns a diagnostic label for cleanup failures without
+// including secrets or credential-bearing URLs.
 func (record ResourceRecord) redactedLabel() string {
 	return fmt.Sprintf("kind=%s id=%q path=%q name=%q owner=%q run_id=%q", record.Kind, record.ID, record.Path, record.Name, record.OwnerTest, record.RunID)
 }
 
+// TestResourceLedger_CleansInReverseRegistrationOrder verifies that CleanupAll
+// runs cleanup callbacks in last-in-first-out order.
+//
+// The test registers project and group cleanup callbacks, invokes CleanupAll,
+// and asserts that the group cleanup runs before the project cleanup. This
+// protects nested fixtures where dependent resources should be removed before
+// their parents.
 func TestResourceLedger_CleansInReverseRegistrationOrder(t *testing.T) {
 	var ledger ResourceLedger
 	var cleaned []string
@@ -128,6 +139,11 @@ func TestResourceLedger_CleansInReverseRegistrationOrder(t *testing.T) {
 	}
 }
 
+// TestResourceLedger_RecordsReturnsCopy verifies that Records returns a copy of
+// the internal slice rather than exposing mutable ledger state.
+//
+// The test mutates the returned record and then reads the ledger again,
+// expecting the original ID to remain unchanged.
 func TestResourceLedger_RecordsReturnsCopy(t *testing.T) {
 	var ledger ResourceLedger
 	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1"})
@@ -141,6 +157,11 @@ func TestResourceLedger_RecordsReturnsCopy(t *testing.T) {
 	}
 }
 
+// TestResourceLedger_RegisterIsConcurrentSafe verifies that concurrent Register
+// calls preserve every cleanup record.
+//
+// The test launches 50 goroutines that register project records and asserts
+// that the final snapshot contains all 50 entries.
 func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 	var ledger ResourceLedger
 	var wg sync.WaitGroup
@@ -158,6 +179,11 @@ func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 	}
 }
 
+// TestResourceLedger_CleanupAllReportsFailures verifies that CleanupAll returns
+// cleanup errors with the redacted resource label and original cause.
+//
+// The test registers a failing cleanup callback and asserts that the returned
+// error includes kind, ID, and failure text for actionable diagnostics.
 func TestResourceLedger_CleanupAllReportsFailures(t *testing.T) {
 	var ledger ResourceLedger
 	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
@@ -173,6 +199,11 @@ func TestResourceLedger_CleanupAllReportsFailures(t *testing.T) {
 	}
 }
 
+// TestResourceLedger_CleanupAllIsIdempotent verifies that calling CleanupAll
+// more than once does not repeat cleanup callbacks.
+//
+// The test registers one cleanup callback, calls CleanupAll twice, and expects
+// the callback counter to increment only once.
 func TestResourceLedger_CleanupAllIsIdempotent(t *testing.T) {
 	var ledger ResourceLedger
 	var calls int
@@ -189,6 +220,8 @@ func TestResourceLedger_CleanupAllIsIdempotent(t *testing.T) {
 	}
 }
 
+// containsAll reports whether value contains every fragment in order-insensitive
+// fashion for compact failure-message assertions.
 func containsAll(value string, fragments ...string) bool {
 	for _, fragment := range fragments {
 		if !strings.Contains(value, fragment) {

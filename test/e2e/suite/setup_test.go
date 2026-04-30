@@ -699,6 +699,8 @@ func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot
 	return nil
 }
 
+// snapshotIntegrityDifferences returns descriptions of pre-existing groups or
+// projects that disappeared or changed path during the E2E run.
 func snapshotIntegrityDifferences(original, current *resourceSnapshot) []string {
 	var missing []string
 
@@ -875,6 +877,8 @@ func waitForPipeline(t *testing.T, client *gitlabclient.Client, projectID int64,
 	return lastStatus
 }
 
+// isTerminalPipelineStatus reports whether status is a GitLab pipeline state
+// that will not transition further.
 func isTerminalPipelineStatus(status string) bool {
 	switch status {
 	case "success", "failed", "canceled", "skipped":

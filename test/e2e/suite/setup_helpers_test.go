@@ -1,3 +1,5 @@
+// setup_helpers_test.go verifies E2E name generation helpers without requiring
+// a live GitLab instance.
 package suite
 
 import (
@@ -7,6 +9,8 @@ import (
 	"time"
 )
 
+// TestShortStableHash_ReturnsStableLowercaseHex verifies that shortStableHash
+// is deterministic, uses the configured hash length, and emits lowercase hex.
 func TestShortStableHash_ReturnsStableLowercaseHex(t *testing.T) {
 	first := shortStableHash("TestIndividual_Branches/Create")
 	second := shortStableHash("TestIndividual_Branches/Create")
@@ -22,6 +26,8 @@ func TestShortStableHash_ReturnsStableLowercaseHex(t *testing.T) {
 	}
 }
 
+// TestSanitizeTestName_ConvertsGoTestNameToSlug verifies that Go test names are
+// converted into GitLab-safe slug segments.
 func TestSanitizeTestName_ConvertsGoTestNameToSlug(t *testing.T) {
 	got := sanitizeTestName("TestIndividual_Branches/Create With Spaces!")
 	want := "testindividual-branches-createwithspaces"
@@ -30,6 +36,8 @@ func TestSanitizeTestName_ConvertsGoTestNameToSlug(t *testing.T) {
 	}
 }
 
+// TestSanitizeTestName_TruncatesToFortyCharacters verifies that sanitized test
+// name segments are capped at 40 characters for compact resource names.
 func TestSanitizeTestName_TruncatesToFortyCharacters(t *testing.T) {
 	got := sanitizeTestName(strings.Repeat("a", 80))
 	if len(got) != 40 {
@@ -37,6 +45,8 @@ func TestSanitizeTestName_TruncatesToFortyCharacters(t *testing.T) {
 	}
 }
 
+// TestNewE2ERunID_UsesUTCStampAndHashSuffix verifies that newE2ERunID encodes
+// the UTC timestamp and a stable lowercase hash suffix.
 func TestNewE2ERunID_UsesUTCStampAndHashSuffix(t *testing.T) {
 	now := time.Date(2026, 4, 30, 12, 34, 56, 789, time.FixedZone("UTC+2", 2*60*60))
 	got := newE2ERunID(now)
@@ -46,6 +56,8 @@ func TestNewE2ERunID_UsesUTCStampAndHashSuffix(t *testing.T) {
 	}
 }
 
+// TestConfiguredE2ERunID_UsesEnvironmentOverride verifies that E2E_RUN_ID is
+// sanitized and used instead of generating a timestamped run ID.
 func TestConfiguredE2ERunID_UsesEnvironmentOverride(t *testing.T) {
 	t.Setenv("E2E_RUN_ID", "Custom_Run/ID!")
 	got := configuredE2ERunID(time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC))
@@ -55,6 +67,8 @@ func TestConfiguredE2ERunID_UsesEnvironmentOverride(t *testing.T) {
 	}
 }
 
+// TestUniqueName_IncludesRunIDHashAndCounter verifies that uniqueName combines
+// the sanitized prefix, run ID, prefix hash, and monotonically increasing count.
 func TestUniqueName_IncludesRunIDHashAndCounter(t *testing.T) {
 	originalRunID := e2eRunID
 	originalCounter := uniqueCounter.Load()
@@ -72,6 +86,8 @@ func TestUniqueName_IncludesRunIDHashAndCounter(t *testing.T) {
 	}
 }
 
+// TestUniqueName_UsesDefaultPrefixForEmptyInput verifies that uniqueName falls
+// back to the e2e prefix when the supplied prefix sanitizes to an empty string.
 func TestUniqueName_UsesDefaultPrefixForEmptyInput(t *testing.T) {
 	originalRunID := e2eRunID
 	originalCounter := uniqueCounter.Load()

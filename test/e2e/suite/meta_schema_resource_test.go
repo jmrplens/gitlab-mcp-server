@@ -3,7 +3,6 @@
 // meta_schema_resource_test.go validates that, after the full meta-tool
 // registry is wired into a server, the gitlab://schema/meta/* resources
 // expose the captured per-action InputSchemas for real meta-tools.
-
 package suite
 
 import (

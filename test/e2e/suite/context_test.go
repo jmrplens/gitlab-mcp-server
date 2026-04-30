@@ -1,5 +1,7 @@
 //go:build e2e
 
+// context_test.go defines the per-test E2E context object that bundles MCP
+// sessions, GitLab client access, and cleanup ownership for resource fixtures.
 package suite
 
 import (
@@ -12,6 +14,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
+// defaultCleanupTimeout bounds per-test resource cleanup during t.Cleanup.
 const defaultCleanupTimeout = 60 * time.Second
 
 // E2EContext carries per-test E2E sessions, identity, and cleanup ownership.
@@ -46,6 +49,7 @@ func NewE2EContext(t *testing.T) *E2EContext {
 	return e2e
 }
 
+// cleanupContext creates the bounded background context used by cleanup hooks.
 func cleanupContext(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
 }
@@ -75,6 +79,8 @@ func (e2e *E2EContext) SafeMode() *mcp.ClientSession {
 	return e2e.requiredSession("safe mode", e2e.Sessions.safeMode)
 }
 
+// requiredSession returns session or skips the test with name when it is not
+// configured for the current E2E mode.
 func (e2e *E2EContext) requiredSession(name string, session *mcp.ClientSession) *mcp.ClientSession {
 	e2e.T.Helper()
 	if session == nil {

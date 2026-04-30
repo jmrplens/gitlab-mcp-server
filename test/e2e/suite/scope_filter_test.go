@@ -4,7 +4,6 @@
 // end-to-end scenario. It creates a non-admin user with a limited-scope
 // token and asserts that admin-only meta-tools are removed while regular
 // meta-tools remain accessible.
-
 package suite
 
 import (

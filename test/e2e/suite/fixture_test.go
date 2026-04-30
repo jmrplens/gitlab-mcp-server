@@ -470,6 +470,8 @@ func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Cli
 	requireNoError(t, waitForBranch(ctx, client, projectID, branch), fmt.Sprintf("wait for branch %s in project %d", branch, projectID))
 }
 
+// waitForBranch polls GitLab until branch is visible in projectID or returns a
+// non-retryable branch lookup error.
 func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string) error {
 	if client == nil {
 		return fmt.Errorf("gitlab client not configured")
@@ -497,6 +499,8 @@ func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID i
 	})
 }
 
+// retryableBranchResponse reports whether a branch lookup response can be
+// retried while GitLab converges after branch creation.
 func retryableBranchResponse(resp *gl.Response) bool {
 	if resp == nil {
 		return true
@@ -522,6 +526,8 @@ func waitForMRReady(ctx context.Context, t *testing.T, client *gitlabclient.Clie
 	}
 }
 
+// waitForMRReadyState polls GitLab until the merge request leaves transitional
+// detailed merge states or the polling context expires.
 func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, projectID, mrIID int64) error {
 	if client == nil {
 		return nil

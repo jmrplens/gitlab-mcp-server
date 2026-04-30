@@ -1,5 +1,7 @@
 //go:build e2e
 
+// groupserviceaccounts_test.go exercises EE-only group service account actions
+// through the gitlab_group meta-tool when the target GitLab instance supports them.
 package suite
 
 import (

@@ -1,5 +1,7 @@
 //go:build e2e
 
+// groupreleases_test.go exercises group-level release aggregation through the
+// gitlab_group meta-tool against a live GitLab instance.
 package suite
 
 import (

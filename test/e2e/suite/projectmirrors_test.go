@@ -1,5 +1,7 @@
 //go:build e2e
 
+// projectmirrors_test.go exercises project remote mirror actions through the
+// gitlab_project meta-tool using Docker-local GitLab mirror targets.
 package suite
 
 import (
