@@ -248,12 +248,20 @@ func replaceSection(path, startMark, endMark, content string) error {
 
 	text := string(data)
 	startIdx := strings.Index(text, startMark)
-	endIdx := strings.Index(text, endMark)
-	if startIdx < 0 || endIdx < 0 || endIdx <= startIdx {
-		return fmt.Errorf("markers %s / %s not found in %s", startMark, endMark, path)
+	if startIdx < 0 {
+		return fmt.Errorf("start marker %s not found in %s", startMark, path)
 	}
 
-	before := text[:startIdx+len(startMark)]
+	// Search for endMark only after startMark to avoid matching an earlier
+	// occurrence of the same marker string that belongs to a different section.
+	searchFrom := startIdx + len(startMark)
+	relEndIdx := strings.Index(text[searchFrom:], endMark)
+	if relEndIdx < 0 {
+		return fmt.Errorf("end marker %s not found after start marker in %s", endMark, path)
+	}
+	endIdx := searchFrom + relEndIdx
+
+	before := text[:searchFrom]
 	after := text[endIdx:]
 	result := before + "\n\n" + content + "\n" + after
 
