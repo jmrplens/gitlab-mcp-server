@@ -30,10 +30,17 @@ func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
-// TestMeasureResources_IncludesMetaSchema verifies the token audit can list
-// resources after registering the captured meta-schema route set.
-func TestMeasureResources_IncludesMetaSchema(t *testing.T) {
-	if tokens := measureResources(newAuditTokensClient(t)); tokens <= 0 {
-		t.Fatalf("measureResources() = %d, want positive token estimate", tokens)
+// TestMeasureResources_SeparatesMetaSchema verifies the token audit measures
+// individual-mode resources separately from the additional meta-schema catalog
+// resources that only appear when meta-tools are enabled.
+func TestMeasureResources_SeparatesMetaSchema(t *testing.T) {
+	client := newAuditTokensClient(t)
+	individualTokens := measureResources(client, false)
+	metaTokens := measureResources(client, true)
+	if individualTokens <= 0 {
+		t.Fatalf("measureResources(includeMetaSchema=false) = %d, want positive token estimate", individualTokens)
+	}
+	if metaTokens <= individualTokens {
+		t.Fatalf("measureResources(includeMetaSchema=true) = %d, want greater than individual %d", metaTokens, individualTokens)
 	}
 }

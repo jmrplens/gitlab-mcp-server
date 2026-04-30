@@ -157,10 +157,10 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "uppercase scheme accepted and case preserved without default",
+			name:       "uppercase scheme accepted and canonicalized without default",
 			header:     "HTTPS://gitlab.example.com",
 			defaultURL: "",
-			wantURL:    "HTTPS://gitlab.example.com",
+			wantURL:    "https://gitlab.example.com",
 		},
 		{
 			name:       "malformed URL rejected without default",
@@ -173,6 +173,24 @@ func TestExtractGitLabURL(t *testing.T) {
 			header:     "https://gitlab.example.com/api",
 			defaultURL: "",
 			wantURL:    "https://gitlab.example.com/api",
+		},
+		{
+			name:       "credentials rejected without default",
+			header:     "https://user:secret@gitlab.example.com",
+			defaultURL: "",
+			wantErr:    true,
+		},
+		{
+			name:       "query rejected without default",
+			header:     "https://gitlab.example.com?token=secret",
+			defaultURL: "",
+			wantErr:    true,
+		},
+		{
+			name:       "fragment rejected without default",
+			header:     "https://gitlab.example.com#internal.example.com",
+			defaultURL: "",
+			wantErr:    true,
 		},
 		{
 			name:       "invalid default URL is also rejected",

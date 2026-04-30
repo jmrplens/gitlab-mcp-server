@@ -215,7 +215,6 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 		if p.cfg.AutoDetectEnterprise {
 			entryCfg.Enterprise = client.DetectEnterprise(ctx, entryCfg.Enterprise)
 		}
-		client.SetEnterprise(entryCfg.Enterprise)
 
 		if p.cfg.IgnoreScopes {
 			return entryCfg

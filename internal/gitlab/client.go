@@ -31,7 +31,7 @@ type Client struct {
 	// enterprise indicates whether the GitLab instance is Premium/Ultimate.
 	// Used to select EE-specific API queries (e.g. GraphQL branch rules with
 	// approval rules, code owner approval, external status checks).
-	enterprise bool
+	enterprise atomic.Bool
 
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
@@ -59,10 +59,10 @@ const initCooldown = 30 * time.Second
 const healthTimeout = 10 * time.Second
 
 // SetEnterprise marks the client as connected to a Premium/Ultimate instance.
-func (c *Client) SetEnterprise(v bool) { c.enterprise = v }
+func (c *Client) SetEnterprise(v bool) { c.enterprise.Store(v) }
 
 // IsEnterprise reports whether the GitLab instance is Premium/Ultimate.
-func (c *Client) IsEnterprise() bool { return c.enterprise }
+func (c *Client) IsEnterprise() bool { return c.enterprise.Load() }
 
 // NewClient creates an authenticated GitLab client from the provided configuration.
 // When cfg.SkipTLSVerify is true, TLS certificate verification is disabled (for self-signed certs).
@@ -75,8 +75,8 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + "/api/v4/version",
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
-		enterprise:   cfg.Enterprise,
 	}
+	c.SetEnterprise(cfg.Enterprise)
 
 	sdkHTTPClient := &http.Client{
 		Transport: &dotUnescapeTransport{
@@ -289,13 +289,13 @@ type gitLabVersionInfo struct {
 // It bypasses the resilient SDK wrapper so edition detection can run during
 // client initialization and degraded-mode recovery.
 func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from admin-configured GITLAB_URL, not user input
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from a normalized GitLab base URL
 	if err != nil {
 		return nil, fmt.Errorf("creating health request: %w", err)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
 
-	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from admin config
+	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
 	if err != nil {
 		return nil, fmt.Errorf("gitlab ping failed: %w", err)
 	}

@@ -75,7 +75,8 @@ func main() {
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
 
-	resourceTokens := measureResources(client)
+	individualResourceTokens := measureResources(client, false)
+	metaResourceTokens := measureResources(client, true)
 	promptTokens := measurePrompts(client)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
@@ -108,9 +109,11 @@ func main() {
 	// Shared overhead (resources + prompts)
 	fmt.Println("## Shared Overhead (Resources + Prompts)")
 	fmt.Println()
-	fmt.Printf("  Resources: ~%s tokens (%s bytes)\n", fmtNum(resourceTokens), fmtNum(resourceTokens*bytesPerTok))
+	fmt.Printf("  Resources (individual): ~%s tokens (%s bytes)\n", fmtNum(individualResourceTokens), fmtNum(individualResourceTokens*bytesPerTok))
+	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaResourceTokens), fmtNum(metaResourceTokens*bytesPerTok))
 	fmt.Printf("  Prompts:   ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
-	fmt.Printf("  Total:     ~%s tokens\n", fmtNum(resourceTokens+promptTokens))
+	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
+	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaResourceTokens+promptTokens))
 	fmt.Println()
 
 	// Top 30 individual tools by token cost
@@ -132,9 +135,9 @@ func main() {
 	fmt.Println("## Grand Total (what an LLM sees)")
 	fmt.Println()
 	fmt.Printf("  Individual mode: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(indTotal), fmtNum(resourceTokens+promptTokens), fmtNum(indTotal+resourceTokens+promptTokens))
+		fmtNum(indTotal), fmtNum(individualResourceTokens+promptTokens), fmtNum(indTotal+individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(metaTotal), fmtNum(resourceTokens+promptTokens), fmtNum(metaTotal+resourceTokens+promptTokens))
+		fmtNum(metaTotal), fmtNum(metaResourceTokens+promptTokens), fmtNum(metaTotal+metaResourceTokens+promptTokens))
 	fmt.Println()
 }
 
@@ -199,15 +202,18 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	return infos
 }
 
-// measureResources registers static, template, workflow, and meta-schema MCP
-// resources and estimates the token cost of their advertised definitions.
-func measureResources(client *gitlabclient.Client) int {
+// measureResources registers static, template, workflow, and optionally
+// meta-schema MCP resources, then estimates the token cost of their advertised
+// definitions.
+func measureResources(client *gitlabclient.Client, includeMetaSchema bool) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
-	metaRoutes := toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, client, false)
-	})
 	resources.Register(server, client)
-	resources.RegisterMetaSchemaResources(server, metaRoutes)
+	if includeMetaSchema {
+		metaRoutes := toolutil.CaptureMetaRoutes(func() {
+			tools.RegisterAllMeta(server, client, false)
+		})
+		resources.RegisterMetaSchemaResources(server, metaRoutes)
+	}
 	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()

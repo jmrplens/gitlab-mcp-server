@@ -161,8 +161,8 @@ func appendOptionName(options []string, name string) []string {
 }
 
 // normalizeGitLabURL validates and canonicalizes a GitLab base URL. The
-// returned string has trailing slashes stripped and a guaranteed http/https
-// scheme and non-empty host.
+// returned string has trailing slashes stripped, no credentials, no query or
+// fragment, and a guaranteed http/https scheme with non-empty host.
 func normalizeGitLabURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -174,7 +174,17 @@ func normalizeGitLabURL(raw string) (string, error) {
 	if u.Host == "" {
 		return "", &InvalidGitLabURLError{URL: raw, Reason: "missing host"}
 	}
-	return strings.TrimRight(raw, "/"), nil
+	if u.User != nil {
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "credentials are not allowed"}
+	}
+	if u.RawQuery != "" {
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "query parameters are not allowed"}
+	}
+	if u.Fragment != "" {
+		return "", &InvalidGitLabURLError{URL: raw, Reason: "fragments are not allowed"}
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	return u.String(), nil
 }
 
 // InvalidGitLabURLError is returned when the GITLAB-URL header contains an invalid URL.
