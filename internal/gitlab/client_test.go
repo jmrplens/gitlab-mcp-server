@@ -565,7 +565,7 @@ func TestDetectEnterprise_OverridesFallback(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	if enterprise := client.DetectEnterprise(context.Background(), true); enterprise {
+	if client.DetectEnterprise(context.Background(), true) {
 		t.Fatal("DetectEnterprise() = true, want false from version endpoint")
 	}
 	if client.IsEnterprise() {
@@ -591,7 +591,7 @@ func TestDetectEnterprise_MissingFieldUsesFallback(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	if enterprise := client.DetectEnterprise(context.Background(), true); !enterprise {
+	if !client.DetectEnterprise(context.Background(), true) {
 		t.Fatal("DetectEnterprise() = false, want configured fallback true")
 	}
 	if !client.IsEnterprise() {
@@ -616,7 +616,7 @@ func TestDetectEnterprise_ErrorUsesFallback(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	if enterprise := client.DetectEnterprise(context.Background(), true); !enterprise {
+	if !client.DetectEnterprise(context.Background(), true) {
 		t.Fatal("DetectEnterprise() = false, want fallback true")
 	}
 	if !client.IsEnterprise() {

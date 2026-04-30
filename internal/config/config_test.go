@@ -638,7 +638,7 @@ func TestValidate_AcceptableMaxValues(t *testing.T) {
 // TestServerConfig_CopiesServerScopedFields verifies ServerConfig returns an
 // immutable per-server snapshot and defensively copies slice-backed fields.
 func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
-	if got := (*Config)(nil).ServerConfig(); got == nil {
+	if (*Config)(nil).ServerConfig() == nil {
 		t.Fatal("nil Config should return an empty ServerConfig snapshot")
 	}
 
