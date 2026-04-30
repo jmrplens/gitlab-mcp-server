@@ -32,6 +32,7 @@ const (
 	startMarker = "<!-- START TOOLS -->"
 	endMarker   = "<!-- END TOOLS -->"
 	readmePath  = "README.md"
+	repoRoot    = "."
 )
 
 // main regenerates the README meta-tool table and exits non-zero on failure.
@@ -66,11 +67,19 @@ func run() error {
 
 	table := buildTable(baseTools, allTools)
 
-	if replaceErr := replaceSection(readmePath, table); replaceErr != nil {
+	if replaceErr := replaceSection(readmePath, startMarker, endMarker, table); replaceErr != nil {
 		return replaceErr
 	}
 
-	fmt.Printf("Updated %s (%d base / %d enterprise meta-tools)\n",
+	stats, statsErr := collectStats(repoRoot)
+	if statsErr != nil {
+		return fmt.Errorf("collecting stats: %w", statsErr)
+	}
+	if replaceErr := replaceSection(readmePath, statsStartMarker, statsEndMarker, renderStats(stats)); replaceErr != nil {
+		return replaceErr
+	}
+
+	fmt.Printf("Updated %s (%d base / %d enterprise meta-tools, stats regenerated)\n",
 		readmePath, len(baseTools), len(allTools))
 	return nil
 }
@@ -229,23 +238,30 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 	return b.String()
 }
 
-// replaceSection replaces the generated README section between the configured
-// marker comments while preserving the markers themselves.
-func replaceSection(path, content string) error {
+// replaceSection replaces content between startMark and endMark in the file at
+// path, preserving both markers themselves.
+func replaceSection(path, startMark, endMark, content string) error {
 	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
 	text := string(data)
-	startIdx := strings.Index(text, startMarker)
-	endIdx := strings.Index(text, endMarker)
-	if startIdx < 0 || endIdx < 0 || endIdx <= startIdx {
-		return fmt.Errorf("markers %s / %s not found in %s", startMarker, endMarker, path)
+	startIdx := strings.Index(text, startMark)
+	if startIdx < 0 {
+		return fmt.Errorf("start marker %s not found in %s", startMark, path)
 	}
 
-	// Replace content between markers (preserve markers).
-	before := text[:startIdx+len(startMarker)]
+	// Search for endMark only after startMark to avoid matching an earlier
+	// occurrence of the same marker string that belongs to a different section.
+	searchFrom := startIdx + len(startMark)
+	relEndIdx := strings.Index(text[searchFrom:], endMark)
+	if relEndIdx < 0 {
+		return fmt.Errorf("end marker %s not found after start marker in %s", endMark, path)
+	}
+	endIdx := searchFrom + relEndIdx
+
+	before := text[:searchFrom]
 	after := text[endIdx:]
 	result := before + "\n\n" + content + "\n" + after
 
