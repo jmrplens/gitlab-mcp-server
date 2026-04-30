@@ -171,7 +171,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 	})
 	requireNoError(t, err, "create project fixture")
 
-	e2e.Ledger.Register(ResourceRecord{
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
 		Kind:      ResourceKindProject,
 		ID:        strconv.FormatInt(out.ID, 10),
 		Path:      out.PathWithNamespace,
@@ -186,7 +186,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 				FullPath:          out.PathWithNamespace,
 			})
 		},
-	})
+	}), "register project fixture cleanup")
 
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
@@ -228,7 +228,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 	})
 	requireNoError(t, err, "create project fixture (meta)")
 
-	e2e.Ledger.Register(ResourceRecord{
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
 		Kind:      ResourceKindProject,
 		ID:        strconv.FormatInt(out.ID, 10),
 		Path:      out.PathWithNamespace,
@@ -246,7 +246,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 				},
 			})
 		},
-	})
+	}), "register meta project fixture cleanup")
 
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
@@ -279,7 +279,7 @@ func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSe
 	requireNoError(t, err, "create group fixture (meta)")
 
 	id := strconv.FormatInt(out.ID, 10)
-	e2e.Ledger.Register(ResourceRecord{
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
 		Kind:      ResourceKindGroup,
 		ID:        id,
 		Path:      out.FullPath,
@@ -293,7 +293,7 @@ func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSe
 				"params": map[string]any{"group_id": id},
 			})
 		},
-	})
+	}), "register meta group fixture cleanup")
 
 	return GroupFixture{ID: out.ID, Path: out.FullPath}
 }
@@ -540,7 +540,7 @@ func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, proje
 	defer cancel()
 
 	return Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
-		mr, _, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(pollCtx))
+		mr, resp, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(pollCtx))
 		if err == nil {
 			switch mr.DetailedMergeStatus {
 			case "preparing", "checking", "unchecked", "":
@@ -552,6 +552,23 @@ func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, proje
 		if pollCtx.Err() != nil {
 			return false, "", pollCtx.Err()
 		}
-		return false, fmt.Sprintf("error polling MR !%d in project %d: %v", mrIID, projectID, err), nil
+
+		state := fmt.Sprintf("error polling MR !%d in project %d: %v", mrIID, projectID, err)
+		if resp != nil {
+			state = fmt.Sprintf("MR !%d in project %d: HTTP %d", mrIID, projectID, resp.StatusCode)
+		}
+		if resp == nil && !isTransientNetworkError(err) {
+			return false, state, fmt.Errorf("get MR !%d in project %d: %w", mrIID, projectID, err)
+		}
+		if resp != nil && !retryableMergeRequestResponse(resp) {
+			return false, state, fmt.Errorf("get MR !%d in project %d: %w", mrIID, projectID, err)
+		}
+		return false, state, nil
 	})
+}
+
+// retryableMergeRequestResponse reports whether an MR readiness lookup can be
+// retried after GitLab returns an HTTP response.
+func retryableMergeRequestResponse(resp *gl.Response) bool {
+	return resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
 }

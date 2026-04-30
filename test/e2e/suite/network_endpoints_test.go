@@ -47,9 +47,6 @@ func remoteMirrorTargetURL(t *testing.T, target ProjectFixture) string {
 
 	baseURL := os.Getenv("E2E_GITLAB_INTERNAL_URL")
 	if baseURL == "" {
-		baseURL = os.Getenv("GITLAB_URL")
-	}
-	if baseURL == "" {
 		baseURL = defaultE2EGitLabInternalURL
 	}
 

@@ -4,6 +4,7 @@ package suite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"time"
 )
+
+var errResourceLedgerClosed = errors.New("resource ledger closed")
 
 // ResourceKind identifies a GitLab or MCP resource owned by an E2E test.
 type ResourceKind string
@@ -56,11 +59,16 @@ type ResourceLedger struct {
 }
 
 // Register adds a resource cleanup record to the ledger.
-func (ledger *ResourceLedger) Register(record ResourceRecord) {
+func (ledger *ResourceLedger) Register(record ResourceRecord) error {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 
+	if ledger.cleaned {
+		return fmt.Errorf("register %s: %w", record.redactedLabel(), errResourceLedgerClosed)
+	}
+
 	ledger.records = append(ledger.records, record)
+	return nil
 }
 
 // Records returns a snapshot copy of registered resources.
@@ -120,14 +128,18 @@ func TestResourceLedger_CleansInReverseRegistrationOrder(t *testing.T) {
 	var ledger ResourceLedger
 	var cleaned []string
 
-	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
+	if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
 		cleaned = append(cleaned, "project")
 		return nil
-	}})
-	ledger.Register(ResourceRecord{Kind: ResourceKindGroup, ID: "2", Cleanup: func(context.Context) error {
+	}}); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
+	if err := ledger.Register(ResourceRecord{Kind: ResourceKindGroup, ID: "2", Cleanup: func(context.Context) error {
 		cleaned = append(cleaned, "group")
 		return nil
-	}})
+	}}); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
 
 	failures := ledger.CleanupAll(context.Background(), t)
 	if len(failures) != 0 {
@@ -146,7 +158,9 @@ func TestResourceLedger_CleansInReverseRegistrationOrder(t *testing.T) {
 // expecting the original ID to remain unchanged.
 func TestResourceLedger_RecordsReturnsCopy(t *testing.T) {
 	var ledger ResourceLedger
-	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1"})
+	if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1"}); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
 
 	records := ledger.Records()
 	records[0].ID = "changed"
@@ -169,7 +183,9 @@ func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 	for i := range 50 {
 		id := fmt.Sprintf("%d", i)
 		wg.Go(func() {
-			ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: id})
+			if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: id}); err != nil {
+				t.Errorf("Register() error = %v, want nil", err)
+			}
 		})
 	}
 	wg.Wait()
@@ -186,9 +202,11 @@ func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 // error includes kind, ID, and failure text for actionable diagnostics.
 func TestResourceLedger_CleanupAllReportsFailures(t *testing.T) {
 	var ledger ResourceLedger
-	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
+	if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
 		return fmt.Errorf("delete failed")
-	}})
+	}}); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
 
 	failures := ledger.CleanupAll(context.Background(), t)
 	if len(failures) != 1 {
@@ -207,16 +225,34 @@ func TestResourceLedger_CleanupAllReportsFailures(t *testing.T) {
 func TestResourceLedger_CleanupAllIsIdempotent(t *testing.T) {
 	var ledger ResourceLedger
 	var calls int
-	ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
+	if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
 		calls++
 		return nil
-	}})
+	}}); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
 
 	ledger.CleanupAll(context.Background(), t)
 	ledger.CleanupAll(context.Background(), t)
 
 	if calls != 1 {
 		t.Fatalf("cleanup calls = %d, want 1", calls)
+	}
+}
+
+// TestResourceLedger_RegisterAfterCleanupReturnsError verifies that the ledger
+// rejects records registered after cleanup has started.
+//
+// The test runs CleanupAll first, then attempts to add another record and
+// expects a closed-ledger error. This prevents late fixture registrations from
+// being silently skipped by idempotent cleanup.
+func TestResourceLedger_RegisterAfterCleanupReturnsError(t *testing.T) {
+	var ledger ResourceLedger
+
+	ledger.CleanupAll(context.Background(), t)
+	err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "late"})
+	if !errors.Is(err, errResourceLedgerClosed) {
+		t.Fatalf("Register() error = %v, want %v", err, errResourceLedgerClosed)
 	}
 }
 

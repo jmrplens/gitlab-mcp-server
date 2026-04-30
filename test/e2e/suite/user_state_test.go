@@ -49,7 +49,7 @@ func RegisterCurrentUserStateRestore(ctx context.Context, e2e *E2EContext) Curre
 	snapshot, err := SnapshotCurrentUserState(ctx, e2e)
 	requireNoError(e2e.T, err, "snapshot current-user state")
 
-	e2e.Ledger.Register(ResourceRecord{
+	requireNoError(e2e.T, e2e.Ledger.Register(ResourceRecord{
 		Kind:      ResourceKindCurrentUserState,
 		ID:        "current-user",
 		Name:      "current-user-state",
@@ -59,7 +59,7 @@ func RegisterCurrentUserStateRestore(ctx context.Context, e2e *E2EContext) Curre
 		Cleanup: func(cleanupCtx context.Context) error {
 			return RestoreCurrentUserState(cleanupCtx, e2e, snapshot)
 		},
-	})
+	}), "register current-user state restore")
 
 	return snapshot
 }
