@@ -41,8 +41,8 @@ func TestNewE2ERunID_UsesUTCStampAndHashSuffix(t *testing.T) {
 	now := time.Date(2026, 4, 30, 12, 34, 56, 789, time.FixedZone("UTC+2", 2*60*60))
 	got := newE2ERunID(now)
 
-	if !regexp.MustCompile(`^20260430T103456Z-[a-f0-9]{10}$`).MatchString(got) {
-		t.Fatalf("newE2ERunID() = %q, want UTC timestamp plus 10-char hex suffix", got)
+	if !regexp.MustCompile(`^20260430t103456z-[a-f0-9]{10}$`).MatchString(got) {
+		t.Fatalf("newE2ERunID() = %q, want lowercase UTC timestamp plus 10-char hex suffix", got)
 	}
 }
 

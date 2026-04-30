@@ -31,7 +31,7 @@ func configuredE2ERunID(now time.Time) string {
 
 func newE2ERunID(now time.Time) string {
 	source := fmt.Sprintf("%d-%d-%d", now.UnixNano(), os.Getpid(), runIDCounter.Add(1))
-	return fmt.Sprintf("%s-%s", now.UTC().Format("20060102T150405Z"), shortStableHash(source))
+	return fmt.Sprintf("%s-%s", now.UTC().Format("20060102t150405z"), shortStableHash(source))
 }
 
 func shortStableHash(value string) string {
