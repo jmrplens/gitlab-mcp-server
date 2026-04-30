@@ -23,7 +23,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,6 +99,8 @@ func TestMain(m *testing.M) {
 	if p := os.Getenv("E2E_PROJECT_PREFIX"); p != "" {
 		e2eProjectPrefix = p
 	}
+	e2eRunID = configuredE2ERunID(time.Now())
+	log.Printf("e2e: run ID %s", e2eRunID)
 
 	// Load .env — Docker mode uses a different file.
 	if isDockerMode() {
@@ -344,14 +345,6 @@ func TestMain(m *testing.M) {
 	_ = safeModeSession.Close()
 	safeModeServerCancel()
 	os.Exit(code)
-}
-
-// uniqueCounter provides a monotonic counter for guaranteed unique project names.
-var uniqueCounter atomic.Int64
-
-// uniqueName generates a timestamped name with an atomic counter to avoid collisions.
-func uniqueName(prefix string) string {
-	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixMilli(), uniqueCounter.Add(1))
 }
 
 // mockCreateMessageHandler returns a deterministic mock LLM response for
@@ -730,6 +723,7 @@ func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot
 // with the E2E prefix. This catches orphans from previous failed runs,
 // including projects already marked for delayed deletion.
 func cleanupOrphanedProjects(client *gitlabclient.Client) {
+	log.Printf("e2e: cleanup: scanning orphaned projects with prefix %q for run ID %q", e2eProjectPrefix, e2eRunID)
 	opts := &gl.ListProjectsOptions{
 		Owned:                new(true),
 		IncludePendingDelete: new(true),

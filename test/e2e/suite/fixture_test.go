@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -63,30 +62,6 @@ type MRFixture struct {
 type CommitFixture struct {
 	SHA     string
 	ShortID string
-}
-
-// ---------------------------------------------------------------------------
-// sanitizeTestName converts a test name like
-// "TestIndividual_Branches/Create" into a slug safe for GitLab project names.
-// ---------------------------------------------------------------------------
-
-// unsafeChars matches any character that is not lowercase alphanumeric or hyphen,
-// used by [sanitizeTestName] to strip characters unsafe for GitLab project names.
-var unsafeChars = regexp.MustCompile(`[^a-z0-9-]`)
-
-// sanitizeTestName converts a Go test name like
-// "TestIndividual_Branches/Create" into a slug safe for GitLab project
-// names by lowercasing, replacing separators with hyphens, stripping
-// unsafe characters, and truncating to 40 characters.
-func sanitizeTestName(name string) string {
-	s := strings.ToLower(name)
-	s = strings.ReplaceAll(s, "/", "-")
-	s = strings.ReplaceAll(s, "_", "-")
-	s = unsafeChars.ReplaceAllString(s, "")
-	if len(s) > 40 {
-		s = s[:40]
-	}
-	return s
 }
 
 // ---------------------------------------------------------------------------
