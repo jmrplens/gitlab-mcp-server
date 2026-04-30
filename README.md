@@ -495,18 +495,18 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 621 | 120,426 |
+| Source (`.go`, non-test) | 621 | 120,446 |
 | Unit tests (`_test.go`) | 402 | 209,465 |
 | End-to-end tests | 108 | 23,497 |
-| **Total** | **1,131** | **353,388** |
+| **Total** | **1,131** | **353,408** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,352 |
+| Source functions | 3,354 |
 | — exported (public) | 2,185 |
-| — unexported (private) | 1,167 |
+| — unexported (private) | 1,169 |
 | Unit test functions (`TestXxx`) | 8,781 |
 | Subtests (`t.Run(...)`) | 1,924 |
 | End-to-end test functions | 243 |
@@ -518,14 +518,14 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines | 1.74× more tests than code |
 | Average source file length | ~193 lines |
 | Average test file length | ~521 lines |
-| Comment lines in source | 10,039 (~8.3% of source) |
+| Comment lines in source | 10,044 (~8.3% of source) |
 | Test functions per source function | 2.6× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,328 |
+| `if err != nil` checks | 5,330 |
 | `defer` statements | 662 |
 | `struct` types defined | 1,928 |
 | `//nolint` suppressions | 55 |
@@ -538,8 +538,8 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 88 |
-| Unique contributors | 3 |
+| Git commits | 91 |
+| Unique contributors | 2 |
 
 ### Hall of fame
 

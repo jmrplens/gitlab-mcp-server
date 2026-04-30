@@ -299,7 +299,7 @@ func gitContributors() int {
 	if err != nil {
 		return 0
 	}
-	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%ae").Output() //#nosec G204 -- absolute path from LookPath, fixed args
+	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%aE").Output() //#nosec G204 -- absolute path from LookPath, fixed args; %aE uses .mailmap
 	if err != nil {
 		return 0
 	}
