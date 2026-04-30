@@ -541,9 +541,9 @@ Numbers nobody asked for, but here they are anyway.
 | Category | Files | Lines |
 | --- | ---: | ---: |
 | Source (`.go`, non-test) | 621 | 120,485 |
-| Unit tests (`_test.go`) | 402 | 209,465 |
+| Unit tests (`_test.go`) | 402 | 209,468 |
 | End-to-end tests | 108 | 23,497 |
-| **Total** | **1,131** | **353,447** |
+| **Total** | **1,131** | **353,450** |
 
 ### Functions
 
@@ -583,7 +583,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 97 |
+| Git commits | 92 |
 | Unique contributors | 2 |
 
 ### Hall of fame
