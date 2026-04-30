@@ -778,9 +778,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 // queues are idle (enqueued == 0). Accelerates E2E tests by allowing async
 // operations (MR merge checks, pipeline creation, commit indexing) to complete
 // before assertions. No-op if the API is unavailable or context is done.
-func drainSidekiq(ctx context.Context, t *testing.T) {
+func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
-	if sess.glClient == nil {
+	if client == nil {
 		return
 	}
 	const maxWait = 15 * time.Second
@@ -788,7 +788,7 @@ func drainSidekiq(ctx context.Context, t *testing.T) {
 
 	deadline := time.Now().Add(maxWait)
 	for time.Now().Before(deadline) {
-		stats, _, err := sess.glClient.GL().Sidekiq.GetJobStats()
+		stats, _, err := client.GL().Sidekiq.GetJobStats()
 		if err != nil {
 			return
 		}
@@ -813,9 +813,9 @@ func drainSidekiq(ctx context.Context, t *testing.T) {
 //     errors before giving up).
 //   - Logs the final status before failing so test output makes the runner
 //     state easy to diagnose.
-func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout time.Duration) string {
+func waitForPipeline(t *testing.T, client *gitlabclient.Client, projectID int64, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
-	drainSidekiq(context.Background(), t)
+	drainSidekiq(context.Background(), t, client)
 	if timeout == 0 {
 		timeout = 900 * time.Second
 	}
@@ -825,7 +825,7 @@ func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout ti
 	lastStatus := "unknown"
 	consecutiveErrors := 0
 	for time.Now().Before(deadline) {
-		p, _, err := sess.glClient.GL().Pipelines.GetPipeline(projectID, pipelineID)
+		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID)
 		if err != nil {
 			consecutiveErrors++
 			t.Logf("waitForPipeline: error polling pipeline %d (%d/%d): %v", pipelineID, consecutiveErrors, maxConsecutiveErrors, err)
@@ -852,12 +852,15 @@ func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout ti
 // hasRunner returns true if a CI runner is available for pipeline tests.
 // In Docker mode it always returns true; in self-hosted mode it checks the
 // Runners API for registered instance runners.
-func hasRunner() bool {
+func hasRunner(client *gitlabclient.Client) bool {
 	if isDockerMode() {
 		return true
 	}
+	if client == nil {
+		return false
+	}
 	runnerType := "instance_type"
-	runners, _, err := sess.glClient.GL().Runners.ListRunners(&gl.ListRunnersOptions{
+	runners, _, err := client.GL().Runners.ListRunners(&gl.ListRunnersOptions{
 		Type: &runnerType,
 	})
 	return err == nil && len(runners) > 0

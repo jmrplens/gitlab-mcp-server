@@ -72,7 +72,7 @@ func TestWaitTools(t *testing.T) {
 	})
 
 	t.Run("Individual/PipelineWait", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		drainSidekiq(ctx, t, sess.glClient)
 		failOnErr := false
 		out, err := callToolOn[pipelines.WaitOutput](ctx, sess.individual, "gitlab_pipeline_wait", pipelines.WaitInput{
 			ProjectID:       proj.pidOf(),
@@ -182,7 +182,7 @@ func TestWaitTools(t *testing.T) {
 	})
 
 	t.Run("Meta/PipelineWait", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		drainSidekiq(ctx, t, sess.glClient)
 		out, err := callToolOn[pipelines.WaitOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "wait",
 			"params": map[string]any{

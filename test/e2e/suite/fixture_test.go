@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
@@ -182,7 +183,7 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 	})
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, session, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
 }
@@ -231,7 +232,7 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 	})
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, session, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
 }
@@ -412,9 +413,9 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // given project or the context is canceled. Under parallel load (~60 projects)
 // branch creation can take well over 30s, so we allow up to 90s with
 // progressive backoff. Transient errors (429, 5xx, network) are retried silently.
-func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
+func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID int64, branch string) {
 	t.Helper()
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, client)
 	pid := int(projectID)
 
 	const maxWait = 90 * time.Second
@@ -422,7 +423,7 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 	delay := 500 * time.Millisecond
 
 	for time.Now().Before(deadline) {
-		_, resp, err := sess.glClient.GL().Branches.GetBranch(pid, branch)
+		_, resp, err := client.GL().Branches.GetBranch(pid, branch)
 		if err == nil {
 			t.Logf("Branch %q ready in project %d", branch, projectID)
 			return
@@ -471,17 +472,17 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 // The helper is best-effort: it never fails the test on its own. If the MR
 // never leaves the transitional state within maxWait, it logs and returns so
 // that the test's own assertion produces the actionable failure message.
-func waitForMRReady(ctx context.Context, t *testing.T, projectID, mrIID int64) {
+func waitForMRReady(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, mrIID int64) {
 	t.Helper()
-	if sess.glClient == nil {
+	if client == nil {
 		return
 	}
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, client)
 	const maxWait = 120 * time.Second
 	deadline := time.Now().Add(maxWait)
 	delay := 500 * time.Millisecond
 	for time.Now().Before(deadline) {
-		mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(ctx))
+		mr, _, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(ctx))
 		if err == nil {
 			switch mr.DetailedMergeStatus {
 			case "preparing", "checking", "unchecked", "":

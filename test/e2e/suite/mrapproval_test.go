@@ -61,8 +61,8 @@ func TestIndividual_MRApproval(t *testing.T) {
 	})
 
 	t.Run("Individual/MR/Merge", func(t *testing.T) {
-		drainSidekiq(ctx, t)
-		waitForMRReady(ctx, t, proj.ID, mr.IID)
+		drainSidekiq(ctx, t, sess.glClient)
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
 		var out mergerequests.Output
 		var err error
 		for i := range 5 {
@@ -75,7 +75,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 				break
 			}
 			t.Logf("merge attempt %d: %v", i+1, err)
-			waitForMRReady(ctx, t, proj.ID, mr.IID)
+			waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "merge MR")
 		requireTruef(t, out.State == "merged", "expected state 'merged', got %q", out.State)
@@ -144,8 +144,8 @@ func TestMeta_MRApproval(t *testing.T) {
 	})
 
 	t.Run("Meta/MR/Merge", func(t *testing.T) {
-		drainSidekiq(ctx, t)
-		waitForMRReady(ctx, t, proj.ID, mr.IID)
+		drainSidekiq(ctx, t, sess.glClient)
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
 		var out mergerequests.Output
 		var err error
 		for i := range 5 {
@@ -161,7 +161,7 @@ func TestMeta_MRApproval(t *testing.T) {
 				break
 			}
 			t.Logf("meta merge attempt %d: %v", i+1, err)
-			waitForMRReady(ctx, t, proj.ID, mr.IID)
+			waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
 		}
 		requireNoError(t, err, "meta merge MR")
 		requireTruef(t, out.State == "merged", "expected state merged, got %q", out.State)

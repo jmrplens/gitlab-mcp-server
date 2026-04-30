@@ -25,6 +25,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/completions"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
@@ -63,10 +64,10 @@ type logEntry struct {
 //     so the server's InitializedHandler can fetch them via ListRoots.
 //
 // The session is closed in t.Cleanup.
-func newCapabilitiesSession(t *testing.T, withLogging, withProgress bool, withRoots []*mcp.Root) *capabilitiesSession {
+func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterprise bool, withLogging, withProgress bool, withRoots []*mcp.Root) *capabilitiesSession {
 	t.Helper()
 
-	completionHandler := completions.NewHandler(sess.glClient)
+	completionHandler := completions.NewHandler(client)
 	rootsManager := roots.NewManager()
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -88,11 +89,11 @@ func newCapabilitiesSession(t *testing.T, withLogging, withProgress bool, withRo
 		},
 	})
 
-	tools.RegisterAll(server, sess.glClient, sess.enterprise)
-	resources.Register(server, sess.glClient)
+	tools.RegisterAll(server, client, enterprise)
+	resources.Register(server, client)
 	resources.RegisterWorkspaceRoots(server, rootsManager)
 	resources.RegisterWorkflowGuides(server)
-	prompts.Register(server, sess.glClient)
+	prompts.Register(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverCtx, serverCancel := context.WithCancel(context.Background())
@@ -207,7 +208,7 @@ func TestCapability_Logging(t *testing.T) {
 		t.Skip("gitlab client not configured")
 	}
 
-	cs := newCapabilitiesSession(t, true, false, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, true, false, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -258,7 +259,7 @@ func TestCapability_Progress(t *testing.T) {
 		t.Skip("gitlab client or individual session not configured")
 	}
 
-	cs := newCapabilitiesSession(t, false, true, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, true, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -328,7 +329,7 @@ func TestCapability_Roots(t *testing.T) {
 	advertised := []*mcp.Root{
 		{URI: "file:///tmp/e2e-capabilities-root", Name: "e2e-capabilities-root"},
 	}
-	cs := newCapabilitiesSession(t, false, false, advertised)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, advertised)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -367,7 +368,7 @@ func TestCapability_RootsListChanged(t *testing.T) {
 		t.Skip("gitlab client not configured")
 	}
 
-	cs := newCapabilitiesSession(t, false, false, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, nil)
 	cs.mcpClient.AddRoots(&mcp.Root{
 		URI:  "file:///tmp/e2e-capabilities-late-root",
 		Name: "e2e-capabilities-late-root",
@@ -418,7 +419,7 @@ func TestCapability_Completions(t *testing.T) {
 		t.Skip("gitlab client not configured")
 	}
 
-	cs := newCapabilitiesSession(t, false, false, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, nil)
 
 	// Ensure at least one project exists so completions have something to
 	// return. Use the shared session to avoid duplicating cleanup logic.

@@ -38,7 +38,7 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 	// Wait for pipeline creation with polling. Sidekiq + runner registration in
 	// ephemeral Docker GitLab CE can be slow on cold starts.
 	t.Run("Latest", func(t *testing.T) {
-		drainSidekiq(ctx, t)
+		drainSidekiq(ctx, t, sess.glClient)
 		var out pipelines.DetailOutput
 		var err error
 		deadline := time.Now().Add(600 * time.Second)

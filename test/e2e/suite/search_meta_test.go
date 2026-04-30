@@ -26,7 +26,7 @@ func TestMeta_SearchExtended(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "search_target.txt", "searchable content for e2e", "add searchable file")
 
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, sess.glClient)
 
 	t.Run("SearchMergeRequests", func(t *testing.T) {
 		out, err := callToolOn[search.MergeRequestsOutput](ctx, sess.meta, "gitlab_search", map[string]any{

@@ -38,7 +38,7 @@ fast-pass:
 // NOT parallelized: pipeline-heavy tests share a single CI runner. Running
 // them concurrently causes pipelines to queue, leading to spurious timeouts.
 func TestIndividual_CIRunner(t *testing.T) {
-	if !hasRunner() {
+	if !hasRunner(sess.glClient) {
 		t.Skip("CI runner not available — skipping pipeline/job tests")
 	}
 
@@ -103,7 +103,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 	t.Run("WaitAndJobList", func(t *testing.T) {
 		requireTruef(t, pipelineID > 0, "pipeline ID not set")
 
-		status := waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
+		status := waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 		t.Logf("Pipeline %d finished with status: %s", pipelineID, status)
 
 		out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{
@@ -163,7 +163,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 		requireNoError(t, err, "pipeline retry")
 		t.Logf("Retried pipeline: ID=%d status=%s", out.ID, out.Status)
 
-		waitForPipeline(t, proj.ID, pipelineID, 900*time.Second)
+		waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 	})
 
 	t.Run("PipelineDelete", func(t *testing.T) {
