@@ -266,6 +266,17 @@ func slicesEqual(got, want []string) bool {
 	return true
 }
 
+// TestAppendOptionName_DeduplicatesExisting verifies the internal option-name
+// accumulator keeps the first occurrence when multiple aliases map to one
+// server-managed option.
+func TestAppendOptionName_DeduplicatesExisting(t *testing.T) {
+	options := []string{"META_PARAM_SCHEMA"}
+	got := appendOptionName(options, "META_PARAM_SCHEMA")
+	if !slicesEqual(got, options) {
+		t.Fatalf("appendOptionName() = %v, want %v", got, options)
+	}
+}
+
 // TestInvalidGitLabURLError_DoesNotLeakURL verifies that [Error] never
 // embeds the raw offending URL in its message — the URL may contain
 // credentials in userinfo or sensitive query parameters that must not

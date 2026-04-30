@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Project Mirrors
 > **Individual tools**: 7
-> **Meta-tool**: Routes inside `gitlab_project` (enterprise-only, requires `GITLAB_ENTERPRISE=true`)
+> **Meta-tool**: Routes inside `gitlab_project` (enterprise-only, requires the Enterprise/Premium catalog)
 > **GitLab API**: [Remote Mirrors API](https://docs.gitlab.com/ee/api/remote_mirrors.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The mirrors domain covers remote mirror management for GitLab projects: listing, retrieving, creating, editing, deleting mirrors, forcing push synchronization, and retrieving SSH public keys for authentication.
 
-When `META_TOOLS=true` (the default) and `GITLAB_ENTERPRISE=true`, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
+When `META_TOOLS=true` (the default) and the Enterprise/Premium catalog is enabled, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
 
 ### Common Questions
 

@@ -31,12 +31,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Audit server identity values used for in-memory MCP introspection sessions.
 const (
 	auditServerName = "audit-metrics"
 	auditClientName = "audit-metrics-client"
 	auditVersion    = "0.0.1"
 )
 
+// main builds the audit client, gathers runtime counts from the registered MCP
+// surface, and prints the metrics report to stdout.
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

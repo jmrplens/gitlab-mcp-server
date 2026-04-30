@@ -111,12 +111,12 @@ Two additional standalone tools (`gitlab_server_check_update`, `gitlab_server_ap
 
 ## Enterprise-only tools (15)
 
-When `GITLAB_ENTERPRISE=true`, the server registers 15 additional meta-tools for GitLab Premium and Ultimate features:
+When the Enterprise/Premium catalog is enabled, the server registers 15 additional meta-tools for GitLab Premium and Ultimate features:
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
 
 :::note
-Enterprise tools require a GitLab Premium or Ultimate license on your instance. Enabling `GITLAB_ENTERPRISE=true` on a Community Edition instance will register the tools but API calls will return permission errors.
+Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.
 :::
 
 ## Further reading

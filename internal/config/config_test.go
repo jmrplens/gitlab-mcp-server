@@ -5,6 +5,7 @@
 package config
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -632,6 +633,49 @@ func TestValidate_AcceptableMaxValues(t *testing.T) {
 	err := cfg.validate()
 	if err != nil {
 		t.Errorf("validate() unexpected error for max values: %v", err)
+	}
+}
+
+// TestServerConfig_CopiesServerScopedFields verifies ServerConfig returns an
+// immutable per-server snapshot and defensively copies slice-backed fields.
+func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
+	if got := (*Config)(nil).ServerConfig(); got == nil {
+		t.Fatal("nil Config should return an empty ServerConfig snapshot")
+	}
+
+	cfg := &Config{
+		GitLabURL:       "https://gitlab.example.com",
+		MetaTools:       true,
+		Enterprise:      true,
+		ReadOnly:        true,
+		SafeMode:        true,
+		ExcludeTools:    []string{"gitlab_create_project"},
+		RateLimitRPS:    2.5,
+		RateLimitBurst:  7,
+		MetaParamSchema: MetaParamSchemaFull,
+	}
+
+	snapshot := cfg.ServerConfig()
+	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.MetaTools || !snapshot.Enterprise || !snapshot.ReadOnly || !snapshot.SafeMode {
+		t.Fatalf("ServerConfig snapshot does not preserve boolean/url fields: %+v", snapshot)
+	}
+	if snapshot.RateLimitRPS != cfg.RateLimitRPS || snapshot.RateLimitBurst != cfg.RateLimitBurst {
+		t.Fatalf("ServerConfig rate limit fields = (%v, %d), want (%v, %d)", snapshot.RateLimitRPS, snapshot.RateLimitBurst, cfg.RateLimitRPS, cfg.RateLimitBurst)
+	}
+	if snapshot.MetaParamSchema != MetaParamSchemaFull {
+		t.Fatalf("MetaParamSchema = %q, want %q", snapshot.MetaParamSchema, MetaParamSchemaFull)
+	}
+	if !slices.Equal(snapshot.ExcludeTools, cfg.ExcludeTools) {
+		t.Fatalf("ExcludeTools = %v, want %v", snapshot.ExcludeTools, cfg.ExcludeTools)
+	}
+
+	cfg.ExcludeTools[0] = "changed_in_source"
+	if snapshot.ExcludeTools[0] != "gitlab_create_project" {
+		t.Fatalf("snapshot ExcludeTools changed after source mutation: %v", snapshot.ExcludeTools)
+	}
+	snapshot.ExcludeTools[0] = "changed_in_snapshot"
+	if cfg.ExcludeTools[0] != "changed_in_source" {
+		t.Fatalf("source ExcludeTools changed after snapshot mutation: %v", cfg.ExcludeTools)
 	}
 }
 

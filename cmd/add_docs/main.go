@@ -193,7 +193,10 @@ func generateFuncDoc(d *ast.FuncDecl, pkgName string, isTest bool) string {
 	return generateExportedFuncDoc(d, pkgName)
 }
 
+// testNameRe splits test names that follow the TestSubject_Scenario convention.
 var testNameRe = regexp.MustCompile(`^Test([A-Z]\w+?)_(\w+)$`)
+
+// testSimpleRe matches test names that only identify the subject under test.
 var testSimpleRe = regexp.MustCompile(`^Test([A-Z]\w+)$`)
 
 // generateTestDoc generates a doc comment for a Test function based on its

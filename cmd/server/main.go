@@ -86,7 +86,8 @@ type httpConfig struct {
 	metaParamSchema    string
 }
 
-// main is an internal helper for the main package.
+// main parses CLI flags, handles one-shot commands such as --help and
+// --tool-search, and dispatches into stdio or HTTP server mode.
 func main() {
 	var showHelp bool
 	var showVersion bool
@@ -639,6 +640,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	return server
 }
 
+// httpShutdownTimeout bounds graceful HTTP shutdown after the process context
+// is cancelled.
 const httpShutdownTimeout = 5 * time.Second
 
 // serveHTTP starts the MCP server in HTTP mode using a [serverpool.ServerPool].
@@ -832,6 +835,9 @@ type healthResponse struct {
 	Commit  string `json:"commit"`
 }
 
+// logIgnoredRequestOptions reports request-scoped configuration headers that
+// were intentionally ignored because the server was started with fixed CLI
+// configuration. The token is reduced to a masked suffix before logging.
 func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	if !options.HasIgnoredOptions() {
 		return
@@ -842,6 +848,8 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	)
 }
 
+// safeTokenSuffix returns a masked token suffix suitable for structured logs.
+// Short tokens are fully masked to avoid exposing low-entropy credentials.
 func safeTokenSuffix(token string) string {
 	if len(token) <= 4 {
 		return "****"
@@ -1224,39 +1232,59 @@ func startAutoUpdate(ctx context.Context, cfg *config.Config) {
 // countRegisteredTools returns the number of tools registered on the server
 // by connecting an ephemeral in-memory client session and calling ListTools.
 func countRegisteredTools(server *mcp.Server) (int, error) {
-	registered, err := listRegisteredTools(server, "counter")
+	registered, err := listRegisteredToolsForInspection(server, "counter")
 	if err != nil {
 		return 0, err
 	}
 	return len(registered), nil
 }
 
+// MCP inspection hooks are replaceable in tests so error paths from in-memory
+// server/client setup can be exercised without mutating production behavior.
+var (
+	listRegisteredToolsForInspection = listRegisteredTools
+	newInspectionTransports          = mcp.NewInMemoryTransports
+	connectInspectionServer          = func(server *mcp.Server, ctx context.Context, transport mcp.Transport) (*mcp.ServerSession, error) {
+		return server.Connect(ctx, transport, nil)
+	}
+	connectInspectionClient = func(client *mcp.Client, ctx context.Context, transport mcp.Transport) (*mcp.ClientSession, error) {
+		return client.Connect(ctx, transport, nil)
+	}
+	listInspectionTools = func(session *mcp.ClientSession, ctx context.Context) (*mcp.ListToolsResult, error) {
+		return session.ListTools(ctx, nil)
+	}
+)
+
+// listRegisteredTools connects an in-memory MCP client to server and returns
+// the tool catalog advertised through tools/list.
 func listRegisteredTools(server *mcp.Server, clientName string) ([]*mcp.Tool, error) {
-	st, ct := mcp.NewInMemoryTransports()
+	st, ct := newInspectionTransports()
 	ctx := context.Background()
 
-	serverSession, err := server.Connect(ctx, st, nil)
+	serverSession, err := connectInspectionServer(server, ctx, st)
 	if err != nil {
 		return nil, fmt.Errorf("server connect: %w", err)
 	}
 	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err := connectInspectionClient(mcpClient, ctx, ct)
 	if err != nil {
 		return nil, fmt.Errorf("client connect: %w", err)
 	}
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
+	result, err := listInspectionTools(session, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
 	return result.Tools, nil
 }
 
+// visibleMetaSchemaRoutes filters captured meta-tool route maps to the tools
+// still visible after read-only or exclude-tools registration filters run.
 func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.ActionMap) (map[string]toolutil.ActionMap, error) {
-	registeredTools, err := listRegisteredTools(server, "meta-schema-filter")
+	registeredTools, err := listRegisteredToolsForInspection(server, "meta-schema-filter")
 	if err != nil {
 		return nil, err
 	}
@@ -1370,12 +1398,22 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 // prints those matching every space-separated search term (AND logic,
 // case-insensitive match on name + description). Then it exits.
 func runToolSearch(query string, metaTools, enterprise bool) {
-	if err := doToolSearch(query, metaTools, enterprise); err != nil {
+	if err := toolSearchRunner(query, metaTools, enterprise); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 }
 
+// Tool search hooks are replaceable in tests so runToolSearch can be verified
+// without terminating the test process through os.Exit.
+var (
+	toolSearchRunner = doToolSearch
+	exitProcess      = os.Exit
+)
+
+// doToolSearch builds the selected MCP tool catalog, searches tool names and
+// descriptions with case-insensitive AND matching, and prints matching tool
+// names with the first description line.
 func doToolSearch(query string, metaTools, enterprise bool) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
@@ -1513,6 +1551,8 @@ func (h *autoUpdateRedactHandler) WithGroup(name string) slog.Handler {
 	return &autoUpdateRedactHandler{base: h.base.WithGroup(name), redactStrings: h.redactStrings}
 }
 
+// redactAttr redacts configured auto-update URL fragments from string-valued
+// log attributes before they are forwarded to the wrapped handler.
 func (h *autoUpdateRedactHandler) redactAttr(a slog.Attr) slog.Attr {
 	if a.Value.Kind() == slog.KindString {
 		s := a.Value.String()

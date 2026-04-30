@@ -195,7 +195,7 @@ Lista personal de tareas pendientes.
 
 ## Modo Enterprise
 
-Establecer `GITLAB_ENTERPRISE=true` habilita 15 meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate. Además, se añaden 6 rutas de acción solo enterprise a las meta-herramientas base existentes:
+El catálogo Enterprise/Premium habilita 15 meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate. En modo stdio, configura `GITLAB_ENTERPRISE=true`; en modo HTTP, usa `--enterprise` para forzar el catálogo u omítelo para permitir autodetección CE/EE por entrada token+URL. Además, se añaden 6 rutas de acción solo enterprise a las meta-herramientas base existentes:
 
 - **Iterations** → enrutadas a través de `gitlab_issue`
 - **Project mirrors** → enrutadas a través de `gitlab_project`
@@ -210,7 +210,8 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable            | Predeterminado | Descripción                                                                            |
-| ------------------- | -------------- | -------------------------------------------------------------------------------------- |
-| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales. |
-| `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise (requiere Premium/Ultimate).               |
+| Variable            | Predeterminado | Descripción                                                                                               |
+| ------------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `META_TOOLS`        | `true`         | Habilitar modo meta-herramientas. Establecer a `false` para herramientas individuales.                    |
+| `GITLAB_ENTERPRISE` | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                    |
+| `--enterprise`      | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL. |

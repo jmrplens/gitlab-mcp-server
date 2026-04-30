@@ -27,12 +27,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 )
 
+// README generation markers define the managed tools table section.
 const (
 	startMarker = "<!-- START TOOLS -->"
 	endMarker   = "<!-- END TOOLS -->"
 	readmePath  = "README.md"
 )
 
+// main regenerates the README meta-tool table and exits non-zero on failure.
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -40,6 +42,8 @@ func main() {
 	}
 }
 
+// run introspects base and Enterprise/Premium meta-tool catalogs and replaces
+// the managed README section with a regenerated table.
 func run() error {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -71,6 +75,8 @@ func run() error {
 	return nil
 }
 
+// listMetaTools registers meta-tools on an in-memory MCP server and returns the
+// tool definitions exposed by tools/list.
 func listMetaTools(client *gitlabclient.Client, enterprise bool) []*mcp.Tool {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-readme", Version: "0.0.1"}, opts)
@@ -123,6 +129,8 @@ func actionCount(tool *mcp.Tool) int {
 	return 0
 }
 
+// toolInfo is the normalized row model used to render the README meta-tool
+// table.
 type toolInfo struct {
 	Name        string
 	Description string
@@ -173,6 +181,8 @@ func findSentenceEnd(s string) int {
 	}
 }
 
+// buildTable renders the managed README Markdown table, marking tools that are
+// only available in the Enterprise/Premium catalog.
 func buildTable(baseTools, allTools []*mcp.Tool) string {
 	baseSet := make(map[string]bool, len(baseTools))
 	for _, t := range baseTools {
@@ -219,6 +229,8 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 	return b.String()
 }
 
+// replaceSection replaces the generated README section between the configured
+// marker comments while preserving the markers themselves.
 func replaceSection(path, content string) error {
 	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
 	if err != nil {

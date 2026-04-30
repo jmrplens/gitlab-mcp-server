@@ -71,7 +71,7 @@ graph TD
         META[metatool<br/>32 base / 47 enterprise meta-tools]
         SAMP[sampling_tools<br/>11 LLM-assisted tools]
         ELIC[elicitation_tools<br/>4 interactive tools]
-        RES[resources<br/>44 resource handlers]
+        RES[resources<br/>46 resource handlers]
         PROMPTS[prompts<br/>38 prompt handlers]
         LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
@@ -248,7 +248,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. With `GITLAB_ENTERPRISE=true`, 15 additional enterprise inline meta-tools bring the total to 47.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 domain meta-tools are registered (21 inline handlers in `register_meta.go` + 3 always-registered + 2 delegated to sub-packages + 1 sampling meta-tool + 1 standalone tool), plus 4 standalone interactive elicitation tools — 32 base tools total. The Enterprise/Premium catalog adds 15 enterprise inline meta-tools, bringing the total to 47; stdio mode enables it with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 ```mermaid
 sequenceDiagram
@@ -272,13 +272,15 @@ sequenceDiagram
 
 ### Resources (`internal/resources`)
 
-44 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
+46 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
 
 | Resource        | URI                                         | Description                        |
 | --------------- | ------------------------------------------- | ---------------------------------- |
 | Current User    | `gitlab://user/current`                     | Authenticated user profile         |
 | Groups          | `gitlab://groups`                           | Accessible groups list             |
 | Workspace Roots | `gitlab://workspace/roots`                  | Client workspace root directories  |
+| Meta Schema     | `gitlab://schema/meta/`                     | Registered meta-tool action index  |
+| Meta Action     | `gitlab://schema/meta/{tool}/{action}`      | JSON Schema for action params      |
 | Group           | `gitlab://group/{id}`                       | Group details by ID                |
 | Group Members   | `gitlab://group/{id}/members`               | Group members with access levels   |
 | Group Projects  | `gitlab://group/{id}/projects`              | Projects within a group            |

@@ -7,7 +7,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Compatibilidad con ediciones de GitLab
 
-GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). La variable de entorno `GITLAB_ENTERPRISE` desbloquea 15 meta-herramientas adicionales exclusivas de Enterprise.
+GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea 15 meta-herramientas adicionales exclusivas de Enterprise: usa `GITLAB_ENTERPRISE=true` en modo stdio, o `--enterprise`/autodetección de edición en modo HTTP.
 
 | Funcionalidad                            | Community (CE) | Enterprise (EE) |
 | ---------------------------------------- | :------------: | :-------------: |
@@ -16,7 +16,7 @@ GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise 
 | Usuarios, Grupos, Miembros, Búsqueda     |       ✅       |       ✅        |
 | Despliegues, Entornos, Paquetes          |       ✅       |       ✅        |
 | 32 meta-herramientas base                |       ✅       |       ✅        |
-| 44 recursos, 38 prompts                  |       ✅       |       ✅        |
+| 46 recursos, 38 prompts                  |       ✅       |       ✅        |
 | Merge Trains                             |       ❌       |       ✅        |
 | Métricas DORA                            |       ❌       |       ✅        |
 | Gestión de vulnerabilidades              |       ❌       |       ✅        |
@@ -24,7 +24,7 @@ GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise 
 | Políticas de cumplimiento                |       ❌       |       ✅        |
 | +15 meta-herramientas enterprise         |       ✖        |       ✅        |
 
-Para habilitar las funcionalidades enterprise, configura `GITLAB_ENTERPRISE=true`.
+Para habilitar funcionalidades enterprise en modo stdio, configura `GITLAB_ENTERPRISE=true`. En modo HTTP, configura `--enterprise` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición.
 
 ## Soporte de plataformas
 

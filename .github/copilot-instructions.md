@@ -87,7 +87,7 @@ gitlab-mcp-server/
 
 ### GitLab Integration
 
-- Base URL configurable via `GITLAB_URL` env var
+- Stdio mode uses `GITLAB_URL`; HTTP mode uses `--gitlab-url` when fixed, or per-request `GITLAB-URL` headers when omitted
 - Authentication via `GITLAB_TOKEN` (Personal Access Token)
 - Self-signed TLS certificates: skip verification when `GITLAB_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Identity & Security
 > **Individual tools**: 28
-> **Meta-tools**: `gitlab_group_scim`, `gitlab_member_role` (when `META_TOOLS=true` and `GITLAB_ENTERPRISE=true`); `gitlab_group_ssh_certificate`, `gitlab_security_settings`, `gitlab_group_credential` are now enterprise-only routes inside `gitlab_group`/`gitlab_project`
+> **Meta-tools**: `gitlab_group_scim`, `gitlab_member_role` (when `META_TOOLS=true` and the Enterprise/Premium catalog is enabled); `gitlab_group_ssh_certificate`, `gitlab_security_settings`, `gitlab_group_credential` are now enterprise-only routes inside `gitlab_group`/`gitlab_project`
 > **GitLab API**: [SCIM API](https://docs.gitlab.com/ee/api/scim.html) · [Group SSH Certificates API](https://docs.gitlab.com/ee/api/group_ssh_certificates.html) · [Security Settings API](https://docs.gitlab.com/ee/api/project_security_settings.html) · [Member Roles API](https://docs.gitlab.com/ee/api/member_roles.html) · [Group Credentials API](https://docs.gitlab.com/ee/api/group_credentials.html) · [LDAP Group Links API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html) · [SAML Group Links API](https://docs.gitlab.com/ee/api/groups.html#saml-group-links)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The identity & security domain covers SCIM identity management for groups, SSH certificate management, project and group security settings (secret push protection), custom member roles at instance and group level, group credential inventory (personal access tokens and SSH keys), LDAP group link management, and SAML group link management.
 
-When `META_TOOLS=true` (the default) and `GITLAB_ENTERPRISE=true`, the 20 individual tools below are consolidated into meta-tools. `gitlab_group_scim` and `gitlab_member_role` are standalone enterprise meta-tools, while SSH certificates, security settings, and group credentials are routes inside `gitlab_group`/`gitlab_project`.
+When `META_TOOLS=true` (the default) and the Enterprise/Premium catalog is enabled, the 20 individual tools below are consolidated into meta-tools. `gitlab_group_scim` and `gitlab_member_role` are standalone enterprise meta-tools, while SSH certificates, security settings, and group credentials are routes inside `gitlab_group`/`gitlab_project`.
 
 ### Common Questions
 
@@ -391,20 +391,20 @@ When `META_TOOLS=true`, the following meta-tools replace the individual tools ab
 
 ### `gitlab_group_scim`
 
-Manage SCIM identities for a group (enterprise-only, requires `GITLAB_ENTERPRISE=true`). Actions: `list`, `get`, `update`, `delete`.
+Manage SCIM identities for a group (enterprise-only, requires the Enterprise/Premium catalog). Actions: `list`, `get`, `update`, `delete`.
 
 ### `gitlab_group_ssh_certificate`
 
-SSH certificate management is now available as enterprise-only routes inside **`gitlab_group`** (requires `GITLAB_ENTERPRISE=true`). Actions: `ssh_certificate_list`, `ssh_certificate_create`, `ssh_certificate_delete`.
+SSH certificate management is now available as enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog). Actions: `ssh_certificate_list`, `ssh_certificate_create`, `ssh_certificate_delete`.
 
 ### `gitlab_security_settings`
 
-Security settings are now available as enterprise-only routes split between **`gitlab_project`** and **`gitlab_group`** (requires `GITLAB_ENTERPRISE=true`). Project actions: `security_settings_get`, `security_settings_update`. Group actions: `security_settings_update`.
+Security settings are now available as enterprise-only routes split between **`gitlab_project`** and **`gitlab_group`** (requires the Enterprise/Premium catalog). Project actions: `security_settings_get`, `security_settings_update`. Group actions: `security_settings_update`.
 
 ### `gitlab_member_role`
 
-Manage custom member roles at instance and group level (enterprise-only, requires `GITLAB_ENTERPRISE=true`). Actions: `list_instance`, `create_instance`, `delete_instance`, `list_group`, `create_group`, `delete_group`.
+Manage custom member roles at instance and group level (enterprise-only, requires the Enterprise/Premium catalog). Actions: `list_instance`, `create_instance`, `delete_instance`, `list_group`, `create_group`, `delete_group`.
 
 ### `gitlab_group_credential`
 
-Group credential management is now available as enterprise-only routes inside **`gitlab_group`** (requires `GITLAB_ENTERPRISE=true`). Actions: `credential_list_pats`, `credential_list_ssh_keys`, `credential_revoke_pat`, `credential_delete_ssh_key`.
+Group credential management is now available as enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog). Actions: `credential_list_pats`, `credential_list_ssh_keys`, `credential_revoke_pat`, `credential_delete_ssh_key`.

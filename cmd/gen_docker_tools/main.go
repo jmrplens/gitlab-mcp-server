@@ -39,18 +39,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 )
 
+// dockerArg describes one top-level argument in the Docker MCP Registry format.
 type dockerArg struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Desc string `json:"desc"`
 }
 
+// dockerTool describes one MCP tool entry emitted for the Docker MCP Registry.
 type dockerTool struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	Arguments   []dockerArg `json:"arguments"`
 }
 
+// main runs the Docker MCP Registry generator and writes failures to stderr.
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -58,6 +61,8 @@ func main() {
 	}
 }
 
+// run introspects the selected MCP catalog mode and writes a tools.json payload
+// compatible with Docker MCP Registry ingestion.
 func run() error {
 	enterprise := flag.Bool("enterprise", false, "include enterprise meta-tools")
 	individual := flag.Bool("individual", false, "emit individual tools instead of meta-tools")
@@ -163,6 +168,8 @@ func schemaArgs(schema any) []dockerArg {
 	return args
 }
 
+// typeString converts a JSON Schema type value into Docker's single string
+// representation, falling back to string when the schema is ambiguous.
 func typeString(t any) string {
 	switch v := t.(type) {
 	case string:

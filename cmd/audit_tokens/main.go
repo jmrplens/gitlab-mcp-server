@@ -30,6 +30,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Token audit constants define the in-memory MCP session identity and the
+// byte-to-token conversion heuristic used by the report.
 const (
 	serverName  = "audit-tokens"
 	clientName  = "audit-tokens-client"
@@ -37,6 +39,7 @@ const (
 	bytesPerTok = 4 // Approximate: 1 token ≈ 4 bytes for English text (cl100k_base average)
 )
 
+// toolTokenInfo stores the serialized size estimate for one MCP tool.
 type toolTokenInfo struct {
 	Name   string
 	Domain string
@@ -44,6 +47,8 @@ type toolTokenInfo struct {
 	Bytes  int
 }
 
+// main creates the mock GitLab-backed client, measures all MCP catalog modes,
+// and prints token overhead comparisons for tools, resources, and prompts.
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -133,6 +138,8 @@ func main() {
 	fmt.Println()
 }
 
+// listTools registers either individual tools or meta-tools on an in-memory MCP
+// server and returns the published tool definitions for measurement.
 func listTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, opts)
@@ -167,6 +174,8 @@ func listTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
 	return result.Tools
 }
 
+// measureTools serializes each tool definition to JSON and estimates its token
+// cost using the audit's byte-based heuristic.
 func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	infos := make([]toolTokenInfo, 0, len(toolList))
 	for _, t := range toolList {
@@ -190,6 +199,8 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	return infos
 }
 
+// measureResources registers static, template, workflow, and meta-schema MCP
+// resources and estimates the token cost of their advertised definitions.
 func measureResources(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
 	metaRoutes := toolutil.CaptureMetaRoutes(func() {
@@ -244,6 +255,8 @@ func measureResources(client *gitlabclient.Client) int {
 	return totalBytes / bytesPerTok
 }
 
+// measurePrompts registers MCP prompts and estimates the token cost of their
+// advertised definitions.
 func measurePrompts(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
 	prompts.Register(server, client)
@@ -279,6 +292,8 @@ func measurePrompts(client *gitlabclient.Client) int {
 	return totalBytes / bytesPerTok
 }
 
+// extractDomain returns the GitLab tool domain from names like
+// gitlab_{domain}_{action}. It returns "unknown" for malformed names.
 func extractDomain(name string) string {
 	// gitlab_{domain}_{action} → domain
 	parts := strings.SplitN(name, "_", 3)
@@ -288,6 +303,7 @@ func extractDomain(name string) string {
 	return "unknown"
 }
 
+// totalTokens sums token estimates across a measured tool list.
 func totalTokens(infos []toolTokenInfo) int {
 	total := 0
 	for _, i := range infos {
@@ -296,6 +312,8 @@ func totalTokens(infos []toolTokenInfo) int {
 	return total
 }
 
+// printTopTools writes the n most expensive tool definitions to stdout in a
+// stable tabular format.
 func printTopTools(infos []toolTokenInfo, n int) {
 	if n > len(infos) {
 		n = len(infos)
@@ -310,6 +328,8 @@ func printTopTools(infos []toolTokenInfo, n int) {
 	fmt.Println()
 }
 
+// printDomainTotals aggregates token estimates by tool domain and prints the
+// highest-cost domains first.
 func printDomainTotals(infos []toolTokenInfo, n int) {
 	domainTotals := map[string]int{}
 	domainCounts := map[string]int{}
@@ -345,6 +365,7 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 	fmt.Println()
 }
 
+// fmtNum formats integers with comma thousands separators for report tables.
 func fmtNum(n int) string {
 	s := strconv.Itoa(n)
 	if len(s) <= 3 {

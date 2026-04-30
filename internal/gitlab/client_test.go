@@ -600,6 +600,31 @@ func TestDetectEnterprise_MissingFieldUsesFallback(t *testing.T) {
 	}
 }
 
+// TestDetectEnterprise_ErrorUsesFallback verifies edition detection falls back
+// to configured mode when the GitLab version endpoint cannot be read.
+func TestDetectEnterprise_ErrorUsesFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/version" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	if enterprise := client.DetectEnterprise(context.Background(), true); !enterprise {
+		t.Fatal("DetectEnterprise() = false, want fallback true")
+	}
+	if !client.IsEnterprise() {
+		t.Fatal("client should use enterprise fallback when detection fails")
+	}
+}
+
 // TestCurrentUsername_Success verifies that [Client.CurrentUsername] returns
 // the username from the /user API endpoint.
 func TestCurrentUsername_Success(t *testing.T) {

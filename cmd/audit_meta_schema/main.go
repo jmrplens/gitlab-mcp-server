@@ -31,6 +31,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// main runs the meta-schema sizing audit and exits non-zero if setup or
+// introspection fails.
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -38,6 +40,9 @@ func main() {
 	}
 }
 
+// run builds an in-memory MCP server with the full meta-tool catalog and
+// compares the generated action parameter schemas across all supported
+// META_PARAM_SCHEMA modes.
 func run() error {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -176,16 +181,9 @@ func run() error {
 	return nil
 }
 
-// buildOneOfSchema constructs a JSON Schema with a oneOf branch per action.
-// When compact is true, each branch's params object only enumerates property
-// names with their declared type (descriptions, $defs and required dropped),
-// and additionalProperties is left true.
-//
-// Removed: this function and its helpers (compactSchema, resolveTopRef) were
-// duplicates of toolutil.BuildMetaToolSchema. Callers now invoke
-// toolutil.BuildMetaToolSchema directly so the audit always tracks production
-// behavior; see the loop above.
-
+// human formats a byte count using compact B, KB, or MB units for the audit
+// table. It keeps raw byte output for small schema sizes so regressions remain
+// easy to spot.
 func human(n int) string {
 	switch {
 	case n >= 1024*1024:
@@ -197,6 +195,8 @@ func human(n int) string {
 	}
 }
 
+// repeat returns s repeated n times without pulling in strings.Repeat for this
+// tiny formatting helper.
 func repeat(s string, n int) string {
 	out := make([]byte, 0, len(s)*n)
 	for range n {

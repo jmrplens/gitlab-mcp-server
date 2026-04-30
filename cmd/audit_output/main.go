@@ -25,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// finding describes one output-format audit finding for a registered MCP tool.
 type finding struct {
 	tool     string
 	category string

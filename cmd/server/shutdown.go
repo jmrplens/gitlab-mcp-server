@@ -1,7 +1,6 @@
 // Shutdown logic for terminating all running instances of this binary.
 // Invoked via the --shutdown CLI flag by pe-agnostic-store before replacing
 // the binary on disk so that MCP clients restart with the new version.
-
 package main
 
 import (
@@ -14,6 +13,8 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
+// shutdownGracePeriod is the maximum time runShutdown waits after graceful
+// termination before force-killing remaining peer processes.
 const shutdownGracePeriod = 5 * time.Second
 
 // runShutdown finds all running instances of this binary (excluding self),

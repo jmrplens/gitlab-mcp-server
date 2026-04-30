@@ -14,25 +14,26 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 8,981   |
-| Unit test functions         | 8,682   |
-| E2E test functions          | 218     |
-| cmd test functions          | 81      |
-| Test files (internal/)      | 410     |
-| Test files (test/e2e/suite/)| 99      |
+| Total test functions        | 9,003   |
+| Unit test functions         | 8,686   |
+| E2E test functions          | 222     |
+| cmd test functions          | 95      |
+| Test files (internal/)      | 397     |
+| Test files (cmd/)           | 5       |
+| Test files (test/e2e/suite/)| 100     |
 | Tool sub-packages tested    | 163     |
 | Core packages tested        | 16      |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 96.9% |
-| Overall coverage (`go test ./internal/...`)           | 97.5% |
-| Average package coverage    | 97.9%   |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 93.0% |
+| Overall coverage (`go test ./internal/...`)           | 97.1% |
+| Average package coverage    | 93.0%   |
 
 ### Naming Convention Stats
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 7,673 | 89.9% |
-| `TestFunc` (no-underscore)     |   656 |  7.7% |
-| `TestFunc_Sc_Exp` (3+ part)   |   210 |  2.5% |
+| `TestFunc_Scenario` (2-part)   | 8,111 | 90.1% |
+| `TestFunc` (no-underscore)     |   673 |  7.5% |
+| `TestFunc_Sc_Exp` (3+ part)   |   219 |  2.4% |
 
 ## Test Distribution
 
@@ -40,12 +41,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,477 |         76 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            229 |         19 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (163)  |          6,976 |        315 | Domain-specific tool handlers        |
-| E2E integration          |            218 |         99 | Full workflow against real GitLab    |
-| cmd/server               |             81 |          1 | Main entry point + OAuth integration |
-| **Total**                |      **8,981** |    **510** |                                      |
+| Core packages            |          1,485 |         83 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            225 |          7 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (163)  |          6,976 |        307 | Domain-specific tool handlers        |
+| E2E integration          |            222 |        100 | Full workflow against real GitLab    |
+| cmd packages             |             95 |          5 | Main entry point + command utilities |
+| **Total**                |      **9,003** |    **502** |                                      |
 
 ### Core Packages
 
@@ -53,21 +54,21 @@
 | -------------- | ----: | -------: | ------------------------------------ |
 | autoupdate     |   110 |   85.1%  | Self-update via GitLab releases      |
 | completions    |    91 |   94.0%  | Argument auto-completion             |
-| config         |    52 |   97.7%  | Configuration loading                |
+| config         |    53 |   97.8%  | Configuration loading                |
 | elicitation    |    78 |   92.0%  | MCP elicitation capability           |
-| gitlab         |    37 |   96.6%  | GitLab API client wrapper            |
+| gitlab         |    38 |  100.0%  | GitLab API client wrapper            |
 | logging        |    16 |  100.0%  | MCP logging capability               |
 | progress       |    17 |  100.0%  | MCP progress notifications           |
 | prompts        |   202 |   96.3%  | MCP prompt implementations           |
 | resources      |   155 |   98.7%  | MCP resource implementations         |
 | roots          |    21 |   98.5%  | MCP roots capability                 |
 | sampling       |    83 |   99.5%  | MCP sampling capability              |
-| serverpool     |    40 |   99.4%  | HTTP mode server pool                |
+| serverpool     |    44 |   99.5%  | HTTP mode server pool                |
 | testutil       |    21 |   60.9%  | Shared test helpers                  |
-| toolutil       |   314 |   96.6%  | Shared tool utilities                |
+| toolutil       |   316 |   96.6%  | Shared tool utilities                |
 | wizard         |   205 |   83.1%  | Setup wizard (Web UI, TUI, CLI)      |
 | oauth          |    35 |   98.6%  | OAuth HTTP mode (cache, verifier, middleware, metadata) |
-| **Subtotal**   |**1,477**|        |                                      |
+| **Subtotal**   |**1,485**|        |                                      |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -283,18 +284,18 @@
 | -------------- | -------: |
 | autoupdate     |   85.1%  |
 | completions    |   94.0%  |
-| config         |   97.6%  |
+| config         |   97.8%  |
 | elicitation    |   92.0%  |
-| gitlab         |   96.6%  |
+| gitlab         |  100.0%  |
 | logging        |  100.0%  |
 | oauth          |   98.6%  |
 | progress       |  100.0%  |
 | prompts        |   96.3%  |
-| resources      |   98.6%  |
+| resources      |   98.7%  |
 | roots          |   98.5%  |
 | sampling       |   99.5%  |
-| serverpool     |   99.4%  |
-| testutil       |   62.7%  |
+| serverpool     |   99.5%  |
+| testutil       |   60.9%  |
 | toolutil       |   96.6%  |
 | wizard         |   83.1%  |
 
@@ -471,9 +472,12 @@ Coverage target: **>90%** per package. Exceptions:
 - **testutil** (60.9%) — Some helpers are only exercised by external tests
   (build-tagged `e2e` suite) and therefore are not counted in the package's
   own unit-test coverage report.
-- **cmd/server** (62.5%) — Main entry-point glue, signal handling, and
+- **cmd/server** (78.2%) — Main entry-point glue, signal handling, and
   HTTP server startup paths are validated end-to-end (e2e + integration)
   but not by in-process unit tests.
+- **cmd utility packages** (0.0%–80.7%) — Audit and generation commands are
+  primarily smoke-tested for their branch-specific registration paths; most
+  formatting/reporting branches are exercised by manual tooling or CI jobs.
 - **autoupdate** (85.1%) — OS-level operations (`syscall.Exec` process
   replacement, Windows-gated binary rename, signal handling) cannot be
   unit tested without integration infrastructure. The `ExecSelf` function
