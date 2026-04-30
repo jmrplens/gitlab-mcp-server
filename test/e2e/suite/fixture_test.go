@@ -145,10 +145,14 @@ func retryOnTransient[O any](ctx context.Context, t *testing.T, label string, ma
 // spurious "already been taken" errors and transient connection resets.
 const projectCreateRetries = 5
 
-// createProject creates a private project via individual MCP tools and
-// registers deletion in t.Cleanup.
-func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
-	t.Helper()
+// CreateProject creates a private project via individual MCP tools and
+// registers deletion in the per-test resource ledger.
+func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession) ProjectFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("project fixture MCP session not configured")
+	}
+	t := e2e.T
 	var out projects.Output
 	var err error
 	for attempt := range projectCreateRetries {
@@ -172,26 +176,43 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 	}
 	requireNoError(t, err, "create project fixture")
 
-	t.Cleanup(func() {
-		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = callToolVoidOn(delCtx, session, "gitlab_project_delete", projects.DeleteInput{
-			ProjectID:         toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
-			PermanentlyRemove: true,
-			FullPath:          out.PathWithNamespace,
-		})
+	e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(out.ID, 10),
+		Path:      out.PathWithNamespace,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_project_delete", projects.DeleteInput{
+				ProjectID:         toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
+				PermanentlyRemove: true,
+				FullPath:          out.PathWithNamespace,
+			})
+		},
 	})
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
 }
 
-// createProjectMeta creates a private project via the gitlab_project meta-tool
-// and registers deletion in t.Cleanup.
-func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
+// createProject keeps legacy call sites working while they migrate to E2EContext.
+func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
+	return CreateProject(ctx, NewE2EContext(t), session)
+}
+
+// CreateProjectMeta creates a private project via the gitlab_project meta-tool
+// and registers deletion in the per-test resource ledger.
+func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession) ProjectFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("project fixture MCP session not configured")
+	}
+	t := e2e.T
 	var out projects.Output
 	var err error
 	for attempt := range projectCreateRetries {
@@ -218,23 +239,36 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 	}
 	requireNoError(t, err, "create project fixture (meta)")
 
-	t.Cleanup(func() {
-		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = callToolVoidOn(delCtx, session, "gitlab_project", map[string]any{
-			"action": "delete",
-			"params": map[string]any{
-				"project_id":         strconv.FormatInt(out.ID, 10),
-				"permanently_remove": true,
-				"full_path":          out.PathWithNamespace,
-			},
-		})
+	e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(out.ID, 10),
+		Path:      out.PathWithNamespace,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_project", map[string]any{
+				"action": "delete",
+				"params": map[string]any{
+					"project_id":         strconv.FormatInt(out.ID, 10),
+					"permanently_remove": true,
+					"full_path":          out.PathWithNamespace,
+				},
+			})
+		},
 	})
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+}
+
+// createProjectMeta keeps legacy call sites working while they migrate to E2EContext.
+func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
+	t.Helper()
+	return CreateProjectMeta(ctx, NewE2EContext(t), session)
 }
 
 // unprotectMain removes protection from the main branch so commits can
