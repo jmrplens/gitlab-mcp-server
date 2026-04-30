@@ -495,10 +495,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 621 | 120,446 |
+| Source (`.go`, non-test) | 621 | 120,470 |
 | Unit tests (`_test.go`) | 402 | 209,465 |
 | End-to-end tests | 108 | 23,497 |
-| **Total** | **1,131** | **353,408** |
+| **Total** | **1,131** | **353,432** |
 
 ### Functions
 
@@ -518,14 +518,14 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines | 1.74× more tests than code |
 | Average source file length | ~193 lines |
 | Average test file length | ~521 lines |
-| Comment lines in source | 10,044 (~8.3% of source) |
+| Comment lines in source | 10,051 (~8.3% of source) |
 | Test functions per source function | 2.6× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,330 |
+| `if err != nil` checks | 5,331 |
 | `defer` statements | 662 |
 | `struct` types defined | 1,928 |
 | `//nolint` suppressions | 55 |
@@ -538,7 +538,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 91 |
+| Git commits | 93 |
 | Unique contributors | 2 |
 
 ### Hall of fame
@@ -552,7 +552,7 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,189 pages of A4 |
+| Source code printed at 55 lines/page | ~2,190 pages of A4 |
 | Source lines mentioning `"gitlab"` | 10,522 (impossible to avoid) |
 | Longest function name in source | `RetryFailedExternalStatusCheckForProjectMR` (42 chars) |
 | Longest test function name | `TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations` (71 chars) |

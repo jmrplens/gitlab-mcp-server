@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,10 @@ const (
 	// tableAlignRight is the Markdown separator row for a two-column table
 	// with the second column right-aligned.
 	tableAlignRight = "| --- | ---: |\n"
+
+	// scannerBufSize is the initial and maximum bufio.Scanner token size.
+	// 512 KB handles the largest generated Go files without reallocating.
+	scannerBufSize = 512 * 1024
 )
 
 // repoStats accumulates filesystem-level measurements of the Go codebase.
@@ -75,12 +80,15 @@ func collectStats(root string) (*repoStats, error) {
 	s := &repoStats{}
 	dirs := make(map[string]bool)
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	// WalkDir is used instead of Walk: it receives fs.DirEntry directly from
+	// the OS directory read, avoiding the extra os.Lstat call Walk performs
+	// for every entry.
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			switch info.Name() {
+		if d.IsDir() {
+			switch d.Name() {
 			case ".git", "vendor", "node_modules", "dist":
 				return filepath.SkipDir
 			}
@@ -128,15 +136,21 @@ func collectStats(root string) (*repoStats, error) {
 
 	s.Packages = len(dirs)
 	s.DirectDeps, s.IndirectDeps = parseDeps(filepath.Join(root, "go.mod"))
-	s.CommitCount = gitRevCount()
-	s.ContributorCount = gitContributors()
+
+	var gitErr error
+	if s.CommitCount, gitErr = gitRevCount(); gitErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: git rev count: %v\n", gitErr)
+	}
+	if s.ContributorCount, gitErr = gitContributors(); gitErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: git contributors: %v\n", gitErr)
+	}
 	return s, nil
 }
 
 // scanGoFile reads every line of a .go file and accumulates pattern-based
 // counters into s. Returns the total line count.
 func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
-	f, err := os.Open(filepath.Clean(path)) //#nosec G304 -- path from filepath.Walk within repo
+	f, err := os.Open(filepath.Clean(path)) //#nosec G304 -- path from filepath.WalkDir within repo
 	if err != nil {
 		return 0, err
 	}
@@ -144,6 +158,8 @@ func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
 
 	var lines int
 	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, scannerBufSize), scannerBufSize)
+
 	for sc.Scan() {
 		lines++
 		line := sc.Text()
@@ -236,11 +252,16 @@ func extractFuncName(trimmed string) string {
 	return ""
 }
 
+// isTODOComment reports whether trimmed is a TODO, FIXME, or HACK comment.
+// It handles both "// TODO" and "//TODO" (with or without a space after //).
 func isTODOComment(trimmed string) bool {
-	up := strings.ToUpper(trimmed)
-	return strings.HasPrefix(up, "// TODO") ||
-		strings.HasPrefix(up, "// FIXME") ||
-		strings.HasPrefix(up, "// HACK")
+	if !strings.HasPrefix(trimmed, "//") {
+		return false
+	}
+	keyword := strings.ToUpper(strings.TrimLeft(trimmed[2:], " \t"))
+	return strings.HasPrefix(keyword, "TODO") ||
+		strings.HasPrefix(keyword, "FIXME") ||
+		strings.HasPrefix(keyword, "HACK")
 }
 
 // parseDeps counts direct and indirect dependencies declared in go.mod.
@@ -281,27 +302,30 @@ func gitBin() (string, error) {
 	return exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
 }
 
-func gitRevCount() int {
+func gitRevCount() (int, error) {
 	bin, err := gitBin()
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	out, err := exec.CommandContext(context.Background(), bin, "rev-list", "--count", "HEAD").Output() //#nosec G204 -- absolute path from LookPath, fixed args
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("rev-list: %w", err)
 	}
-	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
-	return n
+	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("parsing rev-list output %q: %w", strings.TrimSpace(string(out)), err)
+	}
+	return n, nil
 }
 
-func gitContributors() int {
+func gitContributors() (int, error) {
 	bin, err := gitBin()
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%aE").Output() //#nosec G204 -- absolute path from LookPath, fixed args; %aE uses .mailmap
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("git log: %w", err)
 	}
 	emails := make(map[string]bool)
 	for line := range strings.SplitSeq(string(out), "\n") {
@@ -309,7 +333,7 @@ func gitContributors() int {
 			emails[e] = true
 		}
 	}
-	return len(emails)
+	return len(emails), nil
 }
 
 // renderStats builds the Markdown tables for the <!-- START STATS --> section.
