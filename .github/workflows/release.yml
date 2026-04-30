@@ -114,8 +114,8 @@ jobs:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
           # Bump when a new mcp-publisher release is verified. Server version published comes from
           # the git tag (handled in the previous step by update-server-json-sha.sh).
-          MCP_PUBLISHER_VERSION: "v1.7.2"
-          MCP_PUBLISHER_SHA256: ""  # If empty, signature verification is skipped; populate to enforce.
+          MCP_PUBLISHER_VERSION: "v1.7.6"
+          MCP_PUBLISHER_SHA256: "bcc96ca630cae4cf503b4550bd4a17462d42ad4819273bee56f4385bb059ddee"
         run: |
           set -euo pipefail
           TARBALL="mcp-publisher_linux_amd64.tar.gz"
