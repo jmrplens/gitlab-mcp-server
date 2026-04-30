@@ -3,7 +3,6 @@
 // meta_schema_resource_test.go validates that, after the full meta-tool
 // registry is wired into a server, the gitlab://schema/meta/* resources
 // expose the captured per-action InputSchemas for real meta-tools.
-
 package suite
 
 import (
@@ -14,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -23,14 +23,14 @@ import (
 // toolutil.MetaRoutes) plus the meta-schema resources in a single MCP
 // server, then returns an in-memory client session. It pins mode=full so
 // per-action InputSchemas are captured with their real structured shape.
-func metaSchemaResourceSession(t *testing.T) *mcp.ClientSession {
+func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
 	t.Helper()
 	tools.SetMetaParamSchema("full")
 	t.Cleanup(func() { tools.SetMetaParamSchema("opaque") })
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	metaRoutes := toolutil.CaptureMetaRoutes(func() {
-		tools.RegisterAllMeta(server, sess.glClient, sess.enterprise)
+		tools.RegisterAllMeta(server, client, enterprise)
 	})
 	resources.RegisterMetaSchemaResources(server, metaRoutes)
 
@@ -51,7 +51,7 @@ func metaSchemaResourceSession(t *testing.T) *mcp.ClientSession {
 // TestMetaSchemaResource_ListsTemplate verifies the per-action template URI
 // is advertised via ListResourceTemplates.
 func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
-	session := metaSchemaResourceSession(t)
+	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ListResourceTemplates(context.Background(), nil)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
 // schema for gitlab_merge_request/create exposes the expected structural
 // fields callers actually need to construct an MR.
 func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
-	session := metaSchemaResourceSession(t)
+	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/gitlab_merge_request/create",
@@ -103,7 +103,7 @@ func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
 // TestMetaSchemaResource_NotFound verifies unknown tool/action pairs return
 // ResourceNotFoundError when looked up via the live registry.
 func TestMetaSchemaResource_NotFound(t *testing.T) {
-	session := metaSchemaResourceSession(t)
+	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
 
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/gitlab_merge_request/nonexistent_action",
@@ -116,7 +116,7 @@ func TestMetaSchemaResource_NotFound(t *testing.T) {
 // TestMetaSchemaResource_IndexEnumeratesMetaTools verifies the index lists
 // at least the canonical meta-tools wired in RegisterAllMeta.
 func TestMetaSchemaResource_IndexEnumeratesMetaTools(t *testing.T) {
-	session := metaSchemaResourceSession(t)
+	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
 		URI: "gitlab://schema/meta/",

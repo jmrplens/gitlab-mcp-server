@@ -117,7 +117,7 @@ gitlab-mcp-server/
 │   ├── oauth-app-setup.md       # Creating GitLab OAuth applications for MCP clients
 │   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
 ├── test/e2e/                    # End-to-end integration tests
-│   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner for Docker mode
+│   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner + fixture service for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
@@ -190,7 +190,7 @@ go vet ./...                             # Static analysis
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
-make test-e2e-docker                                   # Ephemeral GitLab CE container (Docker, ~4 GB RAM)
+make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
 ```
@@ -530,7 +530,7 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 ```
 
-**Docker mode** — ephemeral GitLab CE container with CI runner (enables pipeline/job tests):
+**Docker mode** — ephemeral GitLab CE container with CI runner and fixture service (enables pipeline/job tests and deterministic webhook/custom-emoji/mirror endpoints):
 
 ```bash
 docker compose -f test/e2e/docker-compose.yml up -d

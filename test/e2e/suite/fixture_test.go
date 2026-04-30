@@ -10,14 +10,15 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
@@ -31,6 +32,17 @@ import (
 type ProjectFixture struct {
 	ID   int64
 	Path string
+}
+
+// GroupFixture holds identifiers for a test group created by a fixture builder.
+type GroupFixture struct {
+	ID   int64
+	Path string
+}
+
+// gidStr returns the group ID as a plain string for use in meta-tool params.
+func (f GroupFixture) gidStr() string {
+	return strconv.FormatInt(f.ID, 10)
 }
 
 // pidOf returns the project ID as a StringOrInt for use in individual tool inputs.
@@ -63,30 +75,6 @@ type MRFixture struct {
 type CommitFixture struct {
 	SHA     string
 	ShortID string
-}
-
-// ---------------------------------------------------------------------------
-// sanitizeTestName converts a test name like
-// "TestIndividual_Branches/Create" into a slug safe for GitLab project names.
-// ---------------------------------------------------------------------------
-
-// unsafeChars matches any character that is not lowercase alphanumeric or hyphen,
-// used by [sanitizeTestName] to strip characters unsafe for GitLab project names.
-var unsafeChars = regexp.MustCompile(`[^a-z0-9-]`)
-
-// sanitizeTestName converts a Go test name like
-// "TestIndividual_Branches/Create" into a slug safe for GitLab project
-// names by lowercasing, replacing separators with hyphens, stripping
-// unsafe characters, and truncating to 40 characters.
-func sanitizeTestName(name string) string {
-	s := strings.ToLower(name)
-	s = strings.ReplaceAll(s, "/", "-")
-	s = strings.ReplaceAll(s, "_", "-")
-	s = unsafeChars.ReplaceAllString(s, "")
-	if len(s) > 40 {
-		s = s[:40]
-	}
-	return s
 }
 
 // ---------------------------------------------------------------------------
@@ -140,24 +128,13 @@ func isRetryableError(err error) bool {
 // the last error after all attempts are exhausted.
 func retryOnTransient[O any](ctx context.Context, t *testing.T, label string, maxRetries int, fn func() (O, error)) (O, error) {
 	t.Helper()
-	var out O
-	var err error
-	for attempt := range maxRetries {
-		out, err = fn()
+	return retryWithBackoff(ctx, t, label, maxRetries, func(int) (O, bool, string, error) {
+		out, err := fn()
 		if err == nil {
-			return out, nil
+			return out, false, "", nil
 		}
-		if attempt >= maxRetries-1 || !isRetryableError(err) {
-			break
-		}
-		t.Logf("%s: attempt %d/%d failed (retrying): %v", label, attempt+1, maxRetries, err)
-		select {
-		case <-ctx.Done():
-			return out, err
-		case <-time.After(time.Duration(attempt+1) * time.Second):
-		}
-	}
-	return out, err
+		return out, isRetryableError(err), "retryable error", err
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -169,15 +146,17 @@ func retryOnTransient[O any](ctx context.Context, t *testing.T, label string, ma
 // spurious "already been taken" errors and transient connection resets.
 const projectCreateRetries = 5
 
-// createProject creates a private project via individual MCP tools and
-// registers deletion in t.Cleanup.
-func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
-	t.Helper()
-	var out projects.Output
-	var err error
-	for attempt := range projectCreateRetries {
-		name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
-		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
+// CreateProject creates a private project via individual MCP tools and
+// registers deletion in the per-test resource ledger.
+func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession) ProjectFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("project fixture MCP session not configured")
+	}
+	t := e2e.T
+	name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
+	out, err := retryWithBackoff(ctx, t, "create project fixture", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
+		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
 			Name:                 name,
 			Description:          "E2E: " + t.Name(),
 			Visibility:           "private",
@@ -185,42 +164,53 @@ func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession
 			DefaultBranch:        defaultBranch,
 		})
 		if err == nil {
-			break
+			return out, false, "", nil
 		}
 		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
-		if retryable && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-	}
+		return out, retryable, "name collision or transient network error", err
+	})
 	requireNoError(t, err, "create project fixture")
 
-	t.Cleanup(func() {
-		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = callToolVoidOn(delCtx, session, "gitlab_project_delete", projects.DeleteInput{
-			ProjectID:         toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
-			PermanentlyRemove: true,
-			FullPath:          out.PathWithNamespace,
-		})
-	})
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(out.ID, 10),
+		Path:      out.PathWithNamespace,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_project_delete", projects.DeleteInput{
+				ProjectID:         toolutil.StringOrInt(strconv.FormatInt(out.ID, 10)),
+				PermanentlyRemove: true,
+				FullPath:          out.PathWithNamespace,
+			})
+		},
+	}), "register project fixture cleanup")
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, session, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
 }
 
-// createProjectMeta creates a private project via the gitlab_project meta-tool
-// and registers deletion in t.Cleanup.
-func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
+// createProject keeps legacy call sites working while they migrate to E2EContext.
+func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
-	var out projects.Output
-	var err error
-	for attempt := range projectCreateRetries {
-		name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
-		out, err = callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
+	return CreateProject(ctx, NewE2EContext(t), session)
+}
+
+// CreateProjectMeta creates a private project via the gitlab_project meta-tool
+// and registers deletion in the per-test resource ledger.
+func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession) ProjectFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("project fixture MCP session not configured")
+	}
+	t := e2e.T
+	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
+	out, err := retryWithBackoff(ctx, t, "create project fixture (meta)", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
+		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
 			"action": "create",
 			"params": map[string]any{
 				"name":                   name,
@@ -231,34 +221,81 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 			},
 		})
 		if err == nil {
-			break
+			return out, false, "", nil
 		}
 		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
-		if retryable && attempt < projectCreateRetries-1 {
-			t.Logf("project create attempt %d failed, retrying: %v", attempt+1, err)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-	}
+		return out, retryable, "name collision or transient network error", err
+	})
 	requireNoError(t, err, "create project fixture (meta)")
 
-	t.Cleanup(func() {
-		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = callToolVoidOn(delCtx, session, "gitlab_project", map[string]any{
-			"action": "delete",
-			"params": map[string]any{
-				"project_id":         strconv.FormatInt(out.ID, 10),
-				"permanently_remove": true,
-				"full_path":          out.PathWithNamespace,
-			},
-		})
-	})
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(out.ID, 10),
+		Path:      out.PathWithNamespace,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_project", map[string]any{
+				"action": "delete",
+				"params": map[string]any{
+					"project_id":         strconv.FormatInt(out.ID, 10),
+					"permanently_remove": true,
+					"full_path":          out.PathWithNamespace,
+				},
+			})
+		},
+	}), "register meta project fixture cleanup")
 
 	// Wait for the default branch to be available.
-	waitForBranchOn(ctx, t, session, out.ID, defaultBranch)
+	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
 	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+}
+
+// createProjectMeta keeps legacy call sites working while they migrate to E2EContext.
+func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
+	t.Helper()
+	return CreateProjectMeta(ctx, NewE2EContext(t), session)
+}
+
+// CreateGroupMeta creates a group via the gitlab_group meta-tool and registers
+// deletion in the per-test resource ledger.
+func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession, namePrefix string) GroupFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("group fixture MCP session not configured")
+	}
+	t := e2e.T
+	name := uniqueName(namePrefix)
+	out, err := callToolOn[groups.Output](ctx, session, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name": name,
+			"path": name,
+		},
+	})
+	requireNoError(t, err, "create group fixture (meta)")
+
+	id := strconv.FormatInt(out.ID, 10)
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindGroup,
+		ID:        id,
+		Path:      out.FullPath,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_group", map[string]any{
+				"action": "delete",
+				"params": map[string]any{"group_id": id},
+			})
+		},
+	}), "register meta group fixture cleanup")
+
+	return GroupFixture{ID: out.ID, Path: out.FullPath}
 }
 
 // unprotectMain removes protection from the main branch so commits can
@@ -276,7 +313,7 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
 	const maxRetries = 5
-	for attempt := range maxRetries {
+	fixture, err := retryWithBackoff(ctx, t, "commit file "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
 			ProjectID:     proj.pidOf(),
 			Branch:        branch,
@@ -286,17 +323,13 @@ func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, p
 			},
 		})
 		if err == nil {
-			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}, false, "", nil
 		}
-		if attempt < maxRetries-1 && strings.Contains(err.Error(), "only create or edit files when you are on a branch") {
-			t.Logf("commitFile %s: retry %d/%d (branch not ready)", path, attempt+1, maxRetries)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-			continue
-		}
-		requireNoError(t, err, "commit file "+path)
-	}
-	t.Fatalf("commitFile %s: exhausted %d retries", path, maxRetries)
-	return CommitFixture{}
+		retryable := strings.Contains(err.Error(), "only create or edit files when you are on a branch")
+		return CommitFixture{}, retryable, "branch not ready", err
+	})
+	requireNoError(t, err, "commit file "+path)
+	return fixture
 }
 
 // commitFileMeta creates a file via the gitlab_repository meta-tool.
@@ -305,7 +338,7 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 	t.Helper()
 	const maxRetries = 8
 	needStartBranch := false
-	for attempt := range maxRetries {
+	fixture, err := retryWithBackoff(ctx, t, "commit file meta "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		params := map[string]any{
 			"project_id":     proj.pidStr(),
 			"branch":         branch,
@@ -322,27 +355,21 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 			"params": params,
 		})
 		if err == nil {
-			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}
+			return CommitFixture{SHA: out.ID, ShortID: out.ShortID}, false, "", nil
 		}
-		if attempt < maxRetries-1 {
-			errMsg := err.Error()
-			if strings.Contains(errMsg, "only create or edit files when you are on a branch") {
-				needStartBranch = true
-				t.Logf("commitFileMeta %s: retry %d/%d (branch not ready, adding start_branch)", path, attempt+1, maxRetries)
-				time.Sleep(time.Duration(attempt+1) * time.Second)
-				continue
-			}
-			if strings.Contains(errMsg, "already exists") {
-				needStartBranch = false
-				t.Logf("commitFileMeta %s: retry %d/%d (branch already exists, removing start_branch)", path, attempt+1, maxRetries)
-				time.Sleep(time.Second)
-				continue
-			}
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "only create or edit files when you are on a branch") {
+			needStartBranch = true
+			return CommitFixture{}, true, "branch not ready, adding start_branch", err
 		}
-		requireNoError(t, err, "commit file meta "+path)
-	}
-	t.Fatalf("commitFileMeta %s: exhausted %d retries", path, maxRetries)
-	return CommitFixture{}
+		if strings.Contains(errMsg, "already exists") {
+			needStartBranch = false
+			return CommitFixture{}, true, "branch already exists, removing start_branch", err
+		}
+		return CommitFixture{}, false, "", err
+	})
+	requireNoError(t, err, "commit file meta "+path)
+	return fixture
 }
 
 // createBranch creates a branch from the default branch via individual tools.
@@ -436,56 +463,54 @@ func createMRMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 // waitForBranchOn polls the GitLab API until the named branch exists in the
 // given project or the context is canceled. Under parallel load (~60 projects)
 // branch creation can take well over 30s, so we allow up to 90s with
-// progressive backoff. Transient errors (429, 5xx, network) are retried silently.
-func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, projectID int64, branch string) {
+// bounded polling. Transient errors (429, 5xx, network) are retried silently.
+func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID int64, branch string) {
 	t.Helper()
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, client)
+	requireNoError(t, waitForBranch(ctx, client, projectID, branch), fmt.Sprintf("wait for branch %s in project %d", branch, projectID))
+}
+
+// waitForBranch polls GitLab until branch is visible in projectID or returns a
+// non-retryable branch lookup error.
+func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string) error {
+	if client == nil {
+		return fmt.Errorf("gitlab client not configured")
+	}
 	pid := int(projectID)
 
 	const maxWait = 90 * time.Second
-	deadline := time.Now().Add(maxWait)
-	delay := 500 * time.Millisecond
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
 
-	for time.Now().Before(deadline) {
-		_, resp, err := sess.glClient.GL().Branches.GetBranch(pid, branch)
+	return Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		_, resp, err := client.GL().Branches.GetBranch(pid, branch, gl.WithContext(pollCtx))
 		if err == nil {
-			t.Logf("Branch %q ready in project %d", branch, projectID)
-			return
+			return true, fmt.Sprintf("branch %q ready in project %d", branch, projectID), nil
 		}
 
-		retryable := false
-		if resp == nil {
-			// Network-level error (EOF, connection reset) — always retryable.
-			retryable = true
-		} else {
-			switch {
-			case resp.StatusCode == http.StatusNotFound:
-				retryable = true
-			case resp.StatusCode == http.StatusTooManyRequests:
-				retryable = true
-			case resp.StatusCode >= 500:
-				retryable = true
-			}
+		state := fmt.Sprintf("branch %q in project %d: %v", branch, projectID, err)
+		if resp != nil {
+			state = fmt.Sprintf("branch %q in project %d: HTTP %d", branch, projectID, resp.StatusCode)
 		}
-		if !retryable {
-			requireNoError(t, err, fmt.Sprintf("get branch %s in project %d", branch, projectID))
+		if resp == nil && !isTransientNetworkError(err) {
+			return false, state, fmt.Errorf("get branch %q in project %d: %w", branch, projectID, err)
 		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("context canceled waiting for branch %q: %v", branch, ctx.Err())
-		case <-time.After(delay):
+		if resp != nil && !retryableBranchResponse(resp) {
+			return false, state, fmt.Errorf("get branch %q in project %d: %w", branch, projectID, err)
 		}
-
-		// Progressive backoff: 500ms → 1s → 2s (capped)
-		if delay < 2*time.Second {
-			delay *= 2
-		}
-	}
-	t.Fatalf("branch %q not available in project %d after %s", branch, projectID, maxWait)
+		return false, state, nil
+	})
 }
 
-// waitForMRReady polls the MR until the GitLab DetailedMergeStatus leaves the
+// retryableBranchResponse reports whether a branch lookup response can be
+// retried while GitLab converges after branch creation.
+func retryableBranchResponse(resp *gl.Response) bool {
+	if resp == nil {
+		return true
+	}
+	return resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+}
+
 // waitForMRReady polls the MR until the GitLab DetailedMergeStatus leaves the
 // transitional values ("preparing", "checking", "unchecked", "") that GitLab
 // CE reports while still computing the diff and merge ref. Downstream
@@ -496,34 +521,54 @@ func waitForBranchOn(ctx context.Context, t *testing.T, _ *mcp.ClientSession, pr
 // The helper is best-effort: it never fails the test on its own. If the MR
 // never leaves the transitional state within maxWait, it logs and returns so
 // that the test's own assertion produces the actionable failure message.
-func waitForMRReady(ctx context.Context, t *testing.T, projectID, mrIID int64) {
+func waitForMRReady(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, mrIID int64) {
 	t.Helper()
-	if sess.glClient == nil {
-		return
+	drainSidekiq(ctx, t, client)
+	if err := waitForMRReadyState(ctx, client, projectID, mrIID); err != nil {
+		t.Logf("MR !%d readiness wait in project %d ended: %v", mrIID, projectID, err)
 	}
-	drainSidekiq(ctx, t)
+}
+
+// waitForMRReadyState polls GitLab until the merge request leaves transitional
+// detailed merge states or the polling context expires.
+func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, projectID, mrIID int64) error {
+	if client == nil {
+		return nil
+	}
 	const maxWait = 120 * time.Second
-	deadline := time.Now().Add(maxWait)
-	delay := 500 * time.Millisecond
-	for time.Now().Before(deadline) {
-		mr, _, err := sess.glClient.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(ctx))
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	return Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		mr, resp, err := client.GL().MergeRequests.GetMergeRequest(int(projectID), mrIID, nil, gl.WithContext(pollCtx))
 		if err == nil {
 			switch mr.DetailedMergeStatus {
 			case "preparing", "checking", "unchecked", "":
-			// still computing; continue polling
+				return false, fmt.Sprintf("detailed_merge_status=%q", mr.DetailedMergeStatus), nil
 			default:
-				t.Logf("MR !%d ready in project %d: detailed_merge_status=%s", mrIID, projectID, mr.DetailedMergeStatus)
-				return
+				return true, fmt.Sprintf("detailed_merge_status=%q", mr.DetailedMergeStatus), nil
 			}
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
+		if pollCtx.Err() != nil {
+			return false, "", pollCtx.Err()
 		}
-		if delay < 2*time.Second {
-			delay *= 2
+
+		state := fmt.Sprintf("error polling MR !%d in project %d: %v", mrIID, projectID, err)
+		if resp != nil {
+			state = fmt.Sprintf("MR !%d in project %d: HTTP %d", mrIID, projectID, resp.StatusCode)
 		}
-	}
-	t.Logf("MR !%d not ready after %s (continuing; final assertion will report state)", mrIID, maxWait)
+		if resp == nil && !isTransientNetworkError(err) {
+			return false, state, fmt.Errorf("get MR !%d in project %d: %w", mrIID, projectID, err)
+		}
+		if resp != nil && !retryableMergeRequestResponse(resp) {
+			return false, state, fmt.Errorf("get MR !%d in project %d: %w", mrIID, projectID, err)
+		}
+		return false, state, nil
+	})
+}
+
+// retryableMergeRequestResponse reports whether an MR readiness lookup can be
+// retried after GitLab returns an HTTP response.
+func retryableMergeRequestResponse(resp *gl.Response) bool {
+	return resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
 }

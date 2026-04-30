@@ -18,12 +18,15 @@ import (
 // create → list → delete.
 func TestIndividual_CustomEmoji(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
+	groupName := uniqueName("e2e-custom-emoji-ind")
+	emojiURL := e2eFixtureServiceURL("/emoji.png")
 
 	// Create a temporary group for custom emoji.
 	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
-		Name: "e2e-custom-emoji-ind",
-		Path: "e2e-custom-emoji-ind",
+		Name: groupName,
+		Path: groupName,
 	})
 	requireNoError(t, groupErr, "create group for custom emoji")
 	t.Cleanup(func() {
@@ -38,7 +41,7 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 		out, err := callToolOn[customemoji.CreateOutput](ctx, sess.individual, "gitlab_create_custom_emoji", customemoji.CreateInput{
 			GroupPath: groupOut.Path,
 			Name:      "e2e_test_emoji",
-			URL:       "https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png",
+			URL:       emojiURL,
 		})
 		requireNoError(t, err, "create custom emoji")
 		requireTruef(t, out.Emoji.ID != "", "expected non-empty emoji GID")
@@ -69,13 +72,16 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 // create → list → delete.
 func TestMeta_CustomEmoji(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
+	groupName := uniqueName("e2e-custom-emoji-meta")
+	emojiURL := e2eFixtureServiceURL("/emoji.png")
 
 	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
-			"name": "e2e-custom-emoji-meta",
-			"path": "e2e-custom-emoji-meta",
+			"name": groupName,
+			"path": groupName,
 		},
 	})
 	requireNoError(t, groupErr, "create group for custom emoji (meta)")
@@ -93,7 +99,7 @@ func TestMeta_CustomEmoji(t *testing.T) {
 			"params": map[string]any{
 				"group_path": groupOut.Path,
 				"name":       "e2e_test_emoji_meta",
-				"url":        "https://about.gitlab.com/images/press/logo/png/gitlab-icon-rgb.png",
+				"url":        emojiURL,
 			},
 		})
 		requireNoError(t, err, "meta custom emoji create")

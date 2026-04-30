@@ -13,6 +13,11 @@ Requires a running GitLab instance with a Personal Access Token that has create/
 cat > .env <<EOF
 GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-...
+# Required when running webhook/custom-emoji tests outside Docker mode.
+# Must be reachable from the GitLab instance, not just from the test process.
+E2E_FIXTURE_URL=https://fixture.example.com
+# Optional when GitLab must reach itself through a different URL for push mirror tests.
+E2E_GITLAB_INTERNAL_URL=https://gitlab.example.com
 EOF
 
 # Run
@@ -25,7 +30,7 @@ Uses an ephemeral GitLab CE container. Requires Docker and ~4 GB RAM.
 
 All Docker infrastructure is version-controlled in this directory:
 
-- `docker-compose.yml` — GitLab CE + Runner definition
+- `docker-compose.yml` — GitLab CE + Runner + fixture service definition
 - `scripts/setup-gitlab.sh` — Creates test user, PAT, generates `test/e2e/.env.docker`
 - `scripts/register-runner.sh` — Registers CI runner
 - `scripts/wait-for-gitlab.sh` — Polls readiness endpoint
@@ -51,7 +56,7 @@ Or use the Makefile target:
 make test-e2e-docker
 ```
 
-Docker mode enables pipeline and job tests that require a CI runner.
+Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
 ## Architecture
 
@@ -61,7 +66,7 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 
 | File                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
-| `suite/setup_test.go`      | TestMain, 4 MCP sessions, helpers, shared state      |
+| `suite/setup_test.go`      | TestMain, 5 MCP sessions, helpers, shared state      |
 | `suite/fixture_test.go`    | Self-contained GitLab resource builders               |
 | `suite/*_test.go`          | 91 domain-specific test files                         |
 
@@ -69,16 +74,35 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 
 | Session            | Purpose                                  |
 | ------------------ | ---------------------------------------- |
-| `session`          | Individual tools (TestFullWorkflow)       |
-| `metaSession`      | Meta-tools (TestMetaToolWorkflow)         |
-| `samplingSession`  | Sampling tools with mock LLM handler     |
-| `elicitSession`    | Elicitation tools with mock user handler |
+| `individual`       | Individual tools                          |
+| `meta`             | Meta-tools                                |
+| `sampling`         | Sampling tools with mock LLM handler      |
+| `elicitation`      | Elicitation tools with mock user handler  |
+| `safeMode`         | Mutating tools wrapped to return previews |
 
 ### Safety Guardrails
 
 - **Snapshot-based cleanup**: `TestMain` captures pre-test project/group/label/variable state and restores it on exit
 - **Unique names**: All test resources use timestamped names to avoid conflicts
-- **Sequential execution**: All subtests run sequentially sharing state via `testState`/`metaState`
+- **Scoped parallelism**: Most top-level tests call `t.Parallel()`; lifecycle subtests usually stay sequential inside each top-level test when they share IDs or mutable state
+
+### Isolation and capabilities
+
+E2E tests are grouped by the resource scope they touch. New tests that mutate resources must use an existing fixture helper or explicitly register cleanup for every resource they create. See `suite/CAPABILITIES.md` for the current inventory and future gating plan.
+
+| Scope | Meaning | Parallelism guidance |
+| ----- | ------- | -------------------- |
+| `project` | Project-owned resources such as files, branches, issues, merge requests, packages, releases, and project settings | Parallel by default when each test creates its own project and cleanup is registered |
+| `group` | Group-owned resources such as group projects, members, labels, wikis, epics, and group settings | Parallel by default when each test creates its own group and cleanup is registered |
+| `user` | Admin-created or test-created user resources | Requires explicit cleanup and, for admin user lifecycle tests, admin capability checks |
+| `current-user` | State attached to the authenticated test user, including status, todos, SSH keys, personal access tokens, and notification preferences | Must be serialized or restored before more parallelism is added |
+| `instance-global` | Instance-wide resources such as settings, topics, broadcast messages, feature flags, system hooks, OAuth applications, Sidekiq, and metadata | Must be admin-gated and serialized when mutating global state |
+| `runner` | Pipeline and job tests that depend on the Docker CI runner | Requires Docker mode with a registered runner; avoid concurrent runner-heavy lifecycles |
+| `enterprise` | Premium or Ultimate features enabled through `GITLAB_ENTERPRISE=true` | Skip cleanly when the instance does not expose the feature |
+| `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
+| `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
+| `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
+| `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |
 
 ## Running Individual Workflows
 

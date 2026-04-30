@@ -63,7 +63,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	})
 
 	t.Run("DiffVersionsList", func(t *testing.T) {
-		waitForMRReady(ctx, t, proj.ID, mrOut.IID)
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrOut.IID)
 		var out mrchanges.DiffVersionsListOutput
 		var listErr error
 		deadline := time.Now().Add(120 * time.Second)

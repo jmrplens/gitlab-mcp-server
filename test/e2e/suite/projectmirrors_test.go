@@ -1,5 +1,7 @@
 //go:build e2e
 
+// projectmirrors_test.go exercises project remote mirror actions through the
+// gitlab_project meta-tool using Docker-local GitLab mirror targets.
 package suite
 
 import (
@@ -16,6 +18,7 @@ import (
 // Remote mirrors are a Free-tier feature (push mirrors).
 func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 	t.Parallel()
+
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
@@ -24,6 +27,8 @@ func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
+	target := createProjectMeta(ctx, t, sess.meta)
+	mirrorURL := remoteMirrorTargetURL(t, target)
 
 	// List — should be empty on a fresh project.
 	t.Run("MirrorList_Empty", func(t *testing.T) {
@@ -43,9 +48,9 @@ func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 			"action": "mirror_add",
 			"params": map[string]any{
 				"project_id":              proj.pidStr(),
-				"url":                     "ssh://git@example.com/mirror-target.git",
+				"url":                     mirrorURL,
 				"enabled":                 true,
-				"auth_method":             "ssh_public_key",
+				"auth_method":             "password",
 				"only_protected_branches": true,
 			},
 		})
@@ -70,19 +75,18 @@ func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 		t.Logf("Got mirror %d, enabled=%v", out.ID, out.Enabled)
 	})
 
-	// Get SSH public key for the mirror (requires auth_method=ssh_public_key).
-	t.Run("MirrorGetPublicKey", func(t *testing.T) {
+	// Password-authenticated mirrors do not expose SSH public keys.
+	t.Run("MirrorGetPublicKey_PasswordMirror", func(t *testing.T) {
 		requireTruef(t, mirrorID > 0, "mirrorID not set")
-		out, err := callToolOn[projectmirrors.PublicKeyOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		_, err := callToolOn[projectmirrors.PublicKeyOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "mirror_get_public_key",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"mirror_id":  mirrorID,
 			},
 		})
-		requireNoError(t, err, "mirror_get_public_key")
-		requireTruef(t, out.PublicKey != "", "mirror_get_public_key: expected non-empty public key")
-		t.Logf("Public key length: %d chars", len(out.PublicKey))
+		requireTruef(t, err != nil, "expected mirror_get_public_key to fail for password-authenticated mirror")
+		t.Logf("Expected public key error for password-authenticated mirror: %v", err)
 	})
 
 	// Edit mirror.

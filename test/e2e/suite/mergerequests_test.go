@@ -99,7 +99,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		waitForMRReady(ctx, t, proj.ID, mrIID)
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
 		deadline := time.Now().Add(120 * time.Second)
@@ -213,7 +213,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 	})
 
 	t.Run("Commits", func(t *testing.T) {
-		waitForMRReady(ctx, t, proj.ID, mrIID)
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
 		deadline := time.Now().Add(120 * time.Second)

@@ -100,11 +100,11 @@ test-e2e:
 	@echo "         Tests create and delete projects, groups, users, and other resources."
 	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	gotestsum \
+	bash -o pipefail -c 'gotestsum \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
-	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt
+	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt'
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
 test-e2e-docker:
@@ -131,14 +131,21 @@ test-e2e-docker:
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
+	@set +e; \
+	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
-	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt || true
+	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt'; \
+	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-status
 	@echo "=== Tearing down ==="
-	docker compose -f test/e2e/docker-compose.yml down -v
-	@echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="
+	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-status); \
+	  teardown_status=0; \
+	  docker compose -f test/e2e/docker-compose.yml down -v || teardown_status=$$?; \
+	  echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="; \
+	  rm -f $(E2E_REPORT_DIR)/e2e-docker-status; \
+	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
+	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test

@@ -28,7 +28,7 @@ func TestIndividual_Search(t *testing.T) {
 	unprotectMain(ctx, t, proj)
 	commitFile(ctx, t, sess.individual, proj, defaultBranch, "searchable.txt", "unique-e2e-search-token-12345", "add searchable content")
 
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, sess.glClient)
 
 	t.Run("Code", func(t *testing.T) {
 		out, err := callToolOn[search.CodeOutput](ctx, sess.individual, "gitlab_search_code", search.CodeInput{
@@ -64,7 +64,7 @@ func TestMeta_Search(t *testing.T) {
 	unprotectMain(ctx, t, proj)
 	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch, "searchable-meta.txt", "unique-e2e-meta-search-67890", "add searchable meta content")
 
-	drainSidekiq(ctx, t)
+	drainSidekiq(ctx, t, sess.glClient)
 
 	t.Run("Code", func(t *testing.T) {
 		out, err := callToolOn[search.CodeOutput](ctx, sess.meta, "gitlab_search", map[string]any{

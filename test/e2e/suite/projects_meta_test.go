@@ -219,14 +219,20 @@ func TestMeta_ProjectCore(t *testing.T) {
 // gitlab_project meta-tool (hook_*).
 func TestMeta_ProjectHooks(t *testing.T) {
 	t.Parallel()
+
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
+	}
+	if !hasE2EFixtureService() {
+		t.Skip("E2E fixture service unavailable; set E2E_FIXTURE_URL or run with E2E_MODE=docker")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
+	hookURL := e2eFixtureServiceURL("/hook")
+	hookUpdatedURL := e2eFixtureServiceURL("/hook-updated")
 
 	var hookID int64
 
@@ -235,7 +241,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			"action": "hook_add",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
-				"url":         "https://example.com/hook",
+				"url":         hookURL,
 				"push_events": true,
 				"token":       "test-secret-token",
 				"name":        "E2E Test Hook",
@@ -279,7 +285,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
 				"hook_id":       hookID,
-				"url":           "https://example.com/hook-updated",
+				"url":           hookUpdatedURL,
 				"issues_events": true,
 			},
 		})
@@ -350,17 +356,16 @@ func TestMeta_ProjectHooks(t *testing.T) {
 
 	t.Run("HookTest", func(t *testing.T) {
 		requireTruef(t, hookID > 0, "hookID not set")
-		// Webhook URL points to unreachable endpoint — expected to fail
-		_, err := callToolOn[projects.TriggerTestHookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[projects.TriggerTestHookOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "hook_test",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"hook_id":    hookID,
-				"trigger":    "push_events",
+				"event":      "push_events",
 			},
 		})
-		requireTruef(t, err != nil, "expected error: webhook endpoint unreachable")
-		t.Logf("Expected error for unreachable hook test: %v", err)
+		requireNoError(t, err, "meta project hook_test")
+		t.Logf("Tested hook %d: %s", hookID, out.Message)
 	})
 
 	t.Run("HookDelete", func(t *testing.T) {

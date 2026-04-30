@@ -130,7 +130,7 @@ E2E tests run against a real GitLab instance via in-memory MCP transport (build 
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 
-# Docker mode (ephemeral GitLab CE with CI runner)
+# Docker mode (ephemeral GitLab CE with CI runner and fixture service)
 docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
 set -a && source test/e2e/.env.docker && set +a
@@ -148,6 +148,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
 - Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
+- Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
 
 ### Build & Cross-Compilation

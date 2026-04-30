@@ -23,7 +23,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,6 +99,8 @@ func TestMain(m *testing.M) {
 	if p := os.Getenv("E2E_PROJECT_PREFIX"); p != "" {
 		e2eProjectPrefix = p
 	}
+	e2eRunID = configuredE2ERunID(time.Now())
+	log.Printf("e2e: run ID %s", e2eRunID)
 
 	// Load .env — Docker mode uses a different file.
 	if isDockerMode() {
@@ -318,9 +319,6 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	// Cleanup: delete any orphaned test projects (prefix-based).
-	cleanupOrphanedProjects(glClient)
-
 	// Verify snapshot integrity in self-hosted mode.
 	if !isDockerMode() && sess.snapshot != nil {
 		if intErr := verifySnapshotIntegrity(glClient, sess.snapshot); intErr != nil {
@@ -333,6 +331,9 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// Cleanup: delete any orphaned test projects (prefix-based).
+	cleanupOrphanedProjects(glClient)
+
 	_ = session.Close()
 	serverCancel()
 	_ = metaSession.Close()
@@ -344,14 +345,6 @@ func TestMain(m *testing.M) {
 	_ = safeModeSession.Close()
 	safeModeServerCancel()
 	os.Exit(code)
-}
-
-// uniqueCounter provides a monotonic counter for guaranteed unique project names.
-var uniqueCounter atomic.Int64
-
-// uniqueName generates a timestamped name with an atomic counter to avoid collisions.
-func uniqueName(prefix string) string {
-	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixMilli(), uniqueCounter.Add(1))
 }
 
 // mockCreateMessageHandler returns a deterministic mock LLM response for
@@ -689,36 +682,16 @@ func snapshotState(client *gitlabclient.Client) (*resourceSnapshot, error) {
 	return snap, nil
 }
 
-// verifySnapshotIntegrity re-fetches all groups and projects and compares
-// them against the initial snapshot. Returns an error if any pre-existing
-// resource was deleted or renamed.
+// verifySnapshotIntegrity re-snapshots groups and projects and compares them
+// against the initial snapshot. Returns an error if any pre-existing resource
+// was deleted or renamed.
 func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot) error {
-	var missing []string
-
-	// Check groups still exist with same path.
-	for id, origPath := range snap.groups {
-		g, _, err := client.GL().Groups.GetGroup(int(id), &gl.GetGroupOptions{})
-		if err != nil {
-			missing = append(missing, fmt.Sprintf("group %q (ID=%d): %v", origPath, id, err))
-			continue
-		}
-		if g.FullPath != origPath {
-			missing = append(missing, fmt.Sprintf("group ID=%d renamed: %q → %q", id, origPath, g.FullPath))
-		}
+	current, err := snapshotState(client)
+	if err != nil {
+		return fmt.Errorf("snapshot current state: %w", err)
 	}
 
-	// Check projects still exist with same path.
-	for id, origPath := range snap.projects {
-		p, _, err := client.GL().Projects.GetProject(int(id), &gl.GetProjectOptions{})
-		if err != nil {
-			missing = append(missing, fmt.Sprintf("project %q (ID=%d): %v", origPath, id, err))
-			continue
-		}
-		if p.PathWithNamespace != origPath {
-			missing = append(missing, fmt.Sprintf("project ID=%d renamed: %q → %q", id, origPath, p.PathWithNamespace))
-		}
-	}
-
+	missing := snapshotIntegrityDifferences(snap, current)
 	if len(missing) > 0 {
 		return fmt.Errorf("%d pre-existing resources were modified or deleted:\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
@@ -726,20 +699,64 @@ func verifySnapshotIntegrity(client *gitlabclient.Client, snap *resourceSnapshot
 	return nil
 }
 
+// snapshotIntegrityDifferences returns descriptions of pre-existing groups or
+// projects that disappeared or changed path during the E2E run.
+func snapshotIntegrityDifferences(original, current *resourceSnapshot) []string {
+	var missing []string
+
+	// Check groups still exist with same path.
+	for id, origPath := range original.groups {
+		currentPath, ok := current.groups[id]
+		if !ok {
+			missing = append(missing, fmt.Sprintf("group %q (ID=%d): missing", origPath, id))
+			continue
+		}
+		if currentPath != origPath {
+			missing = append(missing, fmt.Sprintf("group ID=%d renamed: %q → %q", id, origPath, currentPath))
+		}
+	}
+
+	// Check projects still exist with same path.
+	for id, origPath := range original.projects {
+		currentPath, ok := current.projects[id]
+		if !ok {
+			missing = append(missing, fmt.Sprintf("project %q (ID=%d): missing", origPath, id))
+			continue
+		}
+		if currentPath != origPath {
+			missing = append(missing, fmt.Sprintf("project ID=%d renamed: %q → %q", id, origPath, currentPath))
+		}
+	}
+	return missing
+}
+
 // cleanupOrphanedProjects permanently deletes any projects whose name starts
 // with the E2E prefix. This catches orphans from previous failed runs,
 // including projects already marked for delayed deletion.
 func cleanupOrphanedProjects(client *gitlabclient.Client) {
-	opts := &gl.ListProjectsOptions{
-		Owned:                new(true),
-		IncludePendingDelete: new(true),
+	log.Printf("e2e: cleanup: scanning orphaned projects with prefix %q for run ID %q", e2eProjectPrefix, e2eRunID)
+	var projects []*gl.Project
+	var page int64 = 1
+	for {
+		opts := &gl.ListProjectsOptions{
+			Owned:                new(true),
+			IncludePendingDelete: new(true),
+		}
+		opts.Page = page
+		opts.PerPage = 100
+
+		pageProjects, resp, err := client.GL().Projects.ListProjects(opts)
+		if err != nil {
+			log.Printf("e2e: cleanup: failed to list projects page %d: %v", page, err)
+			return
+		}
+		projects = append(projects, pageProjects...)
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
 	}
-	opts.PerPage = 100
-	projects, _, err := client.GL().Projects.ListProjects(opts)
-	if err != nil {
-		log.Printf("e2e: cleanup: failed to list projects: %v", err)
-		return
-	}
+
 	for _, p := range projects {
 		if strings.HasPrefix(p.Name, e2eProjectPrefix) {
 			permanentlyDeleteProject(client, p)
@@ -784,9 +801,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 // queues are idle (enqueued == 0). Accelerates E2E tests by allowing async
 // operations (MR merge checks, pipeline creation, commit indexing) to complete
 // before assertions. No-op if the API is unavailable or context is done.
-func drainSidekiq(ctx context.Context, t *testing.T) {
+func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
-	if sess.glClient == nil {
+	if client == nil {
 		return
 	}
 	const maxWait = 15 * time.Second
@@ -794,7 +811,7 @@ func drainSidekiq(ctx context.Context, t *testing.T) {
 
 	deadline := time.Now().Add(maxWait)
 	for time.Now().Before(deadline) {
-		stats, _, err := sess.glClient.GL().Sidekiq.GetJobStats()
+		stats, _, err := client.GL().Sidekiq.GetJobStats()
 		if err != nil {
 			return
 		}
@@ -817,53 +834,72 @@ func drainSidekiq(ctx context.Context, t *testing.T) {
 //   - Polls every 5 s.
 //   - Tolerates transient API errors (logs and retries up to 10 consecutive
 //     errors before giving up).
-//   - Logs the final status before failing so test output makes the runner
-//     state easy to diagnose.
-func waitForPipeline(t *testing.T, projectID int64, pipelineID int64, timeout time.Duration) string {
+//   - Reports the final observed status in timeout errors so runner state is
+//     easy to diagnose.
+func waitForPipeline(t *testing.T, client *gitlabclient.Client, projectID int64, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
-	drainSidekiq(context.Background(), t)
+	if client == nil {
+		t.Fatal("waitForPipeline: GitLab client not configured")
+	}
+	drainSidekiq(context.Background(), t, client)
 	if timeout == 0 {
 		timeout = 900 * time.Second
 	}
 	const pollInterval = 5 * time.Second
 	const maxConsecutiveErrors = 10
-	deadline := time.Now().Add(timeout)
+	pollCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	lastStatus := "unknown"
 	consecutiveErrors := 0
-	for time.Now().Before(deadline) {
-		p, _, err := sess.glClient.GL().Pipelines.GetPipeline(projectID, pipelineID)
+	err := Poll(pollCtx, pollInterval, timeout, func() (bool, string, error) {
+		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(pollCtx))
 		if err != nil {
 			consecutiveErrors++
-			t.Logf("waitForPipeline: error polling pipeline %d (%d/%d): %v", pipelineID, consecutiveErrors, maxConsecutiveErrors, err)
+			state := fmt.Sprintf("pipeline %d in project %d: last_status=%s consecutive_errors=%d/%d error=%v", pipelineID, projectID, lastStatus, consecutiveErrors, maxConsecutiveErrors, err)
 			if consecutiveErrors >= maxConsecutiveErrors {
-				t.Fatalf("waitForPipeline: pipeline %d aborted after %d consecutive API errors: %v", pipelineID, consecutiveErrors, err)
+				return false, state, fmt.Errorf("poll pipeline %d in project %d after %d consecutive API errors: %w", pipelineID, projectID, consecutiveErrors, err)
 			}
-			time.Sleep(pollInterval)
-			continue
+			return false, state, nil
 		}
 		consecutiveErrors = 0
 		lastStatus = p.Status
-		switch p.Status {
-		case "success", "failed", "canceled", "skipped":
-			t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, p.Status)
-			return p.Status
+		state := fmt.Sprintf("pipeline %d in project %d: status=%s", pipelineID, projectID, p.Status)
+		if isTerminalPipelineStatus(p.Status) {
+			return true, state, nil
 		}
-		t.Logf("waitForPipeline: pipeline %d status=%s, waiting...", pipelineID, p.Status)
-		time.Sleep(pollInterval)
+		return false, state, nil
+	})
+	if err != nil {
+		t.Fatalf("waitForPipeline: pipeline %d in project %d did not reach terminal status within %s (last status: %s): %v", pipelineID, projectID, timeout, lastStatus, err)
 	}
-	t.Fatalf("waitForPipeline: pipeline %d did not reach terminal status within %s (last status: %s)", pipelineID, timeout, lastStatus)
-	return ""
+	t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, lastStatus)
+	return lastStatus
+}
+
+// isTerminalPipelineStatus reports whether status is a GitLab pipeline state
+// that will not transition further.
+func isTerminalPipelineStatus(status string) bool {
+	switch status {
+	case "success", "failed", "canceled", "skipped":
+		return true
+	default:
+		return false
+	}
 }
 
 // hasRunner returns true if a CI runner is available for pipeline tests.
 // In Docker mode it always returns true; in self-hosted mode it checks the
 // Runners API for registered instance runners.
-func hasRunner() bool {
+func hasRunner(client *gitlabclient.Client) bool {
 	if isDockerMode() {
 		return true
 	}
+	if client == nil {
+		return false
+	}
 	runnerType := "instance_type"
-	runners, _, err := sess.glClient.GL().Runners.ListRunners(&gl.ListRunnersOptions{
+	runners, _, err := client.GL().Runners.ListRunners(&gl.ListRunnersOptions{
 		Type: &runnerType,
 	})
 	return err == nil && len(runners) > 0

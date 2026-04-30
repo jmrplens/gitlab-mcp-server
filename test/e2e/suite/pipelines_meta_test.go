@@ -24,131 +24,132 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
-	defer cancel()
+		proj := createProjectMeta(ctx, t, sess.meta)
 
-	proj := createProjectMeta(ctx, t, sess.meta)
+		// Commit a .gitlab-ci.yml to trigger a pipeline
+		commitFileMeta(ctx, t, sess.meta, proj, "main", ".gitlab-ci.yml",
+			"stages:\n  - test\ntest_job:\n  stage: test\n  script:\n    - echo hello\n",
+			"add CI config")
 
-	// Commit a .gitlab-ci.yml to trigger a pipeline
-	commitFileMeta(ctx, t, sess.meta, proj, "main", ".gitlab-ci.yml",
-		"stages:\n  - test\ntest_job:\n  stage: test\n  script:\n    - echo hello\n",
-		"add CI config")
+		// Wait for pipeline creation with polling. Sidekiq + runner registration in
+		// ephemeral Docker GitLab CE can be slow on cold starts.
+		t.Run("Latest", func(t *testing.T) {
+			drainSidekiq(ctx, t, sess.glClient)
+			var out pipelines.DetailOutput
+			var err error
+			deadline := time.Now().Add(600 * time.Second)
+			delay := 2 * time.Second
+			for time.Now().Before(deadline) {
+				out, err = callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+					"action": "latest",
+					"params": map[string]any{"project_id": proj.pidStr()},
+				})
+				if err == nil {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatalf("context canceled waiting for pipeline: %v", ctx.Err())
+				case <-time.After(delay):
+				}
+			}
+			requireNoError(t, err, "latest pipeline")
+			requireTruef(t, out.ID > 0, "latest: expected ID > 0")
+			t.Logf("Latest pipeline: %d (status: %s)", out.ID, out.Status)
+		})
 
-	// Wait for pipeline creation with polling. Sidekiq + runner registration in
-	// ephemeral Docker GitLab CE can be slow on cold starts.
-	t.Run("Latest", func(t *testing.T) {
-		drainSidekiq(ctx, t)
-		var out pipelines.DetailOutput
-		var err error
-		deadline := time.Now().Add(600 * time.Second)
-		delay := 2 * time.Second
-		for time.Now().Before(deadline) {
-			out, err = callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+		t.Run("Variables", func(t *testing.T) {
+			// Create a pipeline with variables
+			createOut, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "create",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+					"ref":        "main",
+				},
+			})
+			requireNoError(t, err, "create pipeline for variables")
+			out, err := callToolOn[pipelines.VariablesOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "variables",
+				"params": map[string]any{
+					"project_id":  proj.pidStr(),
+					"pipeline_id": createOut.ID,
+				},
+			})
+			requireNoError(t, err, "variables")
+			t.Logf("Pipeline %d variables: %d", createOut.ID, len(out.Variables))
+		})
+
+		t.Run("TestReport", func(t *testing.T) {
+			latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 				"action": "latest",
 				"params": map[string]any{"project_id": proj.pidStr()},
 			})
-			if err == nil {
-				break
-			}
-			select {
-			case <-ctx.Done():
-				t.Fatalf("context canceled waiting for pipeline: %v", ctx.Err())
-			case <-time.After(delay):
-			}
-		}
-		requireNoError(t, err, "latest pipeline")
-		requireTruef(t, out.ID > 0, "latest: expected ID > 0")
-		t.Logf("Latest pipeline: %d (status: %s)", out.ID, out.Status)
-	})
+			requireNoError(t, err, "get latest for test_report")
+			// test_report may return error if pipeline hasn't finished, but we test the action works
+			_, _ = callToolOn[pipelines.TestReportOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "test_report",
+				"params": map[string]any{
+					"project_id":  proj.pidStr(),
+					"pipeline_id": latest.ID,
+				},
+			})
+			t.Logf("TestReport called for pipeline %d", latest.ID)
+		})
 
-	t.Run("Variables", func(t *testing.T) {
-		// Create a pipeline with variables
-		createOut, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "create",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"ref":        "main",
-			},
+		t.Run("TestReportSummary", func(t *testing.T) {
+			latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "latest",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			requireNoError(t, err, "get latest for test_report_summary")
+			_, _ = callToolOn[pipelines.TestReportSummaryOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "test_report_summary",
+				"params": map[string]any{
+					"project_id":  proj.pidStr(),
+					"pipeline_id": latest.ID,
+				},
+			})
+			t.Logf("TestReportSummary called for pipeline %d", latest.ID)
 		})
-		requireNoError(t, err, "create pipeline for variables")
-		out, err := callToolOn[pipelines.VariablesOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "variables",
-			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"pipeline_id": createOut.ID,
-			},
-		})
-		requireNoError(t, err, "variables")
-		t.Logf("Pipeline %d variables: %d", createOut.ID, len(out.Variables))
-	})
 
-	t.Run("TestReport", func(t *testing.T) {
-		latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "latest",
-			"params": map[string]any{"project_id": proj.pidStr()},
+		t.Run("UpdateMetadata", func(t *testing.T) {
+			latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "latest",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			requireNoError(t, err, "get latest for update_metadata")
+			out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "update_metadata",
+				"params": map[string]any{
+					"project_id":  proj.pidStr(),
+					"pipeline_id": latest.ID,
+					"name":        "e2e-renamed",
+				},
+			})
+			requireNoError(t, err, "update_metadata")
+			requireTruef(t, out.ID == latest.ID, "update_metadata: ID mismatch")
 		})
-		requireNoError(t, err, "get latest for test_report")
-		// test_report may return error if pipeline hasn't finished, but we test the action works
-		_, _ = callToolOn[pipelines.TestReportOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "test_report",
-			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"pipeline_id": latest.ID,
-			},
-		})
-		t.Logf("TestReport called for pipeline %d", latest.ID)
-	})
 
-	t.Run("TestReportSummary", func(t *testing.T) {
-		latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "latest",
-			"params": map[string]any{"project_id": proj.pidStr()},
+		t.Run("Cancel", func(t *testing.T) {
+			latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "latest",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			requireNoError(t, err, "get latest for cancel")
+			// Cancel may fail if already finished, that's acceptable
+			_, _ = callToolOn[pipelines.StatusOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+				"action": "cancel",
+				"params": map[string]any{
+					"project_id":  proj.pidStr(),
+					"pipeline_id": latest.ID,
+				},
+			})
+			t.Logf("Cancel attempted for pipeline %d", latest.ID)
 		})
-		requireNoError(t, err, "get latest for test_report_summary")
-		_, _ = callToolOn[pipelines.TestReportSummaryOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "test_report_summary",
-			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"pipeline_id": latest.ID,
-			},
-		})
-		t.Logf("TestReportSummary called for pipeline %d", latest.ID)
-	})
-
-	t.Run("UpdateMetadata", func(t *testing.T) {
-		latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "latest",
-			"params": map[string]any{"project_id": proj.pidStr()},
-		})
-		requireNoError(t, err, "get latest for update_metadata")
-		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "update_metadata",
-			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"pipeline_id": latest.ID,
-				"name":        "e2e-renamed",
-			},
-		})
-		requireNoError(t, err, "update_metadata")
-		requireTruef(t, out.ID == latest.ID, "update_metadata: ID mismatch")
-	})
-
-	t.Run("Cancel", func(t *testing.T) {
-		latest, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "latest",
-			"params": map[string]any{"project_id": proj.pidStr()},
-		})
-		requireNoError(t, err, "get latest for cancel")
-		// Cancel may fail if already finished, that's acceptable
-		_, _ = callToolOn[pipelines.StatusOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-			"action": "cancel",
-			"params": map[string]any{
-				"project_id":  proj.pidStr(),
-				"pipeline_id": latest.ID,
-			},
-		})
-		t.Logf("Cancel attempted for pipeline %d", latest.ID)
 	})
 }
 

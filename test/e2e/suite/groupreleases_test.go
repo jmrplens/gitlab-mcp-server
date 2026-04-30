@@ -1,5 +1,7 @@
 //go:build e2e
 
+// groupreleases_test.go exercises group-level release aggregation through the
+// gitlab_group meta-tool against a live GitLab instance.
 package suite
 
 import (
@@ -79,7 +81,7 @@ func TestMeta_GroupReleases(t *testing.T) {
 	t.Logf("Created project %d in group %d", projOut.ID, groupID)
 
 	// Wait for default branch to be available.
-	waitForBranchOn(ctx, t, sess.meta, projOut.ID, "main")
+	waitForBranchOn(ctx, t, sess.glClient, projOut.ID, "main")
 
 	// Commit a file so there's content for the tag.
 	commitFileMeta(ctx, t, sess.meta, ProjectFixture{ID: projOut.ID, Path: projOut.PathWithNamespace},

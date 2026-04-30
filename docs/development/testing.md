@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-30.
+> Comprehensive test documentation for gitlab-mcp-server.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -540,7 +540,7 @@ Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Do
 
 All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 
-- `test/e2e/docker-compose.yml` — GitLab CE + Runner compose definition
+- `test/e2e/docker-compose.yml` — GitLab CE + Runner + fixture service compose definition
 - `test/e2e/scripts/setup-gitlab.sh` — Creates test user, PAT, writes `.env.docker`
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
@@ -566,7 +566,7 @@ Or use the Makefile target that automates the full lifecycle:
 make test-e2e-docker
 ```
 
-Docker mode enables pipeline and job tests that require a CI runner.
+Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
 #### Test Reports
 
@@ -580,25 +580,32 @@ Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.c
 
 Docker mode files use the `e2e-docker-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
 
+The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. `make test-e2e-docker` still tears down Docker containers and volumes before returning a non-zero status on failure.
+
 Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum@latest`.
 
 #### Test Architecture
 
-The suite uses 4 MCP server/client pairs via `mcp.NewInMemoryTransports()`:
+The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
-| Session            | Purpose                                    |
-| ------------------ | ------------------------------------------ |
-| `session`          | Individual tools (TestFullWorkflow)         |
-| `metaSession`      | Meta-tools (TestMetaToolWorkflow)           |
-| `samplingSession`  | Sampling tools with mock LLM handler       |
-| `elicitSession`    | Elicitation tools with mock user handler   |
+| Session       | Purpose                                    |
+| ------------- | ------------------------------------------ |
+| `individual`  | Individual GitLab tools                    |
+| `meta`        | Domain meta-tools and action dispatch      |
+| `sampling`    | Sampling tools with mock LLM handler       |
+| `elicitation` | Elicitation tools with mock user handler   |
+| `safeMode`    | Mutating tools wrapped as safe-mode previews |
 
 **Workflows:**
 
-| Workflow               | Subtests | Functions | Description                                         |
-| ---------------------- | -------: | --------: | --------------------------------------------------- |
-| TestFullWorkflow       |     ~174 |       191 | Individual tools through complete project lifecycle  |
-| TestMetaToolWorkflow   |     ~151 |       156 | Same operations via meta-tools (domain dispatch)     |
+| Area                 | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| Individual tools     | Exercises domain tools directly against real GitLab       |
+| Meta-tools           | Exercises domain action dispatch through meta-tools       |
+| MCP capabilities     | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
+| Docker-only runner   | Exercises CI pipeline and job behavior with a registered runner |
+
+Latest Docker validation snapshot: `make test-e2e-docker` completed 1,166 tests with 0 skips, 0 failures, and 0 errors in 389.057 seconds. Test function counts and package coverage values above are unchanged by the fixture change.
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 
@@ -786,7 +793,7 @@ internal/tools/samplingtools/
 
 ```text
 test/e2e/
-├── docker-compose.yml        # Ephemeral GitLab CE + Runner
+├── docker-compose.yml        # Ephemeral GitLab CE + Runner + fixture service
 ├── .env.docker               # Docker mode environment variables
 ├── README.md                 # E2E documentation
 ├── scripts/                  # Provisioning scripts

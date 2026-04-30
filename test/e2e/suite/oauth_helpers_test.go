@@ -1,5 +1,7 @@
 //go:build e2e
 
+// oauth_helpers_test.go provides raw HTTP helpers for OAuth E2E tests that need
+// to exercise MCP streamable HTTP authentication outside the in-memory transport.
 package suite
 
 import (
