@@ -31,7 +31,6 @@ wait-job:
 func TestWaitTools(t *testing.T) {
 	t.Parallel()
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-
 		ctx := context.Background()
 
 		// --- Individual tool session ---

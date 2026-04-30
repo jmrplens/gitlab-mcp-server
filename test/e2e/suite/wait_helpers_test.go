@@ -1,3 +1,5 @@
+//go:build e2e
+
 package suite
 
 import (
@@ -15,25 +17,25 @@ var ErrPollTimeout = errors.New("poll timeout")
 // Poll repeatedly evaluates condition until it succeeds, fails, times out, or
 // the context is canceled. The condition should return an error only for
 // non-retryable failures; retryable observations should be reported as state.
-func Poll(ctx context.Context, interval time.Duration, max time.Duration, condition func() (bool, string, error)) error {
+func Poll(ctx context.Context, interval time.Duration, timeout time.Duration, condition func() (bool, string, error)) error {
 	if condition == nil {
 		return errors.New("poll condition is nil")
 	}
 	if interval <= 0 {
 		interval = 100 * time.Millisecond
 	}
-	if max <= 0 {
-		max = interval
+	if timeout <= 0 {
+		timeout = interval
 	}
 
-	deadline := time.NewTimer(max)
+	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 
 	lastState := "no state observed"
 	for {
 		select {
 		case <-ctx.Done():
-			return pollContextError(ctx.Err(), max, lastState)
+			return pollContextError(ctx.Err(), timeout, lastState)
 		default:
 		}
 
@@ -52,24 +54,24 @@ func Poll(ctx context.Context, interval time.Duration, max time.Duration, condit
 		select {
 		case <-ctx.Done():
 			stopTimer(wait)
-			return pollContextError(ctx.Err(), max, lastState)
+			return pollContextError(ctx.Err(), timeout, lastState)
 		case <-deadline.C:
 			stopTimer(wait)
-			return pollTimeoutError(max, lastState)
+			return pollTimeoutError(timeout, lastState)
 		case <-wait.C:
 		}
 	}
 }
 
-func pollContextError(err error, max time.Duration, lastState string) error {
+func pollContextError(err error, timeout time.Duration, lastState string) error {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return pollTimeoutError(max, lastState)
+		return pollTimeoutError(timeout, lastState)
 	}
 	return fmt.Errorf("poll canceled: %w", err)
 }
 
-func pollTimeoutError(max time.Duration, lastState string) error {
-	return fmt.Errorf("%w after %s (last state: %s)", ErrPollTimeout, max, lastState)
+func pollTimeoutError(timeout time.Duration, lastState string) error {
+	return fmt.Errorf("%w after %s (last state: %s)", ErrPollTimeout, timeout, lastState)
 }
 
 func stopTimer(timer *time.Timer) {
@@ -116,7 +118,7 @@ func retryWithBackoffInterval[O any](ctx context.Context, t *testing.T, label st
 		delay := time.Duration(attempt+1) * baseDelay
 		select {
 		case <-ctx.Done():
-			return output, fmt.Errorf("%s canceled before retry after attempt %d/%d: %w (last error: %v)", label, attempt+1, maxRetries, ctx.Err(), err)
+			return output, fmt.Errorf("%s canceled before retry after attempt %d/%d: %w (last error: %s)", label, attempt+1, maxRetries, ctx.Err(), err.Error())
 		case <-time.After(delay):
 		}
 	}

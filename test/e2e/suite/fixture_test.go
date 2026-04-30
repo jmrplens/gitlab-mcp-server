@@ -541,7 +541,7 @@ func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, proje
 			}
 		}
 		if pollCtx.Err() != nil {
-			return false, "", nil
+			return false, "", pollCtx.Err()
 		}
 		return false, fmt.Sprintf("error polling MR !%d in project %d: %v", mrIID, projectID, err), nil
 	})

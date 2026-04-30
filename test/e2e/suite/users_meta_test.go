@@ -33,7 +33,6 @@ func TestMeta_UserSelf(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, e2e *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		RegisterCurrentUserStateRestore(ctx, e2e)
@@ -153,7 +152,6 @@ func TestMeta_UserTodosEvents(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -203,7 +201,6 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, e2e *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		RegisterCurrentUserStateRestore(ctx, e2e)
@@ -345,7 +342,6 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -399,7 +395,6 @@ func TestMeta_UserAdmin(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
@@ -700,7 +695,6 @@ func TestMeta_UserServiceAccounts(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 

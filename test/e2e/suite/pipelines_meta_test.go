@@ -25,7 +25,6 @@ func TestMeta_PipelinesExtended(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 		defer cancel()
 

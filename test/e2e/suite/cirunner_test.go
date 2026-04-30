@@ -39,7 +39,6 @@ fast-pass:
 // them concurrently causes pipelines to queue, leading to spurious timeouts.
 func TestIndividual_CIRunner(t *testing.T) {
 	RunWithCapabilities(t, []Capability{CapabilityRunner, CapabilitySampling}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 		defer cancel()
 

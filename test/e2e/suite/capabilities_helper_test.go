@@ -5,7 +5,7 @@ package suite
 import (
 	"context"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -45,8 +45,8 @@ var capabilityLocks = struct {
 func RequireCapabilities(t *testing.T, caps ...Capability) {
 	t.Helper()
 
-	for _, cap := range caps {
-		switch cap {
+	for _, capability := range caps {
+		switch capability {
 		case CapabilityAdmin:
 			if !hasAdminCapability() {
 				if adminCapability.err != nil {
@@ -76,12 +76,12 @@ func RequireCapabilities(t *testing.T, caps ...Capability) {
 			}
 		case CapabilityExternalNetwork:
 			if !hasExternalNetworkCapability() {
-				t.Skip("external-network capability unavailable; set E2E_EXTERNAL_NETWORK=true to run tests that call public URLs")
+				t.Skip("external-network capability unavailable; prefer Docker fixture endpoints; set E2E_EXTERNAL_NETWORK=true only for tests that must call public URLs")
 			}
 		case CapabilityInstanceGlobal, CapabilityCurrentUserState:
 			// These capabilities represent shared mutable state and are enforced by locks.
 		default:
-			t.Fatalf("unknown E2E capability %q", cap)
+			t.Fatalf("unknown E2E capability %q", capability)
 		}
 	}
 }
@@ -105,7 +105,7 @@ func RunWithCapabilities(t *testing.T, caps []Capability, fn func(t *testing.T, 
 func hasAdminCapability() bool {
 	adminCapability.once.Do(func() {
 		if sess.glClient == nil {
-			adminCapability.err = errGitLabClientUnavailable{}
+			adminCapability.err = gitLabClientUnavailableError{}
 			return
 		}
 
@@ -124,8 +124,8 @@ func hasAdminCapability() bool {
 
 func acquireCapabilityLocks(caps []Capability) func() {
 	lockCaps := lockedCapabilities(caps)
-	for _, cap := range lockCaps {
-		lockForCapability(cap).Lock()
+	for _, capability := range lockCaps {
+		lockForCapability(capability).Lock()
 	}
 
 	return func() {
@@ -137,33 +137,33 @@ func acquireCapabilityLocks(caps []Capability) func() {
 
 func lockedCapabilities(caps []Capability) []Capability {
 	seen := make(map[Capability]struct{}, len(caps))
-	for _, cap := range caps {
-		switch cap {
+	for _, capability := range caps {
+		switch capability {
 		case CapabilityRunner, CapabilityInstanceGlobal, CapabilityCurrentUserState:
-			seen[cap] = struct{}{}
+			seen[capability] = struct{}{}
 		}
 	}
 
 	lockCaps := make([]Capability, 0, len(seen))
-	for cap := range seen {
-		lockCaps = append(lockCaps, cap)
+	for capability := range seen {
+		lockCaps = append(lockCaps, capability)
 	}
-	sort.Slice(lockCaps, func(i, j int) bool { return lockCaps[i] < lockCaps[j] })
+	slices.Sort(lockCaps)
 	return lockCaps
 }
 
-func lockForCapability(cap Capability) *sync.Mutex {
+func lockForCapability(capability Capability) *sync.Mutex {
 	capabilityLocks.mu.Lock()
 	defer capabilityLocks.mu.Unlock()
 
-	lock := capabilityLocks.locks[cap]
+	lock := capabilityLocks.locks[capability]
 	if lock == nil {
 		lock = &sync.Mutex{}
-		capabilityLocks.locks[cap] = lock
+		capabilityLocks.locks[capability] = lock
 	}
 	return lock
 }
 
-type errGitLabClientUnavailable struct{}
+type gitLabClientUnavailableError struct{}
 
-func (errGitLabClientUnavailable) Error() string { return "gitlab client unavailable" }
+func (gitLabClientUnavailableError) Error() string { return "gitlab client unavailable" }

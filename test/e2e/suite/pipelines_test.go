@@ -35,7 +35,6 @@ fast-pass:
 // timeouts on slower hosts.
 func TestPipelines(t *testing.T) {
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-
 		ctx := context.Background()
 
 		// --- Individual tool session ---

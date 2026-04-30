@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 const defaultCleanupTimeout = 60 * time.Second

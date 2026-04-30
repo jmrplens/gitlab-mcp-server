@@ -540,7 +540,7 @@ Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Do
 
 All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 
-- `test/e2e/docker-compose.yml` — GitLab CE + Runner compose definition
+- `test/e2e/docker-compose.yml` — GitLab CE + Runner + fixture service compose definition
 - `test/e2e/scripts/setup-gitlab.sh` — Creates test user, PAT, writes `.env.docker`
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
@@ -793,7 +793,7 @@ internal/tools/samplingtools/
 
 ```text
 test/e2e/
-├── docker-compose.yml        # Ephemeral GitLab CE + Runner
+├── docker-compose.yml        # Ephemeral GitLab CE + Runner + fixture service
 ├── .env.docker               # Docker mode environment variables
 ├── README.md                 # E2E documentation
 ├── scripts/                  # Provisioning scripts

@@ -33,7 +33,6 @@ func TestMeta_AdminTopics(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -95,7 +94,6 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -140,7 +138,6 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -208,7 +205,6 @@ func TestMeta_AdminFeatures(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -262,7 +258,6 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -327,7 +322,6 @@ func TestMeta_AdminSidekiqMetrics(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -373,7 +367,6 @@ func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -421,7 +414,6 @@ func TestMeta_AdminApplications(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -468,7 +460,6 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
