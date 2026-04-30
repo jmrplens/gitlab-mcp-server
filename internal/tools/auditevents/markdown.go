@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting for audit event outputs.
-
 package auditevents
 
 import (

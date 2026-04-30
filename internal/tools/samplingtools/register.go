@@ -15,6 +15,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// samplingRequirement is appended to every sampling tool description so users
+// understand that the MCP client must support human-approved sampling.
 const samplingRequirement = "Requires the MCP client to support the sampling capability (human-in-the-loop approval)."
 
 // RegisterTools wires sampling-powered tools to the MCP server.

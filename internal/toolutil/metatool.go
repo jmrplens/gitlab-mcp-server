@@ -2,7 +2,6 @@
 // a single MCP tool call to one of several action handlers based on
 // the "action" parameter. It provides generic wrappers for typed and
 // void handlers, JSON param deserialization, and action validation.
-
 package toolutil
 
 import (
@@ -56,8 +55,8 @@ type ActionRoute struct {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-// --- Meta-tool route registry ---
-
+// Meta-tool route registry state supports both the global audit view and the
+// per-server capture used when registering meta-schema resources in HTTP mode.
 var (
 	metaRoutesMu      sync.Mutex
 	metaRoutesMap     = map[string]ActionMap{}
@@ -116,6 +115,8 @@ func ClearMetaRoutes() {
 	metaRoutesMu.Unlock()
 }
 
+// cloneMetaRoutes creates a shallow copy of every action map so callers can
+// inspect registered routes without racing later registration work.
 func cloneMetaRoutes(routes map[string]ActionMap) map[string]ActionMap {
 	out := make(map[string]ActionMap, len(routes))
 	for tool, actions := range routes {
@@ -136,8 +137,8 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
 }
 
-// --- Output schema cache ---
-
+// outputSchemaCache stores reflected output schemas by Go type to avoid
+// regenerating identical JSON Schemas for every route registration.
 var (
 	outputSchemaCache sync.Map // reflect.Type → map[string]any
 )

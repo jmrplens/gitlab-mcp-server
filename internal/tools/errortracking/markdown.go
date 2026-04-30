@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for error tracking MCP tool output.
-
 package errortracking
 
 import (

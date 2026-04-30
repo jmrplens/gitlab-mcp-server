@@ -1,7 +1,6 @@
 // markdown.go delegates tool output → Markdown formatting to the type-based
 // registry in [toolutil.MarkdownForResult]. Sub-packages self-register their
 // formatters via init() functions in their own markdown.go files.
-
 package tools
 
 import (

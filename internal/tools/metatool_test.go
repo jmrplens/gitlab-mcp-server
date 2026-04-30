@@ -1,7 +1,6 @@
 // metatool_test.go contains unit tests for the meta-tool dispatch mechanism
 // including action validation, parameter unmarshalling, and the wrapAction
 // and wrapVoidAction generic helpers.
-
 package tools
 
 import (
@@ -305,6 +304,7 @@ func TestSetMetaParamSchema_PropagatesToMetaToolSchema(t *testing.T) {
 	}
 }
 
+// keysOf returns the map keys for failure messages in schema-mode tests.
 func keysOf(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

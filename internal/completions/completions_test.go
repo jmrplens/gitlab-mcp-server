@@ -2,7 +2,6 @@
 // logic. Tests cover prompt and resource argument completion for project IDs,
 // group IDs, usernames, MR IIDs, issue IIDs, branches, and tags using
 // httptest mocks.
-
 package completions
 
 import (

@@ -1,7 +1,6 @@
 // pagination_test.go contains unit tests for PaginationFromResponse and
 // DeleteResult. Tests cover nil response, fully populated headers, single-page
 // results, and the standard delete output builder.
-
 package toolutil
 
 import (

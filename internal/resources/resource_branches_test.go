@@ -1,7 +1,6 @@
 // resource_branches_test.go contains edge-case and branch-coverage tests
 // for MCP resources, exercising nil-pointer branches (e.g. nil author on
 // merge requests) and optional field handling (e.g. milestone due dates).
-
 package resources
 
 import (

@@ -1,5 +1,4 @@
 // summarize_mr_review.go implements the sampling-based merge request review summarization tool.
-
 package samplingtools
 
 import (

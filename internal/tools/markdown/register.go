@@ -1,5 +1,4 @@
 // register.go wires markdown MCP tools to the MCP server.
-
 package markdown
 
 import (

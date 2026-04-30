@@ -1,5 +1,4 @@
 // register.go wires securefiles MCP tools to the MCP server.
-
 package securefiles
 
 import (

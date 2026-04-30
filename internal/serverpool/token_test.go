@@ -1,5 +1,4 @@
 // token_test.go contains unit tests for token extraction and validation.
-
 package serverpool
 
 import (
@@ -254,6 +253,7 @@ func TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault(t *test
 	}
 }
 
+// slicesEqual compares two string slices in order for ignored-option tests.
 func slicesEqual(got, want []string) bool {
 	if len(got) != len(want) {
 		return false

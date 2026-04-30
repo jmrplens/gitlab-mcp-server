@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for secure file MCP tool output.
-
 package securefiles
 
 import (

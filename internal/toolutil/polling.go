@@ -1,6 +1,5 @@
 // polling.go provides shared constants and helpers for polling tools that
 // wait for a GitLab resource to reach a terminal state.
-
 package toolutil
 
 // Polling bounds and defaults (all values in seconds) for tools that wait on

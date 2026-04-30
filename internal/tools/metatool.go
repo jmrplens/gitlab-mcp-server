@@ -1,6 +1,5 @@
 // metatool.go re-exports meta-tool dispatch utilities from toolutil and wires
 // meta-tool registration to the domain-coupled markdownForResult.
-
 package tools
 
 import (
@@ -87,6 +86,8 @@ func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap
 	toolutil.AddReadOnlyMetaTool(server, name, desc, routes, icons, markdownForResult)
 }
 
+// validActionsString exposes the shared action-list formatter for package
+// tests while keeping registration code on the local tools namespace.
 var validActionsString = toolutil.ValidActionsString
 
 // SetMetaParamSchema selects the meta-tool input schema strategy used by all

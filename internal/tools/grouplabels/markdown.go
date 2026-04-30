@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for group label MCP tool output.
-
 package grouplabels
 
 import (

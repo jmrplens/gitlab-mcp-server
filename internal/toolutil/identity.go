@@ -1,7 +1,6 @@
 // identity.go provides user identity resolution for MCP tool handlers.
 // It supports HTTP/OAuth mode (via TokenInfo from the MCP request) and
 // stdio mode (via context-stored identity populated at startup).
-
 package toolutil
 
 import (

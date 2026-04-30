@@ -9,7 +9,6 @@
 //     registered meta-tool and its actions.
 //   - gitlab://schema/meta/{tool}/{action} — JSON Schema for the action's
 //     params property.
-
 package resources
 
 import (
@@ -52,6 +51,8 @@ func RegisterMetaSchemaResources(server *mcp.Server, routes map[string]toolutil.
 	registerMetaSchemaTemplate(server, snapshot)
 }
 
+// registerMetaSchemaIndex registers the static catalog resource that lists
+// every visible meta-tool and its supported action names.
 func registerMetaSchemaIndex(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 	server.AddResource(&mcp.Resource{
 		URI:         metaSchemaIndexURI,
@@ -66,6 +67,8 @@ func registerMetaSchemaIndex(server *mcp.Server, routes map[string]toolutil.Acti
 	})
 }
 
+// registerMetaSchemaTemplate registers the URI-template resource that returns
+// a JSON Schema for one meta-tool action's params object.
 func registerMetaSchemaTemplate(server *mcp.Server, routes map[string]toolutil.ActionMap) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: metaSchemaTemplateURI,
@@ -88,6 +91,8 @@ func registerMetaSchemaTemplate(server *mcp.Server, routes map[string]toolutil.A
 	})
 }
 
+// cloneMetaSchemaRoutes creates a shallow snapshot of route maps so resource
+// handlers do not observe later registration changes from other server builds.
 func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
 	out := make(map[string]toolutil.ActionMap, len(routes))
 	for tool, actions := range routes {

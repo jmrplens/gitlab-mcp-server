@@ -1,6 +1,5 @@
 // run.go is the entry point for the setup wizard, dispatching to the
 // appropriate UI mode (TUI, web, or CLI) based on the environment.
-
 package wizard
 
 import (
@@ -13,10 +12,14 @@ import (
 type UIMode string
 
 const (
+	// UIModeAuto tries richer interfaces first and falls back to plain CLI.
 	UIModeAuto UIMode = "auto" // try web → TUI → CLI
-	UIModeWeb  UIMode = "web"
-	UIModeTUI  UIMode = "tui"
-	UIModeCLI  UIMode = "cli"
+	// UIModeWeb runs the browser-based setup wizard.
+	UIModeWeb UIMode = "web"
+	// UIModeTUI runs the terminal UI setup wizard.
+	UIModeTUI UIMode = "tui"
+	// UIModeCLI runs the plain command-line setup wizard.
+	UIModeCLI UIMode = "cli"
 )
 
 // Run executes the setup wizard using the selected UI mode.

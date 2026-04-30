@@ -1,5 +1,4 @@
 // register.go wires badges MCP tools to the MCP server.
-
 package badges
 
 import (

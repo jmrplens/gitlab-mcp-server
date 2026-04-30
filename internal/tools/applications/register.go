@@ -1,5 +1,4 @@
 // register.go wires applications MCP tools to the MCP server.
-
 package applications
 
 import (

@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the MR approval settings
 // tool closures in register.go. Tests verify get and update paths via an
 // in-memory MCP session and mock GitLab API responses.
-
 package mrapprovalsettings
 
 import (

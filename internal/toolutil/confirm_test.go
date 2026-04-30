@@ -1,5 +1,4 @@
 // confirm_test.go contains unit tests for user confirmation helpers.
-
 package toolutil
 
 import (

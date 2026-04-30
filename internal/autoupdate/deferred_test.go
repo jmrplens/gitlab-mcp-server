@@ -1,5 +1,4 @@
 // deferred_test.go contains unit tests for deferred auto-update file operations.
-
 package autoupdate
 
 import (
@@ -225,6 +224,7 @@ func TestHasPendingUpdate_WithNewFile(t *testing.T) {
 // failReader is an io.Reader that always returns an error.
 type failReader struct{}
 
+// Read implements [io.Reader] by failing before any bytes are copied.
 func (failReader) Read([]byte) (int, error) {
 	return 0, errors.New("simulated read failure")
 }
@@ -264,6 +264,8 @@ type partialReader struct {
 	err  error
 }
 
+// Read implements [io.Reader] by returning buffered bytes and then the
+// configured error once the buffer is exhausted.
 func (r *partialReader) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
 		return 0, r.err

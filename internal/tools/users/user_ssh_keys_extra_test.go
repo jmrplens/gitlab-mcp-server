@@ -2,7 +2,6 @@
 // GetSSHKeyForUser, AddSSHKeyForUser, DeleteSSHKeyForUser,
 // and buildAddSSHKeyOptions with expires_at/usage_type options.
 // Also covers validation, API errors, and cancelled contexts for all SSH operations.
-
 package users
 
 import (

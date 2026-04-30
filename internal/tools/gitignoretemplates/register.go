@@ -1,5 +1,4 @@
 // register.go wires gitignoretemplates MCP tools to the MCP server.
-
 package gitignoretemplates
 
 import (

@@ -2,7 +2,6 @@
 // Tests use httptest to mock the GitLab API and verify member listing with
 // query filters, pagination, access level description mapping, and error
 // handling including context cancellation.
-
 package members
 
 import (

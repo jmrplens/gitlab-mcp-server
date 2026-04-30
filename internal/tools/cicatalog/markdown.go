@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting for CI/CD Catalog outputs.
-
 package cicatalog
 
 import (

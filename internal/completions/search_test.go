@@ -2,7 +2,6 @@
 // (projects, groups, users, merge requests, issues, branches, tags).
 // Tests verify successful searches, empty queries, API errors, and context
 // cancellation using httptest mocks.
-
 package completions
 
 import (

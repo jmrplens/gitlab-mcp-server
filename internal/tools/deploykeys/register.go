@@ -1,5 +1,4 @@
 // register.go wires deploykeys MCP tools to the MCP server.
-
 package deploykeys
 
 import (

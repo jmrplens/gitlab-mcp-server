@@ -1,6 +1,5 @@
 // testhelpers_test.go provides shared test helpers for the autoupdate package
 // tests, including temporary directory setup and binary fixture creation.
-
 package autoupdate
 
 import (

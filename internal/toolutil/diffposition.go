@@ -1,7 +1,6 @@
 // diffposition.go provides unified diff parsing and position validation for
 // inline MR comments. It parses diff hunk headers to extract valid line ranges
 // and validates that a given position (new_line / old_line) is commentable.
-
 package toolutil
 
 import (
@@ -15,9 +14,12 @@ import (
 type LineType int
 
 const (
+	// LineContext identifies an unchanged line present in both old and new file versions.
 	LineContext LineType = iota // Unchanged line (present in both old and new file)
-	LineAdded                   // Added line (present only in new file)
-	LineRemoved                 // Removed line (present only in old file)
+	// LineAdded identifies a line present only in the new file version.
+	LineAdded // Added line (present only in new file)
+	// LineRemoved identifies a line present only in the old file version.
+	LineRemoved // Removed line (present only in old file)
 )
 
 // DiffLine represents a single line in a parsed unified diff with its

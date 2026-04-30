@@ -6,7 +6,6 @@
 // If the GraphQL query fails (e.g. GitLab version too old, GraphQL disabled,
 // or a numeric project ID was provided instead of a path), callers should
 // fall back to the existing REST-based data fetching.
-
 package samplingtools
 
 import (

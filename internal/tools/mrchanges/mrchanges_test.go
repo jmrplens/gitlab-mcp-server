@@ -2,7 +2,6 @@
 // retrieval and diff version operations. Tests use httptest to mock the
 // GitLab Merge Request Diffs API and verify success, not-found, and
 // empty-diff scenarios.
-
 package mrchanges
 
 import (

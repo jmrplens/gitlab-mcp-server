@@ -1,5 +1,4 @@
 // prompt_milestone_label.go registers MCP prompts for milestone and label management.
-
 package prompts
 
 import (

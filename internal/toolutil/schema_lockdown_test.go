@@ -1,3 +1,5 @@
+// schema_lockdown_test.go verifies JSON Schema lockdown behavior for root,
+// nested, and preconfigured additionalProperties values in MCP tool schemas.
 package toolutil
 
 import (

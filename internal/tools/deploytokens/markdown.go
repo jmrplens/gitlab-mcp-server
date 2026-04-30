@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for deploy token MCP tool output.
-
 package deploytokens
 
 import (

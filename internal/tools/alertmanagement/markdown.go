@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for alert management MCP tool output.
-
 package alertmanagement
 
 import (

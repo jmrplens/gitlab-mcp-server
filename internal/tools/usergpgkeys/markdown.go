@@ -1,6 +1,5 @@
 // markdown.go provides Markdown formatting functions for user GPG key
 // MCP tool output.
-
 package usergpgkeys
 
 import (

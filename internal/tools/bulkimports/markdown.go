@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for bulk import migration MCP tool output.
-
 package bulkimports
 
 import (

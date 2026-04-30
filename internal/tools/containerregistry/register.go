@@ -1,5 +1,4 @@
 // register.go wires containerregistry MCP tools to the MCP server.
-
 package containerregistry
 
 import (

@@ -1,7 +1,6 @@
 // markdown_test.go contains unit tests for every Markdown formatter function
 // in markdown.go. Each test verifies that the rendered output contains expected
 // headings, field values, table rows, and empty-state messages.
-
 package tools
 
 import (
@@ -54,6 +53,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// Markdown test fixtures and assertion messages shared by formatter tests.
 const (
 	errExpNonNilResult = "expected non-nil result"
 	errMissingHeader   = "missing header"

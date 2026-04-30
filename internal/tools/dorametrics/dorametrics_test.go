@@ -1,6 +1,5 @@
 // dorametrics_test.go contains unit tests for GitLab DORA metrics retrieval
 // operations. Tests use httptest to mock the GitLab DORA Metrics API.
-
 package dorametrics
 
 import (

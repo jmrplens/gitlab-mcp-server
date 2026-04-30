@@ -1,6 +1,5 @@
 // markdown.go provides Markdown formatting functions for impersonation token
 // MCP tool output.
-
 package impersonationtokens
 
 import (

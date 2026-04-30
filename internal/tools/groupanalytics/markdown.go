@@ -1,5 +1,4 @@
 // markdown.go provides human-readable Markdown formatters for group activity analytics.
-
 package groupanalytics
 
 import (

@@ -2,7 +2,6 @@
 // wrapUpdaterAction generic helper. Tests verify that gitlab_server is registered
 // with both nil and non-nil updater paths, and that wrapUpdaterAction correctly
 // delegates to the wrapped function.
-
 package tools
 
 import (

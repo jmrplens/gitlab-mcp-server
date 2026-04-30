@@ -1,5 +1,4 @@
 // pool.go implements a bounded LRU pool of per-token MCP servers for HTTP mode.
-
 package serverpool
 
 import (
@@ -39,6 +38,8 @@ type poolEntry struct {
 	lastValidated time.Time
 }
 
+// defaultMaxSize is the fallback number of HTTP client sessions retained when
+// the operator does not configure a pool size.
 const defaultMaxSize = 100
 
 // DefaultRevalidateInterval is the default period between token re-validation
@@ -201,6 +202,8 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	return server, nil
 }
 
+// entryConfig builds the per-pool-entry server configuration, applying the
+// resolved GitLab URL plus optional edition and token-scope discovery.
 func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) *config.ServerConfig {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
@@ -222,6 +225,8 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	return entryCfg
 }
 
+// enterpriseSource returns the label used in logs for how Enterprise/Premium
+// tool availability was selected for new pool entries.
 func (p *ServerPool) enterpriseSource() string {
 	if p.cfg.AutoDetectEnterprise {
 		return "detected"
@@ -399,6 +404,8 @@ func (p *ServerPool) evictByKey(key string) {
 	}
 }
 
+// poolEntryConfigLogValues extracts safe configuration values for eviction
+// logs without requiring callers to nil-check partially initialized entries.
 func poolEntryConfigLogValues(entry *poolEntry) (string, bool) {
 	if entry == nil || entry.serverConfig == nil {
 		return "", false

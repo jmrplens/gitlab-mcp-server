@@ -1,5 +1,4 @@
 // register.go wires labels MCP tools to the MCP server.
-
 package labels
 
 import (

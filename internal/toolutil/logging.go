@@ -1,7 +1,6 @@
 // logging.go provides structured logging helpers for tool handlers.
 // It logs to both stderr (via slog) and to the MCP client (via protocol-level
 // logging notifications).
-
 package toolutil
 
 import (

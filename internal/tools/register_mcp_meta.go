@@ -1,6 +1,5 @@
 // register_mcp_meta.go registers the gitlab_server meta-tool that exposes
 // MCP server health, version, and update operations.
-
 package tools
 
 import (

@@ -1,7 +1,6 @@
 // register_test.go contains unit tests for tool registration via RegisterAll
 // and RegisterAllMeta. Tests verify tool counts, tool names, annotation
 // presence, and end-to-end MCP call flow using in-memory transports.
-
 package tools
 
 import (
@@ -1737,6 +1736,8 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
 }
 
+// isExactMatchException reports whether an action name is too generic for the
+// normal destructive-name heuristic but is accepted by explicit policy.
 func isExactMatchException(action string) bool {
 	exceptions := map[string]bool{
 		"merge": true, "erase": true, "stop": true, "ban": true,
@@ -1981,6 +1982,9 @@ var toolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)+
 // metaToolNameRe matches meta-tool names like gitlab_{domain}[_{subdomain}].
 var metaToolNameRe = regexp.MustCompile(`^gitlab_[a-z][a-z0-9]*(_[a-z0-9][a-z0-9]*)*$`)
 
+// auditMinDescLen is the minimum useful MCP tool description length enforced
+// by metadata audits.
+// Tool metadata audit thresholds.
 const auditMinDescLen = 20
 
 // auditHandler returns an HTTP handler that responds to all GitLab API
@@ -3700,6 +3704,8 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 		goldenPath, len(diffs), strings.Join(diffs, "\n"))
 }
 
+// rawJSONEqual compares JSON values after compaction so golden snapshots are
+// insensitive to whitespace-only formatting differences.
 func rawJSONEqual(want, got json.RawMessage) bool {
 	var compactWant, compactGot bytes.Buffer
 	if err := json.Compact(&compactWant, want); err != nil {
@@ -3711,6 +3717,7 @@ func rawJSONEqual(want, got json.RawMessage) bool {
 	return bytes.Equal(compactWant.Bytes(), compactGot.Bytes())
 }
 
+// Shared GitLab error fixture payloads reused by context/error path tests.
 const (
 	// msgCancelledCtxErr is the assertion message for tests expecting a canceled context error.
 	msgCancelledCtxErr = "expected error for canceled context"
@@ -4609,6 +4616,7 @@ func TestWrapVoidActionUnmarshal_Error(t *testing.T) {
 	}
 }
 
+// Shared optional-value fixtures used by merge request and project tests.
 const (
 	testNewName     = "new-name"
 	testCustomEmail = "custom@example.com"

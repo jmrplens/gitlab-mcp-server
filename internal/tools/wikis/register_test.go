@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the wiki tool closures
 // in register.go. Tests exercise mutation error paths and ConfirmAction
 // branches via an in-memory MCP session with a mock GitLab API.
-
 package wikis
 
 import (

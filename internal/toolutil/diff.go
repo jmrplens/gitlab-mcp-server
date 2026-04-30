@@ -1,6 +1,5 @@
 // diff.go defines shared diff output types used by commit diff and
 // repository compare operations.
-
 package toolutil
 
 import gl "gitlab.com/gitlab-org/api/client-go/v2"

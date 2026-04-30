@@ -1,6 +1,5 @@
 // markdown.go provides generic Markdown formatting utilities for MCP tool responses.
 // Domain-specific format functions live in their respective domain sub-packages.
-
 package toolutil
 
 import (

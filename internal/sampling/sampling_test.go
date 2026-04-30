@@ -5,7 +5,6 @@
 // Integration tests use in-memory MCP transports to verify end-to-end
 // sampling including credential redaction, system prompt injection resistance,
 // model hint propagation, and data truncation.
-
 package sampling
 
 import (
@@ -906,6 +905,9 @@ type toolCall struct {
 	args map[string]any
 }
 
+// ExecuteTool records the requested tool call and returns either a configured
+// result, a configured error, or a default text result for tests that only need
+// to observe the call sequence.
 func (m *mockToolExecutor) ExecuteTool(_ context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
 	m.calls = append(m.calls, toolCall{name: name, args: args})
 	if m.err != nil {
@@ -1431,6 +1433,9 @@ type cancellingExecutor struct {
 	cancel context.CancelFunc
 }
 
+// ExecuteTool cancels the context associated with the executor and returns a
+// successful tool result so tests can verify cancellation between sampling
+// iterations rather than during tool execution itself.
 func (e *cancellingExecutor) ExecuteTool(_ context.Context, _ string, _ map[string]any) (*mcp.CallToolResult, error) {
 	e.cancel()
 	return &mcp.CallToolResult{
@@ -1611,6 +1616,9 @@ func TestAnalyzeWithTools_CreateMessageError(t *testing.T) {
 	}
 }
 
+// TestWithTemperature_ClampsAndSets verifies that [WithTemperature] records a
+// requested sampling temperature and clamps it to the MCP-supported 0..2 range.
+// Table-driven subtests cover boundary, in-range, and out-of-range inputs.
 func TestWithTemperature_ClampsAndSets(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1637,6 +1645,9 @@ func TestWithTemperature_ClampsAndSets(t *testing.T) {
 	}
 }
 
+// TestWithModelPriorities_ClampsAndSets verifies that [WithModelPriorities]
+// stores cost, speed, and intelligence priorities while clamping each value to
+// the 0..1 MCP preference range.
 func TestWithModelPriorities_ClampsAndSets(t *testing.T) {
 	cfg := analyzeConfig{}
 	WithModelPriorities(-0.5, 0.4, 1.5)(&cfg)
@@ -1654,6 +1665,9 @@ func TestWithModelPriorities_ClampsAndSets(t *testing.T) {
 	}
 }
 
+// TestWithStopSequences_FiltersEmpty verifies that [WithStopSequences] drops
+// empty strings and preserves the order of non-empty stop sequences. This keeps
+// generated sampling requests free of meaningless stop entries.
 func TestWithStopSequences_FiltersEmpty(t *testing.T) {
 	cfg := analyzeConfig{}
 	WithStopSequences("STOP", "", "END", "")(&cfg)
@@ -1665,6 +1679,9 @@ func TestWithStopSequences_FiltersEmpty(t *testing.T) {
 	}
 }
 
+// TestBuildModelPreferences_NilWhenEmpty verifies that buildModelPreferences
+// returns nil when no hints or priorities are configured. This avoids sending
+// an empty model preferences object in default sampling requests.
 func TestBuildModelPreferences_NilWhenEmpty(t *testing.T) {
 	cfg := &analyzeConfig{}
 	if got := buildModelPreferences(cfg); got != nil {
@@ -1672,6 +1689,9 @@ func TestBuildModelPreferences_NilWhenEmpty(t *testing.T) {
 	}
 }
 
+// TestBuildModelPreferences_HintsOnly verifies that buildModelPreferences
+// creates model hints without setting priority fields when priorities were not
+// explicitly configured.
 func TestBuildModelPreferences_HintsOnly(t *testing.T) {
 	cfg := &analyzeConfig{modelHints: []string{"claude-opus", "claude-sonnet"}}
 	got := buildModelPreferences(cfg)
@@ -1686,6 +1706,9 @@ func TestBuildModelPreferences_HintsOnly(t *testing.T) {
 	}
 }
 
+// TestBuildModelPreferences_HintsAndPriorities verifies that
+// buildModelPreferences combines model hints with configured cost, speed, and
+// intelligence priorities in the resulting MCP model preferences.
 func TestBuildModelPreferences_HintsAndPriorities(t *testing.T) {
 	cfg := &analyzeConfig{
 		modelHints:           []string{"claude"},

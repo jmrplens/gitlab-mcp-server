@@ -2,7 +2,6 @@
 // MCP tool output. Covers single-page rendering (with/without content and
 // encoding), list rendering (empty, single, multiple pages), and special
 // characters in fields.
-
 package groupwikis
 
 import (

@@ -9,7 +9,6 @@
 // Embedding can be disabled globally via EnableEmbeddedResources(false), which
 // is wired from config.EmbeddedResources at startup so deployments can opt out
 // if a particular client misbehaves with the new content type.
-
 package toolutil
 
 import (

@@ -2,7 +2,6 @@
 // FormatGID and ParseGID round-tripping, GraphQLPaginationInput methods
 // (EffectiveFirst, Variables), PageInfoToOutput conversion, and
 // FormatGraphQLPagination Markdown rendering.
-
 package toolutil
 
 import (

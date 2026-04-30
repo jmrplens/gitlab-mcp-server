@@ -1,5 +1,4 @@
 // register.go wires boards MCP tools to the MCP server.
-
 package boards
 
 import (

@@ -278,11 +278,16 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	return *versionInfo.Enterprise
 }
 
+// gitLabVersionInfo captures the subset of /api/v4/version needed for health
+// checks and GitLab edition detection.
 type gitLabVersionInfo struct {
 	Version    string `json:"version"`
 	Enterprise *bool  `json:"enterprise"`
 }
 
+// versionDirect queries the GitLab Version API through the raw health client.
+// It bypasses the resilient SDK wrapper so edition detection can run during
+// client initialization and degraded-mode recovery.
 func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from admin-configured GITLAB_URL, not user input
 	if err != nil {

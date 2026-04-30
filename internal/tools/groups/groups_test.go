@@ -2,7 +2,6 @@
 // list members, list subgroups). Tests use httptest to mock the GitLab API
 // and verify success paths, search/query filtering, ownership filters,
 // pagination, and error handling including context cancellation.
-
 package groups
 
 import (

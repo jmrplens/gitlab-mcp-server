@@ -2,7 +2,6 @@
 // Sub-packages self-register their formatters via init(), and the central
 // dispatcher resolves any output struct to its Markdown representation
 // with a single map lookup instead of a giant type-switch.
-
 package toolutil
 
 import (

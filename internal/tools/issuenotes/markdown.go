@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for issue note MCP tool output.
-
 package issuenotes
 
 import (

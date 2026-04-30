@@ -1,5 +1,4 @@
 // prompt_project_reports_test.go contains unit tests for project report MCP prompts.
-
 package prompts
 
 import (

@@ -1,7 +1,6 @@
 // jobtokenscope_test.go contains unit tests for the job token scope MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.
-
 package jobtokenscope
 
 import (

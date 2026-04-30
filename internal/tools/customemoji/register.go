@@ -1,5 +1,4 @@
 // register.go wires Custom Emoji MCP tools to the MCP server.
-
 package customemoji
 
 import (

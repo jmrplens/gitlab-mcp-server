@@ -1,5 +1,4 @@
 // register.go wires releaselinks MCP tools to the MCP server.
-
 package releaselinks
 
 import (

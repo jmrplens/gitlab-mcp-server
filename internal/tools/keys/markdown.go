@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for SSH key MCP tool output.
-
 package keys
 
 import (

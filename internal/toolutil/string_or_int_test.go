@@ -1,6 +1,5 @@
 // string_or_int_test.go contains unit tests for the StringOrInt JSON
 // unmarshaling type.
-
 package toolutil
 
 import (

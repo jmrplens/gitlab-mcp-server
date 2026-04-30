@@ -1,5 +1,4 @@
 // register.go wires instancevariables MCP tools to the MCP server.
-
 package instancevariables
 
 import (

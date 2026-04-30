@@ -1,5 +1,4 @@
 // pool_test.go contains unit tests for the bounded LRU server pool.
-
 package serverpool
 
 import (

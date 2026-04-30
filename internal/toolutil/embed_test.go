@@ -1,3 +1,5 @@
+// embed_test.go verifies embedded MCP resource helpers that append JSON or raw
+// resource content to [mcp.CallToolResult] values when the feature flag is on.
 package toolutil
 
 import (
@@ -13,6 +15,10 @@ func resetEmbedToggle(t *testing.T) {
 	t.Cleanup(func() { EnableEmbeddedResources(prev) })
 }
 
+// TestEmbedResource_AppendsContentBlock verifies that [EmbedResource] appends
+// an [mcp.EmbeddedResource] after existing content when embedded resources are
+// enabled. The test starts with one text block, embeds a JSON resource, and
+// asserts that URI, MIME type, and text payload are preserved.
 func TestEmbedResource_AppendsContentBlock(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(true)
@@ -41,6 +47,9 @@ func TestEmbedResource_AppendsContentBlock(t *testing.T) {
 	}
 }
 
+// TestEmbedResource_DisabledIsNoOp verifies that [EmbedResource] leaves the
+// result unchanged when the global embedded-resource toggle is disabled. This
+// protects callers that opt out from receiving extra MCP content blocks.
 func TestEmbedResource_DisabledIsNoOp(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(false)
@@ -53,6 +62,9 @@ func TestEmbedResource_DisabledIsNoOp(t *testing.T) {
 	}
 }
 
+// TestEmbedResource_NilResultIsSafe verifies that [EmbedResource] tolerates a
+// nil result pointer without panicking. Tool handlers can therefore call the
+// helper defensively after optional result construction.
 func TestEmbedResource_NilResultIsSafe(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(true)
@@ -61,6 +73,9 @@ func TestEmbedResource_NilResultIsSafe(t *testing.T) {
 	EmbedResource(nil, "gitlab://x", "application/json", "{}")
 }
 
+// TestEmbedResource_EmptyURIIsNoOp verifies that [EmbedResource] skips empty
+// resource URIs. The test enables embedding, passes an empty URI, and expects
+// no content blocks to be appended.
 func TestEmbedResource_EmptyURIIsNoOp(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(true)
@@ -73,6 +88,9 @@ func TestEmbedResource_EmptyURIIsNoOp(t *testing.T) {
 	}
 }
 
+// TestEnableEmbeddedResources_RoundTrip verifies that [EnableEmbeddedResources]
+// and [EmbeddedResourcesEnabled] round-trip both disabled and enabled states.
+// This guards the package-level toggle used by tool formatters.
 func TestEnableEmbeddedResources_RoundTrip(t *testing.T) {
 	resetEmbedToggle(t)
 
@@ -86,6 +104,9 @@ func TestEnableEmbeddedResources_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestEmbedResourceJSON_MarshalsValue verifies that [EmbedResourceJSON]
+// marshals a Go value to compact JSON and embeds it as application/json. The
+// test checks the generated resource content rather than only the block count.
 func TestEmbedResourceJSON_MarshalsValue(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(true)
@@ -111,6 +132,9 @@ func TestEmbedResourceJSON_MarshalsValue(t *testing.T) {
 	}
 }
 
+// TestEmbedResourceJSON_DisabledIsNoOp verifies that [EmbedResourceJSON] does
+// not marshal or append content when embedded resources are disabled. This
+// keeps the JSON helper consistent with [EmbedResource].
 func TestEmbedResourceJSON_DisabledIsNoOp(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(false)
@@ -122,6 +146,9 @@ func TestEmbedResourceJSON_DisabledIsNoOp(t *testing.T) {
 	}
 }
 
+// TestEmbedResourceJSON_MarshalErrorIsSilent verifies that [EmbedResourceJSON]
+// silently skips values that cannot be marshaled to JSON. The test uses a
+// channel value and expects no embedded resource to be appended.
 func TestEmbedResourceJSON_MarshalErrorIsSilent(t *testing.T) {
 	resetEmbedToggle(t)
 	EnableEmbeddedResources(true)

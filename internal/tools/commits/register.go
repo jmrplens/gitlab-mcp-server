@@ -1,5 +1,4 @@
 // register.go wires commits MCP tools to the MCP server.
-
 package commits
 
 import (

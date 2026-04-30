@@ -1,5 +1,4 @@
 // packages_stream_test.go contains unit tests for streaming package downloads.
-
 package packages
 
 import (

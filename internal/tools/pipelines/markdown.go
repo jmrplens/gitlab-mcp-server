@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for pipeline MCP tool output.
-
 package pipelines
 
 import (

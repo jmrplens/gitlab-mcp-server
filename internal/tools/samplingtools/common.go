@@ -1,5 +1,4 @@
 // common.go provides shared helpers for sampling tool implementations.
-
 package samplingtools
 
 import (

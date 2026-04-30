@@ -1,6 +1,5 @@
 // vulnerabilities_test.go contains unit tests for GitLab vulnerability listing
 // and retrieval operations. Tests use httptest to mock the GitLab Vulnerabilities API.
-
 package vulnerabilities
 
 import (

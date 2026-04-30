@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the MR approval rule
 // tool closures in register.go. Tests exercise the error paths for approval
 // rule operations (create, delete, list) via an in-memory MCP session.
-
 package mrapprovals
 
 import (

@@ -5,7 +5,6 @@
 // These utilities are used by domain sub-packages that call the GitLab
 // GraphQL API directly (without a client-go service wrapper), such as
 // vulnerabilities, cicatalog, branchrules, and customemoji.
-
 package toolutil
 
 import (

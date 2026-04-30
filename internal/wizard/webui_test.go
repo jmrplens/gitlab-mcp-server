@@ -1,6 +1,5 @@
 // webui_test.go contains unit tests for the web UI wizard HTTP handlers
 // and embedded asset serving.
-
 package wizard
 
 import (

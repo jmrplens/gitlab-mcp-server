@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for freeze period MCP tool output.
-
 package freezeperiods
 
 import (

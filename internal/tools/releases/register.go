@@ -1,5 +1,4 @@
 // register.go wires releases MCP tools to the MCP server.
-
 package releases
 
 import (

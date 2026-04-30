@@ -1,7 +1,6 @@
 // approvals.go implements GitLab project approval configuration and approval
 // rule operations: get/change approval config, and list/get/create/update/delete
 // approval rules.
-
 package projects
 
 import (

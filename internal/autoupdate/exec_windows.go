@@ -1,10 +1,9 @@
+//go:build windows
+
 // exec_windows.go provides the Windows stub for ExecSelf.
 // Windows has no true exec syscall — Go's syscall.Exec on Windows spawns
 // a new process, losing the MCP stdio pipes. On Windows, the binary is
 // replaced via the rename trick and takes effect on the next startup.
-
-//go:build windows
-
 package autoupdate
 
 import "errors"

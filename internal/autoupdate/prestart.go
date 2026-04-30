@@ -2,7 +2,6 @@
 // It runs BEFORE the MCP server starts, downloads any available update,
 // replaces the binary using the rename trick, and on Unix re-execs the
 // process via syscall.Exec to seamlessly switch to the new version.
-
 package autoupdate
 
 import (

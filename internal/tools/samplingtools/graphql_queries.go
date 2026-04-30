@@ -1,7 +1,6 @@
 // graphql_queries.go defines optimized GraphQL aggregation queries that fetch
 // rich context in a single request, replacing multiple sequential REST calls
 // used by sampling tools.
-
 package samplingtools
 
 // queryMRContext fetches merge request details, discussions, approval state,
@@ -161,12 +160,14 @@ query($projectPath: ID!, $pipelineIID: ID!) {
 
 // GraphQL response types for MR context query.
 
+// gqlMRContextResp is the top-level GraphQL response envelope for MR context.
 type gqlMRContextResp struct {
 	Project struct {
 		MergeRequest *gqlMRContext `json:"mergeRequest"`
 	} `json:"project"`
 }
 
+// gqlMRContext contains the merge request fields used to build sampling input.
 type gqlMRContext struct {
 	IID              string             `json:"iid"`
 	Title            string             `json:"title"`
@@ -183,42 +184,51 @@ type gqlMRContext struct {
 	Discussions      gqlDiscussionNodes `json:"discussions"`
 }
 
+// gqlDiffStats contains the merge request diff size summary.
 type gqlDiffStats struct {
 	Additions int `json:"additions"`
 	Deletions int `json:"deletions"`
 	FileCount int `json:"fileCount"`
 }
 
+// gqlUsernameNodes is a GraphQL connection of username nodes.
 type gqlUsernameNodes struct {
 	Nodes []gqlUsername `json:"nodes"`
 }
 
+// gqlUsername contains the username field common to user-shaped GraphQL nodes.
 type gqlUsername struct {
 	Username string `json:"username"`
 }
 
+// gqlHeadPipeline contains the current head pipeline state for an MR.
 type gqlHeadPipeline struct {
 	Status         string           `json:"status"`
 	DetailedStatus *gqlDetailStatus `json:"detailedStatus"`
 }
 
+// gqlDetailStatus contains GitLab's human-readable detailed pipeline status.
 type gqlDetailStatus struct {
 	Text  string `json:"text"`
 	Label string `json:"label"`
 }
 
+// gqlDiscussionNodes is a GraphQL connection of MR discussion nodes.
 type gqlDiscussionNodes struct {
 	Nodes []gqlDiscussion `json:"nodes"`
 }
 
+// gqlDiscussion contains the notes attached to one MR discussion thread.
 type gqlDiscussion struct {
 	Notes gqlNoteNodes `json:"notes"`
 }
 
+// gqlNoteNodes is a GraphQL connection of notes.
 type gqlNoteNodes struct {
 	Nodes []gqlNote `json:"nodes"`
 }
 
+// gqlNote contains note fields used by issue and MR sampling prompts.
 type gqlNote struct {
 	Author     gqlUsername `json:"author"`
 	Body       string      `json:"body"`
@@ -231,12 +241,14 @@ type gqlNote struct {
 
 // GraphQL response types for Issue context query.
 
+// gqlIssueContextResp is the top-level GraphQL response envelope for issue context.
 type gqlIssueContextResp struct {
 	Project struct {
 		Issue *gqlIssueContext `json:"issue"`
 	} `json:"project"`
 }
 
+// gqlIssueContext contains the issue fields used to build sampling input.
 type gqlIssueContext struct {
 	IID                  string           `json:"iid"`
 	Title                string           `json:"title"`
@@ -256,23 +268,28 @@ type gqlIssueContext struct {
 	RelatedMergeRequests gqlRelatedMRs    `json:"relatedMergeRequests"`
 }
 
+// gqlLabelNodes is a GraphQL connection of label nodes.
 type gqlLabelNodes struct {
 	Nodes []gqlLabel `json:"nodes"`
 }
 
+// gqlLabel contains the label title used by sampling prompts.
 type gqlLabel struct {
 	Title string `json:"title"`
 }
 
+// gqlMilestone contains issue milestone display fields.
 type gqlMilestone struct {
 	Title   string `json:"title"`
 	DueDate string `json:"dueDate"`
 }
 
+// gqlRelatedMRs is a GraphQL connection of merge requests related to an issue.
 type gqlRelatedMRs struct {
 	Nodes []gqlRelatedMR `json:"nodes"`
 }
 
+// gqlRelatedMR contains the related merge request summary fields used in issue context.
 type gqlRelatedMR struct {
 	IID    string      `json:"iid"`
 	Title  string      `json:"title"`
@@ -282,12 +299,14 @@ type gqlRelatedMR struct {
 
 // GraphQL response types for Pipeline context query.
 
+// gqlPipelineContextResp is the top-level GraphQL response envelope for pipeline context.
 type gqlPipelineContextResp struct {
 	Project struct {
 		Pipeline *gqlPipelineContext `json:"pipeline"`
 	} `json:"project"`
 }
 
+// gqlPipelineContext contains the pipeline fields used to build sampling input.
 type gqlPipelineContext struct {
 	IID        string        `json:"iid"`
 	Status     string        `json:"status"`
@@ -299,20 +318,24 @@ type gqlPipelineContext struct {
 	Stages     gqlStageNodes `json:"stages"`
 }
 
+// gqlStageNodes is a GraphQL connection of CI stage nodes.
 type gqlStageNodes struct {
 	Nodes []gqlStage `json:"nodes"`
 }
 
+// gqlStage contains a CI stage and the jobs returned under it.
 type gqlStage struct {
 	Name   string      `json:"name"`
 	Status string      `json:"status"`
 	Jobs   gqlJobNodes `json:"jobs"`
 }
 
+// gqlJobNodes is a GraphQL connection of CI job nodes.
 type gqlJobNodes struct {
 	Nodes []gqlJob `json:"nodes"`
 }
 
+// gqlJob contains CI job fields used by pipeline sampling prompts.
 type gqlJob struct {
 	Name           string    `json:"name"`
 	Status         string    `json:"status"`

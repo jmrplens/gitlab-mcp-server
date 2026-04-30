@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for instance-level CI/CD variable MCP tool output.
-
 package instancevariables
 
 import (

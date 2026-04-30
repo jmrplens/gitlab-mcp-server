@@ -1,5 +1,4 @@
 // register.go wires usagedata MCP tools to the MCP server.
-
 package usagedata
 
 import (

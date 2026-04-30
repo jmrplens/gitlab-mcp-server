@@ -1,6 +1,5 @@
 // markdown.go provides Markdown formatting functions for protected package
 // MCP tool output.
-
 package protectedpackages
 
 import (

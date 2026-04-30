@@ -1,7 +1,6 @@
 // keys_test.go contains unit tests for the SSH key MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.
-
 package keys
 
 import (

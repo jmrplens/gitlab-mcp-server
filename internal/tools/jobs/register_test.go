@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the CI job tool closures
 // in register.go. Tests cover ConfirmAction early-return branches and
 // error propagation for job operations via an in-memory MCP session.
-
 package jobs
 
 import (
@@ -256,6 +255,8 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 // errorReader is a test helper that always returns an error on Read.
 type errorReader struct{}
 
+// Read implements [io.Reader] by returning a closed-pipe error for artifact
+// content error-path tests.
 func (errorReader) Read([]byte) (int, error) {
 	return 0, io.ErrClosedPipe
 }

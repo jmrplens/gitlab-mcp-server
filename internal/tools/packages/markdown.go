@@ -1,7 +1,6 @@
 // markdown.go provides Markdown formatters for all packages output types.
 // Each formatter renders a human-friendly Markdown summary used both by
 // individual tool handlers and the meta-tool dispatcher.
-
 package packages
 
 import (

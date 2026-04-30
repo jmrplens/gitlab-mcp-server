@@ -1,5 +1,4 @@
 // register.go wires sidekiq MCP tools to the MCP server.
-
 package sidekiq
 
 import (

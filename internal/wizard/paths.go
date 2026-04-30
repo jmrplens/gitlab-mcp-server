@@ -1,6 +1,5 @@
 // paths.go resolves platform-specific paths for IDE configuration directories
 // and the user home directory on Linux, macOS, and Windows.
-
 package wizard
 
 import (

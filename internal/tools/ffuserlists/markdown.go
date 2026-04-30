@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for feature flag user list MCP tool output.
-
 package ffuserlists
 
 import (

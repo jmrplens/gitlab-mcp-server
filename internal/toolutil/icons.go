@@ -1,6 +1,5 @@
 // icons.go provides shared MCP icon constants for tools, resources, and prompts.
 // Icons use inline SVG data: URIs to avoid external network dependencies.
-
 package toolutil
 
 import (

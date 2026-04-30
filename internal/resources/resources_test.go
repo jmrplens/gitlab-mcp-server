@@ -2,7 +2,6 @@
 // behavior of each MCP resource registered by [Register]. Tests use httptest
 // to mock GitLab API responses and an in-memory MCP transport to exercise
 // the full resource read pipeline.
-
 package resources
 
 import (

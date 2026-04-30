@@ -19,7 +19,6 @@
 // Meta-tools use MakeMetaHandler with a FormatResultFunc that dispatches
 // to the appropriate sub-package Markdown formatter via the type-switch
 // in markdownForResult (internal/tools/markdown.go).
-
 package toolutil
 
 import (

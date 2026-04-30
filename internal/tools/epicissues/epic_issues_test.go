@@ -2,7 +2,6 @@
 // GraphQL API: List, Assign, Remove, and UpdateOrder. Covers success paths,
 // input validation, API errors, mutation errors, context cancellation,
 // pagination, empty results, dual GID resolution, and markdown formatters.
-
 package epicissues
 
 import (

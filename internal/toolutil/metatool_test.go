@@ -5,7 +5,6 @@
 // and composite wrappers (RouteAction, RouteVoidAction,
 // RouteActionWithRequest, DestructiveAction, DestructiveVoidAction,
 // DestructiveActionWithRequest).
-
 package toolutil
 
 import (

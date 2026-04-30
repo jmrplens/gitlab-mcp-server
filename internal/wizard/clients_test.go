@@ -1,6 +1,5 @@
 // clients_test.go contains unit tests for MCP client detection and
 // configuration path resolution.
-
 package wizard
 
 import (

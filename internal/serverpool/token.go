@@ -1,5 +1,4 @@
 // token.go provides token and GitLab URL extraction for HTTP mode authentication.
-
 package serverpool
 
 import (
@@ -12,11 +11,15 @@ import (
 // RequestOptionGitLabURL identifies the per-request GitLab URL header option.
 const RequestOptionGitLabURL = "GITLAB-URL"
 
+// requestOptionAlias maps one canonical server-managed option name to all
+// accepted HTTP header spellings for compatibility diagnostics.
 type requestOptionAlias struct {
 	name    string
 	headers []string
 }
 
+// serverManagedRequestOptions enumerates request headers that are intentionally
+// ignored because the server process owns those configuration decisions.
 var serverManagedRequestOptions = []requestOptionAlias{
 	{name: "GITLAB_URL", headers: []string{"GITLAB_URL"}},
 	{name: "GITLAB_SKIP_TLS_VERIFY", headers: []string{"GITLAB_SKIP_TLS_VERIFY", "GITLAB-SKIP-TLS-VERIFY", "SKIP-TLS-VERIFY"}},
@@ -125,6 +128,8 @@ func (o RequestOptions) IgnoredOptionsCopy() []string {
 	return slices.Clone(o.IgnoredOptions)
 }
 
+// ignoredServerManagedOptions returns canonical option names for request
+// headers that tried to override server-managed settings.
 func ignoredServerManagedOptions(r *http.Request) []string {
 	ignoredOptions := make([]string, 0)
 	for _, option := range serverManagedRequestOptions {
@@ -135,6 +140,8 @@ func ignoredServerManagedOptions(r *http.Request) []string {
 	return ignoredOptions
 }
 
+// hasAnyHeader reports whether any alias header in headers is present with a
+// non-empty value on r.
 func hasAnyHeader(r *http.Request, headers []string) bool {
 	for _, header := range headers {
 		if strings.TrimSpace(r.Header.Get(header)) != "" {
@@ -144,6 +151,8 @@ func hasAnyHeader(r *http.Request, headers []string) bool {
 	return false
 }
 
+// appendOptionName adds name once while preserving the first-seen order of
+// ignored request options.
 func appendOptionName(options []string, name string) []string {
 	if !slices.Contains(options, name) {
 		return append(options, name)

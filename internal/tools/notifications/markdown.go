@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for notification settings MCP tool output.
-
 package notifications
 
 import (

@@ -2,7 +2,6 @@
 // in register.go. Tests cover ConfirmAction early-return paths, 404 →
 // NotFoundResult branches, and API error propagation via an in-memory MCP
 // session.
-
 package mrnotes
 
 import (

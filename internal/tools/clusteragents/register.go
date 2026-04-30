@@ -1,5 +1,4 @@
 // register.go wires clusteragents MCP tools to the MCP server.
-
 package clusteragents
 
 import (

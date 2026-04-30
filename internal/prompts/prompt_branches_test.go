@@ -3,7 +3,6 @@
 // long diff preservation, empty descriptions, default parameter fallbacks,
 // new/deleted/renamed file handling, API sub-errors (diffs, members, jobs,
 // events), and pipeline status branches.
-
 package prompts
 
 import (

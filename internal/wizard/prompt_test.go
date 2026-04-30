@@ -1,5 +1,4 @@
 // prompt_test.go contains unit tests for interactive prompt input handling.
-
 package wizard
 
 import (

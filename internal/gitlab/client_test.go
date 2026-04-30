@@ -1,7 +1,6 @@
 // client_test.go contains unit tests for the gitlab package.
 // Tests verify [NewClient] creation, [Client.Ping] connectivity checks,
 // and [Client.GL] accessor using httptest to mock the GitLab Version API.
-
 package gitlab
 
 import (

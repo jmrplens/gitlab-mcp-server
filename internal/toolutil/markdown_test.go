@@ -1,5 +1,4 @@
 // markdown_test.go contains unit tests for shared Markdown utility functions.
-
 package toolutil
 
 import (

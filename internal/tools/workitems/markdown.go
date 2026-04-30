@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for work item MCP tool output.
-
 package workitems
 
 import (

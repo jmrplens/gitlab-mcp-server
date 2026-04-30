@@ -1,5 +1,4 @@
 // register.go wires GitLab CI/CD job tools into the MCP server.
-
 package jobs
 
 import (

@@ -1,5 +1,4 @@
 // register.go wires importservice MCP tools to the MCP server.
-
 package importservice
 
 import (

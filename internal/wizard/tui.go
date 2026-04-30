@@ -1,6 +1,5 @@
 // tui.go implements the terminal UI (TUI) wizard mode using the Bubble Tea
 // framework for interactive, in-terminal configuration.
-
 package wizard
 
 import (
@@ -17,7 +16,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Color palette — matches the web UI dark theme.
+// TUI color palette matches the web UI dark theme so all wizard modes keep a
+// consistent visual identity.
 var (
 	colorText      = lipgloss.Color("#e6edf3")
 	colorMuted     = lipgloss.Color("#8b949e")
@@ -27,6 +27,7 @@ var (
 	colorHighlight = lipgloss.Color("#1f6feb")
 )
 
+// TUI styles centralize lipgloss rendering choices used by all wizard views.
 var (
 	tuiAccentStyle  = lipgloss.NewStyle().Foreground(colorAccent)
 	tuiSuccessStyle = lipgloss.NewStyle().Foreground(colorSuccess)
@@ -64,8 +65,10 @@ var (
 	tuiCursorStyle   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 )
 
+// tuiStep identifies the current screen in the terminal wizard state machine.
 type tuiStep int
 
+// TUI wizard steps are ordered in the same sequence the user completes them.
 const (
 	tuiStepInstall tuiStep = iota
 	tuiStepGitLab
@@ -74,6 +77,8 @@ const (
 	tuiStepDone
 )
 
+// tuiModel stores all Bubble Tea state for the terminal wizard, including
+// focused inputs, option selections, client selections, and the final result.
 type tuiModel struct { //nolint:recvcheck // buildResult needs pointer receiver, Bubble Tea interface requires value receivers
 	version string
 	step    tuiStep
@@ -109,6 +114,8 @@ type tuiModel struct { //nolint:recvcheck // buildResult needs pointer receiver,
 	aborted      bool
 }
 
+// newTUIModel creates the initial terminal wizard model with defaults from any
+// existing configuration and sensible client selections.
 func newTUIModel(version string, w io.Writer) tuiModel {
 	// Load existing configuration as defaults
 	existing, hasExisting := loadExistingConfigFn()
@@ -203,6 +210,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateInstall handles the install-path step and advances to GitLab settings
+// when the user presses Enter.
 func (m tuiModel) updateInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "enter" {
 		m.step = tuiStepGitLab
@@ -215,6 +224,8 @@ func (m tuiModel) updateInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateGitLab handles URL/token input, validation, token-link shortcut, and
+// optional navigation into advanced settings.
 func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -289,6 +300,8 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateOptions handles keyboard navigation and toggles for advanced wizard
+// settings such as TLS verification, meta-tools, auto-update, and log level.
 func (m tuiModel) updateOptions(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -321,6 +334,8 @@ func (m tuiModel) updateOptions(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateClients handles client selection, select-all behavior, and completion
+// of the wizard once the user confirms the chosen MCP clients.
 func (m tuiModel) updateClients(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -355,6 +370,8 @@ func (m tuiModel) updateClients(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// buildResult converts the current TUI selections into the shared wizard
+// [Result] structure consumed by [Apply].
 func (m *tuiModel) buildResult() {
 	installPath := m.installInput.Value()
 	if installPath == "" {
@@ -440,6 +457,8 @@ func (m tuiModel) View() tea.View {
 	return v
 }
 
+// renderProgress returns the centered progress indicator shown above the
+// current wizard panel.
 func (m tuiModel) renderProgress(width int) string {
 	type stepInfo struct {
 		name      string
@@ -479,6 +498,7 @@ func (m tuiModel) renderProgress(width int) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(bar)
 }
 
+// viewInstall renders the binary installation step.
 func (m tuiModel) viewInstall(width int) string {
 	var content strings.Builder
 	content.WriteString(tuiSectionTitle.Render("Binary Installation") + "\n\n")
@@ -488,6 +508,8 @@ func (m tuiModel) viewInstall(width int) string {
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
+// viewGitLab renders the GitLab URL and token step, including validation
+// errors and existing-token hints.
 func (m tuiModel) viewGitLab(width int) string {
 	var content strings.Builder
 	content.WriteString(tuiSectionTitle.Render("GitLab Configuration") + "\n\n")
@@ -518,6 +540,7 @@ func (m tuiModel) viewGitLab(width int) string {
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
+// viewOptions renders the advanced options step.
 func (m tuiModel) viewOptions(width int) string {
 	var content strings.Builder
 	content.WriteString(tuiSectionTitle.Render("⚙ Advanced Options") + "\n\n")
@@ -553,6 +576,7 @@ func (m tuiModel) viewOptions(width int) string {
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
+// viewClients renders the MCP client selection step.
 func (m tuiModel) viewClients(width int) string {
 	var content strings.Builder
 	content.WriteString(tuiSectionTitle.Render("MCP Client Configuration") + "\n\n")

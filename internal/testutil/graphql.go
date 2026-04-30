@@ -1,6 +1,5 @@
 // graphql.go provides test helpers for mocking GitLab GraphQL API responses
 // in unit tests, including request parsing and response writing utilities.
-
 package testutil
 
 import (

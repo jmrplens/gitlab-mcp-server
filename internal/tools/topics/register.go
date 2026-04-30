@@ -1,5 +1,4 @@
 // register.go wires topics MCP tools to the MCP server.
-
 package topics
 
 import (

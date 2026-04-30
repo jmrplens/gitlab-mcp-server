@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting for DORA metrics outputs.
-
 package dorametrics
 
 import (

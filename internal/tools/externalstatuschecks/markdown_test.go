@@ -1,6 +1,5 @@
 // markdown_test.go contains unit tests for external status check Markdown
 // formatting functions.
-
 package externalstatuschecks
 
 import (

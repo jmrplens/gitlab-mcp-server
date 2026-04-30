@@ -1,6 +1,5 @@
 // webui_coherence_test.go contains coherence tests that verify consistency
 // between the web UI endpoints and the wizard configuration model.
-
 package wizard
 
 import (

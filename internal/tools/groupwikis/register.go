@@ -1,5 +1,4 @@
 // register.go wires group wiki MCP tools to the MCP server.
-
 package groupwikis
 
 import (

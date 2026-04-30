@@ -1,6 +1,5 @@
 // impersonationtokens_test.go contains unit tests for GitLab impersonation
 // token operations. Tests use httptest to mock the GitLab API.
-
 package impersonationtokens
 
 import (

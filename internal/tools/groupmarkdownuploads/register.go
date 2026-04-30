@@ -1,5 +1,4 @@
 // register.go wires groupmarkdownuploads MCP tools to the MCP server.
-
 package groupmarkdownuploads
 
 import (

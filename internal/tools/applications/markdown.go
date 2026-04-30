@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for OAuth application MCP tool output.
-
 package applications
 
 import (

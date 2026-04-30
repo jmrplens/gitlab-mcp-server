@@ -1,5 +1,4 @@
 // register.go wires groupmilestones MCP tools to the MCP server.
-
 package groupmilestones
 
 import (

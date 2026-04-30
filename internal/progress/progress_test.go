@@ -2,7 +2,6 @@
 // Unit tests verify nil-safety and inactive [Tracker] behavior.
 // Integration tests use an in-memory MCP client/server pair to verify that
 // progress notifications flow correctly from server tool handlers to clients.
-
 package progress
 
 import (

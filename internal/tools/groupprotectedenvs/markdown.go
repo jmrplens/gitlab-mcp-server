@@ -1,6 +1,5 @@
 // markdown.go provides Markdown formatting functions for group protected
 // environment MCP tool output.
-
 package groupprotectedenvs
 
 import (

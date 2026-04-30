@@ -1,5 +1,4 @@
 // icons_test.go validates that all icon constants are properly formed.
-
 package toolutil
 
 import (

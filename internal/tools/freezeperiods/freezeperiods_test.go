@@ -1,7 +1,6 @@
 // freezeperiods_test.go contains unit tests for the freeze period MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.
-
 package freezeperiods
 
 import (

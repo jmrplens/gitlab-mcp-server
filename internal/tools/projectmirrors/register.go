@@ -1,5 +1,4 @@
 // register.go wires projectmirrors MCP tools to the MCP server.
-
 package projectmirrors
 
 import (

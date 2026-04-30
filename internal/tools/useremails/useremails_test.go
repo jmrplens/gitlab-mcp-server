@@ -1,6 +1,5 @@
 // useremails_test.go contains unit tests for GitLab user email operations.
 // Tests use httptest to mock the GitLab User Emails API.
-
 package useremails
 
 import (

@@ -1,5 +1,4 @@
 // register.go wires issuenotes MCP tools to the MCP server.
-
 package issuenotes
 
 import (

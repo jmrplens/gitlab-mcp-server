@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for pipeline schedule MCP tool output.
-
 package pipelineschedules
 
 import (

@@ -1,6 +1,5 @@
 // group_analytics_test.go contains unit tests for GitLab group analytics
 // operations. Tests use httptest to mock the GitLab Group Analytics API.
-
 package groupanalytics
 
 import (

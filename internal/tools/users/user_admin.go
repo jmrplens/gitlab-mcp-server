@@ -1,6 +1,5 @@
 // user_admin.go implements admin user state management operations:
 // block, unblock, ban, unban, activate, deactivate, approve, reject, disable 2FA.
-
 package users
 
 import (

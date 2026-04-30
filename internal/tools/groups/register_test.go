@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the group tool closures
 // in register.go. Tests cover ConfirmAction early-return paths, NotFoundResult
 // branches, and API error propagation via an in-memory MCP session.
-
 package groups
 
 import (

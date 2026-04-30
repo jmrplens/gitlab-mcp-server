@@ -1,7 +1,6 @@
 // commits_test.go contains unit tests for GitLab commit operations
 // (single-file create, multi-action create, start branch, and error handling).
 // Tests use httptest to mock the GitLab Commits API.
-
 package commits
 
 import (

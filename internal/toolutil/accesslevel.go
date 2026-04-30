@@ -1,6 +1,5 @@
 // accesslevel.go maps GitLab access level constants to human-readable labels
 // for use in Markdown formatters and tool output across all domain sub-packages.
-
 package toolutil
 
 import gl "gitlab.com/gitlab-org/api/client-go/v2"

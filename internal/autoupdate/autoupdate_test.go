@@ -1,5 +1,4 @@
 // autoupdate_test.go contains unit tests for the core auto-update logic.
-
 package autoupdate
 
 import (
@@ -1404,6 +1403,7 @@ func TestWriteToFile_CopyError(t *testing.T) {
 // failingReader is an io.Reader that always returns an error.
 type failingReader struct{ err error }
 
+// Read implements [io.Reader] by returning the configured error immediately.
 func (f *failingReader) Read(_ []byte) (int, error) { return 0, f.err }
 
 // TestCheckOnce_ModeAutoApplySuccess verifies CheckOnce in ModeAuto when

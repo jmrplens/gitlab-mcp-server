@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for cluster agent MCP tool output.
-
 package clusteragents
 
 import (

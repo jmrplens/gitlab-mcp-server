@@ -1,5 +1,4 @@
 // register.go wires grouprelationsexport MCP tools to the MCP server.
-
 package grouprelationsexport
 
 import (
