@@ -255,6 +255,45 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
 
    For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the JSON Schema for the `create` action's `params`. The `gitlab://schema/meta/` index resource enumerates every registered meta-tool and its actions.
 
+   The index resource returns a JSON object with the URI template and the action catalog visible for the current server configuration:
+
+   ```json
+   {
+     "uri_template": "gitlab://schema/meta/{tool}/{action}",
+     "tools": [
+       {
+         "tool": "gitlab_merge_request",
+         "actions": ["create", "get", "list", "merge"]
+       }
+     ]
+   }
+   ```
+
+   After choosing a tool/action pair, read the concrete resource for that action. For example:
+
+   ```json
+   {
+     "method": "resources/read",
+     "params": {
+       "uri": "gitlab://schema/meta/gitlab_merge_request/create"
+     }
+   }
+   ```
+
+   The response content is the JSON Schema for the `params` object only. The final tool call still uses the common meta-tool envelope:
+
+   ```json
+   {
+     "action": "create",
+     "params": {
+       "project_id": "42",
+       "source_branch": "feature/docs",
+       "target_branch": "main",
+       "title": "Update documentation"
+     }
+   }
+   ```
+
 2. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. See [env-reference.md](env-reference.md) for size/cost trade-offs.
 
 The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.

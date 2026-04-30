@@ -42,6 +42,48 @@ flowchart LR
 
 The action parameter is always required and must be one of the enumerated values. Additional parameters depend on the chosen action.
 
+## Discovering action parameters
+
+Meta-tools use a common envelope:
+
+```json
+{
+	"action": "create",
+	"params": {
+		"project_id": "42"
+	}
+}
+```
+
+By default, `META_PARAM_SCHEMA=opaque` keeps the tool schema small: clients see the valid `action` enum, while `params` remains an action-specific object. To discover the exact shape for a specific action, read the schema resources:
+
+| Resource                               | Use                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `gitlab://schema/meta/`                | Lists every registered meta-tool and the actions available in the current server configuration |
+| `gitlab://schema/meta/{tool}/{action}` | Returns the JSON Schema for the `params` object of one concrete action                         |
+
+Example resource reads:
+
+```json
+{
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://schema/meta/"
+	}
+}
+```
+
+```json
+{
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://schema/meta/gitlab_merge_request/create"
+	}
+}
+```
+
+The per-action schema response describes only `params`. The final tool call still uses the meta-tool envelope with both `action` and `params`. These resources are always available, even if you set `META_PARAM_SCHEMA=compact` or `META_PARAM_SCHEMA=full` to inline more schema detail in `tools/list`.
+
 ## Example usage
 
 ### Creating an issue
@@ -51,12 +93,14 @@ The action parameter is always required and must be one of the enumerated values
 	"tool": "gitlab_issue",
 	"arguments": {
 		"action": "create",
-		"project": "my-group/my-project",
-		"title": "Update API documentation",
-		"description": "The REST API docs are missing the new v2 endpoints",
-		"labels": "documentation,api",
-		"assignee_ids": "42",
-		"milestone_id": 7
+		"params": {
+			"project_id": "my-group/my-project",
+			"title": "Update API documentation",
+			"description": "The REST API docs are missing the new v2 endpoints",
+			"labels": "documentation,api",
+			"assignee_ids": "42",
+			"milestone_id": 7
+		}
 	}
 }
 ```
@@ -68,10 +112,12 @@ The action parameter is always required and must be one of the enumerated values
 	"tool": "gitlab_merge_request",
 	"arguments": {
 		"action": "list",
-		"project": "my-group/my-project",
-		"state": "opened",
-		"order_by": "updated_at",
-		"per_page": 20
+		"params": {
+			"project_id": "my-group/my-project",
+			"state": "opened",
+			"order_by": "updated_at",
+			"per_page": 20
+		}
 	}
 }
 ```
@@ -83,8 +129,10 @@ The action parameter is always required and must be one of the enumerated values
 	"tool": "gitlab_search",
 	"arguments": {
 		"action": "code",
-		"search": "func handleWebhook",
-		"project": "my-group/my-project"
+		"params": {
+			"search": "func handleWebhook",
+			"project_id": "my-group/my-project"
+		}
 	}
 }
 ```
@@ -210,8 +258,9 @@ You can check which tools your server has registered by looking at the startup l
 
 ## Configuration
 
-| Variable            | Default | Description                                                                                    |
-| ------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `META_TOOLS`        | `true`  | Enable meta-tool mode. Set to `false` for individual tools.                                    |
-| `GITLAB_ENTERPRISE` | `false` | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                   |
-| `--enterprise`      | `false` | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry. |
+| Variable            | Default  | Description                                                                                                                                               |
+| ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `META_TOOLS`        | `true`   | Enable meta-tool mode. Set to `false` for individual tools.                                                                                               |
+| `META_PARAM_SCHEMA` | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Schema resources remain available in every mode. |
+| `GITLAB_ENTERPRISE` | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                              |
+| `--enterprise`      | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                            |

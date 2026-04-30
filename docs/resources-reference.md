@@ -92,6 +92,14 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 |---|------|--------------|-------------|
 | 41 | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Always available regardless of `META_PARAM_SCHEMA` mode. |
 
+The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). The normal discovery flow is:
+
+1. Read `gitlab://schema/meta/` to list every registered meta-tool and action available in the current server configuration. The response is a JSON object with `uri_template` and a sorted `tools` array, where each entry contains `tool` and `actions`.
+2. Read `gitlab://schema/meta/{tool}/{action}` for the action you want to call. The response is the JSON Schema for that action's `params` object, not the full `{action, params}` envelope.
+3. Call the meta-tool with the shared envelope: `{"action":"create","params":{...}}`.
+
+For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the parameter schema for the `create` action of `gitlab_merge_request`. If a route has no captured schema, the template resource returns a permissive object schema with `additionalProperties: true` and a description explaining that `{}` is acceptable or that the meta-tool description should be consulted.
+
 ## Workflow Guide Resources (5)
 
 Static best-practice guides that provide AI assistants with GitLab workflow knowledge without requiring API calls.

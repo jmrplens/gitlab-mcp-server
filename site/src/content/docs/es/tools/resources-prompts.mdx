@@ -26,6 +26,14 @@ El servidor expone **46 recursos** en varias categorías:
 | -------------------------------------- | ----------------------------------------------------------------- |
 | `gitlab://schema/meta/{tool}/{action}` | JSON Schema para los `params` de una acción concreta de meta-tool |
 
+Usa los recursos de meta-esquema cuando un cliente necesite la forma exacta de los parámetros de una acción de meta-herramienta sin expandir todos los schemas en `tools/list`.
+
+1. Lee `gitlab://schema/meta/` para obtener un catálogo JSON con `uri_template` y una lista ordenada de meta-herramientas y acciones registradas.
+2. Sustituye `{tool}` y `{action}` en `gitlab://schema/meta/{tool}/{action}` para leer el JSON Schema del objeto `params` de esa acción.
+3. Llama a la meta-herramienta con el sobre normal `{ "action": "...", "params": { ... } }`.
+
+Por ejemplo, `gitlab://schema/meta/gitlab_merge_request/create` devuelve el schema de parámetros para la acción `create` de `gitlab_merge_request`. Estos recursos de schema están disponibles sin importar el modo de `META_PARAM_SCHEMA`.
+
 ### Plantillas de recursos de proyecto (23)
 
 | Recurso                                                      | Descripción                                                                                 |
@@ -117,6 +125,26 @@ Los clientes MCP pueden solicitar recursos en cualquier momento usando el métod
 ```
 
 El servidor devuelve el contenido del recurso como datos JSON estructurados.
+
+Para inspeccionar parámetros de meta-herramientas, lee primero el índice de schemas y después el schema de la acción:
+
+```json
+{
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://schema/meta/"
+	}
+}
+```
+
+```json
+{
+	"method": "resources/read",
+	"params": {
+		"uri": "gitlab://schema/meta/gitlab_merge_request/create"
+	}
+}
+```
 
 ## Prompts
 
