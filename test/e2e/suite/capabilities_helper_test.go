@@ -128,7 +128,7 @@ func lockedCapabilities(caps []Capability) []Capability {
 	seen := make(map[Capability]struct{}, len(caps))
 	for _, cap := range caps {
 		switch cap {
-		case CapabilityInstanceGlobal, CapabilityCurrentUserState:
+		case CapabilityRunner, CapabilityInstanceGlobal, CapabilityCurrentUserState:
 			seen[cap] = struct{}{}
 		}
 	}
