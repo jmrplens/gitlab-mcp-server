@@ -5,6 +5,7 @@ package suite
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -84,8 +85,7 @@ func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []er
 	ledger.mu.Unlock()
 
 	failures := make([]error, 0)
-	for i := len(records) - 1; i >= 0; i-- {
-		record := records[i]
+	for _, record := range slices.Backward(records) {
 		if record.Cleanup == nil {
 			continue
 		}

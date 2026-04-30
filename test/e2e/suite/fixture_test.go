@@ -154,8 +154,8 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
+	name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
 	out, err := retryWithBackoff(ctx, t, "create project fixture", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
-		name := uniqueName(e2eProjectPrefix + sanitizeTestName(t.Name()))
 		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project_create", projects.CreateInput{
 			Name:                 name,
 			Description:          "E2E: " + t.Name(),
@@ -208,8 +208,8 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 		e2e.T.Skip("project fixture MCP session not configured")
 	}
 	t := e2e.T
+	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
 	out, err := retryWithBackoff(ctx, t, "create project fixture (meta)", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
-		name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
 		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
 			"action": "create",
 			"params": map[string]any{
@@ -492,7 +492,10 @@ func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID i
 		if resp != nil {
 			state = fmt.Sprintf("branch %q in project %d: HTTP %d", branch, projectID, resp.StatusCode)
 		}
-		if !retryableBranchResponse(resp) {
+		if resp == nil && !isTransientNetworkError(err) {
+			return false, state, fmt.Errorf("get branch %q in project %d: %w", branch, projectID, err)
+		}
+		if resp != nil && !retryableBranchResponse(resp) {
 			return false, state, fmt.Errorf("get branch %q in project %d: %w", branch, projectID, err)
 		}
 		return false, state, nil

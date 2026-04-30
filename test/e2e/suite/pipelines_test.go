@@ -35,7 +35,12 @@ fast-pass:
 // timeouts on slower hosts.
 func TestPipelines(t *testing.T) {
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
+		if deadline, ok := t.Deadline(); ok {
+			cancel()
+			ctx, cancel = context.WithDeadline(context.Background(), deadline)
+		}
+		defer cancel()
 
 		// --- Individual tool session ---
 		proj := createProject(ctx, t, sess.individual)

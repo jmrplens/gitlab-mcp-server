@@ -4,7 +4,7 @@
 > **Audience**: 🔧 Developers, contributors
 > **Prerequisites**: Go testing basics, understanding of httptest
 >
-> Comprehensive test documentation for gitlab-mcp-server. Updated: 2026-04-30.
+> Comprehensive test documentation for gitlab-mcp-server.
 >
 > **Maintenance Rule**: Whenever tests are added, modified, or removed, this document must be updated with the new counts and coverage values.
 
@@ -605,7 +605,7 @@ The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 | MCP capabilities     | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
 | Docker-only runner   | Exercises CI pipeline and job behavior with a registered runner |
 
-Latest Docker validation snapshot: `make test-e2e-docker` completed 1,166 tests with 0 skips, 0 failures, and 0 errors in 389.057 seconds on 2026-04-30. Test function counts and package coverage values above are unchanged by the fixture change.
+Latest Docker validation snapshot: `make test-e2e-docker` completed 1,166 tests with 0 skips, 0 failures, and 0 errors in 389.057 seconds. Test function counts and package coverage values above are unchanged by the fixture change.
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 

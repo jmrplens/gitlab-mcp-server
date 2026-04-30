@@ -19,7 +19,7 @@ const stableHashLength = 10
 
 // E2E name generation state shared by all tests in the process.
 var (
-	e2eRunID      = newE2ERunID(time.Now())
+	e2eRunID      = configuredE2ERunID(time.Now())
 	uniqueCounter atomic.Int64
 	unsafeChars   = regexp.MustCompile(`[^a-z0-9-]`)
 	runIDCounter  atomic.Int64

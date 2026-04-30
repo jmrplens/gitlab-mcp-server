@@ -223,6 +223,9 @@ func TestMeta_ProjectHooks(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	if !hasE2EFixtureService() {
+		t.Skip("E2E fixture service unavailable; set E2E_FIXTURE_URL or run with E2E_MODE=docker")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

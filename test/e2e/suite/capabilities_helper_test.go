@@ -32,12 +32,12 @@ const (
 	CapabilityExternalNetwork  Capability = "external-network"
 )
 
-// adminCapability caches whether the configured GitLab token has administrator
-// privileges so admin-only tests do not probe the API repeatedly.
+// adminCapability caches a successful administrator probe so admin-only tests
+// do not repeatedly verify a token that is already known to be privileged.
 var adminCapability = struct {
-	once sync.Once
-	ok   bool
-	err  error
+	mu     sync.Mutex
+	cached bool
+	ok     bool
 }{}
 
 // capabilityLocks stores process-local mutexes for capabilities that mutate
@@ -54,9 +54,9 @@ func RequireCapabilities(t *testing.T, caps ...Capability) {
 	for _, capability := range caps {
 		switch capability {
 		case CapabilityAdmin:
-			if !hasAdminCapability() {
-				if adminCapability.err != nil {
-					t.Skipf("admin capability unavailable: %v", adminCapability.err)
+			if ok, err := hasAdminCapability(); !ok {
+				if err != nil {
+					t.Skipf("admin capability unavailable: %v", err)
 				}
 				t.Skip("admin capability unavailable")
 			}
@@ -111,25 +111,38 @@ func RunWithCapabilities(t *testing.T, caps []Capability, fn func(t *testing.T, 
 }
 
 // hasAdminCapability reports whether the configured GitLab user is an
-// administrator, caching the first API probe for the duration of the test run.
-func hasAdminCapability() bool {
-	adminCapability.once.Do(func() {
-		if sess.glClient == nil {
-			adminCapability.err = gitLabClientUnavailableError{}
-			return
-		}
+// administrator, caching only successful admin probes so transient failures can
+// be retried by later tests.
+func hasAdminCapability() (bool, error) {
+	adminCapability.mu.Lock()
+	if adminCapability.cached {
+		ok := adminCapability.ok
+		adminCapability.mu.Unlock()
+		return ok, nil
+	}
+	adminCapability.mu.Unlock()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	if sess.glClient == nil {
+		return false, gitLabClientUnavailableError{}
+	}
 
-		user, _, err := sess.glClient.GL().Users.CurrentUser(gl.WithContext(ctx))
-		if err != nil {
-			adminCapability.err = err
-			return
-		}
-		adminCapability.ok = user.IsAdmin
-	})
-	return adminCapability.ok
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	user, _, err := sess.glClient.GL().Users.CurrentUser(gl.WithContext(ctx))
+	if err != nil {
+		return false, err
+	}
+	if !user.IsAdmin {
+		return false, nil
+	}
+
+	adminCapability.mu.Lock()
+	adminCapability.ok = true
+	adminCapability.cached = true
+	adminCapability.mu.Unlock()
+
+	return true, nil
 }
 
 // acquireCapabilityLocks locks all serialized capabilities in deterministic

@@ -8,6 +8,7 @@ package suite
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
@@ -31,7 +32,12 @@ wait-job:
 func TestWaitTools(t *testing.T) {
 	t.Parallel()
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
+		if deadline, ok := t.Deadline(); ok {
+			cancel()
+			ctx, cancel = context.WithDeadline(context.Background(), deadline)
+		}
+		defer cancel()
 
 		// --- Individual tool session ---
 		proj := createProject(ctx, t, sess.individual)

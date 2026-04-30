@@ -139,11 +139,13 @@ test-e2e-docker:
 	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt'; \
 	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-status
 	@echo "=== Tearing down ==="
-	docker compose -f test/e2e/docker-compose.yml down -v
-	@echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="
 	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-status); \
+	  teardown_status=0; \
+	  docker compose -f test/e2e/docker-compose.yml down -v || teardown_status=$$?; \
+	  echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="; \
 	  rm -f $(E2E_REPORT_DIR)/e2e-docker-status; \
-	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi
+	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
+	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test

@@ -18,6 +18,15 @@ const (
 	defaultE2EGitLabInternalURL = "http://gitlab-e2e"
 )
 
+// hasE2EFixtureService reports whether the Docker-local fixture service should
+// be reachable from GitLab during this E2E run.
+func hasE2EFixtureService() bool {
+	if os.Getenv("E2E_FIXTURE_URL") != "" {
+		return true
+	}
+	return strings.EqualFold(os.Getenv("E2E_MODE"), "docker")
+}
+
 // e2eFixtureServiceURL returns a URL on the Docker-local fixture service for
 // resourcePath, falling back to the default service name when unset.
 func e2eFixtureServiceURL(resourcePath string) string {
