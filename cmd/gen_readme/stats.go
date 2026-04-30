@@ -19,6 +19,10 @@ const (
 	statsStartMarker = "<!-- START STATS -->"
 	statsEndMarker   = "<!-- END STATS -->"
 	linesPerPage     = 55 // approximate readable lines per A4 page at 12pt
+
+	// tableAlignRight is the Markdown separator row for a two-column table
+	// with the second column right-aligned.
+	tableAlignRight = "| --- | ---: |\n"
 )
 
 // repoStats accumulates filesystem-level measurements of the Go codebase.
@@ -254,24 +258,35 @@ func parseDeps(path string) (direct, indirect int) {
 		case line == ")" && inRequire:
 			inRequire = false
 		case inRequire && line != "" && !strings.HasPrefix(line, "//"):
-			if strings.HasSuffix(line, "// indirect") {
-				indirect++
-			} else {
-				direct++
-			}
+			classifyDep(line, &direct, &indirect)
 		case strings.HasPrefix(line, "require ") && !strings.HasPrefix(line, "require ("):
-			if strings.HasSuffix(line, "// indirect") {
-				indirect++
-			} else {
-				direct++
-			}
+			classifyDep(line, &direct, &indirect)
 		}
 	}
 	return direct, indirect
 }
 
+// classifyDep increments indirect if line ends with "// indirect", direct otherwise.
+func classifyDep(line string, direct, indirect *int) {
+	if strings.HasSuffix(line, "// indirect") {
+		*indirect++
+	} else {
+		*direct++
+	}
+}
+
+// gitBin resolves the absolute path of the git executable so downstream calls
+// use a fixed path instead of relying on PATH lookup at runtime.
+func gitBin() (string, error) {
+	return exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
+}
+
 func gitRevCount() int {
-	out, err := exec.CommandContext(context.Background(), "git", "rev-list", "--count", "HEAD").Output() //#nosec G204 -- fixed args
+	bin, err := gitBin()
+	if err != nil {
+		return 0
+	}
+	out, err := exec.CommandContext(context.Background(), bin, "rev-list", "--count", "HEAD").Output() //#nosec G204 -- absolute path from LookPath, fixed args
 	if err != nil {
 		return 0
 	}
@@ -280,7 +295,11 @@ func gitRevCount() int {
 }
 
 func gitContributors() int {
-	out, err := exec.CommandContext(context.Background(), "git", "log", "--format=%ae").Output() //#nosec G204 -- fixed args
+	bin, err := gitBin()
+	if err != nil {
+		return 0
+	}
+	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%ae").Output() //#nosec G204 -- absolute path from LookPath, fixed args
 	if err != nil {
 		return 0
 	}
@@ -332,7 +351,7 @@ func renderStats(s *repoStats) string {
 
 	b.WriteString("### Functions\n\n")
 	b.WriteString("| Category | Count |\n")
-	b.WriteString("| --- | ---: |\n")
+	b.WriteString(tableAlignRight)
 	fmt.Fprintf(&b, "| Source functions | %s |\n", fmtInt(srcFuncs))
 	fmt.Fprintf(&b, "| — exported (public) | %s |\n", fmtInt(s.ExportedFuncs))
 	fmt.Fprintf(&b, "| — unexported (private) | %s |\n", fmtInt(s.UnexportedFuncs))
@@ -342,7 +361,7 @@ func renderStats(s *repoStats) string {
 
 	b.WriteString("### Ratios worth noting\n\n")
 	b.WriteString("| Observation | Value |\n")
-	b.WriteString("| --- | ---: |\n")
+	b.WriteString(tableAlignRight)
 	fmt.Fprintf(&b, "| Test lines vs source lines | %.2f× more tests than code |\n", testRatio)
 	fmt.Fprintf(&b, "| Average source file length | ~%s lines |\n", fmtInt(avgSrc))
 	fmt.Fprintf(&b, "| Average test file length | ~%s lines |\n", fmtInt(avgTest))
@@ -351,7 +370,7 @@ func renderStats(s *repoStats) string {
 
 	b.WriteString("### Code patterns\n\n")
 	b.WriteString("| Pattern | Count |\n")
-	b.WriteString("| --- | ---: |\n")
+	b.WriteString(tableAlignRight)
 	fmt.Fprintf(&b, "| `if err != nil` checks | %s |\n", fmtInt(s.ErrChecks))
 	fmt.Fprintf(&b, "| `defer` statements | %s |\n", fmtInt(s.DeferStmts))
 	fmt.Fprintf(&b, "| `struct` types defined | %s |\n", fmtInt(s.StructTypes))
@@ -360,7 +379,7 @@ func renderStats(s *repoStats) string {
 
 	b.WriteString("### Project\n\n")
 	b.WriteString("| Metric | Value |\n")
-	b.WriteString("| --- | ---: |\n")
+	b.WriteString(tableAlignRight)
 	fmt.Fprintf(&b, "| Go packages | %s |\n", fmtInt(s.Packages))
 	fmt.Fprintf(&b, "| Direct dependencies (`go.mod`) | %s |\n", fmtInt(s.DirectDeps))
 	fmt.Fprintf(&b, "| Indirect dependencies | %s |\n", fmtInt(s.IndirectDeps))
