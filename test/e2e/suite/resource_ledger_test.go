@@ -30,6 +30,7 @@ const (
 	ResourceKindCustomAttribute     ResourceKind = "custom_attribute"
 	ResourceKindPipeline            ResourceKind = "pipeline"
 	ResourceKindJob                 ResourceKind = "job"
+	ResourceKindCurrentUserState    ResourceKind = "current_user_state"
 )
 
 // ResourceRecord describes one resource and its best-effort cleanup action.

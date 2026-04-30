@@ -32,10 +32,11 @@ func TestMeta_UserSelf(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, e2e *E2EContext) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
+		RegisterCurrentUserStateRestore(ctx, e2e)
 
 		var currentUserID int64
 
@@ -205,6 +206,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
+		RegisterCurrentUserStateRestore(ctx, e2e)
 
 		t.Run("NamespaceList", func(t *testing.T) {
 			out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
