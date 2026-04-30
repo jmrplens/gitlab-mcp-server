@@ -253,15 +253,22 @@ func extractFuncName(trimmed string) string {
 }
 
 // isTODOComment reports whether trimmed is a task-annotation comment.
-// It matches the common work-marker keywords with or without a space after //.
+// It requires a word boundary after the marker so that identifiers like
+// "TodoOutput" or "toDomainOutput" are not mistaken for task annotations.
 func isTODOComment(trimmed string) bool {
 	if !strings.HasPrefix(trimmed, "//") {
 		return false
 	}
 	keyword := strings.ToUpper(strings.TrimLeft(trimmed[2:], " \t"))
-	return strings.HasPrefix(keyword, "TODO") ||
-		strings.HasPrefix(keyword, "FIXME") ||
-		strings.HasPrefix(keyword, "HACK")
+	for _, marker := range []string{"TODO", "FIXME", "HACK"} {
+		if strings.HasPrefix(keyword, marker) {
+			rest := keyword[len(marker):]
+			if rest == "" || !unicode.IsLetter(rune(rest[0])) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // parseDeps counts direct and indirect dependencies declared in go.mod.
