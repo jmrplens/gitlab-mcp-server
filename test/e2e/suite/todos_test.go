@@ -20,20 +20,22 @@ func TestIndividual_Todos(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	t.Run("List", func(t *testing.T) {
-		out, err := callToolOn[todos.ListOutput](ctx, sess.individual, "gitlab_todo_list", todos.ListInput{})
-		requireNoError(t, err, "list todos")
-		t.Logf("Listed %d todos", len(out.Todos))
-	})
+		t.Run("List", func(t *testing.T) {
+			out, err := callToolOn[todos.ListOutput](ctx, sess.individual, "gitlab_todo_list", todos.ListInput{})
+			requireNoError(t, err, "list todos")
+			t.Logf("Listed %d todos", len(out.Todos))
+		})
 
-	t.Run("MarkAllDone", func(t *testing.T) {
-		out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.individual, "gitlab_todo_mark_all_done", todos.MarkAllDoneInput{})
-		requireNoError(t, err, "mark all todos done")
-		t.Logf("Marked all done: %s", out.Message)
+		t.Run("MarkAllDone", func(t *testing.T) {
+			out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.individual, "gitlab_todo_mark_all_done", todos.MarkAllDoneInput{})
+			requireNoError(t, err, "mark all todos done")
+			t.Logf("Marked all done: %s", out.Message)
+		})
 	})
 }
 
@@ -44,25 +46,27 @@ func TestMeta_Todos(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	t.Run("List", func(t *testing.T) {
-		out, err := callToolOn[todos.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "todo_list",
-			"params": map[string]any{},
+		t.Run("List", func(t *testing.T) {
+			out, err := callToolOn[todos.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "todo_list",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "meta list todos")
+			t.Logf("Listed %d todos via meta-tool", len(out.Todos))
 		})
-		requireNoError(t, err, "meta list todos")
-		t.Logf("Listed %d todos via meta-tool", len(out.Todos))
-	})
 
-	t.Run("MarkAllDone", func(t *testing.T) {
-		out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "todo_mark_all_done",
-			"params": map[string]any{},
+		t.Run("MarkAllDone", func(t *testing.T) {
+			out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "todo_mark_all_done",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "meta mark all done")
+			t.Logf("Marked all done via meta-tool: %s", out.Message)
 		})
-		requireNoError(t, err, "meta mark all done")
-		t.Logf("Marked all done via meta-tool: %s", out.Message)
 	})
 }

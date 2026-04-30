@@ -32,113 +32,115 @@ func TestMeta_UserSelf(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	var currentUserID int64
+		var currentUserID int64
 
-	t.Run("Me", func(t *testing.T) {
-		out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "me",
-			"params": map[string]any{},
+		t.Run("Me", func(t *testing.T) {
+			out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "me",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "user me")
+			requireTruef(t, out.ID > 0, "user me: expected user ID > 0")
+			currentUserID = out.ID
+			t.Logf("Me → user %d (%s)", out.ID, out.Username)
 		})
-		requireNoError(t, err, "user me")
-		requireTruef(t, out.ID > 0, "user me: expected user ID > 0")
-		currentUserID = out.ID
-		t.Logf("Me → user %d (%s)", out.ID, out.Username)
-	})
 
-	t.Run("CurrentUserStatus", func(t *testing.T) {
-		out, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "current_user_status",
-			"params": map[string]any{},
+		t.Run("CurrentUserStatus", func(t *testing.T) {
+			out, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "current_user_status",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "current_user_status")
+			t.Logf("Current status: emoji=%s message=%s", out.Emoji, out.Message)
 		})
-		requireNoError(t, err, "current_user_status")
-		t.Logf("Current status: emoji=%s message=%s", out.Emoji, out.Message)
-	})
 
-	t.Run("SetAndGetStatus", func(t *testing.T) {
-		out, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "set_status",
-			"params": map[string]any{
-				"emoji":   "coffee",
-				"message": "e2e-testing",
-			},
-		})
-		requireNoError(t, err, "set_status")
-		t.Logf("Set status: emoji=%s message=%s", out.Emoji, out.Message)
+		t.Run("SetAndGetStatus", func(t *testing.T) {
+			out, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "set_status",
+				"params": map[string]any{
+					"emoji":   "coffee",
+					"message": "e2e-testing",
+				},
+			})
+			requireNoError(t, err, "set_status")
+			t.Logf("Set status: emoji=%s message=%s", out.Emoji, out.Message)
 
-		// Get status back
-		requireTruef(t, currentUserID > 0, "need currentUserID")
-		got, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "get_status",
-			"params": map[string]any{"user_id": currentUserID},
-		})
-		requireNoError(t, err, "get_status")
-		t.Logf("Got status: emoji=%s message=%s", got.Emoji, got.Message)
+			// Get status back
+			requireTruef(t, currentUserID > 0, "need currentUserID")
+			got, err := callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "get_status",
+				"params": map[string]any{"user_id": currentUserID},
+			})
+			requireNoError(t, err, "get_status")
+			t.Logf("Got status: emoji=%s message=%s", got.Emoji, got.Message)
 
-		// Clear status
-		_, _ = callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "set_status",
-			"params": map[string]any{"emoji": "", "message": ""},
+			// Clear status
+			_, _ = callToolOn[users.StatusOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "set_status",
+				"params": map[string]any{"emoji": "", "message": ""},
+			})
 		})
-	})
 
-	t.Run("Emails", func(t *testing.T) {
-		out, err := callToolOn[users.EmailListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "emails",
-			"params": map[string]any{},
+		t.Run("Emails", func(t *testing.T) {
+			out, err := callToolOn[users.EmailListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "emails",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "emails")
+			t.Logf("Emails: %d found", len(out.Emails))
 		})
-		requireNoError(t, err, "emails")
-		t.Logf("Emails: %d found", len(out.Emails))
-	})
 
-	t.Run("ContributionEvents", func(t *testing.T) {
-		requireTruef(t, currentUserID > 0, "need currentUserID")
-		out, err := callToolOn[users.ContributionEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "contribution_events",
-			"params": map[string]any{"user_id": currentUserID},
+		t.Run("ContributionEvents", func(t *testing.T) {
+			requireTruef(t, currentUserID > 0, "need currentUserID")
+			out, err := callToolOn[users.ContributionEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "contribution_events",
+				"params": map[string]any{"user_id": currentUserID},
+			})
+			requireNoError(t, err, "contribution_events")
+			t.Logf("Contribution events: %d", len(out.Events))
 		})
-		requireNoError(t, err, "contribution_events")
-		t.Logf("Contribution events: %d", len(out.Events))
-	})
 
-	t.Run("AssociationsCount", func(t *testing.T) {
-		requireTruef(t, currentUserID > 0, "need currentUserID")
-		_, err := callToolOn[users.AssociationsCountOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "associations_count",
-			"params": map[string]any{"user_id": currentUserID},
+		t.Run("AssociationsCount", func(t *testing.T) {
+			requireTruef(t, currentUserID > 0, "need currentUserID")
+			_, err := callToolOn[users.AssociationsCountOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "associations_count",
+				"params": map[string]any{"user_id": currentUserID},
+			})
+			requireNoError(t, err, "associations_count")
 		})
-		requireNoError(t, err, "associations_count")
-	})
 
-	t.Run("Memberships", func(t *testing.T) {
-		requireTruef(t, currentUserID > 0, "need currentUserID")
-		out, err := callToolOn[users.UserMembershipsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "memberships",
-			"params": map[string]any{"user_id": currentUserID},
+		t.Run("Memberships", func(t *testing.T) {
+			requireTruef(t, currentUserID > 0, "need currentUserID")
+			out, err := callToolOn[users.UserMembershipsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "memberships",
+				"params": map[string]any{"user_id": currentUserID},
+			})
+			requireNoError(t, err, "memberships")
+			t.Logf("Memberships: %d", len(out.Memberships))
 		})
-		requireNoError(t, err, "memberships")
-		t.Logf("Memberships: %d", len(out.Memberships))
-	})
 
-	t.Run("Activities", func(t *testing.T) {
-		out, err := callToolOn[users.UserActivitiesOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "activities",
-			"params": map[string]any{},
+		t.Run("Activities", func(t *testing.T) {
+			out, err := callToolOn[users.UserActivitiesOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "activities",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "activities")
+			t.Logf("Activities: %d", len(out.Activities))
 		})
-		requireNoError(t, err, "activities")
-		t.Logf("Activities: %d", len(out.Activities))
-	})
 
-	t.Run("AvatarGet", func(t *testing.T) {
-		out, err := callToolOn[avatar.GetOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "avatar_get",
-			"params": map[string]any{"email": "test@example.com"},
+		t.Run("AvatarGet", func(t *testing.T) {
+			out, err := callToolOn[avatar.GetOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "avatar_get",
+				"params": map[string]any{"email": "test@example.com"},
+			})
+			requireNoError(t, err, "avatar_get")
+			t.Logf("Avatar URL: %s", out.AvatarURL)
 		})
-		requireNoError(t, err, "avatar_get")
-		t.Logf("Avatar URL: %s", out.AvatarURL)
 	})
 }
 
@@ -149,45 +151,47 @@ func TestMeta_UserTodosEvents(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	t.Run("TodoList", func(t *testing.T) {
-		out, err := callToolOn[todos.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "todo_list",
-			"params": map[string]any{},
+		t.Run("TodoList", func(t *testing.T) {
+			out, err := callToolOn[todos.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "todo_list",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "todo_list")
+			t.Logf("Todos: %d", len(out.Todos))
 		})
-		requireNoError(t, err, "todo_list")
-		t.Logf("Todos: %d", len(out.Todos))
-	})
 
-	t.Run("TodoMarkAllDone", func(t *testing.T) {
-		out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "todo_mark_all_done",
-			"params": map[string]any{},
+		t.Run("TodoMarkAllDone", func(t *testing.T) {
+			out, err := callToolOn[todos.MarkAllDoneOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "todo_mark_all_done",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "todo_mark_all_done")
+			t.Logf("Mark all done: %s", out.Message)
 		})
-		requireNoError(t, err, "todo_mark_all_done")
-		t.Logf("Mark all done: %s", out.Message)
-	})
 
-	t.Run("EventListContributions", func(t *testing.T) {
-		out, err := callToolOn[events.ListContributionEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "event_list_contributions",
-			"params": map[string]any{},
+		t.Run("EventListContributions", func(t *testing.T) {
+			out, err := callToolOn[events.ListContributionEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "event_list_contributions",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "event_list_contributions")
+			t.Logf("Contribution events: %d", len(out.Events))
 		})
-		requireNoError(t, err, "event_list_contributions")
-		t.Logf("Contribution events: %d", len(out.Events))
-	})
 
-	t.Run("EventListProject", func(t *testing.T) {
-		proj := createProjectMeta(ctx, t, sess.meta)
-		out, err := callToolOn[events.ListProjectEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "event_list_project",
-			"params": map[string]any{"project_id": proj.pidStr()},
+		t.Run("EventListProject", func(t *testing.T) {
+			proj := createProjectMeta(ctx, t, sess.meta)
+			out, err := callToolOn[events.ListProjectEventsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "event_list_project",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			requireNoError(t, err, "event_list_project")
+			t.Logf("Project events: %d", len(out.Events))
 		})
-		requireNoError(t, err, "event_list_project")
-		t.Logf("Project events: %d", len(out.Events))
 	})
 }
 
@@ -197,151 +201,153 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	t.Run("NamespaceList", func(t *testing.T) {
-		out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "namespace_list",
-			"params": map[string]any{},
-		})
-		requireNoError(t, err, "namespace_list")
-		requireTruef(t, len(out.Namespaces) > 0, "expected at least 1 namespace")
-		t.Logf("Namespaces: %d", len(out.Namespaces))
-	})
-
-	t.Run("NamespaceSearch", func(t *testing.T) {
-		username := sess.username
-		out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "namespace_search",
-			"params": map[string]any{"query": username},
-		})
-		requireNoError(t, err, "namespace_search")
-		t.Logf("Namespace search '%s': %d results", username, len(out.Namespaces))
-	})
-
-	t.Run("NamespaceExists", func(t *testing.T) {
-		username := sess.username
-		out, err := callToolOn[namespaces.ExistsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "namespace_exists",
-			"params": map[string]any{"id": username},
-		})
-		requireNoError(t, err, "namespace_exists")
-		t.Logf("Namespace exists: %v", out.Exists)
-	})
-
-	t.Run("NamespaceGet", func(t *testing.T) {
-		// First get current user to find their namespace
-		usr, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "current",
-			"params": map[string]any{},
-		})
-		requireNoError(t, err, "get current user")
-		out, err := callToolOn[namespaces.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "namespace_get",
-			"params": map[string]any{"id": strconv.FormatInt(usr.ID, 10)},
-		})
-		requireNoError(t, err, "namespace_get")
-		requireTruef(t, out.ID > 0, "namespace_get: expected ID > 0")
-		t.Logf("Namespace %d: %s", out.ID, out.Name)
-	})
-
-	t.Run("NotificationGlobalGet", func(t *testing.T) {
-		out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_global_get",
-			"params": map[string]any{},
-		})
-		requireNoError(t, err, "notification_global_get")
-		t.Logf("Global notification level: %s", out.Level)
-	})
-
-	t.Run("NotificationGlobalUpdate", func(t *testing.T) {
-		out, err := retryOnTransient(ctx, t, "notification_global_update", 3, func() (notifications.Output, error) {
-			return callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "notification_global_update",
-				"params": map[string]any{"level": "participating"},
+		t.Run("NamespaceList", func(t *testing.T) {
+			out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "namespace_list",
+				"params": map[string]any{},
 			})
+			requireNoError(t, err, "namespace_list")
+			requireTruef(t, len(out.Namespaces) > 0, "expected at least 1 namespace")
+			t.Logf("Namespaces: %d", len(out.Namespaces))
 		})
-		requireNoError(t, err, "notification_global_update")
-		t.Logf("Updated global notification level: %s", out.Level)
-	})
 
-	t.Run("NotificationProjectGetUpdate", func(t *testing.T) {
-		proj := createProjectMeta(ctx, t, sess.meta)
-		out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_project_get",
-			"params": map[string]any{"project_id": proj.pidStr()},
+		t.Run("NamespaceSearch", func(t *testing.T) {
+			username := sess.username
+			out, err := callToolOn[namespaces.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "namespace_search",
+				"params": map[string]any{"query": username},
+			})
+			requireNoError(t, err, "namespace_search")
+			t.Logf("Namespace search '%s': %d results", username, len(out.Namespaces))
 		})
-		requireNoError(t, err, "notification_project_get")
-		t.Logf("Project notification level: %s", out.Level)
 
-		upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_project_update",
-			"params": map[string]any{"project_id": proj.pidStr(), "level": "watch"},
+		t.Run("NamespaceExists", func(t *testing.T) {
+			username := sess.username
+			out, err := callToolOn[namespaces.ExistsOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "namespace_exists",
+				"params": map[string]any{"id": username},
+			})
+			requireNoError(t, err, "namespace_exists")
+			t.Logf("Namespace exists: %v", out.Exists)
 		})
-		requireNoError(t, err, "notification_project_update")
-		t.Logf("Updated project notification level: %s", upd.Level)
-	})
 
-	t.Run("NotificationGroupGetUpdate", func(t *testing.T) {
-		// Need a group — create one for the test
-		grp, err := callToolOn[struct{ ID int64 }](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "create",
-			"params": map[string]any{
-				"name": uniqueName("notif-grp"),
-				"path": uniqueName("notif-grp"),
-			},
+		t.Run("NamespaceGet", func(t *testing.T) {
+			// First get current user to find their namespace
+			usr, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "current",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "get current user")
+			out, err := callToolOn[namespaces.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "namespace_get",
+				"params": map[string]any{"id": strconv.FormatInt(usr.ID, 10)},
+			})
+			requireNoError(t, err, "namespace_get")
+			requireTruef(t, out.ID > 0, "namespace_get: expected ID > 0")
+			t.Logf("Namespace %d: %s", out.ID, out.Name)
 		})
-		requireNoError(t, err, "create group for notification test")
-		grpIDStr := strconv.FormatInt(grp.ID, 10)
-		defer func() {
-			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "delete",
+
+		t.Run("NotificationGlobalGet", func(t *testing.T) {
+			out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_global_get",
+				"params": map[string]any{},
+			})
+			requireNoError(t, err, "notification_global_get")
+			t.Logf("Global notification level: %s", out.Level)
+		})
+
+		t.Run("NotificationGlobalUpdate", func(t *testing.T) {
+			out, err := retryOnTransient(ctx, t, "notification_global_update", 3, func() (notifications.Output, error) {
+				return callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "notification_global_update",
+					"params": map[string]any{"level": "participating"},
+				})
+			})
+			requireNoError(t, err, "notification_global_update")
+			t.Logf("Updated global notification level: %s", out.Level)
+		})
+
+		t.Run("NotificationProjectGetUpdate", func(t *testing.T) {
+			proj := createProjectMeta(ctx, t, sess.meta)
+			out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_project_get",
+				"params": map[string]any{"project_id": proj.pidStr()},
+			})
+			requireNoError(t, err, "notification_project_get")
+			t.Logf("Project notification level: %s", out.Level)
+
+			upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_project_update",
+				"params": map[string]any{"project_id": proj.pidStr(), "level": "watch"},
+			})
+			requireNoError(t, err, "notification_project_update")
+			t.Logf("Updated project notification level: %s", upd.Level)
+		})
+
+		t.Run("NotificationGroupGetUpdate", func(t *testing.T) {
+			// Need a group — create one for the test
+			grp, err := callToolOn[struct{ ID int64 }](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "create",
+				"params": map[string]any{
+					"name": uniqueName("notif-grp"),
+					"path": uniqueName("notif-grp"),
+				},
+			})
+			requireNoError(t, err, "create group for notification test")
+			grpIDStr := strconv.FormatInt(grp.ID, 10)
+			defer func() {
+				_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+					"action": "delete",
+					"params": map[string]any{"group_id": grpIDStr},
+				})
+			}()
+
+			out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_group_get",
 				"params": map[string]any{"group_id": grpIDStr},
 			})
-		}()
+			requireNoError(t, err, "notification_group_get")
+			t.Logf("Group notification level: %s", out.Level)
 
-		out, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_group_get",
-			"params": map[string]any{"group_id": grpIDStr},
+			upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "notification_group_update",
+				"params": map[string]any{"group_id": grpIDStr, "level": "watch"},
+			})
+			requireNoError(t, err, "notification_group_update")
+			t.Logf("Updated group notification level: %s", upd.Level)
 		})
-		requireNoError(t, err, "notification_group_get")
-		t.Logf("Group notification level: %s", out.Level)
 
-		upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "notification_group_update",
-			"params": map[string]any{"group_id": grpIDStr, "level": "watch"},
-		})
-		requireNoError(t, err, "notification_group_update")
-		t.Logf("Updated group notification level: %s", upd.Level)
-	})
+		t.Run("KeyGetByFingerprint", func(t *testing.T) {
+			// Create an SSH key so we always have one
+			sshKey := generateTestSSHKey(t)
+			addOut, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "add_ssh_key",
+				"params": map[string]any{
+					"title": "e2e-fingerprint-test",
+					"key":   sshKey,
+				},
+			})
+			requireNoError(t, err, "add_ssh_key for fingerprint test")
+			defer func() {
+				_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "delete_ssh_key",
+					"params": map[string]any{"key_id": addOut.ID},
+				})
+			}()
 
-	t.Run("KeyGetByFingerprint", func(t *testing.T) {
-		// Create an SSH key so we always have one
-		sshKey := generateTestSSHKey(t)
-		addOut, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "add_ssh_key",
-			"params": map[string]any{
-				"title": "e2e-fingerprint-test",
-				"key":   sshKey,
-			},
-		})
-		requireNoError(t, err, "add_ssh_key for fingerprint test")
-		defer func() {
-			_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "delete_ssh_key",
+			out, err := callToolOn[keys.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "key_get_with_user",
 				"params": map[string]any{"key_id": addOut.ID},
 			})
-		}()
-
-		out, err := callToolOn[keys.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "key_get_with_user",
-			"params": map[string]any{"key_id": addOut.ID},
+			requireNoError(t, err, "key_get_with_user")
+			requireTruef(t, out.ID > 0, "key_get_with_user: expected ID > 0")
+			t.Logf("Key %d with user", out.ID)
 		})
-		requireNoError(t, err, "key_get_with_user")
-		requireTruef(t, out.ID > 0, "key_get_with_user: expected ID > 0")
-		t.Logf("Key %d with user", out.ID)
 	})
 }
 
@@ -351,46 +357,48 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	sshKey := generateTestSSHKey(t)
-	var keyID int64
+		sshKey := generateTestSSHKey(t)
+		var keyID int64
 
-	t.Run("AddSSHKey", func(t *testing.T) {
-		out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "add_ssh_key",
-			"params": map[string]any{
-				"title": "e2e-test-key-" + uniqueName(""),
-				"key":   sshKey,
-			},
+		t.Run("AddSSHKey", func(t *testing.T) {
+			out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "add_ssh_key",
+				"params": map[string]any{
+					"title": "e2e-test-key-" + uniqueName(""),
+					"key":   sshKey,
+				},
+			})
+			requireNoError(t, err, "add_ssh_key")
+			requireTruef(t, out.ID > 0, "add_ssh_key: expected ID > 0")
+			keyID = out.ID
+			t.Logf("Added SSH key %d", keyID)
 		})
-		requireNoError(t, err, "add_ssh_key")
-		requireTruef(t, out.ID > 0, "add_ssh_key: expected ID > 0")
-		keyID = out.ID
-		t.Logf("Added SSH key %d", keyID)
-	})
 
-	t.Run("GetSSHKey", func(t *testing.T) {
-		requireTruef(t, keyID > 0, "keyID not set")
-		out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "get_ssh_key",
-			"params": map[string]any{"key_id": keyID},
+		t.Run("GetSSHKey", func(t *testing.T) {
+			requireTruef(t, keyID > 0, "keyID not set")
+			out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "get_ssh_key",
+				"params": map[string]any{"key_id": keyID},
+			})
+			requireNoError(t, err, "get_ssh_key")
+			requireTruef(t, out.ID == keyID, "get_ssh_key: ID mismatch")
+			t.Logf("Got SSH key %d: %s", out.ID, out.Title)
 		})
-		requireNoError(t, err, "get_ssh_key")
-		requireTruef(t, out.ID == keyID, "get_ssh_key: ID mismatch")
-		t.Logf("Got SSH key %d: %s", out.ID, out.Title)
-	})
 
-	t.Run("DeleteSSHKey", func(t *testing.T) {
-		requireTruef(t, keyID > 0, "keyID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "delete_ssh_key",
-			"params": map[string]any{"key_id": keyID},
+		t.Run("DeleteSSHKey", func(t *testing.T) {
+			requireTruef(t, keyID > 0, "keyID not set")
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "delete_ssh_key",
+				"params": map[string]any{"key_id": keyID},
+			})
+			requireNoError(t, err, "delete_ssh_key")
+			t.Logf("Deleted SSH key %d", keyID)
 		})
-		requireNoError(t, err, "delete_ssh_key")
-		t.Logf("Deleted SSH key %d", keyID)
 	})
 }
 
@@ -702,50 +710,52 @@ func TestMeta_UserServiceAccounts(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 
-	if sess.enterprise {
-		t.Run("ListServiceAccounts", func(t *testing.T) {
-			out, err := callToolOn[users.ServiceAccountListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "list_service_accounts",
-				"params": map[string]any{},
+		if sess.enterprise {
+			t.Run("ListServiceAccounts", func(t *testing.T) {
+				out, err := callToolOn[users.ServiceAccountListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "list_service_accounts",
+					"params": map[string]any{},
+				})
+				requireNoError(t, err, "list_service_accounts")
+				t.Logf("Service accounts: %d", len(out.Accounts))
 			})
-			requireNoError(t, err, "list_service_accounts")
-			t.Logf("Service accounts: %d", len(out.Accounts))
-		})
 
-		t.Run("CreateServiceAccount", func(t *testing.T) {
-			saName := uniqueName("sa-e2e")
-			out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "create_service_account",
+			t.Run("CreateServiceAccount", func(t *testing.T) {
+				saName := uniqueName("sa-e2e")
+				out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "create_service_account",
+					"params": map[string]any{
+						"name":     saName,
+						"username": saName,
+					},
+				})
+				requireNoError(t, err, "create_service_account")
+				requireTruef(t, out.ID > 0, "create_service_account: expected ID > 0")
+				t.Logf("Created service account %d: %s", out.ID, saName)
+				// Clean up
+				_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "delete",
+					"params": map[string]any{"user_id": out.ID},
+				})
+			})
+		}
+
+		t.Run("CreateCurrentUserPAT", func(t *testing.T) {
+			out, err := callToolOn[users.CurrentUserPATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "create_current_user_pat",
 				"params": map[string]any{
-					"name":     saName,
-					"username": saName,
+					"name":   "e2e-current-pat",
+					"scopes": []string{"k8s_proxy"},
 				},
 			})
-			requireNoError(t, err, "create_service_account")
-			requireTruef(t, out.ID > 0, "create_service_account: expected ID > 0")
-			t.Logf("Created service account %d: %s", out.ID, saName)
-			// Clean up
-			_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "delete",
-				"params": map[string]any{"user_id": out.ID},
-			})
+			requireNoError(t, err, "create_current_user_pat")
+			requireTruef(t, out.ID > 0, "create_current_user_pat: expected ID > 0")
+			t.Logf("Created current user PAT %d", out.ID)
 		})
-	}
-
-	t.Run("CreateCurrentUserPAT", func(t *testing.T) {
-		out, err := callToolOn[users.CurrentUserPATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "create_current_user_pat",
-			"params": map[string]any{
-				"name":   "e2e-current-pat",
-				"scopes": []string{"k8s_proxy"},
-			},
-		})
-		requireNoError(t, err, "create_current_user_pat")
-		requireTruef(t, out.ID > 0, "create_current_user_pat: expected ID > 0")
-		t.Logf("Created current user PAT %d", out.ID)
 	})
 }
