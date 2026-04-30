@@ -430,8 +430,7 @@ docker run -d --name gitlab-mcp-server -p 8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.example.com \
-  --skip-tls-verify=true
+  --gitlab-url=https://gitlab.example.com
 
 # Multi-instance mode (clients send GITLAB-URL header per request)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
@@ -439,6 +438,8 @@ docker run -d --name gitlab-mcp-server -p 8080:8080 \
   --http \
   --http-addr=0.0.0.0:8080
 ```
+
+> **TLS verification** is enabled by default. Add `--skip-tls-verify=true` only when connecting to a self-hosted GitLab instance with a self-signed certificate in a controlled environment — never in production.
 
 Clients authenticate via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. In multi-instance mode, clients must also send a `GITLAB-URL` header to target a specific GitLab instance. See [HTTP Server Mode](docs/http-server-mode.md) and [Docker documentation](docs/development/development.md#docker) for Docker Compose and configuration options.
 

@@ -152,7 +152,7 @@ When running the MCP server behind nginx, Caddy, or a cloud load balancer:
     | Server not appearing in MCP status | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify configuration           |
     | "Permission denied" on startup     | Run `chmod +x /path/to/gitlab-mcp-server` (Linux/macOS)                      |
     | Server restarts repeatedly         | Check MCP Logs for missing `GITLAB_URL` or `GITLAB_TOKEN`                    |
-    | Waiting for `initialize` with Docker logs showing HTTP mode | Add `--http=false` after the image name for stdio mode, or configure the client as HTTP with `http://host:8080/mcp` |
+    | Waiting for `initialize` with Docker logs showing HTTP mode | Add `--http=false` after the image name for stdio mode (JSON-RPC over stdin/stdout, no port needed). Alternatively, run the container in HTTP mode with `-p 8080:8080` and configure the MCP client as HTTP pointing to `http://host:8080/mcp` — this only works if the server is running and the port is reachable. |
   </TabItem>
   <TabItem label="Cursor">
     | Symptom                    | Solution                                                                   |
