@@ -529,7 +529,7 @@ Numbers nobody asked for, but here they are anyway.
 | `defer` statements | 662 |
 | `struct` types defined | 1,928 |
 | `//nolint` suppressions | 55 |
-| `TODO` / `FIXME` / `HACK` comments | 2 |
+| `TODO` / `FIXME` / `HACK` comments | 0 |
 
 ### Project
 
@@ -538,7 +538,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 95 |
+| Git commits | 96 |
 | Unique contributors | 2 |
 
 ### Hall of fame

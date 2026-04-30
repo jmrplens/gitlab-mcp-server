@@ -263,7 +263,7 @@ func isTODOComment(trimmed string) bool {
 	for _, marker := range []string{"TODO", "FIXME", "HACK"} {
 		if strings.HasPrefix(keyword, marker) {
 			rest := keyword[len(marker):]
-			if rest == "" || !unicode.IsLetter(rune(rest[0])) {
+			if rest == "" || (!unicode.IsLetter(rune(rest[0])) && rest[0] != '_') {
 				return true
 			}
 		}
