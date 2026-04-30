@@ -323,7 +323,7 @@ docker run -d \
 </Tabs>
 
 :::tip
-Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.0`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
+Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.1`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
 :::
 
 ### Docker Compose
@@ -446,7 +446,7 @@ flyctl scale memory 512    # Subir memoria a 512 MB (por defecto en fly.toml: 25
 La auto-actualización está **deshabilitada** en la configuración incluida (`--auto-update=false`). En Fly.io, el flujo de actualización recomendado es redesplegar con una imagen nueva:
 
 ```bash
-flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.0
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.1
 ```
 
 Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y preserva tus secretos y configuración.
