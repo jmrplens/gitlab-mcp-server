@@ -1,7 +1,6 @@
 // logging_test.go contains unit tests for the LogToolCall, LogToolCallAll,
 // and logToolCallWithUser helpers. Tests capture slog output and assert that
 // the correct log level, tool name, and structured fields are present.
-
 package toolutil
 
 import (

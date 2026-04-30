@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for release link MCP tool output.
-
 package releaselinks
 
 import (

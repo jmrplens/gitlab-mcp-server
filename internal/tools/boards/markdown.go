@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for issue board MCP tool output.
-
 package boards
 
 import (

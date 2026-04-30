@@ -1,5 +1,4 @@
 // register.go wires epicdiscussions MCP tools to the MCP server.
-
 package epicdiscussions
 
 import (

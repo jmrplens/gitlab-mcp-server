@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for search MCP tool output.
-
 package search
 
 import (

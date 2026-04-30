@@ -1,5 +1,4 @@
 // hints_test.go contains unit tests for WriteHints and ExtractHints helpers.
-
 package toolutil
 
 import (

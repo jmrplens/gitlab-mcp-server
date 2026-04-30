@@ -9,15 +9,22 @@ Más allá de las herramientas, GitLab MCP Server expone **recursos** y **prompt
 
 Los recursos MCP proporcionan **datos de contexto de solo lectura** que los clientes pueden solicitar en cualquier momento sin invocar una herramienta. Los recursos son útiles para proporcionar información de fondo que ayuda al LLM a tomar mejores decisiones.
 
-El servidor expone **44 recursos** en varias categorías:
+El servidor expone **46 recursos** en varias categorías:
 
-### Recursos estáticos (3)
+### Recursos estáticos (4)
 
 | Recurso                    | Descripción                                                                                                               |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gitlab://user/current`    | Perfil del usuario autenticado (nombre de usuario, email, estado, administrador)                                          |
 | `gitlab://groups`          | Todos los grupos GitLab accesibles para el usuario autenticado                                                            |
 | `gitlab://workspace/roots` | Directorios raíz del workspace del cliente MCP, para descubrimiento de proyectos vía `gitlab_resolve_project_from_remote` |
+| `gitlab://schema/meta/`    | Catálogo de meta-herramientas registradas y sus acciones                                                                  |
+
+### Plantilla de recurso de meta-esquema (1)
+
+| Recurso                                | Descripción                                                       |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `gitlab://schema/meta/{tool}/{action}` | JSON Schema para los `params` de una acción concreta de meta-tool |
 
 ### Plantillas de recursos de proyecto (23)
 

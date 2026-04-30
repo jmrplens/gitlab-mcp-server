@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.4.0                                               |
+| Version       | 1.4.1                                               |
 
 ### Scale
 
@@ -100,7 +100,7 @@ gitlab-mcp-server/
 │   │   ├── uploads/             # Project upload tools
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
-│   ├── resources/               # 44 MCP resource implementations
+│   ├── resources/               # 46 MCP resource implementations
 │   ├── prompts/                 # 38 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
 │   ├── logging/                 # MCP logging capability
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.4.0)
+└── VERSION                      # Semantic version (1.4.1)
 ```
 
 ## Key Development Patterns
@@ -234,7 +234,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url` (per-request override via `GITLAB-URL` header) |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Enable meta-tools for tool discovery (`true` by default) |
@@ -245,7 +245,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
 | `AUTO_UPDATE_TIMEOUT`    | No       | Pre-start download timeout (`60s` default, range 5s–10m) |
-| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools for GitLab Premium/Ultimate (`false` default) |
+| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition (`false` default) |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
@@ -256,10 +256,10 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | Default GitLab instance URL (optional; per-request override via `GITLAB-URL` header) |
+| `--gitlab-url`        | —       | Fixed GitLab instance URL (optional; omit to require `GITLAB-URL` per request) |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
-| `--enterprise`        | `false` | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) |
+| `--enterprise`        | `false` | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL pool entry when GitLab reports edition |
 | `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
@@ -463,7 +463,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 ### Enterprise tool gating
 
-`GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in both individual and meta-tool modes:
+`GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in stdio mode. In HTTP mode, the `--enterprise` flag explicitly forces the Premium/Ultimate catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition. The catalog effect is the same in individual and meta-tool modes:
 
 **Individual mode** (`META_TOOLS=false`) — gates 35 tool sub-package registrations in `register.go`:
 

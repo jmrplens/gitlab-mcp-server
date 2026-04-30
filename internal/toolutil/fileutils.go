@@ -1,7 +1,6 @@
 // fileutils.go provides shared file utilities for upload and download
 // operations: file validation, SHA-256 checksum computation, progress-reporting
 // io.Reader/io.Writer wrappers, and GitLab package name validation.
-
 package toolutil
 
 import (

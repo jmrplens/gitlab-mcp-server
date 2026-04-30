@@ -1,7 +1,6 @@
 // helpers_test.go provides shared test utilities for the tools package.
 // It includes a test GitLab client factory, JSON response helpers, and
 // pagination header utilities used across all tool test files.
-
 package tools
 
 import (

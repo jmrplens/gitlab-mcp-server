@@ -2,7 +2,6 @@
 // [register.go] correctly translate elicitation cancellation/decline errors
 // returned by the underlying handlers into a non-error CancelledResult,
 // rather than propagating the error to the client.
-
 package elicitationtools
 
 import (

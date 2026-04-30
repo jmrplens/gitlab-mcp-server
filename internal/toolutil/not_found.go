@@ -1,7 +1,6 @@
 // not_found.go provides a structured result builder for resources that do
 // not exist or are inaccessible. It returns an informational MCP result with
 // actionable hints instead of propagating a raw 404 error.
-
 package toolutil
 
 import (

@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for server update MCP tool output.
-
 package serverupdate
 
 import (

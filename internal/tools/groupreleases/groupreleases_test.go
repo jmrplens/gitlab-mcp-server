@@ -1,6 +1,5 @@
 // groupreleases_test.go contains unit tests for GitLab group release operations.
 // Tests use httptest to mock the GitLab Group Releases API.
-
 package groupreleases
 
 import (

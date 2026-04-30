@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for namespace MCP tool output.
-
 package namespaces
 
 import (

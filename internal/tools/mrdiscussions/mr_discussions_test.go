@@ -2,7 +2,6 @@
 // operations (create general, create inline, resolve, reply, list). Tests use
 // httptest to mock the GitLab Discussions API and verify success paths and
 // pagination behavior.
-
 package mrdiscussions
 
 import (

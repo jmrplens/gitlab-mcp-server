@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for GitLab license MCP tool output.
-
 package license
 
 import (

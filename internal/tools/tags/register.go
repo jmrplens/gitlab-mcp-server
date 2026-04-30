@@ -1,5 +1,4 @@
 // register.go wires tags MCP tools to the MCP server.
-
 package tags
 
 import (

@@ -1,7 +1,6 @@
 // helpers_test.go validates the shared test utilities used across all domain
 // tool tests. Each helper is exercised directly to ensure correct behavior
 // in both success and failure scenarios.
-
 package testutil
 
 import (

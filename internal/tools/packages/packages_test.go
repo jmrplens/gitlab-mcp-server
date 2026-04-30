@@ -1,6 +1,5 @@
 // packages_test.go contains unit tests for GitLab Generic Packages API
 // operations (publish, download, list, file_list, delete, file_delete).
-
 package packages
 
 import (

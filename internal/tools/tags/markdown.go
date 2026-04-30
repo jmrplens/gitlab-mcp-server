@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for tag MCP tool output.
-
 package tags
 
 import (

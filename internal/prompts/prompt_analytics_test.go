@@ -1,5 +1,4 @@
 // prompt_analytics_test.go contains unit tests for analytics MCP prompts.
-
 package prompts
 
 import (

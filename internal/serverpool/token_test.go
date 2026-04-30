@@ -1,5 +1,4 @@
 // token_test.go contains unit tests for token extraction and validation.
-
 package serverpool
 
 import (
@@ -86,39 +85,57 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantURL:    "https://gitlab.com",
 		},
 		{
-			name:       "valid HTTPS URL",
+			name:       "valid HTTPS URL without default",
 			header:     "https://gitlab.example.com",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "valid HTTP URL",
+			name:       "valid HTTP URL without default",
 			header:     "http://gitlab.local:8080",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantURL:    "http://gitlab.local:8080",
 		},
 		{
-			name:       "trailing slash stripped",
+			name:       "trailing slash stripped without default",
 			header:     "https://gitlab.example.com/",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "whitespace trimmed",
+			name:       "whitespace trimmed without default",
 			header:     "  https://gitlab.example.com  ",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "invalid scheme rejected",
+			name:       "matching header accepted when default configured",
+			header:     "https://gitlab.example.com/",
+			defaultURL: "https://gitlab.example.com",
+			wantURL:    "https://gitlab.example.com",
+		},
+		{
+			name:       "different header ignored when default configured",
+			header:     "https://other.gitlab.example.com",
+			defaultURL: "https://gitlab.example.com",
+			wantURL:    "https://gitlab.example.com",
+		},
+		{
+			name:       "invalid scheme ignored when default configured",
 			header:     "ftp://gitlab.example.com",
 			defaultURL: "https://gitlab.com",
+			wantURL:    "https://gitlab.com",
+		},
+		{
+			name:       "invalid scheme rejected without default",
+			header:     "ftp://gitlab.example.com",
+			defaultURL: "",
 			wantErr:    true,
 		},
 		{
-			name:       "missing host rejected",
+			name:       "missing host rejected without default",
 			header:     "https://",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantErr:    true,
 		},
 		{
@@ -140,22 +157,40 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "uppercase scheme accepted and case preserved",
+			name:       "uppercase scheme accepted and canonicalized without default",
 			header:     "HTTPS://gitlab.example.com",
-			defaultURL: "https://gitlab.com",
-			wantURL:    "HTTPS://gitlab.example.com",
+			defaultURL: "",
+			wantURL:    "https://gitlab.example.com",
 		},
 		{
-			name:       "malformed URL rejected",
+			name:       "malformed URL rejected without default",
 			header:     "://not-a-url",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantErr:    true,
 		},
 		{
-			name:       "URL with path preserved (only trailing slash stripped)",
+			name:       "URL with path preserved without default",
 			header:     "https://gitlab.example.com/api",
-			defaultURL: "https://gitlab.com",
+			defaultURL: "",
 			wantURL:    "https://gitlab.example.com/api",
+		},
+		{
+			name:       "credentials rejected without default",
+			header:     "https://user:secret@gitlab.example.com",
+			defaultURL: "",
+			wantErr:    true,
+		},
+		{
+			name:       "query rejected without default",
+			header:     "https://gitlab.example.com?token=secret",
+			defaultURL: "",
+			wantErr:    true,
+		},
+		{
+			name:       "fragment rejected without default",
+			header:     "https://gitlab.example.com#internal.example.com",
+			defaultURL: "",
+			wantErr:    true,
 		},
 		{
 			name:       "invalid default URL is also rejected",
@@ -185,6 +220,78 @@ func TestExtractGitLabURL(t *testing.T) {
 				t.Errorf("ExtractGitLabURL() = %q, want %q", got, tt.wantURL)
 			}
 		})
+	}
+}
+
+// TestResolveRequestOptions_IgnoredOptions verifies that server-wide MCP
+// configuration records request options that were ignored.
+func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req.Header.Set("GITLAB-URL", "https://other.gitlab.example.com")
+	req.Header.Set("RATE-LIMIT-RPS", "999")
+	req.Header.Set("META-PARAM-SCHEMA", "full")
+
+	options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
+	if err != nil {
+		t.Fatalf("ResolveRequestOptions() error: %v", err)
+	}
+	if options.GitLabURL != "https://gitlab.example.com" {
+		t.Fatalf("GitLabURL = %q, want %q", options.GitLabURL, "https://gitlab.example.com")
+	}
+	if !options.HasIgnoredOptions() {
+		t.Fatal("HasIgnoredOptions() = false, want true")
+	}
+	ignored := options.IgnoredOptionsCopy()
+	want := []string{"META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
+	if !slicesEqual(ignored, want) {
+		t.Fatalf("IgnoredOptions = %v, want %v", ignored, want)
+	}
+}
+
+// TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault verifies
+// that config-like request headers never override MCP server configuration,
+// even in multi-instance mode where GITLAB-URL is accepted.
+func TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault(t *testing.T) {
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req.Header.Set("GITLAB-URL", "https://gitlab.example.com")
+	req.Header.Set("RATE_LIMIT_BURST", "999")
+	req.Header.Set("META_PARAM_SCHEMA", "full")
+	req.Header.Set("GITLAB-SAFE-MODE", "false")
+
+	options, err := ResolveRequestOptions(req, "")
+	if err != nil {
+		t.Fatalf("ResolveRequestOptions() error: %v", err)
+	}
+	if options.GitLabURL != "https://gitlab.example.com" {
+		t.Fatalf("GitLabURL = %q, want %q", options.GitLabURL, "https://gitlab.example.com")
+	}
+	want := []string{"META_PARAM_SCHEMA", "GITLAB_SAFE_MODE", "RATE_LIMIT_BURST"}
+	if !slicesEqual(options.IgnoredOptionsCopy(), want) {
+		t.Fatalf("IgnoredOptions = %v, want %v", options.IgnoredOptionsCopy(), want)
+	}
+}
+
+// slicesEqual compares two string slices in order for ignored-option tests.
+func slicesEqual(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestAppendOptionName_DeduplicatesExisting verifies the internal option-name
+// accumulator keeps the first occurrence when multiple aliases map to one
+// server-managed option.
+func TestAppendOptionName_DeduplicatesExisting(t *testing.T) {
+	options := []string{"META_PARAM_SCHEMA"}
+	got := appendOptionName(options, "META_PARAM_SCHEMA")
+	if !slicesEqual(got, options) {
+		t.Fatalf("appendOptionName() = %v, want %v", got, options)
 	}
 }
 

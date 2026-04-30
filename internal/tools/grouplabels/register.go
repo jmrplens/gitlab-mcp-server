@@ -1,5 +1,4 @@
 // register.go wires grouplabels MCP tools to the MCP server.
-
 package grouplabels
 
 import (

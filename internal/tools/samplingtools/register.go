@@ -15,6 +15,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// samplingRequirement is appended to every sampling tool description so users
+// understand that the MCP client must support human-approved sampling.
 const samplingRequirement = "Requires the MCP client to support the sampling capability (human-in-the-loop approval)."
 
 // RegisterTools wires sampling-powered tools to the MCP server.
@@ -308,12 +310,9 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"deployment_history": toolutil.Route(wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory)),
 	}
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_analyze",
-		Title: toolutil.TitleFromName("gitlab_analyze"),
-		Description: `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_analyze", `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
-NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a ` + "`SamplingUnsupportedResult`" + `).
+NOT for: raw data retrieval without LLM analysis (use gitlab_merge_request / gitlab_issue / gitlab_pipeline / gitlab_release / gitlab_repository); long-form report generation outside the chat session; clients without sampling support (the action returns a `+"`SamplingUnsupportedResult`"+`).
 
 Returns: each action returns action-specific JSON (typically identifiers + a text field plus model and truncated flags) and a Markdown summary suitable for direct display. Per-action text key:
 - summary: issue_summary, mr_review
@@ -322,7 +321,7 @@ Returns: each action returns action-specific JSON (typically identifiers + a tex
 - report: milestone_report
 - release_notes: release_notes
 Alongside the resource identifiers (merge_request_iid, issue_iid, pipeline_id, milestone_iid, project_id) supplied as input.
-Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), ` + "`SamplingUnsupportedResult`" + ` when the client did not advertise sampling capability.
+Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milestone_iid must exist), 403 (hint: caller must have access to the underlying resource), `+"`SamplingUnsupportedResult`"+` when the client did not advertise sampling capability.
 
 All actions need project_id*. Additional params per action:
 - mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
@@ -337,10 +336,5 @@ All actions need project_id*. Additional params per action:
 - technical_debt: ref. Find TODO/FIXME/HACK markers.
 - deployment_history: environment. Frequency, success rate, patterns.
 
-See also: gitlab_merge_request (MR lifecycle), gitlab_issue (issue CRUD), gitlab_pipeline (raw pipelines and test reports), gitlab_release (release CRUD).`,
-		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_analyze"),
-		Icons:        toolutil.IconAnalytics,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_analyze", routes, metaMarkdownForResult))
+See also: gitlab_merge_request (MR lifecycle), gitlab_issue (issue CRUD), gitlab_pipeline (raw pipelines and test reports), gitlab_release (release CRUD).`, routes, toolutil.IconAnalytics, metaMarkdownForResult)
 }

@@ -3,7 +3,6 @@
 // rendering with and without permissions, empty role), FormatListMarkdown
 // (empty list, single role, multiple roles, zero GroupID), and the
 // writePermRow helper via integration through FormatOutputMarkdown.
-
 package memberroles
 
 import (

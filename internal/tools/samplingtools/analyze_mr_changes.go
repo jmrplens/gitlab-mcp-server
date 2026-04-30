@@ -1,5 +1,4 @@
 // analyze_mr_changes.go implements the sampling-based merge request changes analysis tool.
-
 package samplingtools
 
 import (

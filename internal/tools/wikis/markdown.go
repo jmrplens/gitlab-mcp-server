@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for wiki MCP tool output.
-
 package wikis
 
 import (

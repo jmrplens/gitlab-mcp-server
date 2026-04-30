@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for Dockerfile template MCP tool output.
-
 package dockerfiletemplates
 
 import (

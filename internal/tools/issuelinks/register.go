@@ -1,5 +1,4 @@
 // register.go wires issuelinks MCP tools to the MCP server.
-
 package issuelinks
 
 import (

@@ -3,7 +3,6 @@
 // `total` field. This guards the contract documented in toResultWithTotal:
 // when GitLab reports a total greater than what we fetched, callers should
 // surface that count and infer HasMore=true.
-
 package completions
 
 import (

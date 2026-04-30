@@ -1,6 +1,5 @@
 // wikis_test.go contains unit tests for GitLab wiki page operations.
 // Tests use httptest to mock the GitLab Wikis API.
-
 package wikis
 
 import (

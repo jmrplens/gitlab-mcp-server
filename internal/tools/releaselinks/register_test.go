@@ -2,7 +2,6 @@
 // closures end-to-end through an in-memory MCP session. Tests cover the
 // error paths (500, 403, 404 → NotFoundResult) for all release link tools
 // and the ConfirmAction early-return branch for the delete handler.
-
 package releaselinks
 
 import (

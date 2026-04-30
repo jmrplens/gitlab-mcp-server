@@ -1,6 +1,5 @@
 // mirroring.go implements GitLab project pull mirror operations: get mirror
 // configuration, configure pull mirroring, and trigger immediate mirror updates.
-
 package projects
 
 import (

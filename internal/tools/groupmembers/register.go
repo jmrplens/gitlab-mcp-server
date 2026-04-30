@@ -1,5 +1,4 @@
 // register.go wires groupmembers MCP tools to the MCP server.
-
 package groupmembers
 
 import (

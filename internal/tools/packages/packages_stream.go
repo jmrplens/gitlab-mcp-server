@@ -5,7 +5,6 @@
 // This uses the client-go Client.Do(req, io.Writer) path which streams the
 // response body to any io.Writer, preserving the client's authentication,
 // rate limiting, and retry logic.
-
 package packages
 
 import (

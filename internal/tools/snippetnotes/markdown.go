@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for snippet note MCP tool output.
-
 package snippetnotes
 
 import (

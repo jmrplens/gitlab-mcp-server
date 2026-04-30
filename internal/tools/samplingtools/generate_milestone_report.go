@@ -1,5 +1,4 @@
 // generate_milestone_report.go implements the sampling-based milestone report generation tool.
-
 package samplingtools
 
 import (

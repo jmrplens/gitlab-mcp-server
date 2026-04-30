@@ -1,6 +1,5 @@
 // milestones_test.go contains unit tests for GitLab milestone listing operations.
 // Tests use httptest to mock the GitLab Milestones API.
-
 package milestones
 
 import (

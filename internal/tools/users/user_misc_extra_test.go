@@ -2,7 +2,6 @@
 // CurrentUserStatus, CreateUserRunner, DeleteUserIdentity error/context paths,
 // GetUserActivities with From filter, GetUserMemberships with Type filter,
 // all misc markdown formatters, and parseDate.
-
 package users
 
 import (

@@ -1,5 +1,4 @@
 // register.go wires snippetdiscussions MCP tools to the MCP server.
-
 package snippetdiscussions
 
 import (

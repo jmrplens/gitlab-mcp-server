@@ -1,6 +1,5 @@
 // user_ssh_keys_test.go contains unit tests for GitLab user SSH key
 // management operations. Tests use httptest to mock the GitLab Users API.
-
 package users
 
 import (

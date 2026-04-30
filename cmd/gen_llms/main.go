@@ -40,6 +40,8 @@ import (
 // hard-truncated at the rune boundary.
 const maxFullDescRunes = 600
 
+// main introspects the live MCP catalog and regenerates llms.txt and
+// llms-full.txt in the project root.
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -107,6 +109,8 @@ func newSession(setupServer func(*mcp.Server)) (session *mcp.ClientSession, clea
 	return session, func() { _ = session.Close() }
 }
 
+// listTools returns either the enterprise individual catalog or the base
+// meta-tool catalog, depending on meta.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	session, cleanup := newSession(func(server *mcp.Server) {
 		if meta {
@@ -125,6 +129,7 @@ func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	return result.Tools
 }
 
+// listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
 	session, cleanup := newSession(func(server *mcp.Server) {
 		tools.RegisterAllMeta(server, client, true)
@@ -139,9 +144,15 @@ func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
 	return result.Tools
 }
 
+// listResources returns the static resources and resource templates advertised
+// by the MCP server, including the per-action meta-schema template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate) {
 	session, cleanup := newSession(func(server *mcp.Server) {
+		metaRoutes := toolutil.CaptureMetaRoutes(func() {
+			tools.RegisterAllMeta(server, client, false)
+		})
 		resources.Register(server, client)
+		resources.RegisterMetaSchemaResources(server, metaRoutes)
 		resources.RegisterWorkflowGuides(server)
 	})
 	defer cleanup()
@@ -160,6 +171,7 @@ func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.Resourc
 	return res.Resources, tpl.ResourceTemplates
 }
 
+// listPrompts returns all registered MCP prompt definitions for llms output.
 func listPrompts(client *gitlabclient.Client) []*mcp.Prompt {
 	session, cleanup := newSession(func(server *mcp.Server) {
 		prompts.Register(server, client)

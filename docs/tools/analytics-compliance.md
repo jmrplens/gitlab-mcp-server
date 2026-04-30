@@ -17,7 +17,7 @@ Retrieve counts of recently created issues, merge requests, and new members for 
 
 ### Meta-tool
 
-Group analytics actions are now enterprise-only routes inside **`gitlab_group`** (requires `GITLAB_ENTERPRISE=true`).
+Group analytics actions are now enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog).
 
 Actions: `issues_count`, `mr_count`, `members_count`
 
@@ -205,7 +205,7 @@ restore service, and change failure rate. Requires GitLab Premium / Ultimate.
 
 ### Meta-tool
 
-**`gitlab_dora_metrics`** — retrieve DORA metrics (requires `GITLAB_ENTERPRISE=true`).
+**`gitlab_dora_metrics`** — retrieve DORA metrics (requires the Enterprise/Premium catalog).
 
 Actions: `project`, `group`
 

@@ -1,5 +1,4 @@
 // register.go wires licensetemplates MCP tools to the MCP server.
-
 package licensetemplates
 
 import (

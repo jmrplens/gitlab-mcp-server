@@ -12,7 +12,6 @@
 // It also includes direct unit tests for [decodeFileContent] covering nil
 // input, plain-text encoding, base64 decoding errors, and binary-file
 // detection.
-
 package resources
 
 import (

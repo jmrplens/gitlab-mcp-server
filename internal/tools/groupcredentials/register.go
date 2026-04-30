@@ -1,5 +1,4 @@
 // register.go wires group credential MCP tools to the MCP server.
-
 package groupcredentials
 
 import (

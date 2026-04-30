@@ -1,5 +1,4 @@
 // register.go wires snippetnotes MCP tools to the MCP server.
-
 package snippetnotes
 
 import (

@@ -1,6 +1,5 @@
 // security_settings_test.go contains unit tests for GitLab project security
 // settings operations. Tests use httptest to mock the GitLab API.
-
 package securitysettings
 
 import (

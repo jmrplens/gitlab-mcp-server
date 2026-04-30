@@ -2,7 +2,6 @@
 // including create (general and inline), resolve/unresolve, reply, and list.
 // It exposes typed input/output structs and handler functions registered as
 // MCP tools.
-
 package mrdiscussions
 
 import (

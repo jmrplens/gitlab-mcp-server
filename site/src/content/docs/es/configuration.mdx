@@ -33,7 +33,7 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 | `GITLAB_SKIP_TLS_VERIFY` | `false`        | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                             |
 | `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (32 herramientas de dominio en lugar de 1006+ herramientas individuales)                                                                                                          |
 | `META_PARAM_SCHEMA`      | `opaque`       | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (~5x) o `full` (~10x). El esquema por acción siempre es accesible vía el recurso `gitlab://schema/meta/{tool}/{action}` |
-| `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools) para GitLab Premium/Ultimate                                                                                                           |
+| `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium en modo stdio. En modo HTTP, `--enterprise` puede forzar el catálogo; si se omite, la edición se autodetecta por entrada token+URL                                       |
 | `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                       |
 | `GITLAB_SAFE_MODE`       | `false`        | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                              |
 | `EXCLUDE_TOOLS`          | —              | Lista de herramientas a excluir separadas por comas (ej., `gitlab_delete_project,gitlab_admin`)                                                                                                                    |
@@ -43,17 +43,6 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 :::tip
 **El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
 :::
-
-## Componentes opcionales
-
-Estos controlan qué capacidades MCP están habilitadas:
-
-| Variable                | Predeterminado | Descripción                                                          |
-| ----------------------- | -------------- | -------------------------------------------------------------------- |
-| `ENABLE_ANALYSIS_TOOLS` | `true`         | Habilitar 11 herramientas de análisis con IA (requiere MCP sampling) |
-| `ENABLE_ELICITATION`    | `true`         | Habilitar asistentes de creación interactivos (proyecto, issue, MR)  |
-| `ENABLE_RESOURCES`      | `true`         | Habilitar 44 recursos MCP de solo lectura para acceso a datos        |
-| `ENABLE_PROMPTS`        | `true`         | Habilitar 38 plantillas de prompts MCP                               |
 
 ## Autoactualización
 
@@ -88,12 +77,6 @@ GITLAB_SAFE_MODE=false
 EXCLUDE_TOOLS=
 GITLAB_IGNORE_SCOPES=false
 LOG_LEVEL=info
-
-# Componentes opcionales
-ENABLE_ANALYSIS_TOOLS=true
-ENABLE_ELICITATION=true
-ENABLE_RESOURCES=true
-ENABLE_PROMPTS=true
 
 # Autoactualización
 AUTO_UPDATE=true
@@ -270,10 +253,10 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `--http`                 | `false`                      | Habilitar modo de transporte HTTP                                                                                      |
 | `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                                                                                          |
-| `--gitlab-url`           | —                            | URL por defecto de la instancia de GitLab. Se puede sobreescribir por solicitud mediante la cabecera `GITLAB-URL`      |
+| `--gitlab-url`           | —                            | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                                                                                |
 | `--meta-tools`           | `true`                       | Habilitar modo meta-herramientas                                                                                       |
-| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium                                                                              |
+| `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium si se establece; omítelo para autodetectar CE/EE por entrada token+URL          |
 | `--read-only`            | `false`                      | Modo solo lectura                                                                                                      |
 | `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                          |
 | `--exclude-tools`        | —                            | Herramientas a excluir separadas por comas                                                                             |
@@ -324,7 +307,9 @@ El servidor carga la configuración en el siguiente orden (las fuentes posterior
 4. **Flags de CLI** — Argumentos de línea de comandos (prioridad más alta)
 
 :::note
-En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. Los clientes también pueden enviar una cabecera `GITLAB-URL` para dirigirse a una instancia de GitLab específica.
+En modo HTTP, `GITLAB_TOKEN` no se carga desde variables de entorno. Cada cliente proporciona su propio token mediante la petición HTTP. Los clientes pueden enviar una cabecera `GITLAB-URL` solo cuando el servidor arranca sin `--gitlab-url`.
+
+Cuando `--gitlab-url` está configurado, es autoritativo y los valores `GITLAB-URL` enviados por clientes se ignoran y se registran. Otras opciones de política del servidor, incluido el tamaño de esquema (`--meta-param-schema`) y los límites de tasa (`--rate-limit-rps`, `--rate-limit-burst`), no se pueden sobreescribir por petición.
 :::
 
 ## Certificados autofirmados

@@ -1,5 +1,4 @@
 // generate_release_notes.go implements the sampling-based release notes generation tool.
-
 package samplingtools
 
 import (

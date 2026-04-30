@@ -1,5 +1,4 @@
 // register.go wires commitdiscussions MCP tools to the MCP server.
-
 package commitdiscussions
 
 import (

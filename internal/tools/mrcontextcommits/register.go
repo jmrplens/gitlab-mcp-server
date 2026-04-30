@@ -1,5 +1,4 @@
 // register.go wires mrcontextcommits MCP tools to the MCP server.
-
 package mrcontextcommits
 
 import (

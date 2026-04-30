@@ -36,11 +36,11 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | --- | --- | --- | --- |
 | `-http` | bool | `false` | Enable HTTP transport mode (default is stdio) |
 | `-http-addr` | string | `:8080` | HTTP listen address (e.g. `localhost:8080`, `:9090`) |
-| `-gitlab-url` | string | _(optional)_ | Default GitLab instance URL. Per-request override via `GITLAB-URL` header |
+| `-gitlab-url` | string | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-meta-tools` | bool | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
 | `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. See [env-reference.md](env-reference.md) |
-| `-enterprise` | bool | `false` | Enable Enterprise/Premium meta-tools (15 additional) |
+| `-enterprise` | bool | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
 | `-safe-mode` | bool | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence |
 | `-embedded-resources` | bool | `true` | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks |
@@ -84,10 +84,10 @@ gitlab-mcp-server
 
 ### HTTP Mode
 
-The server listens on an HTTP endpoint. Each client provides its own GitLab token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. Clients can also specify a `GITLAB-URL` header to target a specific GitLab instance per-request. No `GITLAB_TOKEN` is needed at startup.
+The server listens on an HTTP endpoint. Each client provides its own GitLab token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. When the server starts without `--gitlab-url`, clients also specify a `GITLAB-URL` header to target a specific GitLab instance per request. No `GITLAB_TOKEN` is needed at startup.
 
 ```bash
-# Single GitLab instance (all clients use the same default)
+# Single GitLab instance (all clients use the fixed URL)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=localhost:9090
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --max-http-clients=50 --session-timeout=1h
@@ -150,7 +150,7 @@ gitlab-mcp-server
 # Start HTTP server with custom address
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:9090
 
-# Start HTTP server without default URL (clients must send GITLAB-URL header)
+# Start HTTP server without fixed URL (clients must send GITLAB-URL header)
 gitlab-mcp-server --http --http-addr=:8080
 
 # Start HTTP server with TLS skip and custom session timeout

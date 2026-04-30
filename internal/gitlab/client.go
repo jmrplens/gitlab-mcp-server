@@ -31,7 +31,7 @@ type Client struct {
 	// enterprise indicates whether the GitLab instance is Premium/Ultimate.
 	// Used to select EE-specific API queries (e.g. GraphQL branch rules with
 	// approval rules, code owner approval, external status checks).
-	enterprise bool
+	enterprise atomic.Bool
 
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
@@ -59,10 +59,10 @@ const initCooldown = 30 * time.Second
 const healthTimeout = 10 * time.Second
 
 // SetEnterprise marks the client as connected to a Premium/Ultimate instance.
-func (c *Client) SetEnterprise(v bool) { c.enterprise = v }
+func (c *Client) SetEnterprise(v bool) { c.enterprise.Store(v) }
 
 // IsEnterprise reports whether the GitLab instance is Premium/Ultimate.
-func (c *Client) IsEnterprise() bool { return c.enterprise }
+func (c *Client) IsEnterprise() bool { return c.enterprise.Load() }
 
 // NewClient creates an authenticated GitLab client from the provided configuration.
 // When cfg.SkipTLSVerify is true, TLS certificate verification is disabled (for self-signed certs).
@@ -75,8 +75,8 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + "/api/v4/version",
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
-		enterprise:   cfg.Enterprise,
 	}
+	c.SetEnterprise(cfg.Enterprise)
 
 	sdkHTTPClient := &http.Client{
 		Transport: &dotUnescapeTransport{
@@ -193,13 +193,16 @@ func (c *Client) Initialize(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	ver, err := c.pingDirect(ctx)
+	versionInfo, err := c.versionDirect(ctx)
 	if err != nil {
 		return "", err
 	}
+	if versionInfo.Enterprise != nil {
+		c.SetEnterprise(*versionInfo.Enterprise)
+	}
 
 	c.initialized.Store(true)
-	return ver, nil
+	return versionInfo.Version, nil
 }
 
 // EnsureInitialized attempts lazy re-initialization if the client was not
@@ -250,35 +253,68 @@ func (c *Client) MarkInitialized() { c.initialized.Store(true) }
 // pingDirect performs a raw HTTP GET to /api/v4/version using the dedicated
 // health client, bypassing the SDK transport chain entirely. This prevents
 // recursion when called from [EnsureInitialized] inside [resilienceTransport].
-func (c *Client) pingDirect(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from admin-configured GITLAB_URL, not user input
+func (c *Client) pingDirect(ctx context.Context) error {
+	_, err := c.versionDirect(ctx)
+	return err
+}
+
+// DetectEnterprise updates the client edition flag from /api/v4/version when
+// GitLab exposes it, returning fallback when the field is absent or detection
+// fails.
+func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
+	versionInfo, err := c.versionDirect(ctx)
 	if err != nil {
-		return "", fmt.Errorf("creating health request: %w", err)
+		slog.Warn("failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
+		c.SetEnterprise(fallback)
+		return fallback
+	}
+	if versionInfo.Enterprise == nil {
+		slog.Debug("GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
+		c.SetEnterprise(fallback)
+		return fallback
+	}
+	c.SetEnterprise(*versionInfo.Enterprise)
+	slog.Info("detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
+	return *versionInfo.Enterprise
+}
+
+// gitLabVersionInfo captures the subset of /api/v4/version needed for health
+// checks and GitLab edition detection.
+type gitLabVersionInfo struct {
+	Version    string `json:"version"`
+	Enterprise *bool  `json:"enterprise"`
+}
+
+// versionDirect queries the GitLab Version API through the raw health client.
+// It bypasses the resilient SDK wrapper so edition detection can run during
+// client initialization and degraded-mode recovery.
+func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from a normalized GitLab base URL
+	if err != nil {
+		return nil, fmt.Errorf("creating health request: %w", err)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
 
-	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from admin config
+	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
 	if err != nil {
-		return "", fmt.Errorf("gitlab ping failed: %w", err)
+		return nil, fmt.Errorf("gitlab ping failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	var v struct {
-		Version string `json:"version"`
+	var versionInfo gitLabVersionInfo
+	if err = json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
+		return nil, fmt.Errorf("gitlab ping: decoding version: %w", err)
 	}
-	if err = json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return "", fmt.Errorf("gitlab ping: decoding version: %w", err)
-	}
-	if v.Version == "" {
-		return "", errors.New("gitlab ping failed: empty version in response")
+	if versionInfo.Version == "" {
+		return nil, errors.New("gitlab ping failed: empty version in response")
 	}
 
-	return v.Version, nil
+	return &versionInfo, nil
 }
 
 // buildBaseTransport returns the base HTTP round tripper with optional TLS

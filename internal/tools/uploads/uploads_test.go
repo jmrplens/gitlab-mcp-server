@@ -2,7 +2,6 @@
 // operations. Tests use httptest to mock the GitLab API and verify successful
 // uploads, base64 decoding validation, file content integrity, API errors,
 // context cancellation, file_path mode, and list/delete operations.
-
 package uploads
 
 import (

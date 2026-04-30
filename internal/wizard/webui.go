@@ -1,6 +1,5 @@
 // webui.go implements the browser-based wizard UI, serving a local HTTP
 // server with embedded assets for graphical MCP server configuration.
-
 package wizard
 
 import (
@@ -21,10 +20,13 @@ import (
 )
 
 const (
+	// Shared HTTP response header and MIME constants used by the local wizard API.
 	headerContentType = "Content-Type"
 	mimeJSON          = "application/json"
 )
 
+// webAssets contains the browser wizard shell served by [serveIndex].
+//
 //go:embed webui_assets/index.html
 var webAssets embed.FS
 
@@ -78,6 +80,7 @@ func RunWebUI(version string, w io.Writer) error {
 	return result
 }
 
+// serveIndex writes the embedded browser wizard HTML page.
 func serveIndex(rw http.ResponseWriter, _ *http.Request) {
 	data, err := webAssets.ReadFile("webui_assets/index.html")
 	if err != nil {
@@ -88,6 +91,7 @@ func serveIndex(rw http.ResponseWriter, _ *http.Request) {
 	_, _ = rw.Write(data)
 }
 
+// defaultsResponse is the JSON payload returned by GET /api/defaults.
 type defaultsResponse struct {
 	Version          string           `json:"version"`
 	InstalledVersion string           `json:"installed_version,omitempty"`
@@ -99,6 +103,7 @@ type defaultsResponse struct {
 	Clients          []clientResponse `json:"clients"`
 }
 
+// clientResponse describes one configurable MCP client in /api/defaults.
 type clientResponse struct {
 	Name            string `json:"name"`
 	ConfigPath      string `json:"config_path"`
@@ -106,6 +111,8 @@ type clientResponse struct {
 	DefaultSelected bool   `json:"default_selected"`
 }
 
+// handleDefaults returns default wizard values and any previously saved local
+// configuration so the browser UI can pre-fill the form.
 func handleDefaults(version string) http.HandlerFunc {
 	return func(rw http.ResponseWriter, _ *http.Request) {
 		existing, hasExisting := loadExistingConfigFn()
@@ -148,6 +155,7 @@ func handleDefaults(version string) http.HandlerFunc {
 	}
 }
 
+// configureRequest is the JSON body accepted by POST /api/configure.
 type configureRequest struct {
 	InstallPath     string `json:"install_path"`
 	GitLabURL       string `json:"gitlab_url"`
@@ -160,11 +168,15 @@ type configureRequest struct {
 	SelectedClients []int  `json:"selected_clients"`
 }
 
+// configureResponse is the JSON result returned after applying selected client
+// configurations.
 type configureResponse struct {
 	Configured    []string `json:"configured"`
 	JetBrainsJSON string   `json:"jetbrains_json,omitempty"`
 }
 
+// handleConfigure validates the browser wizard submission, installs or locates
+// the binary, writes selected client configurations, and signals completion.
 func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req configureRequest
@@ -262,6 +274,8 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 	}
 }
 
+// handlePickDirectory returns an HTTP handler that asks the host OS to choose
+// an installation directory and returns the selected path as JSON.
 func handlePickDirectory() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		var req struct {

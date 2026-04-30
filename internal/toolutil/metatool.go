@@ -2,7 +2,6 @@
 // a single MCP tool call to one of several action handlers based on
 // the "action" parameter. It provides generic wrappers for typed and
 // void handlers, JSON param deserialization, and action validation.
-
 package toolutil
 
 import (
@@ -56,11 +55,13 @@ type ActionRoute struct {
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
 
-// --- Meta-tool route registry ---
-
+// Meta-tool route registry state supports both the global audit view and the
+// per-server capture used when registering meta-schema resources in HTTP mode.
 var (
-	metaRoutesMu  sync.Mutex
-	metaRoutesMap = map[string]ActionMap{}
+	metaRoutesMu      sync.Mutex
+	metaRoutesMap     = map[string]ActionMap{}
+	metaRouteCapture  map[string]ActionMap
+	metaRouteCaptureM sync.Mutex
 )
 
 // RegisterRoutes records a meta-tool's action routes for external consumers
@@ -68,6 +69,9 @@ var (
 func RegisterRoutes(toolName string, routes ActionMap) {
 	metaRoutesMu.Lock()
 	metaRoutesMap[toolName] = routes
+	if metaRouteCapture != nil {
+		metaRouteCapture[toolName] = routes
+	}
 	metaRoutesMu.Unlock()
 }
 
@@ -75,9 +79,33 @@ func RegisterRoutes(toolName string, routes ActionMap) {
 func MetaRoutes() map[string]ActionMap {
 	metaRoutesMu.Lock()
 	defer metaRoutesMu.Unlock()
-	cp := make(map[string]ActionMap, len(metaRoutesMap))
-	maps.Copy(cp, metaRoutesMap)
-	return cp
+	return cloneMetaRoutes(metaRoutesMap)
+}
+
+// CaptureMetaRoutes runs register and returns only the meta-tool routes
+// registered during that call. The global registry is still populated for
+// audit tools, but callers that build per-server resources should prefer the
+// returned snapshot so concurrent HTTP server instances do not share schema
+// state accidentally.
+func CaptureMetaRoutes(register func()) map[string]ActionMap {
+	metaRouteCaptureM.Lock()
+	defer metaRouteCaptureM.Unlock()
+
+	metaRoutesMu.Lock()
+	metaRouteCapture = map[string]ActionMap{}
+	metaRoutesMu.Unlock()
+
+	defer func() {
+		metaRoutesMu.Lock()
+		metaRouteCapture = nil
+		metaRoutesMu.Unlock()
+	}()
+
+	register()
+
+	metaRoutesMu.Lock()
+	defer metaRoutesMu.Unlock()
+	return cloneMetaRoutes(metaRouteCapture)
 }
 
 // ClearMetaRoutes resets the registry (useful for tests).
@@ -85,6 +113,18 @@ func ClearMetaRoutes() {
 	metaRoutesMu.Lock()
 	metaRoutesMap = map[string]ActionMap{}
 	metaRoutesMu.Unlock()
+}
+
+// cloneMetaRoutes creates a shallow copy of every action map so callers can
+// inspect registered routes without racing later registration work.
+func cloneMetaRoutes(routes map[string]ActionMap) map[string]ActionMap {
+	out := make(map[string]ActionMap, len(routes))
+	for tool, actions := range routes {
+		actionCopy := make(ActionMap, len(actions))
+		maps.Copy(actionCopy, actions)
+		out[tool] = actionCopy
+	}
+	return out
 }
 
 // Route creates a non-destructive ActionRoute without an output schema.
@@ -97,8 +137,8 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 	return ActionRoute{Handler: fn, Destructive: true}
 }
 
-// --- Output schema cache ---
-
+// outputSchemaCache stores reflected output schemas by Go type to avoid
+// regenerating identical JSON Schemas for every route registration.
 var (
 	outputSchemaCache sync.Map // reflect.Type → map[string]any
 )
@@ -357,6 +397,35 @@ func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn 
 
 // FormatResultFunc converts an action result into an MCP call tool result.
 type FormatResultFunc func(any) *mcp.CallToolResult
+
+// AddMetaTool registers an action-dispatched meta-tool with route-derived
+// annotations. Use it for meta-tools that may include mutating or destructive
+// actions; if any route is destructive, the tool receives DestructiveHint=true.
+func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         name,
+		Title:        TitleFromName(name),
+		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
+		Annotations:  DeriveAnnotationsWithTitle(name, routes),
+		Icons:        icons,
+		InputSchema:  MetaToolSchema(routes),
+		OutputSchema: MetaToolOutputSchema(),
+	}, MakeMetaHandler(name, routes, formatResult))
+}
+
+// AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
+// are all read-only list/get/search-style operations.
+func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         name,
+		Title:        TitleFromName(name),
+		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
+		Annotations:  ReadOnlyMetaAnnotationsWithTitle(name),
+		Icons:        icons,
+		InputSchema:  MetaToolSchema(routes),
+		OutputSchema: MetaToolOutputSchema(),
+	}, MakeMetaHandler(name, routes, formatResult))
+}
 
 // MakeMetaHandler creates a generic MCP tool handler that dispatches to action routes.
 // The formatResult function converts the action result into an MCP response.

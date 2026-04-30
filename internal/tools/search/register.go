@@ -1,5 +1,4 @@
 // register.go wires search MCP tools to the MCP server.
-
 package search
 
 import (
@@ -189,10 +188,7 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"wiki":           toolutil.RouteAction(client, Wiki),
 	}
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  "gitlab_search",
-		Title: toolutil.TitleFromName("gitlab_search"),
-		Description: `Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
+	toolutil.AddReadOnlyMetaTool(server, "gitlab_search", `Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
 NOT for: discovering a project from a git remote (use gitlab_discover_project), listing labels / milestones / issues with structured filters (use gitlab_project, gitlab_issue, gitlab_merge_request — those support filters like state/labels/milestone), reading file contents (use gitlab_repository file_get).
 
@@ -213,10 +209,5 @@ Errors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hi
 - projects: query*, group_id
 - snippets: query* (global only)
 
-See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).`,
-		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle("gitlab_search"),
-		Icons:        toolutil.IconSearch,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, toolutil.MakeMetaHandler("gitlab_search", routes, markdownForResult))
+See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).`, routes, toolutil.IconSearch, markdownForResult)
 }

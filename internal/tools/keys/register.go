@@ -1,5 +1,4 @@
 // register.go wires keys MCP tools to the MCP server.
-
 package keys
 
 import (

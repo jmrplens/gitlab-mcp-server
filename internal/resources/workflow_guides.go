@@ -1,6 +1,5 @@
 // workflow_guides.go registers static MCP resources that provide best-practice
 // workflow guides for GitLab-based development.
-
 package resources
 
 import (

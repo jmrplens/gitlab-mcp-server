@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for avatar MCP tool output.
-
 package avatar
 
 import (

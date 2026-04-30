@@ -1,7 +1,6 @@
 // hints.go provides next-action hint helpers for MCP tool responses.
 // Hints guide LLMs toward related operations they can perform next,
 // improving discoverability of available tools and common workflows.
-
 package toolutil
 
 import (

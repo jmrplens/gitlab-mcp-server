@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for job token scope MCP tool output.
-
 package jobtokenscope
 
 import (

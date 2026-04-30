@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for external status check MCP tool output.
-
 package externalstatuschecks
 
 import (

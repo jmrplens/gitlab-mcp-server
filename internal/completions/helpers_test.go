@@ -1,6 +1,5 @@
 // helpers_test.go provides shared test utilities for the completions package,
 // including a mock GitLab client constructor and a JSON response writer.
-
 package completions
 
 import (

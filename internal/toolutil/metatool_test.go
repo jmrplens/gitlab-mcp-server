@@ -5,7 +5,6 @@
 // and composite wrappers (RouteAction, RouteVoidAction,
 // RouteActionWithRequest, DestructiveAction, DestructiveVoidAction,
 // DestructiveActionWithRequest).
-
 package toolutil
 
 import (
@@ -956,6 +955,86 @@ func TestReadOnlyMetaAnnotationsWithTitle(t *testing.T) {
 	}
 }
 
+// TestAddMetaTool_RegistersSharedMetadata verifies the shared registration
+// helper applies the same metadata contract used by all action-dispatched
+// meta-tools.
+func TestAddMetaTool_RegistersSharedMetadata(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	routes := ActionMap{
+		"delete": DestructiveRoute(func(_ context.Context, _ map[string]any) (any, error) {
+			return struct{}{}, nil
+		}),
+	}
+
+	AddMetaTool(server, "gitlab_test_meta", "Manage test metadata.", routes, nil, nil)
+
+	tool := findTool(t, listToolsViaClient(t, server), "gitlab_test_meta")
+	if !strings.Contains(tool.Description, "gitlab://schema/meta/gitlab_test_meta/<action>") {
+		t.Errorf("description missing schema resource hint: %q", tool.Description)
+	}
+	if !strings.Contains(tool.Description, "Manage test metadata.") {
+		t.Errorf("description missing supplied body: %q", tool.Description)
+	}
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint != true {
+		t.Fatal("destructive meta-tool should have DestructiveHint=true")
+	}
+	if tool.Annotations.Title != "Test Meta" {
+		t.Errorf("annotation title = %q, want %q", tool.Annotations.Title, "Test Meta")
+	}
+	if tool.InputSchema == nil {
+		t.Fatal("input schema is nil")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatal("output schema is nil")
+	}
+	if _, ok := MetaRoutes()["gitlab_test_meta"]; !ok {
+		t.Fatal("meta routes were not registered")
+	}
+}
+
+// TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata verifies the read-only
+// helper preserves read-only annotations while sharing the common schema and
+// description contract.
+func TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	routes := ActionMap{
+		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return struct{}{}, nil
+		}),
+	}
+
+	AddReadOnlyMetaTool(server, "gitlab_test_read", "List test metadata.", routes, nil, nil)
+
+	tool := findTool(t, listToolsViaClient(t, server), "gitlab_test_read")
+	if !strings.Contains(tool.Description, "gitlab://schema/meta/gitlab_test_read/<action>") {
+		t.Errorf("description missing schema resource hint: %q", tool.Description)
+	}
+	if tool.Annotations == nil {
+		t.Fatal("annotations are nil")
+	}
+	if !tool.Annotations.ReadOnlyHint {
+		t.Error("ReadOnlyHint should be true")
+	}
+	if !tool.Annotations.IdempotentHint {
+		t.Error("IdempotentHint should be true")
+	}
+	if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint != false {
+		t.Error("DestructiveHint should be false")
+	}
+	if tool.Annotations.Title != "Test Read" {
+		t.Errorf("annotation title = %q, want %q", tool.Annotations.Title, "Test Read")
+	}
+	if _, ok := MetaRoutes()["gitlab_test_read"]; !ok {
+		t.Fatal("meta routes were not registered")
+	}
+}
+
 // TestMakeMetaHandler_MetadataDestructive_TriggersConfirm verifies that
 // MakeMetaHandler reads route.Destructive to determine confirmation requirement.
 func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {
@@ -1391,6 +1470,43 @@ func TestMetaRoutes_ReturnsSnapshot(t *testing.T) {
 	snap2 := MetaRoutes()
 	if _, ok := snap2["gitlab_snap"]; !ok {
 		t.Error("deleting from snapshot must not affect the internal registry")
+	}
+}
+
+// TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback verifies that
+// per-server schema resources can capture a local route catalog without
+// inheriting older global registry entries.
+func TestCaptureMetaRoutes_ReturnsOnlyRoutesRegisteredInCallback(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	RegisterRoutes("gitlab_existing", ActionMap{
+		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return "existing", nil
+		}),
+	})
+
+	captured := CaptureMetaRoutes(func() {
+		RegisterRoutes("gitlab_captured", ActionMap{
+			"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+				return "captured", nil
+			}),
+		})
+	})
+
+	if _, ok := captured["gitlab_captured"]; !ok {
+		t.Fatal("captured routes missing gitlab_captured")
+	}
+	if _, ok := captured["gitlab_existing"]; ok {
+		t.Fatal("captured routes should not include pre-existing global routes")
+	}
+	if _, ok := MetaRoutes()["gitlab_captured"]; !ok {
+		t.Fatal("CaptureMetaRoutes should still populate the global audit registry")
+	}
+
+	delete(captured["gitlab_captured"], "list")
+	if _, ok := MetaRoutes()["gitlab_captured"]["list"]; !ok {
+		t.Fatal("mutating captured inner maps should not affect the global registry")
 	}
 }
 

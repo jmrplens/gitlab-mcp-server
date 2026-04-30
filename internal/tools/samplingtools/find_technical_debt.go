@@ -1,5 +1,4 @@
 // find_technical_debt.go implements the sampling-based technical debt detection tool.
-
 package samplingtools
 
 import (

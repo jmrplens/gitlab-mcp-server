@@ -33,7 +33,7 @@ These must be set for the server to start in stdio mode:
 | `GITLAB_SKIP_TLS_VERIFY` | `false`  | Skip TLS certificate verification for self-signed certs                                                                                                                           |
 | `META_TOOLS`             | `true`   | Enable meta-tool mode (32 domain tools instead of 1006+ individual tools)                                                                                                         |
 | `META_PARAM_SCHEMA`      | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Per-action schema always discoverable via `gitlab://schema/meta/{tool}/{action}` resource |
-| `GITLAB_ENTERPRISE`      | `false`  | Enable Enterprise/Premium tools (35 individual + 15 meta-tools) for GitLab Premium/Ultimate                                                                                       |
+| `GITLAB_ENTERPRISE`      | `false`  | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                         |
 | `GITLAB_READ_ONLY`       | `false`  | Disable all mutating tools (create, update, delete)                                                                                                                               |
 | `GITLAB_SAFE_MODE`       | `false`  | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                 |
 | `EXCLUDE_TOOLS`          | —        | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)                                                                                        |
@@ -43,17 +43,6 @@ These must be set for the server to start in stdio mode:
 :::tip
 **Meta-tools mode** (`META_TOOLS=true`) is strongly recommended. It groups tools by domain (e.g., `gitlab_issue` handles list, get, create, update, delete) which reduces token usage and improves AI tool selection accuracy.
 :::
-
-## Optional components
-
-These control which MCP capabilities are enabled:
-
-| Variable                | Default | Description                                                 |
-| ----------------------- | ------- | ----------------------------------------------------------- |
-| `ENABLE_ANALYSIS_TOOLS` | `true`  | Enable 11 AI-powered analysis tools (requires MCP sampling) |
-| `ENABLE_ELICITATION`    | `true`  | Enable interactive creation wizards (project, issue, MR)    |
-| `ENABLE_RESOURCES`      | `true`  | Enable 44 MCP resources for read-only data access           |
-| `ENABLE_PROMPTS`        | `true`  | Enable 38 MCP prompt templates                              |
 
 ## Auto-update
 
@@ -88,12 +77,6 @@ GITLAB_SAFE_MODE=false
 EXCLUDE_TOOLS=
 GITLAB_IGNORE_SCOPES=false
 LOG_LEVEL=info
-
-# Optional components
-ENABLE_ANALYSIS_TOOLS=true
-ENABLE_ELICITATION=true
-ENABLE_RESOURCES=true
-ENABLE_PROMPTS=true
 
 # Auto-update
 AUTO_UPDATE=true
@@ -270,10 +253,10 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `--http`                 | `false`                      | Enable HTTP transport mode                                                                                 |
 | `--http-addr`            | `:8080`                      | Listen address and port                                                                                    |
-| `--gitlab-url`           | —                            | Default GitLab instance URL. Per-request override via `GITLAB-URL` header                                  |
+| `--gitlab-url`           | —                            | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                        |
 | `--skip-tls-verify`      | `false`                      | Skip TLS verification                                                                                      |
 | `--meta-tools`           | `true`                       | Enable meta-tool mode                                                                                      |
-| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools                                                                            |
+| `--enterprise`           | `false`                      | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL entry          |
 | `--read-only`            | `false`                      | Read-only mode                                                                                             |
 | `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                               |
 | `--exclude-tools`        | —                            | Comma-separated tool names to exclude                                                                      |
@@ -324,7 +307,9 @@ The server loads configuration in the following order (later sources override ea
 4. **CLI flags** — Command-line arguments (highest priority)
 
 :::note
-In HTTP mode, `GITLAB_TOKEN` is not loaded from environment variables. Each client provides their own token via the HTTP request. Clients can also send a `GITLAB-URL` header to target a specific GitLab instance.
+In HTTP mode, `GITLAB_TOKEN` is not loaded from environment variables. Each client provides their own token via the HTTP request. Clients can send a `GITLAB-URL` header only when the server starts without `--gitlab-url`.
+
+When `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged. Other server policy options, including schema size (`--meta-param-schema`) and rate limits (`--rate-limit-rps`, `--rate-limit-burst`), cannot be overridden per request.
 :::
 
 ## Self-signed certificates

@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for GitLab metadata MCP tool output.
-
 package metadata
 
 import (

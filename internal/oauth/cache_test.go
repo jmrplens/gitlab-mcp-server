@@ -1,6 +1,5 @@
 // cache_test.go contains unit tests for the OAuth token identity cache,
 // verifying TTL expiration, concurrent access, and eviction behavior.
-
 package oauth
 
 import (

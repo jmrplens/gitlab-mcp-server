@@ -1,6 +1,5 @@
 // geo_test.go contains unit tests for GitLab Geo site operations.
 // Tests use httptest to mock the GitLab Geo API.
-
 package geo
 
 import (

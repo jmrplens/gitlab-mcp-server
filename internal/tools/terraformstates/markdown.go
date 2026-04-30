@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for Terraform state MCP tool output.
-
 package terraformstates
 
 import (

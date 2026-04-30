@@ -1,7 +1,6 @@
 // safemode_test.go contains unit tests for GITLAB_SAFE_MODE behavior:
 // WrapMutatingToolsForSafeMode intercepts mutating tools and returns a
 // SafeModePreview, while read-only tools continue to call the real handler.
-
 package tools
 
 import (

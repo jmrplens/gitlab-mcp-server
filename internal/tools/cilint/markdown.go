@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for CI lint MCP tool output.
-
 package cilint
 
 import (

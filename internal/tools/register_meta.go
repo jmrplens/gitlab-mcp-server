@@ -2,7 +2,6 @@
 // Meta-tools consolidate multiple related operations behind a single tool
 // with an "action" parameter, reducing the number of tools exposed to the
 // LLM and lowering token usage.
-
 package tools
 
 import (

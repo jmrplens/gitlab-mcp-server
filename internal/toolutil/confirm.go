@@ -1,5 +1,4 @@
 // confirm.go provides user confirmation helpers for destructive MCP tool operations.
-
 package toolutil
 
 import (

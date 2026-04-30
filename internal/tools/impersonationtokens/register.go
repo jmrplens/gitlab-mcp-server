@@ -1,5 +1,4 @@
 // register.go wires impersonation token and personal access token MCP tools.
-
 package impersonationtokens
 
 import (

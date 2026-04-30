@@ -1,6 +1,5 @@
 // project_iterations_test.go contains unit tests for GitLab project iteration
 // operations. Tests use httptest to mock the GitLab Project Iterations API.
-
 package projectiterations
 
 import (

@@ -1,5 +1,4 @@
 // prompt_audit.go registers MCP prompts for GitLab configuration and access auditing.
-
 package prompts
 
 import (

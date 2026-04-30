@@ -87,7 +87,7 @@ gitlab-mcp-server/
 
 ### GitLab Integration
 
-- Base URL configurable via `GITLAB_URL` env var
+- Stdio mode uses `GITLAB_URL`; HTTP mode uses `--gitlab-url` when fixed, or per-request `GITLAB-URL` headers when omitted
 - Authentication via `GITLAB_TOKEN` (Personal Access Token)
 - Self-signed TLS certificates: skip verification when `GITLAB_SKIP_TLS_VERIFY=true`
 - All API calls must respect `context.Context` for cancellation
@@ -182,7 +182,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 | Variable                 | Description                       | Example            |
 | ------------------------ | --------------------------------- | ------------------ |
-| `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url` (per-request override via `GITLAB-URL` header) | `https://gitlab.example.com` |
+| `GITLAB_URL`             | GitLab instance URL. In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request | `https://gitlab.example.com` |
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Enable meta-tools for discovery   | `true` (default)   |
@@ -193,7 +193,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
 | `AUTO_UPDATE_TIMEOUT`    | Pre-start download timeout (range 5s–10m) | `60s` (default)    |
-| `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools: gates 35 individual tool sub-packages and 15 dedicated meta-tools | `false` (default) |
+| `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
 | `RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (also `--rate-limit-rps` flag; `0` = disabled) | `0` (default)    |

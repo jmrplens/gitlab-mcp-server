@@ -1,3 +1,6 @@
+// ratelimit_test.go verifies the token-bucket rate limiter and the MCP
+// receiving middleware that converts over-budget tools/call requests into
+// structured tool error results.
 package toolutil
 
 import (

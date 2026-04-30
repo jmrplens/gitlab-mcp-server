@@ -1,7 +1,6 @@
 // jobs_test.go contains unit tests for GitLab CI/CD job operations
 // (list, get, trace, cancel, retry). Tests use httptest to mock the
 // GitLab Jobs API and verify both success and error paths.
-
 package jobs
 
 import (

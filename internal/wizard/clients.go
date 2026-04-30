@@ -1,6 +1,5 @@
 // clients.go defines supported MCP clients (IDEs) and their configuration
 // file formats and paths for wizard-assisted installation.
-
 package wizard
 
 import (
@@ -12,16 +11,26 @@ import (
 type ClientID string
 
 const (
-	ClientVSCode        ClientID = "vscode"
+	// ClientVSCode identifies Visual Studio Code with GitHub Copilot MCP configuration.
+	ClientVSCode ClientID = "vscode"
+	// ClientClaudeDesktop identifies Claude Desktop MCP configuration.
 	ClientClaudeDesktop ClientID = "claude-desktop"
-	ClientClaudeCode    ClientID = "claude-code"
-	ClientCursor        ClientID = "cursor"
-	ClientWindsurf      ClientID = "windsurf"
-	ClientJetBrains     ClientID = "jetbrains"
-	ClientCopilotCLI    ClientID = "copilot-cli"
-	ClientOpenCode      ClientID = "opencode"
-	ClientCrush         ClientID = "crush"
-	ClientZed           ClientID = "zed"
+	// ClientClaudeCode identifies Claude Code CLI MCP configuration.
+	ClientClaudeCode ClientID = "claude-code"
+	// ClientCursor identifies Cursor MCP configuration.
+	ClientCursor ClientID = "cursor"
+	// ClientWindsurf identifies Windsurf MCP configuration.
+	ClientWindsurf ClientID = "windsurf"
+	// ClientJetBrains identifies JetBrains IDE MCP configuration guidance.
+	ClientJetBrains ClientID = "jetbrains"
+	// ClientCopilotCLI identifies GitHub Copilot CLI MCP configuration.
+	ClientCopilotCLI ClientID = "copilot-cli"
+	// ClientOpenCode identifies OpenCode MCP configuration.
+	ClientOpenCode ClientID = "opencode"
+	// ClientCrush identifies Crush MCP configuration.
+	ClientCrush ClientID = "crush"
+	// ClientZed identifies Zed editor MCP configuration.
+	ClientZed ClientID = "zed"
 )
 
 // DefaultGitLabURL is pre-filled in UI modes as a convenience default.

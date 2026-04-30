@@ -1,5 +1,4 @@
 // register.go wires runner controller scope MCP tools to the MCP server.
-
 package runnercontrollerscopes
 
 import (

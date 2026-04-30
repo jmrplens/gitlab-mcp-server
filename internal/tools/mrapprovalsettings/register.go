@@ -1,5 +1,4 @@
 // register.go wires mrapprovalsettings MCP tools to the MCP server.
-
 package mrapprovalsettings
 
 import (

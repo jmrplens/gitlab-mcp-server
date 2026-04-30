@@ -1,5 +1,4 @@
 // register.go wires issuediscussions MCP tools to the MCP server.
-
 package issuediscussions
 
 import (

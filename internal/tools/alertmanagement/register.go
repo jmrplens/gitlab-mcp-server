@@ -1,5 +1,4 @@
 // register.go wires alertmanagement MCP tools to the MCP server.
-
 package alertmanagement
 
 import (

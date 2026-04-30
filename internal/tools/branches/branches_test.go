@@ -2,7 +2,6 @@
 // (create, list, get, delete, protect, unprotect, update, and list
 // protected branches). Tests use httptest to mock the GitLab API and
 // verify success, error, canceled-context, and markdown-formatter paths.
-
 package branches
 
 import (

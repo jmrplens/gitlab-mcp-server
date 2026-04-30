@@ -1,5 +1,4 @@
 // register.go wires accesstokens MCP tools to the MCP server.
-
 package accesstokens
 
 import (

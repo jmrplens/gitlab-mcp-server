@@ -1,5 +1,4 @@
 // analyze_issue_scope.go implements the sampling-based issue scope analysis tool.
-
 package samplingtools
 
 import (

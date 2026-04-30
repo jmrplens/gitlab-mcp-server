@@ -39,11 +39,14 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `--http`                 | _(desactivado)_              | Habilitar modo de transporte HTTP                                                                                      |
 | `--http-addr`            | `:8080`                      | Dirección de escucha HTTP (`host:puerto`)                                                                              |
-| `--gitlab-url`           | _(opcional)_                 | URL por defecto de la instancia de GitLab. Se puede sobreescribir por solicitud mediante la cabecera `GITLAB-URL`      |
+| `--gitlab-url`           | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                 |
 | `--meta-tools`           | `true`                       | Habilitar meta-herramientas de dominio (32 o 47 con --enterprise)                                                      |
-| `--enterprise`           | `false`                      | Habilitar herramientas Enterprise/Premium (35 individuales + 15 meta-tools)                                            |
+| `--meta-param-schema`    | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`                                          |
+| `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                          |
 | `--read-only`            | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                      |
+| `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                          |
+| `--embedded-resources`   | `true`                       | Incrustar URIs canónicas de recursos MCP en resultados de herramientas get\_\*                                         |
 | `--max-http-clients`     | `100`                        | Máximo de entradas únicas token+URL en el pool del servidor                                                            |
 | `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                                                                         |
 | `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                                                            |
@@ -57,20 +60,26 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
-`--gitlab-url` es opcional. Cuando se establece, sirve como valor por defecto para los clientes que no envían la cabecera `GITLAB-URL`. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`.
+`--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
 :::
+
+### Precedencia de configuración
+
+Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode` y `--trusted-proxy-header` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
+
+Si un cliente envía cabeceras con aspecto de configuración, como `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores.
 
 ## Autenticación
 
 Los clientes deben proporcionar su Token de Acceso Personal de GitLab en cada solicitud HTTP usando una de dos cabeceras.
 
-Opcionalmente, los clientes también pueden especificar a qué instancia de GitLab dirigirse mediante la cabecera `GITLAB-URL`:
+Cuando el servidor arranca sin `--gitlab-url`, los clientes deben especificar a qué instancia de GitLab dirigirse mediante la cabecera `GITLAB-URL`:
 
 ```http
 GITLAB-URL: https://gitlab.ejemplo.com
 ```
 
-Si se omite, el servidor usa el valor por defecto de `--gitlab-url`. Si `--gitlab-url` tampoco se estableció al iniciar, la solicitud es rechazada.
+Si `--gitlab-url` se estableció al iniciar, esta cabecera se ignora y se registra. Si `--gitlab-url` no se estableció y la cabecera se omite, la solicitud se rechaza.
 
 ### Cabecera private-token (recomendada)
 
@@ -314,7 +323,7 @@ docker run -d \
 </Tabs>
 
 :::tip
-Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.0`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
+Fija la imagen a una versión específica (ej. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.1`) en producción. La etiqueta `latest` sigue al último release y puede cambiar inesperadamente.
 :::
 
 ### Docker Compose
@@ -437,7 +446,7 @@ flyctl scale memory 512    # Subir memoria a 512 MB (por defecto en fly.toml: 25
 La auto-actualización está **deshabilitada** en la configuración incluida (`--auto-update=false`). En Fly.io, el flujo de actualización recomendado es redesplegar con una imagen nueva:
 
 ```bash
-flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.0
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.1
 ```
 
 Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y preserva tus secretos y configuración.

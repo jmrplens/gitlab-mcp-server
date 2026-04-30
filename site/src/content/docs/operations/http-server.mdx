@@ -39,11 +39,14 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `--http`                 | _(off)_                      | Enable HTTP transport mode                                                                                 |
 | `--http-addr`            | `:8080`                      | HTTP listen address (`host:port`)                                                                          |
-| `--gitlab-url`           | _(optional)_                 | Default GitLab instance URL. Per-request override via `GITLAB-URL` header                                  |
+| `--gitlab-url`           | _(optional)_                 | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                        |
 | `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification for self-signed certs                                                    |
-| `--meta-tools`           | `true`                       | Enable domain meta-tools (28 or 43 with --enterprise)                                                      |
-| `--enterprise`           | `false`                      | Enable Enterprise/Premium tools (35 individual + 15 meta-tools)                                            |
+| `--meta-tools`           | `true`                       | Enable domain meta-tools (32 base, or 47 with --enterprise)                                                |
+| `--meta-param-schema`    | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                |
+| `--enterprise`           | `false`                      | Force Enterprise/Premium tools; omit to auto-detect CE/EE per token+URL entry                              |
 | `--read-only`            | `false`                      | Read-only mode: disable all mutating tools                                                                 |
+| `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                               |
+| `--embedded-resources`   | `true`                       | Embed canonical MCP resource URIs in get\_\* tool results                                                  |
 | `--max-http-clients`     | `100`                        | Maximum unique token+URL entries in the server pool                                                        |
 | `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                                                   |
 | `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                                                              |
@@ -57,20 +60,26 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) |
 
 :::note
-`--gitlab-url` is optional. When set, it serves as the default for clients that don't send the `GITLAB-URL` header. When omitted, each client must provide the `GITLAB-URL` header.
+`--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
 :::
+
+### Configuration precedence
+
+HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
+
+If a client sends config-like headers such as `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values.
 
 ## Authentication
 
 Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers.
 
-Optionally, clients can also specify which GitLab instance to target using the `GITLAB-URL` header:
+When the server starts without `--gitlab-url`, clients must specify which GitLab instance to target using the `GITLAB-URL` header:
 
 ```http
 GITLAB-URL: https://gitlab.example.com
 ```
 
-If omitted, the server uses the default `--gitlab-url` value. If `--gitlab-url` was also not set at startup, the request is rejected.
+If `--gitlab-url` was set at startup, this header is ignored and logged. If `--gitlab-url` was not set and the header is omitted, the request is rejected.
 
 ### Private-token header (recommended)
 
@@ -314,7 +323,7 @@ docker run -d \
 </Tabs>
 
 :::tip
-Pin the image to a specific version (e.g. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.0`) in production. The `latest` tag tracks the newest release and may shift unexpectedly.
+Pin the image to a specific version (e.g. `ghcr.io/jmrplens/gitlab-mcp-server:1.4.1`) in production. The `latest` tag tracks the newest release and may shift unexpectedly.
 :::
 
 ### Docker Compose
@@ -437,7 +446,7 @@ flyctl scale memory 512    # Bump memory to 512 MB (default in fly.toml: 256 MB)
 Auto-update is **disabled** in the shipped configuration (`--auto-update=false`). On Fly.io, the recommended upgrade flow is to redeploy with a new image:
 
 ```bash
-flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.0
+flyctl deploy --image ghcr.io/jmrplens/gitlab-mcp-server:1.4.1
 ```
 
 This replaces the running machines with the new version atomically and preserves your secrets and configuration.

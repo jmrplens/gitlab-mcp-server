@@ -1,7 +1,6 @@
 // grouprelationsexport_test.go contains unit tests for the grouprelationsexport MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.
-
 package grouprelationsexport
 
 import (

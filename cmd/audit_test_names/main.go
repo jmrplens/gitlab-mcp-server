@@ -38,6 +38,7 @@ type testEntry struct {
 	SuggestedName string
 }
 
+// Test name regular expressions used to classify known naming patterns.
 var (
 	// covPattern matches TestCov* prefixed tests.
 	covPattern = regexp.MustCompile(`^TestCov[A-Z]`)

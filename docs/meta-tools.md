@@ -1,12 +1,12 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 individual tools, **32 base meta-tools** (47 with `GITLAB_ENTERPRISE=true`) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1006 individual tools, **32 base meta-tools** (47 with the Enterprise/Premium catalog) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. With `GITLAB_ENTERPRISE=true`, 15 additional enterprise inline meta-tools are registered for a total of **47 tools**.
+In meta-tool mode (`META_TOOLS=true`, default), the server registers **32 base tools**: 21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation. The Enterprise/Premium catalog registers 15 additional enterprise inline meta-tools for a total of **47 tools**. Stdio mode enables that catalog with `GITLAB_ENTERPRISE=true`; HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 
 > **See also**: [Tools Reference](tools/README.md) | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)
 > 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
@@ -120,7 +120,7 @@ The meta-tool architecture evolved through ADR-0005:
 - **v7.1**: 32 base / 47 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 4 interactive elicitation + 15 enterprise inline); 4 `gitlab_interactive_*` elicitation tools exposed in meta-tools mode
 - **v7.0**: 28 base / 43 enterprise (21 inline + 3 always-registered + 2 delegated + 1 sampling + 1 standalone + 15 enterprise inline); 4 child meta-tools absorbed into parents: `gitlab_branch_rule` → `gitlab_branch`, `gitlab_deployment` → `gitlab_environment`, `gitlab_pipeline_schedule` → `gitlab_pipeline`, `gitlab_runner_controller` → `gitlab_runner`
 
-The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind `GITLAB_ENTERPRISE=true`.
+The base mode provides a ~53% reduction from v3.0, with enterprise features gated behind the Enterprise/Premium catalog.
 
 - Token usage in `tools/list` MCP responses
 - LLM selection confusion when choosing among similar tools

@@ -1,5 +1,4 @@
 // register.go wires DORA metrics MCP tools to the MCP server.
-
 package dorametrics
 
 import (

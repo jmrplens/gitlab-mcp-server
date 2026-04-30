@@ -1,6 +1,5 @@
-// metatool.go re-exports meta-tool dispatch utilities from toolutil
-// and provides makeMetaHandler which uses the domain-coupled markdownForResult.
-
+// metatool.go re-exports meta-tool dispatch utilities from toolutil and wires
+// meta-tool registration to the domain-coupled markdownForResult.
 package tools
 
 import (
@@ -74,40 +73,21 @@ func destructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 	return toolutil.DestructiveVoidAction(client, fn)
 }
 
-// makeMetaHandler creates a meta-tool handler using markdownForResult as the formatter.
-func makeMetaHandler(toolName string, routes actionMap) func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-	return toolutil.MakeMetaHandler(toolName, routes, markdownForResult)
-}
-
 // addMetaTool registers a meta-tool with annotations derived from routes.
 // If ANY route is destructive, the tool gets DestructiveHint: true.
 // If NO route is destructive, it gets NonDestructiveMetaAnnotations.
 func addMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         name,
-		Title:        toolutil.TitleFromName(name),
-		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  toolutil.DeriveAnnotationsWithTitle(name, routes),
-		Icons:        icons,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, makeMetaHandler(name, routes))
+	toolutil.AddMetaTool(server, name, desc, routes, icons, markdownForResult)
 }
 
 // addReadOnlyMetaTool registers a meta-tool where all actions are read-only
 // (list/get/search only). Uses ReadOnlyMetaAnnotations with ReadOnlyHint: true.
 func addReadOnlyMetaTool(server *mcp.Server, name, desc string, routes actionMap, icons []mcp.Icon) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         name,
-		Title:        toolutil.TitleFromName(name),
-		Description:  toolutil.MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  toolutil.ReadOnlyMetaAnnotationsWithTitle(name),
-		Icons:        icons,
-		InputSchema:  toolutil.MetaToolSchema(routes),
-		OutputSchema: toolutil.MetaToolOutputSchema(),
-	}, makeMetaHandler(name, routes))
+	toolutil.AddReadOnlyMetaTool(server, name, desc, routes, icons, markdownForResult)
 }
 
+// validActionsString exposes the shared action-list formatter for package
+// tests while keeping registration code on the local tools namespace.
 var validActionsString = toolutil.ValidActionsString
 
 // SetMetaParamSchema selects the meta-tool input schema strategy used by all

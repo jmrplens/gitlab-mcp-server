@@ -111,12 +111,12 @@ Dos herramientas standalone adicionales (`gitlab_server_check_update`, `gitlab_s
 
 ## Herramientas solo Enterprise (15)
 
-Cuando `GITLAB_ENTERPRISE=true`, el servidor registra 15 meta-herramientas adicionales para las funciones de GitLab Premium y Ultimate:
+Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 15 meta-herramientas adicionales para las funciones de GitLab Premium y Ultimate:
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`, `gitlab_vulnerability`, `gitlab_security_finding`
 
 :::note
-Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate en tu instancia. Habilitar `GITLAB_ENTERPRISE=true` en una instancia Community Edition registrará las herramientas, pero las llamadas a la API devolverán errores de permisos.
+Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate en tu instancia. Forzar el catálogo Enterprise/Premium en una instancia Community Edition registrará las herramientas, pero las llamadas a la API devolverán errores de permisos.
 :::
 
 ## Lectura adicional

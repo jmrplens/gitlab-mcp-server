@@ -1,5 +1,4 @@
 // register.go wires pages MCP tools to the MCP server.
-
 package pages
 
 import (

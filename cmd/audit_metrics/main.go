@@ -28,14 +28,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
+// Audit server identity values used for in-memory MCP introspection sessions.
 const (
 	auditServerName = "audit-metrics"
 	auditClientName = "audit-metrics-client"
 	auditVersion    = "0.0.1"
 )
 
+// main builds the audit client, gathers runtime counts from the registered MCP
+// surface, and prints the metrics report to stdout.
 func main() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -186,7 +190,11 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
+	metaRoutes := toolutil.CaptureMetaRoutes(func() {
+		tools.RegisterAllMeta(server, client, false)
+	})
 	resources.Register(server, client)
+	resources.RegisterMetaSchemaResources(server, metaRoutes)
 	resources.RegisterWorkflowGuides(server)
 
 	st, ct := mcp.NewInMemoryTransports()

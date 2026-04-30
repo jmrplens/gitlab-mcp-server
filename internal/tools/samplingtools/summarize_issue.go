@@ -1,5 +1,4 @@
 // summarize_issue.go implements the sampling-based issue summarization tool.
-
 package samplingtools
 
 import (

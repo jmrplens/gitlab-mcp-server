@@ -1,13 +1,18 @@
-// main_test.go contains unit and integration tests for the server entry point.
-// Tests cover configuration validation, GitLab connectivity checks, HTTP and
-// stdio transport modes, graceful shutdown, and end-to-end MCP protocol
-// interactions (initialize, tools/list) via httptest.
-
+// main_test.go contains unit and integration-style tests for the server entry
+// point. Tests cover CLI flag handling, configuration validation, GitLab client
+// setup, HTTP and stdio transport modes, MCP protocol handshakes, tool catalog
+// filtering, OAuth middleware, server-card generation, and auto-update logging
+// redaction.
+//
+// The tests use httptest servers for GitLab API responses and HTTP transport
+// requests, plus in-memory MCP transports for direct tools/list inspection.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"io"
 	"log/slog"
 	"net"
@@ -24,10 +29,9 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 )
-
-// newMockGitLabClient creates a GitLab client pointed at a mock server for testing.
 
 // HTTP header names, MIME types, and test values reused across tests.
 const (
@@ -64,7 +68,9 @@ func closeMCPSession(t *testing.T, serverURL, sessionID string) {
 	resp.Body.Close()
 }
 
-// newMockGitLabClient is an internal helper for the main package.
+// newMockGitLabClient creates a [gitlabclient.Client] backed by an httptest
+// GitLab server that responds to /api/v4/version. It gives server-construction
+// tests a valid client without requiring real GitLab credentials.
 func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +93,9 @@ func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
-// newTestMCPServer creates a configured MCP server with all tools, resources, and prompts registered.
+// newTestMCPServer creates an MCP server with the full individual tool catalog,
+// resources, and prompts registered. HTTP protocol tests use it as a stable
+// handler target for initialize and tools/list requests.
 func newTestMCPServer(t *testing.T) *mcp.Server {
 	t.Helper()
 	client := newMockGitLabClient(t)
@@ -99,6 +107,28 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 	resources.Register(server, client)
 	prompts.Register(server, client)
 	return server
+}
+
+// newInMemorySession connects an in-memory MCP client to server and registers
+// cleanup for both sessions. It is used by tests that need to inspect the
+// finalized server catalog without opening an HTTP listener.
+func newInMemorySession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
+	session, err := mcpClient.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
 }
 
 // parseJSONRPCResponse reads the HTTP response body and parses the JSON-RPC result.
@@ -615,7 +645,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.Config{MetaTools: false}
+	cfg := &config.ServerConfig{MetaTools: false}
 	server := createServer(client, cfg, nil)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -724,6 +754,39 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 	printHelp()
 }
 
+// TestMain_HelpParsesEnterpriseFlag verifies the CLI registers and visits the
+// --enterprise flag before returning through the help path.
+func TestMain_HelpParsesEnterpriseFlag(t *testing.T) {
+	oldArgs := os.Args
+	oldCommandLine := flag.CommandLine
+	oldStdout := os.Stdout
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Args = []string{"gitlab-mcp-server", "-h", "-enterprise"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Args = oldArgs
+		flag.CommandLine = oldCommandLine
+		os.Stdout = oldStdout
+	})
+
+	main()
+
+	_ = w.Close()
+	out, readErr := io.ReadAll(r)
+	if readErr != nil {
+		t.Fatalf("ReadAll: %v", readErr)
+	}
+	if !strings.Contains(string(out), "gitlab-mcp-server") {
+		t.Fatalf("help output missing project name: %s", string(out))
+	}
+}
+
 // TestProjectMetadata_Constants verifies that project metadata constants
 // are set to the expected values.
 func TestProjectMetadata_Constants(t *testing.T) {
@@ -742,7 +805,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 // meta-tools when MetaTools is true and returns an operational MCP server.
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.Config{MetaTools: true}
+	cfg := &config.ServerConfig{MetaTools: true}
 	server := createServer(client, cfg, nil)
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -781,6 +844,192 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
+}
+
+// TestCreateServer_MetaSchemaResourcesFollowMetaMode verifies that the
+// per-action schema resources are only advertised when meta-tools are active.
+func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
+	client := newMockGitLabClient(t)
+
+	individual := createServer(client, &config.ServerConfig{MetaTools: false}, nil)
+	individualSession := newInMemorySession(t, individual)
+	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates individual: %v", err)
+	}
+	for _, tpl := range individualTemplates.ResourceTemplates {
+		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
+			t.Fatal("individual mode should not advertise meta-tool schema resources")
+		}
+	}
+
+	meta := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	metaSession := newInMemorySession(t, meta)
+	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates meta: %v", err)
+	}
+	var found bool
+	for _, tpl := range metaTemplates.ResourceTemplates {
+		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("meta mode should advertise meta-tool schema resources")
+	}
+}
+
+// TestCreateServer_MetaSchemaRoutesFollowVisibleTools verifies that schema
+// resources mirror the post-filter tool catalog instead of the global route
+// registry populated during registration.
+func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.ServerConfig{
+		MetaTools:    true,
+		ExcludeTools: []string{"gitlab_runner"},
+	}
+	server := createServer(client, cfg, nil)
+	session := newInMemorySession(t, server)
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"})
+	if err != nil {
+		t.Fatalf("ReadResource index: %v", err)
+	}
+	var index resources.MetaSchemaIndex
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); unmarshalErr != nil {
+		t.Fatalf("unmarshal index: %v", unmarshalErr)
+	}
+	for _, entry := range index.Tools {
+		if entry.Tool == "gitlab_runner" {
+			t.Fatal("excluded meta-tool should not appear in schema index")
+		}
+	}
+
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_runner/list"})
+	if err == nil {
+		t.Fatal("excluded meta-tool schema should not be readable")
+	}
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_merge_request/create"})
+	if err != nil {
+		t.Fatalf("visible meta-tool schema should be readable: %v", err)
+	}
+}
+
+// TestCreateServer_MetaSchemaRoutesAreServerScoped verifies that schema
+// resources keep the route set captured for their own server even if another
+// server registers a different CE/Enterprise catalog later in the same process.
+func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
+	client := newMockGitLabClient(t)
+	ceServer := createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: false}, nil)
+	ceSession := newInMemorySession(t, ceServer)
+
+	_ = createServer(client, &config.ServerConfig{MetaTools: true, Enterprise: true}, nil)
+
+	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
+	if err == nil {
+		t.Fatal("CE server should not expose enterprise-only project action schema")
+	}
+	_, err = ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	if err != nil {
+		t.Fatalf("CE server should still expose common project action schema: %v", err)
+	}
+}
+
+// TestCreateServer_FilteringModes verifies that createServer exercises the
+// request-scoped scope filtering and safe-mode wrapping branches used by HTTP
+// server-pool entries.
+func TestCreateServer_FilteringModes(t *testing.T) {
+	client := newMockGitLabClient(t)
+
+	readAPIServer := createServer(client, &config.ServerConfig{
+		MetaTools:   false,
+		TokenScopes: []string{"read_api"},
+	}, nil)
+	readAPITools, err := listRegisteredTools(readAPIServer, "read-api-filter-test")
+	if err != nil {
+		t.Fatalf("list read-api tools: %v", err)
+	}
+	for _, tool := range readAPITools {
+		if tool.Name == "gitlab_create_project" {
+			t.Fatal("read_api scope should remove mutating project creation tool")
+		}
+	}
+
+	safeModeServer := createServer(client, &config.ServerConfig{MetaTools: false, SafeMode: true}, nil)
+	safeModeTools, err := listRegisteredTools(safeModeServer, "safe-mode-test")
+	if err != nil {
+		t.Fatalf("list safe-mode tools: %v", err)
+	}
+	if len(safeModeTools) == 0 {
+		t.Fatal("safe-mode server should still expose tools")
+	}
+}
+
+// TestCreateServer_MetaSchemaRouteFilterError verifies createServer remains
+// usable when the best-effort visible-tool inspection for schema resources
+// fails, covering the defensive warning path.
+func TestCreateServer_MetaSchemaRouteFilterError(t *testing.T) {
+	client := newMockGitLabClient(t)
+	original := listRegisteredToolsForInspection
+	listRegisteredToolsForInspection = func(_ *mcp.Server, _ string) ([]*mcp.Tool, error) {
+		return nil, errors.New("forced inspection failure")
+	}
+	t.Cleanup(func() { listRegisteredToolsForInspection = original })
+
+	server := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	session := newInMemorySession(t, server)
+	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"}); err != nil {
+		t.Fatalf("schema index should still be readable after filter error: %v", err)
+	}
+}
+
+// TestListRegisteredTools_ErrorPaths verifies defensive error wrapping for
+// the in-memory MCP inspection helper used by tool counting and schema route
+// filtering.
+func TestListRegisteredTools_ErrorPaths(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "inspection-errors", Version: "0"}, nil)
+	forcedErr := errors.New("forced failure")
+
+	t.Run("server connect", func(t *testing.T) {
+		original := connectInspectionServer
+		connectInspectionServer = func(_ *mcp.Server, _ context.Context, _ mcp.Transport) (*mcp.ServerSession, error) {
+			return nil, forcedErr
+		}
+		t.Cleanup(func() { connectInspectionServer = original })
+
+		_, err := listRegisteredTools(server, "server-error")
+		if err == nil || !strings.Contains(err.Error(), "server connect") {
+			t.Fatalf("listRegisteredTools() error = %v, want server connect context", err)
+		}
+	})
+
+	t.Run("client connect", func(t *testing.T) {
+		original := connectInspectionClient
+		connectInspectionClient = func(_ *mcp.Client, _ context.Context, _ mcp.Transport) (*mcp.ClientSession, error) {
+			return nil, forcedErr
+		}
+		t.Cleanup(func() { connectInspectionClient = original })
+
+		_, err := listRegisteredTools(server, "client-error")
+		if err == nil || !strings.Contains(err.Error(), "client connect") {
+			t.Fatalf("listRegisteredTools() error = %v, want client connect context", err)
+		}
+	})
+
+	t.Run("list tools", func(t *testing.T) {
+		original := listInspectionTools
+		listInspectionTools = func(_ *mcp.ClientSession, _ context.Context) (*mcp.ListToolsResult, error) {
+			return nil, forcedErr
+		}
+		t.Cleanup(func() { listInspectionTools = original })
+
+		_, err := listRegisteredTools(server, "list-error")
+		if err == nil || !strings.Contains(err.Error(), "list tools") {
+			t.Fatalf("listRegisteredTools() error = %v, want list tools context", err)
+		}
+	})
 }
 
 // TestPreStartAutoUpdate_InvalidMode verifies that preStartAutoUpdate
@@ -1310,6 +1559,118 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 	if body.Commit == "" {
 		t.Error("expected non-empty commit")
 	}
+}
+
+// TestSafeTokenSuffix verifies short tokens are fully masked and longer
+// tokens expose only the suffix used for non-sensitive diagnostics.
+func TestSafeTokenSuffix(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+		want  string
+	}{
+		{name: "empty", token: "", want: "****"},
+		{name: "short", token: "abc", want: "****"},
+		{name: "four", token: "abcd", want: "****"},
+		{name: "long", token: "glpat-123456", want: "...3456"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := safeTokenSuffix(tt.token); got != tt.want {
+				t.Errorf("safeTokenSuffix(%q) = %q, want %q", tt.token, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLogIgnoredRequestOptions verifies ignored per-request MCP options are
+// logged without panicking and skipped when no options were ignored.
+func TestLogIgnoredRequestOptions(t *testing.T) {
+	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{})
+	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{IgnoredOptions: []string{"GITLAB_URL"}})
+}
+
+// TestDoToolSearch_MetaAndIndividualModes verifies tool search can inspect
+// both reduced meta-tool mode and the full individual-tool catalog.
+func TestDoToolSearch_MetaAndIndividualModes(t *testing.T) {
+	tests := []struct {
+		name      string
+		metaTools bool
+	}{
+		{name: "meta", metaTools: true},
+		{name: "individual", metaTools: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldStdout := os.Stdout
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe: %v", err)
+			}
+			os.Stdout = w
+			t.Cleanup(func() { os.Stdout = oldStdout })
+
+			if searchErr := doToolSearch("project", tt.metaTools, false); searchErr != nil {
+				t.Fatalf("doToolSearch() error: %v", searchErr)
+			}
+			_ = w.Close()
+			out, readErr := io.ReadAll(r)
+			if readErr != nil {
+				t.Fatalf("ReadAll: %v", readErr)
+			}
+			if !strings.Contains(string(out), "Found") {
+				t.Fatalf("tool search output missing matches: %s", string(out))
+			}
+		})
+	}
+}
+
+// TestRunToolSearch_ErrorExits verifies runToolSearch reports doToolSearch
+// failures and exits with status 1 through the CLI wrapper path.
+func TestRunToolSearch_ErrorExits(t *testing.T) {
+	originalRunner := toolSearchRunner
+	originalExit := exitProcess
+	originalStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	type exitCode int
+	toolSearchRunner = func(_ string, _ bool, _ bool) error {
+		return errors.New("forced search failure")
+	}
+	exitProcess = func(code int) { panic(exitCode(code)) }
+	os.Stderr = writePipe
+	t.Cleanup(func() {
+		toolSearchRunner = originalRunner
+		exitProcess = originalExit
+		os.Stderr = originalStderr
+	})
+
+	defer func() {
+		panicValue := recover()
+		if panicValue == nil {
+			t.Fatal("runToolSearch() did not exit")
+		}
+		code, ok := panicValue.(exitCode)
+		if !ok {
+			panic(panicValue)
+		}
+		if code != 1 {
+			t.Fatalf("exit code = %d, want 1", code)
+		}
+		_ = writePipe.Close()
+		stderr, readErr := io.ReadAll(readPipe)
+		if readErr != nil {
+			t.Fatalf("ReadAll stderr: %v", readErr)
+		}
+		if !strings.Contains(string(stderr), "forced search failure") {
+			t.Fatalf("stderr = %q, want forced error", string(stderr))
+		}
+	}()
+
+	runToolSearch("project", true, false)
 }
 
 // TestParseLogLevel verifies that LOG_LEVEL values map to correct slog levels.

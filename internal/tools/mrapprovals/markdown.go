@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for merge request approval MCP tool output.
-
 package mrapprovals
 
 import (

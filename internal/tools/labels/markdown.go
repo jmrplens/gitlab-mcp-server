@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for project label MCP tool output.
-
 package labels
 
 import (

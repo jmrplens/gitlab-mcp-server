@@ -1,5 +1,4 @@
 // register.go wires deploymentmergerequests MCP tools to the MCP server.
-
 package deploymentmergerequests
 
 import (

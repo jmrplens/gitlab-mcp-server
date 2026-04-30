@@ -1,5 +1,4 @@
 // register.go wires groupboards MCP tools to the MCP server.
-
 package groupboards
 
 import (

@@ -1,3 +1,5 @@
+// schema_pagination_test.go verifies pagination constraint enrichment across
+// root and nested JSON Schema nodes.
 package toolutil
 
 import (

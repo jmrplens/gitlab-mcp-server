@@ -1,6 +1,5 @@
 // not_found_test.go verifies the structured 404 result builder used by
 // get-handlers across all domain sub-packages when a resource is not found.
-
 package toolutil
 
 import (

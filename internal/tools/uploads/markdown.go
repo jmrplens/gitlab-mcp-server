@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for upload MCP tool output.
-
 package uploads
 
 import (

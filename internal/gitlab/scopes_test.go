@@ -1,6 +1,5 @@
 // scopes_test.go contains unit tests for GitLab token scope validation
 // and scope-checking helpers.
-
 package gitlab
 
 import (

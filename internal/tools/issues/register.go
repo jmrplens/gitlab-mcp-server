@@ -1,5 +1,4 @@
 // register.go wires issues MCP tools to the MCP server.
-
 package issues
 
 import (

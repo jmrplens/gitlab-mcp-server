@@ -1,5 +1,4 @@
 // register.go wires todos MCP tools to the MCP server.
-
 package todos
 
 import (

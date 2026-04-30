@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for group import/export MCP tool output.
-
 package groupimportexport
 
 import (

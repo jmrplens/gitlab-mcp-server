@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting for Branch Rules outputs.
-
 package branchrules
 
 import (

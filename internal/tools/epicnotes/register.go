@@ -1,5 +1,4 @@
 // register.go wires epicnotes MCP tools to the MCP server.
-
 package epicnotes
 
 import (

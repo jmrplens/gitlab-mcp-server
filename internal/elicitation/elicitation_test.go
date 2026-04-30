@@ -3,7 +3,6 @@
 // Integration tests use in-memory MCP transports to validate [Client.Confirm],
 // [Client.PromptText], [Client.SelectOne], and [Client.GatherData] against a
 // real elicitation handler.
-
 package elicitation
 
 import (

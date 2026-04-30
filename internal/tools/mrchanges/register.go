@@ -1,5 +1,4 @@
 // register.go wires mrchanges MCP tools to the MCP server.
-
 package mrchanges
 
 import (

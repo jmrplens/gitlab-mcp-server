@@ -1,7 +1,6 @@
 // external_status_checks_test.go contains unit tests for the external status
 // check MCP tool handlers. Tests use httptest to mock GitLab API responses and
 // verify success, validation, and error paths.
-
 package externalstatuschecks
 
 import (

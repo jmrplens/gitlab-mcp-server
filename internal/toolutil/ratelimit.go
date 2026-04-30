@@ -1,3 +1,5 @@
+// ratelimit.go implements MCP tools/call rate limiting middleware using a
+// token bucket shared by a server instance.
 package toolutil
 
 import (

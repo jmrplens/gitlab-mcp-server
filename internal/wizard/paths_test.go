@@ -1,6 +1,5 @@
 // paths_test.go contains unit tests for platform-specific path resolution
 // functions.
-
 package wizard
 
 import (

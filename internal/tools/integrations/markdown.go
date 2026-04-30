@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for project integration MCP tool output.
-
 package integrations
 
 import (

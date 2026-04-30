@@ -1,6 +1,5 @@
 // markdown_test.go contains unit tests for the Markdown formatting functions
 // in the packages package.
-
 package packages
 
 import (

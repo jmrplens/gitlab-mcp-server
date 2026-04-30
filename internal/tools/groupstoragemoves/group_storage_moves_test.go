@@ -1,6 +1,5 @@
 // group_storage_moves_test.go contains unit tests for GitLab group storage
 // move operations. Tests use httptest to mock the GitLab Group Storage Moves API.
-
 package groupstoragemoves
 
 import (

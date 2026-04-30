@@ -1,6 +1,5 @@
 // envfile_test.go contains unit tests for .env file reading, writing,
 // and credential management.
-
 package wizard
 
 import (

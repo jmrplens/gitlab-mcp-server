@@ -1,5 +1,4 @@
 // register.go wires project discovery MCP tools to the MCP server.
-
 package projectdiscovery
 
 import (

@@ -1,6 +1,5 @@
 // wait_test.go contains unit tests for the pipeline Wait polling tool.
 // Tests use httptest with staged responses to simulate pipeline state transitions.
-
 package pipelines
 
 import (

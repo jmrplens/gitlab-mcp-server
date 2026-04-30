@@ -1,6 +1,5 @@
 // labels_test.go contains unit tests for GitLab label operations.
 // Tests use httptest to mock the GitLab Labels API.
-
 package labels
 
 import (

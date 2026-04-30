@@ -36,7 +36,7 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | **HTTP Legacy** | HTTP | `PRIVATE-TOKEN` header per-request | Multi-user, simple setup |
 | **HTTP OAuth** | HTTP | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
-> **Tip**: In HTTP modes, clients can also send a `GITLAB-URL` header to target a specific GitLab instance per request. If omitted, the server uses the default `--gitlab-url` value.
+> **Tip**: In HTTP modes, clients send a `GITLAB-URL` header only when the server was started without `--gitlab-url`. If `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
 
 ---
 

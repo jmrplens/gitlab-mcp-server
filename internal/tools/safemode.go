@@ -1,6 +1,5 @@
 // safemode.go implements the GITLAB_SAFE_MODE feature that intercepts mutating
 // tools and returns a structured JSON preview instead of executing them.
-
 package tools
 
 import (

@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the bulk import tool
 // closures in register.go. Tests exercise success and error paths via an
 // in-memory MCP session with a mock GitLab API.
-
 package bulkimports
 
 import (

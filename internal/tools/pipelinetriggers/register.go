@@ -1,5 +1,4 @@
 // register.go wires pipelinetriggers MCP tools to the MCP server.
-
 package pipelinetriggers
 
 import (

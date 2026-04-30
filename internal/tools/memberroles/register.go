@@ -1,5 +1,4 @@
 // register.go wires member role MCP tools to the MCP server.
-
 package memberroles
 
 import (

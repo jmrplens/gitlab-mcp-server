@@ -1,7 +1,6 @@
 // register_meta_test.go contains integration tests for the sampling meta-tool
 // closures in register_meta.go. Tests verify tool dispatch and error paths
 // via an in-memory MCP session with a mock GitLab API.
-
 package samplingtools
 
 import (

@@ -195,7 +195,7 @@ Personal todo/task list.
 
 ## Enterprise mode
 
-Setting `GITLAB_ENTERPRISE=true` enables 15 additional meta-tools that expose GitLab Premium and Ultimate features. Additionally, 6 enterprise-only action routes are added to existing base meta-tools:
+The Enterprise/Premium catalog enables 15 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, 6 enterprise-only action routes are added to existing base meta-tools:
 
 - **Iterations** → routed through `gitlab_issue`
 - **Project mirrors** → routed through `gitlab_project`
@@ -210,7 +210,8 @@ You can check which tools your server has registered by looking at the startup l
 
 ## Configuration
 
-| Variable            | Default | Description                                                    |
-| ------------------- | ------- | -------------------------------------------------------------- |
-| `META_TOOLS`        | `true`  | Enable meta-tool mode. Set to `false` for individual tools.    |
-| `GITLAB_ENTERPRISE` | `false` | Enable enterprise-only meta-tools (requires Premium/Ultimate). |
+| Variable            | Default | Description                                                                                    |
+| ------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `META_TOOLS`        | `true`  | Enable meta-tool mode. Set to `false` for individual tools.                                    |
+| `GITLAB_ENTERPRISE` | `false` | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                   |
+| `--enterprise`      | `false` | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry. |

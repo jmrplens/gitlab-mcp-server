@@ -1,7 +1,6 @@
 // register_test.go contains integration tests for the user email tool
 // closures in register.go. Tests exercise mutation error paths via an
 // in-memory MCP session with a mock GitLab API.
-
 package useremails
 
 import (

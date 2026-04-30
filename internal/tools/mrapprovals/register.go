@@ -1,5 +1,4 @@
 // register.go wires mrapprovals MCP tools to the MCP server.
-
 package mrapprovals
 
 import (

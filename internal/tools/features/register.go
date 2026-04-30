@@ -1,5 +1,4 @@
 // register.go wires features MCP tools to the MCP server.
-
 package features
 
 import (

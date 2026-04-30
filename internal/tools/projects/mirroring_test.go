@@ -1,5 +1,4 @@
 // mirroring_test.go contains unit tests for project pull mirror operations.
-
 package projects
 
 import (

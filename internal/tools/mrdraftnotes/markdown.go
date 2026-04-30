@@ -1,5 +1,4 @@
 // markdown.go provides Markdown formatting functions for merge request draft note MCP tool output.
-
 package mrdraftnotes
 
 import (

@@ -1,6 +1,5 @@
 // merge_trains_test.go contains unit tests for GitLab merge train operations.
 // Tests use httptest to mock the GitLab Merge Trains API.
-
 package mergetrains
 
 import (

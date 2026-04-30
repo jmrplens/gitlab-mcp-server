@@ -2,7 +2,6 @@
 // resource returns an appropriate error when the GitLab API responds with
 // an error status code, and when URIs contain invalid or malformed
 // identifiers.
-
 package resources
 
 import (
