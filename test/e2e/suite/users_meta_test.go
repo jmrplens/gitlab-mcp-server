@@ -396,295 +396,297 @@ func TestMeta_UserAdmin(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		defer cancel()
 
-	uname := uniqueName("usr-adm")
-	var testUserID int64
+		uname := uniqueName("usr-adm")
+		var testUserID int64
 
-	t.Run("CreateUser", func(t *testing.T) {
-		out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "create",
-			"params": map[string]any{
-				"email":                 uname + "@e2e-test.local",
-				"name":                  "E2E Test " + uname,
-				"username":              uname,
-				"password":              "E2eT!Gx9K#p2mNq$8BcZ",
-				"skip_confirmation":     true,
-				"force_random_password": false,
-			},
+		t.Run("CreateUser", func(t *testing.T) {
+			out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "create",
+				"params": map[string]any{
+					"email":                 uname + "@e2e-test.local",
+					"name":                  "E2E Test " + uname,
+					"username":              uname,
+					"password":              "E2eT!Gx9K#p2mNq$8BcZ",
+					"skip_confirmation":     true,
+					"force_random_password": false,
+				},
+			})
+			requireNoError(t, err, "create user")
+			requireTruef(t, out.ID > 0, "created user ID > 0")
+			testUserID = out.ID
+			t.Logf("Created user %d: %s", testUserID, uname)
 		})
-		requireNoError(t, err, "create user")
-		requireTruef(t, out.ID > 0, "created user ID > 0")
-		testUserID = out.ID
-		t.Logf("Created user %d: %s", testUserID, uname)
-	})
-	defer func() {
-		if testUserID > 0 {
-			// Unblock first in case blocked
-			_, _ = callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+		defer func() {
+			if testUserID > 0 {
+				// Unblock first in case blocked
+				_, _ = callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "unblock",
+					"params": map[string]any{"user_id": testUserID},
+				})
+				_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+					"action": "delete",
+					"params": map[string]any{"user_id": testUserID},
+				})
+			}
+		}()
+
+		t.Run("ModifyUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "modify",
+				"params": map[string]any{
+					"user_id": testUserID,
+					"bio":     "E2E test user - modified",
+				},
+			})
+			requireNoError(t, err, "modify user")
+			requireTruef(t, out.ID == testUserID, "modify: ID mismatch")
+			t.Logf("Modified user %d", testUserID)
+		})
+
+		t.Run("BlockUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "block",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "block user")
+			requireTruef(t, out.Success, "block should succeed")
+			t.Logf("Blocked user %d", testUserID)
+		})
+
+		t.Run("UnblockUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
 				"action": "unblock",
 				"params": map[string]any{"user_id": testUserID},
 			})
-			_ = callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-				"action": "delete",
+			requireNoError(t, err, "unblock user")
+			requireTruef(t, out.Success, "unblock should succeed")
+			t.Logf("Unblocked user %d", testUserID)
+		})
+
+		t.Run("DeactivateUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "deactivate",
 				"params": map[string]any{"user_id": testUserID},
 			})
-		}
-	}()
-
-	t.Run("ModifyUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "modify",
-			"params": map[string]any{
-				"user_id": testUserID,
-				"bio":     "E2E test user - modified",
-			},
+			requireNoError(t, err, "deactivate user")
+			requireTruef(t, out.Success, "deactivate should succeed")
 		})
-		requireNoError(t, err, "modify user")
-		requireTruef(t, out.ID == testUserID, "modify: ID mismatch")
-		t.Logf("Modified user %d", testUserID)
-	})
 
-	t.Run("BlockUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "block",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("ActivateUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "activate",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "activate user")
+			requireTruef(t, out.Success, "activate should succeed")
 		})
-		requireNoError(t, err, "block user")
-		requireTruef(t, out.Success, "block should succeed")
-		t.Logf("Blocked user %d", testUserID)
-	})
 
-	t.Run("UnblockUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "unblock",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("BanUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "ban",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "ban user")
+			requireTruef(t, out.Success, "ban should succeed")
 		})
-		requireNoError(t, err, "unblock user")
-		requireTruef(t, out.Success, "unblock should succeed")
-		t.Logf("Unblocked user %d", testUserID)
-	})
 
-	t.Run("DeactivateUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "deactivate",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("UnbanUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "unban",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "unban user")
+			requireTruef(t, out.Success, "unban should succeed")
 		})
-		requireNoError(t, err, "deactivate user")
-		requireTruef(t, out.Success, "deactivate should succeed")
-	})
 
-	t.Run("ActivateUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "activate",
-			"params": map[string]any{"user_id": testUserID},
+		// ── SSH keys for user ────────────────────────────────────────────────
+		var userKeyID int64
+		t.Run("SSHKeysForUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[users.SSHKeyListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "ssh_keys_for_user",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "ssh_keys_for_user")
+			t.Logf("SSH keys for user %d: %d", testUserID, len(out.Keys))
 		})
-		requireNoError(t, err, "activate user")
-		requireTruef(t, out.Success, "activate should succeed")
-	})
 
-	t.Run("BanUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "ban",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("AddSSHKeyForUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			sshKey := generateTestSSHKey(t)
+			out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "add_ssh_key_for_user",
+				"params": map[string]any{
+					"user_id": testUserID,
+					"title":   "e2e-user-key",
+					"key":     sshKey,
+				},
+			})
+			requireNoError(t, err, "add_ssh_key_for_user")
+			requireTruef(t, out.ID > 0, "add_ssh_key_for_user: expected key ID > 0")
+			userKeyID = out.ID
+			t.Logf("Added SSH key %d for user %d", userKeyID, testUserID)
 		})
-		requireNoError(t, err, "ban user")
-		requireTruef(t, out.Success, "ban should succeed")
-	})
 
-	t.Run("UnbanUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.AdminActionOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "unban",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("GetSSHKeyForUser", func(t *testing.T) {
+			requireTruef(t, userKeyID > 0, "userKeyID not set")
+			out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "get_ssh_key_for_user",
+				"params": map[string]any{"user_id": testUserID, "key_id": userKeyID},
+			})
+			requireNoError(t, err, "get_ssh_key_for_user")
+			requireTruef(t, out.ID == userKeyID, "get_ssh_key_for_user: ID mismatch")
 		})
-		requireNoError(t, err, "unban user")
-		requireTruef(t, out.Success, "unban should succeed")
-	})
 
-	// ── SSH keys for user ────────────────────────────────────────────────
-	var userKeyID int64
-	t.Run("SSHKeysForUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[users.SSHKeyListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "ssh_keys_for_user",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("DeleteSSHKeyForUser", func(t *testing.T) {
+			requireTruef(t, userKeyID > 0, "userKeyID not set")
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "delete_ssh_key_for_user",
+				"params": map[string]any{"user_id": testUserID, "key_id": userKeyID},
+			})
+			requireNoError(t, err, "delete_ssh_key_for_user")
+			t.Logf("Deleted SSH key %d for user %d", userKeyID, testUserID)
 		})
-		requireNoError(t, err, "ssh_keys_for_user")
-		t.Logf("SSH keys for user %d: %d", testUserID, len(out.Keys))
-	})
 
-	t.Run("AddSSHKeyForUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		sshKey := generateTestSSHKey(t)
-		out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "add_ssh_key_for_user",
-			"params": map[string]any{
-				"user_id": testUserID,
-				"title":   "e2e-user-key",
-				"key":     sshKey,
-			},
+		// ── Emails for user ──────────────────────────────────────────────────
+		var emailID int64
+		t.Run("EmailsForUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[useremails.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "emails_for_user",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "emails_for_user")
+			t.Logf("Emails for user %d: %d", testUserID, len(out.Emails))
 		})
-		requireNoError(t, err, "add_ssh_key_for_user")
-		requireTruef(t, out.ID > 0, "add_ssh_key_for_user: expected key ID > 0")
-		userKeyID = out.ID
-		t.Logf("Added SSH key %d for user %d", userKeyID, testUserID)
-	})
 
-	t.Run("GetSSHKeyForUser", func(t *testing.T) {
-		requireTruef(t, userKeyID > 0, "userKeyID not set")
-		out, err := callToolOn[users.SSHKeyOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "get_ssh_key_for_user",
-			"params": map[string]any{"user_id": testUserID, "key_id": userKeyID},
+		t.Run("AddEmailForUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "add_email_for_user",
+				"params": map[string]any{
+					"user_id":           testUserID,
+					"email":             uname + "-extra@e2e-test.local",
+					"skip_confirmation": true,
+				},
+			})
+			requireNoError(t, err, "add_email_for_user")
+			requireTruef(t, out.ID > 0, "add_email_for_user: expected email ID > 0")
+			emailID = out.ID
+			t.Logf("Added email %d for user %d", emailID, testUserID)
 		})
-		requireNoError(t, err, "get_ssh_key_for_user")
-		requireTruef(t, out.ID == userKeyID, "get_ssh_key_for_user: ID mismatch")
-	})
 
-	t.Run("DeleteSSHKeyForUser", func(t *testing.T) {
-		requireTruef(t, userKeyID > 0, "userKeyID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "delete_ssh_key_for_user",
-			"params": map[string]any{"user_id": testUserID, "key_id": userKeyID},
+		t.Run("GetEmail", func(t *testing.T) {
+			requireTruef(t, emailID > 0, "emailID not set")
+			// get_email fetches emails for the currently authenticated user, not testUserID— error expected
+			_, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "get_email",
+				"params": map[string]any{"email_id": emailID},
+			})
+			requireTruef(t, err != nil, "expected error: email belongs to different user")
+			t.Logf("Expected error for cross-user email access: %v", err)
 		})
-		requireNoError(t, err, "delete_ssh_key_for_user")
-		t.Logf("Deleted SSH key %d for user %d", userKeyID, testUserID)
-	})
 
-	// ── Emails for user ──────────────────────────────────────────────────
-	var emailID int64
-	t.Run("EmailsForUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[useremails.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "emails_for_user",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("DeleteEmailForUser", func(t *testing.T) {
+			requireTruef(t, emailID > 0, "emailID not set")
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "delete_email_for_user",
+				"params": map[string]any{"user_id": testUserID, "email_id": emailID},
+			})
+			requireNoError(t, err, "delete_email_for_user")
+			t.Logf("Deleted email %d for user %d", emailID, testUserID)
 		})
-		requireNoError(t, err, "emails_for_user")
-		t.Logf("Emails for user %d: %d", testUserID, len(out.Emails))
-	})
 
-	t.Run("AddEmailForUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "add_email_for_user",
-			"params": map[string]any{
-				"user_id":           testUserID,
-				"email":             uname + "-extra@e2e-test.local",
-				"skip_confirmation": true,
-			},
+		// ── GPG keys for user ────────────────────────────────────────────────
+		t.Run("GPGKeysForUser", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[usergpgkeys.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "gpg_keys_for_user",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "gpg_keys_for_user")
+			t.Logf("GPG keys for user %d: %d", testUserID, len(out.Keys))
 		})
-		requireNoError(t, err, "add_email_for_user")
-		requireTruef(t, out.ID > 0, "add_email_for_user: expected email ID > 0")
-		emailID = out.ID
-		t.Logf("Added email %d for user %d", emailID, testUserID)
-	})
 
-	t.Run("GetEmail", func(t *testing.T) {
-		requireTruef(t, emailID > 0, "emailID not set")
-		// get_email fetches emails for the currently authenticated user, not testUserID— error expected
-		_, err := callToolOn[useremails.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "get_email",
-			"params": map[string]any{"email_id": emailID},
+		// ── Impersonation tokens ─────────────────────────────────────────────
+		var impTokenID int64
+		t.Run("ListImpersonationTokens", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[impersonationtokens.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "list_impersonation_tokens",
+				"params": map[string]any{"user_id": testUserID},
+			})
+			requireNoError(t, err, "list_impersonation_tokens")
+			t.Logf("Impersonation tokens for user %d: %d", testUserID, len(out.Tokens))
 		})
-		requireTruef(t, err != nil, "expected error: email belongs to different user")
-		t.Logf("Expected error for cross-user email access: %v", err)
-	})
 
-	t.Run("DeleteEmailForUser", func(t *testing.T) {
-		requireTruef(t, emailID > 0, "emailID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "delete_email_for_user",
-			"params": map[string]any{"user_id": testUserID, "email_id": emailID},
+		t.Run("CreateImpersonationToken", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[impersonationtokens.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "create_impersonation_token",
+				"params": map[string]any{
+					"user_id":    testUserID,
+					"name":       "e2e-imp-token",
+					"scopes":     []string{"api"},
+					"expires_at": time.Now().AddDate(0, 0, 364).Format("2006-01-02"),
+				},
+			})
+			requireNoError(t, err, "create_impersonation_token")
+			requireTruef(t, out.ID > 0, "create_impersonation_token: expected token ID > 0")
+			impTokenID = out.ID
+			t.Logf("Created impersonation token %d", impTokenID)
 		})
-		requireNoError(t, err, "delete_email_for_user")
-		t.Logf("Deleted email %d for user %d", emailID, testUserID)
-	})
 
-	// ── GPG keys for user ────────────────────────────────────────────────
-	t.Run("GPGKeysForUser", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[usergpgkeys.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "gpg_keys_for_user",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("GetImpersonationToken", func(t *testing.T) {
+			requireTruef(t, impTokenID > 0, "impTokenID not set")
+			out, err := callToolOn[impersonationtokens.Output](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "get_impersonation_token",
+				"params": map[string]any{"user_id": testUserID, "token_id": impTokenID},
+			})
+			requireNoError(t, err, "get_impersonation_token")
+			requireTruef(t, out.ID == impTokenID, "get_impersonation_token: ID mismatch")
 		})
-		requireNoError(t, err, "gpg_keys_for_user")
-		t.Logf("GPG keys for user %d: %d", testUserID, len(out.Keys))
-	})
 
-	// ── Impersonation tokens ─────────────────────────────────────────────
-	var impTokenID int64
-	t.Run("ListImpersonationTokens", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[impersonationtokens.ListOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "list_impersonation_tokens",
-			"params": map[string]any{"user_id": testUserID},
+		t.Run("RevokeImpersonationToken", func(t *testing.T) {
+			requireTruef(t, impTokenID > 0, "impTokenID not set")
+			_, err := callToolOn[impersonationtokens.RevokeOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "revoke_impersonation_token",
+				"params": map[string]any{"user_id": testUserID, "token_id": impTokenID},
+			})
+			requireNoError(t, err, "revoke_impersonation_token")
+			t.Logf("Revoked impersonation token %d", impTokenID)
 		})
-		requireNoError(t, err, "list_impersonation_tokens")
-		t.Logf("Impersonation tokens for user %d: %d", testUserID, len(out.Tokens))
-	})
 
-	t.Run("CreateImpersonationToken", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[impersonationtokens.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "create_impersonation_token",
-			"params": map[string]any{
-				"user_id":    testUserID,
-				"name":       "e2e-imp-token",
-				"scopes":     []string{"api"},
-				"expires_at": time.Now().AddDate(0, 0, 364).Format("2006-01-02"),
-			},
+		// ── Personal Access Tokens (admin) ───────────────────────────────────
+		t.Run("CreatePersonalAccessToken", func(t *testing.T) {
+			requireTruef(t, testUserID > 0, "testUserID not set")
+			out, err := callToolOn[impersonationtokens.PATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
+				"action": "create_personal_access_token",
+				"params": map[string]any{
+					"user_id": testUserID,
+					"name":    "e2e-pat",
+					"scopes":  []string{"read_api"},
+				},
+			})
+			requireNoError(t, err, "create_personal_access_token")
+			requireTruef(t, out.ID > 0, "create_personal_access_token: expected ID > 0")
+			t.Logf("Created PAT %d for user %d", out.ID, testUserID)
 		})
-		requireNoError(t, err, "create_impersonation_token")
-		requireTruef(t, out.ID > 0, "create_impersonation_token: expected token ID > 0")
-		impTokenID = out.ID
-		t.Logf("Created impersonation token %d", impTokenID)
-	})
 
-	t.Run("GetImpersonationToken", func(t *testing.T) {
-		requireTruef(t, impTokenID > 0, "impTokenID not set")
-		out, err := callToolOn[impersonationtokens.Output](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "get_impersonation_token",
-			"params": map[string]any{"user_id": testUserID, "token_id": impTokenID},
-		})
-		requireNoError(t, err, "get_impersonation_token")
-		requireTruef(t, out.ID == impTokenID, "get_impersonation_token: ID mismatch")
+		// Delete user is handled by defer above
 	})
-
-	t.Run("RevokeImpersonationToken", func(t *testing.T) {
-		requireTruef(t, impTokenID > 0, "impTokenID not set")
-		_, err := callToolOn[impersonationtokens.RevokeOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "revoke_impersonation_token",
-			"params": map[string]any{"user_id": testUserID, "token_id": impTokenID},
-		})
-		requireNoError(t, err, "revoke_impersonation_token")
-		t.Logf("Revoked impersonation token %d", impTokenID)
-	})
-
-	// ── Personal Access Tokens (admin) ───────────────────────────────────
-	t.Run("CreatePersonalAccessToken", func(t *testing.T) {
-		requireTruef(t, testUserID > 0, "testUserID not set")
-		out, err := callToolOn[impersonationtokens.PATOutput](ctx, sess.meta, "gitlab_user", map[string]any{
-			"action": "create_personal_access_token",
-			"params": map[string]any{
-				"user_id": testUserID,
-				"name":    "e2e-pat",
-				"scopes":  []string{"read_api"},
-			},
-		})
-		requireNoError(t, err, "create_personal_access_token")
-		requireTruef(t, out.ID > 0, "create_personal_access_token: expected ID > 0")
-		t.Logf("Created PAT %d for user %d", out.ID, testUserID)
-	})
-
-	// Delete user is handled by defer above
 }
 
 // TestMeta_UserServiceAccounts exercises service account and current-user PAT
