@@ -127,7 +127,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 | Environment Variable | CLI Flag | Notes |
 | --- | --- | --- |
-| `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
+| `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode unless `--auth-mode=oauth` is used, which requires a fixed `--gitlab-url`. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
 | `META_TOOLS` | `--meta-tools` | |

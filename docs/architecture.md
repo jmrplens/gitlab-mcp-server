@@ -145,7 +145,7 @@ Loads settings from environment variables with optional `.env` file support (via
 
 | Variable                 | Required | Default | Description                                          |
 | ------------------------ | -------- | ------- | ---------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | `https://gitlab.com` | GitLab instance base URL                             |
+| `GITLAB_URL`             | No       | `https://gitlab.com` | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
 | `META_TOOLS`             | No       | `true`  | Use meta-tools instead of individual tools            |
