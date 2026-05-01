@@ -20,7 +20,6 @@ Configure your MCP client (VS Code, Cursor, Copilot CLI, OpenCode) with:
     "gitlab-mcp-server": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxx"
       }
     }
@@ -28,16 +27,20 @@ Configure your MCP client (VS Code, Cursor, Copilot CLI, OpenCode) with:
 }
 ```
 
+For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
+
 ### HTTP Mode
 
 Start the server with HTTP transport for multi-client scenarios:
 
 ```bash
 ./gitlab-mcp-server --http \
-  --gitlab-url=https://gitlab.example.com \
+  --gitlab-url=https://gitlab.com \
   --http-addr=:8080 \
   --max-http-clients=100
 ```
+
+Replace `https://gitlab.com` with your self-managed GitLab URL when needed.
 
 Clients connect to `http://localhost:8080/mcp` with their GitLab token in the `Authorization` header.
 

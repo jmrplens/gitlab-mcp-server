@@ -93,7 +93,7 @@ import { Aside, Tabs, TabItem, Card, CardGrid, Steps, FileTree, LinkCard } from 
 ### 6. Build verification
 
 ```bash
-cd site && npx astro build
+cd site && pnpm run build
 ```
 
 Must produce zero errors. Check `site/dist/` for output.
@@ -114,6 +114,6 @@ Must produce zero errors. Check `site/dist/` for output.
 - [ ] All affected ES pages updated with translated content
 - [ ] Frontmatter (title, description, sidebar order) is correct
 - [ ] Starlight components used correctly (imports present)
-- [ ] `cd site && npx astro build` succeeds with zero errors
+- [ ] `cd site && pnpm run build` succeeds with zero errors
 - [ ] No broken internal links between pages
 - [ ] Developer docs (`docs/`) also updated if applicable

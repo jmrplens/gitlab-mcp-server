@@ -185,10 +185,7 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			return
 		}
 
-		if req.GitLabURL == "" {
-			http.Error(rw, "GitLab URL is required", http.StatusBadRequest)
-			return
-		}
+		req.GitLabURL = effectiveGitLabURL(req.GitLabURL)
 
 		// Allow empty token when an existing config has one
 		if req.GitLabToken == "" {

@@ -123,6 +123,34 @@ func TestStepGitLabConfig_ValidInput(t *testing.T) {
 	}
 }
 
+// TestStepGitLabConfig_DefaultURL verifies that pressing Enter at the GitLab
+// URL prompt, or entering whitespace, uses the GitLab.com default.
+func TestStepGitLabConfig_DefaultURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "enter", input: "\nglpat-xxxxxxxxxxxxxxxxxxxx\n"},
+		{name: "whitespace", input: "   \nglpat-xxxxxxxxxxxxxxxxxxxx\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := strings.NewReader(tt.input)
+			var w bytes.Buffer
+			p := NewPrompter(r, &w)
+
+			cfg, err := stepGitLabConfig(p, &w, ServerConfig{}, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.GitLabURL != DefaultGitLabURL {
+				t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, DefaultGitLabURL)
+			}
+		})
+	}
+}
+
 // TestStepGitLabConfig_URLError verifies stepGitLabConfig returns an error
 // when the user enters a URL without a scheme.
 func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {

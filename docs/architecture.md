@@ -141,11 +141,11 @@ The `main()` function supports two runtime modes:
 
 ### Configuration (`internal/config`)
 
-Loads settings from environment variables with optional `.env` file support (via `godotenv`). Used by **stdio mode** to validate that required variables (`GITLAB_URL`, `GITLAB_TOKEN`) are present. HTTP mode uses CLI flags instead (see Transport Selection).
+Loads settings from environment variables with optional `.env` file support (via `godotenv`). Used by **stdio mode** to validate that `GITLAB_TOKEN` is present and to default `GITLAB_URL` to `https://gitlab.com` when omitted. HTTP mode uses CLI flags instead (see Transport Selection).
 
 | Variable                 | Required | Default | Description                                          |
 | ------------------------ | -------- | ------- | ---------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | —       | GitLab instance base URL                             |
+| `GITLAB_URL`             | Stdio    | `https://gitlab.com` | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
 | `META_TOOLS`             | No       | `true`  | Use meta-tools instead of individual tools            |

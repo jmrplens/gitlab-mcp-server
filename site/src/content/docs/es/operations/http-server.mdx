@@ -24,8 +24,8 @@ Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de 
 ## Iniciar el servidor
 
 ```bash
-# Instancia única de GitLab (URL por defecto para todos los clientes)
-gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com
+# Instancia única de GitLab.com (URL fija para todos los clientes; reemplázala para GitLab autogestionado)
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com
 
 # Multi-instancia (cada cliente especifica su URL de GitLab mediante la cabecera GITLAB-URL)
 gitlab-mcp-server --http --http-addr=:8080
@@ -100,7 +100,7 @@ Si ambas cabeceras están presentes, `PRIVATE-TOKEN` tiene precedencia. Las soli
 El modo OAuth (`--auth-mode=oauth`) habilita autenticación OAuth 2.1 compatible con RFC 9728. En lugar de gestionar tokens manualmente, los clientes MCP descubren el servidor de autorización automáticamente y manejan el flujo OAuth:
 
 ```bash
-gitlab-mcp-server --http --gitlab-url=https://tu-gitlab.ejemplo.com --auth-mode=oauth
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 ```
 
 **Cómo funciona:**
@@ -303,7 +303,7 @@ docker run -d \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.ejemplo.com
+  --gitlab-url=https://gitlab.com
 ```
 
 </TabItem>
@@ -339,9 +339,9 @@ services:
     ports:
       - "8080:8080"
     command:
-      # Modo instancia única (URL por defecto para todos los clientes):
+      # Modo instancia única (URL fija de GitLab.com para todos los clientes; reemplázala para GitLab autogestionado):
       - "--http"
-      - "--gitlab-url=https://gitlab.ejemplo.com"
+      - "--gitlab-url=https://gitlab.com"
       - "--http-addr=:8080"
       - "--max-http-clients=200"
       - "--session-timeout=1h"

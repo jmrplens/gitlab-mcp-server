@@ -43,6 +43,15 @@ func newTestModel(t *testing.T) tuiModel {
 	return newTUIModel("1.0.0", io.Discard)
 }
 
+// TestNewTUIModel_DefaultGitLabURL verifies that new setups prefill the
+// GitLab.com default.
+func TestNewTUIModel_DefaultGitLabURL(t *testing.T) {
+	m := newTestModel(t)
+	if m.urlInput.Value() != DefaultGitLabURL {
+		t.Fatalf("urlInput value = %q, want %q", m.urlInput.Value(), DefaultGitLabURL)
+	}
+}
+
 // advanceToGitLab moves the model from tuiStepInstall to tuiStepGitLab.
 func advanceToGitLab(m tuiModel) tuiModel {
 	result, _ := m.Update(keyMsg(tea.KeyEnter))
@@ -195,6 +204,7 @@ func TestUpdateGitLab_TabSwitchesFields(t *testing.T) {
 func TestUpdateGitLab_EnterOnURL_MovesToToken(t *testing.T) {
 	m := newTestModel(t)
 	m = advanceToGitLab(m)
+	m.urlInput.SetValue("")
 	result, _ := m.Update(keyMsg(tea.KeyEnter))
 	final := result.(tuiModel)
 	if final.gitlabFocus != 1 {
@@ -203,12 +213,15 @@ func TestUpdateGitLab_EnterOnURL_MovesToToken(t *testing.T) {
 	if final.step != tuiStepGitLab {
 		t.Error("step should remain tuiStepGitLab")
 	}
+	if final.urlInput.Value() != DefaultGitLabURL {
+		t.Errorf("urlInput value = %q, want %q", final.urlInput.Value(), DefaultGitLabURL)
+	}
 }
 
 // TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances uses table-driven
 // subtests to verify Enter on the token field validates URL and token and
 // advances to tuiStepClients only for valid input, setting error messages
-// for empty URL, invalid URL format, or empty token.
+// for invalid URL format or empty token.
 func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -218,11 +231,10 @@ func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 		wantError string
 	}{
 		{
-			name:      "empty URL",
-			url:       "",
-			token:     "glpat-test",
-			wantStep:  tuiStepGitLab,
-			wantError: "GitLab URL is required",
+			name:     "empty URL uses default",
+			url:      "",
+			token:    "glpat-test",
+			wantStep: tuiStepClients,
 		},
 		{
 			name:      "invalid URL format",
@@ -263,6 +275,9 @@ func TestUpdateGitLab_EnterOnToken_ValidatesAndAdvances(t *testing.T) {
 			if tc.wantError == "" && final.err != "" {
 				t.Errorf("unexpected error: %q", final.err)
 			}
+			if tc.url == "" && tc.wantError == "" && final.urlInput.Value() != DefaultGitLabURL {
+				t.Errorf("urlInput value = %q, want %q", final.urlInput.Value(), DefaultGitLabURL)
+			}
 		})
 	}
 }
@@ -288,12 +303,11 @@ func TestUpdateGitLab_CtrlO_OpensAdvancedOptions(t *testing.T) {
 			wantStep: tuiStepOptions,
 		},
 		{
-			name:      "empty URL from token field",
-			url:       "",
-			token:     "glpat-abc123",
-			focus:     1,
-			wantStep:  tuiStepGitLab,
-			wantError: "GitLab URL is required",
+			name:     "empty URL from token field uses default",
+			url:      "",
+			token:    "glpat-abc123",
+			focus:    1,
+			wantStep: tuiStepOptions,
 		},
 		{
 			name:      "empty token from token field",

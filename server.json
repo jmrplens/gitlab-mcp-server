@@ -40,9 +40,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",
@@ -160,9 +161,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",
@@ -280,9 +282,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",
@@ -400,9 +403,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",
@@ -520,9 +524,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",
@@ -640,9 +645,10 @@
       "environmentVariables": [
         {
           "name": "GITLAB_URL",
-          "description": "GitLab instance URL (e.g. https://gitlab.example.com)",
-          "isRequired": true,
-          "placeholder": "https://gitlab.example.com"
+          "description": "GitLab instance URL (default: https://gitlab.com; set for self-managed instances)",
+          "isRequired": false,
+          "placeholder": "https://gitlab.com",
+          "default": "https://gitlab.com"
         },
         {
           "name": "GITLAB_TOKEN",

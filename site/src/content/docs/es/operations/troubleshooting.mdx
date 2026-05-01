@@ -15,7 +15,7 @@ Para la referencia técnica completa, consulta [`docs/troubleshooting.md`](https
 flowchart TD
     A[El servidor no arranca] --> B{Mensaje de error?}
     B -->|GITLAB_TOKEN required| C[Establece GITLAB_TOKEN<br/>en .env o entorno]
-    B -->|GITLAB_URL required| D[Establece GITLAB_URL<br/>en .env o flag]
+    B -->|Invalid GITLAB_URL| D[Corrige GITLAB_URL<br/>autogestionado]
     B -->|401 Unauthorized| E[Regenera token<br/>con scope api]
     B -->|403 Forbidden| F[Verifica scope api<br/>del token]
     B -->|Conexión rechazada| G{GitLab accesible?}
@@ -36,13 +36,13 @@ flowchart TD
     style K fill:#3b82f6,color:#fff
 ```
 
-| Síntoma                                    | Causa                               | Solución                                                                                                                                                |
-| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_TOKEN is required` al inicio       | Token no establecido                | Establece `GITLAB_TOKEN` en `.env` o en el entorno                                                                                                      |
-| `GITLAB_URL is required` al inicio         | URL no establecida                  | Establece `GITLAB_URL` en `.env` o usa el flag `--gitlab-url`. En modo HTTP, `--gitlab-url` es opcional si los clientes envían la cabecera `GITLAB-URL` |
-| `401 Unauthorized` de la API de GitLab     | PAT inválido o expirado             | Genera un nuevo token con scope `api` en GitLab → Preferences → Access Tokens                                                                           |
-| `403 Forbidden` en operaciones específicas | El token carece del scope requerido | Asegúrate de que el token tiene scope `api` (no solo `read_api`)                                                                                        |
-| Conexión rechazada o timeout               | Instancia de GitLab inaccesible     | Verifica que `GITLAB_URL` es accesible: `curl -s $GITLAB_URL/api/v4/version`                                                                            |
+| Síntoma                                    | Causa                               | Solución                                                                      |
+| ------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------- |
+| `GITLAB_TOKEN is required` al inicio       | Token no establecido                | Establece `GITLAB_TOKEN` en `.env` o en el entorno                            |
+| `GITLAB_URL is not a valid URL` al inicio  | La URL tiene sintaxis inválida      | Corrige `GITLAB_URL` u omítela para usar `https://gitlab.com` en modo stdio   |
+| `401 Unauthorized` de la API de GitLab     | PAT inválido o expirado             | Genera un nuevo token con scope `api` en GitLab → Preferences → Access Tokens |
+| `403 Forbidden` en operaciones específicas | El token carece del scope requerido | Asegúrate de que el token tiene scope `api` (no solo `read_api`)              |
+| Conexión rechazada o timeout               | Instancia de GitLab inaccesible     | Verifica que `GITLAB_URL` es accesible: `curl -s $GITLAB_URL/api/v4/version`  |
 
 ## TLS y certificados
 
@@ -175,7 +175,7 @@ Habilita el registro detallado para diagnosticar problemas:
    LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 
    # Modo HTTP (logs mezclados con la salida del servidor)
-   LOG_LEVEL=debug ./gitlab-mcp-server --http --gitlab-url=https://gitlab.ejemplo.com 2>debug.log
+   LOG_LEVEL=debug ./gitlab-mcp-server --http --gitlab-url=https://gitlab.com 2>debug.log
    ```
 
 2. **Reproduce el problema** ejecutando la misma operación que falló.

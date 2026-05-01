@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,25 +107,58 @@ func TestHandleConfigure_InvalidURL(t *testing.T) {
 	}
 }
 
-// TestHandleConfigure_MissingURL verifies that the configure endpoint
-// returns 400 when GitLab URL is missing.
-func TestHandleConfigure_MissingURL(t *testing.T) {
-	var output bytes.Buffer
-	doneCh := make(chan error, 1)
-	handler := handleConfigure(&output, func(err error) { doneCh <- err })
-
-	body := `{"gitlab_url":"","gitlab_token":"glpat-xxx","selected_clients":[]}`
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+// TestHandleConfigure_DefaultsEmptyURL verifies that an empty GitLab URL uses
+// the GitLab.com default.
+func TestHandleConfigure_DefaultsEmptyURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		gitLabURL string
+	}{
+		{name: "empty", gitLabURL: ""},
+		{name: "whitespace", gitLabURL: "   "},
 	}
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubLoadExistingConfig(t)
+			stubInstallBinary(t)
+			envPath := stubWriteEnvFile(t)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			var output bytes.Buffer
+			doneCh := make(chan error, 1)
+			handler := handleConfigure(&output, func(err error) { doneCh <- err })
+
+			reqBody := configureRequest{
+				InstallPath:     t.TempDir(),
+				GitLabURL:       tt.gitLabURL,
+				GitLabToken:     "glpat-xxx",
+				LogLevel:        "info",
+				SelectedClients: []int{},
+			}
+			body, mErr := json.Marshal(reqBody)
+			if mErr != nil {
+				t.Fatalf("marshal request: %v", mErr)
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			data, readErr := os.ReadFile(envPath)
+			if readErr != nil {
+				t.Fatalf("read env file: %v", readErr)
+			}
+			if !strings.Contains(string(data), "GITLAB_URL="+DefaultGitLabURL) {
+				t.Fatalf("env file = %q, want default GitLab URL", string(data))
+			}
+		})
 	}
 }
 

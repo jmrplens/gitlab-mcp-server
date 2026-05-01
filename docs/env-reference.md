@@ -12,7 +12,6 @@
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `GITLAB_URL` | GitLab instance base URL (must use `http://` or `https://` scheme) | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token with `api` scope | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ---
@@ -21,6 +20,7 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL (must use `http://` or `https://` scheme). Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification (`true`/`false`). Use for self-signed certs |
 
 ---
@@ -105,16 +105,17 @@ Configuration is loaded by `internal/config/` in this precedence order (higher w
 
 ```env
 # Required
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Optional
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_SKIP_TLS_VERIFY=false
 META_TOOLS=true
 LOG_LEVEL=info
 UPLOAD_MAX_FILE_SIZE=500MB
 AUTO_UPDATE=true
 ```
+
+For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
 > **Security**: The `.env` file is gitignored. Never commit tokens or credentials. The Setup Wizard writes secrets to `~/.gitlab-mcp-server.env` with `0600` permissions on Unix.
 
@@ -126,7 +127,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 | Environment Variable | CLI Flag | Notes |
 | --- | --- | --- |
-| `GITLAB_URL` | `--gitlab-url` | Required in stdio mode. Optional in HTTP mode. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
+| `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
 | `META_TOOLS` | `--meta-tools` | |

@@ -14,7 +14,7 @@ It provides 1006 individual MCP tools across 96 GitLab API domains, 32 meta-tool
 
 ## Configuration (environment variables — stdio mode)
 
-- GITLAB_URL: GitLab instance URL (required)
+- GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
 - META_TOOLS: Enable meta-tools for reduced tool count (default: true)

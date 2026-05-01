@@ -30,9 +30,9 @@ By default, gitlab-mcp-server runs in **stdio mode** — each AI client (VS Code
 HTTP mode is configured entirely via CLI flags — no environment variables are needed:
 
 ```bash
-# Single GitLab instance (all clients use the same instance)
+# Single GitLab.com instance (all clients use the same instance; replace for self-managed GitLab)
 gitlab-mcp-server --http \
-  --gitlab-url=https://gitlab.example.com \
+  --gitlab-url=https://gitlab.com \
   --http-addr=:8080
 
 # Multi-instance (each client specifies their GitLab URL via GITLAB-URL header)
@@ -195,7 +195,7 @@ The default `--auth-mode=legacy` accepts tokens via `PRIVATE-TOKEN` or `Authoriz
 
 ```bash
 gitlab-mcp-server --http \
-  --gitlab-url=https://gitlab.example.com \
+  --gitlab-url=https://gitlab.com \
   --auth-mode=oauth \
   --oauth-cache-ttl=15m
 ```

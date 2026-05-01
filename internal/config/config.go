@@ -149,6 +149,9 @@ func (c *Config) ServerConfig() *ServerConfig {
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
 const EnvFileName = ".gitlab-mcp-server.env"
 
+// DefaultGitLabURL is the GitLab instance used when GITLAB_URL is unset.
+const DefaultGitLabURL = "https://gitlab.com"
+
 // Load reads configuration from environment variables.
 // It attempts to load a .env file from the current directory first, then
 // falls back to ~/.gitlab-mcp-server.env (written by the setup wizard) for
@@ -269,7 +272,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		GitLabURL:          os.Getenv("GITLAB_URL"),
+		GitLabURL:          gitLabURLFromEnv(),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
 		SkipTLSVerify:      skipTLS,
 		MetaTools:          metaTools,
@@ -301,10 +304,18 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+func gitLabURLFromEnv() string {
+	gitLabURL := strings.TrimSpace(os.Getenv("GITLAB_URL"))
+	if gitLabURL == "" {
+		return DefaultGitLabURL
+	}
+	return gitLabURL
+}
+
 // validate checks that all required configuration fields are present and valid.
 func (c *Config) validate() error {
 	if c.GitLabURL == "" {
-		return errors.New("GITLAB_URL is required")
+		return errors.New("GITLAB_URL cannot be empty")
 	}
 	u, err := url.Parse(c.GitLabURL)
 	if err != nil {

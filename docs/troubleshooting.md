@@ -14,7 +14,6 @@ Common issues and solutions for gitlab-mcp-server.
 | Symptom | Cause | Solution |
 | --- | --- | --- |
 | `GITLAB_TOKEN is required` at startup | Token not set | Set `GITLAB_TOKEN` in `.env` or environment |
-| `GITLAB_URL is required` at startup | URL not set | Set `GITLAB_URL` in `.env` or use `--gitlab-url` flag. In HTTP mode, `--gitlab-url` is optional if clients send the `GITLAB-URL` header |
 | `401 Unauthorized` from GitLab API | Invalid or expired PAT | Generate a new token with `api` scope in GitLab → User Settings → Access Tokens |
 | `403 Forbidden` on specific operations | Token lacks required scope | Ensure the token has `api` scope (not just `read_api`) |
 | Connection refused or timeout | GitLab instance unreachable | Verify `GITLAB_URL` is reachable: `curl -s $GITLAB_URL/api/v4/version` |
@@ -100,7 +99,7 @@ See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the fu
 | Server does not appear in MCP status | Configuration not loaded | Run `Ctrl+Shift+P` → **MCP: List Servers** to verify. Check that the binary path is absolute and the file exists |
 | "Permission denied" on startup (Linux/macOS) | Binary not executable | Run `chmod +x /path/to/gitlab-mcp-server` |
 | Token prompt does not appear | `${input:...}` misconfigured | Ensure the `inputs` array is at the top level of `mcp.json`, not inside `servers` |
-| Server restarts repeatedly | Crash loop due to missing env vars | Check Output panel → **MCP Logs** for `GITLAB_URL is required` or `GITLAB_TOKEN is required` |
+| Server restarts repeatedly | Crash loop due to missing env vars | Check Output panel → **MCP Logs** for `GITLAB_TOKEN is required` or other startup errors |
 
 ### Cursor
 

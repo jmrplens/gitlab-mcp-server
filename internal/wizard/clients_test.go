@@ -438,33 +438,27 @@ func TestEnvMap_AllFlagsEnabled(t *testing.T) {
 }
 
 // TestTokenCreationURL verifies the token creation URL is constructed
-// correctly, including trimming trailing slashes.
+// correctly for defaults, custom instances, and trailing slashes.
 func TestTokenCreationURL(t *testing.T) {
+	const tokenPath = "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"
+
 	tests := []struct {
-		name     string
-		input    string
-		wantSufx string
+		name  string
+		input string
+		want  string
 	}{
-		{"no trailing slash", "https://gitlab.com", "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"},
-		{"trailing slash", "https://gitlab.com/", "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"},
-		{"custom url", "https://custom.dev", "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"},
+		{name: "empty URL uses default", input: "", want: DefaultGitLabURL + tokenPath},
+		{name: "whitespace URL uses default", input: "   ", want: DefaultGitLabURL + tokenPath},
+		{name: "no trailing slash", input: "https://gitlab.com", want: "https://gitlab.com" + tokenPath},
+		{name: "trailing slash", input: "https://gitlab.com/", want: "https://gitlab.com" + tokenPath},
+		{name: "custom HTTPS URL", input: "https://custom.dev", want: "https://custom.dev" + tokenPath},
+		{name: "custom HTTP URL", input: "http://gitlab.local:8080/", want: "http://gitlab.local:8080" + tokenPath},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := TokenCreationURL(tt.input)
-			if got == "" {
-				t.Fatal("returned empty URL")
-			}
-			wantPrefix := "https://"
-			if got[:8] != wantPrefix {
-				t.Errorf("URL should start with https://, got %q", got)
-			}
-			if len(got) < len(tt.wantSufx) {
-				t.Fatalf("URL too short: %q", got)
-			}
-			suffix := got[len(got)-len(tt.wantSufx):]
-			if suffix != tt.wantSufx {
-				t.Errorf("URL suffix = %q, want %q", suffix, tt.wantSufx)
+			if got != tt.want {
+				t.Errorf("TokenCreationURL(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
