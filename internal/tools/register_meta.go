@@ -2463,58 +2463,15 @@ See also: gitlab_user (SSH/GPG keys, user PATs), gitlab_admin (instance admin), 
 // registry_rule_delete), and package protection rules (protection_rule_list, protection_rule_create,
 // protection_rule_update, protection_rule_delete).
 func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
-	publishAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.PublishInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return packages.Publish(ctx, nil, client, input)
-	}
-	downloadAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.DownloadInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return packages.Download(ctx, nil, client, input)
-	}
-	deleteAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.DeleteInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return nil, packages.Delete(ctx, nil, client, input)
-	}
-	fileDeleteAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.FileDeleteInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return nil, packages.FileDelete(ctx, nil, client, input)
-	}
-	publishAndLinkAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.PublishAndLinkInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return packages.PublishAndLink(ctx, nil, client, input)
-	}
-	publishDirAction := func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[packages.PublishDirInput](params)
-		if err != nil {
-			return nil, err
-		}
-		return packages.PublishDirectory(ctx, nil, client, input)
-	}
-
 	routes := actionMap{
-		"publish":                  route(publishAction),
-		"download":                 route(downloadAction),
+		"publish":                  routeActionWithRequest(client, packages.Publish),
+		"download":                 routeActionWithRequest(client, packages.Download),
 		"list":                     routeAction(client, packages.List),
 		"file_list":                routeAction(client, packages.FileList),
-		"delete":                   destructiveRoute(deleteAction),
-		"file_delete":              destructiveRoute(fileDeleteAction),
-		"publish_and_link":         route(publishAndLinkAction),
-		"publish_directory":        route(publishDirAction),
+		"delete":                   destructiveVoidActionWithRequest(client, packages.Delete),
+		"file_delete":              destructiveVoidActionWithRequest(client, packages.FileDelete),
+		"publish_and_link":         routeActionWithRequest(client, packages.PublishAndLink),
+		"publish_directory":        routeActionWithRequest(client, packages.PublishDirectory),
 		"registry_list_project":    routeAction(client, containerregistry.ListProject),
 		"registry_list_group":      routeAction(client, containerregistry.ListGroup),
 		"registry_get":             routeAction(client, containerregistry.GetRepository),
@@ -2846,10 +2803,17 @@ See also: gitlab_merge_request`, routes, toolutil.IconSecurity)
 // registerGroupSCIMMeta registers the gitlab_group_scim meta-tool with actions
 // for managing SCIM identities in a group.
 func registerGroupSCIMMeta(server *mcp.Server, client *gitlabclient.Client) {
+	updateAction := func(ctx context.Context, client *gitlabclient.Client, input groupscim.UpdateInput) (groupscim.UpdateOutput, error) {
+		if err := groupscim.Update(ctx, client, input); err != nil {
+			return groupscim.UpdateOutput{}, err
+		}
+		return groupscim.UpdateOutput{Updated: true, Message: "SCIM identity updated successfully."}, nil
+	}
+
 	routes := actionMap{
 		"list":   routeAction(client, groupscim.List),
 		"get":    routeAction(client, groupscim.Get),
-		"update": routeVoidAction(client, groupscim.Update),
+		"update": routeAction(client, updateAction),
 		"delete": destructiveVoidAction(client, groupscim.Delete),
 	}
 	addMetaTool(server, "gitlab_group_scim", `Manage SCIM identities for GitLab group provisioning.

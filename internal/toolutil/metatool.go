@@ -42,9 +42,9 @@ type ActionFunc func(ctx context.Context, params map[string]any) (any, error)
 // ActionRoute pairs an action handler with metadata about its behavior.
 // Used by meta-tools to carry per-route destructive classification
 // without string parsing. OutputSchema holds the JSON Schema for the
-// action's typed output (nil for void actions). InputSchema holds the
-// JSON Schema for the action's typed params (nil for routes constructed
-// via the untyped Route/DestructiveRoute constructors).
+// action's typed output. InputSchema holds the JSON Schema for the action's
+// typed params (nil for routes constructed via the untyped Route and
+// DestructiveRoute constructors).
 type ActionRoute struct {
 	Handler      ActionFunc
 	Destructive  bool
@@ -329,6 +329,19 @@ func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ct
 	}
 }
 
+// WrapVoidActionWithRequest wraps a void handler that also requires the MCP
+// request. The request is extracted from context via RequestFromContext; if
+// absent, nil is passed.
+func WrapVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) error) ActionFunc {
+	return func(ctx context.Context, params map[string]any) (any, error) {
+		input, err := UnmarshalParams[T](params)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fn(ctx, RequestFromContext(ctx), client, input)
+	}
+}
+
 // RouteAction wraps a typed function as a non-destructive ActionRoute
 // and attaches the JSON Schema for the input type T and output type R.
 func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
@@ -341,13 +354,23 @@ func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.
 }
 
 // RouteVoidAction wraps a typed void function as a non-destructive ActionRoute.
-// OutputSchema is nil because the action returns no data; InputSchema is
-// captured from T.
+// The handler returns a typed confirmation so meta-tool routes expose
+// structured output instead of nil content.
 func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return ActionRoute{
-		Handler:     WrapVoidAction(client, fn),
-		Destructive: false,
-		InputSchema: schemaForType(reflect.TypeFor[T]()),
+		Handler: func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := UnmarshalParams[T](params)
+			if err != nil {
+				return nil, err
+			}
+			if fnErr := fn(ctx, client, input); fnErr != nil {
+				return nil, fnErr
+			}
+			return VoidOutput{Status: "success", Message: "Action completed successfully."}, nil
+		},
+		Destructive:  false,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		OutputSchema: schemaForType(reflect.TypeFor[VoidOutput]()),
 	}
 }
 
@@ -374,13 +397,23 @@ func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx co
 }
 
 // DestructiveVoidAction wraps a typed void function as a destructive ActionRoute.
-// OutputSchema is nil because the action returns no data; InputSchema is
-// captured from T.
+// The handler returns a typed confirmation so meta-tool routes expose
+// structured output instead of nil content.
 func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) ActionRoute {
 	return ActionRoute{
-		Handler:     WrapVoidAction(client, fn),
-		Destructive: true,
-		InputSchema: schemaForType(reflect.TypeFor[T]()),
+		Handler: func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := UnmarshalParams[T](params)
+			if err != nil {
+				return nil, err
+			}
+			if fnErr := fn(ctx, client, input); fnErr != nil {
+				return nil, fnErr
+			}
+			return DeleteOutput{Status: "success", Message: "Action completed successfully."}, nil
+		},
+		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }
 
@@ -392,6 +425,26 @@ func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn 
 		Destructive:  true,
 		InputSchema:  schemaForType(reflect.TypeFor[T]()),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
+	}
+}
+
+// DestructiveVoidActionWithRequest wraps a request-aware void function as a
+// destructive ActionRoute with typed confirmation output.
+func DestructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) error) ActionRoute {
+	return ActionRoute{
+		Handler: func(ctx context.Context, params map[string]any) (any, error) {
+			input, err := UnmarshalParams[T](params)
+			if err != nil {
+				return nil, err
+			}
+			if fnErr := fn(ctx, RequestFromContext(ctx), client, input); fnErr != nil {
+				return nil, fnErr
+			}
+			return DeleteOutput{Status: "success", Message: "Action completed successfully."}, nil
+		},
+		Destructive:  true,
+		InputSchema:  schemaForType(reflect.TypeFor[T]()),
+		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }
 

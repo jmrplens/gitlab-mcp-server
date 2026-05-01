@@ -153,10 +153,16 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 // Routes without OutputSchema are reported (these are typically void actions
 // or plain Route() calls that lack typed output).
 func auditRouteOutputSchema() []finding {
+	return collectRouteOutputSchemaFindings(toolutil.MetaRoutes())
+}
+
+func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) []finding {
 	var fs []finding
-	allRoutes := toolutil.MetaRoutes()
 	for toolName, routes := range allRoutes {
 		for action, route := range routes {
+			if shouldSkipRouteOutputSchema(toolName, action, route) {
+				continue
+			}
 			if route.OutputSchema == nil {
 				fs = append(fs, finding{
 					tool:     toolName,
@@ -167,6 +173,10 @@ func auditRouteOutputSchema() []finding {
 		}
 	}
 	return fs
+}
+
+func shouldSkipRouteOutputSchema(toolName, _ string, _ toolutil.ActionRoute) bool {
+	return toolName == "gitlab_analyze"
 }
 
 // printReport prints the audit results as a formatted table.

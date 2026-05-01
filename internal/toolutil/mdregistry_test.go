@@ -225,3 +225,23 @@ func TestMarkdownForResult_DeleteOutputViaInit(t *testing.T) {
 		t.Errorf("text = %q, want %q", tc.Text, want)
 	}
 }
+
+func TestMarkdownForResult_VoidOutputViaInit(t *testing.T) {
+	// Re-register: earlier tests in this file reset global maps, wiping init() state.
+	RegisterMarkdown(func(v VoidOutput) string {
+		return EmojiSuccess + " " + v.Message
+	})
+
+	result := MarkdownForResult(VoidOutput{Message: "Action completed"})
+	if result == nil {
+		t.Fatal("expected non-nil result for VoidOutput")
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	want := EmojiSuccess + " Action completed"
+	if tc.Text != want {
+		t.Errorf("text = %q, want %q", tc.Text, want)
+	}
+}

@@ -21,6 +21,9 @@ func init() {
 	RegisterMarkdown(func(v DeleteOutput) string {
 		return EmojiSuccess + " " + v.Message
 	})
+	RegisterMarkdown(func(v VoidOutput) string {
+		return EmojiSuccess + " " + v.Message
+	})
 }
 
 // RegisterMarkdown registers a Markdown string formatter for type T.
