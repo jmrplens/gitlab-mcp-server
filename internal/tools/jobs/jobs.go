@@ -1,6 +1,3 @@
-// Package jobs implements MCP tool handlers for GitLab CI/CD job operations
-// including list, get, trace log retrieval, cancel, and retry.
-// It wraps the Jobs service from client-go v2.
 package jobs
 
 import (

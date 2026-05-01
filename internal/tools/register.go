@@ -1,7 +1,3 @@
-// register.go wires all individual GitLab MCP tools to the MCP server.
-// Each register* function groups related tools by domain (projects, branches,
-// tags, releases, merge requests, etc.) and binds them to handler closures
-// that capture the GitLab client.
 package tools
 
 import (

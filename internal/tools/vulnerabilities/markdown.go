@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for vulnerability outputs.
 package vulnerabilities
 
 import (

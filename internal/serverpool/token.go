@@ -1,4 +1,3 @@
-// token.go provides token and GitLab URL extraction for HTTP mode authentication.
 package serverpool
 
 import (

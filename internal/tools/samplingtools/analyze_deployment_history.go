@@ -1,4 +1,3 @@
-// analyze_deployment_history.go implements the sampling-based deployment history analysis tool.
 package samplingtools
 
 import (

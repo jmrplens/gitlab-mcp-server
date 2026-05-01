@@ -1,4 +1,3 @@
-// register.go wires milestones MCP tools to the MCP server.
 package milestones
 
 import (

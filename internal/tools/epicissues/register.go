@@ -1,4 +1,3 @@
-// register.go wires epic-issue MCP tools to the MCP server.
 package epicissues
 
 import (

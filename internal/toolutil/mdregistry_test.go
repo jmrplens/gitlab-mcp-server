@@ -226,6 +226,8 @@ func TestMarkdownForResult_DeleteOutputViaInit(t *testing.T) {
 	}
 }
 
+// TestMarkdownForResult_VoidOutputViaInit verifies that the built-in VoidOutput
+// formatter produces a success emoji followed by the configured message.
 func TestMarkdownForResult_VoidOutputViaInit(t *testing.T) {
 	// Re-register: earlier tests in this file reset global maps, wiping init() state.
 	RegisterMarkdown(func(v VoidOutput) string {
@@ -246,6 +248,8 @@ func TestMarkdownForResult_VoidOutputViaInit(t *testing.T) {
 	}
 }
 
+// TestFormatDeleteOutput_ReturnsEmojiPlusMessage verifies that delete output
+// formatting combines the success emoji and message text.
 func TestFormatDeleteOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 	t.Parallel()
 	got := formatDeleteOutput(DeleteOutput{Status: "success", Message: "branch deleted"})
@@ -255,6 +259,8 @@ func TestFormatDeleteOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 	}
 }
 
+// TestFormatVoidOutput_ReturnsEmojiPlusMessage verifies that void output
+// formatting combines the success emoji and message text.
 func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 	t.Parallel()
 	got := formatVoidOutput(VoidOutput{Status: "success", Message: "action completed"})

@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group credential
-// MCP tool output.
 package groupcredentials
 
 import (

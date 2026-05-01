@@ -1,5 +1,3 @@
-// user_ssh_keys.go implements SSH key CRUD operations for users:
-// list for user, get, get for user, add, add for user, delete, delete for user.
 package users
 
 import (

@@ -1,5 +1,3 @@
-// stats.go collects filesystem-level codebase metrics used by gen_readme to
-// auto-generate the Unnecessary Statistics section of the README.
 package main
 
 import (

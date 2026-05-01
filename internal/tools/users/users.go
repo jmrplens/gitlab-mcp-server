@@ -1,5 +1,3 @@
-// Package users implements GitLab user operations including retrieving the current
-// authenticated user.
 package users
 
 import (

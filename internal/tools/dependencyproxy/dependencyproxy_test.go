@@ -41,7 +41,7 @@ func TestPurge_Error(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
+// TestRegisterTools_NoPanic_Coverage verifies dependency proxy tool registration.
 func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -50,7 +50,7 @@ func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestRegisterMeta_NoPanic verifies the behavior of cov register meta no panic.
+// TestRegisterMeta_NoPanic_Coverage verifies dependency proxy meta-tool registration.
 func TestRegisterMeta_NoPanic_Coverage(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -59,7 +59,8 @@ func TestRegisterMeta_NoPanic_Coverage(t *testing.T) {
 	RegisterMeta(server, client)
 }
 
-// TestMCPRound_Trip verifies the behavior of cov m c p round trip.
+// TestMCPRound_Trip_Coverage verifies dependency proxy tool execution over
+// in-memory MCP transports.
 func TestMCPRound_Trip_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -91,7 +92,7 @@ func TestMCPRound_Trip_Coverage(t *testing.T) {
 	}
 }
 
-// TestCovMCPRoundTrip_PurgeError verifies the error path inside the registered
+// TestMCPRoundTripPurge_Error_Coverage verifies the error path inside the registered
 // tool handler when the GitLab API call fails (covers register.go lines 30-32).
 func TestMCPRoundTripPurge_Error_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

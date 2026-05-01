@@ -1,5 +1,3 @@
-// ratelimit.go implements per-IP rate limiting for the HTTP MCP server,
-// protecting against abuse of the server pool endpoint.
 package serverpool
 
 import (

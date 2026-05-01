@@ -1,4 +1,3 @@
-// register.go wires terraformstates MCP tools to the MCP server.
 package terraformstates
 
 import (

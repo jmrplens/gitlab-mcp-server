@@ -1,4 +1,3 @@
-// register.go wires issuestatistics MCP tools to the MCP server.
 package issuestatistics
 
 import (

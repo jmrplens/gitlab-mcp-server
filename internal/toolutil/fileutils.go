@@ -1,6 +1,3 @@
-// fileutils.go provides shared file utilities for upload and download
-// operations: file validation, SHA-256 checksum computation, progress-reporting
-// io.Reader/io.Writer wrappers, and GitLab package name validation.
 package toolutil
 
 import (
@@ -19,7 +16,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/progress"
 )
 
-// Upload size defaults re-exported from config (single source of truth).
+// DefaultMaxFileSize re-exports the upload size limit from config as the single
+// source of truth for tool utilities.
 const (
 	DefaultMaxFileSize = config.DefaultMaxFileSize
 )

@@ -1,5 +1,3 @@
-// Package samplingtools provides MCP tools that leverage the sampling capability
-// to analyze GitLab data through LLM-assisted summarization and review.
 package samplingtools
 
 import (

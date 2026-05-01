@@ -1,4 +1,3 @@
-// time_helpers.go provides time-parsing utilities shared across tool handlers.
 package toolutil
 
 import "time"

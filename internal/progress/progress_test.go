@@ -115,8 +115,6 @@ func TestStep_CalculatesProgress(t *testing.T) {
 	tracker.Step(context.Background(), 3, 3, "step three")
 }
 
-// Integration test: Create a real client+server pair and verify progress
-// notifications flow from server tool handler back to the client.
 // TestProgress_Integration creates a real in-memory MCP client/server pair
 // to verify that [Tracker.Step] sends progress notifications from the server
 // tool handler back to the client. It asserts correct progress/total values
@@ -290,7 +288,7 @@ func TestUpdate_NotifyProgressError(t *testing.T) {
 	tracker.Update(context.Background(), 1, 3, "should fail silently")
 }
 
-// TestFromRequest_WithToken_NoSession verifies that a [Tracker] with a token
+// TestFromRequest_WithTokenNoSession verifies that a [Tracker] with a token
 // but no session is inactive and that [Tracker.Update] is a safe no-op.
 func TestFromRequest_WithTokenNoSession(t *testing.T) {
 	// A request with a token but no session results in inactive tracker.

@@ -1,4 +1,3 @@
-// register.go wires deploytokens MCP tools to the MCP server.
 package deploytokens
 
 import (

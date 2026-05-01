@@ -1,10 +1,3 @@
-// graphql.go provides shared utilities for raw GraphQL queries via
-// client-go's GraphQL.Do() method. It includes cursor-based pagination
-// structs, GitLab Global ID (GID) helpers, and pagination summary formatting.
-//
-// These utilities are used by domain sub-packages that call the GitLab
-// GraphQL API directly (without a client-go service wrapper), such as
-// vulnerabilities, cicatalog, branchrules, and customemoji.
 package toolutil
 
 import (

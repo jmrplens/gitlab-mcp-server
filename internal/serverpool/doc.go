@@ -10,6 +10,10 @@
 // eviction when the limit is reached. Token plus URL hashes (SHA-256) are used
 // as pool keys so that raw tokens are never stored in memory.
 //
+// The package also extracts GitLab tokens and per-request GitLab URLs from HTTP
+// headers and includes an authentication-failure rate limiter for the HTTP MCP
+// endpoint.
+//
 // # Usage
 //
 // Create a pool with [New], retrieve or create servers with

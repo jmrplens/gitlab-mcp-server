@@ -1,6 +1,3 @@
-// Package packages implements GitLab Generic Packages API operations as MCP tools.
-// It provides handlers for publishing, downloading, listing, and deleting
-// package files in the GitLab Package Registry.
 package packages
 
 import (

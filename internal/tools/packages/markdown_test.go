@@ -508,7 +508,7 @@ func TestList_WithSortAndOrderBy(t *testing.T) {
 	}
 }
 
-// Empty list with no tags and no links.
+// TestList_WithEmptyPackage verifies list output when a package has no tags or links.
 func TestList_WithEmptyPackage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathAPIPkgs1 {
@@ -573,7 +573,7 @@ func TestFileList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// FileList with created_at in response.
+// TestFileList_WithCreatedAt verifies file list output when created_at is present.
 func TestFileList_WithCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/packages/10/package_files" {

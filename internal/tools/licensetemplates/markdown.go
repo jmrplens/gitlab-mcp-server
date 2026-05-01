@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for license template MCP tool output.
 package licensetemplates
 
 import (

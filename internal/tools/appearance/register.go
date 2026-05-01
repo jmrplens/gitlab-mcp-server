@@ -1,4 +1,3 @@
-// register.go wires appearance MCP tools to the MCP server.
 package appearance
 
 import (

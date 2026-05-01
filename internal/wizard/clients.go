@@ -1,5 +1,3 @@
-// clients.go defines supported MCP clients (IDEs) and their configuration
-// file formats and paths for wizard-assisted installation.
 package wizard
 
 import (

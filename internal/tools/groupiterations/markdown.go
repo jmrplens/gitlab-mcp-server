@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group iteration
-// MCP tool output.
 package groupiterations
 
 import (

@@ -1,5 +1,8 @@
 // Package topics implements MCP tool handlers for GitLab project topics.
 // It wraps the TopicsService from client-go v2.
+//
+// The package also registers MCP tools and renders Markdown summaries for topic
+// responses.
 package topics
 
 import (

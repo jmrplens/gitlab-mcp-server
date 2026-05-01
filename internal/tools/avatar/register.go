@@ -1,4 +1,3 @@
-// register.go wires avatar MCP tools to the MCP server.
 package avatar
 
 import (

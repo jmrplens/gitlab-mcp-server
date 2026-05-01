@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for deployment merge request MCP tool output.
 package deploymentmergerequests
 
 import (

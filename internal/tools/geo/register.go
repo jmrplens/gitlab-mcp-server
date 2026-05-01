@@ -1,4 +1,3 @@
-// Package geo register.go wires Geo site MCP tools to the MCP server.
 package geo
 
 import (

@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group SSH certificate
-// MCP tool output.
 package groupsshcerts
 
 import (

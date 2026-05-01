@@ -1,6 +1,3 @@
-// graphql_queries.go defines optimized GraphQL aggregation queries that fetch
-// rich context in a single request, replacing multiple sequential REST calls
-// used by sampling tools.
 package samplingtools
 
 // queryMRContext fetches merge request details, discussions, approval state,

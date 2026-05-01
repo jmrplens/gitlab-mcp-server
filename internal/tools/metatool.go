@@ -1,5 +1,3 @@
-// metatool.go re-exports meta-tool dispatch utilities from toolutil and wires
-// meta-tool registration to the domain-coupled markdownForResult.
 package tools
 
 import (

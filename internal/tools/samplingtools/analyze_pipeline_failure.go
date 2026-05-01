@@ -1,4 +1,3 @@
-// analyze_pipeline_failure.go implements the sampling-based pipeline failure analysis tool.
 package samplingtools
 
 import (

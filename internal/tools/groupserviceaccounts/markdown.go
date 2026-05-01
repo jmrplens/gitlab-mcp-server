@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group service account
-// MCP tool output.
 package groupserviceaccounts
 
 import (

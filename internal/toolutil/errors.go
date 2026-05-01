@@ -1,6 +1,3 @@
-// errors.go defines structured error types and helpers for tool handlers.
-// It provides ToolError, DetailedError, WrapErr, ClassifyError, and
-// Markdown error formatting used by all domain sub-packages.
 package toolutil
 
 import (

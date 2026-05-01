@@ -1,4 +1,3 @@
-// register.go wires vulnerability MCP tools to the MCP server.
 package vulnerabilities
 
 import (

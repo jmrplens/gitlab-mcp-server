@@ -1,7 +1,3 @@
-// Package repositorysubmodules implements an MCP tool handler for reading file contents
-// inside a Git submodule transparently. It resolves the submodule's
-// remote project and commit pointer, then fetches the file from that
-// project at the pinned commit SHA.
 package repositorysubmodules
 
 import (

@@ -1,4 +1,3 @@
-// register.go wires projectstatistics MCP tools to the MCP server.
 package projectstatistics
 
 import (

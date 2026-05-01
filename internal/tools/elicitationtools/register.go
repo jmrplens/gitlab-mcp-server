@@ -1,4 +1,3 @@
-// register.go wires elicitationtools MCP tools to the MCP server.
 package elicitationtools
 
 import (

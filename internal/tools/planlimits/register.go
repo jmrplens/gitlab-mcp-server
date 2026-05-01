@@ -1,4 +1,3 @@
-// register.go wires planlimits MCP tools to the MCP server.
 package planlimits
 
 import (

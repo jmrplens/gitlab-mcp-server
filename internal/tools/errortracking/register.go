@@ -1,4 +1,3 @@
-// register.go wires errortracking MCP tools to the MCP server.
 package errortracking
 
 import (

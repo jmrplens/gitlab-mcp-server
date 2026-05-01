@@ -1,6 +1,3 @@
-// Package pipelines implements MCP tool handlers for GitLab pipeline operations
-// including list, get, create, cancel, retry, and delete.
-// It wraps the Pipelines service from client-go v2.
 package pipelines
 
 import (

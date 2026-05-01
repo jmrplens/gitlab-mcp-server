@@ -1657,7 +1657,7 @@ func extractWriteHintLines(src string) []string {
 	return result
 }
 
-// TestDestructiveMetadataConsistency verifies that meta-tool routes marked with
+// TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations verifies that meta-tool routes marked with
 // destructive wrappers correspond to individual tools using DeleteAnnotations,
 // and that non-destructive routes do not correspond to individual tools with
 // DeleteAnnotations. This catches misclassified routes after migration.
@@ -1750,7 +1750,7 @@ func isExactMatchException(action string) bool {
 	return exceptions[action]
 }
 
-// TestDestructiveRoutesByNameHeuristic scans ALL route definitions across the
+// TestDestructiveRoutes_NameHeuristic_ClassifiesActions scans ALL route definitions across the
 // codebase and verifies that action names containing destructive keywords
 // (delete, remove, revoke, purge, unprotect, destroy, unpublish) always use
 // destructive wrappers, and that safe action names (list, get, search, create,
@@ -1914,7 +1914,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	t.Logf("scanned %d routes (%d failures)", len(allRoutes), failures)
 }
 
-// TestDestructiveRoutesMinimumInventory verifies that the total number of
+// TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification verifies that the total number of
 // destructive routes across the entire codebase does not drop below a
 // known minimum. This prevents accidental mass reclassification of
 // destructive actions to non-destructive (e.g., a bad find-and-replace).
@@ -4882,7 +4882,7 @@ func TestMRNotesList_AllOptionalParams(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionCreate_InlineWithOldPath exercises the OldPath and OldLine branches.
+// TestMRDiscussionCreateInline_WithOldPath exercises the OldPath and OldLine branches.
 func TestMRDiscussionCreateInline_WithOldPath(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusCreated, `{"id":"disc1","individual_note":false,"notes":[{"id":1,"body":"inline","author":{"username":"test"},"created_at":"2026-01-01T00:00:00Z","resolved":false}]}`)
@@ -4988,7 +4988,7 @@ func TestFileGet_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestUnmarshalParams_MarshalError exercises the json.Marshal error branch in unmarshalParams.
+// TestUnmarshalParamsMarshal_Error exercises the json.Marshal error branch in unmarshalParams.
 func TestUnmarshalParamsMarshal_Error(t *testing.T) {
 	// json.Marshal fails on channels
 	params := map[string]any{"ch": make(chan int)}

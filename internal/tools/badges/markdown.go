@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for badge MCP tool output.
 package badges
 
 import (

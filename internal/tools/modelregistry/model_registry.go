@@ -1,5 +1,8 @@
 // Package modelregistry implements MCP tools for GitLab ML model registry,
 // providing download access to machine learning model package files.
+//
+// The package also registers model registry MCP tools and renders Markdown
+// summaries for downloaded model package files.
 package modelregistry
 
 import (

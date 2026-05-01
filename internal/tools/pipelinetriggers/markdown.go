@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for pipeline trigger MCP tool output.
 package pipelinetriggers
 
 import (

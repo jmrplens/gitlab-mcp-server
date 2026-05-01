@@ -1,5 +1,3 @@
-// schema_pagination.go enriches generated MCP tool input schemas with numeric
-// bounds for standard pagination parameters.
 package toolutil
 
 import (

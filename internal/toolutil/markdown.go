@@ -1,5 +1,3 @@
-// markdown.go provides generic Markdown formatting utilities for MCP tool responses.
-// Domain-specific format functions live in their respective domain sub-packages.
 package toolutil
 
 import (
@@ -174,6 +172,8 @@ func ToolResultWithImage(md string, ann *mcp.Annotations, imageData []byte, mime
 	return result
 }
 
+// AppendResourceLink preserves the legacy resource-link hook as a no-op.
+//
 // Deprecated: AppendResourceLink is intentionally a no-op. It previously emitted
 // mcp.ResourceLink content blocks with external HTTP URLs (GitLab WebURL),
 // but ResourceLink is reserved for MCP-registered resources (gitlab:// URIs).

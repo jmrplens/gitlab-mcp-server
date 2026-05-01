@@ -1,4 +1,3 @@
-// register.go wires awardemoji MCP tools to the MCP server.
 package awardemoji
 
 import (

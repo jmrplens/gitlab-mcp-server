@@ -1,5 +1,3 @@
-// text.go provides text normalization and escaping utilities for tool
-// input processing and safe Markdown output generation.
 package toolutil
 
 import (

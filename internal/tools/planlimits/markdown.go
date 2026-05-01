@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for plan limit MCP tool output.
 package planlimits
 
 import (

@@ -166,11 +166,7 @@ func TestReleaseList_Success(t *testing.T) {
 	}
 }
 
-// TestReleaseList_PaginationQueryParamsAndMetadata verifies that List
-// sends page and per_page query parameters to the GitLab API and correctly
-// parses pagination metadata (TotalItems, TotalPages, NextPage) from the
-// response headers.
-// TestReleaseGetSuccess_EnrichedFields verifies that Get maps enriched
+// TestReleaseGet_SuccessEnrichedFields verifies that Get maps enriched
 // fields: Author, CommitSHA, UpcomingRelease, Milestones.
 func TestReleaseGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,3 @@
-// Package resources registers MCP resources that expose read-only GitLab
-// project data (metadata, branches, merge requests, pipelines) via stable URIs.
 package resources
 
 import (

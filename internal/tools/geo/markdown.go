@@ -1,4 +1,3 @@
-// Package geo markdown.go provides human-readable Markdown formatters for Geo site tools.
 package geo
 
 import (

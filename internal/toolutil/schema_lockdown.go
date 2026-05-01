@@ -1,5 +1,3 @@
-// schema_lockdown.go implements tools/list schema hardening that adds
-// additionalProperties=false to generated object schemas.
 package toolutil
 
 import (

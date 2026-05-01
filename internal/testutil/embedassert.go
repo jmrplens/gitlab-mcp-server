@@ -1,5 +1,3 @@
-// embedassert.go provides shared assertions for tests that verify MCP tool
-// results include embedded resource content when the feature flag is enabled.
 package testutil
 
 import (

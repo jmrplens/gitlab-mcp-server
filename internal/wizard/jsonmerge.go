@@ -1,5 +1,3 @@
-// jsonmerge.go provides a deep-merge function for combining JSON objects,
-// used when inserting or updating MCP server entries in IDE config files.
 package wizard
 
 import (

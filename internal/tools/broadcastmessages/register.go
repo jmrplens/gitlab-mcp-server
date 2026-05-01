@@ -1,4 +1,3 @@
-// register.go wires broadcastmessages MCP tools to the MCP server.
 package broadcastmessages
 
 import (

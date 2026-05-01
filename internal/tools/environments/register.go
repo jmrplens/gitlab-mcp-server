@@ -1,4 +1,3 @@
-// register.go wires environments MCP tools to the MCP server.
 package environments
 
 import (

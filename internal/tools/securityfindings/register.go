@@ -1,4 +1,3 @@
-// register.go wires security findings MCP tools to the MCP server.
 package securityfindings
 
 import (

@@ -1,4 +1,3 @@
-// register.go wires pipelineschedules MCP tools to the MCP server.
 package pipelineschedules
 
 import (

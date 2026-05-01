@@ -1,4 +1,3 @@
-// register.go wires group epic board MCP tools to the MCP server.
 package groupepicboards
 
 import (

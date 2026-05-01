@@ -1,5 +1,3 @@
-// deferred.go provides file-level helpers for the autoupdate package:
-// writing binary data to files and detecting pending staged updates.
 package autoupdate
 
 import (

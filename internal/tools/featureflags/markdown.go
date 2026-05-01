@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for feature flag MCP tool output.
 package featureflags
 
 import (

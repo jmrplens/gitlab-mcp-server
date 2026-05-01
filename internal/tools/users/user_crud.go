@@ -1,4 +1,3 @@
-// user_crud.go implements admin user CRUD operations: create, modify, delete.
 package users
 
 import (

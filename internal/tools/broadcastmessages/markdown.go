@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for broadcast message MCP tool output.
 package broadcastmessages
 
 import (

@@ -1,4 +1,3 @@
-// Package modelregistry register.go wires ML model registry MCP tools to the MCP server.
 package modelregistry
 
 import (

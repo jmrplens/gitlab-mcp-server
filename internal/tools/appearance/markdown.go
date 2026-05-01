@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for GitLab instance appearance MCP tool output.
 package appearance
 
 import (

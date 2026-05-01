@@ -1,4 +1,3 @@
-// register.go wires users MCP tools to the MCP server.
 package users
 
 import (

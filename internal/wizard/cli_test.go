@@ -151,8 +151,8 @@ func TestStepGitLabConfig_DefaultURL(t *testing.T) {
 	}
 }
 
-// TestStepGitLabConfig_URLError verifies stepGitLabConfig returns an error
-// when the user enters a URL without a scheme.
+// TestStepGitLabConfig_WithExistingConfig verifies that existing GitLab URL and
+// token values are preserved when the user accepts defaults.
 func TestStepGitLabConfig_WithExistingConfig(t *testing.T) {
 	// User presses Enter on all prompts → existing values should be used
 	input := "\n\n"

@@ -1,4 +1,3 @@
-// prompt_team.go registers MCP prompts for team activity and collaboration analysis.
 package prompts
 
 import (

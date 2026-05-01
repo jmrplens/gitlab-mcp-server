@@ -1,14 +1,3 @@
-// embed.go provides helpers for embedding MCP resources in tool results.
-//
-// MCP clients that understand the EmbeddedResource content block (MCP spec
-// 2025-06-18 §6.4) can render a tool result with a clickable resource link
-// next to the human-readable Markdown and the StructuredContent payload.
-// Clients that do not understand the type ignore it, so embedding is purely
-// additive and backward compatible.
-//
-// Embedding can be disabled globally via EnableEmbeddedResources(false), which
-// is wired from config.EmbeddedResources at startup so deployments can opt out
-// if a particular client misbehaves with the new content type.
 package toolutil
 
 import (

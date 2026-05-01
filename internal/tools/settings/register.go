@@ -1,4 +1,3 @@
-// register.go wires settings MCP tools to the MCP server.
 package settings
 
 import (

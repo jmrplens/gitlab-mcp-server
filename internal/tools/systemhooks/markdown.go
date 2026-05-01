@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for system hook MCP tool output.
 package systemhooks
 
 import (

@@ -1,8 +1,5 @@
 //go:build !windows
 
-// exec_unix.go provides the Unix implementation of ExecSelf using
-// syscall.Exec to replace the process image in-place, preserving PID
-// and file descriptors (stdin/stdout for MCP stdio transport).
 package autoupdate
 
 import (

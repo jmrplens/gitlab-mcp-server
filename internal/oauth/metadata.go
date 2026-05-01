@@ -1,5 +1,3 @@
-// metadata.go implements the RFC 9728 Protected Resource Metadata endpoint,
-// which advertises the GitLab OAuth authorization server URL to MCP clients.
 package oauth
 
 import (

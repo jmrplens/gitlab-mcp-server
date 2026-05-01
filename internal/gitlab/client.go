@@ -1,6 +1,9 @@
 // Package gitlab provides a wrapper around the GitLab REST API v4 client.
 // Some domains additionally use the GitLab GraphQL API for endpoints not covered
 // by client-go service wrappers (see ADR-0006).
+//
+// The package also detects Personal Access Token scopes so HTTP server entries
+// can register tools according to the authenticated token's capabilities.
 package gitlab
 
 import (

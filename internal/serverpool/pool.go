@@ -1,4 +1,3 @@
-// pool.go implements a bounded LRU pool of per-token MCP servers for HTTP mode.
 package serverpool
 
 import (

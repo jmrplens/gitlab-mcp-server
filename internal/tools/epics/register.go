@@ -1,5 +1,3 @@
-// register.go wires epic MCP tools to the MCP server.
-// Five of six tools use the Work Items GraphQL API; GetLinks remains on REST.
 package epics
 
 import (

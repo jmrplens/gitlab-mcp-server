@@ -1,6 +1,3 @@
-// Package repositorysubmodules implements an MCP tool handler for listing Git submodules
-// in a GitLab repository by parsing .gitmodules and enriching each
-// entry with the commit SHA from the repository tree.
 package repositorysubmodules
 
 import (

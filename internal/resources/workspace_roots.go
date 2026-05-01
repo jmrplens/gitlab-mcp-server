@@ -1,6 +1,3 @@
-// workspace_roots.go registers the "gitlab://workspace/roots" resource that exposes
-// MCP client workspace roots to LLMs, enabling project discovery from local
-// repository paths.
 package resources
 
 import (

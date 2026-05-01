@@ -1,4 +1,3 @@
-// review_mr_security.go implements the sampling-based merge request security review tool.
 package samplingtools
 
 import (

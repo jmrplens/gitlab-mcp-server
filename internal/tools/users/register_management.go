@@ -1,5 +1,3 @@
-// register_management.go wires user management MCP tools to the MCP server:
-// admin state actions, CRUD, SSH keys, misc, and service accounts.
 package users
 
 import (

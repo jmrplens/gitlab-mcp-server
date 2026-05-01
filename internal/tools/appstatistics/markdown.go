@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for application statistics MCP tool output.
 package appstatistics
 
 import (

@@ -1,6 +1,3 @@
-// hooks.go implements GitLab group webhook operations including list, get,
-// add, edit, and delete. It exposes typed input/output structs and handler
-// functions that interact with the GitLab Group Webhooks API v4.
 package groups
 
 import (

@@ -1,6 +1,10 @@
-// Package repositorysubmodules implements an MCP tool handler for updating
-// Git submodule references in a GitLab repository. It wraps the
-// RepositorySubmodulesService from client-go v2.
+// Package repositorysubmodules implements MCP tools for Git submodules in
+// GitLab repositories.
+//
+// It lists submodules by parsing .gitmodules and enriching entries with commit
+// SHAs, reads files inside submodules by resolving the remote project and pinned
+// commit, and updates submodule references through the RepositorySubmodules
+// service from client-go v2.
 package repositorysubmodules
 
 import (

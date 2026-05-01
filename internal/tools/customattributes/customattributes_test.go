@@ -511,7 +511,6 @@ func TestMCPRound_Trip(t *testing.T) {
 	}
 }
 
-// newCustomAttrsMCPSession is an internal helper for the customattributes package.
 // TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
 // handlers when the GitLab API returns an error.
 func TestMCPRoundTrip_ErrorPaths(t *testing.T) {

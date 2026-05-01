@@ -1,6 +1,8 @@
 // Package testutil provides shared test utilities for MCP tool tests.
 // It includes a test GitLab client factory, JSON response helpers, and
 // pagination header utilities used across all domain tool test files.
+// It also includes helpers for GraphQL test responses and assertions for
+// embedded MCP resource content.
 package testutil
 
 import (

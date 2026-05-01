@@ -139,7 +139,7 @@ func TestMRNoteDelete_Success(t *testing.T) {
 	}
 }
 
-// TestMRNoteCreateSuccess_EnrichedFields verifies that mrNoteCreate maps
+// TestMRNoteCreate_SuccessEnrichedFields verifies that mrNoteCreate maps
 // enriched fields: Resolvable, Resolved, ResolvedBy, Internal, NoteableType, Type.
 func TestMRNoteCreate_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

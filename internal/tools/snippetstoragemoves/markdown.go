@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for snippet storage move
-// MCP tool output.
 package snippetstoragemoves
 
 import (

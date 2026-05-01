@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for custom attribute MCP tool output.
 package customattributes
 
 import (

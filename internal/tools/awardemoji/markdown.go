@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for award emoji MCP tool output.
 package awardemoji
 
 import (

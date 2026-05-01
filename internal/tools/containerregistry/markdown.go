@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for container registry MCP tool output.
 package containerregistry
 
 import (

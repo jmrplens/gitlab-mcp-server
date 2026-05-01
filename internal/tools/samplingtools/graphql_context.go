@@ -1,11 +1,3 @@
-// graphql_context.go provides GraphQL-powered context builders that replace
-// multiple sequential REST API calls with a single aggregation query. Each
-// builder returns a formatted Markdown string ready for LLM analysis, plus
-// key metadata fields needed by the sampling tool output structs.
-//
-// If the GraphQL query fails (e.g. GitLab version too old, GraphQL disabled,
-// or a numeric project ID was provided instead of a path), callers should
-// fall back to the existing REST-based data fetching.
 package samplingtools
 
 import (

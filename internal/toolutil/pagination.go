@@ -1,5 +1,3 @@
-// pagination.go defines input and output structs for paginated GitLab API
-// responses, and a helper to extract pagination metadata from API response headers.
 package toolutil
 
 import (

@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for runner MCP tool output.
 package runners
 
 import (

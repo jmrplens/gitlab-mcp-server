@@ -408,7 +408,6 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
-// newSystemHooksMCPSession is an internal helper for the systemhooks package.
 // TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
 // handlers when the GitLab API returns an error.
 func TestMCPRoundTrip_ErrorPaths(t *testing.T) {

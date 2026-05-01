@@ -1,4 +1,3 @@
-// register.go wires wikis MCP tools to the MCP server.
 package wikis
 
 import (

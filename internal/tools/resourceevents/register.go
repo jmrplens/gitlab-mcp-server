@@ -1,4 +1,3 @@
-// register.go wires resourceevents MCP tools to the MCP server.
 package resourceevents
 
 import (

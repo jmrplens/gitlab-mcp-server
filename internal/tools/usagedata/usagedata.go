@@ -1,4 +1,7 @@
 // Package usagedata implements MCP tools for GitLab Usage Data / Service Ping API.
+//
+// The package registers MCP tools and renders Markdown summaries for usage data
+// and event tracking responses.
 package usagedata
 
 import (

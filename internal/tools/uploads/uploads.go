@@ -2,6 +2,9 @@
 // two input modes: base64-encoded content (for small files via JSON) and
 // file_path (for larger files read directly from the local filesystem).
 // Also provides list and delete operations for project markdown uploads.
+//
+// The package registers MCP tools and renders Markdown summaries for upload
+// responses.
 package uploads
 
 import (

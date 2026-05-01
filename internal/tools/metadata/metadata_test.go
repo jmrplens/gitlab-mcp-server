@@ -90,7 +90,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 const covCovMetaJSON = `{"version":"17.0.0","revision":"abc123","kas":{"enabled":true,"external_url":"https://kas.example.com","external_k8s_proxy_url":"https://k8s.example.com","version":"17.0.0"},"enterprise":true}`
 
-// TestGet_APIError verifies the behavior of cov get a p i error.
+// TestGet_APIError_Coverage verifies the API error path for metadata lookup.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -101,7 +101,8 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies the behavior of cov get success.
+// TestGet_Success_Coverage verifies a successful metadata lookup with KAS and
+// Enterprise fields.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covCovMetaJSON)
@@ -115,7 +116,7 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Full verifies the behavior of cov format get markdown full.
+// TestFormatGetMarkdown_Full_Coverage verifies full metadata Markdown output.
 func TestFormatGetMarkdown_Full_Coverage(t *testing.T) {
 	out := GetOutput{
 		Version:    "17.0.0",
@@ -141,7 +142,7 @@ func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisterTools_NoPanic verifies the behavior of cov register tools no panic.
+// TestRegisterTools_NoPanic_Coverage verifies metadata tool registration.
 func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -150,7 +151,8 @@ func TestRegisterTools_NoPanic_Coverage(t *testing.T) {
 	RegisterTools(server, client)
 }
 
-// TestMCPRound_Trip verifies the behavior of cov m c p round trip.
+// TestMCPRound_Trip_Coverage verifies metadata tool execution over in-memory
+// MCP transports.
 func TestMCPRound_Trip_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covCovMetaJSON)

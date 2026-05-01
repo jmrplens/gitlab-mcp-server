@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for project mirror
-// MCP tool output.
 package projectmirrors
 
 import (

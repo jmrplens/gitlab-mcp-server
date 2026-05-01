@@ -1,4 +1,3 @@
-// register.go wires ciyamltemplates MCP tools to the MCP server.
 package ciyamltemplates
 
 import (

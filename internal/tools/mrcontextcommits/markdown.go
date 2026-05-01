@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for merge request context commit MCP tool output.
 package mrcontextcommits
 
 import (

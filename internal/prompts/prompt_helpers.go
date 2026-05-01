@@ -1,6 +1,3 @@
-// Package prompts provides shared helper functions used by multiple
-// team-management prompt handlers across all categories (cross-project,
-// team, project reports, analytics, milestone & label).
 package prompts
 
 import (

@@ -1,6 +1,3 @@
-// Package groups implements MCP tool handlers for GitLab group operations
-// including list, get, list members, and list subgroups (descendant groups).
-// It wraps the Groups service from client-go v2.
 package groups
 
 import (

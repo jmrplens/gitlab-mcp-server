@@ -2,6 +2,8 @@
 // In stdio mode, configuration comes from environment variables (.env / exports).
 // In HTTP mode, configuration comes from CLI flags; no GITLAB_TOKEN is required
 // at startup — each client provides its own token per-request.
+// The --shutdown flag terminates running instances before external updaters
+// replace the binary on disk.
 package main
 
 import (

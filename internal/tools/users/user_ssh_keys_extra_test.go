@@ -432,7 +432,7 @@ func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyMarkdownString verifies single SSH key markdown formatting.
+// TestFormatSSHKeyMarkdownString_WithData verifies single SSH key markdown formatting.
 func TestFormatSSHKeyMarkdownString_WithData(t *testing.T) {
 	out := SSHKeyOutput{
 		ID:        1,

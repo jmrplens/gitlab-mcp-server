@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for group/project invite MCP tool output.
 package invites
 
 import (

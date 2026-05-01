@@ -16,7 +16,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Upload size defaults.
+// DefaultMaxFileSize and MaxFileSize define the default and upper bound for
+// GitLab upload payload sizes.
 const (
 	DefaultMaxFileSize = 2 * 1024 * 1024 * 1024    // 2 GB
 	MaxFileSize        = 1024 * 1024 * 1024 * 1024 // 1 TB upper bound
@@ -48,10 +49,9 @@ const (
 	MaxAutoUpdateTimeout      = 10 * time.Minute
 )
 
-// Rate-limit defaults.
+// DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
+// did not set RATE_LIMIT_BURST explicitly.
 const (
-	// DefaultRateLimitBurst is the bucket size used when rps > 0 and the
-	// operator did not set RATE_LIMIT_BURST explicitly.
 	DefaultRateLimitBurst = 40
 )
 

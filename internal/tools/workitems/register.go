@@ -1,4 +1,3 @@
-// register.go wires workitems MCP tools to the MCP server.
 package workitems
 
 import (

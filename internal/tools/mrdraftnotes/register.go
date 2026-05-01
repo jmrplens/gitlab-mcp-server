@@ -1,4 +1,3 @@
-// register.go wires MR draft note tools into the MCP server.
 package mrdraftnotes
 
 import (

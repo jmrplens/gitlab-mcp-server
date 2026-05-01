@@ -1,4 +1,3 @@
-// register.go wires metadata MCP tools to the MCP server.
 package metadata
 
 import (

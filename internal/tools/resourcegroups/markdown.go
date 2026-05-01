@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for resource group MCP tool output.
 package resourcegroups
 
 import (

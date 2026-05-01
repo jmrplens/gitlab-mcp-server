@@ -1,4 +1,3 @@
-// register.go wires groupvariables MCP tools to the MCP server.
 package groupvariables
 
 import (

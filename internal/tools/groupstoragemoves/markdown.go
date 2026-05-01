@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group storage move
-// MCP tool output.
 package groupstoragemoves
 
 import (

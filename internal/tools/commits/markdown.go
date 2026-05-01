@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for commit MCP tool output.
 package commits
 
 import (

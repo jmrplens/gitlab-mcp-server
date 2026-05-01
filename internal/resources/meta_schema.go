@@ -1,14 +1,3 @@
-// meta_schema.go registers the gitlab://schema/meta/* MCP resources, which
-// expose per-action JSON Schemas for every meta-tool registered in this
-// server. The resources are advisory: they let LLMs discover the exact
-// params shape for a chosen meta-tool action without having to inspect the
-// full meta-tool description or guess from examples.
-//
-// Two URIs are exposed:
-//   - gitlab://schema/meta/             — index resource listing every
-//     registered meta-tool and its actions.
-//   - gitlab://schema/meta/{tool}/{action} — JSON Schema for the action's
-//     params property.
 package resources
 
 import (

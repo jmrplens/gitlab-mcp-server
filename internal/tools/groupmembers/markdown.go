@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for group member MCP tool output.
 package groupmembers
 
 import (

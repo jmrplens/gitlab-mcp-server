@@ -1,4 +1,3 @@
-// register.go wires license MCP tools to the MCP server.
 package license
 
 import (

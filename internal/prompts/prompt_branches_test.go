@@ -86,7 +86,7 @@ func TestReviewMR_LongDiffNotTruncated(t *testing.T) {
 	}
 }
 
-// TestReviewMR_EmptyDescriptionAndEmptyDiff exercises empty description and empty diff branches.
+// TestReviewMREmptyDescriptionAnd_EmptyDiff exercises empty description and empty diff branches.
 func TestReviewMREmptyDescriptionAnd_EmptyDiff(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -168,7 +168,7 @@ func TestGenerateReleaseNotes_DefaultTo(t *testing.T) {
 	}
 }
 
-// TestMRRiskAssessment_NewAndDeletedFiles exercises new_file and deleted_file branches.
+// TestMRRisk_AssessmentNewAndDeletedFiles exercises new_file and deleted_file branches.
 func TestMRRisk_AssessmentNewAndDeletedFiles(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -229,7 +229,7 @@ func TestDailyStandup_NoEventsNoMRs(t *testing.T) {
 	}
 }
 
-// TestReviewMR_DiffsAPIError exercises the diffs API failure branch (second API call).
+// TestReviewMRDiffs_APIError exercises the diffs API failure branch (second API call).
 func TestReviewMRDiffs_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -251,7 +251,7 @@ func TestReviewMRDiffs_APIError(t *testing.T) {
 	}
 }
 
-// TestSuggestMRReviewers_DiffsAPIError exercises the diffs API failure branch.
+// TestSuggestMRReviewersDiffs_APIError exercises the diffs API failure branch.
 func TestSuggestMRReviewersDiffs_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -273,7 +273,7 @@ func TestSuggestMRReviewersDiffs_APIError(t *testing.T) {
 	}
 }
 
-// TestSuggestMRReviewers_MembersAPIError exercises the members API failure branch.
+// TestSuggestMRReviewersMembers_APIError exercises the members API failure branch.
 func TestSuggestMRReviewersMembers_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -297,7 +297,7 @@ func TestSuggestMRReviewersMembers_APIError(t *testing.T) {
 	}
 }
 
-// TestMRRiskAssessment_DiffsAPIError exercises the diffs API failure in risk assessment.
+// TestMRRiskAssessmentDiffs_APIError exercises the diffs API failure in risk assessment.
 func TestMRRiskAssessmentDiffs_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -386,7 +386,7 @@ func TestPipelineStatus_OtherJobStatus(t *testing.T) {
 	}
 }
 
-// TestProjectHealthCheck_PipelineError exercises the pipeline N/A branch.
+// TestProjectHealthCheckPipeline_Error exercises the pipeline N/A branch.
 func TestProjectHealthCheckPipeline_Error(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -416,7 +416,7 @@ func TestProjectHealthCheckPipeline_Error(t *testing.T) {
 	}
 }
 
-// TestProjectHealthCheck_NilAuthorAndNilCommit exercises nil-author MR and nil-commit branch.
+// TestProjectHealthCheckNilAuthorAnd_NilCommit exercises nil-author MR and nil-commit branch.
 func TestProjectHealthCheckNilAuthorAnd_NilCommit(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -446,7 +446,7 @@ func TestProjectHealthCheckNilAuthorAnd_NilCommit(t *testing.T) {
 	}
 }
 
-// TestPipelineStatus_JobsAPIError exercises the jobs API failure path
+// TestPipelineStatusJobs_APIError exercises the jobs API failure path
 // (pipeline fetch succeeds but jobs fetch fails).
 func TestPipelineStatusJobs_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -469,7 +469,7 @@ func TestPipelineStatusJobs_APIError(t *testing.T) {
 	}
 }
 
-// TestDailyStandup_UserAPIError exercises the user API error path.
+// TestDailyStandupUser_APIError exercises the user API error path.
 func TestDailyStandupUser_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -489,7 +489,7 @@ func TestDailyStandupUser_APIError(t *testing.T) {
 	}
 }
 
-// TestDailyStandup_EventsAPIError exercises the events API error path
+// TestDailyStandupEvents_APIError exercises the events API error path
 // (user succeeds, events fail).
 func TestDailyStandupEvents_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

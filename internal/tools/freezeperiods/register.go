@@ -1,4 +1,3 @@
-// register.go wires freezeperiods MCP tools to the MCP server.
 package freezeperiods
 
 import (

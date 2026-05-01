@@ -1,4 +1,3 @@
-// register.go wires mergerequests MCP tools to the MCP server.
 package mergerequests
 
 import (

@@ -1,5 +1,3 @@
-// summary.go implements vulnerability severity counts and pipeline security
-// report summary handlers using the GitLab GraphQL API.
 package vulnerabilities
 
 import (

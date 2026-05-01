@@ -1,4 +1,3 @@
-// register.go wires GPG key MCP tools to the MCP server.
 package usergpgkeys
 
 import (

@@ -1,24 +1,3 @@
-// output.go documents and enforces the standard MCP tool output pattern.
-//
-// All tool handlers in this project follow the triple-return pattern:
-//
-//	func handler(ctx, req, input T) (*mcp.CallToolResult, OutputType, error)
-//
-// On success:
-//
-//	return ToolResultWithMarkdown(FormatXMarkdown(out)), out, nil
-//
-// On error:
-//
-//	return nil, ZeroValue, err
-//
-// The *mcp.CallToolResult provides human-readable Markdown via TextContent,
-// while the OutputType struct provides structured JSON data for programmatic
-// consumption by the SDK serializer.
-//
-// Meta-tools use MakeMetaHandler with a FormatResultFunc that dispatches
-// to the appropriate sub-package Markdown formatter via the type-switch
-// in markdownForResult (internal/tools/markdown.go).
 package toolutil
 
 import (

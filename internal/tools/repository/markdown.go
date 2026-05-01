@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for repository MCP tool output.
 package repository
 
 import (

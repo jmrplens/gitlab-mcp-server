@@ -1,4 +1,3 @@
-// markdown.go provides human-readable Markdown formatters for project aliases.
 package projectaliases
 
 import (

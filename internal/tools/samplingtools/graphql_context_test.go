@@ -395,7 +395,7 @@ func TestFormatMRContext_PendingApproval(t *testing.T) {
 	}
 }
 
-// TestWriteDiscussions_EmptyTimestamp covers graphql_context.go:121-123
+// TestWriteDiscussions_EdgeCases covers graphql_context.go:121-123
 // (note with empty CreatedAt → "unknown") and graphql_context.go:135-137
 // (resolvable=true, resolved=false → [UNRESOLVED]).
 func TestWriteDiscussions_EdgeCases(t *testing.T) {
@@ -454,7 +454,7 @@ func TestFormatIssueContext_EmptyTimeTracking(t *testing.T) {
 	}
 }
 
-// TestWriteIssueNotes_EmptyTimestamp covers graphql_context.go:266-268
+// TestWriteIssueNotes_EdgeCases covers graphql_context.go:266-268
 // (no user notes → early return) and graphql_context.go:273-275
 // (note with empty CreatedAt → "unknown").
 func TestWriteIssueNotes_EdgeCases(t *testing.T) {

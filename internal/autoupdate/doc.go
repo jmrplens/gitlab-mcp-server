@@ -1,6 +1,6 @@
 // Package autoupdate provides self-update capability for the gitlab-mcp-server
-// MCP server. It uses the creativeprojects/go-selfupdate library with a
-// GitLab source to detect, download, validate, and apply new releases.
+// MCP server. It uses the creativeprojects/go-selfupdate library with a GitHub
+// release source to detect, download, validate, and apply new releases.
 //
 // Two operational modes are supported:
 //
@@ -14,4 +14,8 @@
 //
 // Configuration is provided through the [Config] struct, typically populated
 // from environment variables (stdio) or CLI flags (HTTP).
+//
+// Internally the package stages downloads, uses a rename-based replacement path,
+// stores a re-exec guard in the environment to avoid update loops, and provides
+// platform-specific execution behavior for Unix and Windows.
 package autoupdate

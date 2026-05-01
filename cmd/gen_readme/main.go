@@ -1,7 +1,7 @@
 // Command gen_readme auto-generates the managed README.md sections.
 // It creates an in-memory MCP server, lists meta-tools, counts actions
-// from each InputSchema action enum, and replaces content between the
-// tools and statistics marker pairs.
+// from each InputSchema action enum, collects filesystem-level codebase
+// metrics, and replaces content between the tools and statistics marker pairs.
 //
 // Usage:
 //

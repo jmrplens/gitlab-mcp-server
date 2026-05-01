@@ -1,5 +1,3 @@
-// user_misc.go implements miscellaneous user operations: current user status,
-// activities, memberships, user runner, and identity deletion.
 package users
 
 import (

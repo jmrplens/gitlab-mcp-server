@@ -1,7 +1,3 @@
-// Package vulnerabilities implements MCP tool handlers for GitLab vulnerability
-// management using the GraphQL API. It covers listing project vulnerabilities,
-// retrieving individual vulnerability details, and state mutations (dismiss,
-// confirm, resolve, revert).
 package vulnerabilities
 
 import (

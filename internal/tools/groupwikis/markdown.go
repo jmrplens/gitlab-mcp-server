@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for group wiki MCP tool output.
 package groupwikis
 
 import (

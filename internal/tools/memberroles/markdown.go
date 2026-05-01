@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for member role
-// MCP tool output.
 package memberroles
 
 import (

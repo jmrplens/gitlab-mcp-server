@@ -1,7 +1,3 @@
-// string_or_int.go defines the StringOrInt type for flexible JSON
-// unmarshalling. GitLab API parameters like project_id and group_id accept
-// both numeric IDs and URL-encoded paths, but LLMs often send numeric IDs as
-// JSON numbers instead of strings. This type transparently handles both.
 package toolutil
 
 import (

@@ -1,4 +1,3 @@
-// Package metadata implements MCP tools for GitLab Metadata API.
 package metadata
 
 import (

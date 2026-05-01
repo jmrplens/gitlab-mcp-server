@@ -1,5 +1,3 @@
-// Package oauth provides GitLab-specific OAuth 2.0 token verification,
-// caching, and HTTP middleware for the MCP server's HTTP mode.
 package oauth
 
 import (

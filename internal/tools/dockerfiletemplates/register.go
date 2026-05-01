@@ -1,4 +1,3 @@
-// register.go wires dockerfiletemplates MCP tools to the MCP server.
 package dockerfiletemplates
 
 import (

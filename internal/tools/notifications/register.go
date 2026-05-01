@@ -1,4 +1,3 @@
-// register.go wires notifications MCP tools to the MCP server.
 package notifications
 
 import (

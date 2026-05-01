@@ -352,7 +352,7 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get returns an error when the API responds with error.
+// TestGetAPIError_NotFound verifies that Get returns an error when the API responds with error.
 func TestGetAPIError_NotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

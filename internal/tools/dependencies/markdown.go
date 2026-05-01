@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for dependency outputs.
 package dependencies
 
 import (

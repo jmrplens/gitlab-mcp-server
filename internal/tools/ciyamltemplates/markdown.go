@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for CI YAML template MCP tool output.
 package ciyamltemplates
 
 import (
