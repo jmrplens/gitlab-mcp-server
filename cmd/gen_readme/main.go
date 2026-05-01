@@ -1,7 +1,7 @@
-// Command gen_readme auto-generates the meta-tool table in README.md.
+// Command gen_readme auto-generates the managed README.md sections.
 // It creates an in-memory MCP server, lists meta-tools, counts actions
-// from the inputSchema enum, and replaces content between
-// <!-- START TOOLS --> and <!-- END TOOLS --> markers.
+// from each InputSchema action enum, and replaces content between the
+// tools and statistics marker pairs.
 //
 // Usage:
 //
@@ -163,6 +163,36 @@ func firstSentence(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// descriptionSummary returns the README-facing summary for a tool description.
+// Meta-tools prepend a generated usage example and schema-resource hint for
+// MCP clients; those lines are useful in tools/list but noisy in README tables.
+func descriptionSummary(description string) string {
+	return firstSentence(stripMetaToolDescriptionPrefix(description))
+}
+
+// stripMetaToolDescriptionPrefix removes the generated meta-tool usage header
+// added by toolutil.MetaToolDescriptionPrefix while preserving standalone tool
+// descriptions that happen to start with an example.
+func stripMetaToolDescriptionPrefix(description string) string {
+	lines := strings.Split(description, "\n")
+	if len(lines) < 2 {
+		return description
+	}
+
+	firstLine := strings.TrimSpace(lines[0])
+	secondLine := strings.TrimSpace(lines[1])
+	if !strings.HasPrefix(firstLine, `Example: {"action":`) ||
+		!strings.HasPrefix(secondLine, "For the params schema of any action") {
+		return description
+	}
+
+	start := 2
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	return strings.Join(lines[start:], "\n")
+}
+
 // abbreviations that should not be treated as sentence boundaries.
 var abbreviations = []string{"e.g.", "i.e.", "etc.", "vs.", "approx.", "dept.", "est.", "govt.", "incl."}
 
@@ -202,7 +232,7 @@ func buildTable(baseTools, allTools []*mcp.Tool) string {
 	for _, t := range allTools {
 		infos = append(infos, toolInfo{
 			Name:        t.Name,
-			Description: firstSentence(t.Description),
+			Description: descriptionSummary(t.Description),
 			Actions:     actionCount(t),
 			Enterprise:  !baseSet[t.Name],
 		})

@@ -301,53 +301,53 @@ Meta-tool summary:
 
 | Meta-Tool | Actions | Description |
 |-----------|:-------:|-------------|
-| `gitlab_access` | 48 | Example: {"action":"approve_group","params":{...}} |
-| `gitlab_admin` | 88 | Example: {"action":"alert_metric_image_delete","params":{...}} |
-| `gitlab_analyze` | 11 | Example: {"action":"ci_config","params":{...}} |
-| `gitlab_branch` | 11 | Example: {"action":"create","params":{...}} |
-| `gitlab_ci_catalog` | 2 | Example: {"action":"get","params":{...}} |
-| `gitlab_ci_variable` | 15 | Example: {"action":"create","params":{...}} |
-| `gitlab_custom_emoji` | 3 | Example: {"action":"create","params":{...}} |
+| `gitlab_access` | 48 | Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. |
+| `gitlab_admin` | 88 | GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). |
+| `gitlab_analyze` | 11 | LLM-assisted analysis of GitLab data via MCP sampling. |
+| `gitlab_branch` | 11 | Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). |
+| `gitlab_ci_catalog` | 2 | Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). |
+| `gitlab_ci_variable` | 15 | Manage GitLab CI/CD variables at instance, group, and project scope. |
+| `gitlab_custom_emoji` | 3 | Manage group-level custom emoji via GraphQL. |
 | `gitlab_discover_project` | — | Resolve a git remote URL to a GitLab project and return its project_id and metadata. |
-| `gitlab_environment` | 23 | Example: {"action":"create","params":{...}} |
-| `gitlab_feature_flags` | 10 | Example: {"action":"feature_flag_create","params":{...}} |
-| `gitlab_group` | 130 | Example: {"action":"analytics_issues_count","params":{...}} |
+| `gitlab_environment` | 23 | Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. |
+| `gitlab_feature_flags` | 10 | Manage project feature flags and feature-flag user lists for gradual rollouts. |
+| `gitlab_group` | 130 | Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export. |
 | `gitlab_interactive_issue_create` | — | Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
 | `gitlab_interactive_mr_create` | — | Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
 | `gitlab_interactive_project_create` | — | Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
 | `gitlab_interactive_release_create` | — | Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
-| `gitlab_issue` | 63 | Example: {"action":"create","params":{...}} |
-| `gitlab_job` | 25 | Example: {"action":"artifacts","params":{...}} |
-| `gitlab_merge_request` | 58 | Example: {"action":"approval_config","params":{...}} |
-| `gitlab_model_registry` | 1 | Example: {"action":"download","params":{...}} |
-| `gitlab_mr_review` | 23 | Example: {"action":"changes_get","params":{...}} |
-| `gitlab_package` | 24 | Example: {"action":"delete","params":{...}} |
-| `gitlab_pipeline` | 33 | Example: {"action":"cancel","params":{...}} |
-| `gitlab_project` | 122 | Example: {"action":"approval_config_change","params":{...}} |
-| `gitlab_release` | 12 | Example: {"action":"create","params":{...}} |
-| `gitlab_repository` | 41 | Example: {"action":"archive","params":{...}} |
-| `gitlab_runner` | 34 | Example: {"action":"controller_create","params":{...}} |
-| `gitlab_search` | 10 | Example: {"action":"code","params":{...}} |
-| `gitlab_snippet` | 34 | Example: {"action":"content","params":{...}} |
-| `gitlab_tag` | 9 | Example: {"action":"create","params":{...}} |
-| `gitlab_template` | 12 | Example: {"action":"ci_yml_get","params":{...}} |
-| `gitlab_user` | 74 | Example: {"action":"activate","params":{...}} |
-| `gitlab_wiki` | 6 | Example: {"action":"create","params":{...}} |
-| `gitlab_attestation` 🏢 | 2 | Example: {"action":"download","params":{...}} |
-| `gitlab_audit_event` 🏢 | 6 | Example: {"action":"get_group","params":{...}} |
-| `gitlab_compliance_policy` 🏢 | 2 | Example: {"action":"get","params":{...}} |
-| `gitlab_dependency` 🏢 | 4 | Example: {"action":"export_create","params":{...}} |
-| `gitlab_dora_metrics` 🏢 | 2 | Example: {"action":"group","params":{...}} |
-| `gitlab_enterprise_user` 🏢 | 4 | Example: {"action":"delete","params":{...}} |
-| `gitlab_external_status_check` 🏢 | 8 | Example: {"action":"create_project","params":{...}} |
-| `gitlab_geo` 🏢 | 8 | Example: {"action":"create","params":{...}} |
-| `gitlab_group_scim` 🏢 | 4 | Example: {"action":"delete","params":{...}} |
-| `gitlab_member_role` 🏢 | 6 | Example: {"action":"create_group","params":{...}} |
-| `gitlab_merge_train` 🏢 | 4 | Example: {"action":"add","params":{...}} |
-| `gitlab_project_alias` 🏢 | 4 | Example: {"action":"create","params":{...}} |
-| `gitlab_security_finding` 🏢 | 1 | Example: {"action":"list","params":{...}} |
-| `gitlab_storage_move` 🏢 | 18 | Example: {"action":"get_group","params":{...}} |
-| `gitlab_vulnerability` 🏢 | 8 | Example: {"action":"confirm","params":{...}} |
+| `gitlab_issue` | 63 | Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events. |
+| `gitlab_job` | 25 | Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. |
+| `gitlab_merge_request` | 58 | Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. |
+| `gitlab_model_registry` | 1 | Download ML model package files from the GitLab Model Registry. |
+| `gitlab_mr_review` | 23 | Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload. |
+| `gitlab_package` | 24 | Manage GitLab package registry, container registry, and protection rules. |
+| `gitlab_pipeline` | 33 | Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. |
+| `gitlab_project` | 122 | Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). |
+| `gitlab_release` | 12 | Manage GitLab releases and their asset links (binaries, packages, runbooks). |
+| `gitlab_repository` | 41 | Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. |
+| `gitlab_runner` | 34 | Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. |
+| `gitlab_search` | 10 | Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. |
+| `gitlab_snippet` | 34 | Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. |
+| `gitlab_tag` | 9 | Manage Git tags and tag protections in a project, plus GPG signature inspection. |
+| `gitlab_template` | 12 | Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration. |
+| `gitlab_user` | 74 | User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. |
+| `gitlab_wiki` | 6 | CRUD project wiki pages and upload attachments to wikis. |
+| `gitlab_attestation` 🏢 | 2 | List and download build attestations (SLSA provenance) for project artifacts. |
+| `gitlab_audit_event` 🏢 | 6 | List and get GitLab audit events at instance, group, and project levels for compliance tracking. |
+| `gitlab_compliance_policy` 🏢 | 2 | Get and update admin compliance policy settings (CSP namespace configuration). |
+| `gitlab_dependency` 🏢 | 4 | List project dependencies and create/download SBOM exports (CycloneDX). |
+| `gitlab_dora_metrics` 🏢 | 2 | Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate. |
+| `gitlab_enterprise_user` 🏢 | 4 | Manage enterprise users for a GitLab group: list, get, disable 2FA, delete. |
+| `gitlab_external_status_check` 🏢 | 8 | Manage external status checks for MRs and projects. |
+| `gitlab_geo` 🏢 | 8 | Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate). |
+| `gitlab_group_scim` 🏢 | 4 | Manage SCIM identities for GitLab group provisioning. |
+| `gitlab_member_role` 🏢 | 6 | Manage custom member roles at instance or group level. |
+| `gitlab_merge_train` 🏢 | 4 | Manage GitLab merge trains (automated merge queues). |
+| `gitlab_project_alias` 🏢 | 4 | CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate). |
+| `gitlab_security_finding` 🏢 | 1 | List pipeline security report findings via GraphQL (Premium/Ultimate). |
+| `gitlab_storage_move` 🏢 | 18 | Manage repository storage moves for projects, groups, and snippets (admin only). |
+| `gitlab_vulnerability` 🏢 | 8 | List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). |
 
 **32 base** / **47 with enterprise** meta-tools. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
 
@@ -531,37 +531,37 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 621 | 120,528 |
-| Unit tests (`_test.go`) | 403 | 210,206 |
-| End-to-end tests | 108 | 23,497 |
-| **Total** | **1,132** | **354,231** |
+| Source (`.go`, non-test) | 621 | 120,577 |
+| Unit tests (`_test.go`) | 404 | 210,567 |
+| End-to-end tests | 108 | 23,492 |
+| **Total** | **1,133** | **354,636** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,362 |
+| Source functions | 3,366 |
 | — exported (public) | 2,187 |
-| — unexported (private) | 1,175 |
-| Unit test functions (`TestXxx`) | 8,817 |
-| Subtests (`t.Run(...)`) | 1,924 |
+| — unexported (private) | 1,179 |
+| Unit test functions (`TestXxx`) | 8,827 |
+| Subtests (`t.Run(...)`) | 1,929 |
 | End-to-end test functions | 243 |
 
 ### Ratios worth noting
 
 | Observation | Value |
 | --- | ---: |
-| Test lines vs source lines | 1.74× more tests than code |
+| Test lines vs source lines | 1.75× more tests than code |
 | Average source file length | ~194 lines |
 | Average test file length | ~521 lines |
-| Comment lines in source | 10,074 (~8.4% of source) |
+| Comment lines in source | 10,080 (~8.4% of source) |
 | Test functions per source function | 2.6× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,344 |
+| `if err != nil` checks | 5,350 |
 | `defer` statements | 662 |
 | `struct` types defined | 1,928 |
 | `//nolint` suppressions | 55 |
@@ -582,14 +582,14 @@ Numbers nobody asked for, but here they are anyway.
 | Record | File |
 | --- | --- |
 | Longest source file | `internal/tools/register_meta.go` — 3,123 lines |
-| Longest test file | `internal/tools/projects/projects_test.go` — 6,384 lines |
+| Longest test file | `internal/tools/projects/projects_test.go` — 6,379 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,191 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,527 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,192 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,541 (impossible to avoid) |
 | Longest function name in source | `RetryFailedExternalStatusCheckForProjectMR` (42 chars) |
 | Longest test function name | `TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding` (79 chars) |
 
