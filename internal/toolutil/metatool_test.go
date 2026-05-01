@@ -2081,7 +2081,8 @@ func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *test
 }
 
 func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T) {
-	t.Parallel()
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
 
 	routes := ActionMap{
 		"delete": DestructiveVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {

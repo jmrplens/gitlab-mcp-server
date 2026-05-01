@@ -105,7 +105,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		if err != nil {
 			return nil, toolutil.DeleteOutput{}, err
 		}
-		out := toolutil.DeleteOutput{Message: fmt.Sprintf("Draft note %d published on MR !%d in project %s", input.NoteID, input.MRIID, input.ProjectID)}
+		out := toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Draft note %d published on MR !%d in project %s", input.NoteID, input.MRIID, input.ProjectID)}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(out.Message), out, nil)
 	})
 
@@ -122,7 +122,7 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		if err != nil {
 			return nil, toolutil.DeleteOutput{}, err
 		}
-		out := toolutil.DeleteOutput{Message: fmt.Sprintf("All draft notes published on MR !%d in project %s", input.MRIID, input.ProjectID)}
+		out := toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("All draft notes published on MR !%d in project %s", input.MRIID, input.ProjectID)}
 		return toolutil.WithHints(toolutil.ToolResultWithMarkdown(out.Message), out, nil)
 	})
 }
