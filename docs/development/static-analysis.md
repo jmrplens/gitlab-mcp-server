@@ -4,7 +4,7 @@ This document describes all static analysis tools used in **gitlab-mcp-server**,
 
 > **Diátaxis type**: Reference
 > **Audience**: 🔧 Developers, contributors
-> **Prerequisites**: Go toolchain installed, Make (optional)
+> **Prerequisites**: Go toolchain installed, Make (optional). Make targets export the project Go toolchain from `go.mod` by default.
 
 ---
 
@@ -24,6 +24,8 @@ The project uses nine complementary static analysis tools:
 | `govulncheck` | Dependency CVE scanner | No | N/A | [pkg.go.dev](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) |
 | `markdownlint-cli2` | Markdown lint and auto-fix | Yes (`--fix`) | `.markdownlint-cli2.jsonc` | [github.com](https://github.com/DavidAnson/markdownlint-cli2) |
 
+Go analyzers and formatters are scoped to the project Go source roots: `cmd/`, `internal/`, and `test/`. Analysis targets pass the `e2e` build tag so files under `test/e2e/` are included without running E2E tests. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts.
+
 ## Quick Start
 
 ```bash
@@ -32,6 +34,9 @@ make install-tools
 
 # Run ALL analysis tools at once (9 tools)
 make analyze
+
+# Override the toolchain only when debugging local Go installations
+make GOTOOLCHAIN=auto analyze
 
 # Generate LLM-consumable report file
 make analyze-report
@@ -76,14 +81,14 @@ govulncheck -version
 
 | Target | Description |
 | --- | --- |
-| `make goimports` | Apply goimports formatting to all Go files |
+| `make goimports` | Apply goimports formatting to Go files under `cmd/`, `internal/`, and `test/` |
 | `make goimports-check` | Check if goimports formatting is needed (no changes) |
 | `make gofmt-check` | Check if gofmt formatting is needed (no changes) |
-| `make fmt` | Apply gofmt formatting to all Go files |
-| `make vet` | Run `go vet` on all packages |
+| `make fmt` | Apply gofmt formatting to Go files under `cmd/`, `internal/`, and `test/` |
+| `make vet` | Run `go vet` on `cmd/`, `internal/`, and `test/` packages with the `e2e` build tag |
 | `make modernize` | Report modernization suggestions |
 | `make modernize-fix` | Apply modernization fixes automatically |
-| `make golangci-lint` | Run golangci-lint (reads `.golangci.yml`) |
+| `make golangci-lint` | Run golangci-lint on `cmd/`, `internal/`, and `test/` packages |
 | `make gosec` | Run security scanner (medium+ severity/confidence) |
 | `make staticcheck` | Run static analysis checks |
 | `make govulncheck` | Scan dependencies for known CVEs |
@@ -94,7 +99,7 @@ govulncheck -version
 
 | Target | Description |
 | --- | --- |
-| `make analyze` | Run ALL 9 tools sequentially, continue on errors |
+| `make analyze` | Run ALL 9 tools sequentially and fail if any tool reports findings or exits non-zero |
 | `make analyze-fix` | Apply auto-fixes: goimports + gofmt + modernize + markdownlint |
 | `make analyze-report` | Generate combined report to `dist/analysis/report.txt` |
 | `make lint` | Quick lint (go vet only, backward compatible) |
@@ -427,6 +432,10 @@ lint:
     - make analyze
   allow_failure: false
 ```
+
+`make analyze` always runs all nine tools. If any tool fails, the target exits non-zero after printing every tool's output.
+
+Make targets set `GOTOOLCHAIN` to the Go version declared in `go.mod` (for example, `go1.26.2`) unless a caller explicitly overrides it on the command line.
 
 Or as separate jobs for parallel execution:
 

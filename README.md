@@ -540,19 +540,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 621 | 120,485 |
-| Unit tests (`_test.go`) | 402 | 209,468 |
+| Source (`.go`, non-test) | 621 | 120,528 |
+| Unit tests (`_test.go`) | 403 | 210,206 |
 | End-to-end tests | 108 | 23,497 |
-| **Total** | **1,131** | **353,450** |
+| **Total** | **1,132** | **354,231** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,354 |
-| — exported (public) | 2,185 |
-| — unexported (private) | 1,169 |
-| Unit test functions (`TestXxx`) | 8,781 |
+| Source functions | 3,362 |
+| — exported (public) | 2,187 |
+| — unexported (private) | 1,175 |
+| Unit test functions (`TestXxx`) | 8,817 |
 | Subtests (`t.Run(...)`) | 1,924 |
 | End-to-end test functions | 243 |
 
@@ -563,14 +563,14 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines | 1.74× more tests than code |
 | Average source file length | ~194 lines |
 | Average test file length | ~521 lines |
-| Comment lines in source | 10,054 (~8.3% of source) |
+| Comment lines in source | 10,074 (~8.4% of source) |
 | Test functions per source function | 2.6× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,331 |
+| `if err != nil` checks | 5,344 |
 | `defer` statements | 662 |
 | `struct` types defined | 1,928 |
 | `//nolint` suppressions | 55 |
@@ -583,23 +583,23 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 192 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 92 |
+| Git commits | 94 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `internal/tools/register_meta.go` — 3,159 lines |
+| Longest source file | `internal/tools/register_meta.go` — 3,123 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,384 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,190 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,522 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,191 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,527 (impossible to avoid) |
 | Longest function name in source | `RetryFailedExternalStatusCheckForProjectMR` (42 chars) |
-| Longest test function name | `TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations` (71 chars) |
+| Longest test function name | `TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding` (79 chars) |
 
 <!-- END STATS -->

@@ -9,7 +9,7 @@ How gitlab-mcp-server formats tool responses for both human and machine consumpt
 
 ## Overview
 
-Every tool response contains **two representations** of the same data:
+Successful tool responses contain **two representations** of the same data:
 
 1. **Markdown content** — human-readable text with tables, clickable links, and next-step hints. Targeted at the LLM (`audience: assistant`) so it can reason over the data and present it to you.
 2. **Structured JSON** (`structuredContent`) — machine-readable data for programmatic clients. IDEs like VS Code read this to extract fields, and it also includes a `next_steps` array with actionable hints.
@@ -62,7 +62,7 @@ After each response, you will see suggested next actions:
 - Approve or merge an open MR
 ```
 
-These hints are available in both the Markdown and JSON output, so your IDE can display them regardless of which format it reads.
+These hints are available in both the Markdown and JSON output, so your IDE can display them regardless of which format it reads. Tool execution errors use `isError: true` and may omit `structuredContent` so clients do not confuse an error payload with a successful typed result.
 
 ### Formatted Data
 
@@ -266,7 +266,7 @@ This behaviour is enabled by default and can be disabled globally with `EMBEDDED
 
 Meta-tools declare a single tool-level `OutputSchema` (the envelope with `next_steps` and `pagination` fields). In addition, each action route can carry its own output schema describing the exact shape returned by that specific action.
 
-Per-route schemas are populated automatically when using typed route constructors (`RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]`). Void actions and plain `Route()` calls do not have per-route schemas.
+Per-route schemas are populated automatically when using typed route constructors (`RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]`) and the typed void/delete constructors (`RouteVoidAction[T]`, `DestructiveVoidAction[T]`, `DestructiveVoidActionWithRequest[T]`). Plain untyped `Route()` calls do not automatically get per-route schemas.
 
 These schemas are:
 

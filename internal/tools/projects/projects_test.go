@@ -1939,7 +1939,7 @@ func TestAddPushRule_Success(t *testing.T) {
 		CommitMessageRegex: testCommitRegex,
 		PreventSecrets:     new(true),
 		DenyDeleteTag:      new(true),
-		MaxFileSize:        int64Ptr(10),
+		MaxFileSize:        new(int64(10)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2159,11 +2159,6 @@ func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 		t.Error("message should contain role name 'Developer'")
 	}
 }
-
-// Test helpers
-//
-//go:fix inline
-func int64Ptr(i int64) *int64 { return new(i) }
 
 // ---------------------------------------------------------------------------
 // Format function coverage tests
@@ -3717,7 +3712,7 @@ func TestAddPushRule_AllFields(t *testing.T) {
 		CommitMessageRegex:         "^(feat|fix):",
 		DenyDeleteTag:              new(true),
 		FileNameRegex:              "\\.(exe|dll)$",
-		MaxFileSize:                int64Ptr(50),
+		MaxFileSize:                new(int64(50)),
 		MemberCheck:                new(true),
 		PreventSecrets:             new(true),
 		RejectUnsignedCommits:      new(false),

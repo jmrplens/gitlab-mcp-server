@@ -10,6 +10,7 @@ package toolutil
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -363,6 +364,56 @@ func TestMakeMetaHandler_CustomFormatter(t *testing.T) {
 	tc, ok := result.Content[0].(*mcp.TextContent)
 	if !ok || tc.Text != "CUSTOM:pong" {
 		t.Errorf("result text = %q, want %q", tc.Text, "CUSTOM:pong")
+	}
+}
+
+func TestMakeMetaHandler_NilFormatterResult_UsesDefaultFormatter(t *testing.T) {
+	routes := ActionMap{
+		"stats": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]int{"count": 5}, nil
+		}),
+	}
+	formatter := func(any) *mcp.CallToolResult {
+		return nil
+	}
+	handler := MakeMetaHandler("test_tool", routes, formatter)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "stats"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("result = %#v, want successful fallback result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("fallback result content is empty")
+	}
+	m, ok := raw.(map[string]int)
+	if !ok || m["count"] != 5 {
+		t.Fatalf("structured content = %#v, want count 5", raw)
+	}
+}
+
+func TestMakeMetaHandler_IsErrorResult_OmitsStructuredContent(t *testing.T) {
+	routes := ActionMap{
+		"blocked": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]string{"status": "blocked"}, nil
+		}),
+	}
+	formatter := func(any) *mcp.CallToolResult {
+		return ErrorResult("blocked")
+	}
+	handler := MakeMetaHandler("test_tool", routes, formatter)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "blocked"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if raw != nil {
+		t.Fatalf("structured content = %#v, want nil for IsError result", raw)
 	}
 }
 
@@ -1326,25 +1377,25 @@ func TestDestructiveActionWithRequest_OutputSchema(t *testing.T) {
 	}
 }
 
-// TestRouteVoidAction_OutputSchema_Nil verifies void variants keep OutputSchema nil.
-func TestRouteVoidAction_OutputSchema_Nil(t *testing.T) {
+// TestRouteVoidAction_OutputSchema verifies void variants expose typed output schemas.
+func TestRouteVoidAction_OutputSchema(t *testing.T) {
 	client := &gitlabclient.Client{}
 	route := RouteVoidAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
 		return nil
 	})
-	if route.OutputSchema != nil {
-		t.Errorf("expected OutputSchema to be nil for void action, got %v", route.OutputSchema)
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil for void action")
 	}
 }
 
-// TestDestructiveVoidAction_OutputSchema_Nil verifies destructive void variants keep OutputSchema nil.
-func TestDestructiveVoidAction_OutputSchema_Nil(t *testing.T) {
+// TestDestructiveVoidAction_OutputSchema verifies destructive void variants expose typed output schemas.
+func TestDestructiveVoidAction_OutputSchema(t *testing.T) {
 	client := &gitlabclient.Client{}
 	route := DestructiveVoidAction(client, func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
 		return nil
 	})
-	if route.OutputSchema != nil {
-		t.Errorf("expected OutputSchema to be nil for void action, got %v", route.OutputSchema)
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be non-nil for destructive void action")
 	}
 	if !route.Destructive {
 		t.Error("expected Destructive=true")
@@ -1847,5 +1898,337 @@ func TestUnmarshalParams_DoubleFailureReturnsOriginalError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid params for this action") {
 		t.Errorf("expected wrapped error message, got %q", err.Error())
+	}
+}
+
+type routeSchemaTestInput struct {
+	ID int `json:"id"`
+}
+
+func TestRouteVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
+	t.Parallel()
+
+	route := RouteVoidAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, input routeSchemaTestInput) error {
+		if input.ID != 7 {
+			t.Fatalf("input.ID = %d, want 7", input.ID)
+		}
+		return nil
+	})
+
+	if route.OutputSchema == nil {
+		t.Fatal("RouteVoidAction OutputSchema is nil")
+	}
+	if route.Destructive {
+		t.Fatal("RouteVoidAction marked route destructive")
+	}
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": 7})
+	if err != nil {
+		t.Fatalf("route handler returned error: %v", err)
+	}
+	out, ok := result.(VoidOutput)
+	if !ok {
+		t.Fatalf("route handler result type = %T, want VoidOutput", result)
+	}
+	if out.Status != "success" {
+		t.Fatalf("VoidOutput.Status = %q, want success", out.Status)
+	}
+	if out.Message == "" {
+		t.Fatal("VoidOutput.Message is empty")
+	}
+}
+
+func TestRouteVoidAction_InvalidInput_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	route := RouteVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+		t.Fatal("handler should not be called for invalid input")
+		return nil
+	})
+
+	result, err := route.Handler(context.Background(), map[string]any{"unknown": true})
+	if err == nil {
+		t.Fatal("route handler returned nil error for invalid input")
+	}
+	if result != nil {
+		t.Fatalf("route handler result = %#v, want nil", result)
+	}
+}
+
+func TestDestructiveVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
+	t.Parallel()
+
+	route := DestructiveVoidAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, input routeSchemaTestInput) error {
+		if input.ID != 11 {
+			t.Fatalf("input.ID = %d, want 11", input.ID)
+		}
+		return nil
+	})
+
+	if route.OutputSchema == nil {
+		t.Fatal("DestructiveVoidAction OutputSchema is nil")
+	}
+	if !route.Destructive {
+		t.Fatal("DestructiveVoidAction did not mark route destructive")
+	}
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": 11})
+	if err != nil {
+		t.Fatalf("route handler returned error: %v", err)
+	}
+	out, ok := result.(DeleteOutput)
+	if !ok {
+		t.Fatalf("route handler result type = %T, want DeleteOutput", result)
+	}
+	if out.Status != "success" {
+		t.Fatalf("DeleteOutput.Status = %q, want success", out.Status)
+	}
+	if out.Message == "" {
+		t.Fatal("DeleteOutput.Message is empty")
+	}
+}
+
+func TestDestructiveVoidAction_HandlerError_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("delete failed")
+	route := DestructiveVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+		return wantErr
+	})
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": 1})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("route handler error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("route handler result = %#v, want nil", result)
+	}
+}
+
+func TestWithVoidOutput_NilResult_ReturnsSuccessOutput(t *testing.T) {
+	t.Parallel()
+
+	sentinel := struct{ OK bool }{OK: true}
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil }
+	wrapped := withVoidOutput(inner, sentinel)
+
+	result, err := wrapped(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != sentinel {
+		t.Fatalf("result = %#v, want %#v", result, sentinel)
+	}
+}
+
+func TestWithVoidOutput_NonNilResult_PassesThrough(t *testing.T) {
+	t.Parallel()
+
+	original := struct{ Val int }{Val: 42}
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return original, nil }
+	wrapped := withVoidOutput(inner, struct{ OK bool }{OK: true})
+
+	result, err := wrapped(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != original {
+		t.Fatalf("result = %#v, want %#v", result, original)
+	}
+}
+
+func TestWithVoidOutput_InnerError_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("inner failure")
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return nil, wantErr }
+	wrapped := withVoidOutput(inner, struct{}{})
+
+	result, err := wrapped(context.Background(), nil)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *testing.T) {
+	t.Parallel()
+
+	route := DestructiveVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	if !route.Destructive {
+		t.Fatal("expected Destructive = true")
+	}
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be set")
+	}
+	result, err := route.Handler(context.Background(), map[string]any{"id": 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, ok := result.(DeleteOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want DeleteOutput", result)
+	}
+	if out.Status != "success" {
+		t.Fatalf("Status = %q, want \"success\"", out.Status)
+	}
+}
+
+func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	routes := ActionMap{
+		"delete": DestructiveVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+			return nil
+		}),
+		"void": RouteVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+			return nil
+		}),
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	AddMetaTool(server, "test_meta", "Test meta tool.", routes, nil, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	voidResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_meta",
+		Arguments: map[string]any{
+			"action": "void",
+			"params": map[string]any{"id": 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(void): %v", err)
+	}
+	if voidResult.IsError {
+		t.Fatalf("CallTool(void) returned IsError result: %#v", voidResult)
+	}
+	if len(voidResult.Content) == 0 {
+		t.Fatal("CallTool(void) returned no content")
+	}
+	var voidOut VoidOutput
+	rawVoid, err := json.Marshal(voidResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal void structured content: %v", err)
+	}
+	err = json.Unmarshal(rawVoid, &voidOut)
+	if err != nil {
+		t.Fatalf("unmarshal void structured content: %v", err)
+	}
+	if voidOut.Status != "success" || voidOut.Message == "" {
+		t.Fatalf("void structured content = %+v, want success status and message", voidOut)
+	}
+
+	deleteResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_meta",
+		Arguments: map[string]any{
+			"action": "delete",
+			"params": map[string]any{"id": 1, "confirm": true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(delete): %v", err)
+	}
+	if deleteResult.IsError {
+		t.Fatalf("CallTool(delete) returned IsError result: %#v", deleteResult)
+	}
+	var deleteOut DeleteOutput
+	rawDelete, err := json.Marshal(deleteResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal delete structured content: %v", err)
+	}
+	err = json.Unmarshal(rawDelete, &deleteOut)
+	if err != nil {
+		t.Fatalf("unmarshal delete structured content: %v", err)
+	}
+	if deleteOut.Status != "success" || deleteOut.Message == "" {
+		t.Fatalf("delete structured content = %+v, want success status and message", deleteOut)
+	}
+}
+
+func TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("request delete failed")
+	route := DestructiveVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return wantErr
+		})
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": 1})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestWrapVoidActionWithRequest_Success_ReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	result, err := wrapped(context.Background(), map[string]any{"id": 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestWrapVoidActionWithRequest_Error_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("wrap void request error")
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return wantErr
+		})
+
+	result, err := wrapped(context.Background(), map[string]any{"id": 1})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestWrapVoidActionWithRequest_UnmarshalError_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	// Pass a param with the wrong type to trigger UnmarshalParams error.
+	result, err := wrapped(context.Background(), map[string]any{"id": "not-an-int"})
+	if err == nil {
+		t.Fatal("expected error for invalid params, got nil")
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil on error", result)
 	}
 }

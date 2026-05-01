@@ -27,7 +27,7 @@ func TestIndividual_PushRules(t *testing.T) {
 		out, err := callToolOn[projects.PushRuleOutput](ctx, sess.individual, "gitlab_project_add_push_rule", projects.AddPushRuleInput{
 			ProjectID:          proj.pidOf(),
 			CommitMessageRegex: "^[A-Z].*",
-			MaxFileSize:        int64Ptr(50),
+			MaxFileSize:        new(int64(50)),
 		})
 		requireNoError(t, err, "add push rule")
 		requireTruef(t, out.ID > 0, "push rule ID should be positive, got %d", out.ID)
@@ -47,7 +47,7 @@ func TestIndividual_PushRules(t *testing.T) {
 	t.Run("Edit", func(t *testing.T) {
 		out, err := callToolOn[projects.PushRuleOutput](ctx, sess.individual, "gitlab_project_edit_push_rule", projects.EditPushRuleInput{
 			ProjectID:   proj.pidOf(),
-			MaxFileSize: int64Ptr(100),
+			MaxFileSize: new(int64(100)),
 		})
 		requireNoError(t, err, "edit push rule")
 		requireTruef(t, out.MaxFileSize == 100, "expected max_file_size=100 after edit, got %d", out.MaxFileSize)

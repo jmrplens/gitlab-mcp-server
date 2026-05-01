@@ -187,7 +187,7 @@ Requiere que el cliente de IA soporte la capacidad de MCP elicitation.
 
 ## Formato de salida de las herramientas
 
-Cada herramienta devuelve una respuesta en formato dual:
+Las llamadas exitosas a herramientas devuelven una respuesta en formato dual:
 
 ```json
 {
@@ -209,10 +209,10 @@ Cada herramienta devuelve una respuesta en formato dual:
 }
 ```
 
-- **`structuredContent`** — JSON tipado para que la IA lo analice y razone sobre él, incluye sugerencias de `next_steps`
+- **`structuredContent`** — JSON tipado para que la IA lo analice y razone sobre él, incluye sugerencias de `next_steps` y cumple el schema de salida declarado cuando existe
 - **`content`** — Markdown formateado para la visualización humana
 
-Este formato dual asegura que la IA pueda tomar decisiones de seguimiento mientras presenta una salida limpia al usuario.
+Este formato dual asegura que la IA pueda tomar decisiones de seguimiento mientras presenta una salida limpia al usuario. Los errores de ejecución usan `isError: true` y pueden devolver solo Markdown para que los clientes no interpreten el error como un resultado estructurado exitoso.
 
 ## Modelo de seguridad
 

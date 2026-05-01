@@ -154,8 +154,8 @@ func acquireCapabilityLocks(caps []Capability) func() {
 	}
 
 	return func() {
-		for i := len(lockCaps) - 1; i >= 0; i-- {
-			lockForCapability(lockCaps[i]).Unlock()
+		for _, capability := range slices.Backward(lockCaps) {
+			lockForCapability(capability).Unlock()
 		}
 	}
 }

@@ -225,3 +225,41 @@ func TestMarkdownForResult_DeleteOutputViaInit(t *testing.T) {
 		t.Errorf("text = %q, want %q", tc.Text, want)
 	}
 }
+
+func TestMarkdownForResult_VoidOutputViaInit(t *testing.T) {
+	// Re-register: earlier tests in this file reset global maps, wiping init() state.
+	RegisterMarkdown(func(v VoidOutput) string {
+		return EmojiSuccess + " " + v.Message
+	})
+
+	result := MarkdownForResult(VoidOutput{Message: "Action completed"})
+	if result == nil {
+		t.Fatal("expected non-nil result for VoidOutput")
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	want := EmojiSuccess + " Action completed"
+	if tc.Text != want {
+		t.Errorf("text = %q, want %q", tc.Text, want)
+	}
+}
+
+func TestFormatDeleteOutput_ReturnsEmojiPlusMessage(t *testing.T) {
+	t.Parallel()
+	got := formatDeleteOutput(DeleteOutput{Status: "success", Message: "branch deleted"})
+	want := EmojiSuccess + " branch deleted"
+	if got != want {
+		t.Fatalf("formatDeleteOutput = %q, want %q", got, want)
+	}
+}
+
+func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
+	t.Parallel()
+	got := formatVoidOutput(VoidOutput{Status: "success", Message: "action completed"})
+	want := EmojiSuccess + " action completed"
+	if got != want {
+		t.Fatalf("formatVoidOutput = %q, want %q", got, want)
+	}
+}

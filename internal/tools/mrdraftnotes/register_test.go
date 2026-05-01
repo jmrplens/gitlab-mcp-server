@@ -5,12 +5,14 @@ package mrdraftnotes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // TestRegisterTools_DeleteConfirmDeclined covers the ConfirmAction early-return
@@ -149,6 +151,66 @@ func TestRegisterTools_ErrorPaths(t *testing.T) {
 			}
 			if result == nil || !result.IsError {
 				t.Fatal("expected IsError result for server error response")
+			}
+		})
+	}
+}
+
+// TestRegisterTools_PublishOutputsIncludeStatus verifies publish confirmations
+// include a concrete status in structured content.
+func TestRegisterTools_PublishOutputsIncludeStatus(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_mr_draft_note_publish", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 1}},
+		{"gitlab_mr_draft_note_publish_all", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, callErr := session.CallTool(ctx, &mcp.CallToolParams{Name: tt.name, Arguments: tt.args})
+			if callErr != nil {
+				t.Fatalf("CallTool error: %v", callErr)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("expected successful result, got %+v", result)
+			}
+			if result.StructuredContent == nil {
+				t.Fatal("expected structured content")
+			}
+			raw, marshalErr := json.Marshal(result.StructuredContent)
+			if marshalErr != nil {
+				t.Fatalf("marshal structured content: %v", marshalErr)
+			}
+			var out toolutil.DeleteOutput
+			if unmarshalErr := json.Unmarshal(raw, &out); unmarshalErr != nil {
+				t.Fatalf("unmarshal structured content: %v", unmarshalErr)
+			}
+			if out.Status != "success" {
+				t.Fatalf("Status = %q, want success", out.Status)
+			}
+			if out.Message == "" {
+				t.Fatal("expected non-empty message")
 			}
 		})
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
@@ -5005,7 +5006,16 @@ func TestMakeMetaHandler_SuccessfulDispatch(t *testing.T) {
 			called = true
 			return "result", nil
 		}),
-	}, markdownForResult)
+	}, func(value any) *mcp.CallToolResult {
+		got, ok := value.(string)
+		if !ok {
+			t.Fatalf("formatter got %T, want string", value)
+		}
+		if got != "result" {
+			t.Fatalf("formatter got %q, want %q", got, "result")
+		}
+		return toolutil.SuccessResult(got)
+	})
 
 	_, result, err := handler(context.Background(), nil, MetaToolInput{Action: "get", Params: map[string]any{}})
 	if err != nil {
@@ -5051,5 +5061,113 @@ func TestCommitToOutput_NilDate(t *testing.T) {
 	}
 	if out.CommittedDate != "" {
 		t.Errorf("CommittedDate = %q, want empty string", out.CommittedDate)
+	}
+}
+
+// TestGroupSCIMMeta_UpdateAction_ErrorPath verifies that the updateAction
+// closure in registerGroupSCIMMeta propagates errors from groupscim.Update
+// back to the caller as an MCP error result.
+func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
+	t.Parallel()
+
+	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
+
+	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+		case r.Method == http.MethodPatch && r.URL.Path == scimUpdatePath:
+			http.Error(w, `{"message":"forbidden"}`, http.StatusForbidden)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}), true)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "gitlab_group_scim",
+		Arguments: map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"group_id":   "mygroup",
+				"uid":        "uid-123",
+				"extern_uid": "new-uid",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() unexpected transport error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error result for failed SCIM update, got success")
+	}
+	if result.StructuredContent != nil {
+		t.Fatalf("StructuredContent = %#v, want nil for error result", result.StructuredContent)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected error result content, got none")
+	}
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("error content type = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(textContent.Text, "forbidden") {
+		t.Fatalf("error content = %q, want forbidden detail", textContent.Text)
+	}
+}
+
+// TestGroupSCIMMeta_UpdateAction_SuccessPath verifies that the updateAction
+// closure in registerGroupSCIMMeta returns the expected UpdateOutput on
+// a successful GitLab SCIM PATCH response.
+func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
+	t.Parallel()
+
+	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
+
+	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+		case r.Method == http.MethodPatch && r.URL.Path == scimUpdatePath:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}), true)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "gitlab_group_scim",
+		Arguments: map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"group_id":   "mygroup",
+				"uid":        "uid-123",
+				"extern_uid": "new-uid",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() unexpected transport error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success result, got error: %+v", result)
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for successful SCIM update")
+	}
+	raw, marshalErr := json.Marshal(result.StructuredContent)
+	if marshalErr != nil {
+		t.Fatalf("marshal structured content: %v", marshalErr)
+	}
+	var out groupscim.UpdateOutput
+	if unmarshalErr := json.Unmarshal(raw, &out); unmarshalErr != nil {
+		t.Fatalf("unmarshal structured content: %v", unmarshalErr)
+	}
+	if !out.Updated {
+		t.Fatal("Updated = false, want true")
+	}
+	if out.Message != "SCIM identity updated successfully." {
+		t.Fatalf("Message = %q, want SCIM identity updated successfully.", out.Message)
 	}
 }

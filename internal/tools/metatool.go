@@ -73,6 +73,11 @@ func destructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 	return toolutil.DestructiveVoidAction(client, fn)
 }
 
+// destructiveVoidActionWithRequest wraps a request-aware void function as a destructive ActionRoute.
+func destructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) error) actionRoute {
+	return toolutil.DestructiveVoidActionWithRequest(client, fn)
+}
+
 // addMetaTool registers a meta-tool with annotations derived from routes.
 // If ANY route is destructive, the tool gets DestructiveHint: true.
 // If NO route is destructive, it gets NonDestructiveMetaAnnotations.

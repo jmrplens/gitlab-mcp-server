@@ -153,8 +153,13 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 // Routes without OutputSchema are reported (these are typically void actions
 // or plain Route() calls that lack typed output).
 func auditRouteOutputSchema() []finding {
+	return collectRouteOutputSchemaFindings(toolutil.MetaRoutes())
+}
+
+// collectRouteOutputSchemaFindings scans the given meta-tool route map and
+// returns a finding for every action that does not declare an OutputSchema.
+func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) []finding {
 	var fs []finding
-	allRoutes := toolutil.MetaRoutes()
 	for toolName, routes := range allRoutes {
 		for action, route := range routes {
 			if route.OutputSchema == nil {

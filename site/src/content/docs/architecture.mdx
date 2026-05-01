@@ -187,7 +187,7 @@ Requires the AI client to support MCP elicitation capability.
 
 ## Tool output format
 
-Every tool returns a dual-format response:
+Successful tool calls return a dual-format response:
 
 ```json
 {
@@ -205,10 +205,10 @@ Every tool returns a dual-format response:
 }
 ```
 
-- **`structuredContent`** — Typed JSON for the AI to parse and reason about, includes `next_steps` hints
+- **`structuredContent`** — Typed JSON for the AI to parse and reason about, includes `next_steps` hints, and conforms to the tool's declared output schema when one is present
 - **`content`** — Formatted Markdown for human display
 
-This dual format ensures the AI can make follow-up decisions while presenting clean output to the user.
+This dual format ensures the AI can make follow-up decisions while presenting clean output to the user. Tool execution errors set `isError: true` and can return only Markdown content so clients do not treat the error as a successful structured result.
 
 ## Security model
 

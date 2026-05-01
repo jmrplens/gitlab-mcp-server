@@ -208,6 +208,7 @@ linters:
           - noctx
           - wastedassign
           - fatcontext
+          - nilnil
 
       # Main entry point: allow os.Exit
       - path: "cmd/server/main\\.go"
@@ -239,7 +240,7 @@ output:
     - linter
     - severity
     - file
-  show-stats: true
+  show-stats: false
 
 formatters:
   enable:
