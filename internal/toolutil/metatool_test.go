@@ -367,7 +367,34 @@ func TestMakeMetaHandler_CustomFormatter(t *testing.T) {
 	}
 }
 
-func TestMakeMetaHandler_IsErrorResultOmitsStructuredContent(t *testing.T) {
+func TestMakeMetaHandler_NilFormatterResult_UsesDefaultFormatter(t *testing.T) {
+	routes := ActionMap{
+		"stats": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]int{"count": 5}, nil
+		}),
+	}
+	formatter := func(any) *mcp.CallToolResult {
+		return nil
+	}
+	handler := MakeMetaHandler("test_tool", routes, formatter)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "stats"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("result = %#v, want successful fallback result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("fallback result content is empty")
+	}
+	m, ok := raw.(map[string]int)
+	if !ok || m["count"] != 5 {
+		t.Fatalf("structured content = %#v, want count 5", raw)
+	}
+}
+
+func TestMakeMetaHandler_IsErrorResult_OmitsStructuredContent(t *testing.T) {
 	routes := ActionMap{
 		"blocked": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return map[string]string{"status": "blocked"}, nil
@@ -1878,7 +1905,7 @@ type routeSchemaTestInput struct {
 	ID int `json:"id"`
 }
 
-func TestRouteVoidActionReturnsTypedOutput(t *testing.T) {
+func TestRouteVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	t.Parallel()
 
 	route := RouteVoidAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, input routeSchemaTestInput) error {
@@ -1911,7 +1938,7 @@ func TestRouteVoidActionReturnsTypedOutput(t *testing.T) {
 	}
 }
 
-func TestRouteVoidActionInvalidInput(t *testing.T) {
+func TestRouteVoidAction_InvalidInput_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	route := RouteVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
@@ -1928,7 +1955,7 @@ func TestRouteVoidActionInvalidInput(t *testing.T) {
 	}
 }
 
-func TestDestructiveVoidActionReturnsTypedOutput(t *testing.T) {
+func TestDestructiveVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	t.Parallel()
 
 	route := DestructiveVoidAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, input routeSchemaTestInput) error {
@@ -1961,7 +1988,7 @@ func TestDestructiveVoidActionReturnsTypedOutput(t *testing.T) {
 	}
 }
 
-func TestDestructiveVoidActionPropagatesError(t *testing.T) {
+func TestDestructiveVoidAction_HandlerError_PropagatesError(t *testing.T) {
 	t.Parallel()
 
 	wantErr := errors.New("delete failed")
@@ -2026,7 +2053,7 @@ func TestWithVoidOutput_InnerError_PropagatesError(t *testing.T) {
 	}
 }
 
-func TestDestructiveVoidActionWithRequest_ReturnsDeleteOutput(t *testing.T) {
+func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *testing.T) {
 	t.Parallel()
 
 	route := DestructiveVoidActionWithRequest((*gitlabclient.Client)(nil),
@@ -2053,7 +2080,7 @@ func TestDestructiveVoidActionWithRequest_ReturnsDeleteOutput(t *testing.T) {
 	}
 }
 
-func TestMetaToolVoidActionsReturnProtocolStructuredContent(t *testing.T) {
+func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T) {
 	t.Parallel()
 
 	routes := ActionMap{
@@ -2134,7 +2161,7 @@ func TestMetaToolVoidActionsReturnProtocolStructuredContent(t *testing.T) {
 	}
 }
 
-func TestDestructiveVoidActionWithRequest_PropagatesError(t *testing.T) {
+func TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError(t *testing.T) {
 	t.Parallel()
 
 	wantErr := errors.New("request delete failed")

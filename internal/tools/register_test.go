@@ -5062,13 +5062,17 @@ func TestCommitToOutput_NilDate(t *testing.T) {
 func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
 	t.Parallel()
 
+	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
+
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v4/version":
+		switch {
+		case r.URL.Path == "/api/v4/version":
 			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-		default:
-			// Return a server error for any SCIM PATCH request.
+		case r.Method == http.MethodPatch && r.URL.Path == scimUpdatePath:
 			http.Error(w, `{"message":"forbidden"}`, http.StatusForbidden)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
 		}
 	}), true)
 
@@ -5097,13 +5101,17 @@ func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
 func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
 	t.Parallel()
 
+	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
+
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v4/version":
+		switch {
+		case r.URL.Path == "/api/v4/version":
 			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
-		default:
-			// SCIM PATCH returns 204 No Content on success.
+		case r.Method == http.MethodPatch && r.URL.Path == scimUpdatePath:
 			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
 		}
 	}), true)
 
