@@ -5005,7 +5005,9 @@ func TestMakeMetaHandler_SuccessfulDispatch(t *testing.T) {
 			called = true
 			return "result", nil
 		}),
-	}, markdownForResult)
+	}, func(any) *mcp.CallToolResult {
+		return toolutil.SuccessResult("ok")
+	})
 
 	_, result, err := handler(context.Background(), nil, MetaToolInput{Action: "get", Params: map[string]any{}})
 	if err != nil {

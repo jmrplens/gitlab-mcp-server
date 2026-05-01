@@ -367,6 +367,29 @@ func TestMakeMetaHandler_CustomFormatter(t *testing.T) {
 	}
 }
 
+func TestMakeMetaHandler_IsErrorResultOmitsStructuredContent(t *testing.T) {
+	routes := ActionMap{
+		"blocked": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return map[string]string{"status": "blocked"}, nil
+		}),
+	}
+	formatter := func(any) *mcp.CallToolResult {
+		return ErrorResult("blocked")
+	}
+	handler := MakeMetaHandler("test_tool", routes, formatter)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "blocked"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if raw != nil {
+		t.Fatalf("structured content = %#v, want nil for IsError result", raw)
+	}
+}
+
 // defaultFormatResult.
 
 // TestDefaultFormatResult_NilResult verifies "ok" text for nil result.
@@ -2027,6 +2050,87 @@ func TestDestructiveVoidActionWithRequest_ReturnsDeleteOutput(t *testing.T) {
 	}
 	if out.Status != "success" {
 		t.Fatalf("Status = %q, want \"success\"", out.Status)
+	}
+}
+
+func TestMetaToolVoidActionsReturnProtocolStructuredContent(t *testing.T) {
+	t.Parallel()
+
+	routes := ActionMap{
+		"delete": DestructiveVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+			return nil
+		}),
+		"void": RouteVoidAction((*gitlabclient.Client)(nil), func(context.Context, *gitlabclient.Client, routeSchemaTestInput) error {
+			return nil
+		}),
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	AddMetaTool(server, "test_meta", "Test meta tool.", routes, nil, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	voidResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_meta",
+		Arguments: map[string]any{
+			"action": "void",
+			"params": map[string]any{"id": 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(void): %v", err)
+	}
+	if voidResult.IsError {
+		t.Fatalf("CallTool(void) returned IsError result: %#v", voidResult)
+	}
+	if len(voidResult.Content) == 0 {
+		t.Fatal("CallTool(void) returned no content")
+	}
+	var voidOut VoidOutput
+	rawVoid, err := json.Marshal(voidResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal void structured content: %v", err)
+	}
+	err = json.Unmarshal(rawVoid, &voidOut)
+	if err != nil {
+		t.Fatalf("unmarshal void structured content: %v", err)
+	}
+	if voidOut.Status != "success" || voidOut.Message == "" {
+		t.Fatalf("void structured content = %+v, want success status and message", voidOut)
+	}
+
+	deleteResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_meta",
+		Arguments: map[string]any{
+			"action": "delete",
+			"params": map[string]any{"id": 1, "confirm": true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(delete): %v", err)
+	}
+	if deleteResult.IsError {
+		t.Fatalf("CallTool(delete) returned IsError result: %#v", deleteResult)
+	}
+	var deleteOut DeleteOutput
+	rawDelete, err := json.Marshal(deleteResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal delete structured content: %v", err)
+	}
+	err = json.Unmarshal(rawDelete, &deleteOut)
+	if err != nil {
+		t.Fatalf("unmarshal delete structured content: %v", err)
+	}
+	if deleteOut.Status != "success" || deleteOut.Message == "" {
+		t.Fatalf("delete structured content = %+v, want success status and message", deleteOut)
 	}
 }
 

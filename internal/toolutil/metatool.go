@@ -514,7 +514,10 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		callResult := formatResult(result)
-		return callResult, enrichWithHints(result, callResult), err
+		if err != nil || callResult == nil || callResult.IsError {
+			return callResult, nil, err
+		}
+		return callResult, enrichWithHints(result, callResult), nil
 	}
 }
 

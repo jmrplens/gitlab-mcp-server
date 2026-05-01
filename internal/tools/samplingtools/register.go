@@ -261,6 +261,15 @@ func wrapSamplingAction[T any, R any](client *gitlabclient.Client, fn func(ctx c
 	}
 }
 
+// samplingRoute preserves the sampling-specific unsupported-capability handling
+// while still attaching the typed input/output schemas expected by meta-route
+// schema resources and audits.
+func samplingRoute[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) toolutil.ActionRoute {
+	route := toolutil.RouteActionWithRequest(client, fn)
+	route.Handler = wrapSamplingAction[T, R](client, fn)
+	return route
+}
+
 // metaMarkdownForResult dispatches sampling output types to their Markdown formatters.
 func metaMarkdownForResult(result any) *mcp.CallToolResult {
 	switch v := result.(type) {
@@ -297,17 +306,17 @@ func metaMarkdownForResult(result any) *mcp.CallToolResult {
 // all 11 sampling analysis tools under one action-dispatched interface.
 func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 	routes := toolutil.ActionMap{
-		"mr_changes":         toolutil.Route(wrapSamplingAction[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges)),
-		"issue_summary":      toolutil.Route(wrapSamplingAction[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue)),
-		"release_notes":      toolutil.Route(wrapSamplingAction[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes)),
-		"pipeline_failure":   toolutil.Route(wrapSamplingAction[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure)),
-		"mr_review":          toolutil.Route(wrapSamplingAction[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview)),
-		"milestone_report":   toolutil.Route(wrapSamplingAction[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport)),
-		"ci_config":          toolutil.Route(wrapSamplingAction[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig)),
-		"issue_scope":        toolutil.Route(wrapSamplingAction[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope)),
-		"mr_security":        toolutil.Route(wrapSamplingAction[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity)),
-		"technical_debt":     toolutil.Route(wrapSamplingAction[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt)),
-		"deployment_history": toolutil.Route(wrapSamplingAction[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory)),
+		"mr_changes":         samplingRoute[AnalyzeMRChangesInput, AnalyzeMRChangesOutput](client, AnalyzeMRChanges),
+		"issue_summary":      samplingRoute[SummarizeIssueInput, SummarizeIssueOutput](client, SummarizeIssue),
+		"release_notes":      samplingRoute[GenerateReleaseNotesInput, GenerateReleaseNotesOutput](client, GenerateReleaseNotes),
+		"pipeline_failure":   samplingRoute[AnalyzePipelineFailureInput, AnalyzePipelineFailureOutput](client, AnalyzePipelineFailure),
+		"mr_review":          samplingRoute[SummarizeMRReviewInput, SummarizeMRReviewOutput](client, SummarizeMRReview),
+		"milestone_report":   samplingRoute[GenerateMilestoneReportInput, GenerateMilestoneReportOutput](client, GenerateMilestoneReport),
+		"ci_config":          samplingRoute[AnalyzeCIConfigInput, AnalyzeCIConfigOutput](client, AnalyzeCIConfig),
+		"issue_scope":        samplingRoute[AnalyzeIssueScopeInput, AnalyzeIssueScopeOutput](client, AnalyzeIssueScope),
+		"mr_security":        samplingRoute[ReviewMRSecurityInput, ReviewMRSecurityOutput](client, ReviewMRSecurity),
+		"technical_debt":     samplingRoute[FindTechnicalDebtInput, FindTechnicalDebtOutput](client, FindTechnicalDebt),
+		"deployment_history": samplingRoute[AnalyzeDeploymentHistoryInput, AnalyzeDeploymentHistoryOutput](client, AnalyzeDeploymentHistory),
 	}
 
 	toolutil.AddReadOnlyMetaTool(server, "gitlab_analyze", `LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).

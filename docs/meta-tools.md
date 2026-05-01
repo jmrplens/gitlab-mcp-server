@@ -130,16 +130,16 @@ The base mode provides a ~53% reduction from v3.0, with enterprise features gate
 
 All meta-tools use the shared infrastructure in `internal/toolutil/metatool.go`:
 
-- `ActionRoute` — pairs a handler with a `Destructive bool` field for metadata-driven classification. Each route can also carry an `OutputSchema` describing the exact shape returned by that specific action
+- `ActionRoute` — pairs a handler with metadata-driven classification. Typed routes carry both `InputSchema` and `OutputSchema` so each action can expose exact params and result contracts
 - `ActionMap` — `map[string]ActionRoute` mapping action names to route definitions
-- `Route(fn)` / `DestructiveRoute(fn)` — constructors for non-destructive and destructive routes
+- `Route(fn)` / `DestructiveRoute(fn)` — legacy constructors for already-adapted handlers
 - `DeriveAnnotations(routes)` — auto-derives tool-level annotations from route metadata: if any route is destructive → `MetaAnnotations`, otherwise → `NonDestructiveMetaAnnotations`
-- `MakeMetaHandler()` — creates action-dispatch handlers from route maps; automatically enriches `structuredContent` with `next_steps` hints extracted from Markdown
+- `MakeMetaHandler()` — creates action-dispatch handlers from route maps; successful results automatically enrich `structuredContent` with `next_steps` hints extracted from Markdown, while `isError` results omit structured content
 - `MetaToolInput` — common input struct with `action` and `params` fields
 - `MetaAnnotations` — shared annotations (destructiveHint: true) for meta-tools with destructive actions
 - `ReadOnlyMetaAnnotations` — for meta-tools with only read operations (e.g., `gitlab_template`, `gitlab_search`)
 - `NonDestructiveMetaAnnotations` — for meta-tools without destructive actions (e.g., `gitlab_user`)
-- `RouteAction()` / `RouteVoidAction()` / `DestructiveAction()` / `DestructiveVoidAction()` — composite wrappers that combine handler adaption with route classification
+- `RouteAction()` / `RouteVoidAction()` / `DestructiveAction()` / `DestructiveVoidAction()` — composite wrappers that combine handler adaptation, route classification, and input/output schema capture
 
 ### How Actions Are Routed
 
@@ -159,7 +159,7 @@ User: gitlab_project { action: "board_create", params: { project_id: "42", name:
 
 ### Response Enrichment
 
-Meta-tool responses include a `next_steps` array in the JSON `structuredContent`. This is critical for IDEs like VS Code that only read JSON:
+Successful meta-tool responses include a `next_steps` array in the JSON `structuredContent`. This is critical for IDEs like VS Code that only read JSON:
 
 ```json
 {
@@ -173,7 +173,7 @@ Meta-tool responses include a `next_steps` array in the JSON `structuredContent`
 }
 ```
 
-The enrichment is automatic — `MakeMetaHandler` calls `enrichWithHints()` which parses the Markdown "💡 Next steps" section and merges the hints into the JSON output. Individual (non-meta) tools do not include `structuredContent` by design.
+The enrichment is automatic — `MakeMetaHandler` calls `enrichWithHints()` which parses the Markdown "💡 Next steps" section and merges the hints into the JSON output. If a route returns `isError: true`, `MakeMetaHandler` returns the actionable Markdown error without `structuredContent`, matching the MCP rule that successful structured results must conform to the declared `OutputSchema`.
 
 See [Output Format](output-format.md) for the complete response format specification.
 

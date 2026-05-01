@@ -157,15 +157,11 @@ func auditRouteOutputSchema() []finding {
 }
 
 // collectRouteOutputSchemaFindings scans the given meta-tool route map and
-// returns a finding for every action that does not declare an OutputSchema,
-// skipping routes excluded by shouldSkipRouteOutputSchema.
+// returns a finding for every action that does not declare an OutputSchema.
 func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) []finding {
 	var fs []finding
 	for toolName, routes := range allRoutes {
 		for action, route := range routes {
-			if shouldSkipRouteOutputSchema(toolName, action, route) {
-				continue
-			}
 			if route.OutputSchema == nil {
 				fs = append(fs, finding{
 					tool:     toolName,
@@ -176,13 +172,6 @@ func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) [
 		}
 	}
 	return fs
-}
-
-// shouldSkipRouteOutputSchema reports whether a route should be excluded from
-// OutputSchema auditing. Currently skips gitlab_analyze because its actions
-// return free-form LLM-generated text that cannot be captured in a rigid schema.
-func shouldSkipRouteOutputSchema(toolName, _ string, _ toolutil.ActionRoute) bool {
-	return toolName == "gitlab_analyze"
 }
 
 // printReport prints the audit results as a formatted table.

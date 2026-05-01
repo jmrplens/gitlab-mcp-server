@@ -109,6 +109,86 @@ func TestWrapSamplingAction_InvalidParams(t *testing.T) {
 	}
 }
 
+func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
+	t.Parallel()
+
+	type testInput struct {
+		Value string `json:"value"`
+	}
+	type testOutput struct {
+		Result string `json:"result"`
+	}
+	fn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, input testInput) (testOutput, error) {
+		return testOutput{Result: input.Value}, nil
+	}
+
+	route := samplingRoute[testInput, testOutput](nil, fn)
+	if route.InputSchema == nil {
+		t.Fatal("InputSchema is nil")
+	}
+	if route.OutputSchema == nil {
+		t.Fatal("OutputSchema is nil")
+	}
+	if route.Destructive {
+		t.Fatal("samplingRoute marked route destructive")
+	}
+}
+
+func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterMeta(server, nil)
+
+	routes := toolutil.MetaRoutes()["gitlab_analyze"]
+	if len(routes) == 0 {
+		t.Fatal("gitlab_analyze routes were not registered")
+	}
+	for action, route := range routes {
+		if route.OutputSchema == nil {
+			t.Fatalf("route %q OutputSchema is nil", action)
+		}
+	}
+}
+
+func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterMeta(server, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_analyze",
+		Arguments: map[string]any{
+			"action": "mr_changes",
+			"params": map[string]any{
+				"project_id":        "group/project",
+				"merge_request_iid": 1,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected IsError result when sampling is unsupported")
+	}
+	if result.StructuredContent != nil {
+		t.Fatalf("StructuredContent = %#v, want nil for IsError result", result.StructuredContent)
+	}
+}
+
 // TestMetaMarkdownForResult_SamplingUnsupported verifies that metaMarkdownForResult renders a user-facing message when the sampling capability is unavailable.
 func TestMetaMarkdownForResult_SamplingUnsupported(t *testing.T) {
 	result := metaMarkdownForResult(samplingUnsupportedOutput{})

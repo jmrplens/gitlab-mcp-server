@@ -9,7 +9,7 @@ How gitlab-mcp-server formats tool responses for both human and machine consumpt
 
 ## Overview
 
-Every tool response contains **two representations** of the same data:
+Successful tool responses contain **two representations** of the same data:
 
 1. **Markdown content** — human-readable text with tables, clickable links, and next-step hints. Targeted at the LLM (`audience: assistant`) so it can reason over the data and present it to you.
 2. **Structured JSON** (`structuredContent`) — machine-readable data for programmatic clients. IDEs like VS Code read this to extract fields, and it also includes a `next_steps` array with actionable hints.
@@ -62,7 +62,7 @@ After each response, you will see suggested next actions:
 - Approve or merge an open MR
 ```
 
-These hints are available in both the Markdown and JSON output, so your IDE can display them regardless of which format it reads.
+These hints are available in both the Markdown and JSON output, so your IDE can display them regardless of which format it reads. Tool execution errors use `isError: true` and may omit `structuredContent` so clients do not confuse an error payload with a successful typed result.
 
 ### Formatted Data
 

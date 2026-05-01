@@ -112,7 +112,7 @@ For list operations:
 
 ### Structured Output (OutputSchema)
 
-Use typed output structs to auto-generate `OutputSchema` and `StructuredContent`. This enables clients to process tool results programmatically:
+Use typed output structs to auto-generate `OutputSchema` and `StructuredContent`. This enables clients to process successful tool results programmatically. If a tool result sets `isError: true`, omit `structuredContent` unless it still conforms to the declared success schema.
 
 ```go
 // Triple-return signature auto-generates OutputSchema from Out type

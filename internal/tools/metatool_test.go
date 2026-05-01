@@ -76,7 +76,9 @@ func TestMakeMetaHandler_ValidAction(t *testing.T) {
 		}),
 	}
 
-	handler := toolutil.MakeMetaHandler("test_tool", routes, markdownForResult)
+	handler := toolutil.MakeMetaHandler("test_tool", routes, func(any) *mcp.CallToolResult {
+		return toolutil.SuccessResult("ok")
+	})
 	input := MetaToolInput{
 		Action: "get",
 		Params: map[string]any{"id": "42"},
