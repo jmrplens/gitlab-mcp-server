@@ -1954,3 +1954,131 @@ func TestDestructiveVoidActionPropagatesError(t *testing.T) {
 		t.Fatalf("route handler result = %#v, want nil", result)
 	}
 }
+
+func TestWithVoidOutput_NilResult_ReturnsSuccessOutput(t *testing.T) {
+	t.Parallel()
+
+	sentinel := struct{ OK bool }{OK: true}
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil }
+	wrapped := withVoidOutput(inner, sentinel)
+
+	result, err := wrapped(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != sentinel {
+		t.Fatalf("result = %#v, want %#v", result, sentinel)
+	}
+}
+
+func TestWithVoidOutput_NonNilResult_PassesThrough(t *testing.T) {
+	t.Parallel()
+
+	original := struct{ Val int }{Val: 42}
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return original, nil }
+	wrapped := withVoidOutput(inner, struct{ OK bool }{OK: true})
+
+	result, err := wrapped(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != original {
+		t.Fatalf("result = %#v, want %#v", result, original)
+	}
+}
+
+func TestWithVoidOutput_InnerError_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("inner failure")
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return nil, wantErr }
+	wrapped := withVoidOutput(inner, struct{}{})
+
+	result, err := wrapped(context.Background(), nil)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestDestructiveVoidActionWithRequest_ReturnsDeleteOutput(t *testing.T) {
+	t.Parallel()
+
+	route := DestructiveVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	if !route.Destructive {
+		t.Fatal("expected Destructive = true")
+	}
+	if route.OutputSchema == nil {
+		t.Fatal("expected OutputSchema to be set")
+	}
+	result, err := route.Handler(context.Background(), map[string]any{"id": 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, ok := result.(DeleteOutput)
+	if !ok {
+		t.Fatalf("result type = %T, want DeleteOutput", result)
+	}
+	if out.Status != "success" {
+		t.Fatalf("Status = %q, want \"success\"", out.Status)
+	}
+}
+
+func TestDestructiveVoidActionWithRequest_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("request delete failed")
+	route := DestructiveVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return wantErr
+		})
+
+	result, err := route.Handler(context.Background(), map[string]any{"id": 1})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestWrapVoidActionWithRequest_Success_ReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	result, err := wrapped(context.Background(), map[string]any{"id": 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}
+
+func TestWrapVoidActionWithRequest_Error_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("wrap void request error")
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return wantErr
+		})
+
+	result, err := wrapped(context.Background(), map[string]any{"id": 1})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil", result)
+	}
+}

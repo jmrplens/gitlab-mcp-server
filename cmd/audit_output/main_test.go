@@ -10,7 +10,7 @@ import (
 
 var errNoop = errors.New("noop")
 
-func TestShouldSkipRouteOutputSchema(t *testing.T) {
+func TestShouldSkipRouteOutputSchema_ToolNameCases_ReturnsExpectedSkip(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -35,7 +35,7 @@ func TestShouldSkipRouteOutputSchema(t *testing.T) {
 	}
 }
 
-func TestCollectRouteOutputSchemaFindings(t *testing.T) {
+func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding(t *testing.T) {
 	t.Parallel()
 
 	noop := func(context.Context, map[string]any) (any, error) { return nil, errNoop }
