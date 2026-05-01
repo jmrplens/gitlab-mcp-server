@@ -5053,3 +5053,73 @@ func TestCommitToOutput_NilDate(t *testing.T) {
 		t.Errorf("CommittedDate = %q, want empty string", out.CommittedDate)
 	}
 }
+
+// TestGroupSCIMMeta_UpdateAction_ErrorPath verifies that the updateAction
+// closure in registerGroupSCIMMeta propagates errors from groupscim.Update
+// back to the caller as an MCP error result.
+func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
+	t.Parallel()
+
+	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+		default:
+			// Return a server error for any SCIM PATCH request.
+			http.Error(w, `{"message":"forbidden"}`, http.StatusForbidden)
+		}
+	}), true)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "gitlab_group_scim",
+		Arguments: map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"group_id":   "mygroup",
+				"uid":        "uid-123",
+				"extern_uid": "new-uid",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() unexpected transport error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error result for failed SCIM update, got success")
+	}
+}
+
+// TestGroupSCIMMeta_UpdateAction_SuccessPath verifies that the updateAction
+// closure in registerGroupSCIMMeta returns the expected UpdateOutput on
+// a successful GitLab SCIM PATCH response.
+func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
+	t.Parallel()
+
+	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+		default:
+			// SCIM PATCH returns 204 No Content on success.
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}), true)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "gitlab_group_scim",
+		Arguments: map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"group_id":   "mygroup",
+				"uid":        "uid-123",
+				"extern_uid": "new-uid",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() unexpected transport error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success result, got error: %+v", result)
+	}
+}

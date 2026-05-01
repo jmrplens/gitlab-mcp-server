@@ -18,12 +18,18 @@ var (
 )
 
 func init() {
-	RegisterMarkdown(func(v DeleteOutput) string {
-		return EmojiSuccess + " " + v.Message
-	})
-	RegisterMarkdown(func(v VoidOutput) string {
-		return EmojiSuccess + " " + v.Message
-	})
+	RegisterMarkdown(formatDeleteOutput)
+	RegisterMarkdown(formatVoidOutput)
+}
+
+// formatDeleteOutput renders a DeleteOutput confirmation as a success string.
+func formatDeleteOutput(v DeleteOutput) string {
+	return EmojiSuccess + " " + v.Message
+}
+
+// formatVoidOutput renders a VoidOutput confirmation as a success string.
+func formatVoidOutput(v VoidOutput) string {
+	return EmojiSuccess + " " + v.Message
 }
 
 // RegisterMarkdown registers a Markdown string formatter for type T.

@@ -2082,3 +2082,21 @@ func TestWrapVoidActionWithRequest_Error_PropagatesError(t *testing.T) {
 		t.Fatalf("result = %#v, want nil", result)
 	}
 }
+
+func TestWrapVoidActionWithRequest_UnmarshalError_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	wrapped := WrapVoidActionWithRequest((*gitlabclient.Client)(nil),
+		func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ routeSchemaTestInput) error {
+			return nil
+		})
+
+	// Pass a param with the wrong type to trigger UnmarshalParams error.
+	result, err := wrapped(context.Background(), map[string]any{"id": "not-an-int"})
+	if err == nil {
+		t.Fatal("expected error for invalid params, got nil")
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil on error", result)
+	}
+}

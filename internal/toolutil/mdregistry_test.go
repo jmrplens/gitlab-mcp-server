@@ -245,3 +245,21 @@ func TestMarkdownForResult_VoidOutputViaInit(t *testing.T) {
 		t.Errorf("text = %q, want %q", tc.Text, want)
 	}
 }
+
+func TestFormatDeleteOutput_ReturnsEmojiPlusMessage(t *testing.T) {
+	t.Parallel()
+	got := formatDeleteOutput(DeleteOutput{Status: "success", Message: "branch deleted"})
+	want := EmojiSuccess + " branch deleted"
+	if got != want {
+		t.Fatalf("formatDeleteOutput = %q, want %q", got, want)
+	}
+}
+
+func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
+	t.Parallel()
+	got := formatVoidOutput(VoidOutput{Status: "success", Message: "action completed"})
+	want := EmojiSuccess + " action completed"
+	if got != want {
+		t.Fatalf("formatVoidOutput = %q, want %q", got, want)
+	}
+}
