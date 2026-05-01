@@ -78,6 +78,8 @@ chmod +x gitlab-mcp-server-*  # Linux/macOS only
 
 **Or configure manually** — expand your client below:
 
+`GITLAB_URL` defaults to `https://gitlab.com`; add it only when you connect to a self-managed GitLab instance.
+
 <details>
 <summary><strong>VS Code (GitHub Copilot)</strong></summary>
 
@@ -90,7 +92,6 @@ Add to `.vscode/mcp.json` in your workspace:
       "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -111,7 +112,6 @@ Add to `claude_desktop_config.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -132,7 +132,6 @@ Add to `.cursor/mcp.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -147,7 +146,6 @@ Add to `.cursor/mcp.json`:
 
 ```bash
 claude mcp add gitlab /path/to/gitlab-mcp-server \
-  -e GITLAB_URL=https://gitlab.example.com \
   -e GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
@@ -164,7 +162,6 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -186,7 +183,6 @@ Add to the MCP configuration in **Settings → Tools → AI Assistant → MCP Se
       "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -208,7 +204,6 @@ Add to Zed settings (`settings.json`):
       "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -230,7 +225,6 @@ Add to `.kiro/settings/mcp.json`:
       "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -255,7 +249,6 @@ Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Glob
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -276,7 +269,6 @@ Open the Roo Code sidebar in VS Code → MCP servers icon → **Edit Global MCP*
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -425,12 +417,12 @@ following patterns depending on how your MCP client connects.
 ```bash
 docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 
-# Single-instance mode (fixed GitLab URL for all clients)
+# Single-instance mode (fixed GitLab.com URL for all clients; replace for self-managed GitLab)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
   ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http \
   --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.example.com
+  --gitlab-url=https://gitlab.com
 
 # Multi-instance mode (clients send GITLAB-URL header per request)
 docker run -d --name gitlab-mcp-server -p 8080:8080 \
@@ -460,8 +452,6 @@ for this mode.
         "-i",
         "--rm",
         "-e",
-        "GITLAB_URL",
-        "-e",
         "GITLAB_TOKEN",
         "-e",
         "GITLAB_SKIP_TLS_VERIFY",
@@ -469,7 +459,6 @@ for this mode.
         "--http=false"
       ],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}",
         "GITLAB_SKIP_TLS_VERIFY": "false"
       }
@@ -480,10 +469,12 @@ for this mode.
 
 ## FAQ
 
+For self-managed GitLab in Docker stdio mode, add `GITLAB_URL` to `env` and pass `-e GITLAB_URL` in `args`.
+
 <details>
 <summary><strong>Does it work with self-hosted GitLab?</strong></summary>
 
-Yes. Set `GITLAB_URL` to your instance URL. Self-signed TLS certificates are supported via `GITLAB_SKIP_TLS_VERIFY=true`.
+Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio mode uses `https://gitlab.com`. Self-signed TLS certificates are supported via `GITLAB_SKIP_TLS_VERIFY=true`.
 </details>
 
 <details>

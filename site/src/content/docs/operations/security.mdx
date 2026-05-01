@@ -42,8 +42,8 @@ Store your token in a `.env` file with restricted permissions:
 
 ```bash
 # Create .env file
-echo 'GITLAB_URL=https://gitlab.example.com' > .env
-echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' >> .env
+echo 'GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx' > .env
+# Add GITLAB_URL here only for self-managed instances.
 
 # Restrict permissions (owner read/write only)
 chmod 600 .env
@@ -64,7 +64,6 @@ For VS Code users, you can use input variables to avoid storing tokens in plain 
 			"type": "stdio",
 			"command": "gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "${input:gitlabToken}"
 			}
 		}

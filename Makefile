@@ -431,12 +431,11 @@ endif
 	docker push $(DOCKER_REGISTRY):$(VERSION)
 	docker push $(DOCKER_REGISTRY):latest
 
+GITLAB_URL ?= https://gitlab.com
+
 ## docker-run: run the Docker image locally in HTTP mode (port 8080)
-## Usage: make docker-run GITLAB_URL=https://gitlab.example.com
+## Usage: make docker-run [GITLAB_URL=https://gitlab.example.com]
 docker-run:
-ifndef GITLAB_URL
-	$(error GITLAB_URL is required. Usage: make docker-run GITLAB_URL=https://gitlab.example.com)
-endif
 	docker run --rm -p 8080:8080 \
 		$(BINARY_NAME):latest \
 		--http \
@@ -570,7 +569,7 @@ checksum:
 	@cat dist/checksums.txt
 
 # ─── MCP Inspector ───────────────────────────────────────────────────────────
-# Requires: Node.js >= 22, npx, .env with GITLAB_URL and GITLAB_TOKEN.
+# Requires: Node.js >= 22, npx, .env with GITLAB_TOKEN. Add GITLAB_URL for self-managed instances.
 # Compiles a fresh binary to /tmp, launches the Inspector, and cleans up on exit.
 
 INSPECTOR_BIN := /tmp/$(BINARY_NAME)-inspector$(BINARY_EXT)
@@ -578,7 +577,7 @@ INSPECTOR_BIN := /tmp/$(BINARY_NAME)-inspector$(BINARY_EXT)
 ## inspector: compile the server and launch MCP Inspector UI via stdio.
 ## Reads credentials from .env. The temporary binary is removed on exit.
 inspector:
-	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Create it with GITLAB_URL and GITLAB_TOKEN."; exit 1; fi
+	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Create it with GITLAB_TOKEN; add GITLAB_URL for self-managed instances."; exit 1; fi
 	@echo "Compiling $(BINARY_NAME) to $(INSPECTOR_BIN)..."
 	@go build -ldflags="$(LDFLAGS)" -o $(INSPECTOR_BIN) $(CMD_PATH)
 	@echo "Starting MCP Inspector (stdio) — press Ctrl+C to stop..."
@@ -587,7 +586,7 @@ inspector:
 		ALLOWED_ORIGINS="http://localhost:6274,http://127.0.0.1:6274,http://0.0.0.0:6274" \
 		HOST=0.0.0.0 \
 		npx -y @modelcontextprotocol/inspector \
-			-e GITLAB_URL="$$GITLAB_URL" \
+			-e GITLAB_URL="$${GITLAB_URL:-https://gitlab.com}" \
 			-e GITLAB_TOKEN="$$GITLAB_TOKEN" \
 			-e GITLAB_SKIP_TLS_VERIFY="$${GITLAB_SKIP_TLS_VERIFY:-false}" \
 			-e AUTO_UPDATE=false \

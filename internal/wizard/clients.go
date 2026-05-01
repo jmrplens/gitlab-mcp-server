@@ -5,6 +5,8 @@ package wizard
 import (
 	"fmt"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
 // ClientID identifies a supported MCP client.
@@ -34,12 +36,20 @@ const (
 )
 
 // DefaultGitLabURL is pre-filled in UI modes as a convenience default.
-const DefaultGitLabURL = ""
+const DefaultGitLabURL = config.DefaultGitLabURL
+
+func effectiveGitLabURL(gitLabURL string) string {
+	gitLabURL = strings.TrimSpace(gitLabURL)
+	if gitLabURL == "" {
+		return DefaultGitLabURL
+	}
+	return gitLabURL
+}
 
 // TokenCreationURL returns the GitLab URL for creating a personal access token
 // with the "api" scope pre-selected, which is required for full MCP functionality.
 func TokenCreationURL(gitlabURL string) string {
-	return strings.TrimRight(gitlabURL, "/") + "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"
+	return strings.TrimRight(effectiveGitLabURL(gitlabURL), "/") + "/-/user_settings/personal_access_tokens?name=gitlab-mcp-server&scopes=api"
 }
 
 // ServerConfig holds the user's configuration values for the MCP server.

@@ -231,16 +231,13 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keyMsg.String() {
 		case "enter":
 			if m.gitlabFocus == 0 {
+				m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
 				m.gitlabFocus = 1
 				m.urlInput.Blur()
 				m.tokenInput.Focus()
 				return m, textinput.Blink
 			}
-			// Validate
-			if m.urlInput.Value() == "" {
-				m.err = "GitLab URL is required"
-				return m, nil
-			}
+			m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
 			if _, parseErr := url.ParseRequestURI(m.urlInput.Value()); parseErr != nil {
 				m.err = fmt.Sprintf("Invalid URL: %v", parseErr)
 				return m, nil
@@ -260,10 +257,7 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+o":
 			// Only from token field: open advanced options
 			if m.gitlabFocus == 1 {
-				if m.urlInput.Value() == "" {
-					m.err = "GitLab URL is required"
-					return m, nil
-				}
+				m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
 				if m.tokenInput.Value() == "" {
 					m.err = "Token is required"
 					return m, nil

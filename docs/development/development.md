@@ -147,6 +147,8 @@ docker build \
 #### Run locally
 
 ```bash
+make docker-run
+# or, for self-managed GitLab:
 make docker-run GITLAB_URL=https://gitlab.example.com
 ```
 
@@ -273,7 +275,7 @@ make inspector-stop  # Stop Inspector processes and clean up temp binary
 
 This compiles the server to a temporary binary (`/tmp/gitlab-mcp-server-inspector`), reads credentials from `.env`, and launches the Inspector at `http://127.0.0.1:6274/`. The temporary binary is automatically cleaned up on exit.
 
-**Prerequisites**: Node.js >= 22, `.env` file with `GITLAB_URL` and `GITLAB_TOKEN`.
+**Prerequisites**: Node.js >= 22, `.env` file with `GITLAB_TOKEN`. Add `GITLAB_URL` for self-managed instances.
 
 ## Linting & Formatting
 

@@ -160,7 +160,7 @@ func parseJSONRPCResponse(t *testing.T, resp *http.Response) map[string]any {
 }
 
 // TestRun_InvalidConfig_ReturnsError verifies that [run] returns an error when
-// required environment variables (GITLAB_URL, GITLAB_TOKEN) are missing.
+// required environment variables are missing.
 func TestRun_InvalidConfig_ReturnsError(t *testing.T) {
 	t.Setenv("GITLAB_URL", "")
 	t.Setenv("GITLAB_TOKEN", "")
@@ -171,8 +171,8 @@ func TestRun_InvalidConfig_ReturnsError(t *testing.T) {
 	}
 
 	msg := err.Error()
-	if !strings.Contains(msg, "GITLAB_URL") && !strings.Contains(msg, "GITLAB_TOKEN") {
-		t.Errorf("error should mention GITLAB_URL or GITLAB_TOKEN, got: %s", msg)
+	if !strings.Contains(msg, "GITLAB_TOKEN") {
+		t.Errorf("error should mention GITLAB_TOKEN, got: %s", msg)
 	}
 }
 
@@ -546,7 +546,7 @@ func TestRunWithContext_SuccessStdio(t *testing.T) {
 }
 
 // TestRunWithContext_InvalidConfig verifies that [runWithContext] returns an
-// error when configuration is invalid (missing required fields).
+// error when configuration is invalid.
 func TestRunWithContext_InvalidConfig(t *testing.T) {
 	t.Setenv("GITLAB_URL", "")
 	t.Setenv("GITLAB_TOKEN", "")
@@ -554,6 +554,9 @@ func TestRunWithContext_InvalidConfig(t *testing.T) {
 	err := runWithContext(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected error when config is invalid")
+	}
+	if !strings.Contains(err.Error(), "GITLAB_TOKEN") {
+		t.Fatalf("error = %q, want GITLAB_TOKEN", err.Error())
 	}
 }
 
@@ -2182,6 +2185,25 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 	}
 }
 
+// TestRunHTTP_OAuthRequiresGitLabURL verifies that OAuth mode requires a
+// fixed GitLab URL and cannot silently fall back to HTTP multi-instance mode.
+func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:         "",
+		maxHTTPClients:    config.DefaultMaxHTTPClients,
+		sessionTimeout:    config.DefaultSessionTimeout,
+		autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		authMode:          "oauth",
+		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
+	})
+	if err == nil {
+		t.Fatal("expected error when OAuth mode has no fixed GitLab URL")
+	}
+	if !strings.Contains(err.Error(), "--auth-mode=oauth requires --gitlab-url") {
+		t.Errorf("error = %q, want OAuth GitLab URL requirement", err.Error())
+	}
+}
+
 // TestRunHTTP_OAuthCacheTTL_BelowMin verifies that runHTTP rejects an
 // oauth-cache-ttl below the minimum allowed value.
 func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
@@ -2623,7 +2645,7 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		GitLabURL:     "", // empty — buildServerCard falls back to https://gitlab.com
+		GitLabURL:     "", // empty uses config.DefaultGitLabURL for dummy client registration
 		SkipTLSVerify: true,
 		MetaTools:     true,
 		Enterprise:    false,

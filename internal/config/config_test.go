@@ -5,6 +5,7 @@ package config
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,22 +47,67 @@ func TestLoad_ValidConfig(t *testing.T) {
 	}
 }
 
-// TestLoad_MissingURL verifies that [Load] returns an error when GITLAB_URL
-// is empty, since it is a required configuration field.
-func TestLoad_MissingURL(t *testing.T) {
-	t.Setenv("GITLAB_URL", "")
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+// TestLoad_DefaultGitLabURLWhenUnset verifies that [Load] uses GitLab.com when
+// GITLAB_URL is not configured.
+func TestLoad_DefaultGitLabURLWhenUnset(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "empty", value: ""},
+		{name: "whitespace", value: "   "},
+	}
 
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() expected error when GITLAB_URL is empty, got nil")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", tt.value)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(fmtLoadUnexpected, err)
+			}
+			if cfg.GitLabURL != DefaultGitLabURL {
+				t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, DefaultGitLabURL)
+			}
+		})
+	}
+}
+
+// TestLoad_InvalidExplicitGitLabURL verifies that malformed explicit
+// GITLAB_URL values are rejected instead of being replaced by the default.
+func TestLoad_InvalidExplicitGitLabURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr string
+	}{
+		{name: "missing scheme", value: "gitlab.example.com", wantErr: "must use http:// or https://"},
+		{name: "unsupported scheme", value: "ftp://gitlab.example.com", wantErr: "must use http:// or https://"},
+		{name: "missing host", value: "https://", wantErr: "must include a host"},
+		{name: "malformed URL", value: "http://[::1", wantErr: "is not a valid URL"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", tt.value)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatal("Load() expected error for invalid GITLAB_URL, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Load() error = %q, want substring %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
 
 // TestLoad_MissingToken verifies that [Load] returns an error when GITLAB_TOKEN
 // is empty, since it is a required configuration field.
 func TestLoad_MissingToken(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_URL", "")
 	t.Setenv("GITLAB_TOKEN", "")
 
 	_, err := Load()

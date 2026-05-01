@@ -19,26 +19,26 @@ GitLab MCP Server se configura mediante variables de entorno en modo stdio y fla
 
 ## Variables requeridas
 
-Estas deben establecerse para que el servidor arranque en modo stdio:
+Esta debe establecerse para que el servidor arranque en modo stdio:
 
 | Variable       | Descripción                           | Ejemplo                      |
 | -------------- | ------------------------------------- | ---------------------------- |
-| `GITLAB_URL`   | URL base de la instancia de GitLab    | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token con scope `api` | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ## Opciones principales
 
-| Variable                 | Predeterminado | Descripción                                                                                                                                                                                                        |
-| ------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GITLAB_SKIP_TLS_VERIFY` | `false`        | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                             |
-| `META_TOOLS`             | `true`         | Habilitar modo meta-herramientas (32 herramientas de dominio en lugar de 1006+ herramientas individuales)                                                                                                          |
-| `META_PARAM_SCHEMA`      | `opaque`       | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (~5x) o `full` (~10x). El esquema por acción siempre es accesible vía el recurso `gitlab://schema/meta/{tool}/{action}` |
-| `GITLAB_ENTERPRISE`      | `false`        | Habilitar herramientas Enterprise/Premium en modo stdio. En modo HTTP, `--enterprise` puede forzar el catálogo; si se omite, la edición se autodetecta por entrada token+URL                                       |
-| `GITLAB_READ_ONLY`       | `false`        | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                       |
-| `GITLAB_SAFE_MODE`       | `false`        | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                              |
-| `EXCLUDE_TOOLS`          | —              | Lista de herramientas a excluir separadas por comas (ej., `gitlab_delete_project,gitlab_admin`)                                                                                                                    |
-| `GITLAB_IGNORE_SCOPES`   | `false`        | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes                                                                                                           |
-| `LOG_LEVEL`              | `info`         | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                                                                                                                                      |
+| Variable                 | Predeterminado       | Descripción                                                                                                                                                                                                        |
+| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GITLAB_URL`             | `https://gitlab.com` | URL base de la instancia GitLab. Establécela para instancias autogestionadas                                                                                                                                       |
+| `GITLAB_SKIP_TLS_VERIFY` | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                             |
+| `META_TOOLS`             | `true`               | Habilitar modo meta-herramientas (32 herramientas de dominio en lugar de 1006+ herramientas individuales)                                                                                                          |
+| `META_PARAM_SCHEMA`      | `opaque`             | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (~5x) o `full` (~10x). El esquema por acción siempre es accesible vía el recurso `gitlab://schema/meta/{tool}/{action}` |
+| `GITLAB_ENTERPRISE`      | `false`              | Habilitar herramientas Enterprise/Premium en modo stdio. En modo HTTP, `--enterprise` puede forzar el catálogo; si se omite, la edición se autodetecta por entrada token+URL                                       |
+| `GITLAB_READ_ONLY`       | `false`              | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                       |
+| `GITLAB_SAFE_MODE`       | `false`              | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                              |
+| `EXCLUDE_TOOLS`          | —                    | Lista de herramientas a excluir separadas por comas (ej., `gitlab_delete_project,gitlab_admin`)                                                                                                                    |
+| `GITLAB_IGNORE_SCOPES`   | `false`              | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes                                                                                                           |
+| `LOG_LEVEL`              | `info`               | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                                                                                                                                      |
 
 :::tip
 **El modo meta-herramientas** (`META_TOOLS=true`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
@@ -65,7 +65,6 @@ Estas deben establecerse para que el servidor arranque en modo stdio:
 
 ```bash title=".env"
 # Requeridas
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Opcionales
@@ -82,6 +81,8 @@ LOG_LEVEL=info
 AUTO_UPDATE=true
 ```
 
+Para GitLab autogestionado, añade `GITLAB_URL=https://gitlab.example.com`.
+
 ## Configuración de clientes
 
 <Tabs>
@@ -96,7 +97,6 @@ Crea `.vscode/mcp.json` en tu workspace:
 			"type": "stdio",
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -121,7 +121,6 @@ Crea `.vscode/mcp.json` en tu workspace:
 			"type": "stdio",
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "${input:gitlab-token}"
 			}
 		}
@@ -147,7 +146,6 @@ Edita `claude_desktop_config.json`:
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -166,7 +164,6 @@ Crea `.cursor/mcp.json` en tu proyecto:
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -186,9 +183,10 @@ claude mcp add gitlab \
 Establece las variables de entorno antes de iniciar:
 
 ```bash
-export GITLAB_URL="https://gitlab.example.com"
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
+
+Establece `GITLAB_URL` aquí solo para instancias autogestionadas.
 
 O usa un archivo `.env` en el directorio de trabajo.
 
@@ -202,7 +200,6 @@ mcpServers:
   - name: gitlab
     command: /ruta/a/gitlab-mcp-server
     env:
-      GITLAB_URL: https://gitlab.example.com
       GITLAB_TOKEN: glpat-xxxxxxxxxxxxxxxxxxxx
 ```
 
@@ -219,7 +216,6 @@ Edita `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -238,7 +234,9 @@ Añade una entrada stdio apuntando al binario:
 
 - **Nombre**: `gitlab`
 - **Comando**: `/ruta/a/gitlab-mcp-server`
-- **Variables de entorno**: `GITLAB_URL=https://gitlab.example.com`, `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`
+- **Variables de entorno**: `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`
+
+Añade `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado.
 
 Alternativamente, crea `.idea/mcp.json` en la raíz del proyecto con la misma estructura JSON usada por VS Code / Cursor. Reinicia el IDE tras editar.
 
@@ -283,11 +281,11 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 Ejemplo:
 
 ```bash
-# Instancia única de GitLab (URL por defecto para todos los clientes)
+# Instancia única de GitLab.com (URL fija para todos los clientes; reemplázala para GitLab autogestionado)
 ./gitlab-mcp-server \
   --http \
-  --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.example.com \
+	--http-addr=0.0.0.0:8080 \
+	--gitlab-url=https://gitlab.com \
   --max-http-clients=200 \
   --session-timeout=1h
 

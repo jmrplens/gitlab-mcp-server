@@ -72,10 +72,11 @@ The server reads configuration from environment variables and communicates via s
 
 ```bash
 # Configuration via environment variables
-export GITLAB_URL="https://gitlab.example.com"
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 gitlab-mcp-server
 ```
+
+Set `GITLAB_URL` only for self-managed instances; stdio mode defaults to `https://gitlab.com`.
 
 ```bash
 # Configuration via .env file in current directory
@@ -87,11 +88,11 @@ gitlab-mcp-server
 The server listens on an HTTP endpoint. Each client provides its own GitLab token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. When the server starts without `--gitlab-url`, clients also specify a `GITLAB-URL` header to target a specific GitLab instance per request. No `GITLAB_TOKEN` is needed at startup.
 
 ```bash
-# Single GitLab instance (all clients use the fixed URL)
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=localhost:9090
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --max-http-clients=50 --session-timeout=1h
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth --oauth-cache-ttl=15m
+# Single GitLab.com instance (all clients use the fixed URL; replace for self-managed GitLab)
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --http-addr=localhost:9090
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --max-http-clients=50 --session-timeout=1h
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --oauth-cache-ttl=15m
 
 # Multi-instance (each client specifies their GitLab URL via GITLAB-URL header)
 gitlab-mcp-server --http --http-addr=:8080
@@ -148,19 +149,19 @@ gitlab-mcp-server -h
 gitlab-mcp-server
 
 # Start HTTP server with custom address
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:9090
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --http-addr=:9090
 
 # Start HTTP server without fixed URL (clients must send GITLAB-URL header)
 gitlab-mcp-server --http --http-addr=:8080
 
-# Start HTTP server with TLS skip and custom session timeout
+# Start HTTP server for self-managed GitLab with TLS skip and custom session timeout
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --skip-tls-verify --session-timeout=2h
 
 # Start HTTP server with individual tools (no meta-tools)
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --meta-tools=false
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --meta-tools=false
 
 # Start with auto-update in check-only mode
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auto-update=check
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check
 
 # Terminate all running instances (used by external updaters)
 gitlab-mcp-server --shutdown

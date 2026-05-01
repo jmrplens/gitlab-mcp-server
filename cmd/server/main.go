@@ -235,7 +235,7 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 
 ENVIRONMENT VARIABLES (stdio mode)
-  GITLAB_URL                GitLab instance URL (e.g. https://gitlab.example.com)
+  GITLAB_URL                GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
   META_TOOLS                Enable meta-tools: true/false (default true)
@@ -974,7 +974,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 	// parseable URL to register tools; it never makes real API calls.
 	gitlabURL := cfg.GitLabURL
 	if gitlabURL == "" {
-		gitlabURL = "https://gitlab.com"
+		gitlabURL = config.DefaultGitLabURL
 	}
 
 	dummyClient, err := gitlabclient.NewClientWithToken(gitlabURL, "dummy-token-for-tool-discovery", cfg.SkipTLSVerify)

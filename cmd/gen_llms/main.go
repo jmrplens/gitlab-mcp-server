@@ -206,7 +206,7 @@ func writeLLMSTxt(version string, individual, metaBase, metaEnterprise []*mcp.To
 	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
 
 	b.WriteString("## Configuration (environment variables — stdio mode)\n\n")
-	b.WriteString("- GITLAB_URL: GitLab instance URL (required)\n")
+	b.WriteString("- GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)\n")
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- META_TOOLS: Enable meta-tools for reduced tool count (default: true)\n")

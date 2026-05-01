@@ -170,7 +170,7 @@ The host passes these environment variables through to the container:
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Yes      | GitLab instance URL                                      |
+| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances |
 | `GITLAB_TOKEN`           | Yes      | Personal Access Token                                    |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)           |
 | `META_TOOLS`             | No       | Group tools per domain (default `true`)                  |
@@ -190,9 +190,10 @@ For detached HTTP deployments, do not use a stdio client entry. Run the Docker i
 If you prefer not to use the wizard, create a `.env` file next to the binary:
 
 ```env
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
+
+For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
 Then add the server to your MCP client config manually.
 
@@ -207,7 +208,6 @@ Add to `.vscode/mcp.json` in your project:
       "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -225,7 +225,6 @@ Add to `claude_desktop_config.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -243,7 +242,6 @@ Add to `.cursor/mcp.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -260,7 +258,8 @@ Add to `.cursor/mcp.json`:
 For shared server deployments, run in HTTP mode:
 
 ```bash
-gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
+# Use https://gitlab.com for GitLab.com, or replace it with your self-managed URL.
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --http-addr=:8080
 ```
 
 Each client provides its own token via HTTP header:
@@ -285,7 +284,7 @@ For production deployments, enable server-side token verification with OAuth mod
 
 ```bash
 gitlab-mcp-server --http \
-  --gitlab-url=https://gitlab.example.com \
+  --gitlab-url=https://gitlab.com \
   --auth-mode=oauth \
   --oauth-cache-ttl=15m
 ```

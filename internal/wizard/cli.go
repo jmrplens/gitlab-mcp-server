@@ -125,6 +125,7 @@ func stepGitLabConfig(p *Prompter, w io.Writer, existing ServerConfig, hasExisti
 	if err != nil {
 		return nil, err
 	}
+	gitlabURL = effectiveGitLabURL(gitlabURL)
 
 	if _, parseErr := url.ParseRequestURI(gitlabURL); parseErr != nil {
 		return nil, fmt.Errorf("invalid URL %q: %w", gitlabURL, parseErr)

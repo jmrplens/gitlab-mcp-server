@@ -19,13 +19,13 @@ These are the settings every user needs to get started.
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `GITLAB_URL` | GitLab instance base URL | `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | Personal Access Token with `api` scope | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ### Common Options
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools (32 base / 47 enterprise instead of 1006) |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
@@ -38,14 +38,15 @@ These are the settings every user needs to get started.
 ### .env File Example
 
 ```env
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_SKIP_TLS_VERIFY=false
 META_TOOLS=true
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
 LOG_LEVEL=info
 ```
+
+For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
 > **Security**: The `.env` file is gitignored. Never commit tokens or credentials.
 
@@ -104,7 +105,6 @@ VS Code [input variables](https://code.visualstudio.com/docs/copilot/reference/m
       "type": "stdio",
       "command": "/usr/local/bin/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}",
         "META_TOOLS": "true"
       }
@@ -132,11 +132,12 @@ VS Code supports loading all environment variables from a file on disk via the `
 Where `~/.gitlab-mcp-server.env` (or any path you choose) contains:
 
 ```env
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=true
 META_TOOLS=true
 ```
+
+Add `GITLAB_URL=https://gitlab.example.com` for self-managed GitLab.
 
 > **Tip**: You can combine `envFile` with `env` — values in `env` override those from `envFile`.
 
@@ -236,10 +237,12 @@ To enable server-side token verification, set `--auth-mode=oauth`:
 
 ```bash
 gitlab-mcp-server --http \
-  --gitlab-url=https://gitlab.example.com \
+  --gitlab-url=https://gitlab.com \
   --auth-mode=oauth \
   --oauth-cache-ttl=15m
 ```
+
+Replace `https://gitlab.com` with your self-managed GitLab URL when needed.
 
 With OAuth mode:
 
@@ -276,4 +279,4 @@ Configuration is loaded by `internal/config/` in this order:
 
 > **Note**: `godotenv` does not overwrite existing variables, so values from step 1 take precedence over step 2, and explicit environment variables (step 3) override both.
 
-The `config.Load()` function validates that `GITLAB_URL` and `GITLAB_TOKEN` are set (used by stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. Clients can provide `GITLAB-URL` only in multi-instance mode, when the server starts without `--gitlab-url`; all other MCP server settings are process policy and cannot be overridden per request. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)).
+The `config.Load()` function validates that `GITLAB_TOKEN` is set and defaults `GITLAB_URL` to `https://gitlab.com` when it is omitted (stdio mode only). In HTTP mode, configuration comes from CLI flags and no token is required at startup — each client provides its own token per-request via `PRIVATE-TOKEN` or `Authorization: Bearer` headers. Clients can provide `GITLAB-URL` only in multi-instance mode, when the server starts without `--gitlab-url`; all other MCP server settings are process policy and cannot be overridden per request. When `--auth-mode=oauth`, the server validates tokens against the GitLab `/api/v4/user` endpoint and caches verified identities with a configurable TTL (see [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)).

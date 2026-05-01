@@ -411,7 +411,6 @@ jobs:
   list-issues:
     runs-on: ubuntu-latest
     env:
-      GITLAB_URL: https://gitlab.example.com
       GITLAB_TOKEN: ${{ secrets.MCP_PAT }}
     steps:
       - name: Download gitlab-mcp-server
@@ -443,7 +442,6 @@ jobs:
   review:
     runs-on: ubuntu-latest
     env:
-      GITLAB_URL: https://gitlab.example.com
       GITLAB_TOKEN: ${{ secrets.MCP_PAT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
     steps:

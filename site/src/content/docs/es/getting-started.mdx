@@ -88,16 +88,16 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 El host debe proporcionar estas variables antes de habilitar el plugin:
 
-| Variable                 | Obligatoria | Descripción                                                                       |
-| ------------------------ | ----------- | --------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | Sí          | URL de la instancia GitLab (p. ej. `https://gitlab.example.com`)                  |
-| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                               |
-| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                       |
-| `META_TOOLS`             | No          | `true` para herramientas agrupadas, `false` individuales (por defecto `true`)     |
-| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)         |
-| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)          |
-| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`) |
-| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                             |
+| Variable                 | Obligatoria | Descripción                                                                                                   |
+| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas |
+| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                           |
+| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                   |
+| `META_TOOLS`             | No          | `true` para herramientas agrupadas, `false` individuales (por defecto `true`)                                 |
+| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                     |
+| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                      |
+| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                             |
+| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                         |
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
@@ -111,7 +111,6 @@ Si prefieres el binario nativo, instala el plugin, localiza el directorio del pl
 		"gitlab": {
 			"command": "/usr/local/bin/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "${GITLAB_URL}",
 				"GITLAB_TOKEN": "${GITLAB_TOKEN}"
 			}
 		}
@@ -120,6 +119,8 @@ Si prefieres el binario nativo, instala el plugin, localiza el directorio del pl
 ```
 
 ## Configuración manual
+
+`GITLAB_URL` usa `https://gitlab.com` por defecto; añádela solo para instancias GitLab autogestionadas.
 
 Si prefieres configurar manualmente, elige tu cliente de IA:
 
@@ -135,7 +136,6 @@ Crea o edita `.vscode/mcp.json` en la raíz de tu workspace:
 			"type": "stdio",
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -161,7 +161,6 @@ Usa variables de entrada de VS Code para evitar almacenar el token en texto plan
 			"type": "stdio",
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "${input:gitlab-token}"
 			}
 		}
@@ -182,7 +181,6 @@ Edita `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) 
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -201,7 +199,6 @@ Crea o edita `.cursor/mcp.json` en la raíz de tu proyecto:
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -220,14 +217,13 @@ claude mcp add gitlab \
   -- /ruta/a/gitlab-mcp-server
 ```
 
-Luego establece las variables de entorno requeridas:
+Luego establece el token requerido:
 
 ```bash
-export GITLAB_URL="https://gitlab.example.com"
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
-O crea un archivo `.env` en tu directorio de trabajo con las variables anteriores.
+Establece `GITLAB_URL` aquí solo para instancias autogestionadas, o crea un archivo `.env` en tu directorio de trabajo con las variables anteriores.
 
 </TabItem>
 <TabItem label="Windsurf">
@@ -240,7 +236,6 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -254,10 +249,9 @@ Edita `~/.codeium/windsurf/mcp_config.json`:
 1. Abre **Settings → Tools → AI Assistant → MCP Servers**
 2. Haz clic en **+ Add** y selecciona **stdio**
 3. Establece el comando a `/ruta/a/gitlab-mcp-server`
-4. Añade las variables de entorno:
-   - `GITLAB_URL` = `https://gitlab.example.com`
-   - `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
-5. Haz clic en **OK** y reinicia el IDE
+4. Añade `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
+5. Añade `GITLAB_URL` solo para instancias autogestionadas
+6. Haz clic en **OK** y reinicia el IDE
 
 </TabItem>
 <TabItem label="Zed">
@@ -271,7 +265,6 @@ Edita tu `settings.json` de Zed y añade:
 			"command": "/ruta/a/gitlab-mcp-server",
 			"args": [],
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -291,7 +284,6 @@ Crea o edita `.kiro/mcp.json` en la raíz de tu proyecto:
 			"command": "/ruta/a/gitlab-mcp-server",
 			"args": [],
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -314,7 +306,6 @@ Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -333,7 +324,6 @@ Abre la barra lateral de Roo Code → haz clic en el icono de servidores MCP →
 		"gitlab": {
 			"command": "/ruta/a/gitlab-mcp-server",
 			"env": {
-				"GITLAB_URL": "https://gitlab.example.com",
 				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
 			}
 		}
@@ -349,9 +339,10 @@ Abre la barra lateral de Roo Code → haz clic en el icono de servidores MCP →
 En lugar de colocar secretos en archivos de configuración del cliente, puedes usar un archivo `.env`:
 
 ```bash title=".env"
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ```
+
+Añade `GITLAB_URL=https://gitlab.example.com` para GitLab autogestionado.
 
 El servidor carga `.env` desde el directorio de trabajo actual automáticamente. Consulta [Configuración](/gitlab-mcp-server/configuration/) para el orden de carga completo.
 
@@ -360,7 +351,7 @@ El servidor carga `.env` desde el directorio de trabajo actual automáticamente.
 Para despliegues en equipo, puedes ejecutar el servidor en modo HTTP donde cada usuario se autentica con su propio token:
 
 ```bash
-./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.example.com
+./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
 Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consulta [Modo servidor HTTP](/gitlab-mcp-server/operations/http-server/) para más detalles.
@@ -370,7 +361,7 @@ Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consu
 Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuarios autorizan a través del navegador — no se requiere copiar ni distribuir tokens:
 
 ```bash
-./gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --auth-mode=oauth
+./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 ```
 
 Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.

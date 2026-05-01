@@ -28,7 +28,6 @@
                 "--http=false"
             ],
             "env": {
-                "GITLAB_URL": "${GITLAB_URL}",
                 "GITLAB_TOKEN": "${GITLAB_TOKEN}",
                 "GITLAB_SKIP_TLS_VERIFY": "${GITLAB_SKIP_TLS_VERIFY:-false}",
                 "META_TOOLS": "${META_TOOLS:-true}",

@@ -45,6 +45,8 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 
 ### Stdio Mode
 
+`GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for self-managed GitLab instances.
+
 Add to `.vscode/mcp.json`:
 
 ```json
@@ -54,7 +56,6 @@ Add to `.vscode/mcp.json`:
       "type": "stdio",
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}"
       }
     }
@@ -83,8 +84,6 @@ Docker stdio variant:
         "-i",
         "--rm",
         "-e",
-        "GITLAB_URL",
-        "-e",
         "GITLAB_TOKEN",
         "-e",
         "GITLAB_SKIP_TLS_VERIFY",
@@ -92,7 +91,6 @@ Docker stdio variant:
         "--http=false"
       ],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "${input:gitlab-token}",
         "GITLAB_SKIP_TLS_VERIFY": "false"
       }
@@ -166,7 +164,6 @@ Edit `claude_desktop_config.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -214,9 +211,10 @@ claude mcp add gitlab \
 Set environment variables before launching:
 
 ```bash
-export GITLAB_URL="https://gitlab.example.com"
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
+
+Set `GITLAB_URL` here only for self-managed instances.
 
 ### HTTP OAuth Mode
 
@@ -270,7 +268,6 @@ Create or edit `.cursor/mcp.json` in your project root:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -328,7 +325,6 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -362,10 +358,9 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 1. Open **Settings → Tools → AI Assistant → MCP Servers**
 2. Click **+ Add** and select **stdio**
 3. Set the command to `/path/to/gitlab-mcp-server`
-4. Add environment variables:
-   - `GITLAB_URL` = `https://gitlab.example.com`
-   - `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
-5. Click **OK** and restart the IDE
+4. Add `GITLAB_TOKEN` = `glpat-xxxxxxxxxxxxxxxxxxxx`
+5. Add `GITLAB_URL` only for self-managed instances
+6. Click **OK** and restart the IDE
 
 ### HTTP Legacy Mode
 
@@ -403,7 +398,6 @@ Edit your Zed `settings.json`:
       "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -441,7 +435,6 @@ Create or edit `.kiro/settings/mcp.json` in your project root (or `~/.kiro/setti
       "command": "/path/to/gitlab-mcp-server",
       "args": [],
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -476,7 +469,6 @@ Create or edit `.kiro/settings/mcp.json` in your project root (or `~/.kiro/setti
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -517,7 +509,6 @@ Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Glob
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
@@ -554,7 +545,6 @@ Open the Roo Code sidebar in VS Code → click the MCP servers icon → **Edit G
     "gitlab": {
       "command": "/path/to/gitlab-mcp-server",
       "env": {
-        "GITLAB_URL": "https://gitlab.example.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
       }
     }
