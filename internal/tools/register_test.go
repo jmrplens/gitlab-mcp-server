@@ -22,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
@@ -5005,8 +5006,15 @@ func TestMakeMetaHandler_SuccessfulDispatch(t *testing.T) {
 			called = true
 			return "result", nil
 		}),
-	}, func(any) *mcp.CallToolResult {
-		return toolutil.SuccessResult("ok")
+	}, func(value any) *mcp.CallToolResult {
+		got, ok := value.(string)
+		if !ok {
+			t.Fatalf("formatter got %T, want string", value)
+		}
+		if got != "result" {
+			t.Fatalf("formatter got %q, want %q", got, "result")
+		}
+		return toolutil.SuccessResult(got)
 	})
 
 	_, result, err := handler(context.Background(), nil, MetaToolInput{Action: "get", Params: map[string]any{}})
@@ -5093,6 +5101,19 @@ func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error result for failed SCIM update, got success")
 	}
+	if result.StructuredContent != nil {
+		t.Fatalf("StructuredContent = %#v, want nil for error result", result.StructuredContent)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected error result content, got none")
+	}
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("error content type = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(textContent.Text, "forbidden") {
+		t.Fatalf("error content = %q, want forbidden detail", textContent.Text)
+	}
 }
 
 // TestGroupSCIMMeta_UpdateAction_SuccessPath verifies that the updateAction
@@ -5131,5 +5152,22 @@ func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
 	}
 	if result.IsError {
 		t.Fatalf("expected success result, got error: %+v", result)
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for successful SCIM update")
+	}
+	raw, marshalErr := json.Marshal(result.StructuredContent)
+	if marshalErr != nil {
+		t.Fatalf("marshal structured content: %v", marshalErr)
+	}
+	var out groupscim.UpdateOutput
+	if unmarshalErr := json.Unmarshal(raw, &out); unmarshalErr != nil {
+		t.Fatalf("unmarshal structured content: %v", unmarshalErr)
+	}
+	if !out.Updated {
+		t.Fatal("Updated = false, want true")
+	}
+	if out.Message != "SCIM identity updated successfully." {
+		t.Fatalf("Message = %q, want SCIM identity updated successfully.", out.Message)
 	}
 }

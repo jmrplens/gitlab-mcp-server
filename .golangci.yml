@@ -240,7 +240,7 @@ output:
     - linter
     - severity
     - file
-  show-stats: true
+  show-stats: false
 
 formatters:
   enable:

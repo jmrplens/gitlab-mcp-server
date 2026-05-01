@@ -135,12 +135,14 @@ func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
 }
 
 func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
-	t.Parallel()
-
+	toolutil.ClearMetaRoutes()
+	t.Cleanup(toolutil.ClearMetaRoutes)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, nil)
+	routeSnapshot := toolutil.CaptureMetaRoutes(func() {
+		RegisterMeta(server, nil)
+	})
 
-	routes := toolutil.MetaRoutes()["gitlab_analyze"]
+	routes := routeSnapshot["gitlab_analyze"]
 	if len(routes) == 0 {
 		t.Fatal("gitlab_analyze routes were not registered")
 	}
@@ -152,10 +154,12 @@ func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 }
 
 func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
-	t.Parallel()
-
+	toolutil.ClearMetaRoutes()
+	t.Cleanup(toolutil.ClearMetaRoutes)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	RegisterMeta(server, nil)
+	toolutil.CaptureMetaRoutes(func() {
+		RegisterMeta(server, nil)
+	})
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, st, nil); err != nil {

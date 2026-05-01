@@ -170,7 +170,7 @@ func TestProtect_WithAccessLevels(t *testing.T) {
 			{AccessLevel: &al},
 		},
 		ApprovalRules: []ApprovalRuleInput{
-			{AccessLevel: &al, RequiredApprovalCount: int64Ptr(1)},
+			{AccessLevel: &al, RequiredApprovalCount: new(int64(1))},
 		},
 	})
 	if err != nil {
@@ -208,7 +208,7 @@ func TestProtect_WithAllOptionalFields(t *testing.T) {
 			{UserID: &uid, GroupID: &gid, AccessLevel: &al, GroupInheritanceType: &git},
 		},
 		ApprovalRules: []ApprovalRuleInput{
-			{UserID: &uid, GroupID: &gid, AccessLevel: &al, RequiredApprovalCount: int64Ptr(2), GroupInheritanceType: &git},
+			{UserID: &uid, GroupID: &gid, AccessLevel: &al, RequiredApprovalCount: new(int64(2)), GroupInheritanceType: &git},
 		},
 	})
 	if err != nil {
@@ -487,17 +487,6 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// ---------- Helpers ----------.
-
-//go:fix inline
-func int64Ptr(v int64) *int64 { return new(v) }
-
-//go:fix inline
-func intPtr(v int) *int { return new(v) }
-
-//go:fix inline
-func boolPtr(v bool) *bool { return new(v) }
-
 // TestUpdate_WithAllFields verifies Update maps all optional fields including
 // DeployAccessLevels and ApprovalRules with all sub-fields populated.
 func TestUpdate_WithAllFields(t *testing.T) {
@@ -523,23 +512,23 @@ func TestUpdate_WithAllFields(t *testing.T) {
 		RequiredApprovalCount: &reqApproval,
 		DeployAccessLevels: []UpdateDeployAccessLevelInput{
 			{
-				ID:                   int64Ptr(1),
-				AccessLevel:          intPtr(30),
-				UserID:               int64Ptr(10),
-				GroupID:              int64Ptr(20),
-				GroupInheritanceType: int64Ptr(1),
-				Destroy:              boolPtr(false),
+				ID:                   new(int64(1)),
+				AccessLevel:          new(30),
+				UserID:               new(int64(10)),
+				GroupID:              new(int64(20)),
+				GroupInheritanceType: new(int64(1)),
+				Destroy:              new(false),
 			},
 		},
 		ApprovalRules: []UpdateApprovalRuleInput{
 			{
-				ID:                    int64Ptr(2),
-				AccessLevel:           intPtr(40),
-				UserID:                int64Ptr(11),
-				GroupID:               int64Ptr(21),
-				RequiredApprovalCount: int64Ptr(1),
-				GroupInheritanceType:  int64Ptr(0),
-				Destroy:               boolPtr(true),
+				ID:                    new(int64(2)),
+				AccessLevel:           new(40),
+				UserID:                new(int64(11)),
+				GroupID:               new(int64(21)),
+				RequiredApprovalCount: new(int64(1)),
+				GroupInheritanceType:  new(int64(0)),
+				Destroy:               new(true),
 			},
 		},
 	})

@@ -266,7 +266,7 @@ This behaviour is enabled by default and can be disabled globally with `EMBEDDED
 
 Meta-tools declare a single tool-level `OutputSchema` (the envelope with `next_steps` and `pagination` fields). In addition, each action route can carry its own output schema describing the exact shape returned by that specific action.
 
-Per-route schemas are populated automatically when using typed route constructors (`RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]`). Void actions and plain `Route()` calls do not have per-route schemas.
+Per-route schemas are populated automatically when using typed route constructors (`RouteAction[T,R]`, `DestructiveAction[T,R]`, `RouteActionWithRequest[T,R]`, `DestructiveActionWithRequest[T,R]`) and the typed void/delete constructors (`RouteVoidAction[T]`, `DestructiveVoidAction[T]`, `DestructiveVoidActionWithRequest[T]`). Plain untyped `Route()` calls do not automatically get per-route schemas.
 
 These schemas are:
 
