@@ -14,13 +14,13 @@
 
 | Metric                      | Value   |
 | --------------------------- | ------- |
-| Total test functions        | 9,003   |
-| Unit test functions         | 8,686   |
-| E2E test functions          | 222     |
-| cmd test functions          | 95      |
+| Total test functions        | 9,080   |
+| Unit test functions         | 8,837   |
+| E2E test functions          | 243     |
+| cmd test functions          | 124     |
 | Test files (internal/)      | 397     |
-| Test files (cmd/)           | 5       |
-| Test files (test/e2e/suite/)| 100     |
+| Test files (cmd/)           | 8       |
+| Test files (test/e2e/suite/)| 107     |
 | Tool sub-packages tested    | 163     |
 | Core packages tested        | 16      |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 93.0% |
@@ -31,9 +31,9 @@
 
 | Pattern                        | Count | %     |
 | ------------------------------ | ----: | ----: |
-| `TestFunc_Scenario` (2-part)   | 8,111 | 90.1% |
-| `TestFunc` (no-underscore)     |   673 |  7.5% |
-| `TestFunc_Sc_Exp` (3+ part)   |   219 |  2.4% |
+| `TestFunc_Scenario` (2-part)   | 8,154 | 89.9% |
+| `TestFunc` (no-underscore)     |   672 |  7.4% |
+| `TestFunc_Sc_Exp` (3+ part)   |   248 |  2.7% |
 
 ## Test Distribution
 
@@ -41,12 +41,12 @@
 
 | Layer                    | Test Functions | Test Files | Description                          |
 | ------------------------ | -------------: | ---------: | ------------------------------------ |
-| Core packages            |          1,485 |         83 | autoupdate, config, gitlab, oauth…   |
-| Tools orchestration      |            225 |          7 | register, metatool, markdown, safemode, errors |
-| Tool sub-packages (163)  |          6,976 |        307 | Domain-specific tool handlers        |
-| E2E integration          |            222 |        100 | Full workflow against real GitLab    |
-| cmd packages             |             95 |          5 | Main entry point + command utilities |
-| **Total**                |      **9,003** |    **502** |                                      |
+| Core packages            |          1,506 |         83 | autoupdate, config, gitlab, oauth…   |
+| Tools orchestration      |            227 |          7 | register, metatool, markdown, safemode, errors |
+| Tool sub-packages (163)  |          6,980 |        307 | Domain-specific tool handlers        |
+| E2E integration          |            243 |        107 | Full workflow against real GitLab    |
+| cmd packages             |            124 |          8 | Main entry point + command utilities |
+| **Total**                |      **9,080** |    **512** |                                      |
 
 ### Core Packages
 
@@ -266,7 +266,7 @@
 | vulnerabilities          |    52 |
 | wikis                    |    57 |
 | workitems                |    66 |
-| **Total** (163 sub-packages) | **6,941** |
+| **Total** (163 sub-packages) | **6,980** |
 
 </details>
 
@@ -276,6 +276,7 @@
 
 | Package    | Coverage |
 | ---------- | -------: |
+| cmd/audit_godocs |   51.4%  |
 | cmd/server |   62.5%  |
 
 ### Core Packages

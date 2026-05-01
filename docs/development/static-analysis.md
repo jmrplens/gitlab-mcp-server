@@ -104,6 +104,15 @@ govulncheck -version
 | `make analyze-report` | Generate combined report to `dist/analysis/report.txt` |
 | `make lint` | Quick lint (go vet only, backward compatible) |
 
+### Project Audit Targets
+
+| Target | Description |
+| --- | --- |
+| `make audit-godocs` | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
+| `make audit-godocs-check` | Run the same Godoc audit and fail if findings remain |
+
+See [Godoc Compliance](godoc.md) for the detailed policy, categories, and local pkgsite workflow.
+
 ### LLM Workflow
 
 For AI-assisted code correction:

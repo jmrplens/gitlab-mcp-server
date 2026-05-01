@@ -3,9 +3,10 @@
        lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
        mdlint mdlint-fix \
-       analyze analyze-fix analyze-report install-tools \
-       audit-output audit-tokens audit-tools audit-metrics audit-test-names \
+	analyze analyze-fix analyze-report install-tools \
+	audit-output audit-tokens audit-tools audit-metrics audit-test-names audit-godocs audit-godocs-check \
        gen-llms gen-readme \
+	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
        inspector inspector-stop help
@@ -44,6 +45,7 @@ endif
 
 # Analysis output directory
 ANALYSIS_DIR=dist/analysis
+PKGSITE ?= $(shell command -v pkgsite 2>/dev/null || printf "%s/bin/pkgsite" "$$(go env GOPATH 2>/dev/null)")
 
 version: build
 	dist/$(BINARY_NAME)$(BINARY_EXT) --version
@@ -533,6 +535,22 @@ audit-metrics:
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:
 	go run ./cmd/audit_test_names/ cmd internal test
+
+## audit-godocs: generate a Godoc compliance report, including test functions.
+audit-godocs:
+	$(call MKDIR_P,$(ANALYSIS_DIR))
+	go run ./cmd/audit_godocs/ --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
+	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
+
+## audit-godocs-check: fail when package, symbol, or test Godoc findings remain.
+audit-godocs-check:
+	go run ./cmd/audit_godocs/ --include-tests --fail-on-findings
+
+## docs-local-go: serve local pkg.go.dev-style documentation at http://127.0.0.1:6060.
+docs-local-go:
+	@if [ ! -x "$(PKGSITE)" ]; then echo "pkgsite not found. Install with: go install golang.org/x/pkgsite/cmd/pkgsite@latest"; exit 1; fi
+	@echo "Serving local Go documentation at http://127.0.0.1:6060"
+	$(PKGSITE) -http=127.0.0.1:6060
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Prefer 'make goimports' over 'make fmt' — goimports is a superset of gofmt.
