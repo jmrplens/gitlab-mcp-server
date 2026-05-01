@@ -82,7 +82,7 @@ This repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manife
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` via `docker run -i --rm`, so you need [Docker](https://docs.docker.com/get-docker/) installed and running.
+The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` via `docker run -i --rm`, so you need [Docker](https://docs.docker.com/get-docker/) installed and running. The bundled `mcp.json` is configured for stdio MCP clients and passes `--http=false` after the image name to override the Docker image's HTTP default. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container will start an HTTP listener and the client will wait forever for a stdio `initialize` response.
 
 ### Required environment
 
@@ -101,7 +101,9 @@ The host must provide these variables before enabling the plugin:
 
 ### Prefer a native binary instead of Docker?
 
-The Open Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker for portability. If you prefer the native binary, install the plugin, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, and then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
+The Open Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker stdio for portability. For detached HTTP deployments, do not use a stdio client entry; run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
+
+If you prefer the native binary, install the plugin, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, and then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
 ```json
 {

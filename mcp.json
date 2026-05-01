@@ -24,7 +24,8 @@
                 "AUTO_UPDATE",
                 "-e",
                 "LOG_LEVEL",
-                "ghcr.io/jmrplens/gitlab-mcp-server:latest"
+                "ghcr.io/jmrplens/gitlab-mcp-server:latest",
+                "--http=false"
             ],
             "env": {
                 "GITLAB_URL": "${GITLAB_URL}",

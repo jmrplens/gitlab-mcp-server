@@ -127,6 +127,9 @@ func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission test not reliable on Windows")
 	}
+	if os.Getuid() == 0 {
+		t.Skip("permission test not reliable as root: root bypasses filesystem permission checks")
+	}
 	tmpDir := t.TempDir()
 	blocked := filepath.Join(tmpDir, "readonly")
 	if err := os.Mkdir(blocked, 0o555); err != nil {
