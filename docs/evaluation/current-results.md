@@ -18,7 +18,7 @@ This document summarizes the latest evaluation state for the `research/metatool-
 
 The latest model-backed full run used the current enterprise opaque meta-tool catalog, Anthropic tool calling, simulated tool results, and local validation. The harness did not execute GitLab mutations.
 
-This full run predates the latest sampling, elicitation, destructive-action, and trace-artifact expansion, so it covers the earlier 102-case fixture. The current 134-case fixture has been validated in dry-run mode. A targeted model-backed capability sample covering new rows is recorded below, and the full 134-case fixture should be rerun against Anthropic before treating every new row as a full-suite quality gate.
+This full run predates the latest sampling, elicitation, destructive-action, and trace-artifact expansion, so it covers the earlier 102-case fixture. The current 134-case fixture has been validated in dry-run mode. A targeted model-backed capability sample covering new rows is summarized below, and the full 134-case fixture should be rerun against Anthropic before treating every new row as a full-suite quality gate.
 
 | Metric | Result |
 | --- | ---: |
@@ -53,9 +53,7 @@ The model completed every case in the 102-case fixture. Four percent of cases ne
 
 The latest targeted Anthropic run validates representative new rows for sampling, destructive confirmation, and capability fallback. It also exercises the new trace artifact writer.
 
-Report: `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md`
-
-Trace directory: `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.traces/`
+The sample report and trace directory are local analysis artifacts. Reproduce them under ignored `dist/evaluation/meta-tools/` instead of committing prompt/action trace files.
 
 | Metric | Result |
 | --- | ---: |
@@ -194,7 +192,7 @@ go vet ./cmd/eval_meta_tools
 golangci-lint run ./cmd/eval_meta_tools
 npx markdownlint-cli2 docs/evaluation/*.md docs/development/testing.md
 go run ./cmd/eval_meta_tools/ --dry-run --repeat=1 --out /tmp/eval-expanded-dry-run.md
-go run ./cmd/eval_meta_tools/ --task=MT-093,MT-099,MT-101,MF-004,MF-005 --repeat=1 --out plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md --trace-dir plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.traces
+go run ./cmd/eval_meta_tools/ --task=MT-093,MT-099,MT-101,MF-004,MF-005 --repeat=1 --out dist/evaluation/meta-tools/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md
 ```
 
 ## Known Limitations

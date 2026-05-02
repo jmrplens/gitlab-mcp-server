@@ -542,9 +542,19 @@ func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
 }
 
 func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
-	got := defaultTraceDir("plan/evals/report.md")
-	if got != "plan/evals/report.traces" {
+	got := defaultTraceDir("dist/evaluation/meta-tools/report.md")
+	if got != "dist/evaluation/meta-tools/report.traces" {
 		t.Fatalf("defaultTraceDir() = %q, want report.traces", got)
+	}
+}
+
+func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
+	got := defaultOutputPath("claude/sonnet:4 6")
+	if !strings.HasPrefix(got, "dist/evaluation/meta-tools/anthropic-") {
+		t.Fatalf("defaultOutputPath() = %q, want dist evaluation path", got)
+	}
+	if !strings.HasSuffix(got, "-claude-sonnet-4-6.md") {
+		t.Fatalf("defaultOutputPath() = %q, want sanitized model suffix", got)
 	}
 }
 

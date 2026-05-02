@@ -141,7 +141,7 @@ Current versus `main` on the 51-task comparison fixture:
 
 The `main` snapshot failed the server-diagnostics task because `gitlab_server` did not exist in that catalog.
 
-The current working tree expands beyond this full run with sampling, elicitation, destructive-action, and trace-artifact coverage. The expanded fixture is validated by dry-run and unit tests, and a targeted Anthropic sample for representative new rows is recorded under `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md` with per-case traces in the sibling `.traces/` directory.
+The current working tree expands beyond this full run with sampling, elicitation, destructive-action, and trace-artifact coverage. The expanded fixture is validated by dry-run and unit tests, and targeted Anthropic samples for representative new rows should be stored as local ignored artifacts under `dist/evaluation/meta-tools/` with per-case traces in the sibling `.traces/` directory.
 
 ## Phase 5: Full Catalog Coverage
 
@@ -217,7 +217,7 @@ go vet ./cmd/eval_meta_tools
 golangci-lint run ./cmd/eval_meta_tools
 npx markdownlint-cli2 docs/evaluation/*.md docs/development/testing.md
 go run ./cmd/eval_meta_tools/ --dry-run --repeat=1 --out /tmp/eval-expanded-dry-run.md
-go run ./cmd/eval_meta_tools/ --task=MT-093,MT-099,MT-101,MF-004,MF-005 --repeat=1 --out plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md --trace-dir plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.traces
+go run ./cmd/eval_meta_tools/ --task=MT-093,MT-099,MT-101,MF-004,MF-005 --repeat=1 --out dist/evaluation/meta-tools/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md
 ```
 
 For a full model-backed run:

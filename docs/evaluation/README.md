@@ -57,9 +57,10 @@ go run ./cmd/eval_meta_tools/ \
   --pause=250ms \
   --retries=8 \
   --retry-wait=65s \
-  --out /tmp/eval-anthropic.md \
-  --trace-dir /tmp/eval-anthropic.traces
+  --out dist/evaluation/meta-tools/eval-anthropic.md
 ```
+
+By default, model-backed reports and traces are written under `dist/evaluation/meta-tools/`, which is ignored by git. Keep full prompt/action trace samples there for local analysis instead of versioning them.
 
 Useful flags:
 
@@ -69,7 +70,7 @@ Useful flags:
 | `--task=MT-091,MS-002` | Run a targeted subset. |
 | `--repeat=N` | Repeat selected cases to check stability. |
 | `--tools-file=/path/to/tools_meta.json` | Compare against a saved `tools/list` snapshot, such as the `main` branch catalog. |
-| `--trace-dir=/path/to/traces` | Store model-backed per-case JSON traces, `traces.jsonl`, and `index.md`; defaults to `<report>.traces`. |
+| `--trace-dir=/path/to/traces` | Store model-backed per-case JSON traces, `traces.jsonl`, and `index.md`; defaults to `<report>.traces`, normally under ignored `dist/`. |
 | `--pause=1s` | Add spacing between API calls when running a model-backed evaluation. |
 | `--retries=8 --retry-wait=65s` | Survive transient model API throttling. |
 

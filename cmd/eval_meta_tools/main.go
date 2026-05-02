@@ -38,7 +38,7 @@ import (
 
 const (
 	defaultTasksPath = "docs/evaluation/automated-meta-tool-cases.md"
-	defaultEvalDir   = "plan/metatool-token-schema-research/evals"
+	defaultEvalDir   = "dist/evaluation/meta-tools"
 	defaultModel     = "claude-sonnet-4-6"
 	anthropicAPI     = "https://api.anthropic.com/v1/messages"
 	anthropicVersion = "2023-06-01"
@@ -361,7 +361,7 @@ func run() error {
 func parseFlags() options {
 	var opts options
 	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
-	flag.StringVar(&opts.Output, "out", "", "Markdown report path")
+	flag.StringVar(&opts.Output, "out", "", "Markdown report path; defaults under dist/evaluation/meta-tools")
 	flag.StringVar(&opts.TraceDir, "trace-dir", "", "Directory for per-task model trace artifacts; defaults to <report>.traces in model-backed mode")
 	flag.StringVar(&opts.Model, "model", "", "Anthropic model; defaults to ANTHROPIC_MODEL or claude-sonnet-4-6")
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
