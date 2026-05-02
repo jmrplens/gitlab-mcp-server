@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -60,6 +62,39 @@ func TestValidateToolCall_AcceptsConfirmedDestructiveCall(t *testing.T) {
 	}
 	if !result.DestructiveSafe {
 		t.Fatal("DestructiveSafe = false, want true")
+	}
+}
+
+func TestLoadToolsSnapshot_DerivesRoutes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tools.json")
+	snapshot := `[
+  {
+    "name": "gitlab_project",
+    "description": "Manage projects.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {"type": "string", "enum": ["get", "list"]},
+        "params": {"type": "object"}
+      }
+    }
+  }
+]`
+	if err := os.WriteFile(path, []byte(snapshot), 0o600); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+	tools, routes, err := loadToolsSnapshot(path)
+	if err != nil {
+		t.Fatalf("loadToolsSnapshot() error = %v", err)
+	}
+	if len(tools) != 1 || tools[0].Name != "gitlab_project" {
+		t.Fatalf("tools = %+v, want gitlab_project", tools)
+	}
+	if _, ok := routes["gitlab_project"]["get"]; !ok {
+		t.Fatalf("routes = %+v, want gitlab_project/get", routes)
+	}
+	if _, ok := routes["gitlab_project"]["list"]; !ok {
+		t.Fatalf("routes = %+v, want gitlab_project/list", routes)
 	}
 }
 

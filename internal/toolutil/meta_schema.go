@@ -147,13 +147,45 @@ func LookupMetaActionSchema(routes map[string]ActionMap, tool, action string) (m
 		return nil, false
 	}
 	if route.InputSchema == nil {
-		return map[string]any{
+		schema := map[string]any{
 			"type":                 "object",
 			"description":          "This action has no captured parameter schema. Send an empty object {} or consult the meta-tool description for required fields.",
 			"additionalProperties": true,
-		}, true
+		}
+		return enrichDestructiveSchema(schema, route.Destructive), true
 	}
-	return route.InputSchema, true
+	return enrichDestructiveSchema(cloneSchemaMap(route.InputSchema), route.Destructive), true
+}
+
+func enrichDestructiveSchema(schema map[string]any, destructive bool) map[string]any {
+	if !destructive {
+		return schema
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	if properties == nil {
+		properties = make(map[string]any)
+		schema["properties"] = properties
+	}
+	if _, exists := properties["confirm"]; !exists {
+		properties["confirm"] = map[string]any{
+			"type":        "boolean",
+			"description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+		}
+	}
+	schema["x_destructive"] = true
+	return schema
+}
+
+func cloneSchemaMap(value map[string]any) map[string]any {
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		if nested, ok := item.(map[string]any); ok {
+			out[key] = cloneSchemaMap(nested)
+			continue
+		}
+		out[key] = item
+	}
+	return out
 }
 
 // ParseMetaSchemaURI extracts the tool and action segments from a schema URI.

@@ -6,6 +6,7 @@
 //	go run ./cmd/eval_meta_tools/
 //	go run ./cmd/eval_meta_tools/ --max-tasks=5
 //	go run ./cmd/eval_meta_tools/ --dry-run
+//	go run ./cmd/eval_meta_tools/ --tools-file /tmp/tools_meta.json
 package main
 
 import (
@@ -47,6 +48,7 @@ type options struct {
 	TasksPath string
 	Output    string
 	Model     string
+	ToolsFile string
 	OnlyIDs   string
 	MaxTasks  int
 	MaxTokens int
@@ -70,6 +72,12 @@ type anthropicTool struct {
 	Description  string        `json:"description"`
 	InputSchema  any           `json:"input_schema"`
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
+}
+
+type snapshotTool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 type cacheControl struct {
@@ -171,17 +179,10 @@ func run() error {
 		return errors.New("no tasks selected")
 	}
 
-	client, cleanup, err := newMockGitLabClient()
+	anthropicTools, routes, err := loadCatalog(opts.ToolsFile)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
-
-	mcpTools, routes, err := buildCatalog(client)
-	if err != nil {
-		return err
-	}
-	anthropicTools := convertTools(mcpTools)
 
 	if opts.DryRun {
 		results := runStaticValidation(tasks, routes)
@@ -221,6 +222,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
 	flag.StringVar(&opts.Output, "out", "", "Markdown report path")
 	flag.StringVar(&opts.Model, "model", "", "Anthropic model; defaults to ANTHROPIC_MODEL or claude-sonnet-4-6")
+	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.StringVar(&opts.OnlyIDs, "task", "", "Comma-separated task IDs to run, for example MT-035,MT-040")
 	flag.IntVar(&opts.MaxTasks, "max-tasks", 0, "Limit number of tasks; 0 runs all tasks")
 	flag.IntVar(&opts.MaxTokens, "max-tokens", 1024, "Max output tokens per Anthropic request")
@@ -358,6 +360,48 @@ func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
 	return client, srv.Close, nil
 }
 
+func loadCatalog(toolsFile string) ([]anthropicTool, map[string]toolutil.ActionMap, error) {
+	if toolsFile != "" {
+		return loadToolsSnapshot(toolsFile)
+	}
+	client, cleanup, err := newMockGitLabClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+	mcpTools, routes, err := buildCatalog(client)
+	if err != nil {
+		return nil, nil, err
+	}
+	return convertTools(mcpTools), routes, nil
+}
+
+func loadToolsSnapshot(path string) ([]anthropicTool, map[string]toolutil.ActionMap, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read tools snapshot: %w", err)
+	}
+	snapshot, err := parseToolsSnapshot(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return convertSnapshotTools(snapshot), routesFromSnapshot(snapshot), nil
+}
+
+func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
+	var snapshot []snapshotTool
+	if err := json.Unmarshal(data, &snapshot); err == nil {
+		return snapshot, nil
+	}
+	var wrapped struct {
+		Tools []snapshotTool `json:"tools"`
+	}
+	if err := json.Unmarshal(data, &wrapped); err != nil {
+		return nil, fmt.Errorf("decode tools snapshot: %w", err)
+	}
+	return wrapped.Tools, nil
+}
+
 func buildCatalog(client *gitlabclient.Client) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-meta-tools", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	routes := toolutil.CaptureMetaRoutes(func() {
@@ -400,6 +444,61 @@ func convertTools(toolList []*mcp.Tool) []anthropicTool {
 		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral"}
 	}
 	return out
+}
+
+func convertSnapshotTools(snapshot []snapshotTool) []anthropicTool {
+	out := make([]anthropicTool, 0, len(snapshot))
+	for _, tool := range snapshot {
+		inputSchema := any(map[string]any{"type": "object"})
+		if tool.InputSchema != nil {
+			inputSchema = tool.InputSchema
+		}
+		out = append(out, anthropicTool{Name: tool.Name, Description: tool.Description, InputSchema: inputSchema})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	if len(out) > 0 {
+		out[len(out)-1].CacheControl = &cacheControl{Type: "ephemeral"}
+	}
+	return out
+}
+
+func routesFromSnapshot(snapshot []snapshotTool) map[string]toolutil.ActionMap {
+	routes := make(map[string]toolutil.ActionMap, len(snapshot))
+	for _, tool := range snapshot {
+		actions := actionEnumFromSchema(tool.InputSchema)
+		if len(actions) == 0 {
+			continue
+		}
+		actionMap := make(toolutil.ActionMap, len(actions))
+		for _, action := range actions {
+			actionMap[action] = toolutil.ActionRoute{}
+		}
+		routes[tool.Name] = actionMap
+	}
+	return routes
+}
+
+func actionEnumFromSchema(schema map[string]any) []string {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	actionProperty, ok := properties["action"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawEnum, ok := actionProperty["enum"].([]any)
+	if !ok {
+		return nil
+	}
+	actions := make([]string, 0, len(rawEnum))
+	for _, rawAction := range rawEnum {
+		action, okAction := rawAction.(string)
+		if okAction && action != "" {
+			actions = append(actions, action)
+		}
+	}
+	return actions
 }
 
 type anthropicRunner struct {

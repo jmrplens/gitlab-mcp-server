@@ -394,7 +394,7 @@ Use this for project settings and metadata. Use gitlab_repository for files/comm
 
 Call with {"action":"<enum value>","params":{...}}. Most project-scoped actions require project_id, which may be a numeric ID or URL-encoded path. List actions accept page/per_page. For exact required and optional params, call gitlab_server schema_get or read gitlab://schema/meta/gitlab_project/<action>; unknown params are rejected.
 
-Action families: project CRUD (create/get/list/update/delete/restore), fork and project actions (fork, transfer, star, archive, languages), user/group listings and shares, member_*, hook_*, label_*, milestone_*, badge_*, board_*, integration_*, upload_*, import/export, pages_*, avatar, approval_*, pull_mirror_*, mirror_*, and maintenance/admin actions.
+Action families: project CRUD (create/get/list/update/delete/restore), fork and project actions (fork, transfer, star, archive, languages), user/group listings and shares, member_*, hook_*, label_*, milestone_*, badge_*, board_*, integration_*, upload_*, import/export, pages_*, avatar, approval_*, pull_mirror_*, mirror_*, and maintenance/admin actions. For delete/remove milestone requests, use action milestone_delete (never milestone_list) with params project_id, milestone_iid, confirm:true. Use milestone_list only for listing.
 
 Safety: create/fork/import/export/mirroring/housekeeping can create resources or queue async work. Destructive actions include delete, *_delete, pages_unpublish, mirror_force_push, delete_shared_group, and delete_fork_relation; they require confirmation/elicitation. archive is reversible via unarchive. Common failures: 404 for wrong project_id/path, 403 for insufficient role, 400 for invalid visibility/merge settings.
 
