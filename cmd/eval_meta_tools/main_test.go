@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
@@ -33,6 +35,35 @@ func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
 	}
 	if got := strings.Join(tasks[1].OptionalParams, ","); got != "confirm" {
 		t.Fatalf("optional params = %q", got)
+	}
+}
+
+func TestParseTasksMarkdown_ParsesMultiStepRows(t *testing.T) {
+	markdown := `# Test
+
+| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
+| --- | --- | --- | --- | --- | --- | --- |
+| MS-001 | Resolve a remote and inspect a file. | ` + "`gitlab_discover_project` -> `gitlab_project` / `get` -> `gitlab_repository` / `file_get`" + ` | ` + "`remote_url`; `project_id`; `project_id`, `file_path`, `ref`" + ` | none; none; none | none | ok |
+| MS-002 | Remove stale project hook after listing hooks in project ` + "`my-org/tools/gitlab-mcp-server`" + `. | ` + "`gitlab_project` / `hook_list` -> `gitlab_project` / `hook_delete`" + ` | ` + "`project_id`; `project_id`, `hook_id`" + ` | none; ` + "`confirm`" + ` | 2 | ok |
+`
+	tasks, err := parseTasksMarkdown(markdown)
+	if err != nil {
+		t.Fatalf("parseTasksMarkdown() error = %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("tasks = %d, want 2", len(tasks))
+	}
+	if len(tasks[0].Steps) != 3 {
+		t.Fatalf("steps = %d, want 3", len(tasks[0].Steps))
+	}
+	if tasks[0].Steps[0].ExpectedTool != "gitlab_discover_project" || tasks[0].Steps[0].ExpectedAction != "" {
+		t.Fatalf("first step = %+v, want standalone discover_project", tasks[0].Steps[0])
+	}
+	if got := strings.Join(tasks[0].Steps[2].RequiredParams, ","); got != "project_id,file_path,ref" {
+		t.Fatalf("third step required params = %q", got)
+	}
+	if !tasks[1].Steps[1].Destructive {
+		t.Fatal("second scenario step is not destructive, want destructive")
 	}
 }
 
@@ -96,6 +127,68 @@ func TestValidateToolCall_AcceptsConfirmedDestructiveCall(t *testing.T) {
 	}
 	if !result.DestructiveSafe {
 		t.Fatal("DestructiveSafe = false, want true")
+	}
+}
+
+func TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt(t *testing.T) {
+	task := evalTask{ExpectedTool: "gitlab_repository", ExpectedAction: "file_delete", RequiredParams: []string{"project_id", "file_path", "branch"}, Destructive: true}
+	result := validateToolCall(task, "gitlab_repository", map[string]any{
+		"action": "file_metadata",
+		"params": map[string]any{
+			"project_id": "42",
+			"file_path":  "README.md",
+			"ref":        "main",
+		},
+	})
+	if result.Valid {
+		t.Fatal("validateToolCall() Valid = true, want false")
+	}
+	if !result.DestructiveSafe {
+		t.Fatal("DestructiveSafe = false for a wrong read-only attempt, want true")
+	}
+}
+
+func TestValidateStandaloneToolCall_AcceptsTopLevelInput(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
+	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
+		"remote_url": "https://gitlab.example.com/my-org/project.git",
+	})
+	if !result.Valid {
+		t.Fatalf("validateStepCall() Valid = false: %s", result.Message)
+	}
+}
+
+func TestValidateStandaloneToolCall_RejectsMetaEnvelope(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
+	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
+		"action": "resolve",
+		"params": map[string]any{"remote_url": "https://gitlab.example.com/my-org/project.git"},
+	})
+	if result.Valid {
+		t.Fatal("validateStepCall() Valid = true, want false")
+	}
+	if !strings.Contains(result.Message, "standalone tool") {
+		t.Fatalf("message = %q, want standalone guidance", result.Message)
+	}
+}
+
+func TestRunStaticValidation_ValidatesMultiStepRoutes(t *testing.T) {
+	tasks := []evalTask{{
+		ID: "MS-001",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_discover_project"},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "get"},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get"},
+		},
+	}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project":    {"get": {}},
+		"gitlab_repository": {"file_get": {}},
+	}
+	toolNames := map[string]bool{"gitlab_discover_project": true, "gitlab_project": true, "gitlab_repository": true}
+	results := runStaticValidation(tasks, routes, toolNames, 1)
+	if len(results) != 1 || !results[0].FinalSuccess || results[0].CompletedSteps != 3 {
+		t.Fatalf("results = %+v, want completed multi-step validation", results)
 	}
 }
 

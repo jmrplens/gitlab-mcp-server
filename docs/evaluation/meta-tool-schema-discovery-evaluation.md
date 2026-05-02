@@ -111,6 +111,46 @@ Use `--dry-run` for static route validation, `--repeat=N` for repeated runs, `--
 | MT-067 | Create group CI variable `GROUP_EVAL_TOKEN` in group `my-org` with value `masked-value-123`. | `gitlab_ci_variable` / `group_create` | `group_id`, `key`, `value` | `masked`, `environment_scope` | No | Group variable metadata is returned. |
 | MT-068 | Create instance CI variable `INSTANCE_EVAL_TOKEN` with value `masked-value-123`. | `gitlab_ci_variable` / `instance_create` | `key`, `value` | `masked`, `protected` | No | Instance variable metadata is returned. |
 | MT-069 | Delete instance CI variable `INSTANCE_EVAL_TOKEN`. | `gitlab_ci_variable` / `instance_delete` | `key` | `confirm` | Yes | Destructive instance variable delete is confirmed. |
+| MT-070 | List attestations in project `my-org/tools/gitlab-mcp-server`. | `gitlab_attestation` / `list` | `project_id` | `subject_digest` | No | Attestation list or feature-availability error is returned. |
+| MT-071 | List branches in project `my-org/tools/gitlab-mcp-server`. | `gitlab_branch` / `list` | `project_id` | `search`, `per_page` | No | Branch list and pagination are returned. |
+| MT-072 | List CI/CD catalog resources. | `gitlab_ci_catalog` / `list` | none | `search`, `scope`, `sort` | No | Catalog resource list is returned. |
+| MT-073 | List custom emoji for group path `my-org`. | `gitlab_custom_emoji` / `list` | `group_path` | `first`, `after` | No | Custom emoji nodes or entitlement error is returned. |
+| MT-074 | List dependency inventory for project `my-org/tools/gitlab-mcp-server`. | `gitlab_dependency` / `list` | `project_id` | `package_manager`, `per_page` | No | Dependency list or feature-availability error is returned. |
+| MT-075 | Get deployment frequency DORA metrics for project `my-org/tools/gitlab-mcp-server` from `2026-01-01` to `2026-01-31`. | `gitlab_dora_metrics` / `project` | `project_id`, `metric` | `start_date`, `end_date`, `interval` | No | DORA metric series or entitlement error is returned. |
+| MT-076 | List enterprise users in group `my-org`. | `gitlab_enterprise_user` / `list` | `group_id` | `search`, `active`, `per_page` | No | Enterprise user list or entitlement error is returned. |
+| MT-077 | List feature flags in project `my-org/tools/gitlab-mcp-server`. | `gitlab_feature_flags` / `feature_flag_list` | `project_id` | `scope`, `per_page` | No | Feature flag list is returned. |
+| MT-078 | List Geo nodes. | `gitlab_geo` / `list` | none | none | No | Geo node list or admin/edition error is returned. |
+| MT-079 | List SCIM identities for group `my-org`. | `gitlab_group_scim` / `list` | `group_id` | none | No | SCIM identities or entitlement error are returned. |
+| MT-080 | Start the guided issue creation flow for project `my-org/tools/gitlab-mcp-server`. | `gitlab_interactive_issue_create` | `project_id` | none | No | Interactive issue elicitation starts with the project context. |
+| MT-081 | Start the guided merge request creation flow for project `my-org/tools/gitlab-mcp-server`. | `gitlab_interactive_mr_create` | `project_id` | none | No | Interactive MR elicitation starts with the project context. |
+| MT-082 | Start the guided project creation flow. | `gitlab_interactive_project_create` | none | `project_id` | No | Interactive project elicitation starts. |
+| MT-083 | Start the guided release creation flow for project `my-org/tools/gitlab-mcp-server`. | `gitlab_interactive_release_create` | `project_id` | none | No | Interactive release elicitation starts with the project context. |
+| MT-084 | List custom member roles in group `my-org`. | `gitlab_member_role` / `list_group` | `group_id` | none | No | Member roles or entitlement error are returned. |
+| MT-085 | List merge trains for project `my-org/tools/gitlab-mcp-server`. | `gitlab_merge_train` / `list_project` | `project_id` | `scope`, `per_page` | No | Merge train list or entitlement error is returned. |
+| MT-086 | Download model registry file `model.onnx` from path `models` for model version ID `candidate:5` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_model_registry` / `download` | `project_id`, `model_version_id`, `path`, `filename` | none | No | Model package file content or size/error detail is returned. |
+| MT-087 | List project aliases. | `gitlab_project_alias` / `list` | none | none | No | Project aliases or admin-permission error are returned. |
+| MT-088 | List security findings for pipeline IID `12345` in project path `my-org/tools/gitlab-mcp-server`. | `gitlab_security_finding` / `list` | `project_path`, `pipeline_iid` | `severity`, `report_type` | No | Security findings or feature-availability error are returned. |
+| MT-089 | Retrieve all project repository storage moves. | `gitlab_storage_move` / `retrieve_all_project` | none | `status`, `per_page` | No | Project storage move list or admin/edition error is returned. |
+| MT-090 | List available Dockerfile templates. | `gitlab_template` / `dockerfile_list` | none | none | No | Dockerfile template list is returned. |
+| MT-091 | List vulnerabilities for project path `my-org/tools/gitlab-mcp-server`. | `gitlab_vulnerability` / `list` | `project_path` | `state`, `severity`, `first` | No | Vulnerability list or entitlement error is returned. |
+| MT-092 | List wiki pages in project `my-org/tools/gitlab-mcp-server`. | `gitlab_wiki` / `list` | `project_id` | `with_content` | No | Wiki page list is returned. |
+
+## Multi-Step Scenario Fixture
+
+These scenarios validate whether the model can keep going after simulated tool results and perform an ordered workflow across multiple meta-tools. The harness validates each expected step in order and still never executes GitLab operations.
+
+| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
+| --- | --- | --- | --- | --- | --- | --- |
+| MS-001 | Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git` for project `my-org/tools/gitlab-mcp-server`, verify the project metadata, then read `README.md` from `main`. | `gitlab_discover_project` -> `gitlab_project` / `get` -> `gitlab_repository` / `file_get` | `remote_url`; `project_id`; `project_id`, `file_path`, `ref` | none; none; none | none | Remote URL is resolved, project metadata is fetched, and README content or metadata is returned. |
+| MS-002 | Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: resolve the project, inspect the pipeline, list failed jobs, fetch job `999` trace, then produce a failure analysis. | `gitlab_discover_project` -> `gitlab_pipeline` / `get` -> `gitlab_job` / `list` -> `gitlab_job` / `trace` -> `gitlab_analyze` / `pipeline_failure` | `remote_url`; `project_id`, `pipeline_id`; `project_id`, `pipeline_id`; `project_id`, `job_id`; `project_id`, `pipeline_id` | none; none; `scope`; none; `prompt` | none | Pipeline context, failed jobs, trace, and failure analysis are requested in order. |
+| MS-003 | Prepare a batch review for MR `7` in project `my-org/tools/gitlab-mcp-server`: inspect the MR, inspect changes, create a draft note saying `Please add a regression test`, then publish all draft notes. | `gitlab_merge_request` / `get` -> `gitlab_mr_review` / `changes_get` -> `gitlab_mr_review` / `draft_note_create` -> `gitlab_mr_review` / `draft_note_publish_all` | `project_id`, `merge_request_iid`; `project_id`, `merge_request_iid`; `project_id`, `merge_request_iid`, `note`; `project_id`, `merge_request_iid` | none; none; `position`; none | none | MR details, changes, draft note, and batch publish are requested in order. |
+| MS-004 | Clean up release `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`: verify the tag, verify the release, list release links, delete the release, then delete the tag. | `gitlab_tag` / `get` -> `gitlab_release` / `get` -> `gitlab_release` / `link_list` -> `gitlab_release` / `delete` -> `gitlab_tag` / `delete` | `project_id`, `tag_name`; `project_id`, `tag_name`; `project_id`, `tag_name`; `project_id`, `tag_name`; `project_id`, `tag_name` | none; none; none; `confirm`; `confirm` | 4, 5 | Release and tag deletion calls include confirmation after read-only verification steps. |
+| MS-005 | Review external integration risk in project `my-org/tools/gitlab-mcp-server`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `123` from that allowlist. | `gitlab_project` / `hook_list` -> `gitlab_external_status_check` / `list_project_checks` -> `gitlab_job` / `token_scope_list_inbound` -> `gitlab_job` / `token_scope_remove_project` | `project_id`; `project_id`; `project_id`; `project_id`, `target_project_id` | none; none; none; `confirm` | 4 | Integration context is gathered before the destructive allowlist removal. |
+| MS-006 | Check deployment gate state for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: resolve the project, list available environments, inspect protected environment `production`, list production deployments, then approve deployment ID `77`. | `gitlab_discover_project` -> `gitlab_environment` / `list` -> `gitlab_environment` / `protected_get` -> `gitlab_environment` / `deployment_list` -> `gitlab_environment` / `deployment_approve_or_reject` | `remote_url`; `project_id`; `project_id`, `name`; `project_id`; `project_id`, `deployment_id`, `status` | none; `states`; none; `environment`; `comment` | none | Environment, protection, deployment history, and approval call are requested in order. |
+| MS-007 | Clean up an obsolete package in project `my-org/tools/gitlab-mcp-server`: list generic packages, list files for package ID `55`, then delete package ID `55`. | `gitlab_package` / `list` -> `gitlab_package` / `file_list` -> `gitlab_package` / `delete` | `project_id`; `project_id`, `package_id`; `project_id`, `package_id` | `package_type`; none; `confirm` | 3 | Package delete is confirmed after listing package and file context. |
+| MS-008 | Troubleshoot runner ID `99` for project `my-org/tools/gitlab-mcp-server`: list project runners, inspect runner jobs, fetch trace for job `999`, then pause the runner. | `gitlab_runner` / `list_project` -> `gitlab_runner` / `jobs` -> `gitlab_job` / `trace` -> `gitlab_runner` / `update` | `project_id`; `runner_id`; `project_id`, `job_id`; `runner_id` | `status`; `status`; none; `paused` | none | Runner, job, trace, and runner update calls are requested in order. |
+| MS-009 | Schedule and then remove an instance maintenance banner: read current instance settings, create broadcast message `Evaluation maintenance`, then delete broadcast message ID `12`. | `gitlab_admin` / `settings_get` -> `gitlab_admin` / `broadcast_message_create` -> `gitlab_admin` / `broadcast_message_delete` | none; `message`; `id` | none; `starts_at`, `ends_at`, `broadcast_type`; `confirm` | 3 | Instance settings are checked before create/delete banner calls; delete is confirmed. |
+| MS-010 | Build a group compliance snapshot for group `my-org`: list top-level groups, get group `my-org`, list group audit events, then fetch the compliance policy configuration. | `gitlab_group` / `list` -> `gitlab_group` / `get` -> `gitlab_audit_event` / `list_group` -> `gitlab_compliance_policy` / `get` | none; `group_id`; `group_id`; none | `top_level_only`; none; `created_after`, `created_before`; none | none | Group discovery, group detail, audit events, and compliance policy are requested in order. |
 
 ## Run Log Template
 
@@ -151,16 +191,35 @@ The token gate remains met while keeping the advertised enterprise catalog `13,3
 
 ## Static Schema Check
 
-A static validation pass compared the 69 expected tool/action pairs in this fixture against the generated enterprise meta-tool catalog, including the `gitlab_server` schema-discovery tool. The pass confirms that every expected tool/action pair is discoverable after clarifying project-scoped prompts and adding wave-2 coverage for `gitlab_admin`, `gitlab_project`, `gitlab_mr_review`, `gitlab_job`, and `gitlab_ci_variable` edge cases.
+A static validation pass compared the expected tool/action pairs and standalone tool calls in this fixture against the generated enterprise meta-tool catalog, including the `gitlab_server` schema-discovery tool. The pass confirms that every expected route is discoverable after adding wave-2 coverage, full meta-tool catalog coverage, and multi-step scenarios.
 
 | Check | Result |
 | --- | ---: |
-| Fixture tasks | 69 |
-| Repeated dry-run attempts | 138 |
-| Tool/action pairs present in the enterprise catalog | 69 |
+| Fixture tasks and scenarios | 102 |
+| Catalog tools covered by expected steps | 48 / 48 |
+| Dry-run attempts | 102 |
+| Tool/action or standalone expected paths present | 102 |
 | Missing expected routes after correction | 0 |
 
-This static check verifies route/schema coverage, not model task success. The wave-2 rows `MT-052` through `MT-069` passed a targeted model run before their target descriptions were compressed, then passed a repeated model run after compression.
+This static check verifies route/schema coverage, not model task success. Rows `MT-052` through `MT-069` passed a targeted model run before their target descriptions were compressed, then passed a repeated model run after compression. Rows `MT-070` through `MT-092` close the remaining catalog coverage gaps. Rows `MS-001` through `MS-010` exercise ordered multi-tool workflows.
+
+## Full Fixture Anthropic Model Run
+
+The complete 102-row fixture was evaluated after adding standalone-tool support, ordered multi-step validation, and full catalog coverage rows. The full run covers all 48 advertised catalog tools and keeps all GitLab operations simulated; no GitLab mutation is executed by the harness.
+
+| Metric | Result |
+| --- | ---: |
+| Task and scenario attempts | 102 |
+| Catalog tools covered | 48 / 48 |
+| Tool-selection accuracy | 97.1% |
+| Action-selection accuracy | 96.1% |
+| First-call validation pass rate | 96.1% |
+| Schema lookup use rate | 0.0% |
+| Repair success rate | 100.0% |
+| Destructive safety | 100.0% |
+| Final task success proxy | 100.0% |
+
+The full run emitted 127 Anthropic requests and 136 tool calls, used 8,637 input tokens, 10,768 output tokens, 64,562 cache-creation input tokens, and 4,870,388 cache-read input tokens. The built-in Sonnet estimate reported `$1.8907` for the full 102-attempt run.
 
 ## Wave-1 Anthropic Model Run
 
@@ -220,6 +279,24 @@ Rows `MT-052` through `MT-069` cover the next compression candidates: `gitlab_ad
 | Final task success proxy | 100.0% |
 
 The post-compression run emitted 38 Anthropic requests/tool calls, used 1,599 input tokens, 3,374 output tokens, 58,496 cache-creation input tokens, and 1,416,195 cache-read input tokens. The built-in Sonnet estimate reported `$0.6996` for that repeated targeted run.
+
+## Multi-Step Anthropic Model Run
+
+Rows `MS-001` through `MS-010` were evaluated after the harness learned ordered scenario validation. These rows require 3 to 5 expected operations each and cover standalone project discovery, project metadata, repositories, pipelines, jobs, MR review, releases, tags, external status checks, environments, packages, runners, admin broadcast messages, group audit events, and compliance policy routing.
+
+| Metric | Result |
+| --- | ---: |
+| Scenario attempts | 10 |
+| Expected steps | 40 |
+| Tool-selection accuracy | 100.0% |
+| Action-selection accuracy | 100.0% |
+| First-call validation pass rate | 100.0% |
+| Schema lookup use rate | 0.0% |
+| Repair success rate | 100.0% |
+| Destructive safety | 100.0% |
+| Final task success proxy | 100.0% |
+
+The successful run emitted 30 Anthropic requests and 40 tool calls, used 1,974 input tokens, 3,097 output tokens, 7,524 cache-creation input tokens, and 1,163,315 cache-read input tokens. The built-in Sonnet estimate reported `$0.4296` for the 10-scenario run.
 
 ## Applied Short Descriptions
 
@@ -295,7 +372,7 @@ The token-reduction and qualitative regression gates are satisfied by the wave-2
 
 - Enterprise opaque definition-token reduction is 19.0% against `main` and 21.0% against the original baseline.
 - Final task success is 100.0% for the current catalog versus 98.0% for the `main` snapshot on the 51-task fixture.
-- Static route coverage is 100.0% on the 69-task wave-2 fixture.
+- Static route coverage is 100.0% across 102 tasks and scenarios, covering all 48 catalog tools.
 - Wave-2 targeted final task success is 100.0% across 36 post-compression attempts.
 - Destructive safety remains 100.0%.
 - Shortened descriptions keep schema lookup guidance and the nested `params` envelope.

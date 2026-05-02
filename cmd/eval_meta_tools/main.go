@@ -42,7 +42,7 @@ const (
 	defaultModel     = "claude-sonnet-4-6"
 	anthropicAPI     = "https://api.anthropic.com/v1/messages"
 	anthropicVersion = "2023-06-01"
-	toolCallLimit    = 4
+	toolCallLimit    = 12
 )
 
 type options struct {
@@ -64,6 +64,15 @@ type options struct {
 type evalTask struct {
 	ID             string
 	Prompt         string
+	ExpectedTool   string
+	ExpectedAction string
+	RequiredParams []string
+	OptionalParams []string
+	Destructive    bool
+	Steps          []evalStep
+}
+
+type evalStep struct {
 	ExpectedTool   string
 	ExpectedAction string
 	RequiredParams []string
@@ -162,6 +171,7 @@ type taskResult struct {
 	FinalAction      string
 	FinalSuccess     bool
 	DestructiveSafe  bool
+	CompletedSteps   int
 	AnthropicCalls   int
 	ToolCalls        int
 	Usage            anthropicUsage
@@ -221,11 +231,12 @@ func run() error {
 	}
 
 	if opts.DryRun {
+		toolNames := catalogToolNames(anthropicTools)
 		results := make([]taskResult, 0, len(tasks)*opts.Repeat)
 		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
-			results = append(results, runStaticValidation(tasks, routes, runIndex)...)
+			results = append(results, runStaticValidation(tasks, routes, toolNames, runIndex)...)
 		}
-		return writeReport(opts.Output, opts, results, len(anthropicTools), true)
+		return writeReport(opts.Output, opts, results, anthropicTools, true)
 	}
 
 	apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
@@ -256,7 +267,7 @@ func run() error {
 		}
 	}
 
-	return writeReport(opts.Output, opts, results, len(anthropicTools), false)
+	return writeReport(opts.Output, opts, results, anthropicTools, false)
 }
 
 func parseFlags() options {
@@ -327,47 +338,107 @@ func parseTasksMarkdown(markdown string) ([]evalTask, error) {
 	var tasks []evalTask
 	for line := range strings.SplitSeq(markdown, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "| MT-") {
+		if !isTaskRow(line) {
 			continue
 		}
 		cols := splitMarkdownRow(line)
 		if len(cols) < 7 {
 			return nil, fmt.Errorf("task row has %d columns, want at least 7: %s", len(cols), line)
 		}
-		tool, action, err := parseExpectedToolAction(cols[2])
+		task, err := parseTaskRow(cols)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", cols[0], err)
 		}
-		tasks = append(tasks, evalTask{
-			ID:             cols[0],
-			Prompt:         cols[1],
-			ExpectedTool:   tool,
-			ExpectedAction: action,
-			RequiredParams: parseParamList(cols[3]),
-			OptionalParams: parseParamList(cols[4]),
-			Destructive:    strings.EqualFold(cols[5], "yes"),
-		})
+		tasks = append(tasks, task)
 	}
 	if len(tasks) == 0 {
-		return nil, errors.New("no MT-* task rows found")
+		return nil, errors.New("no MT-* or MS-* task rows found")
 	}
 	return tasks, nil
+}
+
+func isTaskRow(line string) bool {
+	return strings.HasPrefix(line, "| MT-") || strings.HasPrefix(line, "| MS-")
+}
+
+func parseTaskRow(cols []string) (evalTask, error) {
+	steps, err := parseExpectedSteps(cols[2])
+	if err != nil {
+		return evalTask{}, err
+	}
+	requiredGroups, err := parseParamGroups(cols[3], len(steps))
+	if err != nil {
+		return evalTask{}, fmt.Errorf("required params: %w", err)
+	}
+	optionalGroups, err := parseParamGroups(cols[4], len(steps))
+	if err != nil {
+		return evalTask{}, fmt.Errorf("optional params: %w", err)
+	}
+	destructiveFlags, err := parseDestructiveSteps(cols[5], len(steps))
+	if err != nil {
+		return evalTask{}, fmt.Errorf("destructive steps: %w", err)
+	}
+	for i := range steps {
+		steps[i].RequiredParams = requiredGroups[i]
+		steps[i].OptionalParams = optionalGroups[i]
+		steps[i].Destructive = destructiveFlags[i]
+	}
+	first := steps[0]
+	return evalTask{
+		ID:             cols[0],
+		Prompt:         cols[1],
+		ExpectedTool:   first.ExpectedTool,
+		ExpectedAction: first.ExpectedAction,
+		RequiredParams: first.RequiredParams,
+		OptionalParams: first.OptionalParams,
+		Destructive:    first.Destructive,
+		Steps:          steps,
+	}, nil
 }
 
 func validateTaskFixture(tasks []evalTask) []string {
 	var problems []string
 	for _, task := range tasks {
-		if hasParam(task.RequiredParams, "project_id") && !promptNamesEntity(task.Prompt, "project") {
-			problems = append(problems, fmt.Sprintf("%s requires project_id but prompt does not name a project", task.ID))
-		}
-		if hasParam(task.RequiredParams, "group_id") && !promptNamesEntity(task.Prompt, "group") {
-			problems = append(problems, fmt.Sprintf("%s requires group_id but prompt does not name a group", task.ID))
-		}
-		if task.Destructive && !hasParam(task.OptionalParams, "confirm") && !hasParam(task.RequiredParams, "confirm") {
-			problems = append(problems, fmt.Sprintf("%s is destructive but does not list confirm as a parameter", task.ID))
+		steps := taskSteps(task)
+		for stepIndex, step := range steps {
+			stepLabel := task.ID
+			if len(steps) > 1 {
+				stepLabel = fmt.Sprintf("%s step %d", task.ID, stepIndex+1)
+			}
+			if hasParam(step.RequiredParams, "project_id") && !promptNamesEntity(task.Prompt, "project") {
+				problems = append(problems, fmt.Sprintf("%s requires project_id but prompt does not name a project", stepLabel))
+			}
+			if hasParam(step.RequiredParams, "group_id") && !promptNamesEntity(task.Prompt, "group") {
+				problems = append(problems, fmt.Sprintf("%s requires group_id but prompt does not name a group", stepLabel))
+			}
+			if step.Destructive && !hasParam(step.OptionalParams, "confirm") && !hasParam(step.RequiredParams, "confirm") {
+				problems = append(problems, fmt.Sprintf("%s is destructive but does not list confirm as a parameter", stepLabel))
+			}
 		}
 	}
 	return problems
+}
+
+func taskSteps(task evalTask) []evalStep {
+	if len(task.Steps) > 0 {
+		return task.Steps
+	}
+	return []evalStep{{
+		ExpectedTool:   task.ExpectedTool,
+		ExpectedAction: task.ExpectedAction,
+		RequiredParams: task.RequiredParams,
+		OptionalParams: task.OptionalParams,
+		Destructive:    task.Destructive,
+	}}
+}
+
+func taskHasDestructiveStep(task evalTask) bool {
+	for _, step := range taskSteps(task) {
+		if step.Destructive {
+			return true
+		}
+	}
+	return false
 }
 
 func hasParam(params []string, needle string) bool {
@@ -395,15 +466,86 @@ func splitMarkdownRow(line string) []string {
 
 func parseExpectedToolAction(value string) (tool, action string, err error) {
 	parts := strings.Split(value, "/")
+	if len(parts) == 1 {
+		tool = strings.Trim(strings.TrimSpace(parts[0]), "`")
+		if tool == "" {
+			return "", "", fmt.Errorf("empty tool in %q", value)
+		}
+		return tool, "", nil
+	}
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("expected tool/action pair, got %q", value)
+		return "", "", fmt.Errorf("expected tool/action pair or standalone tool, got %q", value)
 	}
 	tool = strings.Trim(strings.TrimSpace(parts[0]), "`")
 	action = strings.Trim(strings.TrimSpace(parts[1]), "`")
-	if tool == "" || action == "" {
+	if strings.EqualFold(action, "none") || action == "-" {
+		action = ""
+	}
+	if tool == "" {
 		return "", "", fmt.Errorf("empty tool/action in %q", value)
 	}
 	return tool, action, nil
+}
+
+func parseExpectedSteps(value string) ([]evalStep, error) {
+	parts := strings.Split(value, "->")
+	steps := make([]evalStep, 0, len(parts))
+	for _, part := range parts {
+		tool, action, err := parseExpectedToolAction(strings.TrimSpace(part))
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, evalStep{ExpectedTool: tool, ExpectedAction: action})
+	}
+	if len(steps) == 0 {
+		return nil, errors.New("empty expected sequence")
+	}
+	return steps, nil
+}
+
+func parseParamGroups(value string, stepCount int) ([][]string, error) {
+	if stepCount == 1 {
+		return [][]string{parseParamList(value)}, nil
+	}
+	groups := strings.Split(value, ";")
+	if len(groups) != stepCount {
+		return nil, fmt.Errorf("got %d groups, want %d semicolon-separated groups", len(groups), stepCount)
+	}
+	out := make([][]string, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, parseParamList(group))
+	}
+	return out, nil
+}
+
+func parseDestructiveSteps(value string, stepCount int) ([]bool, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	flags := make([]bool, stepCount)
+	if value == "" || value == "none" || value == "no" {
+		return flags, nil
+	}
+	if value == "yes" {
+		if stepCount != 1 {
+			return nil, errors.New("use 1-based step numbers or all for multi-step destructive scenarios")
+		}
+		flags[0] = true
+		return flags, nil
+	}
+	if value == "all" {
+		for i := range flags {
+			flags[i] = true
+		}
+		return flags, nil
+	}
+	for rawPart := range strings.SplitSeq(value, ",") {
+		part := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(rawPart), "step "))
+		stepNumber, err := strconv.Atoi(part)
+		if err != nil || stepNumber < 1 || stepNumber > stepCount {
+			return nil, fmt.Errorf("invalid step number %q", rawPart)
+		}
+		flags[stepNumber-1] = true
+	}
+	return flags, nil
 }
 
 func parseParamList(value string) []string {
@@ -411,9 +553,8 @@ func parseParamList(value string) []string {
 	if value == "" || strings.EqualFold(value, "none") {
 		return nil
 	}
-	parts := strings.Split(value, ",")
-	params := make([]string, 0, len(parts))
-	for _, part := range parts {
+	params := make([]string, 0)
+	for part := range strings.SplitSeq(value, ",") {
 		name := strings.Trim(strings.TrimSpace(part), "`")
 		if name != "" {
 			params = append(params, name)
@@ -539,6 +680,14 @@ func convertSnapshotTools(snapshot []snapshotTool) []anthropicTool {
 	return out
 }
 
+func catalogToolNames(catalog []anthropicTool) map[string]bool {
+	names := make(map[string]bool, len(catalog))
+	for _, tool := range catalog {
+		names[tool.Name] = true
+	}
+	return names
+}
+
 func routesFromSnapshot(snapshot []snapshotTool) map[string]toolutil.ActionMap {
 	routes := make(map[string]toolutil.ActionMap, len(snapshot))
 	for _, tool := range snapshot {
@@ -588,10 +737,12 @@ type anthropicRunner struct {
 }
 
 func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catalog []anthropicTool, routes map[string]toolutil.ActionMap) taskResult {
-	result := taskResult{Task: task}
+	steps := taskSteps(task)
+	result := taskResult{Task: task, DestructiveSafe: true}
 	messages := []anthropicMessage{{Role: "user", Content: []anthropicContentBlock{{Type: "text", Text: taskPrompt(task)}}}}
 	firstFinalAttempt := true
 	repairSent := false
+	stepIndex := 0
 
 	for range toolCallLimit {
 		response, err := r.call(ctx, catalog, messages)
@@ -610,7 +761,6 @@ func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catal
 		}
 
 		var followups []anthropicContentBlock
-		finalProcessed := false
 		for _, toolUse := range toolUses {
 			if isSchemaLookup(toolUse) {
 				result.SchemaLookupUsed = true
@@ -621,13 +771,12 @@ func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catal
 				}
 				continue
 			}
-			if finalProcessed {
-				followups = append(followups, toolResultBlock(toolUse.ID, "extra final tool call ignored", errors.New("extra final tool call ignored")))
+			if stepIndex >= len(steps) {
+				followups = append(followups, toolResultBlock(toolUse.ID, "scenario already completed", errors.New("scenario already completed")))
 				continue
 			}
 
-			finalProcessed = true
-			validation := validateToolCall(task, toolUse.Name, toolUse.Input)
+			validation := validateStepCall(steps[stepIndex], toolUse.Name, toolUse.Input)
 			if firstFinalAttempt {
 				result.FirstTool = toolUse.Name
 				result.FirstAction = validation.Action
@@ -636,16 +785,22 @@ func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catal
 			}
 			result.FinalTool = toolUse.Name
 			result.FinalAction = validation.Action
-			result.DestructiveSafe = validation.DestructiveSafe
+			result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
 			if validation.Valid {
-				result.FinalSuccess = true
+				stepIndex++
+				result.CompletedSteps = stepIndex
 				if repairSent {
 					result.RepairSuccess = true
 				}
-				return result
+				if stepIndex == len(steps) {
+					result.FinalSuccess = true
+					return result
+				}
+				followups = append(followups, toolResultBlock(toolUse.ID, fmt.Sprintf("ok; continue with step %d of %d", stepIndex+1, len(steps)), nil))
+				continue
 			}
 
-			result.Notes = append(result.Notes, validation.Message)
+			result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
 			if repairSent {
 				return result
 			}
@@ -659,7 +814,7 @@ func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catal
 		}
 	}
 
-	result.Notes = append(result.Notes, "tool-call step limit reached")
+	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
 }
 
@@ -813,53 +968,105 @@ func toolResultBlock(toolUseID, content string, err error) anthropicContentBlock
 }
 
 func systemPrompt() string {
-	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Every final task call must use the meta-tool envelope {"action":"...","params":{...}}. You may call gitlab_server schema_index or schema_get first when you need exact params. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true inside params when making the final task call. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}. Standalone tools without an action enum use their input schema directly. You may call gitlab_server schema_index or schema_get first when you need exact params. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. Return tool calls only; do not answer with explanatory text.`
 }
 
 func taskPrompt(task evalTask) string {
 	destructive := "No"
-	if task.Destructive {
+	if taskHasDestructiveStep(task) {
 		destructive = "Yes; include confirm:true in params for the final task call."
+	}
+	if len(taskSteps(task)) > 1 {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nPerform the full scenario. You may need several MCP tool calls; after each simulated result, continue with the next needed GitLab operation until the scenario is complete.", task.ID, task.Prompt, destructive)
 	}
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nChoose the next MCP tool call needed to perform this task. You may look up schemas first, but the final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive)
 }
 
 func validateToolCall(task evalTask, toolName string, input map[string]any) validationResult {
+	return validateStepCall(taskSteps(task)[0], toolName, input)
+}
+
+func validateStepCall(step evalStep, toolName string, input map[string]any) validationResult {
+	if step.ExpectedAction == "" {
+		return validateStandaloneToolCall(step, toolName, input)
+	}
+	return validateActionToolCall(step, toolName, input)
+}
+
+func validateActionToolCall(step evalStep, toolName string, input map[string]any) validationResult {
 	action, _ := input["action"].(string)
 	params, _ := input["params"].(map[string]any)
 	if params == nil {
 		params = map[string]any{}
 	}
 	result := validationResult{
-		ToolMatches:     toolName == task.ExpectedTool,
-		ActionMatches:   action == task.ExpectedAction,
+		ToolMatches:     toolName == step.ExpectedTool,
+		ActionMatches:   action == step.ExpectedAction,
 		RequiredPresent: true,
 		Action:          action,
 	}
 
 	var problems []string
 	if !result.ToolMatches {
-		problems = append(problems, fmt.Sprintf("expected tool %s, got %s", task.ExpectedTool, toolName))
+		problems = append(problems, fmt.Sprintf("expected tool %s, got %s", step.ExpectedTool, toolName))
 	}
 	if !result.ActionMatches {
-		problems = append(problems, fmt.Sprintf("expected action %s, got %s", task.ExpectedAction, action))
+		problems = append(problems, fmt.Sprintf("expected action %s, got %s", step.ExpectedAction, action))
 	}
 	for key := range input {
 		if key != "action" && key != "params" {
 			problems = append(problems, fmt.Sprintf("unexpected top-level parameter %s; put action-specific fields under params", key))
 		}
 	}
-	for _, required := range task.RequiredParams {
+	for _, required := range step.RequiredParams {
 		if _, ok := params[required]; !ok {
 			result.RequiredPresent = false
 			problems = append(problems, fmt.Sprintf("missing required params.%s", required))
 		}
 	}
 	result.DestructiveSafe = true
-	if task.Destructive {
+	if step.Destructive && result.ToolMatches && result.ActionMatches {
 		result.DestructiveSafe = isTruthy(params["confirm"])
 		if !result.DestructiveSafe {
 			problems = append(problems, "destructive task requires params.confirm=true")
+		}
+	}
+	result.Valid = len(problems) == 0
+	if result.Valid {
+		result.Message = "ok"
+	} else {
+		result.Message = strings.Join(problems, "; ")
+	}
+	return result
+}
+
+func validateStandaloneToolCall(step evalStep, toolName string, input map[string]any) validationResult {
+	result := validationResult{
+		ToolMatches:     toolName == step.ExpectedTool,
+		ActionMatches:   true,
+		RequiredPresent: true,
+	}
+	var problems []string
+	if !result.ToolMatches {
+		problems = append(problems, fmt.Sprintf("expected tool %s, got %s", step.ExpectedTool, toolName))
+	}
+	if _, ok := input["action"]; ok {
+		problems = append(problems, "standalone tool must not include action")
+	}
+	if _, ok := input["params"]; ok {
+		problems = append(problems, "standalone tool uses top-level input fields, not params")
+	}
+	for _, required := range step.RequiredParams {
+		if _, ok := input[required]; !ok {
+			result.RequiredPresent = false
+			problems = append(problems, fmt.Sprintf("missing required %s", required))
+		}
+	}
+	result.DestructiveSafe = true
+	if step.Destructive && result.ToolMatches {
+		result.DestructiveSafe = isTruthy(input["confirm"])
+		if !result.DestructiveSafe {
+			problems = append(problems, "destructive standalone task requires confirm=true")
 		}
 	}
 	result.Valid = len(problems) == 0
@@ -883,23 +1090,43 @@ func isTruthy(value any) bool {
 	}
 }
 
-func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap, runIndex int) []taskResult {
+func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap, toolNames map[string]bool, runIndex int) []taskResult {
 	results := make([]taskResult, 0, len(tasks))
 	for _, task := range tasks {
-		_, ok := routes[task.ExpectedTool][task.ExpectedAction]
-		result := taskResult{Task: task, Run: runIndex, FirstTool: task.ExpectedTool, FirstAction: task.ExpectedAction, FinalTool: task.ExpectedTool, FinalAction: task.ExpectedAction, DestructiveSafe: true}
-		if ok {
+		steps := taskSteps(task)
+		first := steps[0]
+		last := steps[len(steps)-1]
+		result := taskResult{Task: task, Run: runIndex, FirstTool: first.ExpectedTool, FirstAction: first.ExpectedAction, FinalTool: last.ExpectedTool, FinalAction: last.ExpectedAction, DestructiveSafe: true}
+		missing := missingRoutes(steps, routes, toolNames)
+		if len(missing) == 0 {
 			result.FirstPass = true
 			result.FinalSuccess = true
+			result.CompletedSteps = len(steps)
 		} else {
-			result.Notes = append(result.Notes, "expected route missing from catalog")
+			result.Notes = append(result.Notes, strings.Join(missing, "; "))
 		}
 		results = append(results, result)
 	}
 	return results
 }
 
-func writeReport(path string, opts options, results []taskResult, toolCount int, dryRun bool) error {
+func missingRoutes(steps []evalStep, routes map[string]toolutil.ActionMap, toolNames map[string]bool) []string {
+	var missing []string
+	for i, step := range steps {
+		if step.ExpectedAction == "" {
+			if !toolNames[step.ExpectedTool] {
+				missing = append(missing, fmt.Sprintf("step %d expected standalone tool %s missing from catalog", i+1, step.ExpectedTool))
+			}
+			continue
+		}
+		if _, ok := routes[step.ExpectedTool][step.ExpectedAction]; !ok {
+			missing = append(missing, fmt.Sprintf("step %d expected route %s/%s missing from catalog", i+1, step.ExpectedTool, step.ExpectedAction))
+		}
+	}
+	return missing
+}
+
+func writeReport(path string, opts options, results []taskResult, catalog []anthropicTool, dryRun bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
 	}
@@ -913,7 +1140,7 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 	fmt.Fprintf(&b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "Mode: %s\n", mode)
 	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
-	fmt.Fprintf(&b, "Catalog tools: %d\n", toolCount)
+	fmt.Fprintf(&b, "Catalog tools: %d\n", len(catalog))
 	fmt.Fprintf(&b, "Runs: %d\n", opts.Repeat)
 	fmt.Fprintf(&b, "Task attempts: %d\n\n", len(results))
 	fmt.Fprintf(&b, "## Metrics\n\n")
@@ -929,9 +1156,10 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 		writePerRunMetrics(&b, results)
 	}
 	writeUsageSummary(&b, opts, results, dryRun)
+	writeFixtureCoverage(&b, catalog, results)
 	fmt.Fprintf(&b, "\n## Task Results\n\n")
-	fmt.Fprintf(&b, "| Run | Task | Expected | First final call | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n")
-	fmt.Fprintf(&b, "| ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | --- |\n")
+	fmt.Fprintf(&b, "| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n")
+	fmt.Fprintf(&b, "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n")
 	for _, result := range results {
 		notes := strings.Join(result.Notes, "; ")
 		if notes == "" {
@@ -941,13 +1169,13 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 		if result.RepairAttempted {
 			repair = boolText(result.RepairSuccess)
 		}
-		fmt.Fprintf(&b, "| %d | %s | `%s` / `%s` | `%s` / `%s` | %s | %s | %s | %s | %d | %d | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d/%d | %s | %s | %s | %s | %d | %d | %s |\n",
 			result.Run,
 			result.Task.ID,
-			result.Task.ExpectedTool,
-			result.Task.ExpectedAction,
-			emptyDash(result.FirstTool),
-			emptyDash(result.FirstAction),
+			escapeTable(expectedDisplay(result.Task)),
+			escapeTable(stepDisplay(result.FirstTool, result.FirstAction)),
+			result.CompletedSteps,
+			len(taskSteps(result.Task)),
 			boolText(result.SchemaLookupUsed),
 			boolText(result.FirstPass),
 			repair,
@@ -962,6 +1190,64 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 	}
 	fmt.Printf("wrote evaluation report: %s\n", path)
 	return nil
+}
+
+func writeFixtureCoverage(b *strings.Builder, catalog []anthropicTool, results []taskResult) {
+	summary := fixtureToolCoverage(catalog, results)
+	fmt.Fprintf(b, "\n## Fixture Tool Coverage\n\n")
+	fmt.Fprintf(b, "| Metric | Value |\n| --- | ---: |\n")
+	fmt.Fprintf(b, "| Catalog tools | %d |\n", summary.Total)
+	fmt.Fprintf(b, "| Tools covered by expected steps | %d |\n", summary.Covered)
+	fmt.Fprintf(b, "| Missing tools | %d |\n", len(summary.Missing))
+	if len(summary.Missing) > 0 {
+		fmt.Fprintf(b, "\nMissing: `%s`\n", strings.Join(summary.Missing, "`, `"))
+	}
+}
+
+type fixtureCoverage struct {
+	Total   int
+	Covered int
+	Missing []string
+}
+
+func fixtureToolCoverage(catalog []anthropicTool, results []taskResult) fixtureCoverage {
+	catalogNames := make([]string, 0, len(catalog))
+	for _, tool := range catalog {
+		catalogNames = append(catalogNames, tool.Name)
+	}
+	sort.Strings(catalogNames)
+	covered := map[string]bool{}
+	for _, result := range results {
+		for _, step := range taskSteps(result.Task) {
+			covered[step.ExpectedTool] = true
+		}
+	}
+	var missing []string
+	for _, name := range catalogNames {
+		if !covered[name] {
+			missing = append(missing, name)
+		}
+	}
+	return fixtureCoverage{Total: len(catalogNames), Covered: len(catalogNames) - len(missing), Missing: missing}
+}
+
+func expectedDisplay(task evalTask) string {
+	steps := taskSteps(task)
+	parts := make([]string, 0, len(steps))
+	for _, step := range steps {
+		parts = append(parts, stepDisplay(step.ExpectedTool, step.ExpectedAction))
+	}
+	return strings.Join(parts, " -> ")
+}
+
+func stepDisplay(tool, action string) string {
+	if tool == "" {
+		return "-"
+	}
+	if action == "" {
+		return fmt.Sprintf("`%s`", tool)
+	}
+	return fmt.Sprintf("`%s` / `%s`", tool, action)
 }
 
 func writePerRunMetrics(b *strings.Builder, results []taskResult) {
@@ -1081,10 +1367,11 @@ func calculateMetrics(results []taskResult) metrics {
 	var toolOK, actionOK, firstOK, lookupOK, destructiveTotal, destructiveOK, finalOK int
 	var repairTotal, repairOK int
 	for _, result := range results {
-		if result.FirstTool == result.Task.ExpectedTool {
+		first := taskSteps(result.Task)[0]
+		if result.FirstTool == first.ExpectedTool {
 			toolOK++
 		}
-		if result.FirstAction == result.Task.ExpectedAction {
+		if result.FirstAction == first.ExpectedAction {
 			actionOK++
 		}
 		if result.FirstPass {
@@ -1099,7 +1386,7 @@ func calculateMetrics(results []taskResult) metrics {
 				repairOK++
 			}
 		}
-		if result.Task.Destructive {
+		if taskHasDestructiveStep(result.Task) {
 			destructiveTotal++
 			if result.DestructiveSafe {
 				destructiveOK++
@@ -1132,13 +1419,6 @@ func boolText(value bool) string {
 		return "Yes"
 	}
 	return "No"
-}
-
-func emptyDash(value string) string {
-	if value == "" {
-		return "-"
-	}
-	return value
 }
 
 func escapeTable(value string) string {
