@@ -1,44 +1,104 @@
-# Meta-Tool Schema Discovery Evaluation
+# Automated Meta-Tool Evaluation Cases
 
-> **Purpose**: Evaluate whether model-controlled schema discovery (`gitlab_server` `schema_index` / `schema_get`) keeps default opaque meta-tool schemas usable while reducing the need to inline every action schema in `tools/list`.
->
-> **Catalog mode**: `META_TOOLS=true`, `META_PARAM_SCHEMA=opaque`.
-> **Baseline**: production enterprise opaque catalog before description compression.
-> **Compressed catalog**: production descriptions shortened for the heaviest meta-tools while preserving schema lookup, nested `params`, unknown-key rejection, destructive confirmation guidance, and focused repair hints.
+This document is both a human-readable reference and the default fixture parsed by `cmd/eval_meta_tools`.
 
----
+The rows beginning with `MT-*` and `MS-*` are executable fixture rows. The harness reads this file, extracts those rows, sends the `Prompt` text to the model with a fixed wrapper, and validates the model's tool calls against the expected route, required parameters, step order, and destructive confirmation rules.
 
-## How to Run
+## What The Automated Evaluation Tests
 
-1. Start the server with the default opaque meta-tool mode.
-2. Send each task prompt to the target model in a fresh or controlled conversation.
-3. Record every tool call in the run log table below.
-4. Compare the observed tool/action/params with the expected path.
-5. Repeat the same task set against the compressed description catalog.
+The evaluation tests the model-facing MCP catalog, not live GitLab behavior.
 
-The repository also includes a local Anthropic harness that sends the production meta-tool catalog as tool definitions, simulates `gitlab_server` `schema_index` / `schema_get`, validates the selected tool calls, and never executes GitLab operations:
+| Layer | What is tested |
+| --- | --- |
+| Tool catalog | The model receives the generated MCP `tools/list` catalog converted to Anthropic tool definitions. |
+| Route selection | The model must choose the expected MCP tool and action for each prompt. |
+| Parameter shape | Action-based meta-tools must use `{ "action": "...", "params": { ... } }`; standalone tools must use top-level input fields. |
+| Required parameters | The expected required parameter names must be present in the emitted tool call. |
+| Schema discovery | The model may call `gitlab_server` / `schema_index` or `schema_get`; the harness returns the real derived action schema. |
+| Repair behavior | If the first final call fails validation, the harness returns an error `tool_result` and allows one repair attempt. |
+| Multi-step workflows | `MS-*` rows must complete each expected step in order after simulated success results. |
+| Destructive safety | Destructive expected routes must include `confirm:true` on the destructive call. |
 
-```bash
-go run ./cmd/eval_meta_tools/ --model claude-sonnet-4-6 \
-  --out plan/metatool-token-schema-research/evals/anthropic-sonnet-4-6-current.md
+## What Is Mocked
+
+The harness does not start an external MCP process and does not call live GitLab operations.
+
+| Component | Behavior |
+| --- | --- |
+| MCP server catalog | Built in memory with the Go MCP SDK using `mcp.NewInMemoryTransports`. |
+| GitLab client during catalog build | Backed by a tiny `httptest` server that returns `{"version":"17.0.0"}`. This is only enough to build/register the catalog. |
+| `--tools-file` mode | Skips local catalog generation and validates against a saved `tools/list` JSON snapshot. |
+| Final GitLab operation calls | Never executed. The harness only validates the tool call shape and returns simulated `tool_result` blocks. |
+| Schema lookup calls | Simulated from local `toolutil` route metadata, returning the real schema index or action schema. |
+| Anthropic API | Real model API in model-backed mode; skipped entirely in `--dry-run` mode. |
+
+## Evaluation Flow
+
+```mermaid
+flowchart TD
+    A[Read this Markdown fixture] --> B[Parse MT/MS rows]
+    B --> C[Build or load MCP tools/list catalog]
+    C --> D{Mode}
+    D -->|--dry-run| E[Validate expected routes exist]
+    D -->|model-backed| F[Send catalog and fixed system prompt to Anthropic]
+    F --> G[Send wrapped task prompt]
+    G --> H{Model tool_use}
+    H -->|schema lookup| I[Return real schema index/action schema]
+    H -->|final operation| J[Validate tool/action/params/confirm]
+    J -->|valid multi-step| K[Return ok; continue]
+    K --> H
+    J -->|valid final step| L[Mark final success]
+    J -->|invalid first attempt| M[Return error tool_result]
+    M --> H
+    E --> N[Write Markdown report]
+    L --> N
 ```
 
-Use `--dry-run` for static route validation, `--repeat=N` for repeated runs, `--max-tasks=N` for a smoke test, `--task MT-035` for a targeted rerun, or `--tools-file=/path/to/tools_meta.json` to evaluate a saved `tools/list` snapshot such as the `main` branch catalog. The harness reads `ANTHROPIC_API_KEY` from the environment or `.env` and reports Anthropic request/tool-call counts, token usage, and optional cost estimates.
+## Model Prompt Template
 
-## Metrics
+Every model-backed case uses the same system prompt:
 
-| Metric | Definition | Target |
-| --- | --- | --- |
-| Catalog tokens | Total advertised tool-definition tokens from `go run ./cmd/audit_tokens/` | Lower is better |
-| Tool-selection accuracy | First selected meta-tool matches expected tool | >= 95% |
-| Action-selection accuracy | First selected action matches expected action | >= 95% |
-| First-call validation pass rate | First tool call succeeds without schema or validation repair | >= 90% |
-| Schema lookup use rate | Model calls `gitlab_server` `schema_get` or reads schema resource before uncertain actions | Track only |
-| Repair success rate | Model corrects an `IsError` validation result on the next attempt | >= 95% |
-| Destructive safety | Destructive calls include explicit confirmation or elicitation flow | 100% |
-| Final task success | Final answer satisfies verifier | >= 95% |
+```text
+You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}. Standalone tools without an action enum use their input schema directly. You may call gitlab_server schema_index or schema_get first when you need exact params. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. Return tool calls only; do not answer with explanatory text.
+```
 
-## Task Fixture
+For single-operation `MT-*` rows, the user message is:
+
+```text
+Task <ID>: <Prompt>
+Destructive: <No|Yes; include confirm:true in params for the final task call.>
+Choose the next MCP tool call needed to perform this task. You may look up schemas first, but the final task call should perform the requested GitLab operation.
+```
+
+For multi-step `MS-*` rows, the user message is:
+
+```text
+Task <ID>: <Prompt>
+Destructive: <No|Yes; include confirm:true in params for the final task call.>
+Perform the full scenario. You may need several MCP tool calls; after each simulated result, continue with the next needed GitLab operation until the scenario is complete.
+```
+
+Example for `MT-020`:
+
+```text
+Task MT-020: Cancel pipeline `12345` in project `my-org/tools/gitlab-mcp-server`.
+Destructive: Yes; include confirm:true in params for the final task call.
+Choose the next MCP tool call needed to perform this task. You may look up schemas first, but the final task call should perform the requested GitLab operation.
+```
+
+## How To Read The Fixture Tables
+
+| Column | Meaning |
+| --- | --- |
+| ID | Stable case identifier. `MT-*` rows are single-operation cases; `MS-*` rows are ordered multi-step scenarios. |
+| Prompt | The natural-language task inserted into the model prompt wrapper above. |
+| Expected tool/action or sequence | The required MCP tool and action. Standalone tools are listed without an action. Multi-step rows use `->`. |
+| Required params | Parameters that must appear in the model's emitted final tool call. Multi-step rows separate step params with semicolons. |
+| Optional params | Parameters that are allowed but not required for validation. Destructive actions normally list `confirm` here. |
+| Destructive or destructive steps | `Yes` for single-step destructive cases, or step numbers for multi-step cases. |
+| Success verifier | Human-readable expected outcome for the simulated result or completed workflow. |
+
+## Single-Operation Fixture
 
 | ID | Prompt | Expected tool/action | Required params | Optional params | Destructive | Success verifier |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -128,7 +188,7 @@ Use `--dry-run` for static route validation, `--repeat=N` for repeated runs, `--
 | MT-084 | List custom member roles in group `my-org`. | `gitlab_member_role` / `list_group` | `group_id` | none | No | Member roles or entitlement error are returned. |
 | MT-085 | List merge trains for project `my-org/tools/gitlab-mcp-server`. | `gitlab_merge_train` / `list_project` | `project_id` | `scope`, `per_page` | No | Merge train list or entitlement error is returned. |
 | MT-086 | Download model registry file `model.onnx` from path `models` for model version ID `candidate:5` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_model_registry` / `download` | `project_id`, `model_version_id`, `path`, `filename` | none | No | Model package file content or size/error detail is returned. |
-| MT-087 | List project aliases. | `gitlab_project_alias` / `list` | none | none | No | Project aliases or admin-permission error are returned. |
+| MT-087 | List project aliases. | `gitlab_project_alias` / `list` | none | none | No | Project aliases or admin-permission error is returned. |
 | MT-088 | List security findings for pipeline IID `12345` in project path `my-org/tools/gitlab-mcp-server`. | `gitlab_security_finding` / `list` | `project_path`, `pipeline_iid` | `severity`, `report_type` | No | Security findings or feature-availability error are returned. |
 | MT-089 | Retrieve all project repository storage moves. | `gitlab_storage_move` / `retrieve_all_project` | none | `status`, `per_page` | No | Project storage move list or admin/edition error is returned. |
 | MT-090 | List available Dockerfile templates. | `gitlab_template` / `dockerfile_list` | none | none | No | Dockerfile template list is returned. |
@@ -136,8 +196,6 @@ Use `--dry-run` for static route validation, `--repeat=N` for repeated runs, `--
 | MT-092 | List wiki pages in project `my-org/tools/gitlab-mcp-server`. | `gitlab_wiki` / `list` | `project_id` | `with_content` | No | Wiki page list is returned. |
 
 ## Multi-Step Scenario Fixture
-
-These scenarios validate whether the model can keep going after simulated tool results and perform an ordered workflow across multiple meta-tools. The harness validates each expected step in order and still never executes GitLab operations.
 
 | ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -152,228 +210,21 @@ These scenarios validate whether the model can keep going after simulated tool r
 | MS-009 | Schedule and then remove an instance maintenance banner: read current instance settings, create broadcast message `Evaluation maintenance`, then delete broadcast message ID `12`. | `gitlab_admin` / `settings_get` -> `gitlab_admin` / `broadcast_message_create` -> `gitlab_admin` / `broadcast_message_delete` | none; `message`; `id` | none; `starts_at`, `ends_at`, `broadcast_type`; `confirm` | 3 | Instance settings are checked before create/delete banner calls; delete is confirmed. |
 | MS-010 | Build a group compliance snapshot for group `my-org`: list top-level groups, get group `my-org`, list group audit events, then fetch the compliance policy configuration. | `gitlab_group` / `list` -> `gitlab_group` / `get` -> `gitlab_audit_event` / `list_group` -> `gitlab_compliance_policy` / `get` | none; `group_id`; `group_id`; none | `top_level_only`; none; `created_after`, `created_before`; none | none | Group discovery, group detail, audit events, and compliance policy are requested in order. |
 
-## Run Log Template
+## Coverage Summary
 
-| Run | Task ID | Catalog variant | First tool/action | Schema lookup used | First-call pass | Repair success | Final success | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | MT-001 | baseline | | | | | | |
-
-## Compression Results
-
-The first compression passes shortened `gitlab_admin`, `gitlab_project`, `gitlab_merge_request`, `gitlab_group`, `gitlab_issue`, `gitlab_repository`, `gitlab_pipeline`, and `gitlab_user`. The quality-preserving compromise then added small targeted hints for `gitlab_search` and milestone deletion.
-
-The expanded pass shortened the next heaviest meta-tools (`gitlab_access`, `gitlab_package`, `gitlab_runner`, `gitlab_environment`, and `gitlab_snippet`) after adding coverage for those domains to the benchmark fixture. Wave 2 added coverage for `gitlab_admin`, `gitlab_project`, `gitlab_mr_review`, `gitlab_job`, and `gitlab_ci_variable`, then shortened those descriptions after a targeted model run passed. The current enterprise opaque catalog is `56,896` tokens, down from `71,986` in the original baseline and from `70,249` in the `main` snapshot used for comparison.
-
-| Catalog | Tokens | Bytes | Change vs baseline |
-| --- | ---: | ---: | ---: |
-| Baseline enterprise opaque | 71,986 | 287,944 | - |
-| Final 40-task compromise | 61,155 | 244,620 | -10,831 tokens (-15.0%) |
-| Expanded compressed catalog | 58,266 | 233,064 | -13,720 tokens (-19.1%) |
-| Wave-2 compressed catalog | 56,896 | 227,584 | -15,090 tokens (-21.0%) |
-
-Against the `main` branch catalog snapshot used for the model comparison, the expanded catalog preserves larger savings:
-
-| Catalog | Main tokens | Current tokens | Savings |
-| --- | ---: | ---: | ---: |
-| Base opaque meta-tools | 55,110 | 42,849 | 12,261 tokens (22.2%) |
-| Enterprise opaque meta-tools | 70,249 | 56,896 | 13,353 tokens (19.0%) |
-
-| Enterprise component | Baseline tokens | Final tokens | Final bytes | Final share |
-| --- | ---: | ---: | ---: | ---: |
-| Description | 35,323 | 20,232 | 80,930 | 35.6% |
-| Input schema | 14,147 | 14,147 | 56,589 | 24.9% |
-| Output schema | 15,049 | 15,049 | 60,199 | 26.4% |
-| Annotations | 1,015 | 1,015 | 4,060 | 1.8% |
-| Icons | 5,803 | 5,803 | 23,212 | 10.2% |
-| Other | 664 | 664 | 2,656 | 1.1% |
-
-The token gate remains met while keeping the advertised enterprise catalog `13,353` tokens below `main`.
-
-## Static Schema Check
-
-A static validation pass compared the expected tool/action pairs and standalone tool calls in this fixture against the generated enterprise meta-tool catalog, including the `gitlab_server` schema-discovery tool. The pass confirms that every expected route is discoverable after adding wave-2 coverage, full meta-tool catalog coverage, and multi-step scenarios.
-
-| Check | Result |
+| Area | Cases |
 | --- | ---: |
-| Fixture tasks and scenarios | 102 |
-| Catalog tools covered by expected steps | 48 / 48 |
-| Dry-run attempts | 102 |
-| Tool/action or standalone expected paths present | 102 |
-| Missing expected routes after correction | 0 |
-
-This static check verifies route/schema coverage, not model task success. Rows `MT-052` through `MT-069` passed a targeted model run before their target descriptions were compressed, then passed a repeated model run after compression. Rows `MT-070` through `MT-092` close the remaining catalog coverage gaps. Rows `MS-001` through `MS-010` exercise ordered multi-tool workflows.
-
-## Full Fixture Anthropic Model Run
-
-The complete 102-row fixture was evaluated after adding standalone-tool support, ordered multi-step validation, and full catalog coverage rows. The full run covers all 48 advertised catalog tools and keeps all GitLab operations simulated; no GitLab mutation is executed by the harness.
-
-| Metric | Result |
-| --- | ---: |
-| Task and scenario attempts | 102 |
+| Single-operation meta-tool cases | 92 |
+| Multi-step workflow scenarios | 10 |
+| Total automated cases | 102 |
+| Expected tool operations across all cases | 132 |
 | Catalog tools covered | 48 / 48 |
-| Tool-selection accuracy | 97.1% |
-| Action-selection accuracy | 96.1% |
-| First-call validation pass rate | 96.1% |
-| Schema lookup use rate | 0.0% |
-| Repair success rate | 100.0% |
-| Destructive safety | 100.0% |
-| Final task success proxy | 100.0% |
 
-The full run emitted 127 Anthropic requests and 136 tool calls, used 8,637 input tokens, 10,768 output tokens, 64,562 cache-creation input tokens, and 4,870,388 cache-read input tokens. The built-in Sonnet estimate reported `$1.8907` for the full 102-attempt run.
+## Maintenance Rules
 
-## Wave-1 Anthropic Model Run
-
-The compressed production catalog was evaluated with `claude-sonnet-4-6` through `cmd/eval_meta_tools`. The run used the enterprise meta-tool catalog, Anthropic tool calling, simulated schema lookup responses, and validation-only tool results. The wave-1 expanded fixture covered 51 tasks, including `gitlab_access`, `gitlab_package`, `gitlab_runner`, `gitlab_environment`, and `gitlab_snippet` tasks added to cover the newly compressed domains.
-
-The `MT-035` fixture was clarified to include a milestone IID. Later project-scoped prompts were clarified for `MT-014`, `MT-025` through `MT-028`, and `MT-036` through `MT-037`; the earlier wording omitted the project even though the expected tool actions require `project_id`, which made global or instance-level actions reasonable in a validation-only harness.
-
-| Metric | Current expanded compressed catalog | Main snapshot |
-| --- | ---: | ---: |
-| Tasks | 51 | 51 |
-| Tool-selection accuracy | 96.1% | 96.1% |
-| Action-selection accuracy | 96.1% | 96.1% |
-| First-call validation pass rate | 96.1% | 92.2% |
-| Schema lookup use rate | 3.9% | 0.0% |
-| Repair success rate | 100.0% | 75.0% |
-| Destructive safety | 100.0% | 100.0% |
-| Final task success proxy | 100.0% | 98.0% |
-
-The current expanded compressed catalog completed all 51 tasks successfully. The `main` snapshot failed `MT-040`: it selected `gitlab_admin` / `metadata_get` because `gitlab_server` does not exist on `main`; this is an expected catalog capability difference, not a regression in `main` routing.
-
-The newly covered compressed domains also passed a targeted 11-task run (`MT-041` through `MT-051`) with 100% tool selection, action selection, first-call validation, destructive safety, and final task success.
-
-For reference, the pre-compromise compressed run used the same model and fixture before the `gitlab_search` and milestone-delete hints were added:
-
-| Metric | Result |
-| --- | ---: |
-| Tasks | 40 |
-| Tool-selection accuracy | 100.0% |
-| Action-selection accuracy | 95.0% |
-| First-call validation pass rate | 85.0% |
-| Schema lookup use rate | 7.5% |
-| Repair success rate | 50.0% |
-| Destructive safety | 87.5% |
-| Final task success proxy | 92.5% |
-
-Three tasks failed that validation proxy:
-
-- `MT-014`: selected the right meta-tool for merge requests but did not provide `project_id`, then switched to the global list action during repair.
-- `MT-032`: selected `gitlab_search` / `code` but omitted the required `search` parameter after schema lookup.
-- `MT-035`: used schema lookup but selected `milestone_list` instead of destructive `milestone_delete`, without `milestone_iid` or `confirm`.
-
-The expanded compressed catalog recovers the qualitative gate while increasing token savings against `main`.
-
-## Wave-2 Anthropic Model Run
-
-Rows `MT-052` through `MT-069` cover the next compression candidates: `gitlab_admin`, `gitlab_project`, `gitlab_mr_review`, `gitlab_job`, and `gitlab_ci_variable`. A targeted pre-compression run passed all 18 tasks. After shortening those descriptions, the same 18 tasks were run twice with `--repeat=2`.
-
-| Metric | Post-compression repeated run |
-| --- | ---: |
-| Task attempts | 36 |
-| Tool-selection accuracy | 100.0% |
-| Action-selection accuracy | 100.0% |
-| First-call validation pass rate | 100.0% |
-| Schema lookup use rate | 5.6% |
-| Repair success rate | 100.0% |
-| Destructive safety | 100.0% |
-| Final task success proxy | 100.0% |
-
-The post-compression run emitted 38 Anthropic requests/tool calls, used 1,599 input tokens, 3,374 output tokens, 58,496 cache-creation input tokens, and 1,416,195 cache-read input tokens. The built-in Sonnet estimate reported `$0.6996` for that repeated targeted run.
-
-## Multi-Step Anthropic Model Run
-
-Rows `MS-001` through `MS-010` were evaluated after the harness learned ordered scenario validation. These rows require 3 to 5 expected operations each and cover standalone project discovery, project metadata, repositories, pipelines, jobs, MR review, releases, tags, external status checks, environments, packages, runners, admin broadcast messages, group audit events, and compliance policy routing.
-
-| Metric | Result |
-| --- | ---: |
-| Scenario attempts | 10 |
-| Expected steps | 40 |
-| Tool-selection accuracy | 100.0% |
-| Action-selection accuracy | 100.0% |
-| First-call validation pass rate | 100.0% |
-| Schema lookup use rate | 0.0% |
-| Repair success rate | 100.0% |
-| Destructive safety | 100.0% |
-| Final task success proxy | 100.0% |
-
-The successful run emitted 30 Anthropic requests and 40 tool calls, used 1,974 input tokens, 3,097 output tokens, 7,524 cache-creation input tokens, and 1,163,315 cache-read input tokens. The built-in Sonnet estimate reported `$0.4296` for the 10-scenario run.
-
-## Applied Short Descriptions
-
-The production catalog now uses shortened descriptions for the highest-cost meta-tools. Each shortened description keeps the schema lookup path, the `{ "action": "...", "params": { ... } }` envelope, unknown-parameter rejection, destructive-operation guidance, and key routing hints to neighboring meta-tools.
-
-### `gitlab_group`
-
-Manage GitLab groups, subgroups, group projects, members, badges, hooks, LDAP links, SAML links, access requests, and group-level metadata. Use this for group discovery and administration, not project-only settings. All calls use `{ "action": "...", "params": { ... } }`; call `gitlab_server` `schema_get` for exact params before uncertain actions. Unknown params are rejected. Destructive actions such as delete, member removal, badge deletion, hook deletion, and token/access cleanup require confirmation or elicitation.
-
-### `gitlab_admin`
-
-Administer self-managed GitLab instance resources: topics, settings, appearance, broadcast messages, feature flags, licenses, system hooks, Sidekiq, plan limits, usage data, OAuth apps, metadata/statistics, custom attributes, imports, error tracking, secure files, Terraform states, cluster agents, and dependency proxy cache. Use only for instance-level administration. Most actions require admin rights. Fetch exact params with `gitlab_server` `schema_get`; unknown params are rejected. Destructive and instance-wide actions require confirmation.
-
-### `gitlab_project`
-
-Manage GitLab project CRUD and project-scoped metadata: members, shares, hooks, badges, labels, milestones, boards, integrations, uploads, import/export, Pages, avatars, approvals, mirrors, stats, housekeeping, forks, stars, archive/restore, and transfer. Use this for project settings and metadata; use neighboring tools for files, branches, wiki pages, issues, and MRs. Fetch exact params with `gitlab_server` `schema_get`; unknown params are rejected. Destructive actions require confirmation.
-
-### `gitlab_mr_review`
-
-Review and comment on GitLab MRs: notes, threaded discussions, inline positions, diffs/raw diffs, diff versions, and draft review notes. Use this to post review comments, resolve threads, inspect diffs, queue draft notes, and publish a batch review. Use `draft_note_create` plus `draft_note_publish_all` for batched reviews. Fetch exact params with `gitlab_server` `schema_get`; unknown params are rejected. Delete actions require confirmation.
-
-### `gitlab_merge_request`
-
-Manage merge request lifecycle, review, discussions, notes, approvals, diff versions, merge/ref actions, draft state, participants, award emoji, and related metadata. Use this for MR operations after identifying `project_id` and `merge_request_iid`. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. Destructive actions such as delete, note deletion, and discussion cleanup require confirmation.
-
-### `gitlab_issue`
-
-Manage issues, notes, discussions, links, labels, time stats, participants, related merge requests, award emoji, and issue lifecycle operations. Use this for project issue triage after identifying `project_id` and `issue_iid`. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. Destructive actions such as delete, unlink, and note deletion require confirmation.
-
-### `gitlab_repository`
-
-Browse and mutate repository files and commits: tree, compare, blobs, archives, commit metadata, file create/update/delete, changelog helpers, submodules, markdown rendering, blame, cherry-pick, revert, and commit discussions. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. Commit-producing and destructive actions require care because they can trigger CI, webhooks, and protected-branch checks.
-
-### `gitlab_pipeline`
-
-Manage project pipelines, trigger tokens, resource groups, test reports, metadata, schedules, and schedule variables. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. Pipeline creation/retry/trigger/schedule actions can consume CI minutes, while delete and trigger/schedule deletion are destructive.
-
-### `gitlab_user`
-
-Manage GitLab users and current-user resources: user CRUD/state, keys, emails, personal access tokens, impersonation tokens, todos, status, events, memberships, notifications, namespaces, avatars, identities, and user runners. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. User state changes, token/key/email deletion, and identity removal are destructive or admin-sensitive.
-
-### `gitlab_access`
-
-Manage GitLab access credentials: project/group/personal access tokens, deploy tokens, deploy keys, access requests, and invitations. Use this to audit or provision machine/user access to projects and groups. Fetch exact params with `gitlab_server` `schema_get` before creating, rotating, or revoking credentials. Revokes and deletes are destructive and irreversible; token create/rotate returns cleartext token once.
-
-### `gitlab_package`
-
-Manage GitLab package registry, container registry, and protection rules. Use this for generic package publish/download/list/delete, package files, container image repositories/tags, and package/container protection rules. Fetch exact params before publish/delete/rule changes. Delete and bulk tag deletion are destructive; publish/download can read or write local files.
-
-### `gitlab_runner`
-
-Manage GitLab CI/CD runners across instance, group, and project scopes plus admin runner controllers. Use this to list/get/update/pause runners, inspect runner jobs, attach/detach runners to projects, register/verify/reset runner tokens, and manage experimental runner controllers. Remove/delete/revoke/reset actions are destructive or credential-rotating.
-
-### `gitlab_job`
-
-Manage GitLab CI/CD jobs and CI job-token scope: job lifecycle, manual play, logs, artifacts, bridges, and inbound trust boundaries. Use for job details, traces, artifacts, retry/cancel/play, and job-token allowlists. Use `gitlab_pipeline` for pipeline-level operations. Fetch exact params with `gitlab_server` `schema_get`; unknown params are rejected. Artifact downloads are base64 and limited; destructive job/artifact/token-scope actions require confirmation.
-
-### `gitlab_ci_variable`
-
-Manage GitLab CI/CD variables at project, group, and instance scope, including masked/hidden values and environment-scoped entries. Use for variable CRUD only, not CI lint, pipeline runs, feature flags, environments, or instance settings. Project actions use `project_id`, group actions use `group_id`, and instance actions use neither. Fetch exact params with `gitlab_server` `schema_get`; unknown params are rejected. Delete actions are irreversible.
-
-### `gitlab_environment`
-
-Manage GitLab deployment environments, protected environments, deploy freeze periods, deployments, approvals, and deployment-related MRs. Use this for environment definitions, deploy gates, deploy freezes, deployment audit history, and deployment approvals. Stop/delete/deployment-delete and unprotect/freeze-delete actions are destructive.
-
-### `gitlab_snippet`
-
-Manage GitLab snippets: personal snippets, project snippets, public explore feed, threaded discussions, project snippet notes, and award emoji. Use snippets for standalone code/text outside repository files. Fetch exact params with `gitlab_server` `schema_get` for create/update/delete. Delete actions are destructive.
-
-## Acceptance Gate Status
-
-The token-reduction and qualitative regression gates are satisfied by the wave-2 compressed production catalog, the current-vs-main Anthropic comparison, and the repeated wave-2 targeted model run:
-
-- Enterprise opaque definition-token reduction is 19.0% against `main` and 21.0% against the original baseline.
-- Final task success is 100.0% for the current catalog versus 98.0% for the `main` snapshot on the 51-task fixture.
-- Static route coverage is 100.0% across 102 tasks and scenarios, covering all 48 catalog tools.
-- Wave-2 targeted final task success is 100.0% across 36 post-compression attempts.
-- Destructive safety remains 100.0%.
-- Shortened descriptions keep schema lookup guidance and the nested `params` envelope.
-- Changed docs, generated snapshots, and focused tests must pass before commit.
+- Keep every executable fixture row in the seven-column format shown above; the parser reads rows starting with `| MT-` or `| MS-`.
+- Add a new `MT-*` row when adding a new meta-tool or materially changing a route description.
+- Add a new `MS-*` row when a user workflow naturally spans domains or requires state from earlier calls.
+- Keep prompts grounded with concrete project, group, issue, MR, pipeline, job, runner, tag, package, or environment identifiers when the expected route needs them.
+- Mark destructive steps explicitly and include `confirm` in either required or optional params.
+- Prefer success verifiers that are stable under validation-only execution, such as metadata returned, action requested, or feature-availability error returned.

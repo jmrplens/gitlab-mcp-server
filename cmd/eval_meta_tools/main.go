@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	defaultTasksPath = "docs/evaluation/meta-tool-schema-discovery-evaluation.md"
+	defaultTasksPath = "docs/evaluation/automated-meta-tool-cases.md"
 	defaultEvalDir   = "plan/metatool-token-schema-research/evals"
 	defaultModel     = "claude-sonnet-4-6"
 	anthropicAPI     = "https://api.anthropic.com/v1/messages"
