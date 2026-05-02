@@ -99,7 +99,7 @@ gitlab-mcp-server/
 - Use `httptest` for mocking GitLab API responses in unit tests
 - Test naming: `TestToolName_Scenario_ExpectedResult`
 - Aim for >80% coverage on tool handlers
-- **When adding or modifying tests, update `docs/development/testing.md`** with new test counts and coverage values
+- **When adding or modifying tests, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/development/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 ### Verification After Changes
 

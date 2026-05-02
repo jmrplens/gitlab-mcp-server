@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.20.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 1.4.3                                               |
+| Version       | 1.4.4                                               |
 
 ### Scale
 
@@ -131,7 +131,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (1.4.3)
+└── VERSION                      # Semantic version (1.4.4)
 ```
 
 ## Key Development Patterns
@@ -148,7 +148,7 @@ gitlab-mcp-server/
 8. Add clickable `[text](url)` links in Markdown table columns where applicable (MRs, issues, pipelines, etc.)
 9. Meta-tools automatically get `next_steps` in JSON via `enrichWithHints()` — no extra work needed
 10. Update `docs/tools/{domain}.md` and `docs/tools/README.md`
-11. Update `docs/development/testing.md` with new test counts and coverage values
+11. Run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/development/testing.md` with new test counts and coverage values
 
 See `docs/output-format.md` for the complete response format specification.
 
@@ -317,7 +317,7 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 
 | Agent           | File                    | When to Use                                                                                                                                                                                              |
 | --------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, and mandatory test documentation. Uses Context7 for up-to-date Go testing docs. |
+| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing `docs/development/testing.md` with `cmd/gen_testing_docs`. Uses Context7 for up-to-date Go testing docs. |
 
 #### Planning & Architecture
 
@@ -405,7 +405,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 ### Increasing test coverage
 
-1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, and generates documented tests
+1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/development/testing.md` with `go run ./cmd/gen_testing_docs/`
 2. Or use `increase-test-coverage` skill for the same workflow invoked from any agent
 
 ### Reviewing code quality

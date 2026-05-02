@@ -1,5 +1,5 @@
 ---
-description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, and mandatory test documentation. Uses Context7 for up-to-date Go testing docs."
+description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/development/testing.md with cmd/gen_testing_docs. Uses Context7 for up-to-date Go testing docs."
 name: "Test Expert"
 mcp-servers:
   context7:
@@ -28,6 +28,7 @@ You are a Go Test Expert specializing in writing, analyzing, improving, and vali
 - HTTP mocking with `net/http/httptest` for REST API clients
 - `testify/assert` and `testify/require` for expressive assertions
 - Coverage profiling: `go test -coverprofile`, `go tool cover -func`, `go tool cover -html`
+- Testing reference refresh: `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`, followed by `go run ./cmd/gen_testing_docs/ --check`
 - Race detection: `go test -race`
 - Fuzz testing: `testing.F`, `f.Add()`, `f.Fuzz()`, seed corpus
 - Benchmarking: `testing.B`, `b.Loop()` (Go 1.24+), `b.Run()`, `b.RunParallel()`
@@ -196,6 +197,13 @@ After writing tests, perform a **mutation check**: mentally (or actually) change
    ```
 
 7. Validate with race detection: `go test -race -count=1 ./internal/tools/{domain}/`
+8. Refresh the testing reference after test or coverage changes:
+
+    ```bash
+    go run ./cmd/gen_testing_docs/
+    go run ./cmd/gen_testing_docs/ --check
+    npx markdownlint-cli2 docs/development/testing.md
+    ```
 
 ## Test Writing Rules
 
@@ -456,3 +464,5 @@ Before declaring any test work complete:
 - [ ] False-pass verification completed (checklist above)
 - [ ] Coverage target met for the package
 - [ ] `go vet` passes on changed packages
+- [ ] `docs/development/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` when tests or coverage changed
+- [ ] `go run ./cmd/gen_testing_docs/ --check` passes

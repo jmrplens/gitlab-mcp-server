@@ -5,7 +5,7 @@
        mdlint mdlint-fix \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-test-names audit-godocs audit-godocs-check \
-       gen-llms gen-readme \
+	gen-llms gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -510,6 +510,10 @@ gen-llms:
 ## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
 gen-readme:
 	go run ./cmd/gen_readme/
+
+## gen-testing-docs: regenerate testing.md counts and coverage tables.
+gen-testing-docs:
+	go run ./cmd/gen_testing_docs/
 
 # ─── Output Quality Audit ────────────────────────────────────────────────────
 

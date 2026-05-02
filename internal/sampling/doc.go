@@ -19,5 +19,5 @@
 //   - input is capped by [MaxInputLength];
 //   - common credential patterns are redacted;
 //   - user data is wrapped in nonce-delimited XML blocks;
-//   - confidential payloads can be labelled with [WrapConfidentialWarning].
+//   - confidential payloads can be labeled with [WrapConfidentialWarning].
 package sampling

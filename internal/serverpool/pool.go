@@ -154,12 +154,13 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	// Slow path: write lock to create new entry.
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.getOrCreateLocked(key, token, gitlabURL)
+}
 
-	// Double-check after acquiring write lock.
-	if entry, ok := p.entries[key]; ok {
-		p.lru.MoveToFront(entry.element)
-		p.metrics.Hits.Add(1)
-		return entry.server, nil
+// getOrCreateLocked returns an existing server or creates a new one while p.mu is held.
+func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Server, error) {
+	if server, ok := p.existingServerLocked(key); ok {
+		return server, nil
 	}
 
 	p.metrics.Misses.Add(1)
@@ -199,6 +200,17 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	)
 
 	return server, nil
+}
+
+// existingServerLocked returns an existing server for key while p.mu is held.
+func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
+	entry, ok := p.entries[key]
+	if !ok {
+		return nil, false
+	}
+	p.lru.MoveToFront(entry.element)
+	p.metrics.Hits.Add(1)
+	return entry.server, true
 }
 
 // entryConfig builds the per-pool-entry server configuration, applying the
