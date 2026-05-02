@@ -1,5 +1,3 @@
-// Package containerregistry implements MCP tools for GitLab container
-// registry operations using the ContainerRegistryService API.
 package containerregistry
 
 import (

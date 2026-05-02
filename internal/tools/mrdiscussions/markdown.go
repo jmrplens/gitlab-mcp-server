@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for merge request discussion MCP tool output.
 package mrdiscussions
 
 import (

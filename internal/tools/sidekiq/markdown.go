@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for Sidekiq MCP tool output.
 package sidekiq
 
 import (

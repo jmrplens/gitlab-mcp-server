@@ -1,6 +1,3 @@
-// Shutdown logic for terminating all running instances of this binary.
-// Invoked via the --shutdown CLI flag by pe-agnostic-store before replacing
-// the binary on disk so that MCP clients restart with the new version.
 package main
 
 import (

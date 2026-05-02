@@ -1,4 +1,3 @@
-// Package repositorysubmodules wires repository submodule MCP tools to the MCP server.
 package repositorysubmodules
 
 import (

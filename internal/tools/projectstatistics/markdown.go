@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for project statistics MCP tool output.
 package projectstatistics
 
 import (

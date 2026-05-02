@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for usage data MCP tool output.
 package usagedata
 
 import (

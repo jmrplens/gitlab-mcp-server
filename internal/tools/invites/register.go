@@ -1,4 +1,3 @@
-// register.go wires invites MCP tools to the MCP server.
 package invites
 
 import (

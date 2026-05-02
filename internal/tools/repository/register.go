@@ -1,4 +1,3 @@
-// register.go wires repository MCP tools to the MCP server.
 package repository
 
 import (

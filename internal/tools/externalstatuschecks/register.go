@@ -1,4 +1,3 @@
-// register.go wires external status check MCP tools to the MCP server.
 package externalstatuschecks
 
 import (

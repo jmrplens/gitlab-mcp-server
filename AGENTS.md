@@ -7,7 +7,7 @@ This project includes a comprehensive AI assistance infrastructure for developme
 | Agent | Description |
 |-------|-------------|
 | **Go MCP Server Expert** | Primary coding agent for Go MCP development. Implements tools, fixes handlers, answers SDK questions. Has Context7 integration for up-to-date library docs. |
-| **Test Expert** | Testing specialist: writes tests, analyzes coverage to 90%+, detects false passes, identifies edge cases. Uses Context7 for Go testing docs. |
+| **Test Expert** | Testing specialist: writes tests, analyzes coverage to 90%+, detects false passes, identifies edge cases, and refreshes `docs/development/testing.md` with `cmd/gen_testing_docs`. Uses Context7 for Go testing docs. |
 | **Plan Expert** | Strategic planning for features, refactoring, architecture, tests, bugs, docs, and upgrades. Generates structured plans — does NOT write code. |
 | **Debug Mode** | Systematic bug investigation with 4-phase workflow: reproduce → hypothesize → fix → verify. |
 | **SE: Reviewer** | Security review (OWASP Top 10, Zero Trust, LLM security) and architecture review (Well-Architected frameworks, ADRs). |

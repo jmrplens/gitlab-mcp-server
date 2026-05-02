@@ -1,4 +1,3 @@
-// annotations.go provides shared MCP tool annotation presets and helpers.
 package toolutil
 
 import "github.com/modelcontextprotocol/go-sdk/mcp"

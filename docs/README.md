@@ -30,6 +30,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Development Guide](development/development.md) | Developer guide: setup, building, testing, adding new tools |
 | [Testing](development/testing.md) | Test suite overview, coverage breakdown, and per-package statistics |
 | [Static Analysis](development/static-analysis.md) | Static analysis tools: vet, modernize, golangci-lint, gosec, staticcheck, govulncheck |
+| [Godoc Compliance](development/godoc.md) | Godoc audit workflow for packages, exported symbols, and test functions |
 
 ## Reference
 

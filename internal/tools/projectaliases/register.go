@@ -1,4 +1,3 @@
-// register.go wires project alias MCP tools to the MCP server.
 package projectaliases
 
 import (

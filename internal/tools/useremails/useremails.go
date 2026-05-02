@@ -1,4 +1,7 @@
 // Package useremails implements GitLab email address management operations for users.
+//
+// The package registers MCP tools and renders Markdown summaries for user email
+// responses.
 package useremails
 
 import (

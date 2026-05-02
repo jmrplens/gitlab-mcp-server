@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for CI job MCP tool output.
 package jobs
 
 import (

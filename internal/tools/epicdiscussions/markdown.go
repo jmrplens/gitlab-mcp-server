@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for epic discussion MCP tool output.
 package epicdiscussions
 
 import (

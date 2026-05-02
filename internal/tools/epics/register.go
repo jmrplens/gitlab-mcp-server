@@ -1,5 +1,3 @@
-// register.go wires epic MCP tools to the MCP server.
-// Five of six tools use the Work Items GraphQL API; GetLinks remains on REST.
 package epics
 
 import (
@@ -99,5 +97,3 @@ func RegisterTools(server *mcp.Server, client *gitlabclient.Client) {
 		return toolutil.DeleteResult(fmt.Sprintf("epic &%d from group %s", input.IID, input.FullPath))
 	})
 }
-
-// register.go wires epic MCP tools to the MCP server.

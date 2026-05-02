@@ -1,4 +1,3 @@
-// register.go wires branches MCP tools to the MCP server.
 package branches
 
 import (

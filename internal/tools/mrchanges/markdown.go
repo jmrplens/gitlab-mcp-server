@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for merge request changes MCP tool output.
 package mrchanges
 
 import (

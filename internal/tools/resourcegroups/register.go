@@ -1,4 +1,3 @@
-// register.go wires resourcegroups MCP tools to the MCP server.
 package resourcegroups
 
 import (

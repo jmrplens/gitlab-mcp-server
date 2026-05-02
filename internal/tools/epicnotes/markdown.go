@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for epic note MCP tool output.
 package epicnotes
 
 import (

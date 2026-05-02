@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for Custom Emoji outputs.
 package customemoji
 
 import (

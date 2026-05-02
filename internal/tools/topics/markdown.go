@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for topic MCP tool output.
 package topics
 
 import (

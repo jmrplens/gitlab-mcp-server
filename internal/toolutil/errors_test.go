@@ -239,7 +239,7 @@ func TestDetailedError_Markdown(t *testing.T) {
 	}
 }
 
-// TestDetailedError_Markdown_MinimalFields verifies Markdown with only required fields.
+// TestDetailedError_MarkdownMinimal verifies Markdown with only required fields.
 func TestDetailedError_MarkdownMinimal(t *testing.T) {
 	de := &DetailedError{
 		Domain:  "repos",

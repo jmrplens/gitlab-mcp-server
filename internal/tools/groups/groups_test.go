@@ -422,7 +422,7 @@ func TestSubgroupsList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGroupGetSuccess_EnrichedFields verifies that Get maps the enriched
+// TestGroupGet_SuccessEnrichedFields verifies that Get maps the enriched
 // fields: FullName, CreatedAt, MarkedForDeletion.
 func TestGroupGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

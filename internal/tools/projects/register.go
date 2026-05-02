@@ -1,4 +1,3 @@
-// register.go wires projects MCP tools to the MCP server.
 package projects
 
 import (

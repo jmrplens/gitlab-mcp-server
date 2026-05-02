@@ -1,4 +1,3 @@
-// protection_rules.go implements container registry protection rule operations.
 package containerregistry
 
 import (

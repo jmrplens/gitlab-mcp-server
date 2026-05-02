@@ -1,4 +1,3 @@
-// register.go wires email management MCP tools to the MCP server.
 package useremails
 
 import (

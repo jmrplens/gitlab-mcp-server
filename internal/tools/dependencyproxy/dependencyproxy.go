@@ -1,4 +1,3 @@
-// Package dependencyproxy implements MCP tools for GitLab Dependency Proxy.
 package dependencyproxy
 
 import (

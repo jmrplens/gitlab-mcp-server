@@ -54,7 +54,7 @@ func TestFromRequest_NilSession(t *testing.T) {
 
 // IsSupported tests.
 
-// TestClient_ZeroValue_NotSupported verifies that a zero-value [Client] reports
+// TestClient_ZeroValueNotSupported verifies that a zero-value [Client] reports
 // itself as unsupported.
 func TestClient_ZeroValueNotSupported(t *testing.T) {
 	var c Client
@@ -482,7 +482,7 @@ func TestAnalyze_DataTruncation(t *testing.T) {
 // initialize in-memory server and client pairs.
 var testImpl = &mcp.Implementation{Name: "test", Version: "1.0.0"}
 
-// TestAnalyze_Integration_Success verifies end-to-end sampling through an
+// TestAnalyze_IntegrationSuccess verifies end-to-end sampling through an
 // in-memory MCP transport. The mock handler returns a fixed text result, and
 // the test asserts the [AnalysisResult] content, model name, and truncation flag.
 func TestAnalyze_IntegrationSuccess(t *testing.T) {
@@ -530,7 +530,7 @@ func TestAnalyze_IntegrationSuccess(t *testing.T) {
 	}
 }
 
-// TestAnalyze_Integration_WithModelHints verifies that [WithModelHints] and
+// TestAnalyze_IntegrationWithModelHints verifies that [WithModelHints] and
 // [WithMaxTokens] options are propagated through to the MCP sampling request.
 // The mock handler captures the received parameters for assertion.
 func TestAnalyze_IntegrationWithModelHints(t *testing.T) {
@@ -584,7 +584,7 @@ func TestAnalyze_IntegrationWithModelHints(t *testing.T) {
 	}
 }
 
-// TestAnalyze_Integration_CredentialsStripped verifies that credentials in data
+// TestAnalyze_IntegrationCredentialsStripped verifies that credentials in data
 // are stripped before being sent to the LLM via sampling. The mock handler
 // captures the message and asserts that secrets are replaced with [REDACTED]
 // while non-secret text and XML delimiters are preserved.
@@ -644,7 +644,7 @@ func TestAnalyze_IntegrationCredentialsStripped(t *testing.T) {
 	}
 }
 
-// TestAnalyze_Integration_SystemPromptPresent verifies that [Client.Analyze]
+// TestAnalyze_IntegrationSystemPromptPresent verifies that [Client.Analyze]
 // includes a system prompt containing XML delimiter references and
 // injection-resistance instructions.
 func TestAnalyze_IntegrationSystemPromptPresent(t *testing.T) {
@@ -692,7 +692,7 @@ func TestAnalyze_IntegrationSystemPromptPresent(t *testing.T) {
 	}
 }
 
-// TestAnalyze_Integration_LargeDataTruncated verifies that [Client.Analyze]
+// TestAnalyze_IntegrationLargeDataTruncated verifies that [Client.Analyze]
 // truncates data exceeding [MaxInputLength], sets the Truncated flag on the
 // result, and includes a truncation warning in the message sent to the LLM.
 func TestAnalyze_IntegrationLargeDataTruncated(t *testing.T) {

@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for group epic board MCP tool output.
 package groupepicboards
 
 import (

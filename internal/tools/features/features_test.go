@@ -364,7 +364,6 @@ func TestRegisterTools_CallAllThroughMCP(t *testing.T) {
 // Helper: MCP session factory
 // ---------------------------------------------------------------------------.
 
-// newFeaturesMCPSession is an internal helper for the features package.
 // TestMCPRoundTrip_ErrorPaths covers the error return paths in register.go
 // handlers when the GitLab API returns an error.
 func TestMCPRoundTrip_ErrorPaths(t *testing.T) {

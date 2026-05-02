@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for database migration MCP tool output.
 package dbmigrations
 
 import (

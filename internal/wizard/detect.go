@@ -1,6 +1,3 @@
-// Package wizard implements an interactive setup wizard that launches when
-// the binary runs in a terminal (double-click, direct execution) rather than
-// as an MCP server via stdio pipe.
 package wizard
 
 import "os"

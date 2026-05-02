@@ -1,6 +1,9 @@
 // Package wikis implements MCP tool handlers for GitLab project wiki operations
 // including list, get, create, update, and delete pages.
 // It wraps the Wikis service from client-go v2.
+//
+// The package also registers MCP tools and renders Markdown summaries for wiki
+// page responses.
 package wikis
 
 import (

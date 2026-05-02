@@ -1,5 +1,3 @@
-// wait.go implements a server-side polling tool that waits for a CI/CD job
-// to reach a terminal state, sending MCP progress notifications during polling.
 package jobs
 
 import (

@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for gitignore template MCP tool output.
 package gitignoretemplates
 
 import (

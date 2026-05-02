@@ -1,7 +1,3 @@
-// metatool.go implements the meta-tool dispatch pattern that routes
-// a single MCP tool call to one of several action handlers based on
-// the "action" parameter. It provides generic wrappers for typed and
-// void handlers, JSON param deserialization, and action validation.
 package toolutil
 
 import (
@@ -641,8 +637,8 @@ var (
 // SetMetaParamSchemaMode selects the meta-tool input schema strategy used by
 // [MetaToolSchema]. Accepts "opaque" (default), "compact", or "full". Any
 // other value is coerced to opaque so that misconfiguration cannot break the
-// tools/list payload. Must be called before [RegisterAllMeta]; later calls
-// only affect schemas built after the call returns.
+// tools/list payload. Must be called before meta-tools are registered; later
+// calls only affect schemas built after the call returns.
 func SetMetaParamSchemaMode(mode string) {
 	metaParamSchemaMu.Lock()
 	defer metaParamSchemaMu.Unlock()

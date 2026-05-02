@@ -1,6 +1,3 @@
-// diffposition.go provides unified diff parsing and position validation for
-// inline MR comments. It parses diff hunk headers to extract valid line ranges
-// and validates that a given position (new_line / old_line) is commentable.
 package toolutil
 
 import (

@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for group protected branch
-// MCP tool output.
 package groupprotectedbranches
 
 import (

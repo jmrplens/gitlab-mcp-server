@@ -541,7 +541,6 @@ func TestEvictByKey(t *testing.T) {
 	if pool.Size() != 2 {
 		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
 	}
-
 	key := sessionKey("token-evict", "http://localhost")
 	pool.evictByKey(key)
 
@@ -553,6 +552,44 @@ func TestEvictByKey(t *testing.T) {
 	pool.evictByKey("nonexistent-key")
 	if pool.Size() != 1 {
 		t.Errorf("pool.Size() = %d after noop eviction, want 1", pool.Size())
+	}
+}
+
+// TestGetOrCreateLocked_ExistingEntry verifies the slow-path double-check
+// branch deterministically without depending on goroutine scheduling.
+func TestGetOrCreateLocked_ExistingEntry(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithMaxSize(20))
+
+	existingKey := "existing"
+	otherKey := "other"
+	existingServer := mcp.NewServer(&mcp.Implementation{Name: "existing", Version: "0.0.0"}, nil)
+	otherServer := mcp.NewServer(&mcp.Implementation{Name: "other", Version: "0.0.0"}, nil)
+
+	pool.mu.Lock()
+	existingElement := pool.lru.PushBack(existingKey)
+	otherElement := pool.lru.PushFront(otherKey)
+	pool.entries[existingKey] = &poolEntry{server: existingServer, element: existingElement}
+	pool.entries[otherKey] = &poolEntry{server: otherServer, element: otherElement}
+
+	server, err := pool.getOrCreateLocked(existingKey, "unused-token", "http://localhost")
+	missingServer, missingOK := pool.existingServerLocked("missing")
+	pool.mu.Unlock()
+
+	if err != nil {
+		t.Fatalf("getOrCreateLocked() error = %v", err)
+	}
+	if server != existingServer {
+		t.Fatal("getOrCreateLocked() returned unexpected server")
+	}
+	if missingOK || missingServer != nil {
+		t.Fatalf("existingServerLocked(missing) = (%v, %v), want (nil, false)", missingServer, missingOK)
+	}
+	if front := pool.lru.Front(); front == nil || front.Value != existingKey {
+		t.Fatalf("front LRU key = %v, want %s", front, existingKey)
+	}
+	if hits := pool.Stats().Hits; hits != 1 {
+		t.Fatalf("Hits = %d, want 1", hits)
 	}
 }
 

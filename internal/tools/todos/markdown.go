@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for to-do MCP tool output.
 package todos
 
 import (

@@ -1,10 +1,3 @@
-// Package projects implements GitLab project operations including create, get,
-// list, delete, update, restore, fork, star, unstar, archive, unarchive,
-// transfer, list forks, get languages, webhook management (list, get, add,
-// edit, delete, trigger test), user/group/starrer listings, share/unshare
-// with groups, invited groups, push rules (get, add, edit, delete), and
-// user contributed/starred project listings. It exposes typed input/output
-// structs and handler functions registered as MCP tools.
 package projects
 
 import (

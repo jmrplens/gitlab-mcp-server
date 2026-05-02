@@ -12,6 +12,8 @@ import (
 
 var errNoop = errors.New("noop")
 
+// TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding verifies
+// that route output-schema auditing reports only routes without schemas.
 func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFinding(t *testing.T) {
 	t.Parallel()
 
@@ -44,6 +46,8 @@ func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFin
 	}
 }
 
+// TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes verifies that
+// analyze meta-tool routes are included in output-schema auditing.
 func TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes(t *testing.T) {
 	t.Parallel()
 
@@ -63,6 +67,8 @@ func TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes(t *testing.T)
 	}
 }
 
+// TestPct_ZeroTotal_ReturnsZero verifies that percentage rendering handles an
+// empty denominator without division by zero.
 func TestPct_ZeroTotal_ReturnsZero(t *testing.T) {
 	t.Parallel()
 	if got := pct(5, 0); got != 0 {
@@ -70,6 +76,8 @@ func TestPct_ZeroTotal_ReturnsZero(t *testing.T) {
 	}
 }
 
+// TestPct_HalfCoverage_ReturnsFifty verifies that percentage rendering rounds a
+// half-covered ratio to fifty percent.
 func TestPct_HalfCoverage_ReturnsFifty(t *testing.T) {
 	t.Parallel()
 	if got := pct(50, 100); got != 50 {
@@ -77,6 +85,8 @@ func TestPct_HalfCoverage_ReturnsFifty(t *testing.T) {
 	}
 }
 
+// TestPct_FullCoverage_ReturnsHundred verifies that percentage rendering
+// reports one hundred percent when all items are covered.
 func TestPct_FullCoverage_ReturnsHundred(t *testing.T) {
 	t.Parallel()
 	if got := pct(10, 10); got != 100 {
@@ -84,6 +94,8 @@ func TestPct_FullCoverage_ReturnsHundred(t *testing.T) {
 	}
 }
 
+// TestAuditOutputSchema_MissingSchema_ReturnsFindings verifies that individual
+// MCP tools without an output schema are reported.
 func TestAuditOutputSchema_MissingSchema_ReturnsFindings(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +112,8 @@ func TestAuditOutputSchema_MissingSchema_ReturnsFindings(t *testing.T) {
 	}
 }
 
+// TestAuditOutputSchema_AllPresent_NoFindings verifies that complete output
+// schemas produce no findings.
 func TestAuditOutputSchema_AllPresent_NoFindings(t *testing.T) {
 	t.Parallel()
 
@@ -111,6 +125,8 @@ func TestAuditOutputSchema_AllPresent_NoFindings(t *testing.T) {
 	}
 }
 
+// TestAuditDescriptionReturns_Missing_ReturnsFindings verifies that tool
+// descriptions without a Returns section are reported.
 func TestAuditDescriptionReturns_Missing_ReturnsFindings(t *testing.T) {
 	t.Parallel()
 
@@ -127,6 +143,8 @@ func TestAuditDescriptionReturns_Missing_ReturnsFindings(t *testing.T) {
 	}
 }
 
+// TestAuditDescriptionReturns_AllPresent_NoFindings verifies that descriptions
+// with Returns sections produce no findings.
 func TestAuditDescriptionReturns_AllPresent_NoFindings(t *testing.T) {
 	t.Parallel()
 
@@ -138,6 +156,8 @@ func TestAuditDescriptionReturns_AllPresent_NoFindings(t *testing.T) {
 	}
 }
 
+// TestAuditTitle_Missing_ReturnsFindings verifies that untitled tools are
+// reported by the title audit.
 func TestAuditTitle_Missing_ReturnsFindings(t *testing.T) {
 	t.Parallel()
 
@@ -154,6 +174,8 @@ func TestAuditTitle_Missing_ReturnsFindings(t *testing.T) {
 	}
 }
 
+// TestAuditTitle_AllPresent_NoFindings verifies that titled tools produce no
+// title audit findings.
 func TestAuditTitle_AllPresent_NoFindings(t *testing.T) {
 	t.Parallel()
 
@@ -163,6 +185,8 @@ func TestAuditTitle_AllPresent_NoFindings(t *testing.T) {
 	}
 }
 
+// TestAuditSeeAlso_Missing_ReturnsFindings verifies that tool descriptions
+// without related-tool guidance are reported.
 func TestAuditSeeAlso_Missing_ReturnsFindings(t *testing.T) {
 	t.Parallel()
 
@@ -179,6 +203,8 @@ func TestAuditSeeAlso_Missing_ReturnsFindings(t *testing.T) {
 	}
 }
 
+// TestAuditSeeAlso_AllPresent_NoFindings verifies that descriptions with See
+// also guidance produce no findings.
 func TestAuditSeeAlso_AllPresent_NoFindings(t *testing.T) {
 	t.Parallel()
 
@@ -188,6 +214,8 @@ func TestAuditSeeAlso_AllPresent_NoFindings(t *testing.T) {
 	}
 }
 
+// TestAuditRouteOutputSchema_AllSchemasPresent_ReturnsNoFindings verifies that
+// all registered meta-routes expose output schemas.
 func TestAuditRouteOutputSchema_AllSchemasPresent_ReturnsNoFindings(t *testing.T) {
 	t.Parallel()
 	// The full registered meta-routes all have OutputSchema after the refactor.

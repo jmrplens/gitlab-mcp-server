@@ -10,6 +10,28 @@
 // eviction when the limit is reached. Token plus URL hashes (SHA-256) are used
 // as pool keys so that raw tokens are never stored in memory.
 //
+// The package also extracts GitLab tokens and per-request GitLab URLs from HTTP
+// headers and includes an authentication-failure rate limiter for the HTTP MCP
+// endpoint.
+//
+// # Isolation Model
+//
+// HTTP requests are routed to per-identity server entries:
+//
+//	HTTP request
+//	    |
+//	    v
+//	ExtractToken and ExtractGitLabURL
+//	    |
+//	    v
+//	ServerPool.GetOrCreate
+//	    |
+//	    v
+//	per-token, per-URL MCP server
+//
+// This design keeps token scopes, edition detection, read-only mode, safe mode,
+// tools, resources, and prompts isolated between concurrent HTTP clients.
+//
 // # Usage
 //
 // Create a pool with [New], retrieve or create servers with

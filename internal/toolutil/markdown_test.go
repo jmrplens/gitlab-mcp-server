@@ -283,7 +283,7 @@ func TestToolResultAnnotated(t *testing.T) {
 	})
 }
 
-// TestToolResultWithImage verifies that ToolResultWithImage creates a
+// TestToolResultWithImage_Scenarios_CorrectContent verifies that ToolResultWithImage creates a
 // CallToolResult containing both a TextContent with metadata and an
 // ImageContent with raw image bytes and MIME type. Covers valid inputs,
 // nil annotations, and empty image data to ensure all branches produce

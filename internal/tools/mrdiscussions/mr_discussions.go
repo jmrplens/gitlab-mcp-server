@@ -1,7 +1,8 @@
-// mr_discussions.go implements GitLab merge request discussion operations
-// including create (general and inline), resolve/unresolve, reply, and list.
-// It exposes typed input/output structs and handler functions registered as
-// MCP tools.
+// Package mrdiscussions implements GitLab merge request discussion MCP tools.
+//
+// It supports creating general and inline discussions, resolving and
+// unresolving discussions, replying to discussion threads, and listing merge
+// request discussions.
 package mrdiscussions
 
 import (

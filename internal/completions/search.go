@@ -1,6 +1,3 @@
-// search.go implements GitLab API search functions used by the completion
-// handler. Each function queries a specific GitLab API endpoint and returns
-// formatted string entries suitable for MCP completion results.
 package completions
 
 import (

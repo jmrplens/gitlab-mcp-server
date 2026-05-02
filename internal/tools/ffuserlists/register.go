@@ -1,4 +1,3 @@
-// register.go wires ffuserlists MCP tools to the MCP server.
 package ffuserlists
 
 import (

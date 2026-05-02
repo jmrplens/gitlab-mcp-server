@@ -1,6 +1,9 @@
 // Package todos implements MCP tool handlers for GitLab to-do item operations
 // including list, mark as done, and mark all as done.
 // It wraps the Todos service from client-go v2.
+//
+// The package also registers MCP tools and renders Markdown summaries for to-do
+// item responses.
 package todos
 
 import (

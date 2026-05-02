@@ -109,6 +109,8 @@ func TestWrapSamplingAction_InvalidParams(t *testing.T) {
 	}
 }
 
+// TestSamplingRoute_AttachesInputAndOutputSchemas verifies that sampling routes
+// retain reflected input and output schemas for meta-tool registration.
 func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
 	t.Parallel()
 
@@ -134,6 +136,8 @@ func TestSamplingRoute_AttachesInputAndOutputSchemas(t *testing.T) {
 	}
 }
 
+// TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas verifies that every
+// registered gitlab_analyze route declares an output schema.
 func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 	toolutil.ClearMetaRoutes()
 	t.Cleanup(toolutil.ClearMetaRoutes)
@@ -153,6 +157,8 @@ func TestRegisterMeta_AnalyzeRoutesDeclareOutputSchemas(t *testing.T) {
 	}
 }
 
+// TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent verifies that a
+// sampling capability failure returns an error result without structured output.
 func TestRegisterMeta_SamplingUnsupportedOmitsStructuredContent(t *testing.T) {
 	toolutil.ClearMetaRoutes()
 	t.Cleanup(toolutil.ClearMetaRoutes)

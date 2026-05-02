@@ -1,4 +1,3 @@
-// scopes.go detects the scopes of the currently authenticated Personal Access Token.
 package gitlab
 
 import (

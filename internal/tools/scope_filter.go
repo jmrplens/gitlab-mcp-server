@@ -1,5 +1,3 @@
-// scope_filter.go defines PAT scope requirements per meta-tool and provides
-// a function to remove tools the current token cannot execute.
 package tools
 
 import (

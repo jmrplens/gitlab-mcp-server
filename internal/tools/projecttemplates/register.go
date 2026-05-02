@@ -1,4 +1,3 @@
-// register.go wires projecttemplates MCP tools to the MCP server.
 package projecttemplates
 
 import (

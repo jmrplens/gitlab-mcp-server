@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for runner controller token MCP tool output.
 package runnercontrollertokens
 
 import (

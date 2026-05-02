@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for project discovery MCP tool output.
 package projectdiscovery
 
 import (

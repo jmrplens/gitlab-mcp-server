@@ -1,4 +1,3 @@
-// prompt_project_reports.go registers MCP prompts for project-level reporting and summaries.
 package prompts
 
 import (

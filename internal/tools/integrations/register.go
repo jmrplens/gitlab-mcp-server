@@ -1,4 +1,3 @@
-// register.go wires integrations MCP tools to the MCP server.
 package integrations
 
 import (

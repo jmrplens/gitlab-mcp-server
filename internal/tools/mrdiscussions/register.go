@@ -1,5 +1,3 @@
-// Package mrdiscussions provides MCP tool handlers for GitLab merge request
-// discussion operations: create (general and inline), resolve, reply, and list.
 package mrdiscussions
 
 import (

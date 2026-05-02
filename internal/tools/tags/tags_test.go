@@ -231,7 +231,7 @@ func TestTagGet_Success(t *testing.T) {
 	}
 }
 
-// TestTagGetSuccess_EnrichedFields verifies that Get maps enriched fields:
+// TestTagGet_SuccessEnrichedFields verifies that Get maps enriched fields:
 // CommitSHA, CommitMessage, CreatedAt from the commit sub-object.
 func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

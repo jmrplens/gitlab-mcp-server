@@ -1,4 +1,3 @@
-// project_snippets implements project-scoped snippet CRUD operations.
 package snippets
 
 import (

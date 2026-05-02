@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for access token MCP tool output.
 package accesstokens
 
 import (

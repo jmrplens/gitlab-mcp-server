@@ -1,5 +1,8 @@
 // Package geo implements MCP tools for GitLab Geo site management,
 // providing CRUD operations and status retrieval for Geo replication sites.
+//
+// The package also registers Geo MCP tools and renders Markdown summaries for
+// Geo site responses.
 package geo
 
 import (

@@ -1,4 +1,3 @@
-// register.go wires namespaces MCP tools to the MCP server.
 package namespaces
 
 import (

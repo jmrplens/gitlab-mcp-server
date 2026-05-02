@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for issue link MCP tool output.
 package issuelinks
 
 import (

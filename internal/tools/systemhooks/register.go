@@ -1,4 +1,3 @@
-// register.go wires systemhooks MCP tools to the MCP server.
 package systemhooks
 
 import (

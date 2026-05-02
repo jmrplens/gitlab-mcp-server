@@ -1,4 +1,3 @@
-// Package modelregistry markdown.go provides human-readable Markdown formatters for model registry tools.
 package modelregistry
 
 import (

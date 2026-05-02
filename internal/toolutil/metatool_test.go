@@ -367,6 +367,8 @@ func TestMakeMetaHandler_CustomFormatter(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_NilFormatterResult_UsesDefaultFormatter verifies that a
+// nil custom formatter result falls back to the default formatter.
 func TestMakeMetaHandler_NilFormatterResult_UsesDefaultFormatter(t *testing.T) {
 	routes := ActionMap{
 		"stats": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -394,6 +396,8 @@ func TestMakeMetaHandler_NilFormatterResult_UsesDefaultFormatter(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_IsErrorResult_OmitsStructuredContent verifies that error
+// formatter results do not expose structured content.
 func TestMakeMetaHandler_IsErrorResult_OmitsStructuredContent(t *testing.T) {
 	routes := ActionMap{
 		"blocked": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -1905,6 +1909,8 @@ type routeSchemaTestInput struct {
 	ID int `json:"id"`
 }
 
+// TestRouteVoidAction_ValidInput_ReturnsTypedOutput verifies that a void route
+// returns a typed success output for valid input.
 func TestRouteVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	t.Parallel()
 
@@ -1938,6 +1944,8 @@ func TestRouteVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	}
 }
 
+// TestRouteVoidAction_InvalidInput_ReturnsError verifies that invalid input is
+// rejected before the wrapped void handler runs.
 func TestRouteVoidAction_InvalidInput_ReturnsError(t *testing.T) {
 	t.Parallel()
 
@@ -1955,6 +1963,8 @@ func TestRouteVoidAction_InvalidInput_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestDestructiveVoidAction_ValidInput_ReturnsTypedOutput verifies that a
+// destructive void route returns DeleteOutput and marks the route destructive.
 func TestDestructiveVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	t.Parallel()
 
@@ -1988,6 +1998,8 @@ func TestDestructiveVoidAction_ValidInput_ReturnsTypedOutput(t *testing.T) {
 	}
 }
 
+// TestDestructiveVoidAction_HandlerError_PropagatesError verifies that errors
+// from destructive void handlers are returned unchanged.
 func TestDestructiveVoidAction_HandlerError_PropagatesError(t *testing.T) {
 	t.Parallel()
 
@@ -2005,6 +2017,8 @@ func TestDestructiveVoidAction_HandlerError_PropagatesError(t *testing.T) {
 	}
 }
 
+// TestWithVoidOutput_NilResult_ReturnsSuccessOutput verifies that nil inner
+// results are replaced with the configured success output.
 func TestWithVoidOutput_NilResult_ReturnsSuccessOutput(t *testing.T) {
 	t.Parallel()
 
@@ -2021,6 +2035,8 @@ func TestWithVoidOutput_NilResult_ReturnsSuccessOutput(t *testing.T) {
 	}
 }
 
+// TestWithVoidOutput_NonNilResult_PassesThrough verifies that non-nil inner
+// results are returned unchanged.
 func TestWithVoidOutput_NonNilResult_PassesThrough(t *testing.T) {
 	t.Parallel()
 
@@ -2037,6 +2053,8 @@ func TestWithVoidOutput_NonNilResult_PassesThrough(t *testing.T) {
 	}
 }
 
+// TestWithVoidOutput_InnerError_PropagatesError verifies that inner handler
+// errors bypass success-output substitution.
 func TestWithVoidOutput_InnerError_PropagatesError(t *testing.T) {
 	t.Parallel()
 
@@ -2053,6 +2071,8 @@ func TestWithVoidOutput_InnerError_PropagatesError(t *testing.T) {
 	}
 }
 
+// TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput verifies
+// that request-aware destructive void routes return DeleteOutput on success.
 func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *testing.T) {
 	t.Parallel()
 
@@ -2080,6 +2100,8 @@ func TestDestructiveVoidActionWithRequest_ValidInput_ReturnsDeleteOutput(t *test
 	}
 }
 
+// TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent verifies that
+// protocol-level calls to void actions include typed structured content.
 func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T) {
 	ClearMetaRoutes()
 	t.Cleanup(ClearMetaRoutes)
@@ -2162,6 +2184,8 @@ func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T)
 	}
 }
 
+// TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError verifies
+// that request-aware destructive void routes propagate handler errors.
 func TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError(t *testing.T) {
 	t.Parallel()
 
@@ -2180,6 +2204,8 @@ func TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError(t *testin
 	}
 }
 
+// TestWrapVoidActionWithRequest_Success_ReturnsNil verifies that request-aware
+// void wrappers return nil output when the handler succeeds.
 func TestWrapVoidActionWithRequest_Success_ReturnsNil(t *testing.T) {
 	t.Parallel()
 
@@ -2197,6 +2223,8 @@ func TestWrapVoidActionWithRequest_Success_ReturnsNil(t *testing.T) {
 	}
 }
 
+// TestWrapVoidActionWithRequest_Error_PropagatesError verifies that
+// request-aware void wrappers return handler errors unchanged.
 func TestWrapVoidActionWithRequest_Error_PropagatesError(t *testing.T) {
 	t.Parallel()
 
@@ -2215,6 +2243,8 @@ func TestWrapVoidActionWithRequest_Error_PropagatesError(t *testing.T) {
 	}
 }
 
+// TestWrapVoidActionWithRequest_UnmarshalError_ReturnsError verifies that
+// request-aware void wrappers reject invalid params before calling the handler.
 func TestWrapVoidActionWithRequest_UnmarshalError_ReturnsError(t *testing.T) {
 	t.Parallel()
 

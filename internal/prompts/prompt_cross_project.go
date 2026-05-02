@@ -1,6 +1,3 @@
-// Package prompts implements cross-project MCP prompts that aggregate
-// data across all accessible GitLab projects. These prompts use the global
-// MergeRequests and Issues APIs instead of project-scoped ones.
 package prompts
 
 import (

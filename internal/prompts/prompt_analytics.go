@@ -1,4 +1,3 @@
-// prompt_analytics.go registers MCP prompts for GitLab analytics and metrics.
 package prompts
 
 import (

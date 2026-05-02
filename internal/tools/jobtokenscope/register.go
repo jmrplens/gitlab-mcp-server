@@ -1,4 +1,3 @@
-// register.go wires jobtokenscope MCP tools to the MCP server.
 package jobtokenscope
 
 import (

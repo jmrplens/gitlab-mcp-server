@@ -1,4 +1,3 @@
-// register.go wires uploads MCP tools to the MCP server.
 package uploads
 
 import (

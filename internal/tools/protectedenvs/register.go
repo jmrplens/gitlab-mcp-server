@@ -1,4 +1,3 @@
-// register.go wires protectedenvs MCP tools to the MCP server.
 package protectedenvs
 
 import (

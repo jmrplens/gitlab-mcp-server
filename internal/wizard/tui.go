@@ -1,5 +1,3 @@
-// tui.go implements the terminal UI (TUI) wizard mode using the Bubble Tea
-// framework for interactive, in-terminal configuration.
 package wizard
 
 import (

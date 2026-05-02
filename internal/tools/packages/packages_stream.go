@@ -1,10 +1,3 @@
-// packages_stream.go implements streaming download for GitLab Generic Package
-// files. Instead of loading the entire file into memory (as DownloadPackageFile
-// does), it streams the HTTP response body directly to disk via io.Copy.
-//
-// This uses the client-go Client.Do(req, io.Writer) path which streams the
-// response body to any io.Writer, preserving the client's authentication,
-// rate limiting, and retry logic.
 package packages
 
 import (

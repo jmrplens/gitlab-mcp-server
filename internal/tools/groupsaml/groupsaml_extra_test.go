@@ -11,7 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
 
-// TestList validates the List handler across API errors and edge cases.
+// TestList_APIError validates the List handler across API errors and edge cases.
 // Covers: API 500 error propagation.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

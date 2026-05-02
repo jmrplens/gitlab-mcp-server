@@ -1,4 +1,3 @@
-// register.go wires appstatistics MCP tools to the MCP server.
 package appstatistics
 
 import (

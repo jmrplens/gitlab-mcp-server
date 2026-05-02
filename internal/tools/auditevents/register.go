@@ -1,4 +1,3 @@
-// register.go wires audit event MCP tools to the MCP server.
 package auditevents
 
 import (

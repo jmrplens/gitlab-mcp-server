@@ -1,5 +1,8 @@
 // Package completions provides a CompletionHandler for GitLab-aware autocomplete
 // of prompt arguments and resource URI template parameters.
+//
+// It queries GitLab search and project endpoints to return canonical argument
+// values suitable for MCP completion results.
 package completions
 
 import (

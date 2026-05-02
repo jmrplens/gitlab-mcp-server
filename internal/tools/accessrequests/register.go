@@ -1,4 +1,3 @@
-// register.go wires accessrequests MCP tools to the MCP server.
 package accessrequests
 
 import (

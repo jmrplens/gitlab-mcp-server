@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for event MCP tool output.
 package events
 
 import (

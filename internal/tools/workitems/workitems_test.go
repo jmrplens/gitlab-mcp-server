@@ -1406,9 +1406,7 @@ func TestFormatGetMarkdown_NoStatusNoLinkedItems(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Get — rich response with labels, assignees, status, dates
-// ---------------------------------------------------------------------------.
+// TestGet_RichResponse verifies rich work item response mapping.
 func TestGet_RichResponse(t *testing.T) {
 	richJSON := `{"data":{"namespace":{"workItem":{
 		"id":"gid://gitlab/WorkItem/42","iid":"42",

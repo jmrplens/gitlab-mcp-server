@@ -22,6 +22,7 @@ gitlab-mcp-server/
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
 │   ├── add_docs/                # AST tool: adds godoc comments to undocumented symbols
+│   ├── audit_godocs/            # Audits Go package, symbol, and test documentation
 │   ├── audit_output/            # Audits MCP tool output quality (schema, annotations, descriptions)
 │   ├── audit_test_names/        # Audits test function naming convention compliance
 │   ├── audit_tools/             # Audits MCP tool metadata violations (naming, annotations)

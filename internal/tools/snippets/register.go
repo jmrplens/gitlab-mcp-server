@@ -1,4 +1,3 @@
-// register.go wires snippets MCP tools to the MCP server.
 package snippets
 
 import (

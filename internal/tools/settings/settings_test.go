@@ -246,9 +246,7 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_MarshalError verifies that Get handles the json.Marshal step.
-// Since gl.Settings always marshals fine, we test the unmarshal step
-// by returning a valid response and verifying the full round-trip.
+// TestGet_Success_FullRoundTrip verifies that Get handles a complete settings response.
 func TestGet_Success_FullRoundTrip(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":true,"default_project_visibility":"private"}`)

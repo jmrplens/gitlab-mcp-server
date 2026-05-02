@@ -1,4 +1,3 @@
-// set_jira.go implements the Jira integration configuration handler.
 package integrations
 
 import (

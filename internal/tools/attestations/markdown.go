@@ -1,5 +1,3 @@
-// markdown.go provides Markdown formatting functions for attestation
-// MCP tool output.
 package attestations
 
 import (

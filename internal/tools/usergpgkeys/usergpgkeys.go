@@ -1,4 +1,7 @@
 // Package usergpgkeys implements GitLab GPG key management operations for users.
+//
+// The package registers MCP tools and renders Markdown summaries for user GPG
+// key responses.
 package usergpgkeys
 
 import (

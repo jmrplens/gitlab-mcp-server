@@ -1,4 +1,3 @@
-// register.go wires groupimportexport MCP tools to the MCP server.
 package groupimportexport
 
 import (

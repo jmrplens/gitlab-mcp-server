@@ -1,6 +1,7 @@
-// mr_notes.go implements GitLab merge request note (comment) operations
-// including create, list, update, and delete. It exposes typed input/output
-// structs and handler functions registered as MCP tools.
+// Package mrnotes implements GitLab merge request note MCP tools.
+//
+// It supports creating, listing, updating, and deleting merge request notes and
+// registers those handlers as MCP tools.
 package mrnotes
 
 import (

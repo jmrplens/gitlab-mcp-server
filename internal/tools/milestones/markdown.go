@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for project milestone MCP tool output.
 package milestones
 
 import (

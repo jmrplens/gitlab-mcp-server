@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for server health MCP tool output.
 package health
 
 import (

@@ -1,7 +1,3 @@
-// packages_composite.go implements higher-level GitLab Generic Packages
-// operations that combine multiple API calls into a single tool invocation.
-// - PublishAndLink: publish a file then create a release asset link
-// - PublishDirectory: publish all matching files in a directory.
 package packages
 
 import (

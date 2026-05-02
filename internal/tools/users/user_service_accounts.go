@@ -1,4 +1,3 @@
-// user_service_accounts.go implements service account and current-user PAT operations.
 package users
 
 import (

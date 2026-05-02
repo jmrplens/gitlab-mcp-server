@@ -1,4 +1,3 @@
-// register.go wires cilint MCP tools to the MCP server.
 package cilint
 
 import (

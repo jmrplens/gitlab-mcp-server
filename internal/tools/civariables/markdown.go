@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for CI/CD variable MCP tool output.
 package civariables
 
 import (

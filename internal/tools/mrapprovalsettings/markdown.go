@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for MR approval settings output.
 package mrapprovalsettings
 
 import (

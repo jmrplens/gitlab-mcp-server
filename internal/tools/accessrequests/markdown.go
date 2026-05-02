@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting functions for access request MCP tool output.
 package accessrequests
 
 import (

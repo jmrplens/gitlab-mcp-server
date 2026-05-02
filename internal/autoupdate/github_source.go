@@ -1,5 +1,3 @@
-// github_source.go creates a selfupdate.Source backed by the public GitHub
-// Releases API for the auto-update mechanism.
 package autoupdate
 
 import "github.com/creativeprojects/go-selfupdate"

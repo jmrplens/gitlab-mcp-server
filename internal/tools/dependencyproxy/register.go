@@ -1,4 +1,3 @@
-// register.go wires dependencyproxy MCP tools to the MCP server.
 package dependencyproxy
 
 import (

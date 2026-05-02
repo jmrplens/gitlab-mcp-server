@@ -1,4 +1,3 @@
-// register.go wires dbmigrations MCP tools to the MCP server.
 package dbmigrations
 
 import (

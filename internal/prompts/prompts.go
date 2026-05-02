@@ -1,5 +1,3 @@
-// Package prompts registers MCP prompt templates that generate AI-optimized
-// summaries, reviews, and assessments from GitLab project data.
 package prompts
 
 import (

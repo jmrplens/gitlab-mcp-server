@@ -1,13 +1,3 @@
-// Package sampling provides a Client for requesting LLM analysis via MCP sampling.
-//
-// The Client is a value type — its zero value is safe to use and acts as a no-op
-// when the connected MCP client does not support sampling. This mirrors the
-// pattern used by the progress.Tracker type.
-//
-// SECURITY: All user-supplied data sent to the LLM is wrapped in unique
-// nonce-based XML delimiters (e.g., <gitlab_data_{random}>) that cannot be
-// predicted or injected by attacker-controlled content. This prevents XML
-// tag injection attacks. Credential patterns are stripped from data before sending.
 package sampling
 
 import (

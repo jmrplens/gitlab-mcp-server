@@ -1,4 +1,3 @@
-// register.go wires group SCIM MCP tools to the MCP server.
 package groupscim
 
 import (

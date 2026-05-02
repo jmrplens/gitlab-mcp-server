@@ -329,7 +329,10 @@ After all phases complete:
 2. Generate final coverage report: `go tool cover -func=coverage.out`
 3. Verify every package meets 90%+ target
 4. Run quality checks: `go vet ./...` and `staticcheck ./...` (if available)
-5. Clean up any temporary files
+5. Refresh `docs/development/testing.md`: `go run ./cmd/gen_testing_docs/`
+6. Verify the generated testing reference: `go run ./cmd/gen_testing_docs/ --check`
+7. Lint the generated testing reference: `npx markdownlint-cli2 docs/development/testing.md`
+8. Clean up any temporary files
 
 ---
 

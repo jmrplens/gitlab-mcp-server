@@ -1,4 +1,3 @@
-// register.go wires deployments MCP tools to the MCP server.
 package deployments
 
 import (

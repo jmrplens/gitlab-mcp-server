@@ -1,5 +1,3 @@
-// Package snippets implements MCP tools for GitLab personal and project
-// snippets via the SnippetsService and ProjectSnippetsService APIs.
 package snippets
 
 import (

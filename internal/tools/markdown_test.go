@@ -1228,7 +1228,7 @@ func TestFormatAnalyze_MRChangesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatAnalyzeMRChangesMarkdown_Truncated verifies truncation warning.
+// TestFormatAnalyze_MRChangesMarkdownTruncated verifies truncation warning.
 func TestFormatAnalyze_MRChangesMarkdownTruncated(t *testing.T) {
 	a := samplingtools.AnalyzeMRChangesOutput{MRIID: 1, Title: "x", Analysis: "text", Truncated: true}
 	md := samplingtools.FormatAnalyzeMRChangesMarkdown(a)

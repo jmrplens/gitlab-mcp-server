@@ -1,4 +1,3 @@
-// markdown.go provides Markdown formatting for security findings outputs.
 package securityfindings
 
 import (

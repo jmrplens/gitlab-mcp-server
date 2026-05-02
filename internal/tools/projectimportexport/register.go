@@ -1,4 +1,3 @@
-// register.go wires projectimportexport MCP tools to the MCP server.
 package projectimportexport
 
 import (

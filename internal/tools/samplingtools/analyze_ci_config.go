@@ -1,4 +1,3 @@
-// analyze_ci_config.go implements the sampling-based CI configuration analysis tool.
 package samplingtools
 
 import (

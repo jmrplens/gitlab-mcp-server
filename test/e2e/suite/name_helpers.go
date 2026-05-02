@@ -1,5 +1,3 @@
-// name_helpers.go builds deterministic, GitLab-safe identifiers for E2E
-// resources so parallel runs can isolate their projects, groups, and branches.
 package suite
 
 import (

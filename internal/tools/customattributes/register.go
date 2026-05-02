@@ -1,4 +1,3 @@
-// register.go wires customattributes MCP tools to the MCP server.
 package customattributes
 
 import (

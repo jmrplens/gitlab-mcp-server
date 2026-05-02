@@ -1,8 +1,3 @@
-// Package integrations implements MCP tool handlers for GitLab project
-// integrations (services). It wraps the ServicesService from client-go v2.
-//
-// The generic List method returns all integrations. Get and Delete dispatch
-// to the integration-specific client-go methods based on the slug parameter.
 package integrations
 
 import (

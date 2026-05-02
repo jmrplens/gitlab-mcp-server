@@ -1,4 +1,3 @@
-// register.go wires server update MCP tools to the MCP server.
 package serverupdate
 
 import (

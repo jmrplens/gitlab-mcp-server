@@ -1,4 +1,3 @@
-// register.go wires CI/CD Catalog MCP tools to the MCP server.
 package cicatalog
 
 import (

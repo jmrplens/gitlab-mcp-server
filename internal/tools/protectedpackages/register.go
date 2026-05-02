@@ -1,4 +1,3 @@
-// register.go wires protectedpackages MCP tools to the MCP server.
 package protectedpackages
 
 import (

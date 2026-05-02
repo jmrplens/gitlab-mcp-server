@@ -1,5 +1,3 @@
-// mutations.go provides mutation handlers for dismissing, confirming,
-// resolving, and reverting vulnerabilities via the GitLab GraphQL API.
 package vulnerabilities
 
 import (

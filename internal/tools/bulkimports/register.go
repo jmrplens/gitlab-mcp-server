@@ -1,4 +1,3 @@
-// register.go wires bulkimports MCP tools to the MCP server.
 package bulkimports
 
 import (

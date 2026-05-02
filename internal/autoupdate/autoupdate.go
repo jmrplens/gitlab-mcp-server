@@ -1,6 +1,3 @@
-// autoupdate.go provides self-update capability for the gitlab-mcp-server binary.
-// It wraps the creativeprojects/go-selfupdate library with a GitHub source
-// to detect, download, validate, and apply new releases.
 package autoupdate
 
 import (

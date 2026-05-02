@@ -596,16 +596,9 @@ func TestPreStartUpdate_ExecSelfFails_Full(t *testing.T) {
 	}
 }
 
-// TestPreStartUpdate_SetJustUpdatedError verifies that when SetJustUpdated
-// fails (e.g. os.Setenv error scenario), PreStartUpdate still returns
-// Updated=true with the new version but does not attempt execSelf.
-// We simulate this by making os.Setenv fail via a read-only env var hack;
-// since that's not portable, we instead verify the code path by overriding
-// the env var name temporarily. Actually, SetJustUpdated always uses
-// os.Setenv which doesn't fail in practice; this test exercises the guard
-// where SetJustUpdated succeeds but execSelf fails (already covered above).
-// Instead, let's test the successful Unix update path where execSelf
-// "succeeds" (returns nil = process replaced, function doesn't return).
+// TestPreStartUpdate_UnixExecSuccess verifies the successful Unix update path
+// where execSelf returns nil, simulating a process replacement that normally
+// does not return to the caller.
 func TestPreStartUpdate_UnixExecSuccess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("exec path not taken on Windows")

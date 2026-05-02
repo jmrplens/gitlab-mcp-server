@@ -1,4 +1,3 @@
-// register.go wires featureflags MCP tools to the MCP server.
 package featureflags
 
 import (

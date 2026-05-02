@@ -1,4 +1,3 @@
-// register.go wires search MCP tools to the MCP server.
 package search
 
 import (

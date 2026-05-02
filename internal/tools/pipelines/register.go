@@ -1,4 +1,3 @@
-// register.go wires pipelines MCP tools to the MCP server.
 package pipelines
 
 import (

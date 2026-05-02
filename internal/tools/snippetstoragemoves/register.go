@@ -1,4 +1,3 @@
-// register.go wires snippet storage move MCP tools to the MCP server.
 package snippetstoragemoves
 
 import (
