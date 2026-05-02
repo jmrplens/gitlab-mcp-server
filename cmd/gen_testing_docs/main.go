@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +38,32 @@ const (
 	endMarker      = "<!-- END TESTING STATS -->"
 	fallbackStart  = "## Overview"
 	fallbackEnd    = "## Test Types"
+
+	cmdPattern      = "./cmd/..."
+	internalPattern = "./internal/..."
+	e2eSuitePattern = "./test/e2e/suite"
+	e2eSuiteRun     = "./test/e2e/suite/"
+	e2eSuitePath    = "test/e2e/suite"
+	e2eSuiteDisplay = "test/e2e/suite/"
+
+	goFileSuffix     = ".go"
+	goTestFileSuffix = "_test.go"
+
+	cmdPathPrefix           = "cmd/"
+	internalPathPrefix      = "internal/"
+	internalToolsPathPrefix = "internal/tools/"
+
+	layerCmd                = "cmd"
+	layerCore               = "core"
+	layerE2E                = "e2e"
+	layerOther              = "other"
+	layerToolsOrchestration = "tools-orchestration"
+	layerToolSubpackage     = "tool-subpackage"
+
+	tableDividerMetric         = "| --- | ---: |\n"
+	tableHeaderPackageCoverage = "| Package | Coverage |\n"
+	tableRowPackageCoverage    = "| %s | %s |\n"
+	tableRow4Columns           = "| %s | %s | %s | %s |\n"
 
 	pattern3Part        = "3-part"
 	pattern2Part        = "2-part"
@@ -182,17 +209,12 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 	coverageByPackage := map[string]coverageValue{}
 	if !opts.skipCoverage {
-		combinedCoverage, combinedTotal, coverageErr := runCoverage(ctx, opts, "cmd-internal", []string{"./internal/...", "./cmd/..."})
+		combinedCoverage, combinedTotal, internalTotal, coverageErr := runUnitCoverage(ctx, opts)
 		if coverageErr != nil {
 			return repositoryMetrics{}, coverageErr
 		}
 		coverageByPackage = combinedCoverage
 		metrics.OverallCoverage = combinedTotal
-
-		_, internalTotal, internalErr := runCoverage(ctx, opts, "internal", []string{"./internal/..."})
-		if internalErr != nil {
-			return repositoryMetrics{}, internalErr
-		}
 		metrics.InternalCoverage = internalTotal
 	}
 
@@ -217,7 +239,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 			metrics.NamingCounts[pattern] += count
 		}
 
-		if pkg.Layer == "tool-subpackage" {
+		if pkg.Layer == layerToolSubpackage {
 			toolCount, toolErr := countMCPTools(info.Dir)
 			if toolErr != nil {
 				return repositoryMetrics{}, fmt.Errorf("count MCP tools in %s: %w", pkg.RelPath, toolErr)
@@ -234,7 +256,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 	metrics.AveragePackageCoverage = averageCoverage(metrics.Packages)
 
 	if opts.includeE2ERun {
-		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-timeout", opts.timeout.String(), "./test/e2e/suite/"}); e2eErr != nil {
+		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
 			return repositoryMetrics{}, fmt.Errorf("run e2e tests: %w", e2eErr)
 		}
 		metrics.E2ENote = "E2E tests were executed with -tags e2e during this generation run. Coverage tables still report unit-test coverage for ./internal/... and ./cmd/...."
@@ -245,7 +267,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 // listPackages returns all packages covered by the testing reference document.
 func listPackages(ctx context.Context) ([]packageInfo, error) {
-	output, err := runGo(ctx, []string{"list", "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", "./cmd/...", "./internal/...", "./test/e2e/suite"})
+	output, err := runGo(ctx, []string{"list", "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2eSuitePattern})
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
@@ -264,52 +286,66 @@ func listPackages(ctx context.Context) ([]packageInfo, error) {
 	return infos, nil
 }
 
-// runCoverage executes go test with coverage and returns per-package and total percentages.
-func runCoverage(ctx context.Context, opts options, name string, patterns []string) (map[string]coverageValue, coverageValue, error) {
+// runUnitCoverage executes coverage once and derives combined and internal totals.
+func runUnitCoverage(ctx context.Context, opts options) (packageCoverages map[string]coverageValue, overallCoverage, internalCoverage coverageValue, err error) {
 	coverageDir, cleanup, err := coverageDirectory(opts.coverageDir)
 	if err != nil {
-		return nil, coverageValue{}, err
+		return nil, coverageValue{}, coverageValue{}, err
 	}
-	defer cleanup()
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	profilePath := filepath.Join(coverageDir, name+".out")
+	profilePath := filepath.Join(coverageDir, "cmd-internal.out")
+	patterns := []string{internalPattern, cmdPattern}
 	args := []string{"test", "-coverprofile=" + profilePath, "-covermode=count"}
 	args = append(args, patterns...)
 	args = append(args, "-count=1")
 
 	output, err := runGo(ctx, args)
 	if err != nil {
-		return nil, coverageValue{}, fmt.Errorf("run coverage for %s: %w", strings.Join(patterns, " "), err)
+		return nil, coverageValue{}, coverageValue{}, fmt.Errorf("run coverage for %s: %w", strings.Join(patterns, " "), err)
 	}
 
 	coverages, err := parsePackageCoverages(string(output))
 	if err != nil {
-		return nil, coverageValue{}, err
+		return nil, coverageValue{}, coverageValue{}, err
 	}
 
 	coverOutput, err := runGo(ctx, []string{"tool", "cover", "-func=" + profilePath})
 	if err != nil {
-		return nil, coverageValue{}, fmt.Errorf("summarize coverage for %s: %w", strings.Join(patterns, " "), err)
+		return nil, coverageValue{}, coverageValue{}, fmt.Errorf("summarize coverage for %s: %w", strings.Join(patterns, " "), err)
 	}
 	total, err := parseTotalCoverage(string(coverOutput))
 	if err != nil {
-		return nil, coverageValue{}, err
+		return nil, coverageValue{}, coverageValue{}, err
 	}
 
-	return coverages, coverageValue{Percent: total, OK: true}, nil
+	profile, err := os.ReadFile(profilePath) // #nosec G304 -- profilePath is created by coverageDirectory for this process.
+	if err != nil {
+		return nil, coverageValue{}, coverageValue{}, fmt.Errorf("read coverage profile: %w", err)
+	}
+	internalTotal, err := parseCoverageProfileTotal(string(profile), func(fileName string) bool {
+		return strings.Contains(fileName, "/"+internalPathPrefix)
+	})
+	if err != nil {
+		return nil, coverageValue{}, coverageValue{}, err
+	}
+
+	return coverages, coverageValue{Percent: total, OK: true}, internalTotal, nil
 }
 
 // coverageDirectory returns the directory for profiles and a cleanup callback.
 func coverageDirectory(configured string) (dir string, cleanup func(), err error) {
 	if configured != "" {
 		if mkdirErr := os.MkdirAll(configured, 0o750); mkdirErr != nil {
-			return "", func() {}, fmt.Errorf("create coverage dir: %w", mkdirErr)
+			return "", nil, fmt.Errorf("create coverage dir: %w", mkdirErr)
 		}
-		return configured, func() {}, nil
+		return configured, nil, nil
 	}
 	dir, err = os.MkdirTemp("", "gen-testing-docs-coverage-*")
 	if err != nil {
-		return "", func() {}, fmt.Errorf("create temp coverage dir: %w", err)
+		return "", nil, fmt.Errorf("create temp coverage dir: %w", err)
 	}
 	return dir, func() { _ = os.RemoveAll(dir) }, nil
 }
@@ -324,7 +360,7 @@ func countTests(dir string) (testFunctions, testFiles int, namingCounts map[stri
 	namingCounts = map[string]int{}
 	fset := token.NewFileSet()
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), goTestFileSuffix) {
 			continue
 		}
 		testFiles++
@@ -377,19 +413,21 @@ func classifyTestName(name string) string {
 func countMCPTools(dir string) (int, error) {
 	count := 0
 	fset := token.NewFileSet()
-	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	for _, entry := range entries {
 		if entry.IsDir() {
-			return nil
+			continue
 		}
-		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-			return nil
+		if !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
+			continue
 		}
+		path := filepath.Join(dir, entry.Name())
 		node, parseErr := parser.ParseFile(fset, path, nil, 0)
 		if parseErr != nil {
-			return parseErr
+			return 0, parseErr
 		}
 		ast.Inspect(node, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
@@ -406,9 +444,8 @@ func countMCPTools(dir string) (int, error) {
 			}
 			return true
 		})
-		return nil
-	})
-	return count, err
+	}
+	return count, nil
 }
 
 // parsePackageCoverages extracts coverage percentages from go test output.
@@ -444,6 +481,46 @@ func parseTotalCoverage(output string) (float64, error) {
 	return 0, errors.New("total coverage line not found")
 }
 
+// parseCoverageProfileTotal calculates weighted coverage for matching files.
+func parseCoverageProfileTotal(profile string, includeFile func(string) bool) (coverageValue, error) {
+	totalStatements := 0
+	coveredStatements := 0
+	for line := range strings.SplitSeq(profile, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "mode:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			return coverageValue{}, fmt.Errorf("unexpected coverage profile line: %q", line)
+		}
+		fileName, _, ok := strings.Cut(fields[0], ":")
+		if !ok {
+			return coverageValue{}, fmt.Errorf("coverage profile line missing location: %q", line)
+		}
+		if !includeFile(fileName) {
+			continue
+		}
+		statements, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return coverageValue{}, fmt.Errorf("parse statement count in %q: %w", line, err)
+		}
+		count, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return coverageValue{}, fmt.Errorf("parse coverage count in %q: %w", line, err)
+		}
+		totalStatements += statements
+		if count > 0 {
+			coveredStatements += statements
+		}
+	}
+	if totalStatements == 0 {
+		return coverageValue{}, nil
+	}
+	percent := float64(coveredStatements) * 100 / float64(totalStatements)
+	return coverageValue{Percent: percent, OK: true}, nil
+}
+
 // renderTestingStats builds the generated Markdown section.
 func renderTestingStats(metrics repositoryMetrics, topToolRows int) string {
 	var b strings.Builder
@@ -464,22 +541,22 @@ func renderTestingStats(metrics repositoryMetrics, topToolRows int) string {
 func renderOverview(metrics repositoryMetrics) string {
 	var b strings.Builder
 	totals := layerTotals(metrics.Packages)
-	toolPackages := packagesByLayer(metrics.Packages, "tool-subpackage")
-	corePackages := packagesByLayer(metrics.Packages, "core")
+	toolPackages := packagesByLayer(metrics.Packages, layerToolSubpackage)
+	corePackages := packagesByLayer(metrics.Packages, layerCore)
 
 	b.WriteString("| Metric | Value |\n")
-	b.WriteString("| --- | ---: |\n")
+	b.WriteString(tableDividerMetric)
 	fmt.Fprintf(&b, "| Total test functions | %s |\n", fmtInt(totalTests(metrics.Packages)))
-	fmt.Fprintf(&b, "| Unit test functions | %s |\n", fmtInt(totalTests(metrics.Packages)-totals["e2e"].tests))
-	fmt.Fprintf(&b, "| E2E test functions | %s |\n", fmtInt(totals["e2e"].tests))
-	fmt.Fprintf(&b, "| cmd test functions | %s |\n", fmtInt(totals["cmd"].tests))
-	fmt.Fprintf(&b, "| Test files (internal/) | %s |\n", fmtInt(testFilesWithPrefix(metrics.Packages, "internal/")))
-	fmt.Fprintf(&b, "| Test files (cmd/) | %s |\n", fmtInt(testFilesWithPrefix(metrics.Packages, "cmd/")))
-	fmt.Fprintf(&b, "| Test files (test/e2e/suite/) | %s |\n", fmtInt(testFilesWithPrefix(metrics.Packages, "test/e2e/suite")))
+	fmt.Fprintf(&b, "| Unit test functions | %s |\n", fmtInt(totalTests(metrics.Packages)-totals[layerE2E].tests))
+	fmt.Fprintf(&b, "| E2E test functions | %s |\n", fmtInt(totals[layerE2E].tests))
+	fmt.Fprintf(&b, "| cmd test functions | %s |\n", fmtInt(totals[layerCmd].tests))
+	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", internalPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix)))
+	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", cmdPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix)))
+	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", e2eSuiteDisplay, fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath)))
 	fmt.Fprintf(&b, "| Tool sub-packages tested | %s |\n", fmtInt(countTestedPackages(toolPackages)))
 	fmt.Fprintf(&b, "| Core packages tested | %s |\n", fmtInt(countTestedPackages(corePackages)))
-	fmt.Fprintf(&b, "| Overall coverage (`go test ./internal/... ./cmd/...`) | %s |\n", fmtCoverage(metrics.OverallCoverage))
-	fmt.Fprintf(&b, "| Overall coverage (`go test ./internal/...`) | %s |\n", fmtCoverage(metrics.InternalCoverage))
+	fmt.Fprintf(&b, "| Overall coverage (`go test %s %s`) | %s |\n", internalPattern, cmdPattern, fmtCoverage(metrics.OverallCoverage))
+	fmt.Fprintf(&b, "| Overall coverage (`go test %s`) | %s |\n", internalPattern, fmtCoverage(metrics.InternalCoverage))
 	fmt.Fprintf(&b, "| Average package coverage | %s |\n\n", fmtCoverage(metrics.AveragePackageCoverage))
 	return b.String()
 }
@@ -524,15 +601,15 @@ func renderDistribution(metrics repositoryMetrics) string {
 		Label       string
 		Description string
 	}{
-		{"core", "Core packages", "shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities"},
-		{"tools-orchestration", "Tools orchestration", "registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests"},
-		{"tool-subpackage", fmt.Sprintf("Tool sub-packages (%d)", countTestedPackages(packagesByLayer(metrics.Packages, "tool-subpackage"))), "domain-specific GitLab tool handlers"},
-		{"e2e", "E2E integration", "build-tagged real GitLab integration suite"},
-		{"cmd", "cmd packages", "server entry point and developer command utilities"},
+		{layerCore, "Core packages", "shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities"},
+		{layerToolsOrchestration, "Tools orchestration", "registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests"},
+		{layerToolSubpackage, fmt.Sprintf("Tool sub-packages (%d)", countTestedPackages(packagesByLayer(metrics.Packages, layerToolSubpackage))), "domain-specific GitLab tool handlers"},
+		{layerE2E, "E2E integration", "build-tagged real GitLab integration suite"},
+		{layerCmd, "cmd packages", "server entry point and developer command utilities"},
 	}
 	for _, row := range rows {
 		total := totals[row.Layer]
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", row.Label, fmtInt(total.tests), fmtInt(total.files), escapeTable(row.Description))
+		fmt.Fprintf(&b, tableRow4Columns, row.Label, fmtInt(total.tests), fmtInt(total.files), escapeTable(row.Description))
 	}
 	fmt.Fprintf(&b, "| **Total** | **%s** | **%s** |  |\n\n", fmtInt(totalTests(metrics.Packages)), fmtInt(totalTestFiles(metrics.Packages)))
 	return b.String()
@@ -540,7 +617,7 @@ func renderDistribution(metrics repositoryMetrics) string {
 
 // renderCorePackages renders counts and coverage for non-tool internal packages.
 func renderCorePackages(metrics repositoryMetrics) string {
-	packages := packagesByLayer(metrics.Packages, "core")
+	packages := packagesByLayer(metrics.Packages, layerCore)
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Key < packages[j].Key })
 
 	var b strings.Builder
@@ -553,7 +630,7 @@ func renderCorePackages(metrics repositoryMetrics) string {
 			continue
 		}
 		subtotal += pkg.TestFunctions
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), escapeTable(pkg.Summary))
+		fmt.Fprintf(&b, tableRow4Columns, pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), escapeTable(pkg.Summary))
 	}
 	fmt.Fprintf(&b, "| **Subtotal** | **%s** |  |  |\n\n", fmtInt(subtotal))
 	return b.String()
@@ -561,7 +638,7 @@ func renderCorePackages(metrics repositoryMetrics) string {
 
 // renderTopToolPackages renders the most-tested tool sub-packages.
 func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
-	packages := packagesByLayer(metrics.Packages, "tool-subpackage")
+	packages := packagesByLayer(metrics.Packages, layerToolSubpackage)
 	sort.Slice(packages, func(i, j int) bool {
 		if packages[i].TestFunctions != packages[j].TestFunctions {
 			return packages[i].TestFunctions > packages[j].TestFunctions
@@ -577,7 +654,7 @@ func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
 	b.WriteString("| Sub-package | Tests | Coverage | Tools |\n")
 	b.WriteString("| --- | ---: | ---: | ---: |\n")
 	for _, pkg := range packages {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount))
+		fmt.Fprintf(&b, tableRow4Columns, pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount))
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -585,7 +662,7 @@ func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
 
 // renderCompleteToolPackages renders the full tool sub-package table.
 func renderCompleteToolPackages(metrics repositoryMetrics) string {
-	packages := packagesByLayer(metrics.Packages, "tool-subpackage")
+	packages := packagesByLayer(metrics.Packages, layerToolSubpackage)
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Key < packages[j].Key })
 
 	tested := countTestedPackages(packages)
@@ -617,29 +694,29 @@ func renderCoverageReport(metrics repositoryMetrics) string {
 	var b strings.Builder
 	b.WriteString("## Coverage Report\n\n")
 	b.WriteString("### cmd Package Snapshot\n\n")
-	b.WriteString("| Package | Coverage |\n")
-	b.WriteString("| --- | ---: |\n")
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, "cmd")) {
-		fmt.Fprintf(&b, "| %s | %s |\n", pkg.Key, fmtCoverage(pkg.Coverage))
+	b.WriteString(tableHeaderPackageCoverage)
+	b.WriteString(tableDividerMetric)
+	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCmd)) {
+		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
 	}
 	b.WriteString("\n")
 
 	b.WriteString("### Core Packages\n\n")
-	b.WriteString("| Package | Coverage |\n")
-	b.WriteString("| --- | ---: |\n")
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, "core")) {
-		fmt.Fprintf(&b, "| %s | %s |\n", pkg.Key, fmtCoverage(pkg.Coverage))
+	b.WriteString(tableHeaderPackageCoverage)
+	b.WriteString(tableDividerMetric)
+	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCore)) {
+		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
 	}
 	b.WriteString("\n")
 
 	b.WriteString("### Tool Sub-Packages\n\n")
-	b.WriteString("| Package | Coverage |\n")
-	b.WriteString("| --- | ---: |\n")
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, "tools-orchestration")) {
-		fmt.Fprintf(&b, "| %s | %s |\n", "tools (orch.)", fmtCoverage(pkg.Coverage))
+	b.WriteString(tableHeaderPackageCoverage)
+	b.WriteString(tableDividerMetric)
+	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolsOrchestration)) {
+		fmt.Fprintf(&b, tableRowPackageCoverage, "tools (orch.)", fmtCoverage(pkg.Coverage))
 	}
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, "tool-subpackage")) {
-		fmt.Fprintf(&b, "| %s | %s |\n", pkg.Key, fmtCoverage(pkg.Coverage))
+	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolSubpackage)) {
+		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -669,7 +746,7 @@ func packageSummary(dir string) string {
 
 	fset := token.NewFileSet()
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), goFileSuffix) || strings.HasSuffix(entry.Name(), goTestFileSuffix) {
 			continue
 		}
 		node, parseErr := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, parser.ParseComments)
@@ -788,13 +865,23 @@ func replaceBetweenMarkers(text, content string) (string, error) {
 // runGo executes a Go command with the module toolchain version pinned.
 func runGo(ctx context.Context, args []string) ([]byte, error) {
 	// #nosec G204 -- args are built by this generator from fixed Go subcommands; no shell is involved.
-	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd := exec.CommandContext(ctx, goExecutable(), args...)
 	cmd.Env = goEnvironment()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, tailLines(string(output), 80))
 	}
 	return output, nil
+}
+
+// goExecutable returns the absolute Go tool path from the runtime installation.
+func goExecutable() string {
+	name := "go"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	//lint:ignore SA1019 testing docs generation must avoid PATH lookup for Sonar go:S4036.
+	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
 }
 
 // goEnvironment returns the process environment with GOTOOLCHAIN pinned to go.mod.
@@ -859,13 +946,13 @@ func relativePath(path string) string {
 // packageKey returns the short name used in generated tables.
 func packageKey(relPath string) string {
 	switch {
-	case strings.HasPrefix(relPath, "internal/tools/"):
-		return strings.TrimPrefix(relPath, "internal/tools/")
+	case strings.HasPrefix(relPath, internalToolsPathPrefix):
+		return strings.TrimPrefix(relPath, internalToolsPathPrefix)
 	case relPath == "internal/tools":
 		return "tools"
-	case strings.HasPrefix(relPath, "internal/"):
-		return strings.TrimPrefix(relPath, "internal/")
-	case strings.HasPrefix(relPath, "cmd/"):
+	case strings.HasPrefix(relPath, internalPathPrefix):
+		return strings.TrimPrefix(relPath, internalPathPrefix)
+	case strings.HasPrefix(relPath, cmdPathPrefix):
 		return relPath
 	default:
 		return relPath
@@ -876,17 +963,17 @@ func packageKey(relPath string) string {
 func classifyLayer(relPath string) string {
 	switch {
 	case relPath == "internal/tools":
-		return "tools-orchestration"
-	case strings.HasPrefix(relPath, "internal/tools/"):
-		return "tool-subpackage"
-	case strings.HasPrefix(relPath, "internal/"):
-		return "core"
-	case strings.HasPrefix(relPath, "cmd/"):
-		return "cmd"
-	case relPath == "test/e2e/suite":
-		return "e2e"
+		return layerToolsOrchestration
+	case strings.HasPrefix(relPath, internalToolsPathPrefix):
+		return layerToolSubpackage
+	case strings.HasPrefix(relPath, internalPathPrefix):
+		return layerCore
+	case strings.HasPrefix(relPath, cmdPathPrefix):
+		return layerCmd
+	case relPath == e2eSuitePath:
+		return layerE2E
 	default:
-		return "other"
+		return layerOther
 	}
 }
 

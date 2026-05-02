@@ -97,6 +97,16 @@ func RegisterTools() {
 	toolutil.AddMetaTool(server, toolC, routes, icons, handlerC)
 }
 `)
+	nested := filepath.Join(dir, "nested")
+	if err := os.Mkdir(nested, 0o750); err != nil {
+		t.Fatalf("create nested fixture dir: %v", err)
+	}
+	writeFixture(t, nested, "register.go", `package nested
+
+func RegisterTools() {
+	mcp.AddTool(server, toolNested, handlerNested)
+}
+`)
 
 	got, err := countMCPTools(dir)
 	if err != nil {
@@ -104,6 +114,30 @@ func RegisterTools() {
 	}
 	if got != 2 {
 		t.Fatalf("countMCPTools() = %d, want 2", got)
+	}
+}
+
+// TestParseCoverageProfileTotal_FiltersMatchingFiles verifies internal-only
+// coverage totals can be derived from one combined coverage profile.
+func TestParseCoverageProfileTotal_FiltersMatchingFiles(t *testing.T) {
+	profile := strings.Join([]string{
+		"mode: count",
+		"github.com/example/project/internal/a/a.go:1.1,2.1 2 1",
+		"github.com/example/project/internal/a/b.go:3.1,4.1 3 0",
+		"github.com/example/project/cmd/app/main.go:1.1,2.1 5 1",
+	}, "\n")
+
+	got, err := parseCoverageProfileTotal(profile, func(fileName string) bool {
+		return strings.Contains(fileName, "/internal/")
+	})
+	if err != nil {
+		t.Fatalf("parseCoverageProfileTotal() error = %v", err)
+	}
+	if !got.OK {
+		t.Fatal("parseCoverageProfileTotal() OK = false, want true")
+	}
+	if got.Percent != 40 {
+		t.Fatalf("parseCoverageProfileTotal() = %.1f, want 40.0", got.Percent)
 	}
 }
 

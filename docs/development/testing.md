@@ -18,16 +18,16 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,083 |
-| Unit test functions | 8,841 |
+| Total test functions | 9,084 |
+| Unit test functions | 8,842 |
 | E2E test functions | 242 |
-| cmd test functions | 127 |
+| cmd test functions | 128 |
 | Test files (internal/) | 397 |
 | Test files (cmd/) | 9 |
 | Test files (test/e2e/suite/) | 107 |
 | Tool sub-packages tested | 162 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 91.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 91.3% |
 | Overall coverage (`go test ./internal/...`) | 97.1% |
 | Average package coverage | 95.0% |
 
@@ -35,7 +35,7 @@
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,163 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,164 | 89.9% |
 | `TestFunc` (no underscore) | 672 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 248 | 2.7% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration | 227 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (162) | 6,980 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
-| cmd packages | 127 | 9 | server entry point and developer command utilities |
-| **Total** | **9,083** | **513** |  |
+| cmd packages | 128 | 9 | server entry point and developer command utilities |
+| **Total** | **9,084** | **513** |  |
 
 ### Core Packages
 
@@ -283,14 +283,14 @@
 
 | Package | Coverage |
 | --- | ---: |
-| cmd/audit_godocs | 51.4% |
+| cmd/audit_godocs | 50.7% |
 | cmd/audit_meta_schema | 80.7% |
 | cmd/audit_metrics | 9.7% |
 | cmd/audit_output | 24.6% |
 | cmd/audit_tokens | 14.0% |
 | cmd/gen_llms | 6.4% |
 | cmd/gen_readme | 14.6% |
-| cmd/gen_testing_docs | 17.9% |
+| cmd/gen_testing_docs | 20.7% |
 | cmd/server | 78.3% |
 
 ### Core Packages
@@ -488,9 +488,9 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_metrics** (9.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (14.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (14.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_testing_docs** (17.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (24.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_godocs** (51.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.

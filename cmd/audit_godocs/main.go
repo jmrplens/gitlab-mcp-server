@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -198,7 +199,8 @@ func listPackages() ([]packageInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "list", "-f", "{{.Dir}}\t{{.ImportPath}}\t{{.Name}}", "./...")
+	// #nosec G204 -- goExecutable returns the fixed Go tool path from the active runtime installation.
+	cmd := exec.CommandContext(ctx, goExecutable(), "list", "-f", "{{.Dir}}\t{{.ImportPath}}\t{{.Name}}", "./...")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("go list: %w", err)
@@ -220,6 +222,16 @@ func listPackages() ([]packageInfo, error) {
 		packages = append(packages, packageInfo{Dir: dir, ImportPath: importPath, Name: name})
 	}
 	return packages, nil
+}
+
+// goExecutable returns the absolute Go tool path from the runtime installation.
+func goExecutable() string {
+	name := "go"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	//lint:ignore SA1019 command audit must avoid PATH lookup for Sonar go:S4036.
+	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
 }
 
 // auditPackage parses source files for one package and checks documentation.
