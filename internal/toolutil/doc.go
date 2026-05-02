@@ -16,5 +16,29 @@
 //     pagination parameters with numeric bounds.
 //
 // This package must never import from domain sub-packages to prevent circular
-// dependencies. The dependency direction is: domain sub-packages → toolutil.
+// dependencies. The dependency direction is: domain sub-packages -> toolutil.
+//
+// # Common Entry Points
+//
+// Handlers usually use [WrapErr], [WrapErrWithMessage], or [WrapErrWithHint]
+// for errors; [PaginationInput] and [PaginationOutput] for paginated endpoints;
+// [StringOrInt] for GitLab IDs that may be numeric or path-based; and
+// [RegisterMarkdown] or [RegisterMarkdownResult] to publish type-specific
+// Markdown renderers.
+//
+// Destructive tools use [ConfirmAction] when they need an MCP elicitation step,
+// and list/detail outputs commonly embed [HintableOutput] so meta-tools can add
+// next-step guidance.
+//
+// # Dependency Direction
+//
+// The package dependency shape is intentionally one-way:
+//
+//	internal/tools/{domain}
+//	    |
+//	    v
+//	toolutil
+//	    |
+//	    v
+//	MCP SDK and GitLab client primitives
 package toolutil

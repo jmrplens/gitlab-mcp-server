@@ -14,6 +14,24 @@
 // headers and includes an authentication-failure rate limiter for the HTTP MCP
 // endpoint.
 //
+// # Isolation Model
+//
+// HTTP requests are routed to per-identity server entries:
+//
+//	HTTP request
+//	    |
+//	    v
+//	ExtractToken and ExtractGitLabURL
+//	    |
+//	    v
+//	ServerPool.GetOrCreate
+//	    |
+//	    v
+//	per-token, per-URL MCP server
+//
+// This design keeps token scopes, edition detection, read-only mode, safe mode,
+// tools, resources, and prompts isolated between concurrent HTTP clients.
+//
 // # Usage
 //
 // Create a pool with [New], retrieve or create servers with

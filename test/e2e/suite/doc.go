@@ -13,4 +13,24 @@
 //
 // These tests are built with the e2e build tag and are normally run through
 // `make test-e2e` or `make test-e2e-docker`.
+//
+// # Execution Model
+//
+// The suite starts an in-memory MCP client and server pair, then drives GitLab
+// operations through MCP calls instead of calling handlers directly:
+//
+//	E2E test
+//	    |
+//	    v
+//	MCP client session
+//	    |
+//	    v
+//	MCP server tools, resources, prompts, and capabilities
+//	    |
+//	    v
+//	Real or Docker-managed GitLab instance
+//
+// Tests named TestIndividual_* exercise individual tools. Tests named
+// TestMeta_* exercise the meta-tool catalog against the same style of GitLab
+// fixtures.
 package suite

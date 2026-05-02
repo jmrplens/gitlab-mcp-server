@@ -8,6 +8,14 @@
 //
 //	go run ./cmd/audit_godocs/ --format=markdown
 //	go run ./cmd/audit_godocs/ --include-tests --fail-on-findings
+//
+// # Reported Categories
+//
+// Findings are grouped by package comments, exported declarations, and optional
+// test declarations. Package findings catch missing, malformed, or duplicated
+// package comments; symbol findings catch exported declarations without useful
+// comments; and test findings catch Test, Benchmark, Fuzz, and Example functions
+// whose comments are missing or do not start with the function name.
 package main
 
 import (

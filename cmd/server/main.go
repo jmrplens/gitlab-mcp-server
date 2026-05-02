@@ -4,6 +4,30 @@
 // at startup — each client provides its own token per-request.
 // The --shutdown flag terminates running instances before external updaters
 // replace the binary on disk.
+//
+// # Modes
+//
+// Stdio mode creates one MCP server from environment configuration and serves
+// JSON-RPC over standard input and output. HTTP mode creates a streamable HTTP
+// handler backed by a server pool so each token and GitLab URL pair receives an
+// isolated MCP server configuration.
+//
+// # Startup Flow
+//
+// The command validates configuration, registers tools, resources, prompts,
+// completions, roots, logging, progress, sampling, and elicitation support, then
+// starts the selected transport:
+//
+//	server
+//	    |
+//	    v
+//	configuration and auto-update setup
+//	    |
+//	    v
+//	MCP capability registration
+//	    |
+//	    v
+//	stdio or HTTP transport
 package main
 
 import (
