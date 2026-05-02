@@ -333,58 +333,17 @@ func RegisterMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"controller_token_revoke": toolutil.DestructiveVoidAction(client, runnercontrollertokens.Revoke),
 	}
 
-	toolutil.AddMetaTool(server, "gitlab_runner", `Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive — revoking the registration token only invalidates future registrations; already-registered runners keep operating using their existing runner authentication tokens.
+	toolutil.AddMetaTool(server, "gitlab_runner", `Manage GitLab CI/CD runners across instance, group, and project scopes plus admin runner controllers. Remove/delete/revoke/reset actions are destructive or credential-rotating.
 Valid actions: `+toolutil.ValidActionsString(routes)+`
 
-When to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.
-NOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitlab_job), CI variables (use gitlab_ci_variable), CI lint or templates (use gitlab_template), self-hosted GitLab Runner installation (out of scope — install via the GitLab Runner CLI).
+Use this to list/get/update/pause runners, inspect runner jobs, attach/detach runners to projects, register/verify/reset runner tokens, and manage experimental runner controllers. NOT for pipeline runs, job logs/retry/play, CI variables, CI lint/templates, or installing GitLab Runner itself.
 
-Returns:
-- list / list_all / list_project / list_group / list_managers / jobs / controller_list / controller_scope_list / controller_token_list: arrays with pagination {page, per_page, total, next_page}.
-- get / update / register / reset_*_token / enable_project / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE — store it securely.
-- verify / remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.
-Errors: 401/403 (hint: list_all / register with admin token / runner controller actions require admin), 404 (hint: runner_id and controller_id are global, project / group context only filters), 400 (hint: access_level ∈ not_protected / ref_protected; tag_list is a comma-separated string; deprecated reset_*_reg_token endpoints — prefer controller_token_create).
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get before destructive or admin actions. List actions accept page/per_page. runner_id and controller_id are global integer IDs.
 
-Param conventions: * = required. List actions accept page, per_page. Runner IDs are integers.
+Runner actions: list/list_all, get, update, remove, jobs, list_project, list_group, enable_project, disable_project. update accepts description, paused, tag_list (comma-separated), run_untagged, locked, access_level (not_protected/ref_protected), maximum_timeout, maintenance_note. Project/group actions need project_id* or group_id*; enable/disable need runner_id*.
+Registration/token actions: register token*, verify token*, delete_by_token token*, delete_registered runner_id*, reset_token runner_id*, deprecated reset_*_reg_token helpers, list_managers runner_id*. register/reset/controller token creation returns cleartext token ONCE.
+Runner controllers: controller_list/get/create/update/delete, controller_scope_* for instance/runner scopes, controller_token_* for controller tokens. Controller operations generally require admin.
 
-Runner CRUD:
-- list: type, status, paused, tag_list (comma-separated)
-- list_all: (admin) type, status, paused, tag_list
-- get / remove: runner_id*
-- update: runner_id*, description, paused, tag_list, run_untagged, locked, access_level, maximum_timeout, maintenance_note
-- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort, page, per_page
-
-Project/Group runners:
-- list_project: project_id*, type, status, tag_list
-- enable_project: project_id*, runner_id*
-- disable_project: project_id*, runner_id*
-- list_group: group_id*, type, status, tag_list
-
-Registration and tokens:
-- register: token*, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note
-- delete_registered: runner_id*
-- delete_by_token: token*
-- verify: token*
-- reset_token: runner_id*
-- reset_instance_reg_token: (deprecated, no params)
-- reset_group_reg_token: group_id* (deprecated)
-- reset_project_reg_token: project_id* (deprecated)
-- list_managers: runner_id*
-
-Runner controllers (admin, experimental):
-- controller_list
-- controller_get / controller_delete: controller_id*
-- controller_create: description, state (enabled/disabled/dry_run)
-- controller_update: controller_id*, description, state
-
-Controller scopes:
-- controller_scope_list / controller_scope_add_instance / controller_scope_remove_instance: controller_id*
-- controller_scope_add_runner / controller_scope_remove_runner: controller_id*, runner_id*
-
-Controller tokens:
-- controller_token_list: controller_id*
-- controller_token_get / controller_token_rotate / controller_token_revoke: controller_id*, token_id*
-- controller_token_create: controller_id*, description
-
-See also: gitlab_pipeline, gitlab_job`, routes, toolutil.IconRunner, nil)
+Returns paginated arrays, runner/controller/token objects, one-time tokens, or {success,message}. Errors: 401/403 for admin or role gaps, 404 for IDs not visible/found, 400 for invalid access_level/tag_list/token.
+See also: gitlab_pipeline, gitlab_job, gitlab_ci_variable, gitlab_template.`, routes, toolutil.IconRunner, nil)
 }

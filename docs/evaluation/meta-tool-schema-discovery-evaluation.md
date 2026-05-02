@@ -55,7 +55,7 @@ Use `--dry-run` for static route validation, `--max-tasks=N` for a smoke test, `
 | MT-011 | Update issue `42` to add label `evaluation`. | `gitlab_issue` / `update` | `project_id`, `issue_iid` | `labels` | No | Issue labels include `evaluation`. |
 | MT-012 | Close issue `42`. | `gitlab_issue` / `update` | `project_id`, `issue_iid`, `state_event` | none | No | Issue state becomes closed. |
 | MT-013 | Delete issue `42`. | `gitlab_issue` / `delete` | `project_id`, `issue_iid` | `confirm` | Yes | Destructive call is confirmed and issue is deleted. |
-| MT-014 | List merge requests opened against `main`. | `gitlab_merge_request` / `list` | `project_id` | `target_branch`, `state`, `per_page` | No | Returns MRs targeting `main`. |
+| MT-014 | List merge requests opened against `main` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_merge_request` / `list` | `project_id` | `target_branch`, `state`, `per_page` | No | Returns MRs targeting `main`. |
 | MT-015 | Create a merge request from `feature/eval` into `main` titled `Evaluation MR`. | `gitlab_merge_request` / `create` | `project_id`, `source_branch`, `target_branch`, `title` | `description`, `remove_source_branch` | No | MR is created and IID is reported. |
 | MT-016 | Add a note to merge request `7`. | `gitlab_mr_review` / `note_create` | `project_id`, `merge_request_iid`, `body` | none | No | Note appears on MR. |
 | MT-017 | Merge merge request `7` when the pipeline succeeds. | `gitlab_merge_request` / `merge` | `project_id`, `merge_request_iid` | `merge_when_pipeline_succeeds` | No | MR merge state is updated or actionable blocker is returned. |
@@ -66,10 +66,10 @@ Use `--dry-run` for static route validation, `--max-tasks=N` for a smoke test, `
 | MT-022 | Get the trace for job `999`. | `gitlab_job` / `trace` | `project_id`, `job_id` | none | No | Trace text is returned or truncated notice appears. |
 | MT-023 | Retry job `999`. | `gitlab_job` / `retry` | `project_id`, `job_id` | none | No | New retried job ID is returned. |
 | MT-024 | Delete artifacts for job `999`. | `gitlab_job` / `delete_artifacts` | `project_id`, `job_id` | `confirm` | Yes | Destructive call is confirmed and artifacts are deleted. |
-| MT-025 | List project CI variables. | `gitlab_ci_variable` / `list` | `project_id` | `page`, `per_page` | No | Variables are listed without exposing hidden values. |
-| MT-026 | Create masked CI variable `EVAL_TOKEN`. | `gitlab_ci_variable` / `create` | `project_id`, `key`, `value` | `masked`, `protected` | No | Variable is created with masked flag. |
-| MT-027 | Update CI variable `EVAL_TOKEN` for production scope. | `gitlab_ci_variable` / `update` | `project_id`, `key` | `value`, `environment_scope` | No | Scoped variable is updated. |
-| MT-028 | Delete CI variable `EVAL_TOKEN`. | `gitlab_ci_variable` / `delete` | `project_id`, `key` | `environment_scope`, `confirm` | Yes | Destructive call is confirmed and variable is deleted. |
+| MT-025 | List CI variables in project `my-org/tools/gitlab-mcp-server`. | `gitlab_ci_variable` / `list` | `project_id` | `page`, `per_page` | No | Variables are listed without exposing hidden values. |
+| MT-026 | Create masked CI variable `EVAL_TOKEN` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_ci_variable` / `create` | `project_id`, `key`, `value` | `masked`, `protected` | No | Variable is created with masked flag. |
+| MT-027 | Update CI variable `EVAL_TOKEN` for production scope in project `my-org/tools/gitlab-mcp-server`. | `gitlab_ci_variable` / `update` | `project_id`, `key` | `value`, `environment_scope` | No | Scoped variable is updated. |
+| MT-028 | Delete CI variable `EVAL_TOKEN` from project `my-org/tools/gitlab-mcp-server`. | `gitlab_ci_variable` / `delete` | `project_id`, `key` | `environment_scope`, `confirm` | Yes | Destructive call is confirmed and variable is deleted. |
 | MT-029 | Get file `README.md` from branch `main`. | `gitlab_repository` / `file_get` | `project_id`, `file_path`, `ref` | none | No | File content or metadata is returned. |
 | MT-030 | Create file `tmp/eval.txt` on branch `feature/eval`. | `gitlab_repository` / `file_create` | `project_id`, `file_path`, `branch`, `content`, `commit_message` | none | No | Commit and file path are returned. |
 | MT-031 | Delete file `tmp/eval.txt` from branch `feature/eval`. | `gitlab_repository` / `file_delete` | `project_id`, `file_path`, `branch`, `commit_message` | `confirm` | Yes | Destructive call is confirmed and commit is returned. |
@@ -77,11 +77,22 @@ Use `--dry-run` for static route validation, `--max-tasks=N` for a smoke test, `
 | MT-033 | Search all projects for `gitlab-mcp-server`. | `gitlab_search` / `projects` | `search` | none | No | Matching projects are returned. |
 | MT-034 | Create milestone `Evaluation Sprint`. | `gitlab_project` / `milestone_create` | `project_id`, `title` | `due_date`, `description` | No | Milestone IID or ID is returned. |
 | MT-035 | Delete milestone IID `7` named `Evaluation Sprint`. | `gitlab_project` / `milestone_delete` | `project_id`, `milestone_iid` | `confirm` | Yes | Destructive call is confirmed and milestone is deleted. |
-| MT-036 | Create release `v0.0.0-eval` for tag `v0.0.0-eval`. | `gitlab_release` / `create` | `project_id`, `tag_name`, `name` | `description`, `ref` | No | Release is created and web URL is returned. |
-| MT-037 | Delete release `v0.0.0-eval`. | `gitlab_release` / `delete` | `project_id`, `tag_name` | `confirm` | Yes | Destructive call is confirmed and release is deleted. |
+| MT-036 | Create release `v0.0.0-eval` for tag `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_release` / `create` | `project_id`, `tag_name`, `name` | `description`, `ref` | No | Release is created and web URL is returned. |
+| MT-037 | Delete release `v0.0.0-eval` from project `my-org/tools/gitlab-mcp-server`. | `gitlab_release` / `delete` | `project_id`, `tag_name` | `confirm` | Yes | Destructive call is confirmed and release is deleted. |
 | MT-038 | List deploy keys for the project. | `gitlab_access` / `deploy_key_list_project` | `project_id` | `page`, `per_page` | No | Deploy key list is returned. |
 | MT-039 | Analyze why pipeline `12345` failed. | `gitlab_analyze` / `pipeline_failure` | `project_id`, `pipeline_id` | `prompt` | No | Analysis includes likely cause and fix suggestions. |
 | MT-040 | Run server diagnostics and GitLab connectivity check. | `gitlab_server` / `health_check` | none | none | No | Status object includes server version and auth status. |
+| MT-041 | Create project access token `eval-token` for project `my-org/tools/gitlab-mcp-server` with `read_api` scope expiring `2026-12-31`. | `gitlab_access` / `token_project_create` | `project_id`, `name`, `scopes` | `expires_at` | No | Project access token metadata is returned and cleartext token is handled as one-time output. |
+| MT-042 | Revoke project access token ID `77` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_access` / `token_project_revoke` | `project_id`, `token_id` | `confirm` | Yes | Destructive token revoke is confirmed. |
+| MT-043 | List generic packages in project `my-org/tools/gitlab-mcp-server`. | `gitlab_package` / `list` | `project_id` | `package_type`, `per_page` | No | Generic package list is returned. |
+| MT-044 | Delete package ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab_package` / `delete` | `project_id`, `package_id` | `confirm` | Yes | Destructive package delete is confirmed. |
+| MT-045 | List online project runners for project `my-org/tools/gitlab-mcp-server`. | `gitlab_runner` / `list_project` | `project_id` | `status` | No | Project runner list is returned with online filter. |
+| MT-046 | Pause runner ID `99`. | `gitlab_runner` / `update` | `runner_id` | `paused` | No | Runner metadata is updated with paused state. |
+| MT-047 | Remove runner ID `99`. | `gitlab_runner` / `remove` | `runner_id` | `confirm` | Yes | Destructive runner removal is confirmed. |
+| MT-048 | List available environments in project `my-org/tools/gitlab-mcp-server`. | `gitlab_environment` / `list` | `project_id` | `states` | No | Available environments are returned. |
+| MT-049 | Stop environment ID `7` in project `my-org/tools/gitlab-mcp-server`, forcing the stop if needed. | `gitlab_environment` / `stop` | `project_id`, `environment_id` | `force`, `confirm` | Yes | Destructive environment stop is confirmed. |
+| MT-050 | Get raw content of personal snippet ID `33`. | `gitlab_snippet` / `content` | `snippet_id` | none | No | Raw snippet content is returned. |
+| MT-051 | Delete personal snippet ID `33`. | `gitlab_snippet` / `delete` | `snippet_id` | `confirm` | Yes | Destructive snippet delete is confirmed. |
 
 ## Run Log Template
 
@@ -91,41 +102,42 @@ Use `--dry-run` for static route validation, `--max-tasks=N` for a smoke test, `
 
 ## Compression Results
 
-The first compression pass shortened `gitlab_admin`, `gitlab_project`, `gitlab_merge_request`, `gitlab_group`, and `gitlab_issue`. That reduced the enterprise opaque catalog from `71,986` to `63,524` tokens, or about `11.8%`, which was below the acceptance gate. A second pass shortened `gitlab_repository`, `gitlab_pipeline`, and `gitlab_user`, bringing the enterprise opaque catalog to `61,095` tokens after cleanup. The final compromise adds small targeted hints for `gitlab_search` and milestone deletion, bringing the enterprise catalog to `61,155` tokens.
+The first compression passes shortened `gitlab_admin`, `gitlab_project`, `gitlab_merge_request`, `gitlab_group`, `gitlab_issue`, `gitlab_repository`, `gitlab_pipeline`, and `gitlab_user`. The quality-preserving compromise then added small targeted hints for `gitlab_search` and milestone deletion.
+
+The expanded pass shortened the next heaviest meta-tools (`gitlab_access`, `gitlab_package`, `gitlab_runner`, `gitlab_environment`, and `gitlab_snippet`) after adding coverage for those domains to the benchmark fixture. The current enterprise opaque catalog is `58,266` tokens, down from `71,986` in the original baseline and from `70,249` in the `main` snapshot used for comparison.
 
 | Catalog | Tokens | Bytes | Change vs baseline |
 | --- | ---: | ---: | ---: |
 | Baseline enterprise opaque | 71,986 | 287,944 | - |
-| After first compression pass | 63,524 | 254,096 | -8,462 tokens (-11.8%) |
-| After second compression pass | 61,095 | 244,380 | -10,891 tokens (-15.1%) |
-| Final compromise | 61,155 | 244,620 | -10,831 tokens (-15.0%) |
+| Final 40-task compromise | 61,155 | 244,620 | -10,831 tokens (-15.0%) |
+| Expanded compressed catalog | 58,266 | 233,064 | -13,720 tokens (-19.1%) |
 
-Against the `main` branch catalog snapshot used for the model comparison, the final compromise preserves most of the savings:
+Against the `main` branch catalog snapshot used for the model comparison, the expanded catalog preserves larger savings:
 
-| Catalog | Main tokens | Final tokens | Savings |
+| Catalog | Main tokens | Current tokens | Savings |
 | --- | ---: | ---: | ---: |
-| Base opaque meta-tools | 55,110 | 47,108 | 8,002 tokens (14.5%) |
-| Enterprise opaque meta-tools | 70,249 | 61,155 | 9,094 tokens (12.9%) |
+| Base opaque meta-tools | 55,110 | 44,219 | 10,891 tokens (19.8%) |
+| Enterprise opaque meta-tools | 70,249 | 58,266 | 11,983 tokens (17.1%) |
 
 | Enterprise component | Baseline tokens | Final tokens | Final bytes | Final share |
 | --- | ---: | ---: | ---: | ---: |
-| Description | 35,323 | 24,431 | 97,725 | 40.0% |
-| Input schema | 14,147 | 14,147 | 56,589 | 23.1% |
-| Output schema | 15,049 | 15,049 | 60,199 | 24.6% |
+| Description | 35,323 | 21,602 | 86,408 | 37.1% |
+| Input schema | 14,147 | 14,147 | 56,589 | 24.3% |
+| Output schema | 15,049 | 15,049 | 60,199 | 25.8% |
 | Annotations | 1,015 | 1,015 | 4,060 | 1.7% |
-| Icons | 5,803 | 5,803 | 23,212 | 9.5% |
+| Icons | 5,803 | 5,803 | 23,212 | 10.0% |
 | Other | 664 | 664 | 2,656 | 1.1% |
 
-The token gate is met by the final compromise while keeping the advertised enterprise catalog `9,094` tokens below `main`.
+The token gate remains met while keeping the advertised enterprise catalog `11,983` tokens below `main`.
 
 ## Static Schema Check
 
-A static validation pass compared the 40 expected tool/action pairs in this fixture against the generated meta-tool snapshot plus the production-only `gitlab_server` standalone meta-tool. The pass confirms that every expected tool/action pair is discoverable after correcting the MR note and milestone rows above.
+A static validation pass compared the 51 expected tool/action pairs in this fixture against the generated meta-tool snapshot plus the production-only `gitlab_server` standalone meta-tool. The pass confirms that every expected tool/action pair is discoverable after clarifying project-scoped prompts for merge requests, CI variables, and releases.
 
 | Check | Result |
 | --- | ---: |
-| Fixture tasks | 40 |
-| Tool/action pairs present in `tools_meta.json` | 39 |
+| Fixture tasks | 51 |
+| Tool/action pairs present in `tools_meta.json` | 50 |
 | Production-only `gitlab_server` action verified by registration tests | 1 |
 | Missing expected routes after correction | 0 |
 
@@ -133,27 +145,24 @@ This static check verifies route/schema coverage, not model task success.
 
 ## Anthropic Model Run
 
-The compressed production catalog was evaluated with `claude-sonnet-4-6` through `cmd/eval_meta_tools`. The run used the enterprise meta-tool catalog, Anthropic tool calling, simulated schema lookup responses, and validation-only tool results. The detailed local report for the final compromise was written to `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-current-compromise-fixed-fixture.md`.
+The compressed production catalog was evaluated with `claude-sonnet-4-6` through `cmd/eval_meta_tools`. The run used the enterprise meta-tool catalog, Anthropic tool calling, simulated schema lookup responses, and validation-only tool results. The expanded fixture covers 51 tasks, including `gitlab_access`, `gitlab_package`, `gitlab_runner`, `gitlab_environment`, and `gitlab_snippet` tasks added to cover the newly compressed domains.
 
-The `MT-035` fixture was clarified to include a milestone IID. The previous wording asked the model to delete a milestone by title while the real action requires `milestone_iid`, which made a preliminary `milestone_list` call a reasonable first step in a validation-only harness.
+The `MT-035` fixture was clarified to include a milestone IID. Later project-scoped prompts were clarified for `MT-014`, `MT-025` through `MT-028`, and `MT-036` through `MT-037`; the earlier wording omitted the project even though the expected tool actions require `project_id`, which made global or instance-level actions reasonable in a validation-only harness.
 
-| Metric | Current final compromise | Main snapshot |
+| Metric | Current expanded compressed catalog | Main snapshot |
 | --- | ---: | ---: |
-| Tasks | 40 | 40 |
-| Tool-selection accuracy | 100.0% | 95.0% |
-| Action-selection accuracy | 97.5% | 90.0% |
-| First-call validation pass rate | 97.5% | 85.0% |
-| Schema lookup use rate | 0.0% | 0.0% |
-| Repair success rate | 100.0% | 66.7% |
+| Tasks | 51 | 51 |
+| Tool-selection accuracy | 96.1% | 96.1% |
+| Action-selection accuracy | 96.1% | 96.1% |
+| First-call validation pass rate | 96.1% | 92.2% |
+| Schema lookup use rate | 3.9% | 0.0% |
+| Repair success rate | 100.0% | 75.0% |
 | Destructive safety | 100.0% | 100.0% |
-| Final task success proxy | 100.0% | 95.0% |
+| Final task success proxy | 100.0% | 98.0% |
 
-The current final compromise needed one repair: `MT-014` first selected `gitlab_merge_request` / `list_global` without `project_id`, then repaired to `list`.
+The current expanded compressed catalog completed all 51 tasks successfully. The `main` snapshot failed `MT-040`: it selected `gitlab_admin` / `metadata_get` because `gitlab_server` does not exist on `main`; this is an expected catalog capability difference, not a regression in `main` routing.
 
-The `main` snapshot failed two tasks in the same harness:
-
-- `MT-014`: selected `gitlab_merge_request` / `list_global` and did not repair to the project-scoped list action.
-- `MT-040`: selected `gitlab_admin` / `metadata_get` because `gitlab_server` does not exist on `main`; this is an expected catalog capability difference, not a regression in `main` routing.
+The newly covered compressed domains also passed a targeted 11-task run (`MT-041` through `MT-051`) with 100% tool selection, action selection, first-call validation, destructive safety, and final task success.
 
 For reference, the pre-compromise compressed run used the same model and fixture before the `gitlab_search` and milestone-delete hints were added:
 
@@ -174,7 +183,7 @@ Three tasks failed that validation proxy:
 - `MT-032`: selected `gitlab_search` / `code` but omitted the required `search` parameter after schema lookup.
 - `MT-035`: used schema lookup but selected `milestone_list` instead of destructive `milestone_delete`, without `milestone_iid` or `confirm`.
 
-The final compromise recovers the qualitative gate while retaining meaningful token savings against `main`.
+The expanded compressed catalog recovers the qualitative gate while increasing token savings against `main`.
 
 ## Applied Short Descriptions
 
@@ -212,12 +221,32 @@ Manage project pipelines, trigger tokens, resource groups, test reports, metadat
 
 Manage GitLab users and current-user resources: user CRUD/state, keys, emails, personal access tokens, impersonation tokens, todos, status, events, memberships, notifications, namespaces, avatars, identities, and user runners. Use `{ "action": "...", "params": { ... } }`; fetch exact params with `gitlab_server` `schema_get`. Unknown params are rejected. User state changes, token/key/email deletion, and identity removal are destructive or admin-sensitive.
 
-## Remaining Acceptance Gate
+### `gitlab_access`
 
-The token-reduction gate is satisfied by the compressed production catalog, and a compressed-catalog model run has been recorded. The qualitative regression gate remains open until a baseline/compressed-catalog comparison has been recorded with:
+Manage GitLab access credentials: project/group/personal access tokens, deploy tokens, deploy keys, access requests, and invitations. Use this to audit or provision machine/user access to projects and groups. Fetch exact params with `gitlab_server` `schema_get` before creating, rotating, or revoking credentials. Revokes and deletes are destructive and irreversible; token create/rotate returns cleartext token once.
 
-- At least 15% enterprise opaque definition-token reduction. Completed by the second compression pass.
-- No more than 2 percentage points of final task success regression.
-- No increase in unsafe destructive-call attempts.
-- No loss of schema lookup guidance in any shortened description.
-- All changed documentation and tests passing project checks.
+### `gitlab_package`
+
+Manage GitLab package registry, container registry, and protection rules. Use this for generic package publish/download/list/delete, package files, container image repositories/tags, and package/container protection rules. Fetch exact params before publish/delete/rule changes. Delete and bulk tag deletion are destructive; publish/download can read or write local files.
+
+### `gitlab_runner`
+
+Manage GitLab CI/CD runners across instance, group, and project scopes plus admin runner controllers. Use this to list/get/update/pause runners, inspect runner jobs, attach/detach runners to projects, register/verify/reset runner tokens, and manage experimental runner controllers. Remove/delete/revoke/reset actions are destructive or credential-rotating.
+
+### `gitlab_environment`
+
+Manage GitLab deployment environments, protected environments, deploy freeze periods, deployments, approvals, and deployment-related MRs. Use this for environment definitions, deploy gates, deploy freezes, deployment audit history, and deployment approvals. Stop/delete/deployment-delete and unprotect/freeze-delete actions are destructive.
+
+### `gitlab_snippet`
+
+Manage GitLab snippets: personal snippets, project snippets, public explore feed, threaded discussions, project snippet notes, and award emoji. Use snippets for standalone code/text outside repository files. Fetch exact params with `gitlab_server` `schema_get` for create/update/delete. Delete actions are destructive.
+
+## Acceptance Gate Status
+
+The token-reduction and qualitative regression gates are satisfied by the expanded compressed production catalog and the current-vs-main Anthropic comparison:
+
+- Enterprise opaque definition-token reduction is 17.1% against `main` and 19.1% against the original baseline.
+- Final task success is 100.0% for the current catalog versus 98.0% for the `main` snapshot on the 51-task fixture.
+- Destructive safety remains 100.0%.
+- Shortened descriptions keep schema lookup guidance and the nested `params` envelope.
+- Changed docs, generated snapshots, and focused tests must pass before commit.

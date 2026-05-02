@@ -1353,48 +1353,18 @@ func registerEnvironmentMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"deployment_merge_requests":    routeAction(client, deploymentmergerequests.List),
 	}
 
-	addMetaTool(server, "gitlab_environment", `Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
-When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
-NOT for: CI/CD variables scoped to environments (use gitlab_ci_variable), pipelines/jobs (use gitlab_pipeline / gitlab_job), feature flag rollout strategies (use gitlab_feature_flags).
+	addMetaTool(server, "gitlab_environment", `Manage GitLab deployment environments, protected environments, deploy freeze periods, deployments, approvals, and deployment-related MRs. stop/delete/deployment_delete and unprotect/freeze_delete are destructive.
+Use this for environment definitions (production/staging/review/*), deploy gates, deploy freezes, deployment audit history, and deployment approvals. NOT for CI variables, pipeline/job execution, or feature flag rollout strategies.
 
-Behavior:
-- Idempotent reads: list / get / protected_list / protected_get / freeze_list / freeze_get / deployment_list / deployment_get / deployment_merge_requests.
-- update / protected_update / freeze_update / deployment_update are idempotent (same input → same state). create / protected_protect / freeze_create / deployment_create are NON-idempotent on duplicate (project_id, name) — return 409. deployment_approve_or_reject is single-shot per (deployment_id, user) and cannot be reversed.
-- Side effects: stop runs the on-stop CI job (unless force=true) and terminates any review-app resources; deployment_approve_or_reject may release queued CI jobs awaiting a manual gate; freeze_create immediately blocks deploys that match the cron window.
-- Destructive: delete and stop are destructive — stop cannot be reversed without re-deploying; deployment_delete removes the deployment audit record (history loss).
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get before mutating. All actions need project_id*. Lists accept page/per_page. environment_id comes from list/create.
 
-Returns: resource object (environment / protection / freeze / deployment) for *_get/*_create/*_update/*_protect; paginated array for *_list; updated deployment with approval state for deployment_approve_or_reject; MR list for deployment_merge_requests; {success, message} for *_delete/*_unprotect/stop.
-Errors: 404 not found, 403 forbidden (hint: protect/unprotect require Maintainer+), 400 invalid params (hint: tier ∈ production/staging/testing/development/other; freeze cron timezone must be valid TZ name).
+Environments: list, get, create, update, stop, delete. create needs name*; tier is production/staging/testing/development/other. stop may run on-stop CI jobs; force skips them. delete usually requires a stopped environment.
+Protected environments: protected_list/get/protect/update/unprotect. get/unprotect need name*; protect/update use deploy_access_levels and approval_rules.
+Freeze periods: freeze_list/get/create/update/delete. create needs freeze_start* and freeze_end* cron expressions; cron_timezone must be valid.
+Deployments: deployment_list/get/create/update/delete/approve_or_reject/merge_requests. create needs environment*, ref*, sha*; update needs status*; approve_or_reject uses status approved/rejected.
 
-Param conventions: * = required. All actions need project_id*. environment_id is the numeric ID returned by list/create.
-
-Environments:
-- list: project_id*, name, search, states (available/stopped/stopping), page, per_page
-- get / delete: project_id*, environment_id*
-- create: project_id*, name*, description, external_url, tier (production/staging/testing/development/other)
-- update: project_id*, environment_id*, name, description, external_url, tier
-- stop: project_id*, environment_id*, force (bool) — force skips on-stop jobs
-
-Protected environments:
-- protected_list: project_id*, page, per_page
-- protected_get / protected_unprotect: project_id*, name*
-- protected_protect / protected_update: project_id*, name*, deploy_access_levels, approval_rules
-
-Freeze periods (cron expressions):
-- freeze_list: project_id*, page, per_page
-- freeze_get / freeze_delete: project_id*, freeze_period_id*
-- freeze_create: project_id*, freeze_start* (cron, e.g. '0 23 * * 5'), freeze_end* (cron), cron_timezone
-- freeze_update: project_id*, freeze_period_id*, freeze_start, freeze_end, cron_timezone
-
-Deployments (immutable history records):
-- deployment_list: project_id*, order_by, sort, environment, status, page, per_page
-- deployment_get / deployment_delete: project_id*, deployment_id*
-- deployment_create: project_id*, environment*, ref*, sha*, tag (bool), status (created/running/success/failed/canceled)
-- deployment_update: project_id*, deployment_id*, status*
-- deployment_approve_or_reject: project_id*, deployment_id*, status* (approved/rejected), comment
-- deployment_merge_requests: project_id*, deployment_id*, state, order_by, sort, page, per_page
-
-See also: gitlab_pipeline / gitlab_job (CI runs deploying to environments), gitlab_ci_variable (env-scoped variables), gitlab_feature_flags (env-scoped strategies).`, routes, toolutil.IconEnvironment)
+Returns environment/protection/freeze/deployment objects, paginated lists, approval state, MR lists, or {success,message}. Errors: 403 for Maintainer+ operations, 404 for scoped IDs/names, 400 for invalid tier/status/cron/timezone.
+See also: gitlab_pipeline, gitlab_job, gitlab_ci_variable, gitlab_feature_flags.`, routes, toolutil.IconEnvironment)
 }
 
 // registerCIVariableMeta registers the gitlab_ci_variable meta-tool with actions:
@@ -1672,60 +1642,21 @@ func registerAccessMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"invite_project":               routeAction(client, invites.ProjectInvites),
 		"invite_group":                 routeAction(client, invites.GroupInvites),
 	}
-	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
-When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
-NOT for: SSH/GPG keys or impersonation tokens (use gitlab_user), PAT creation (use gitlab_user create_personal_access_token / create_current_user_pat — gitlab_access exposes token_personal_* for list/get/rotate/revoke only), instance admin operations (use gitlab_admin), project membership/permissions (use gitlab_project member_*), 2FA/MFA flows.
+	addMetaTool(server, "gitlab_access", `Manage GitLab access credentials: project/group/personal access tokens, deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
+Use this to audit or provision machine/user access to projects and groups. NOT for SSH/GPG user keys, PAT creation, impersonation tokens, memberships, or instance admin settings; use gitlab_user, gitlab_project, gitlab_group, or gitlab_admin for those.
 
-Returns:
-- token_*_list / deploy_token_list_* / deploy_key_list_* / request_list_* / invite_list_*: arrays with pagination.
-- token_*_get / token_*_create / token_*_rotate / deploy_token_get_* / deploy_token_create_* / deploy_key_get / deploy_key_add / deploy_key_update / deploy_key_enable / approve_* / request_*: token / key / request / invitation object. Create / rotate include the cleartext token only ONCE — store it securely; subsequent reads return only the metadata.
-- token_*_revoke / deploy_token_delete_* / deploy_key_delete / deny_* : {success, message}.
-Errors: 401/403 (hint: requires Maintainer+ to manage project tokens, Owner for group, admin for instance / deploy_token_list_all / deploy_key_list_all / deploy_key_add_instance), 404 (hint: token_id and deploy_key_id are scoped to the project/group), 400 (hint: scopes must be a subset of {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future ISO date).
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get before creating/rotating/revoking credentials. List actions accept page/per_page. Token scopes must be from {api, read_api, read_repository, write_repository, read_registry, write_registry}; expires_at must be a future date.
 
-Param conventions: * = required. List actions accept page, per_page. Token actions scope to project_id* or group_id*. Deploy token/key delete and token revoke are irreversible.
+Action families:
+- token_project_* / token_group_* / token_personal_*: list/get/create/rotate/revoke access tokens. project/group actions need project_id* or group_id*; create needs name*, scopes*; get/rotate/revoke need token_id*. Create/rotate returns cleartext token ONCE.
+- deploy_token_*: list/get/create/delete deploy tokens for project/group; create needs name*, scopes*.
+- deploy_key_*: list/get/add/update/delete/enable deploy keys. Project actions need project_id*; add needs title*, key*; can_push is optional.
+- request_* / approve_* / deny_*: access requests; approve/deny need user_id* and project_id* or group_id*.
+- invite_*: list or create project/group invitations; invite needs email*, access_level*.
 
-Access tokens (token_*) — project, group, and personal scopes. Rotate generates a new token and invalidates the old one:
-- token_project_list / token_group_list: project_id* or group_id*
-- token_project_get / token_group_get: project_id* or group_id*, token_id*
-- token_project_create / token_group_create: project_id* or group_id*, name*, scopes*, expires_at, access_level
-- token_project_rotate / token_group_rotate: project_id* or group_id*, token_id*, expires_at
-- token_project_rotate_self / token_group_rotate_self: project_id* or group_id*, expires_at
-- token_project_revoke / token_group_revoke: project_id* or group_id*, token_id*
-- token_personal_list: user_id
-- token_personal_get: token_id*
-- token_personal_rotate: token_id*, expires_at
-- token_personal_rotate_self: expires_at
-- token_personal_revoke: token_id*
-- token_personal_revoke_self: (no params)
-
-Deploy tokens (deploy_token_*) — scoped to project or group, used for CI/CD registry access:
-- deploy_token_list_all: (admin only)
-- deploy_token_list_project / deploy_token_list_group: project_id* or group_id*
-- deploy_token_get_project / deploy_token_get_group: project_id* or group_id*, deploy_token_id*
-- deploy_token_create_project / deploy_token_create_group: project_id* or group_id*, name*, scopes*, expires_at
-- deploy_token_delete_project / deploy_token_delete_group: project_id* or group_id*, deploy_token_id*
-
-Deploy keys (deploy_key_*) — SSH keys for read/write repo access without a user account:
-- deploy_key_list_project / deploy_key_list_user_project: project_id*
-- deploy_key_list_all: (admin only)
-- deploy_key_get: project_id*, deploy_key_id*
-- deploy_key_add: project_id*, title*, key*, can_push
-- deploy_key_update: project_id*, deploy_key_id*, title, can_push
-- deploy_key_delete: project_id*, deploy_key_id*
-- deploy_key_enable: project_id*, deploy_key_id*
-- deploy_key_add_instance: title*, key*
-
-Access requests (request_*, approve_*, deny_*):
-- request_list_project / request_list_group: project_id* or group_id*
-- request_project / request_group: project_id* or group_id*
-- approve_project / approve_group: project_id* or group_id*, user_id*, access_level
-- deny_project / deny_group: project_id* or group_id*, user_id*
-
-Invitations (invite_*):
-- invite_list_project / invite_list_group: project_id* or group_id*
-- invite_project / invite_group: project_id* or group_id*, email*, access_level*, expires_at
-
-See also: gitlab_user (SSH/GPG keys, user PATs), gitlab_admin (instance admin), gitlab_project (project settings)`, routes, toolutil.IconToken)
+Errors: 401/403 for insufficient Maintainer/Owner/admin role; 404 for IDs scoped to another project/group; 400 for invalid scopes, access_level, key, or expiry.
+Returns arrays, credential/key/request/invitation objects, one-time cleartext tokens for create/rotate, or {success,message} confirmations.
+See also: gitlab_user, gitlab_project, gitlab_group, gitlab_admin.`, routes, toolutil.IconToken)
 }
 
 // registerPackageMeta registers the gitlab_package meta-tool with actions from
@@ -1763,56 +1694,19 @@ func registerPackageMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"protection_rule_delete":   destructiveVoidAction(client, protectedpackages.Delete),
 	}
 
-	addMetaTool(server, "gitlab_package", `Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
-When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
-NOT for: release asset links — these are managed by gitlab_release link_*; secure files (use gitlab_admin secure_file_*); ML model registry artifacts (use gitlab_model_registry); upload general project attachments (use gitlab_project upload).
+	addMetaTool(server, "gitlab_package", `Manage GitLab package registry, container registry, and protection rules. Delete actions are destructive; publish/download can read or write local files.
+Use this for generic package publish/download/list/delete, package files, container image repositories/tags, and package/container protection rules. NOT for release asset link CRUD (gitlab_release link_*), secure files (gitlab_admin secure_file_*), ML model artifacts, or project uploads.
 
-Behavior:
-- Idempotent reads: list / file_list / registry_list_project / registry_list_group / registry_get / registry_tag_list / registry_tag_get / registry_rule_list / protection_rule_list / download.
-- publish / publish_directory / publish_and_link create a NEW package version (NON-idempotent — re-publishing the same (package_name, package_version, file_name) returns 400/409 or creates a duplicate file depending on package_type). registry_rule_update / protection_rule_update are idempotent; *_create are non-idempotent on duplicate keys.
-- Side effects: publish_and_link also creates a release link visible to release subscribers; download streams large files to disk when output_path is set; protection_rule_create / registry_rule_create take effect immediately and may block subsequent publish/delete calls.
-- Destructive: delete (entire package), file_delete (single file), registry_delete (entire image repo), registry_tag_delete / registry_tag_delete_bulk (image tags — name_regex_delete may match many tags) and *_rule_delete are irreversible. Protection rules can return 403 ('forbidden by protection rule') instead of executing the delete.
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get before publish/delete/rule changes. Most actions need project_id*. Lists accept page/per_page.
 
-Returns:
-- list / file_list / registry_list_project / registry_list_group / registry_tag_list / registry_rule_list / protection_rule_list: arrays with pagination.
-- publish / publish_and_link / publish_directory / registry_get / registry_tag_get / registry_rule_create / registry_rule_update / protection_rule_create / protection_rule_update: package / image / rule object. publish_and_link also returns the created release link.
-- download: {file_name, content_base64 (or saved_to)} — large files are streamed to disk when output_path is set.
-- delete / file_delete / registry_delete / registry_tag_delete / registry_tag_delete_bulk / registry_rule_delete / protection_rule_delete: {success, message}.
-Errors: 404 (hint: package_id, repository_id and tag_name are project-scoped), 403 (hint: requires Maintainer+ to delete; protection rules may block delete with a 'forbidden by protection rule' message), 400 (hint: file_path must exist locally; content_base64 must be valid base64; package_type must be one of GitLab's supported types).
+Packages: list, file_list, download, publish, publish_directory, publish_and_link, delete, file_delete. publish needs project_id*, package_name*, package_version*, file_name*, and exactly one of file_path/content_base64. download needs output_path*. delete needs package_id*; file_delete needs package_file_id*. publish_and_link also needs tag_name* and should use exact release asset filenames for link_name.
 
-Param conventions: * = required. Most actions need project_id*. List actions accept page, per_page.
+Container registry: registry_list_project/group, registry_get, registry_delete, registry_tag_list/get/delete/delete_bulk, registry_rule_list/create/update/delete. repository_id* and tag_name* are project-scoped; bulk deletion regexes may match many tags.
 
-Packages:
-- publish: project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), status (default/hidden)
-- download: project_id*, package_name*, package_version*, file_name*, output_path*
-- list: project_id*, package_name, package_version, package_type (generic/npm/maven/etc.), order_by, sort
-- file_list: project_id*, package_id*
-- delete: project_id*, package_id*. Deletes package and all files.
-- file_delete: project_id*, package_id*, package_file_id*
-- publish_and_link: publish + create release link. project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), tag_name*, link_name, link_type
-- publish_directory: project_id*, package_name*, package_version*, directory_path*, include_pattern (glob), status
+Package protection rules: protection_rule_list/create/update/delete; create needs package_name_pattern*, package_type*, and access levels. Protection rules take effect immediately and may block publish/delete.
 
-Container registry:
-- registry_list_project: project_id*, tags, tags_count
-- registry_list_group: group_id*
-- registry_get: repository_id*, tags, tags_count
-- registry_delete: project_id*, repository_id*
-- registry_tag_list / registry_tag_get / registry_tag_delete: project_id*, repository_id*, tag_name* (for get/delete)
-- registry_tag_delete_bulk: project_id*, repository_id*, name_regex_delete, name_regex_keep, keep_n, older_than
-
-Container registry protection rules:
-- registry_rule_list: project_id*
-- registry_rule_create: project_id*, repository_path_pattern*, minimum_access_level_for_push, minimum_access_level_for_delete
-- registry_rule_update: project_id*, rule_id*, repository_path_pattern, minimum_access_level_for_push, minimum_access_level_for_delete
-- registry_rule_delete: project_id*, rule_id*
-
-Package protection rules:
-- protection_rule_list: project_id*
-- protection_rule_create: project_id*, package_name_pattern*, package_type*, minimum_access_level_for_push, minimum_access_level_for_delete
-- protection_rule_update: project_id*, rule_id*, package_name_pattern, package_type, minimum_access_level_for_push, minimum_access_level_for_delete
-- protection_rule_delete: project_id*, rule_id*
-
-See also: gitlab_release (release asset links), gitlab_project`, routes, toolutil.IconPackage)
+Returns paginated arrays, package/image/rule objects, downloaded content or saved path, published URLs/checksums, release link data for publish_and_link, or {success,message}. Errors: 403 for missing Maintainer+ or protection blocks, 404 for scoped IDs, 400 for invalid file/content/package_type.
+See also: gitlab_release, gitlab_project, gitlab_admin, gitlab_model_registry.`, routes, toolutil.IconPackage)
 }
 
 // registerSnippetMeta registers the gitlab_snippet meta-tool with actions:
@@ -1858,58 +1752,17 @@ func registerSnippetMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"emoji_snippet_note_create": routeAction(client, awardemoji.CreateSnippetNoteAwardEmoji),
 		"emoji_snippet_note_delete": destructiveVoidAction(client, awardemoji.DeleteSnippetNoteAwardEmoji),
 	}
-	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
-When to use: store/share standalone code or text outside a repo, comment on existing snippets, react with emoji on a snippet or snippet note, browse public snippets via explore.
-NOT for: files in a repository (use gitlab_repository), wiki pages (use gitlab_wiki), MR/issue notes (use gitlab_mr_review or gitlab_issue), custom group emoji (use gitlab_custom_emoji — enterprise).
+	addMetaTool(server, "gitlab_snippet", `Manage GitLab snippets: personal snippets, project snippets, public explore feed, threaded discussions, project snippet notes, and award emoji. Delete actions are destructive.
+Use snippets for standalone code/text outside repository files. NOT for repo files, wiki pages, MR/issue notes, or defining custom group emoji.
 
-Returns:
-- *_list / list_all / explore: array with pagination.
-- *_get / *_create / *_update: snippet object {id, title, file_name, files, visibility, author, web_url, raw_url}.
-- content / project_content: raw snippet body as text.
-- file_content: raw content of a single file in a multi-file snippet.
-- discussion_* / note_*: discussion or note object.
-- emoji_*: award emoji object.
-- *_delete: {success: bool, message: string}.
-Errors: 404 not found, 403 forbidden (hint: requires Reporter+ for project snippets; private snippets require ownership), 400 invalid params (hint: visibility ∈ private/internal/public).
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get for create/update/delete. Lists accept page/per_page. visibility is private/internal/public.
 
-Param conventions: * = required. List actions accept page, per_page. visibility ∈ private/internal/public.
+Personal snippets: list/list_all/explore, get/content, file_content, create/update/delete. get/content/delete need snippet_id*; file_content needs snippet_id* and file_path*; create needs title*, file_name*, content*.
+Project snippets: project_list/get/content/create/update/delete. Project actions need project_id*; get/content/update/delete also need snippet_id*; create needs title*, file_name*, content*.
+Discussions: discussion_list/get/create/add_note/update_note/delete_note. Notes: note_list/get/create/update/delete for project snippets. Emoji: emoji_snippet_* and emoji_snippet_note_*; create needs name*, delete/get need award_id*.
 
-Personal snippets:
-- list / list_all / explore: (no required params)
-- get / content: snippet_id*
-- file_content: snippet_id*, file_path*
-- create: title*, file_name*, content*, visibility, description
-- update: snippet_id*, title, file_name, content, visibility, description
-- delete: snippet_id*
-
-Project snippets:
-- project_list: project_id*
-- project_get / project_content: project_id*, snippet_id*
-- project_create: project_id*, title*, file_name*, content*, visibility
-- project_update: project_id*, snippet_id*, title, file_name, content, visibility
-- project_delete: project_id*, snippet_id*
-
-Discussions (threaded):
-- discussion_list: snippet_id*
-- discussion_get: snippet_id*, discussion_id*
-- discussion_create: snippet_id*, body*
-- discussion_add_note: snippet_id*, discussion_id*, body*
-- discussion_update_note: snippet_id*, discussion_id*, note_id*, body*
-- discussion_delete_note: snippet_id*, discussion_id*, note_id*
-
-Notes (project snippets only) — all need project_id*, snippet_id*:
-- note_list: order_by, sort
-- note_get / note_delete: note_id*
-- note_create: body*
-- note_update: note_id*, body*
-
-Award emoji — all need project_id*, snippet_id* (snippet emoji) or project_id*, snippet_id*, note_id* (note emoji):
-- emoji_snippet_list / emoji_snippet_note_list: (no extra params)
-- emoji_snippet_get / emoji_snippet_note_get: award_id*
-- emoji_snippet_create / emoji_snippet_note_create: name*
-- emoji_snippet_delete / emoji_snippet_note_delete: award_id*
-
-See also: gitlab_repository (project files and commits), gitlab_wiki (long-form project docs), gitlab_project (project membership and visibility), gitlab_custom_emoji (define group-level custom emoji).`, routes, toolutil.IconSnippet)
+Returns paginated arrays, snippet/discussion/note/emoji objects, raw snippet content, or {success,message}. Errors: 403 for private/ownership or Reporter+ gaps, 404 for scoped IDs, 400 for invalid visibility/content.
+See also: gitlab_repository, gitlab_wiki, gitlab_mr_review, gitlab_issue, gitlab_custom_emoji.`, routes, toolutil.IconSnippet)
 }
 
 // registerFeatureFlagsMeta registers the gitlab_feature_flags meta-tool with actions:

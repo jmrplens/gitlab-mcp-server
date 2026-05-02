@@ -25,14 +25,14 @@ func TestLookupMetaActionSchema_DestructiveActionAddsConfirm(t *testing.T) {
 	if !ok {
 		t.Fatalf("schema properties missing: %#v", schema)
 	}
-	if _, ok := properties["confirm"]; !ok {
+	if _, hasConfirm := properties["confirm"]; !hasConfirm {
 		t.Fatalf("confirm property missing: %#v", properties)
 	}
 	if schema["x_destructive"] != true {
 		t.Fatalf("x_destructive = %#v, want true", schema["x_destructive"])
 	}
 	originalProperties := routes["gitlab_project"]["milestone_delete"].InputSchema["properties"].(map[string]any)
-	if _, ok := originalProperties["confirm"]; ok {
+	if _, originalHasConfirm := originalProperties["confirm"]; originalHasConfirm {
 		t.Fatalf("original schema was mutated: %#v", originalProperties)
 	}
 }
