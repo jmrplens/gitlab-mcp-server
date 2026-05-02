@@ -1,0 +1,100 @@
+{
+  "run": 1,
+  "task_id": "MT-099",
+  "prompt": "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`.",
+  "system_prompt": "You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. For action-based meta-tools, every final task call must use the envelope {\"action\":\"...\",\"params\":{...}}. Standalone tools without an action enum use their input schema directly. You may call gitlab_server schema_index or schema_get first when you need exact params. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. Return tool calls only; do not answer with explanatory text.",
+  "user_prompt": "Task MT-099: Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`.\nDestructive: Yes; include confirm:true in params for the final task call.\nChoose the next MCP tool call needed to perform this task. You may look up schemas first, but the final task call should perform the requested GitLab operation.",
+  "expected": [
+    {
+      "step": 1,
+      "tool": "gitlab_branch",
+      "action": "delete",
+      "required_params": [
+        "project_id",
+        "branch_name"
+      ],
+      "optional_params": [
+        "confirm"
+      ],
+      "destructive": true
+    }
+  ],
+  "events": [
+    {
+      "turn": 0,
+      "kind": "user_prompt",
+      "role": "user",
+      "content": "Task MT-099: Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`.\nDestructive: Yes; include confirm:true in params for the final task call.\nChoose the next MCP tool call needed to perform this task. You may look up schemas first, but the final task call should perform the requested GitLab operation."
+    },
+    {
+      "turn": 1,
+      "kind": "assistant_message",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01LxheDnTFu3CVhTLzfukfjN",
+          "name": "gitlab_branch",
+          "input": {
+            "action": "delete",
+            "params": {
+              "branch_name": "obsolete/eval",
+              "confirm": true,
+              "project_id": "my-org/tools/gitlab-mcp-server"
+            }
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 88,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 38877
+      }
+    },
+    {
+      "turn": 1,
+      "kind": "tool_use",
+      "role": "assistant",
+      "tool_use_id": "toolu_01LxheDnTFu3CVhTLzfukfjN",
+      "tool": "gitlab_branch",
+      "action": "delete",
+      "input": {
+        "action": "delete",
+        "params": {
+          "branch_name": "obsolete/eval",
+          "confirm": true,
+          "project_id": "my-org/tools/gitlab-mcp-server"
+        }
+      }
+    },
+    {
+      "turn": 1,
+      "kind": "validation",
+      "validation": {
+        "valid": true,
+        "tool_matches": true,
+        "action_matches": true,
+        "required_present": true,
+        "destructive_safe": true,
+        "message": "ok"
+      }
+    }
+  ],
+  "summary": {
+    "first_tool": "gitlab_branch",
+    "first_action": "delete",
+    "final_tool": "gitlab_branch",
+    "final_action": "delete",
+    "schema_lookup_used": false,
+    "first_pass": true,
+    "repair_attempted": false,
+    "repair_success": false,
+    "final_success": true,
+    "destructive_safe": true,
+    "completed_steps": 1,
+    "expected_steps": 1,
+    "anthropic_calls": 1,
+    "tool_calls": 1
+  }
+}

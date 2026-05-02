@@ -388,6 +388,25 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	}
 }
 
+func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	task := evalTask{ID: "MT-002", Prompt: "Find project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if result.Trace.TaskID != task.ID || !strings.Contains(result.Trace.UserPrompt, task.Prompt) {
+		t.Fatalf("trace prompt = %+v, want task prompt recorded", result.Trace)
+	}
+	wantKinds := []string{"user_prompt", "assistant_message", "tool_use", "validation"}
+	for _, kind := range wantKinds {
+		if !traceHasKind(result.Trace, kind) {
+			t.Fatalf("trace events = %+v, want kind %s", result.Trace.Events, kind)
+		}
+	}
+}
+
 func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
 	runner := newScriptedRunner(t,
 		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "iid": 7}}),
@@ -495,6 +514,40 @@ func TestEstimateCostUSD_UsesPerMillionPricing(t *testing.T) {
 	}
 }
 
+func TestWriteTraceArtifacts_WritesJSONLIndexAndPerTaskFiles(t *testing.T) {
+	trace := taskTrace{
+		Run:          2,
+		TaskID:       "MT-002",
+		Prompt:       "Find a project.",
+		SystemPrompt: systemPrompt(),
+		UserPrompt:   "Task MT-002: Find a project.",
+		Expected:     []traceExpectedStep{{Step: 1, Tool: "gitlab_project", Action: "get", RequiredParams: []string{"project_id"}}},
+		Events:       []traceEvent{{Turn: 1, Kind: "tool_use", Tool: "gitlab_project", Action: "get"}},
+		Summary:      traceSummary{FinalSuccess: true, FirstPass: true, CompletedSteps: 1, ExpectedSteps: 1},
+	}
+	dir := t.TempDir()
+	if err := writeTraceArtifacts(dir, []taskResult{{Trace: trace}}); err != nil {
+		t.Fatalf("writeTraceArtifacts() error = %v", err)
+	}
+
+	for _, name := range []string{"index.md", "traces.jsonl", "run-002-MT-002.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.Contains(string(data), "MT-002") {
+			t.Fatalf("%s = %s, want task ID", name, data)
+		}
+	}
+}
+
+func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
+	got := defaultTraceDir("plan/evals/report.md")
+	if got != "plan/evals/report.traces" {
+		t.Fatalf("defaultTraceDir() = %q, want report.traces", got)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -529,6 +582,15 @@ func newScriptedRunner(t *testing.T, responses ...anthropicResponse) *anthropicR
 
 func toolUseResponse(id, name string, input map[string]any) anthropicResponse {
 	return anthropicResponse{Content: []anthropicContentBlock{{Type: "tool_use", ID: id, Name: name, Input: input}}}
+}
+
+func traceHasKind(trace taskTrace, kind string) bool {
+	for _, event := range trace.Events {
+		if event.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func projectGetRoute() toolutil.ActionRoute {

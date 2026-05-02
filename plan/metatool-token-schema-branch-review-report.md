@@ -13,7 +13,7 @@ This report summarizes the `research/metatool-token-schema` branch relative to `
 | Commits ahead of `main` | 8 committed changes before this documentation cleanup |
 | Diff size before documentation cleanup | 34 files, 8,529 insertions, 6,290 deletions |
 | Primary goal | Keep `META_TOOLS=true` and `META_PARAM_SCHEMA=opaque` usable while reducing advertised tool-definition tokens. |
-| Main acceptance signal | 100% final task success on the latest model-backed fixture, 100% dry-run success on the expanded 105-case fixture, and 48 / 48 meta-tool coverage. |
+| Main acceptance signal | 100% final task success on the latest model-backed fixture, 100% dry-run success on the expanded 134-case fixture, a 100% targeted model-backed capability trace sample, and 48 / 48 meta-tool coverage. |
 
 ## Commit Timeline
 
@@ -90,6 +90,7 @@ Capabilities:
 | Usage reporting | Records requests, tool calls, input/output tokens, cache write/read tokens, and estimated cost. |
 | Multi-step scenarios | Validates ordered workflows with multiple tool calls and simulated continuation. |
 | Standalone tools | Handles interactive tools and project discovery tools that do not use the `{action, params}` envelope. |
+| Trace artifacts | Writes per-case JSON traces, a `traces.jsonl` corpus, and an `index.md` for model-backed runs. |
 
 Review focus:
 
@@ -140,7 +141,7 @@ Current versus `main` on the 51-task comparison fixture:
 
 The `main` snapshot failed the server-diagnostics task because `gitlab_server` did not exist in that catalog.
 
-The current working tree adds 3 deterministic failure-simulation rows after this model-backed run. Those rows are validated by dry-run and unit tests, but should be included in the next Anthropic run before being treated as model-backed quality gates.
+The current working tree expands beyond this full run with sampling, elicitation, destructive-action, and trace-artifact coverage. The expanded fixture is validated by dry-run and unit tests, and a targeted Anthropic sample for representative new rows is recorded under `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md` with per-case traces in the sibling `.traces/` directory.
 
 ## Phase 5: Full Catalog Coverage
 
@@ -148,22 +149,25 @@ The final committed evaluation expansion plus the current follow-up adds:
 
 | Coverage item | Count |
 | --- | ---: |
-| Single-operation cases | 92 |
-| Multi-step scenarios | 10 |
-| Failure simulation scenarios | 3 |
-| Total automated cases | 105 |
-| Expected tool operations across all cases | 137 |
+| Single-operation cases | 116 |
+| Multi-step scenarios | 13 |
+| Failure simulation scenarios | 5 |
+| Total automated cases | 134 |
+| Expected tool operations across all cases | 174 |
 | Catalog tools covered | 48 / 48 |
-| Unique action routes covered by expected steps | 106 / 1007 |
+| Unique action routes covered by expected steps | 134 / 1007 |
 
 Important additions:
 
 - `MT-070` through `MT-092` close the remaining catalog coverage gaps.
 - `MT-080` through `MT-083` verify standalone interactive tools.
 - `MT-091` verifies that vulnerability routes use `project_path`, not `project_id`.
-- `MS-001` through `MS-010` exercise cross-domain workflows with ordered steps.
+- `MS-001` through `MS-013` exercise cross-domain workflows with ordered steps.
+- `MT-093` through `MT-098` broaden sampling coverage across `gitlab_analyze` actions.
+- `MT-099` through `MT-116` add additional destructive coverage across branches, tags, pipelines, users, feature flags, custom emoji, wikis, merge requests, issues, access credentials, repository discussions, admin state, and project mirroring.
+- `MS-011` through `MS-013` add elicitation, sampling, and feature-flag cleanup workflows.
 - Destructive metrics now require confirmation only when the model attempts the expected destructive route, avoiding false safety failures for harmless read-only repair attempts.
-- `MF-001` through `MF-003` add transient GitLab failure, 404 fallback, and poisoned-output continuation scenarios.
+- `MF-001` through `MF-005` add transient GitLab failure, 404 fallback, poisoned-output continuation, unsupported sampling fallback, and unsupported elicitation fallback scenarios.
 - Fixture validation now compares destructive flags and listed params against live route metadata and generated action schemas.
 
 ## Phase 6: Documentation Cleanup
@@ -173,7 +177,7 @@ The documentation cleanup in this working tree reorganizes `docs/evaluation` int
 | Document | Purpose |
 | --- | --- |
 | `docs/evaluation/README.md` | Evaluation index and harness overview. |
-| `docs/evaluation/automated-meta-tool-cases.md` | Human-readable explanation of all 105 automated cases. |
+| `docs/evaluation/automated-meta-tool-cases.md` | Human-readable explanation of all 134 automated cases. |
 | `docs/evaluation/current-results.md` | Current static, model, token, and quality results. |
 | `docs/evaluation/user-prompt-playbook.md` | Copy-ready prompts for manual user/model testing. |
 
@@ -194,7 +198,7 @@ The cleanup removes the earlier mixed documents that combined prompts, results, 
 | --- | --- |
 | Model-backed results can drift across provider versions. | Reports record model, date, token usage, and cost; use repeated runs before release. |
 | The harness does not execute GitLab mutations. | It validates trajectory, parameters, and safety; live E2E remains separate. |
-| Compressed descriptions may remove rare routing cues. | The 105-case fixture covers all advertised meta-tools and includes multi-step plus failure-injection workflows. |
+| Compressed descriptions may remove rare routing cues. | The 134-case fixture covers all advertised meta-tools and includes multi-step plus failure-injection workflows. |
 | Generated `tools_meta.json` is large. | Review source descriptions first, then confirm generated changes are expected. |
 | External links to old evaluation docs may break after cleanup. | Review docs index and known references; add redirect notes if external consumers depend on old filenames. |
 
@@ -213,6 +217,7 @@ go vet ./cmd/eval_meta_tools
 golangci-lint run ./cmd/eval_meta_tools
 npx markdownlint-cli2 docs/evaluation/*.md docs/development/testing.md
 go run ./cmd/eval_meta_tools/ --dry-run --repeat=1 --out /tmp/eval-expanded-dry-run.md
+go run ./cmd/eval_meta_tools/ --task=MT-093,MT-099,MT-101,MF-004,MF-005 --repeat=1 --out plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.md --trace-dir plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-capability-trace-sample.traces
 ```
 
 For a full model-backed run:
@@ -233,7 +238,7 @@ go run ./cmd/eval_meta_tools/ \
 - [ ] `META_PARAM_SCHEMA=opaque` remains the default documented path.
 - [ ] Compressed descriptions still mention schema lookup, nested params, unknown-parameter rejection, and destructive confirmation where applicable.
 - [ ] Destructive actions require explicit confirmation in schemas, validation, and evaluation cases.
-- [ ] The 105-case fixture covers every advertised meta-tool and includes deterministic failure-injection scenarios.
+- [ ] The 134-case fixture covers every advertised meta-tool and includes deterministic failure-injection and capability-fallback scenarios.
 - [ ] Model-backed results meet the quality gates in `docs/evaluation/current-results.md`.
 - [ ] Generated docs and test metrics are synchronized with `cmd/gen_testing_docs`.
 - [ ] User-facing docs and developer docs describe the same configuration behavior.

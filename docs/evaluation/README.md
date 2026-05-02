@@ -6,7 +6,7 @@ The evaluation suite has three complementary layers:
 
 | Document | Purpose |
 | --- | --- |
-| [Automated meta-tool cases](automated-meta-tool-cases.md) | Human-readable reference for the 105 automated evaluation cases used by `cmd/eval_meta_tools`. |
+| [Automated meta-tool cases](automated-meta-tool-cases.md) | Human-readable reference for the 134 automated evaluation cases used by `cmd/eval_meta_tools`. |
 | [Current results](current-results.md) | Latest static, model, token, and quality results for the current branch. |
 | [User prompt playbook](user-prompt-playbook.md) | Copy-ready prompts and scenario patterns for users who want to exercise the server manually. |
 
@@ -34,7 +34,7 @@ The automated evaluation is a validation harness for model tool-calling behavior
 | 5. Simulate schema discovery | If the model calls `gitlab_server` with `schema_index` or `schema_get`, the harness returns the real locally derived schema index or action schema. |
 | 6. Validate final calls | For normal tool calls, the harness checks tool name, action, required params, schema-exposed params, meta-tool envelope shape, standalone-tool shape, step order, and `confirm:true` for destructive routes. |
 | 7. Simulate tool results | Valid non-final multi-step calls receive an `ok; continue` tool result. Invalid first attempts receive an error tool result so the model can repair once. `MF-*` rows can also inject one-time transient errors, 404 fallback paths, and untrusted tool output. |
-| 8. Write report | The report records route accuracy, first-pass rate, repair rate, schema lookup usage, destructive safety, token usage, cost, and catalog coverage. |
+| 8. Write report and traces | The report records route accuracy, first-pass rate, repair rate, schema lookup usage, destructive safety, token usage, cost, and catalog coverage. Model-backed runs also write per-case JSON traces and a `traces.jsonl` file for later LLM analysis. |
 
 `--tools-file=/path/to/tools_meta.json` replaces step 2 with a saved `tools/list` snapshot, which is how the branch is compared against `main` without checking out or starting a second server.
 
@@ -57,7 +57,8 @@ go run ./cmd/eval_meta_tools/ \
   --pause=250ms \
   --retries=8 \
   --retry-wait=65s \
-  --out /tmp/eval-anthropic.md
+  --out /tmp/eval-anthropic.md \
+  --trace-dir /tmp/eval-anthropic.traces
 ```
 
 Useful flags:
@@ -68,8 +69,13 @@ Useful flags:
 | `--task=MT-091,MS-002` | Run a targeted subset. |
 | `--repeat=N` | Repeat selected cases to check stability. |
 | `--tools-file=/path/to/tools_meta.json` | Compare against a saved `tools/list` snapshot, such as the `main` branch catalog. |
+| `--trace-dir=/path/to/traces` | Store model-backed per-case JSON traces, `traces.jsonl`, and `index.md`; defaults to `<report>.traces`. |
 | `--pause=1s` | Add spacing between API calls when running a model-backed evaluation. |
 | `--retries=8 --retry-wait=65s` | Survive transient model API throttling. |
+
+Trace artifacts intentionally omit API keys and request headers. Each trace stores the exact system prompt, wrapped user prompt, expected route sequence, assistant `tool_use` blocks, simulated `tool_result` blocks, validation messages, simulation events, token usage for model responses, and the final summary.
+
+MCP completions are not directly model-callable in this Anthropic tool-calling harness. Completion quality should be tested through MCP `completion/complete` client/server tests and prompt/resource argument completion tests; this harness can only evaluate the tools that appear in the model-visible `tools/list` catalog.
 
 ## Design Notes
 
@@ -80,9 +86,11 @@ The suite follows a hybrid of deterministic and model-backed evaluation practice
 | Versioned fixtures | The case matrix is checked into this directory and parsed by `cmd/eval_meta_tools`. |
 | Trajectory checks | The harness validates expected tool, action, required params, step order, and destructive confirmation. |
 | Failure injection | Dedicated `MF-*` cases simulate transient GitLab failure, missing resources, and prompt-injection text embedded in tool output. |
+| Capability fallback | Dedicated `MF-*` cases simulate unsupported sampling and elicitation capabilities, then validate raw-tool or non-interactive fallback paths. |
 | Outcome checks | Each case has a success verifier describing the expected user-visible outcome. |
 | Safety gates | Destructive steps must list `confirm` and model calls must include `confirm:true` on the destructive route. |
 | Reproducible reports | Reports include model name, request counts, token usage, cache usage, estimated cost, per-task status, and fixture coverage. |
+| Trace artifacts | Model-backed runs produce JSON and JSONL transcripts that preserve the prompts, tool calls, validation messages, and simulated results for every case. |
 | Full catalog coverage | The fixture covers all 48 advertised meta-tools in the enterprise opaque catalog. |
 
 External references consulted while reorganizing this directory include MCP Evals, OpenAI Frontier Evals and nanoeval, promptfoo trajectory assertions, LangSmith dataset and tracing concepts, Inspect AI evaluation patterns, and Anthropic agent-evaluation guidance.

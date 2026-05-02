@@ -1,0 +1,159 @@
+{
+  "run": 1,
+  "task_id": "MF-005",
+  "prompt": "Start guided issue creation in project `my-org/tools/gitlab-mcp-server`; if elicitation is unavailable, create an issue titled `Evaluation fallback`.",
+  "system_prompt": "You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. For action-based meta-tools, every final task call must use the envelope {\"action\":\"...\",\"params\":{...}}. Standalone tools without an action enum use their input schema directly. You may call gitlab_server schema_index or schema_get first when you need exact params. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. Return tool calls only; do not answer with explanatory text.",
+  "user_prompt": "Task MF-005: Start guided issue creation in project `my-org/tools/gitlab-mcp-server`; if elicitation is unavailable, create an issue titled `Evaluation fallback`.\nDestructive: No\nPerform the full scenario. You may need several MCP tool calls; after each simulated result, continue with the next needed GitLab operation until the scenario is complete.",
+  "expected": [
+    {
+      "step": 1,
+      "tool": "gitlab_interactive_issue_create",
+      "required_params": [
+        "project_id"
+      ],
+      "destructive": false,
+      "simulation": "elicitation_unsupported_continue"
+    },
+    {
+      "step": 2,
+      "tool": "gitlab_issue",
+      "action": "create",
+      "required_params": [
+        "project_id",
+        "title"
+      ],
+      "optional_params": [
+        "description",
+        "labels"
+      ],
+      "destructive": false
+    }
+  ],
+  "events": [
+    {
+      "turn": 0,
+      "kind": "user_prompt",
+      "role": "user",
+      "content": "Task MF-005: Start guided issue creation in project `my-org/tools/gitlab-mcp-server`; if elicitation is unavailable, create an issue titled `Evaluation fallback`.\nDestructive: No\nPerform the full scenario. You may need several MCP tool calls; after each simulated result, continue with the next needed GitLab operation until the scenario is complete."
+    },
+    {
+      "turn": 1,
+      "kind": "assistant_message",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "tool_use",
+          "id": "toolu_018EbmnB7UE5FLh93QqEGZAo",
+          "name": "gitlab_interactive_issue_create",
+          "input": {
+            "project_id": "my-org/tools/gitlab-mcp-server"
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 55,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 38882
+      }
+    },
+    {
+      "turn": 1,
+      "kind": "tool_use",
+      "role": "assistant",
+      "tool_use_id": "toolu_018EbmnB7UE5FLh93QqEGZAo",
+      "tool": "gitlab_interactive_issue_create",
+      "input": {
+        "project_id": "my-org/tools/gitlab-mcp-server"
+      }
+    },
+    {
+      "turn": 1,
+      "kind": "validation",
+      "validation": {
+        "valid": true,
+        "tool_matches": true,
+        "action_matches": true,
+        "required_present": true,
+        "destructive_safe": true,
+        "message": "ok"
+      }
+    },
+    {
+      "turn": 1,
+      "kind": "tool_result",
+      "role": "user",
+      "tool_use_id": "toolu_018EbmnB7UE5FLh93QqEGZAo",
+      "content": "simulated elicitation capability unsupported; fall back to the scripted non-interactive meta-tool action when all required params are known",
+      "is_error": true
+    },
+    {
+      "turn": 2,
+      "kind": "assistant_message",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01DFSw4NeKmFc2vMYva8JwVK",
+          "name": "gitlab_issue",
+          "input": {
+            "action": "create",
+            "params": {
+              "project_id": "my-org/tools/gitlab-mcp-server",
+              "title": "Evaluation fallback"
+            }
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 82,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 39001
+      }
+    },
+    {
+      "turn": 2,
+      "kind": "tool_use",
+      "role": "assistant",
+      "tool_use_id": "toolu_01DFSw4NeKmFc2vMYva8JwVK",
+      "tool": "gitlab_issue",
+      "action": "create",
+      "input": {
+        "action": "create",
+        "params": {
+          "project_id": "my-org/tools/gitlab-mcp-server",
+          "title": "Evaluation fallback"
+        }
+      }
+    },
+    {
+      "turn": 2,
+      "kind": "validation",
+      "validation": {
+        "valid": true,
+        "tool_matches": true,
+        "action_matches": true,
+        "required_present": true,
+        "destructive_safe": true,
+        "message": "ok"
+      }
+    }
+  ],
+  "summary": {
+    "first_tool": "gitlab_interactive_issue_create",
+    "final_tool": "gitlab_issue",
+    "final_action": "create",
+    "schema_lookup_used": false,
+    "first_pass": true,
+    "repair_attempted": true,
+    "repair_success": true,
+    "final_success": true,
+    "destructive_safe": true,
+    "completed_steps": 2,
+    "expected_steps": 2,
+    "anthropic_calls": 2,
+    "tool_calls": 2,
+    "notes": "step 1 simulation elicitation_unsupported_continue: simulated elicitation capability unsupported"
+  }
+}
