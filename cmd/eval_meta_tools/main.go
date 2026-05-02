@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,10 +52,12 @@ type options struct {
 	ToolsFile string
 	OnlyIDs   string
 	MaxTasks  int
+	Repeat    int
 	MaxTokens int
 	Retries   int
 	RetryWait time.Duration
 	Pause     time.Duration
+	Pricing   pricingOptions
 	DryRun    bool
 }
 
@@ -64,7 +67,15 @@ type evalTask struct {
 	ExpectedTool   string
 	ExpectedAction string
 	RequiredParams []string
+	OptionalParams []string
 	Destructive    bool
+}
+
+type pricingOptions struct {
+	InputPerMTok      float64
+	OutputPerMTok     float64
+	CacheWritePerMTok float64
+	CacheReadPerMTok  float64
 }
 
 type anthropicTool struct {
@@ -115,7 +126,22 @@ type anthropicResponse struct {
 	Type    string                  `json:"type"`
 	Role    string                  `json:"role"`
 	Content []anthropicContentBlock `json:"content"`
+	Usage   anthropicUsage          `json:"usage"`
 	Error   *anthropicError         `json:"error,omitempty"`
+}
+
+type anthropicUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+func (u *anthropicUsage) add(other anthropicUsage) {
+	u.InputTokens += other.InputTokens
+	u.OutputTokens += other.OutputTokens
+	u.CacheCreationInputTokens += other.CacheCreationInputTokens
+	u.CacheReadInputTokens += other.CacheReadInputTokens
 }
 
 type anthropicError struct {
@@ -125,6 +151,7 @@ type anthropicError struct {
 
 type taskResult struct {
 	Task             evalTask
+	Run              int
 	SchemaLookupUsed bool
 	FirstTool        string
 	FirstAction      string
@@ -135,6 +162,9 @@ type taskResult struct {
 	FinalAction      string
 	FinalSuccess     bool
 	DestructiveSafe  bool
+	AnthropicCalls   int
+	ToolCalls        int
+	Usage            anthropicUsage
 	Notes            []string
 }
 
@@ -178,6 +208,12 @@ func run() error {
 	if len(tasks) == 0 {
 		return errors.New("no tasks selected")
 	}
+	if opts.Repeat < 1 {
+		return errors.New("repeat must be >= 1")
+	}
+	if problems := validateTaskFixture(tasks); len(problems) > 0 {
+		return fmt.Errorf("fixture validation failed:\n- %s", strings.Join(problems, "\n- "))
+	}
 
 	anthropicTools, routes, err := loadCatalog(opts.ToolsFile)
 	if err != nil {
@@ -185,7 +221,10 @@ func run() error {
 	}
 
 	if opts.DryRun {
-		results := runStaticValidation(tasks, routes)
+		results := make([]taskResult, 0, len(tasks)*opts.Repeat)
+		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
+			results = append(results, runStaticValidation(tasks, routes, runIndex)...)
+		}
 		return writeReport(opts.Output, opts, results, len(anthropicTools), true)
 	}
 
@@ -204,13 +243,16 @@ func run() error {
 	}
 
 	ctx := context.Background()
-	results := make([]taskResult, 0, len(tasks))
-	for _, task := range tasks {
-		result := runner.evaluateTask(ctx, task, anthropicTools, routes)
-		results = append(results, result)
-		fmt.Printf("%s: final=%t first=%s/%s final_call=%s/%s\n", task.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction)
-		if opts.Pause > 0 {
-			time.Sleep(opts.Pause)
+	results := make([]taskResult, 0, len(tasks)*opts.Repeat)
+	for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
+		for _, task := range tasks {
+			result := runner.evaluateTask(ctx, task, anthropicTools, routes)
+			result.Run = runIndex
+			results = append(results, result)
+			fmt.Printf("run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", runIndex, task.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.AnthropicCalls, result.ToolCalls)
+			if opts.Pause > 0 {
+				time.Sleep(opts.Pause)
+			}
 		}
 	}
 
@@ -225,10 +267,15 @@ func parseFlags() options {
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.StringVar(&opts.OnlyIDs, "task", "", "Comma-separated task IDs to run, for example MT-035,MT-040")
 	flag.IntVar(&opts.MaxTasks, "max-tasks", 0, "Limit number of tasks; 0 runs all tasks")
+	flag.IntVar(&opts.Repeat, "repeat", 1, "Number of times to repeat the selected task set")
 	flag.IntVar(&opts.MaxTokens, "max-tokens", 1024, "Max output tokens per Anthropic request")
 	flag.IntVar(&opts.Retries, "retries", 3, "Retries for transient Anthropic 429/5xx responses")
 	flag.DurationVar(&opts.RetryWait, "retry-wait", 65*time.Second, "Fallback wait before retrying Anthropic 429 responses")
 	flag.DurationVar(&opts.Pause, "pause", 0, "Optional pause between tasks")
+	flag.Float64Var(&opts.Pricing.InputPerMTok, "input-cost-per-mtok", 0, "Optional input token price in USD per million tokens for cost estimates")
+	flag.Float64Var(&opts.Pricing.OutputPerMTok, "output-cost-per-mtok", 0, "Optional output token price in USD per million tokens for cost estimates")
+	flag.Float64Var(&opts.Pricing.CacheWritePerMTok, "cache-write-cost-per-mtok", 0, "Optional prompt-cache write price in USD per million tokens for cost estimates")
+	flag.Float64Var(&opts.Pricing.CacheReadPerMTok, "cache-read-cost-per-mtok", 0, "Optional prompt-cache read price in USD per million tokens for cost estimates")
 	flag.BoolVar(&opts.DryRun, "dry-run", false, "Validate fixture routes without calling Anthropic")
 	flag.Parse()
 	return opts
@@ -297,6 +344,7 @@ func parseTasksMarkdown(markdown string) ([]evalTask, error) {
 			ExpectedTool:   tool,
 			ExpectedAction: action,
 			RequiredParams: parseParamList(cols[3]),
+			OptionalParams: parseParamList(cols[4]),
 			Destructive:    strings.EqualFold(cols[5], "yes"),
 		})
 	}
@@ -304,6 +352,35 @@ func parseTasksMarkdown(markdown string) ([]evalTask, error) {
 		return nil, errors.New("no MT-* task rows found")
 	}
 	return tasks, nil
+}
+
+func validateTaskFixture(tasks []evalTask) []string {
+	var problems []string
+	for _, task := range tasks {
+		if hasParam(task.RequiredParams, "project_id") && !promptNamesEntity(task.Prompt, "project") {
+			problems = append(problems, fmt.Sprintf("%s requires project_id but prompt does not name a project", task.ID))
+		}
+		if hasParam(task.RequiredParams, "group_id") && !promptNamesEntity(task.Prompt, "group") {
+			problems = append(problems, fmt.Sprintf("%s requires group_id but prompt does not name a group", task.ID))
+		}
+		if task.Destructive && !hasParam(task.OptionalParams, "confirm") && !hasParam(task.RequiredParams, "confirm") {
+			problems = append(problems, fmt.Sprintf("%s is destructive but does not list confirm as a parameter", task.ID))
+		}
+	}
+	return problems
+}
+
+func hasParam(params []string, needle string) bool {
+	return slices.Contains(params, needle)
+}
+
+func promptNamesEntity(prompt, entity string) bool {
+	lowerPrompt := strings.ToLower(prompt)
+	lowerEntity := strings.ToLower(entity)
+	return strings.Contains(lowerPrompt, lowerEntity+" `") ||
+		strings.Contains(lowerPrompt, lowerEntity+" id `") ||
+		strings.Contains(lowerPrompt, lowerEntity+" id ") ||
+		strings.Contains(lowerPrompt, lowerEntity+" path `")
 }
 
 func splitMarkdownRow(line string) []string {
@@ -518,11 +595,14 @@ func (r *anthropicRunner) evaluateTask(ctx context.Context, task evalTask, catal
 
 	for range toolCallLimit {
 		response, err := r.call(ctx, catalog, messages)
+		result.AnthropicCalls++
+		result.Usage.add(response.Usage)
 		if err != nil {
 			result.Notes = append(result.Notes, err.Error())
 			return result
 		}
 		toolUses := toolUseBlocks(response.Content)
+		result.ToolCalls += len(toolUses)
 		messages = append(messages, anthropicMessage{Role: "assistant", Content: response.Content})
 		if len(toolUses) == 0 {
 			result.Notes = append(result.Notes, "model returned no tool_use block")
@@ -803,11 +883,11 @@ func isTruthy(value any) bool {
 	}
 }
 
-func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap) []taskResult {
+func runStaticValidation(tasks []evalTask, routes map[string]toolutil.ActionMap, runIndex int) []taskResult {
 	results := make([]taskResult, 0, len(tasks))
 	for _, task := range tasks {
 		_, ok := routes[task.ExpectedTool][task.ExpectedAction]
-		result := taskResult{Task: task, FirstTool: task.ExpectedTool, FirstAction: task.ExpectedAction, FinalTool: task.ExpectedTool, FinalAction: task.ExpectedAction, DestructiveSafe: true}
+		result := taskResult{Task: task, Run: runIndex, FirstTool: task.ExpectedTool, FirstAction: task.ExpectedAction, FinalTool: task.ExpectedTool, FinalAction: task.ExpectedAction, DestructiveSafe: true}
 		if ok {
 			result.FirstPass = true
 			result.FinalSuccess = true
@@ -834,7 +914,8 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 	fmt.Fprintf(&b, "Mode: %s\n", mode)
 	fmt.Fprintf(&b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(&b, "Catalog tools: %d\n", toolCount)
-	fmt.Fprintf(&b, "Tasks: %d\n\n", len(results))
+	fmt.Fprintf(&b, "Runs: %d\n", opts.Repeat)
+	fmt.Fprintf(&b, "Task attempts: %d\n\n", len(results))
 	fmt.Fprintf(&b, "## Metrics\n\n")
 	fmt.Fprintf(&b, "| Metric | Value |\n| --- | ---: |\n")
 	fmt.Fprintf(&b, "| Tool-selection accuracy | %.1f%% |\n", metrics.ToolSelection)
@@ -844,9 +925,13 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 	fmt.Fprintf(&b, "| Repair success rate | %.1f%% |\n", metrics.RepairSuccess)
 	fmt.Fprintf(&b, "| Destructive safety | %.1f%% |\n", metrics.DestructiveSafety)
 	fmt.Fprintf(&b, "| Final task success proxy | %.1f%% |\n", metrics.FinalSuccess)
+	if opts.Repeat > 1 {
+		writePerRunMetrics(&b, results)
+	}
+	writeUsageSummary(&b, opts, results, dryRun)
 	fmt.Fprintf(&b, "\n## Task Results\n\n")
-	fmt.Fprintf(&b, "| Task | Expected | First final call | Schema lookup | First pass | Repair | Final success | Notes |\n")
-	fmt.Fprintf(&b, "| --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(&b, "| Run | Task | Expected | First final call | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n")
+	fmt.Fprintf(&b, "| ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | --- |\n")
 	for _, result := range results {
 		notes := strings.Join(result.Notes, "; ")
 		if notes == "" {
@@ -856,7 +941,8 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 		if result.RepairAttempted {
 			repair = boolText(result.RepairSuccess)
 		}
-		fmt.Fprintf(&b, "| %s | `%s` / `%s` | `%s` / `%s` | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | `%s` / `%s` | `%s` / `%s` | %s | %s | %s | %s | %d | %d | %s |\n",
+			result.Run,
 			result.Task.ID,
 			result.Task.ExpectedTool,
 			result.Task.ExpectedAction,
@@ -866,6 +952,8 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 			boolText(result.FirstPass),
 			repair,
 			boolText(result.FinalSuccess),
+			result.AnthropicCalls,
+			result.ToolCalls,
 			escapeTable(notes),
 		)
 	}
@@ -874,6 +962,106 @@ func writeReport(path string, opts options, results []taskResult, toolCount int,
 	}
 	fmt.Printf("wrote evaluation report: %s\n", path)
 	return nil
+}
+
+func writePerRunMetrics(b *strings.Builder, results []taskResult) {
+	byRun := make(map[int][]taskResult)
+	runs := make([]int, 0)
+	for _, result := range results {
+		if _, ok := byRun[result.Run]; !ok {
+			runs = append(runs, result.Run)
+		}
+		byRun[result.Run] = append(byRun[result.Run], result)
+	}
+	sort.Ints(runs)
+	fmt.Fprintf(b, "\n## Per-Run Metrics\n\n")
+	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Repair success | Destructive safety | Final success |\n")
+	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	for _, runIndex := range runs {
+		metrics := calculateMetrics(byRun[runIndex])
+		fmt.Fprintf(b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+			runIndex,
+			metrics.ToolSelection,
+			metrics.ActionSelection,
+			metrics.FirstPass,
+			metrics.SchemaLookup,
+			metrics.RepairSuccess,
+			metrics.DestructiveSafety,
+			metrics.FinalSuccess,
+		)
+	}
+}
+
+func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, dryRun bool) {
+	if dryRun {
+		return
+	}
+	summary := aggregateUsage(results)
+	fmt.Fprintf(b, "\n## API Usage\n\n")
+	fmt.Fprintf(b, "| Metric | Value |\n| --- | ---: |\n")
+	fmt.Fprintf(b, "| Anthropic requests | %d |\n", summary.AnthropicCalls)
+	fmt.Fprintf(b, "| Tool calls emitted | %d |\n", summary.ToolCalls)
+	fmt.Fprintf(b, "| Input tokens | %d |\n", summary.Usage.InputTokens)
+	fmt.Fprintf(b, "| Output tokens | %d |\n", summary.Usage.OutputTokens)
+	fmt.Fprintf(b, "| Cache creation input tokens | %d |\n", summary.Usage.CacheCreationInputTokens)
+	fmt.Fprintf(b, "| Cache read input tokens | %d |\n", summary.Usage.CacheReadInputTokens)
+	pricing := resolvePricing(opts)
+	if pricing.Source == "" {
+		fmt.Fprintf(b, "| Estimated cost | Not configured |\n")
+		return
+	}
+	fmt.Fprintf(b, "| Estimated cost | $%.4f |\n", estimateCostUSD(summary.Usage, pricing.Pricing))
+	fmt.Fprintf(b, "| Pricing source | %s |\n", pricing.Source)
+}
+
+type usageSummary struct {
+	Usage          anthropicUsage
+	AnthropicCalls int
+	ToolCalls      int
+}
+
+func aggregateUsage(results []taskResult) usageSummary {
+	var summary usageSummary
+	for _, result := range results {
+		summary.Usage.add(result.Usage)
+		summary.AnthropicCalls += result.AnthropicCalls
+		summary.ToolCalls += result.ToolCalls
+	}
+	return summary
+}
+
+type resolvedPricing struct {
+	Pricing pricingOptions
+	Source  string
+}
+
+func resolvePricing(opts options) resolvedPricing {
+	if pricingConfigured(opts.Pricing) {
+		return resolvedPricing{Pricing: opts.Pricing, Source: "flags"}
+	}
+	if strings.Contains(strings.ToLower(opts.Model), "sonnet") {
+		return resolvedPricing{
+			Pricing: pricingOptions{
+				InputPerMTok:      3.00,
+				OutputPerMTok:     15.00,
+				CacheWritePerMTok: 3.75,
+				CacheReadPerMTok:  0.30,
+			},
+			Source: "default Claude Sonnet estimate",
+		}
+	}
+	return resolvedPricing{}
+}
+
+func pricingConfigured(pricing pricingOptions) bool {
+	return pricing.InputPerMTok > 0 || pricing.OutputPerMTok > 0 || pricing.CacheWritePerMTok > 0 || pricing.CacheReadPerMTok > 0
+}
+
+func estimateCostUSD(usage anthropicUsage, pricing pricingOptions) float64 {
+	return (float64(usage.InputTokens)*pricing.InputPerMTok +
+		float64(usage.OutputTokens)*pricing.OutputPerMTok +
+		float64(usage.CacheCreationInputTokens)*pricing.CacheWritePerMTok +
+		float64(usage.CacheReadInputTokens)*pricing.CacheReadPerMTok) / 1_000_000
 }
 
 type metrics struct {

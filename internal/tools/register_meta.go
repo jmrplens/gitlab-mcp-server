@@ -389,17 +389,16 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		routes["security_settings_update"] = routeAction(client, securitysettings.UpdateProject)
 	}
 
-	desc := `Manage GitLab projects and project-scoped metadata: project CRUD, forks, stars, archive/transfer/restore, members, group sharing, hooks, badges, labels, milestones, boards, integrations, uploads, import/export, Pages, avatars, approvals, mirroring, statistics, and housekeeping.
+	desc := `Manage GitLab project CRUD and project-scoped metadata: members, shares, hooks, badges, labels, milestones, boards, integrations, uploads, import/export, Pages, avatars, approvals, mirrors, stats, housekeeping, forks, stars, archive/restore, and transfer.
 Use this for project settings and metadata. Use gitlab_repository for files/commits, gitlab_branch for branches, gitlab_wiki for wiki pages, gitlab_issue for issues, and gitlab_merge_request for MRs.
 
-Call with {"action":"<enum value>","params":{...}}. Most project-scoped actions require project_id, which may be a numeric ID or URL-encoded path. List actions accept page/per_page. For exact required and optional params, call gitlab_server schema_get or read gitlab://schema/meta/gitlab_project/<action>; unknown params are rejected.
+Call with {"action":"<enum value>","params":{...}}. Most actions require project_id (numeric ID or URL-encoded path). For exact params call gitlab_server schema_get or read gitlab://schema/meta/gitlab_project/<action>; unknown params are rejected. List actions accept page/per_page.
 
-Action families: project CRUD (create/get/list/update/delete/restore), fork and project actions (fork, transfer, star, archive, languages), user/group listings and shares, member_*, hook_*, label_*, milestone_*, badge_*, board_*, integration_*, upload_*, import/export, pages_*, avatar, approval_*, pull_mirror_*, mirror_*, and maintenance/admin actions. For delete/remove milestone requests, use action milestone_delete (never milestone_list) with params project_id, milestone_iid, confirm:true. Use milestone_list only for listing.
+Action families: project CRUD, fork/star/archive/languages, user/group listings and shares, member_*, hook_*, label_*, milestone_*, badge_*, board_*, integration_*, upload_*, import/export, pages_*, avatar, approval_*, pull_mirror_*, mirror_*, and maintenance/admin actions. For milestone deletion use milestone_delete with project_id, milestone_iid, confirm:true; never milestone_list.
 
-Safety: create/fork/import/export/mirroring/housekeeping can create resources or queue async work. Destructive actions include delete, *_delete, pages_unpublish, mirror_force_push, delete_shared_group, and delete_fork_relation; they require confirmation/elicitation. archive is reversible via unarchive. Common failures: 404 for wrong project_id/path, 403 for insufficient role, 400 for invalid visibility/merge settings.
+Safety: create/fork/import/export/mirroring/housekeeping can create or queue work. Destructive actions include delete, *_delete, pages_unpublish, mirror_force_push, delete_shared_group, and delete_fork_relation; they require confirmation. archive is reversible via unarchive.
 
-Returns resource objects, paginated lists, or {success,message} confirmations depending on the action.
-See also: gitlab_discover_project (resolve a remote URL), gitlab_repository, gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request.`
+Returns resource objects, paginated lists, or {success,message}. See also: gitlab_discover_project, gitlab_repository, gitlab_branch, gitlab_wiki, gitlab_issue, gitlab_merge_request.`
 
 	if enterprise {
 		desc += `
@@ -666,52 +665,17 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"diff_version_get":       routeAction(client, mrchanges.GetDiffVersion),
 	}
 
-	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
-When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review.
-NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
+	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab MRs: notes, threaded discussions, inline positions, diffs/raw diffs, diff versions, and draft review notes.
+Use this to post review comments, resolve threads, inspect diffs, queue draft notes, and publish a batch review. NOT for MR lifecycle (use gitlab_merge_request), MR reactions (gitlab_merge_request emoji_mr_note_*), or pipelines.
 
-IMPORTANT — batch review pattern: call draft_note_create once per comment (with `+"`position`"+` for inline comments, or `+"`in_reply_to_discussion_id`"+` for replies), then draft_note_publish_all ONCE to send a single notification. Use discussion_create only for standalone questions that need immediate visibility.
+Call with {"action":"<enum value>","params":{...}}. All actions need project_id and merge_request_iid; list actions accept page/per_page. Fetch exact params with gitlab_server schema_get or gitlab://schema/meta/gitlab_mr_review/<action>; unknown params are rejected.
 
-Returns:
-- *_list: array with pagination (page, per_page, total, next_page).
-- note_*, discussion_*, draft_note_*, diff_*: resource object(s) with id, body/note, author, position (when inline).
-- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files} — if truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
-- raw_diffs: {raw_diff: string} — full unified diff for the MR head; ideal when changes_get returns truncated_files.
-- *_delete / *_publish: {success: bool, message: string}.
-Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
+Batch pattern: call draft_note_create once per comment (note*, optional position or in_reply_to_discussion_id), then draft_note_publish_all once. Use discussion_create with body* for immediate threads. note_* and discussion_* use body; draft_note_* uses note.
 
-Param conventions: * = required. All actions need project_id*, merge_request_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
+Action families: note_*, discussion_*, changes_get, raw_diffs, diff_versions_*, draft_note_*. Inline position needs base_sha, start_sha, head_sha, path, and new_line/old_line as the schema requires. Delete actions are destructive and require confirmation.
 
-Notes (general comments):
-- note_list: order_by (created_at/updated_at), sort
-- note_get / note_delete: note_id*
-- note_create: body*
-- note_update: note_id*, body*
-
-Discussions (threaded, can be inline via position):
-- discussion_list
-- discussion_get: discussion_id*
-- discussion_create: body*, position (inline)
-- discussion_reply: discussion_id*, body*
-- discussion_resolve: discussion_id*, resolved* (bool)
-- discussion_note_update: discussion_id*, note_id*, body, resolved
-- discussion_note_delete: discussion_id*, note_id*
-
-Changes and diff versions:
-- changes_get: returns file diffs; check truncated_files
-- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
-- diff_versions_list: list MR diff revisions
-- diff_version_get: version_id*, unidiff (bool)
-
-Draft notes (batch review):
-- draft_note_list: order_by, sort
-- draft_note_get: note_id*
-- draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion (bool), position
-- draft_note_update: note_id*, note, position
-- draft_note_delete / draft_note_publish: note_id*
-- draft_note_publish_all: publishes ALL pending drafts as a single review notification
-
-See also: gitlab_merge_request (MR lifecycle, approvals, merge, time tracking, reactions), gitlab_pipeline (MR pipelines), gitlab_repository (file blame for context).`, routes, toolutil.IconDiscussion)
+Returns paginated lists, note/discussion/draft/diff objects, raw_diff, or {success,message}. Errors: 404 for wrong note_id/discussion_id/MR IID, 403 for insufficient role, 400 for invalid position.
+See also: gitlab_merge_request, gitlab_pipeline, gitlab_repository.`, routes, toolutil.IconDiscussion)
 }
 
 // registerRepositoryMeta registers the gitlab_repository meta-tool with actions:
@@ -1137,41 +1101,16 @@ func registerJobMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"token_scope_remove_group":        destructiveVoidAction(client, jobtokenscope.RemoveGroupAllowlist),
 	}
 
-	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. Erase/delete actions are destructive.
-When to use: job details, logs, artifacts, retry/cancel jobs, job token scope. NOT for: pipeline-level operations (use gitlab_pipeline).
+	addMetaTool(server, "gitlab_job", `Manage GitLab CI/CD jobs and CI job-token scope: job lifecycle, manual play, logs, artifacts, bridges, and inbound trust boundaries.
+Use for job details, traces, artifacts, retry/cancel/play, and job-token allowlists. NOT for pipeline-level operations (use gitlab_pipeline).
 
-Behavior:
-- Idempotent reads: list / list_project / get / trace / artifacts / download_artifacts / download_single_artifact / download_single_artifact_by_ref / list_bridges / token_scope_get / token_scope_list_inbound / token_scope_list_groups.
-- retry starts a NEW job run on every call (NON-idempotent — returns a fresh job_id). play activates an existing manual job that has not yet run (same job_id; only manual jobs with rules.when=manual are eligible) and may pass new variables. cancel is idempotent (no-op once final). keep_artifacts / token_scope_patch / token_scope_add_project / token_scope_add_group are idempotent.
-- Side effects: retry / play queue runners, consume CI minutes, and may trigger downstream pipelines and notifications. trace returns up to 100KB of log; download_artifacts streams up to 1MB inline (base64).
-- Destructive: erase clears the job log and artifacts in place (irreversible); delete_artifacts removes a single job's artifacts; delete_project_artifacts wipes ALL artifacts across the project (irreversible). token_scope_remove_* tightens trust boundaries and may break running pipelines.
+Call with {"action":"<enum value>","params":{...}}. All job actions need project_id; list actions accept page/per_page. Fetch exact params with gitlab_server schema_get or gitlab://schema/meta/gitlab_job/<action>; unknown params are rejected.
 
-Param conventions: * = required. All job actions need project_id*. List actions accept page, per_page.
+Job actions: list(project_id,pipeline_id), list_project, get/trace/cancel/retry/erase/keep_artifacts/play/wait(project_id,job_id), list_bridges(project_id,pipeline_id), delete_artifacts(project_id,job_id), delete_project_artifacts(project_id). play may pass variables [{key,value,variable_type}]. retry/play queue runners and can consume CI minutes.
 
-Jobs:
-- list: project_id*, pipeline_id*, scope
-- list_project: project_id*, scope, include_retried
-- get: project_id*, job_id*
-- trace: project_id*, job_id*. Returns job log (truncated to 100KB).
-- cancel / retry / erase / keep_artifacts: project_id*, job_id*
-- play: project_id*, job_id*, variables (array of {key, value, variable_type})
-- wait: project_id*, job_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
-- list_bridges: project_id*, pipeline_id*, scope
-- delete_artifacts: project_id*, job_id*
-- delete_project_artifacts: project_id*. Deletes ALL artifacts across project.
+Artifact actions: artifacts(project_id,job_id), download_artifacts(project_id,ref_name,job), download_single_artifact(project_id,job_id,artifact_path), download_single_artifact_by_ref(project_id,ref_name,artifact_path,job). Inline downloads are base64 and limited.
 
-Artifact downloads (base64, max 1MB):
-- artifacts: project_id*, job_id*
-- download_artifacts: project_id*, ref_name*, job
-- download_single_artifact: project_id*, job_id*, artifact_path*
-- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job
-
-Job token scope:
-- token_scope_get / token_scope_patch: project_id*. Patch params: enabled.
-- token_scope_list_inbound: project_id*
-- token_scope_add_project / token_scope_remove_project: project_id*, target_project_id*
-- token_scope_list_groups: project_id*
-- token_scope_add_group / token_scope_remove_group: project_id*, target_group_id*
+Token scope actions: token_scope_get/patch(project_id), token_scope_list_inbound, token_scope_add/remove_project(project_id,target_project_id), token_scope_list_groups, token_scope_add/remove_group(project_id,target_group_id). erase/delete_artifacts/delete_project_artifacts and token_scope_remove_* are destructive and require confirmation.
 
 See also: gitlab_pipeline, gitlab_repository`, routes, toolutil.IconJob)
 }
@@ -1388,37 +1327,15 @@ func registerCIVariableMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"instance_delete": destructiveVoidAction(client, instancevariables.Delete),
 	}
 
-	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
-When to use: define / rotate / unmask / scope CI/CD variables at project, group, or instance level, both regular and secret (masked / masked_and_hidden), with environment scoping for per-env values.
-NOT for: linting CI YAML or browsing CI templates (use gitlab_template), pipeline runs or schedules (use gitlab_pipeline), feature flags (use gitlab_feature_flags), per-deployment env metadata (use gitlab_environment), GitLab instance settings (use gitlab_admin).
+	addMetaTool(server, "gitlab_ci_variable", `Manage GitLab CI/CD variables at project, group, and instance scope, including masked/hidden values and environment-scoped entries. Delete actions are irreversible.
+Use for variable CRUD only. NOT for CI lint/templates (gitlab_template), pipeline runs/schedules (gitlab_pipeline), feature flags (gitlab_feature_flags), environments (gitlab_environment), or instance settings (gitlab_admin).
 
-Returns:
-- list / group_list / instance_list: arrays of variable objects {key, value (or hidden), variable_type, protected, masked, raw, environment_scope, description} with pagination.
-- get / create / update / group_get / group_create / group_update / instance_get / instance_create / instance_update: single variable object.
-- delete / group_delete / instance_delete: {success, message}.
-Errors: 404 (hint: a (key, environment_scope) pair must exist for get/update/delete — supply environment_scope when the variable is env-scoped), 403 (hint: project requires Maintainer+, group requires Owner, instance requires admin), 400 (hint: variable_type ∈ env_var/file; masked requires single-line non-empty value matching GitLab's masking rules).
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get or gitlab://schema/meta/gitlab_ci_variable/<action>; unknown params are rejected. List actions accept page/per_page.
 
-Param conventions: * = required. Project-scoped actions need project_id*, group-scoped need group_id*, instance-scoped need no ID. Common optional params: variable_type, protected, masked, raw, environment_scope.
+Scopes and required params: project actions list/get/create/update/delete use project_id plus key/value as required by action; group_* actions use group_id; instance_* actions use key/value and no project_id/group_id. Common options: description, variable_type (env_var/file), protected, masked, masked_and_hidden, raw, environment_scope.
 
-Project variables:
-- list: project_id*
-- get / delete: project_id*, key*, environment_scope
-- create: project_id*, key*, value*, description, variable_type, protected, masked, masked_and_hidden, raw, environment_scope
-- update: project_id*, key*, value, description, variable_type, protected, masked, raw, environment_scope
-
-Group variables (group_*):
-- group_list: group_id*
-- group_get / group_delete: group_id*, key*
-- group_create: group_id*, key*, value*, description, variable_type, protected, masked, raw, environment_scope
-- group_update: group_id*, key*, value, description, variable_type, protected, masked, raw, environment_scope
-
-Instance variables (instance_*):
-- instance_list: (no params)
-- instance_get / instance_delete: key*
-- instance_create: key*, value*, description, variable_type, protected, masked, raw
-- instance_update: key*, value, description, variable_type, protected, masked, raw
-
-See also: gitlab_pipeline (pipeline operations), gitlab_template (CI lint)`, routes, toolutil.IconVariable)
+Returns variable objects, paginated lists, or {success,message}. Errors: 404 for missing (key,environment_scope), 403 for insufficient role/admin rights, 400 for invalid key/type/masked value. Use environment_scope for scoped get/update/delete.
+See also: gitlab_pipeline, gitlab_template`, routes, toolutil.IconVariable)
 }
 
 // registerTemplateMeta registers the gitlab_template meta-tool with actions:
@@ -1564,17 +1481,16 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 
-	addMetaTool(server, "gitlab_admin", `Administer self-managed GitLab instance resources: topics, settings, appearance, broadcast messages, instance feature flags, licenses, system hooks, Sidekiq metrics, plan limits, usage data, OAuth applications, app statistics, metadata, custom attributes, bulk imports, error tracking, alert metric images, secure files, Terraform states, cluster agents, dependency proxy cache, and external import jobs.
-Use this only for instance-level administration. Most actions require an admin token. Use gitlab_user for user CRUD, gitlab_group/gitlab_project for namespace/project administration, gitlab_server for MCP server health/schema/self-update, gitlab_feature_flags for project runtime flags, and gitlab_ci_variable for CI variables.
+	addMetaTool(server, "gitlab_admin", `Administer self-managed GitLab instance resources: topics, settings, appearance, broadcast messages, feature flags, licenses, system hooks, Sidekiq, plan limits, usage data, OAuth apps, metadata/statistics, custom attributes, imports, error tracking, secure files, Terraform states, cluster agents, and dependency proxy cache.
+Use only for instance-level administration. Most actions require admin rights. Use gitlab_user for users, gitlab_group/gitlab_project for namespace/project admin, gitlab_server for MCP health/schema/self-update, gitlab_feature_flags for project flags, and gitlab_ci_variable for CI variables.
 
-Call with {"action":"<enum value>","params":{...}}. Choose action from the enum and put all action-specific fields under params. For exact params and required fields, call gitlab_server schema_get or read gitlab://schema/meta/gitlab_admin/<action>; unknown params are rejected. List actions accept page/per_page.
+Call with {"action":"<enum value>","params":{...}}. Fetch exact params with gitlab_server schema_get or gitlab://schema/meta/gitlab_admin/<action>; unknown params are rejected. List actions accept page/per_page.
 
-Action families: topic_*, settings_*, appearance_*, broadcast_message_*, feature_*, license_*, system_hook_*, sidekiq_*, plan_limits_*, usage_data_*, application_*, app_statistics_get, metadata_get, custom_attr_*, bulk_import_*, error_tracking_*, alert_metric_image_*, secure_file_*, terraform_*, cluster_agent_*, import_*, dependency_proxy_delete, and db_migration_mark.
+Action families: topic_*, settings_*, appearance_*, broadcast_message_*, feature_*, license_*, system_hook_*, sidekiq_*, plan_limits_*, usage_data_*, application_*, app_statistics_get, metadata_get, custom_attr_*, bulk_import_*, error_tracking_*, alert_metric_image_*, secure_file_*, terraform_*, cluster_agent_*, import_*, dependency_proxy_delete, db_migration_mark.
 
-Safety: many mutations apply instance-wide immediately. create/import/bulk_import actions can queue long-running jobs or create duplicate resources; token/secret creation may return cleartext only once. Destructive actions include *_delete, *_revoke, dependency_proxy_delete, terraform unlock/delete, bulk_import_cancel, import_cancel_github, and db_migration_mark; they require confirmation/elicitation and may be irreversible. Verify license/base64, HTTPS system-hook URLs, OAuth scopes, cron/time formats, Terraform locks, and db migration state before mutating.
+Safety: many mutations apply instance-wide. create/import/bulk_import can queue long jobs or duplicate resources; token/secret creation may return cleartext once. Destructive actions include *_delete, *_revoke, dependency_proxy_delete, terraform unlock/delete, bulk_import_cancel, import_cancel_github, and db_migration_mark; require confirmation and may be irreversible.
 
-Returns resource objects, metrics, paginated lists, or {success,message} confirmations. Common failures: 401/403 for missing admin rights, 404 for wrong IDs, 400 for invalid encoded content or action-specific constraints.
-See also: gitlab_user, gitlab_group, gitlab_project, gitlab_access, gitlab_server.`, routes, toolutil.IconServer)
+Returns objects, metrics, lists, or {success,message}. Common failures: 401/403 admin rights, 404 wrong IDs, 400 invalid encoded content or constraints. See also: gitlab_user, gitlab_group, gitlab_project, gitlab_access, gitlab_server.`, routes, toolutil.IconServer)
 }
 
 // registerAccessMeta registers the gitlab_access meta-tool with actions:
