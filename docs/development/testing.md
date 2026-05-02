@@ -18,24 +18,24 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,109 |
-| Unit test functions | 8,867 |
+| Total test functions | 9,122 |
+| Unit test functions | 8,880 |
 | E2E test functions | 242 |
-| cmd test functions | 148 |
+| cmd test functions | 160 |
 | Test files (internal/) | 398 |
 | Test files (cmd/) | 10 |
 | Test files (test/e2e/suite/) | 107 |
 | Tool sub-packages tested | 162 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 90.2% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 90.5% |
 | Overall coverage (`go test ./internal/...`) | 96.9% |
-| Average package coverage | 94.8% |
+| Average package coverage | 94.9% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,187 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,200 | 89.9% |
 | `TestFunc` (no underscore) | 672 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 250 | 2.7% |
 
@@ -46,11 +46,11 @@
 | Layer | Test Functions | Test Files | Description |
 | --- | ---: | ---: | --- |
 | Core packages | 1,511 | 84 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration | 228 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
+| Tools orchestration | 229 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (162) | 6,980 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
-| cmd packages | 148 | 10 | server entry point and developer command utilities |
-| **Total** | **9,109** | **515** |  |
+| cmd packages | 160 | 10 | server entry point and developer command utilities |
+| **Total** | **9,122** | **515** |  |
 
 ### Core Packages
 
@@ -288,11 +288,11 @@
 | cmd/audit_metrics | 23.6% |
 | cmd/audit_output | 24.6% |
 | cmd/audit_tokens | 22.4% |
-| cmd/eval_meta_tools | 34.8% |
+| cmd/eval_meta_tools | 59.2% |
 | cmd/gen_llms | 6.4% |
 | cmd/gen_readme | 14.6% |
 | cmd/gen_testing_docs | 20.7% |
-| cmd/server | 78.4% |
+| cmd/server | 78.8% |
 
 ### Core Packages
 
@@ -491,11 +491,11 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_tokens** (22.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (23.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (24.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_meta_tools** (34.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_meta_tools** (59.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **testutil** (60.9%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **awardemoji** (65.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/server** (78.4%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (78.8%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_meta_schema** (80.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **wizard** (83.1%) - interactive UI code, browser launch, and OS dialogs require heavy test stubbing.
 - **autoupdate** (85.1%) - process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process.

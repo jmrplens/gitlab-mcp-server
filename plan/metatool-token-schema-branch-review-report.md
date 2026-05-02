@@ -13,7 +13,7 @@ This report summarizes the `research/metatool-token-schema` branch relative to `
 | Commits ahead of `main` | 8 committed changes before this documentation cleanup |
 | Diff size before documentation cleanup | 34 files, 8,529 insertions, 6,290 deletions |
 | Primary goal | Keep `META_TOOLS=true` and `META_PARAM_SCHEMA=opaque` usable while reducing advertised tool-definition tokens. |
-| Main acceptance signal | 100% final task success on the current model-backed fixture and 48 / 48 meta-tool coverage. |
+| Main acceptance signal | 100% final task success on the latest model-backed fixture, 100% dry-run success on the expanded 105-case fixture, and 48 / 48 meta-tool coverage. |
 
 ## Commit Timeline
 
@@ -100,7 +100,7 @@ Review focus:
 
 ## Phase 4: Model Evaluation Results
 
-Latest full fixture result:
+Latest model-backed full fixture result:
 
 | Metric | Result |
 | --- | ---: |
@@ -140,17 +140,21 @@ Current versus `main` on the 51-task comparison fixture:
 
 The `main` snapshot failed the server-diagnostics task because `gitlab_server` did not exist in that catalog.
 
+The current working tree adds 3 deterministic failure-simulation rows after this model-backed run. Those rows are validated by dry-run and unit tests, but should be included in the next Anthropic run before being treated as model-backed quality gates.
+
 ## Phase 5: Full Catalog Coverage
 
-The final committed evaluation expansion adds:
+The final committed evaluation expansion plus the current follow-up adds:
 
 | Coverage item | Count |
 | --- | ---: |
 | Single-operation cases | 92 |
 | Multi-step scenarios | 10 |
-| Total automated cases | 102 |
-| Expected tool operations across all cases | 132 |
+| Failure simulation scenarios | 3 |
+| Total automated cases | 105 |
+| Expected tool operations across all cases | 137 |
 | Catalog tools covered | 48 / 48 |
+| Unique action routes covered by expected steps | 106 / 1007 |
 
 Important additions:
 
@@ -159,6 +163,8 @@ Important additions:
 - `MT-091` verifies that vulnerability routes use `project_path`, not `project_id`.
 - `MS-001` through `MS-010` exercise cross-domain workflows with ordered steps.
 - Destructive metrics now require confirmation only when the model attempts the expected destructive route, avoiding false safety failures for harmless read-only repair attempts.
+- `MF-001` through `MF-003` add transient GitLab failure, 404 fallback, and poisoned-output continuation scenarios.
+- Fixture validation now compares destructive flags and listed params against live route metadata and generated action schemas.
 
 ## Phase 6: Documentation Cleanup
 
@@ -167,7 +173,7 @@ The documentation cleanup in this working tree reorganizes `docs/evaluation` int
 | Document | Purpose |
 | --- | --- |
 | `docs/evaluation/README.md` | Evaluation index and harness overview. |
-| `docs/evaluation/automated-meta-tool-cases.md` | Human-readable explanation of all 102 automated cases. |
+| `docs/evaluation/automated-meta-tool-cases.md` | Human-readable explanation of all 105 automated cases. |
 | `docs/evaluation/current-results.md` | Current static, model, token, and quality results. |
 | `docs/evaluation/user-prompt-playbook.md` | Copy-ready prompts for manual user/model testing. |
 
@@ -188,7 +194,7 @@ The cleanup removes the earlier mixed documents that combined prompts, results, 
 | --- | --- |
 | Model-backed results can drift across provider versions. | Reports record model, date, token usage, and cost; use repeated runs before release. |
 | The harness does not execute GitLab mutations. | It validates trajectory, parameters, and safety; live E2E remains separate. |
-| Compressed descriptions may remove rare routing cues. | The 102-case fixture covers all advertised meta-tools and includes multi-step workflows. |
+| Compressed descriptions may remove rare routing cues. | The 105-case fixture covers all advertised meta-tools and includes multi-step plus failure-injection workflows. |
 | Generated `tools_meta.json` is large. | Review source descriptions first, then confirm generated changes are expected. |
 | External links to old evaluation docs may break after cleanup. | Review docs index and known references; add redirect notes if external consumers depend on old filenames. |
 
@@ -200,10 +206,13 @@ Use focused validation before merging:
 go run ./cmd/gen_testing_docs/
 go run ./cmd/gen_testing_docs/ --check
 go test ./cmd/eval_meta_tools -count=1
+go test ./internal/toolutil -count=1
+go test ./internal/tools -run 'TestRegisterAllMeta_CriticalDestructiveRouteMetadata|TestRegisterMCPMeta' -count=1
+go test ./cmd/server -run 'TestCreateServer_ReadOnlyMetaToolsKeepSchemaDiscovery|TestCreateServer_MetaSchemaRoutesFollowVisibleTools|TestCreateServer_MetaSchemaResourcesFollowMetaMode' -count=1
 go vet ./cmd/eval_meta_tools
 golangci-lint run ./cmd/eval_meta_tools
 npx markdownlint-cli2 docs/evaluation/*.md docs/development/testing.md
-go run ./cmd/eval_meta_tools/ --dry-run --repeat=1 --out /tmp/eval-final-dry-run.md
+go run ./cmd/eval_meta_tools/ --dry-run --repeat=1 --out /tmp/eval-expanded-dry-run.md
 ```
 
 For a full model-backed run:
@@ -224,7 +233,7 @@ go run ./cmd/eval_meta_tools/ \
 - [ ] `META_PARAM_SCHEMA=opaque` remains the default documented path.
 - [ ] Compressed descriptions still mention schema lookup, nested params, unknown-parameter rejection, and destructive confirmation where applicable.
 - [ ] Destructive actions require explicit confirmation in schemas, validation, and evaluation cases.
-- [ ] The 102-case fixture covers every advertised meta-tool.
+- [ ] The 105-case fixture covers every advertised meta-tool and includes deterministic failure-injection scenarios.
 - [ ] Model-backed results meet the quality gates in `docs/evaluation/current-results.md`.
 - [ ] Generated docs and test metrics are synchronized with `cmd/gen_testing_docs`.
 - [ ] User-facing docs and developer docs describe the same configuration behavior.

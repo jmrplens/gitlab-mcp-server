@@ -377,7 +377,7 @@ func registerProjectMeta(server *mcp.Server, client *gitlabclient.Client, enterp
 		"mirror_add":            routeAction(client, projectmirrors.Add),
 		"mirror_edit":           routeAction(client, projectmirrors.Edit),
 		"mirror_delete":         destructiveVoidAction(client, projectmirrors.Delete),
-		"mirror_force_push":     routeVoidAction(client, projectmirrors.ForcePushUpdate),
+		"mirror_force_push":     destructiveVoidAction(client, projectmirrors.ForcePushUpdate),
 	}
 
 	if enterprise {
@@ -1429,7 +1429,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"usage_data_metric_definitions":  routeAction(client, usagedata.GetMetricDefinitions),
 		"usage_data_track_event":         routeAction(client, usagedata.TrackEvent),
 		"usage_data_track_events":        routeAction(client, usagedata.TrackEvents),
-		"db_migration_mark":              routeAction(client, dbmigrations.Mark),
+		"db_migration_mark":              destructiveAction(client, dbmigrations.Mark),
 		"application_list":               routeAction(client, applications.List),
 		"application_create":             routeAction(client, applications.Create),
 		"application_delete":             destructiveVoidAction(client, applications.Delete),
@@ -1442,7 +1442,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"bulk_import_start":              routeAction(client, bulkimports.StartMigration),
 		"bulk_import_list":               routeAction(client, bulkimports.List),
 		"bulk_import_get":                routeAction(client, bulkimports.Get),
-		"bulk_import_cancel":             routeAction(client, bulkimports.Cancel),
+		"bulk_import_cancel":             destructiveAction(client, bulkimports.Cancel),
 		"bulk_import_entity_list":        routeAction(client, bulkimports.ListEntities),
 		"bulk_import_entity_get":         routeAction(client, bulkimports.GetEntity),
 		"bulk_import_entity_failures":    routeAction(client, bulkimports.ListEntityFailures),
@@ -1463,7 +1463,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"terraform_state_get":            routeAction(client, terraformstates.Get),
 		"terraform_state_delete":         destructiveVoidAction(client, terraformstates.Delete),
 		"terraform_state_lock":           routeAction(client, terraformstates.Lock),
-		"terraform_state_unlock":         routeAction(client, terraformstates.Unlock),
+		"terraform_state_unlock":         destructiveAction(client, terraformstates.Unlock),
 		"terraform_version_delete":       destructiveVoidAction(client, terraformstates.DeleteVersion),
 		"cluster_agent_list":             routeAction(client, clusteragents.ListAgents),
 		"cluster_agent_get":              routeAction(client, clusteragents.GetAgent),
@@ -1477,7 +1477,7 @@ func registerAdminMeta(server *mcp.Server, client *gitlabclient.Client) {
 		"import_github":                  routeAction(client, importservice.ImportFromGitHub),
 		"import_bitbucket":               routeAction(client, importservice.ImportFromBitbucketCloud),
 		"import_bitbucket_server":        routeAction(client, importservice.ImportFromBitbucketServer),
-		"import_cancel_github":           routeAction(client, importservice.CancelGitHubImport),
+		"import_cancel_github":           destructiveAction(client, importservice.CancelGitHubImport),
 		"import_gists":                   routeVoidAction(client, importservice.ImportGists),
 	}
 

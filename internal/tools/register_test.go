@@ -178,6 +178,41 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 	})
 }
 
+// TestRegisterAllMeta_CriticalDestructiveRouteMetadata verifies that high-risk
+// meta-tool actions are marked destructive even when their action names do not
+// follow the simple delete/remove/revoke pattern.
+func TestRegisterAllMeta_CriticalDestructiveRouteMetadata(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	routes := toolutil.CaptureMetaRoutes(func() {
+		RegisterAllMeta(server, client, true)
+	})
+
+	for _, tc := range []struct {
+		tool   string
+		action string
+	}{
+		{tool: "gitlab_project", action: "mirror_force_push"},
+		{tool: "gitlab_merge_request", action: "merge"},
+		{tool: "gitlab_admin", action: "db_migration_mark"},
+		{tool: "gitlab_admin", action: "bulk_import_cancel"},
+		{tool: "gitlab_admin", action: "terraform_state_unlock"},
+		{tool: "gitlab_admin", action: "import_cancel_github"},
+	} {
+		t.Run(tc.tool+"/"+tc.action, func(t *testing.T) {
+			route, ok := routes[tc.tool][tc.action]
+			if !ok {
+				t.Fatalf("route %s/%s is not registered", tc.tool, tc.action)
+			}
+			if !route.Destructive {
+				t.Fatalf("route %s/%s Destructive = false, want true", tc.tool, tc.action)
+			}
+		})
+	}
+}
+
 // TestRegisterAll_ToolNames verifies that every expected individual tool name
 // is present after RegisterAll and that no unexpected tools are registered.
 func TestRegisterAll_ToolNames(t *testing.T) {
@@ -1880,7 +1915,9 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		"block": true, "deactivate": true, "reject": true, "unapprove": true,
 		"approval_reset": true, "disable_two_factor": true, "disable_2fa": true,
 		"unshare": true, "disable_project": true, "import_from_file": true,
-		"cancel_github": true, "rotate": true,
+		"cancel_github": true, "rotate": true, "mirror_force_push": true,
+		"db_migration_mark": true, "bulk_import_cancel": true,
+		"terraform_state_unlock": true, "import_cancel_github": true,
 	}
 
 	var failures int

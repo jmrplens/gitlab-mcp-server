@@ -79,6 +79,10 @@ Errors: connectivity / auth failures appear inside the diagnostics object (statu
 
 See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (GitLab instance admin), gitlab_user (current user identity).`
 	}
+	if updater == nil {
+		addReadOnlyMetaTool(server, "gitlab_server", desc, routes, toolutil.IconHealth)
+		return
+	}
 	addMetaTool(server, "gitlab_server", desc, routes, toolutil.IconHealth)
 }
 

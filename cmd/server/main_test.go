@@ -25,6 +25,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
@@ -961,6 +962,48 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 	})
 	if err == nil && !excludedResult.IsError {
 		t.Fatal("excluded meta-tool schema should not be available through schema_get")
+	}
+}
+
+// TestCreateServer_ReadOnlyMetaToolsKeepSchemaDiscovery verifies read-only mode
+// keeps gitlab_server schema discovery visible even when an updater is
+// configured for normal mode.
+func TestCreateServer_ReadOnlyMetaToolsKeepSchemaDiscovery(t *testing.T) {
+	client := newMockGitLabClient(t)
+	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
+		Mode:           autoupdate.ModeCheck,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, autoupdate.EmptySource{})
+	server := createServer(client, &config.ServerConfig{MetaTools: true, ReadOnly: true}, updater)
+	session := newInMemorySession(t, server)
+
+	toolsResult, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	var foundServer bool
+	for _, tool := range toolsResult.Tools {
+		if tool.Name == "gitlab_server" {
+			foundServer = true
+		}
+		if tool.Name == "gitlab_project" {
+			t.Fatal("read-only mode should remove mutating meta-tools such as gitlab_project")
+		}
+	}
+	if !foundServer {
+		t.Fatal("read-only meta mode should keep gitlab_server for schema discovery")
+	}
+
+	toolResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "gitlab_server",
+		Arguments: map[string]any{"action": "schema_index"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool schema_index: %v", err)
+	}
+	if toolResult.IsError {
+		t.Fatal("schema_index returned IsError=true")
 	}
 }
 

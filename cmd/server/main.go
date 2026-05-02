@@ -587,7 +587,11 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		metaSchemaRegistry = toolutil.NewMetaSchemaRegistry(nil)
 		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
 			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
-			gitlabtools.RegisterMCPMeta(server, client, updater, metaSchemaRegistry)
+			serverUpdater := updater
+			if cfg.ReadOnly {
+				serverUpdater = nil
+			}
+			gitlabtools.RegisterMCPMeta(server, client, serverUpdater, metaSchemaRegistry)
 		})
 	} else {
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)

@@ -654,13 +654,13 @@ func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
 }
 
 // TestMetaToolDescriptionPrefix_FormatsLiteralExample checks that the prefix
-// embeds the alphabetically first action and the resource pointer for the
-// given tool name. Empty routes return an empty string.
+// embeds a low-risk example action and the resource pointer for the given tool
+// name. Empty routes return an empty string.
 func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
-	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": Route(nil)}
+	routes := ActionMap{"create": Route(nil), "list": Route(nil), "delete": DestructiveRoute(nil)}
 	got := MetaToolDescriptionPrefix("gitlab_widget", routes)
 
-	wantExample := `Example: {"action":"create","params":{...}}`
+	wantExample := `Example: {"action":"list","params":{...}}`
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
 	}

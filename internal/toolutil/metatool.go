@@ -772,7 +772,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 
 // MetaToolDescriptionPrefix builds a fixed-format header that should be
 // prepended to a meta-tool's user-supplied description. The header gives
-// LLMs a literal JSON usage example based on the alphabetically first action
+// LLMs a literal JSON usage example based on a low-risk representative action
 // and points at both tool-call and resource-based per-action params schemas.
 // Returns an empty string when routes is empty so callers degrade gracefully
 // rather than emit a malformed header.
@@ -785,12 +785,40 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 		actions = append(actions, name)
 	}
 	sort.Strings(actions)
-	first := actions[0]
+	first := preferredExampleAction(actions, routes)
 	return fmt.Sprintf(
 		"Example: {\"action\":%q,\"params\":{...}}\nFor exact params, call gitlab_server schema_get with {\"tool\":%q,\"action\":\"<action>\"} or read gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
 		toolName,
 	)
+}
+
+func preferredExampleAction(sortedActions []string, routes ActionMap) string {
+	for _, action := range sortedActions {
+		if !routes[action].Destructive && isReadOnlyExampleAction(action) {
+			return action
+		}
+	}
+	for _, action := range sortedActions {
+		if !routes[action].Destructive {
+			return action
+		}
+	}
+	return sortedActions[0]
+}
+
+func isReadOnlyExampleAction(action string) bool {
+	if action == "current" || action == "health_check" || action == "schema_get" || action == "schema_index" || action == "status" {
+		return true
+	}
+	if action == "get" || action == "list" || action == "search" {
+		return true
+	}
+	return strings.HasPrefix(action, "get_") ||
+		strings.HasPrefix(action, "list_") ||
+		strings.HasPrefix(action, "search_") ||
+		strings.HasSuffix(action, "_get") ||
+		strings.HasSuffix(action, "_list")
 }
 
 // buildMetaOneOf constructs the oneOf branch list for full/compact modes.
