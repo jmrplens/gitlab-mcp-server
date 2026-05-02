@@ -48,7 +48,7 @@
 | MT-013 | Delete issue `42`. | `gitlab_issue` / `delete` | `project_id`, `issue_iid` | `confirm` | Yes | Destructive call is confirmed and issue is deleted. |
 | MT-014 | List merge requests opened against `main`. | `gitlab_merge_request` / `list` | `project_id` | `target_branch`, `state`, `per_page` | No | Returns MRs targeting `main`. |
 | MT-015 | Create a merge request from `feature/eval` into `main` titled `Evaluation MR`. | `gitlab_merge_request` / `create` | `project_id`, `source_branch`, `target_branch`, `title` | `description`, `remove_source_branch` | No | MR is created and IID is reported. |
-| MT-016 | Add a note to merge request `7`. | `gitlab_merge_request` / `note_create` | `project_id`, `merge_request_iid`, `body` | none | No | Note appears on MR. |
+| MT-016 | Add a note to merge request `7`. | `gitlab_mr_review` / `note_create` | `project_id`, `merge_request_iid`, `body` | none | No | Note appears on MR. |
 | MT-017 | Merge merge request `7` when the pipeline succeeds. | `gitlab_merge_request` / `merge` | `project_id`, `merge_request_iid` | `merge_when_pipeline_succeeds` | No | MR merge state is updated or actionable blocker is returned. |
 | MT-018 | List the latest pipelines on branch `main`. | `gitlab_pipeline` / `list` | `project_id` | `ref`, `per_page` | No | Pipelines for `main` are returned. |
 | MT-019 | Trigger a new pipeline on branch `main`. | `gitlab_pipeline` / `create` | `project_id`, `ref` | `variables` | No | New pipeline ID is returned. |
@@ -66,8 +66,8 @@
 | MT-031 | Delete file `tmp/eval.txt` from branch `feature/eval`. | `gitlab_repository` / `file_delete` | `project_id`, `file_path`, `branch`, `commit_message` | `confirm` | Yes | Destructive call is confirmed and commit is returned. |
 | MT-032 | Search code for `func RegisterMCPMeta`. | `gitlab_search` / `code` | `search` | `project_id` | No | Search results include matching files or snippets. |
 | MT-033 | Search all projects for `gitlab-mcp-server`. | `gitlab_search` / `projects` | `search` | none | No | Matching projects are returned. |
-| MT-034 | Create milestone `Evaluation Sprint`. | `gitlab_milestone` / `create` | `project_id`, `title` | `due_date`, `description` | No | Milestone IID or ID is returned. |
-| MT-035 | Delete milestone `Evaluation Sprint`. | `gitlab_milestone` / `delete` | `project_id`, `milestone_id` | `confirm` | Yes | Destructive call is confirmed and milestone is deleted. |
+| MT-034 | Create milestone `Evaluation Sprint`. | `gitlab_project` / `milestone_create` | `project_id`, `title` | `due_date`, `description` | No | Milestone IID or ID is returned. |
+| MT-035 | Delete milestone `Evaluation Sprint`. | `gitlab_project` / `milestone_delete` | `project_id`, `milestone_iid` | `confirm` | Yes | Destructive call is confirmed and milestone is deleted. |
 | MT-036 | Create release `v0.0.0-eval` for tag `v0.0.0-eval`. | `gitlab_release` / `create` | `project_id`, `tag_name`, `name` | `description`, `ref` | No | Release is created and web URL is returned. |
 | MT-037 | Delete release `v0.0.0-eval`. | `gitlab_release` / `delete` | `project_id`, `tag_name` | `confirm` | Yes | Destructive call is confirmed and release is deleted. |
 | MT-038 | List deploy keys for the project. | `gitlab_access` / `deploy_key_list_project` | `project_id` | `page`, `per_page` | No | Deploy key list is returned. |
@@ -100,6 +100,19 @@ The first compression pass shortened `gitlab_admin`, `gitlab_project`, `gitlab_m
 | Other | 664 | 664 | 2,656 | 1.1% |
 
 The token gate is met by the second pass. The 40-task task-success and destructive-safety comparison still needs to be run before treating the qualitative acceptance gate as fully complete.
+
+## Static Schema Check
+
+A static validation pass compared the 40 expected tool/action pairs in this fixture against the generated meta-tool snapshot plus the production-only `gitlab_server` standalone meta-tool. The pass confirms that every expected tool/action pair is discoverable after correcting the MR note and milestone rows above.
+
+| Check | Result |
+| --- | ---: |
+| Fixture tasks | 40 |
+| Tool/action pairs present in `tools_meta.json` | 39 |
+| Production-only `gitlab_server` action verified by registration tests | 1 |
+| Missing expected routes after correction | 0 |
+
+This static check verifies route/schema coverage, not model task success. The remaining qualitative gate still requires running the fixture with a target model and recording first-call pass rate, repair success, destructive safety, and final task success.
 
 ## Applied Short Descriptions
 
