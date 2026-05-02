@@ -63,6 +63,7 @@ const (
 	tableDividerMetric         = "| --- | ---: |\n"
 	tableHeaderPackageCoverage = "| Package | Coverage |\n"
 	tableRowPackageCoverage    = "| %s | %s |\n"
+	tableRowTestFiles          = "| Test files (%s) | %s |\n"
 	tableRow4Columns           = "| %s | %s | %s | %s |\n"
 
 	pattern3Part        = "3-part"
@@ -550,9 +551,9 @@ func renderOverview(metrics repositoryMetrics) string {
 	fmt.Fprintf(&b, "| Unit test functions | %s |\n", fmtInt(totalTests(metrics.Packages)-totals[layerE2E].tests))
 	fmt.Fprintf(&b, "| E2E test functions | %s |\n", fmtInt(totals[layerE2E].tests))
 	fmt.Fprintf(&b, "| cmd test functions | %s |\n", fmtInt(totals[layerCmd].tests))
-	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", internalPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix)))
-	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", cmdPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix)))
-	fmt.Fprintf(&b, "| Test files (%s) | %s |\n", e2eSuiteDisplay, fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath)))
+	fmt.Fprintf(&b, tableRowTestFiles, internalPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix)))
+	fmt.Fprintf(&b, tableRowTestFiles, cmdPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix)))
+	fmt.Fprintf(&b, tableRowTestFiles, e2eSuiteDisplay, fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath)))
 	fmt.Fprintf(&b, "| Tool sub-packages tested | %s |\n", fmtInt(countTestedPackages(toolPackages)))
 	fmt.Fprintf(&b, "| Core packages tested | %s |\n", fmtInt(countTestedPackages(corePackages)))
 	fmt.Fprintf(&b, "| Overall coverage (`go test %s %s`) | %s |\n", internalPattern, cmdPattern, fmtCoverage(metrics.OverallCoverage))
