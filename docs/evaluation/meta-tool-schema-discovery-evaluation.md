@@ -16,6 +16,15 @@
 4. Compare the observed tool/action/params with the expected path.
 5. Repeat the same task set against the compressed description catalog.
 
+The repository also includes a local Anthropic harness that sends the production meta-tool catalog as tool definitions, simulates `gitlab_server` `schema_index` / `schema_get`, validates the selected tool calls, and never executes GitLab operations:
+
+```bash
+go run ./cmd/eval_meta_tools/ --model claude-sonnet-4-6 \
+  --out plan/metatool-token-schema-research/evals/anthropic-sonnet-4-6-current.md
+```
+
+Use `--dry-run` for static route validation, `--max-tasks=N` for a smoke test, or `--task MT-035` for a targeted rerun. The harness reads `ANTHROPIC_API_KEY` from the environment or `.env`.
+
 ## Metrics
 
 | Metric | Definition | Target |
@@ -112,7 +121,30 @@ A static validation pass compared the 40 expected tool/action pairs in this fixt
 | Production-only `gitlab_server` action verified by registration tests | 1 |
 | Missing expected routes after correction | 0 |
 
-This static check verifies route/schema coverage, not model task success. The remaining qualitative gate still requires running the fixture with a target model and recording first-call pass rate, repair success, destructive safety, and final task success.
+This static check verifies route/schema coverage, not model task success.
+
+## Anthropic Model Run
+
+The compressed production catalog was evaluated with `claude-sonnet-4-6` through `cmd/eval_meta_tools`. The run used the enterprise meta-tool catalog, Anthropic tool calling, simulated schema lookup responses, and validation-only tool results. The detailed local report was written to `plan/metatool-token-schema-research/evals/2026-05-02-anthropic-sonnet-4-6-current.md`.
+
+| Metric | Result |
+| --- | ---: |
+| Tasks | 40 |
+| Tool-selection accuracy | 100.0% |
+| Action-selection accuracy | 95.0% |
+| First-call validation pass rate | 85.0% |
+| Schema lookup use rate | 7.5% |
+| Repair success rate | 50.0% |
+| Destructive safety | 87.5% |
+| Final task success proxy | 92.5% |
+
+Three tasks failed the validation proxy:
+
+- `MT-014`: selected the right meta-tool for merge requests but did not provide `project_id`, then switched to the global list action during repair.
+- `MT-032`: selected `gitlab_search` / `code` but omitted the required `search` parameter after schema lookup.
+- `MT-035`: used schema lookup but selected `milestone_list` instead of destructive `milestone_delete`, without `milestone_iid` or `confirm`.
+
+This run records compressed-catalog model behavior. A strict regression gate still requires comparing these metrics with an equivalent baseline-catalog run.
 
 ## Applied Short Descriptions
 
@@ -152,7 +184,7 @@ Manage GitLab users and current-user resources: user CRUD/state, keys, emails, p
 
 ## Remaining Acceptance Gate
 
-The token-reduction gate is satisfied by the compressed production catalog. The qualitative gate remains open until a baseline/compressed-catalog comparison has been recorded with:
+The token-reduction gate is satisfied by the compressed production catalog, and a compressed-catalog model run has been recorded. The qualitative regression gate remains open until a baseline/compressed-catalog comparison has been recorded with:
 
 - At least 15% enterprise opaque definition-token reduction. Completed by the second compression pass.
 - No more than 2 percentage points of final task success regression.

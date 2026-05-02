@@ -18,24 +18,24 @@
 
 | Metric | Value |
 | --- | ---: |
-| Total test functions | 9,093 |
-| Unit test functions | 8,851 |
+| Total test functions | 9,097 |
+| Unit test functions | 8,855 |
 | E2E test functions | 242 |
-| cmd test functions | 133 |
+| cmd test functions | 137 |
 | Test files (internal/) | 397 |
-| Test files (cmd/) | 9 |
+| Test files (cmd/) | 10 |
 | Test files (test/e2e/suite/) | 107 |
 | Tool sub-packages tested | 162 |
 | Core packages tested | 16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 91.1% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) | 90.4% |
 | Overall coverage (`go test ./internal/...`) | 96.9% |
-| Average package coverage | 95.1% |
+| Average package coverage | 94.7% |
 
 ### Naming Convention Stats
 
 | Pattern | Count | % |
 | --- | ---: | ---: |
-| `TestFunc_Scenario` (2-part) | 8,171 | 89.9% |
+| `TestFunc_Scenario` (2-part) | 8,175 | 89.9% |
 | `TestFunc` (no underscore) | 672 | 7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) | 250 | 2.7% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration | 228 | 7 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests |
 | Tool sub-packages (162) | 6,980 | 307 | domain-specific GitLab tool handlers |
 | E2E integration | 242 | 107 | build-tagged real GitLab integration suite |
-| cmd packages | 133 | 9 | server entry point and developer command utilities |
-| **Total** | **9,093** | **513** |  |
+| cmd packages | 137 | 10 | server entry point and developer command utilities |
+| **Total** | **9,097** | **514** |  |
 
 ### Core Packages
 
@@ -288,6 +288,7 @@
 | cmd/audit_metrics | 23.6% |
 | cmd/audit_output | 24.6% |
 | cmd/audit_tokens | 22.4% |
+| cmd/eval_meta_tools | 19.5% |
 | cmd/gen_llms | 6.4% |
 | cmd/gen_readme | 14.6% |
 | cmd/gen_testing_docs | 20.7% |
@@ -486,6 +487,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 
 - **cmd/gen_llms** (6.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (14.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_meta_tools** (19.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (20.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (22.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (23.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
