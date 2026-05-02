@@ -27,18 +27,18 @@ This must be set for the server to start in stdio mode:
 
 ## Core options
 
-| Variable                 | Default              | Description                                                                                                                                                                       |
-| ------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                     |
-| `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                           |
-| `META_TOOLS`             | `true`               | Enable meta-tool mode (32 domain tools instead of 1006+ individual tools)                                                                                                         |
-| `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Per-action schema always discoverable via `gitlab://schema/meta/{tool}/{action}` resource |
-| `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                         |
-| `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                               |
-| `GITLAB_SAFE_MODE`       | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                 |
-| `EXCLUDE_TOOLS`          | —                    | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)                                                                                        |
-| `GITLAB_IGNORE_SCOPES`   | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                |
-| `LOG_LEVEL`              | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                   |
+| Variable                 | Default              | Description                                                                                                                                                                                                            |
+| ------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                                                          |
+| `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                |
+| `META_TOOLS`             | `true`               | Enable meta-tool mode (32 domain tools instead of 1006+ individual tools)                                                                                                                                              |
+| `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Per-action schema always discoverable via `gitlab_server` `schema_get` and the `gitlab://schema/meta/{tool}/{action}` resource |
+| `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                                                              |
+| `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                                    |
+| `GITLAB_SAFE_MODE`       | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                                                      |
+| `EXCLUDE_TOOLS`          | —                    | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)                                                                                                                             |
+| `GITLAB_IGNORE_SCOPES`   | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                                                     |
+| `LOG_LEVEL`              | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                        |
 
 :::tip
 **Meta-tools mode** (`META_TOOLS=true`) is strongly recommended. It groups tools by domain (e.g., `gitlab_issue` handles list, get, create, update, delete) which reduces token usage and improves AI tool selection accuracy.
@@ -92,15 +92,15 @@ Create `.vscode/mcp.json` in your workspace:
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
 }
 ```
 
@@ -108,23 +108,23 @@ Create `.vscode/mcp.json` in your workspace:
 
 ```json
 {
-	"inputs": [
-		{
-			"id": "gitlab-token",
-			"type": "promptString",
-			"description": "GitLab Personal Access Token",
-			"password": true
-		}
-	],
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "${input:gitlab-token}"
-			}
-		}
-	}
+  "inputs": [
+    {
+      "id": "gitlab-token",
+      "type": "promptString",
+      "description": "GitLab Personal Access Token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "${input:gitlab-token}"
+      }
+    }
+  }
 }
 ```
 
@@ -142,14 +142,14 @@ Edit `claude_desktop_config.json`:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
 }
 ```
 
@@ -160,14 +160,14 @@ Create `.cursor/mcp.json` in your project:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
 }
 ```
 
@@ -212,14 +212,14 @@ Edit `~/.codeium/windsurf/mcp_config.json` (Cascade → Plugins → Configure):
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
 }
 ```
 
@@ -284,8 +284,8 @@ Example:
 # Single GitLab.com instance (fixed URL for all clients; replace for self-managed GitLab)
 ./gitlab-mcp-server \
   --http \
-	--http-addr=0.0.0.0:8080 \
-	--gitlab-url=https://gitlab.com \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com \
   --max-http-clients=200 \
   --session-timeout=1h
 

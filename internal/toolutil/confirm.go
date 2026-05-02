@@ -35,8 +35,8 @@ func isTruthy(s string) bool {
 //  1. YOLO_MODE / AUTOPILOT env var → skip confirmation entirely
 //  2. Explicit "confirm": true in params → skip confirmation
 //  3. MCP elicitation supported → ask user interactively
-//  4. Elicitation unsupported and no confirm param → return error prompting
-//     the caller to re-send with confirm: true
+//  4. Elicitation unsupported and no confirm param → proceed for compatibility
+//     with non-elicitation MCP clients
 //
 // Returns nil if the action should proceed. Returns a non-nil *mcp.CallToolResult
 // if the action was canceled or requires explicit confirmation.
@@ -80,8 +80,8 @@ func hasExplicitConfirm(params map[string]any) bool {
 
 // ConfirmAction uses MCP elicitation to ask the user for confirmation before
 // a destructive action. Returns nil if the user confirmed or elicitation is
-// unsupported (fallback: action proceeds). Returns a non-error tool result
-// if the user declined or canceled.
+// unsupported (compatibility fallback: action proceeds). Returns a non-error
+// tool result if the user declined or canceled.
 func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
 	tool := ""
 	if req != nil {

@@ -264,6 +264,13 @@ actionable errors when LLMs mistype argument names:
 
 Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `iid` vs `merge_request_iid`).
 
+The meta-tool dispatcher returns recoverable `CallToolResult{IsError: true}`
+responses, rather than protocol-level errors, for valid MCP requests that have
+an empty `action`, an unknown `action`, missing `params` for actions with
+required fields, or typed `params` decoding failures such as
+`json: unknown field "foo"`. This lets clients keep the conversation alive and
+retry with corrected action names or parameters.
+
 ## Destructive Action Confirmation
 
 Before executing destructive operations (delete, force-push), handlers use the confirmation flow in `confirm.go`:
@@ -271,7 +278,8 @@ Before executing destructive operations (delete, force-push), handlers use the c
 1. **YOLO_MODE / AUTOPILOT** env var set → skip confirmation
 2. **Explicit `confirm: true`** in params → proceed
 3. **MCP elicitation supported** → ask user interactively via `elicitation.Confirm()`
-4. **No confirmation mechanism** → return `CancelledResult`
+4. **MCP elicitation unsupported** → proceed for compatibility with clients that
+    do not advertise elicitation support
 
 ## Testing Error Handling
 

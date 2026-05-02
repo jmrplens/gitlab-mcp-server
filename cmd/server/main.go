@@ -581,11 +581,13 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	})
 
 	var metaSchemaRoutes map[string]toolutil.ActionMap
+	var metaSchemaRegistry *toolutil.MetaSchemaRegistry
 	if cfg.MetaTools {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
+		metaSchemaRegistry = toolutil.NewMetaSchemaRegistry(nil)
 		metaSchemaRoutes = toolutil.CaptureMetaRoutes(func() {
 			gitlabtools.RegisterAllMeta(server, client, cfg.Enterprise)
-			gitlabtools.RegisterMCPMeta(server, client, updater)
+			gitlabtools.RegisterMCPMeta(server, client, updater, metaSchemaRegistry)
 		})
 	} else {
 		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
@@ -628,6 +630,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		if routesErr != nil {
 			slog.Warn("failed to filter meta-schema routes to visible tools", "error", routesErr)
 		}
+		metaSchemaRegistry.SetRoutes(metaSchemaRoutes)
 	}
 
 	resources.Register(server, client)

@@ -6,16 +6,18 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestRegisterMCPMeta_NilUpdater verifies that RegisterMCPMeta registers the
-// gitlab_server tool with only status and health_check actions when updater is nil.
+// gitlab_server tool with diagnostics and schema actions when updater is nil.
 func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -62,6 +64,79 @@ func TestRegisterMCPMeta_NilUpdater(t *testing.T) {
 	}
 	if callResult.IsError {
 		t.Fatal("CallTool(status) returned IsError=true")
+	}
+}
+
+// TestRegisterMCPMeta_SchemaDiscoveryUsesRegistry verifies gitlab_server schema
+// actions expose the route snapshot supplied by the server after filtering.
+func TestRegisterMCPMeta_SchemaDiscoveryUsesRegistry(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
+	}))
+	registry := toolutil.NewMetaSchemaRegistry(map[string]toolutil.ActionMap{
+		"gitlab_widget": {
+			"create": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string"},
+				},
+				"required": []any{"project_id"},
+			}},
+			"delete": toolutil.ActionRoute{Destructive: true, InputSchema: map[string]any{
+				"type": "object",
+			}},
+		},
+	})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterMCPMeta(server, client, nil, registry)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	indexResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "gitlab_server",
+		Arguments: map[string]any{"action": "schema_index"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(schema_index) error: %v", err)
+	}
+	var index toolutil.MetaSchemaDiscoveryIndex
+	decodeStructuredContent(t, indexResult, &index)
+	if index.ToolCount != 1 || index.ActionCount != 2 {
+		t.Fatalf("schema_index counts = (%d,%d), want (1,2)", index.ToolCount, index.ActionCount)
+	}
+	if !index.Tools[0].Actions[1].Destructive {
+		t.Fatalf("schema_index destructive flag not preserved: %+v", index.Tools[0].Actions)
+	}
+
+	schemaResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "gitlab_server",
+		Arguments: map[string]any{
+			"action": "schema_get",
+			"params": map[string]any{"tool": "gitlab_widget", "action": "create"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(schema_get) error: %v", err)
+	}
+	var schema map[string]any
+	decodeStructuredContent(t, schemaResult, &schema)
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties missing: %#v", schema)
+	}
+	if _, found := properties["project_id"]; !found {
+		t.Fatalf("schema_get missing project_id: %#v", schema)
 	}
 }
 
@@ -141,5 +216,22 @@ func TestWrapUpdaterAction_Dispatch(t *testing.T) {
 	}
 	if out.Result != "got:hello" {
 		t.Errorf("result = %q, want %q", out.Result, "got:hello")
+	}
+}
+
+func decodeStructuredContent(t *testing.T, result *mcp.CallToolResult, target any) {
+	t.Helper()
+	if result.IsError {
+		t.Fatal("CallTool returned IsError=true")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("StructuredContent is nil")
+	}
+	raw, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal StructuredContent: %v", err)
+	}
+	if unmarshalErr := json.Unmarshal(raw, target); unmarshalErr != nil {
+		t.Fatalf("unmarshal StructuredContent: %v", unmarshalErr)
 	}
 }

@@ -2349,8 +2349,8 @@ func TestMetadataAudit_MetaToolDescriptions(t *testing.T) {
 				t.Errorf("description too short (%d chars, minimum %d)",
 					len(tool.Description), auditMinDescLen)
 			}
-			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "For the params schema of any action") {
-				t.Error("meta-tool description should point LLMs to the per-action schema resource")
+			if hasMetaToolAction(tool) && !strings.Contains(tool.Description, "gitlab_server schema_get") {
+				t.Error("meta-tool description should point LLMs to model-controlled per-action schema discovery")
 			}
 		})
 	}

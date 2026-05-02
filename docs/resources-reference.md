@@ -19,7 +19,7 @@ Static resources have a fixed URI and require no parameters.
 | 1 | `current_user` | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL. |
 | 2 | `groups` | `gitlab://groups` | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL. |
 | 3 | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
-| 4 | `meta_schema_index` | `gitlab://schema/meta/` | Catalog of every registered meta-tool and its actions. Use the `gitlab://schema/meta/{tool}/{action}` template to fetch the JSON Schema for a specific action's `params`. |
+| 4 | `meta_schema_index` | `gitlab://schema/meta/` | Catalog of every registered meta-tool and its actions. Use the `gitlab://schema/meta/{tool}/{action}` template, or `gitlab_server` `schema_get`, to fetch the JSON Schema for a specific action's `params`. |
 
 ## Resource Templates (37)
 
@@ -92,7 +92,9 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 |---|------|--------------|-------------|
 | 41 | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Always available regardless of `META_PARAM_SCHEMA` mode. |
 
-The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). The normal discovery flow is:
+The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). They are mirrored by model-controlled `gitlab_server` actions: use `schema_index` to list visible meta-tools/actions with schema URIs and destructive flags, and `schema_get` to fetch the same per-action `params` schema returned by `gitlab://schema/meta/{tool}/{action}`.
+
+The resource discovery flow is:
 
 1. Read `gitlab://schema/meta/` to list every registered meta-tool and action available in the current server configuration. The response is a JSON object with `uri_template` and a sorted `tools` array, where each entry contains `tool` and `actions`.
 2. Read `gitlab://schema/meta/{tool}/{action}` for the action you want to call. The response is the JSON Schema for that action's `params` object, not the full `{action, params}` envelope.

@@ -57,10 +57,11 @@ func run() error {
 		return fmt.Errorf("client: %w", err)
 	}
 
-	// Register both base and enterprise meta-tools and capture every route map.
+	// Register the production-like enterprise meta-tool catalog and capture every route map.
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
 	routes := toolutil.CaptureMetaRoutes(func() {
 		tools.RegisterAllMeta(server, client, true)
+		tools.RegisterMCPMeta(server, client, nil)
 	})
 
 	// Connect once so we can retrieve the published InputSchema (the

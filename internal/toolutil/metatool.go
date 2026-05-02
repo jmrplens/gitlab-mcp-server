@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -50,6 +51,28 @@ type ActionRoute struct {
 
 // ActionMap maps action names to their route definitions (handler + metadata).
 type ActionMap map[string]ActionRoute
+
+// ParamValidationError marks action parameter decoding failures that should be
+// surfaced to MCP clients as recoverable tool errors instead of protocol errors.
+type ParamValidationError struct {
+	Err error
+}
+
+// Error returns the underlying validation error message.
+func (e *ParamValidationError) Error() string {
+	if e == nil || e.Err == nil {
+		return "invalid params"
+	}
+	return e.Err.Error()
+}
+
+// Unwrap returns the underlying validation error.
+func (e *ParamValidationError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // Meta-tool route registry state supports both the global audit view and the
 // per-server capture used when registering meta-schema resources in HTTP mode.
@@ -237,22 +260,26 @@ func UnmarshalParams[T any](params map[string]any) (T, error) {
 	cleaned := stripReservedKeys(params)
 	data, err := json.Marshal(cleaned)
 	if err != nil {
-		return input, fmt.Errorf("invalid params: %w", err)
+		return input, newParamValidationError("invalid params: %w", err)
 	}
 	if err = strictUnmarshal(data, &input); err != nil {
 		// Retry with numeric string coercion.
 		coerced := coerceNumericStrings(cleaned)
 		data2, marshalErr := json.Marshal(coerced)
 		if marshalErr != nil {
-			return input, fmt.Errorf("invalid params for this action: %w", err)
+			return input, newParamValidationError("invalid params for this action: %w", err)
 		}
 		if strictUnmarshal(data2, &input) != nil {
 			// Return the original error for a clearer message.
-			return input, fmt.Errorf("invalid params for this action: %w", err)
+			return input, newParamValidationError("invalid params for this action: %w", err)
 		}
 		return input, nil
 	}
 	return input, nil
+}
+
+func newParamValidationError(format string, args ...any) error {
+	return &ParamValidationError{Err: fmt.Errorf(format, args...)}
 }
 
 // strictUnmarshal decodes JSON bytes into v while rejecting any keys that do
@@ -486,12 +513,19 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 		if input.Action == "" {
-			return nil, nil, fmt.Errorf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))
+			return ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))), nil, nil
 		}
 
 		route, ok := routes[input.Action]
 		if !ok {
-			return nil, nil, fmt.Errorf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))
+			return ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))), nil, nil
+		}
+
+		if input.Params == nil {
+			required := requiredParamNames(route.InputSchema)
+			if len(required) > 0 {
+				return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s. Call gitlab_server schema_get with {\"tool\":%q,\"action\":%q} for the exact params schema.", toolName, input.Action, strings.Join(required, ", "), toolName, input.Action)), nil, nil
+			}
 		}
 
 		// Confirm destructive actions before execution using route metadata.
@@ -510,6 +544,10 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {
+			var validationErr *ParamValidationError
+			if errors.As(err, &validationErr) {
+				return ErrorResult(fmt.Sprintf("%s/%s: %s", toolName, input.Action, validationErr.Error())), nil, nil
+			}
 			return nil, nil, err
 		}
 		callResult := formatResult(result)
@@ -521,6 +559,33 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		}
 		return callResult, enrichWithHints(result, callResult), nil
 	}
+}
+
+func requiredParamNames(schema map[string]any) []string {
+	if schema == nil {
+		return nil
+	}
+	rawRequired, ok := schema["required"]
+	if !ok {
+		return nil
+	}
+	var names []string
+	switch values := rawRequired.(type) {
+	case []any:
+		for _, value := range values {
+			if name, isString := value.(string); isString && name != "" {
+				names = append(names, name)
+			}
+		}
+	case []string:
+		for _, name := range values {
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // enrichWithHints extracts next-step hints from the Markdown content in
@@ -659,8 +724,8 @@ func currentMetaParamSchemaMode() string {
 
 // paramsResourceHint is appended to the description of the params property
 // in every meta-tool input schema, regardless of mode. It points the LLM at
-// the per-action JSON Schema available via the gitlab://schema/meta resource.
-const paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+// both model-controlled and resource-based per-action JSON Schema discovery.
+const paramsResourceHint = " For a specific action's `params` schema, call gitlab_server schema_get or read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders)."
 
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
 // chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
@@ -708,9 +773,9 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 // MetaToolDescriptionPrefix builds a fixed-format header that should be
 // prepended to a meta-tool's user-supplied description. The header gives
 // LLMs a literal JSON usage example based on the alphabetically first action
-// and points at the gitlab://schema/meta resource for per-action params
-// schemas. Returns an empty string when routes is empty so callers degrade
-// gracefully rather than emit a malformed header.
+// and points at both tool-call and resource-based per-action params schemas.
+// Returns an empty string when routes is empty so callers degrade gracefully
+// rather than emit a malformed header.
 func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	if len(routes) == 0 {
 		return ""
@@ -722,8 +787,9 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	first := actions[0]
 	return fmt.Sprintf(
-		"Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		"Example: {\"action\":%q,\"params\":{...}}\nFor exact params, call gitlab_server schema_get with {\"tool\":%q,\"action\":\"<action>\"} or read gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
+		toolName,
 	)
 }
 

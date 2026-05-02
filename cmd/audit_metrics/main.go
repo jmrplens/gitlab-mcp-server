@@ -61,6 +61,8 @@ func main() {
 	individualTools := listServerTools(client, false, false)
 	metaBase := listServerTools(client, true, false)
 	metaEnterprise := listServerTools(client, true, true)
+	metaBaseActionTools, metaBaseActions := countActionSchemaTools(metaBase)
+	metaEnterpriseActionTools, metaEnterpriseActions := countActionSchemaTools(metaEnterprise)
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
@@ -96,7 +98,11 @@ func main() {
 	fmt.Println()
 	printRow("Individual MCP tools", len(individualTools))
 	printRow("Meta-tools (base)", len(metaBase))
+	printRow("  Action-schema tools", metaBaseActionTools)
+	printRow("  Schema actions", metaBaseActions)
 	printRow("Meta-tools (enterprise)", len(metaEnterprise))
+	printRow("  Action-schema tools", metaEnterpriseActionTools)
+	printRow("  Schema actions", metaEnterpriseActions)
 	printRow("Enterprise-only meta-tools", len(metaEnterprise)-len(metaBase))
 	printRow("MCP Resources (total)", resourceCount)
 	printRow("  Static resources", staticResources)
@@ -157,6 +163,7 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 
 	if meta {
 		tools.RegisterAllMeta(server, client, enterprise)
+		tools.RegisterMCPMeta(server, client, nil)
 	} else {
 		tools.RegisterAll(server, client, true)
 	}
@@ -192,6 +199,7 @@ func countResources(client *gitlabclient.Client) (static, templates int) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
 	metaRoutes := toolutil.CaptureMetaRoutes(func() {
 		tools.RegisterAllMeta(server, client, false)
+		tools.RegisterMCPMeta(server, client, nil)
 	})
 	resources.Register(server, client)
 	resources.RegisterMetaSchemaResources(server, metaRoutes)
@@ -227,6 +235,50 @@ func countResources(client *gitlabclient.Client) (static, templates int) {
 	}
 	templates = len(tpl.ResourceTemplates)
 	return static, templates
+}
+
+// countActionSchemaTools counts meta-tools whose advertised input schema has
+// an action enum, along with the total number of advertised action values.
+func countActionSchemaTools(toolList []*mcp.Tool) (toolsWithActions, actions int) {
+	for _, tool := range toolList {
+		count := actionEnumCount(tool)
+		if count == 0 {
+			continue
+		}
+		toolsWithActions++
+		actions += count
+	}
+	return toolsWithActions, actions
+}
+
+func actionEnumCount(tool *mcp.Tool) int {
+	if tool == nil {
+		return 0
+	}
+	if tool.InputSchema == nil {
+		return 0
+	}
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		return 0
+	}
+	var schema map[string]any
+	if unmarshalErr := json.Unmarshal(raw, &schema); unmarshalErr != nil {
+		return 0
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	action, ok := properties["action"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	enumValues, ok := action["enum"].([]any)
+	if !ok {
+		return 0
+	}
+	return len(enumValues)
 }
 
 // countPrompts registers all MCP prompts and returns the count.

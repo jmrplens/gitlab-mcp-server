@@ -30,7 +30,7 @@
 | Variable | Default | Description |
 | --- | --- | --- |
 | `META_TOOLS` | `true` | Enable domain-level meta-tools: `true` (32 base / 47 enterprise) or `false` (1006 individual tools) |
-| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |
+| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, ~5x size) or `full` (oneOf with full per-action JSON Schemas, ~10x size). Independent of `META_TOOLS`. The per-action JSON Schema is always discoverable via `gitlab_server` `schema_get` and the `gitlab://schema/meta/{tool}/{action}` MCP resource regardless of mode |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |

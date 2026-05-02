@@ -41,10 +41,22 @@ const (
 
 // toolTokenInfo stores the serialized size estimate for one MCP tool.
 type toolTokenInfo struct {
-	Name   string
-	Domain string
-	Tokens int
-	Bytes  int
+	Name       string
+	Domain     string
+	Tokens     int
+	Bytes      int
+	Components toolComponentBytes
+}
+
+// toolComponentBytes stores byte totals for the expensive top-level fields in
+// an advertised MCP tool definition.
+type toolComponentBytes struct {
+	Description  int
+	InputSchema  int
+	OutputSchema int
+	Annotations  int
+	Icons        int
+	Other        int
 }
 
 // main creates the mock GitLab-backed client, measures all MCP catalog modes,
@@ -126,6 +138,10 @@ func main() {
 	fmt.Println()
 	printTopTools(metaBaseInfo, len(metaBaseInfo))
 
+	fmt.Println("## Tool Definition Components (meta-tools enterprise)")
+	fmt.Println()
+	printComponentTotals(metaEnterpriseInfo)
+
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
 	fmt.Println()
@@ -149,6 +165,7 @@ func listTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
 
 	if meta {
 		tools.RegisterAllMeta(server, client, enterprise)
+		tools.RegisterMCPMeta(server, client, nil)
 	} else {
 		tools.RegisterAll(server, client, enterprise)
 	}
@@ -190,16 +207,55 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 		tokens := len(b) / bytesPerTok
 		domain := extractDomain(t.Name)
 		infos = append(infos, toolTokenInfo{
-			Name:   t.Name,
-			Domain: domain,
-			Tokens: tokens,
-			Bytes:  len(b),
+			Name:       t.Name,
+			Domain:     domain,
+			Tokens:     tokens,
+			Bytes:      len(b),
+			Components: measureToolComponents(b),
 		})
 	}
 	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].Tokens > infos[j].Tokens
+		if infos[i].Tokens != infos[j].Tokens {
+			return infos[i].Tokens > infos[j].Tokens
+		}
+		return infos[i].Name < infos[j].Name
 	})
 	return infos
+}
+
+// measureToolComponents breaks a serialized MCP tool definition into the
+// fields most relevant to token-budget decisions. Other includes name, title,
+// untracked fields, and JSON separator overhead.
+func measureToolComponents(raw []byte) toolComponentBytes {
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return toolComponentBytes{Other: len(raw)}
+	}
+	components := toolComponentBytes{
+		Description:  topLevelFieldBytes(decoded, "description"),
+		InputSchema:  topLevelFieldBytes(decoded, "inputSchema"),
+		OutputSchema: topLevelFieldBytes(decoded, "outputSchema"),
+		Annotations:  topLevelFieldBytes(decoded, "annotations"),
+		Icons:        topLevelFieldBytes(decoded, "icons"),
+	}
+	tracked := components.Description + components.InputSchema + components.OutputSchema + components.Annotations + components.Icons
+	components.Other = max(len(raw)-tracked, 0)
+	return components
+}
+
+// topLevelFieldBytes returns the byte cost of one serialized top-level JSON
+// field, including the field name and colon but excluding surrounding object
+// braces and comma separators.
+func topLevelFieldBytes(decoded map[string]json.RawMessage, key string) int {
+	value, ok := decoded[key]
+	if !ok {
+		return 0
+	}
+	entry, err := json.Marshal(map[string]json.RawMessage{key: value})
+	if err != nil || len(entry) < 2 {
+		return 0
+	}
+	return len(entry) - 2
 }
 
 // measureResources registers static, template, workflow, and optionally
@@ -211,6 +267,7 @@ func measureResources(client *gitlabclient.Client, includeMetaSchema bool) int {
 	if includeMetaSchema {
 		metaRoutes := toolutil.CaptureMetaRoutes(func() {
 			tools.RegisterAllMeta(server, client, false)
+			tools.RegisterMCPMeta(server, client, nil)
 		})
 		resources.RegisterMetaSchemaResources(server, metaRoutes)
 	}
@@ -369,6 +426,40 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 	}
 	_ = tw.Flush()
 	fmt.Println()
+}
+
+// printComponentTotals aggregates top-level tool-definition component costs.
+func printComponentTotals(infos []toolTokenInfo) {
+	totals := toolComponentBytes{}
+	totalBytes := 0
+	for _, info := range infos {
+		totalBytes += info.Bytes
+		totals.Description += info.Components.Description
+		totals.InputSchema += info.Components.InputSchema
+		totals.OutputSchema += info.Components.OutputSchema
+		totals.Annotations += info.Components.Annotations
+		totals.Icons += info.Components.Icons
+		totals.Other += info.Components.Other
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "  Component\tTokens\tBytes\tShare\n")
+	fmt.Fprintf(tw, "  ─────────\t──────\t─────\t─────\n")
+	printComponentRow(tw, "description", totals.Description, totalBytes)
+	printComponentRow(tw, "inputSchema", totals.InputSchema, totalBytes)
+	printComponentRow(tw, "outputSchema", totals.OutputSchema, totalBytes)
+	printComponentRow(tw, "annotations", totals.Annotations, totalBytes)
+	printComponentRow(tw, "icons", totals.Icons, totalBytes)
+	printComponentRow(tw, "other", totals.Other, totalBytes)
+	_ = tw.Flush()
+	fmt.Println()
+}
+
+func printComponentRow(tw *tabwriter.Writer, label string, bytes, totalBytes int) {
+	share := 0.0
+	if totalBytes > 0 {
+		share = float64(bytes) * 100 / float64(totalBytes)
+	}
+	fmt.Fprintf(tw, "  %s\t%s\t%s\t%.1f%%\n", label, fmtNum(bytes/bytesPerTok), fmtNum(bytes), share)
 }
 
 // fmtNum formats integers with comma thousands separators for report tables.

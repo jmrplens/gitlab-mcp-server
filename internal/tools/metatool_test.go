@@ -23,7 +23,7 @@ const (
 )
 
 // TestMakeMetaHandler_EmptyAction verifies that MakeMetaHandler returns a
-// descriptive error when the action field is empty.
+// descriptive tool error when the action field is empty.
 func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 	routes := actionMap{
 		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -34,17 +34,21 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 	handler := toolutil.MakeMetaHandler("test_tool", routes, markdownForResult)
 	input := MetaToolInput{Action: ""}
 
-	_, _, err := handler(context.Background(), nil, input)
-	if err == nil {
-		t.Fatal("expected error for empty action")
+	result, raw, err := handler(context.Background(), nil, input)
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
 	}
-	if got := err.Error(); got != "test_tool: 'action' is required. Valid actions: create" {
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	got := metaErrorText(t, result)
+	if got != "test_tool: 'action' is required. Valid actions: create" {
 		t.Errorf("unexpected error: %s", got)
 	}
 }
 
 // TestMakeMetaHandler_UnknownAction verifies that MakeMetaHandler returns a
-// descriptive error listing valid actions when an unknown action is provided.
+// descriptive tool error listing valid actions when an unknown action is provided.
 func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 	routes := actionMap{
 		"create": route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -58,13 +62,32 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 	handler := toolutil.MakeMetaHandler("test_tool", routes, markdownForResult)
 	input := MetaToolInput{Action: "destroy"}
 
-	_, _, err := handler(context.Background(), nil, input)
-	if err == nil {
-		t.Fatal("expected error for unknown action")
+	result, raw, err := handler(context.Background(), nil, input)
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
 	}
-	if got := err.Error(); got != `test_tool: unknown action "destroy". Valid actions: create, list` {
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	got := metaErrorText(t, result)
+	if got != `test_tool: unknown action "destroy". Valid actions: create, list` {
 		t.Errorf("unexpected error: %s", got)
 	}
+}
+
+func metaErrorText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("error result content is empty")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	return text.Text
 }
 
 // TestMakeMetaHandler_ValidAction verifies that MakeMetaHandler dispatches

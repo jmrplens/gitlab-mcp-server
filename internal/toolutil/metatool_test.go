@@ -315,8 +315,8 @@ func TestMakeMetaHandler_ValidAction(t *testing.T) {
 	}
 }
 
-// TestMakeMetaHandler_EmptyAction verifies MakeMetaHandler returns an error
-// when the action field is empty.
+// TestMakeMetaHandler_EmptyAction verifies MakeMetaHandler returns a
+// recoverable tool error when the action field is empty.
 func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 	routes := ActionMap{
 		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -324,14 +324,20 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
-	if err == nil {
-		t.Fatal("expected error for empty action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil for error result", raw)
+	}
+	if text := errorResultText(t, result); !strings.Contains(text, "'action' is required") {
+		t.Fatalf("error result text = %q, want action required message", text)
 	}
 }
 
-// TestMakeMetaHandler_UnknownAction verifies MakeMetaHandler returns an error
-// for an unrecognized action name.
+// TestMakeMetaHandler_UnknownAction verifies MakeMetaHandler returns a
+// recoverable tool error for an unrecognized action name.
 func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 	routes := ActionMap{
 		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
@@ -339,9 +345,74 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
-	if err == nil {
-		t.Fatal("expected error for unknown action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil for error result", raw)
+	}
+	if text := errorResultText(t, result); !strings.Contains(text, `unknown action "bogus"`) {
+		t.Fatalf("error result text = %q, want unknown action message", text)
+	}
+}
+
+// TestMakeMetaHandler_MissingParamsForRequiredSchema_ReturnsError verifies
+// absent params are rejected before dispatch when the action schema has required fields.
+func TestMakeMetaHandler_MissingParamsForRequiredSchema_ReturnsError(t *testing.T) {
+	called := false
+	routes := ActionMap{
+		"create": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				called = true
+				return struct{}{}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "title"},
+			},
+		},
+	}
+	handler := MakeMetaHandler("gitlab_issue", routes, nil)
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "create"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if called {
+		t.Fatal("handler was called despite missing params")
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil for error result", raw)
+	}
+	text := errorResultText(t, result)
+	if !strings.Contains(text, "'params' is required") || !strings.Contains(text, "project_id, title") {
+		t.Fatalf("error result text = %q, want required params guidance", text)
+	}
+}
+
+// TestMakeMetaHandler_InvalidParams_ReturnsErrorResult verifies typed params
+// validation failures are surfaced as recoverable tool errors.
+func TestMakeMetaHandler_InvalidParams_ReturnsErrorResult(t *testing.T) {
+	called := false
+	routes := ActionMap{
+		"get": RouteAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, _ routeSchemaTestInput) (map[string]bool, error) {
+			called = true
+			return map[string]bool{"called": true}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "get", Params: map[string]any{"unknown": true}})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if called {
+		t.Fatal("handler was called despite invalid params")
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil for error result", raw)
+	}
+	if text := errorResultText(t, result); !strings.Contains(text, `unknown field "unknown"`) {
+		t.Fatalf("error result text = %q, want unknown field guidance", text)
 	}
 }
 
@@ -2182,6 +2253,63 @@ func TestMetaToolVoidActions_ProtocolCall_ReturnsStructuredContent(t *testing.T)
 	if deleteOut.Status != "success" || deleteOut.Message == "" {
 		t.Fatalf("delete structured content = %+v, want success status and message", deleteOut)
 	}
+}
+
+// TestMetaToolProtocol_TopLevelActionParamsRejected verifies action params sent
+// at the meta-tool envelope top level do not reach the action handler.
+func TestMetaToolProtocol_TopLevelActionParamsRejected(t *testing.T) {
+	ClearMetaRoutes()
+	t.Cleanup(ClearMetaRoutes)
+
+	called := false
+	routes := ActionMap{
+		"create": RouteAction((*gitlabclient.Client)(nil), func(_ context.Context, _ *gitlabclient.Client, _ routeSchemaTestInput) (map[string]bool, error) {
+			called = true
+			return map[string]bool{"called": true}, nil
+		}),
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	AddMetaTool(server, "test_meta", "Test meta tool.", routes, nil, nil)
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "test_meta",
+		Arguments: map[string]any{
+			"action": "create",
+			"id":     1,
+		},
+	})
+	if err == nil && (result == nil || !result.IsError) {
+		t.Fatalf("CallTool returned result = %#v, error = nil; want protocol or tool error", result)
+	}
+	if called {
+		t.Fatal("handler was called with top-level action params")
+	}
+}
+
+func errorResultText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("error result content is empty")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	return text.Text
 }
 
 // TestDestructiveVoidActionWithRequest_HandlerError_PropagatesError verifies

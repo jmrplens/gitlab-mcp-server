@@ -31,6 +31,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
 // HTTP header names, MIME types, and test values reused across tests.
@@ -129,6 +130,23 @@ func newInMemorySession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { session.Close() })
 	return session
+}
+
+func decodeCallToolStructuredContent(t *testing.T, result *mcp.CallToolResult, target any) {
+	t.Helper()
+	if result.IsError {
+		t.Fatal("CallTool returned IsError=true")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("StructuredContent is nil")
+	}
+	raw, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal StructuredContent: %v", err)
+	}
+	if unmarshalErr := json.Unmarshal(raw, target); unmarshalErr != nil {
+		t.Fatalf("unmarshal StructuredContent: %v", unmarshalErr)
+	}
 }
 
 // parseJSONRPCResponse reads the HTTP response body and parses the JSON-RPC result.
@@ -917,6 +935,32 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_merge_request/create"})
 	if err != nil {
 		t.Fatalf("visible meta-tool schema should be readable: %v", err)
+	}
+
+	toolResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "gitlab_server",
+		Arguments: map[string]any{"action": "schema_index"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool schema_index: %v", err)
+	}
+	var schemaIndex toolutil.MetaSchemaDiscoveryIndex
+	decodeCallToolStructuredContent(t, toolResult, &schemaIndex)
+	for _, entry := range schemaIndex.Tools {
+		if entry.Tool == "gitlab_runner" {
+			t.Fatal("excluded meta-tool should not appear in schema_index action")
+		}
+	}
+
+	excludedResult, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "gitlab_server",
+		Arguments: map[string]any{
+			"action": "schema_get",
+			"params": map[string]any{"tool": "gitlab_runner", "action": "list"},
+		},
+	})
+	if err == nil && !excludedResult.IsError {
+		t.Fatal("excluded meta-tool schema should not be available through schema_get")
 	}
 }
 
