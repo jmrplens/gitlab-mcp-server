@@ -35,15 +35,9 @@ func (s *StringOrInt) UnmarshalJSON(data []byte) error {
 	// Try number (LLMs often send numeric IDs as JSON numbers).
 	var num json.Number
 	if err := json.Unmarshal(data, &num); err == nil {
-		// If it's an integer, format without decimals.
-		if _, err = strconv.ParseInt(num.String(), 10, 64); err == nil {
-			*s = StringOrInt(num.String())
-			return nil
-		}
-		// If it's a float, convert to int (e.g. 405.0 -> "405").
-		var f float64
-		if f, err = strconv.ParseFloat(num.String(), 64); err == nil {
-			*s = StringOrInt(strconv.FormatInt(int64(f), 10))
+		integer, parseErr := integerFromString(num.String())
+		if parseErr == nil {
+			*s = StringOrInt(strconv.FormatInt(integer, 10))
 			return nil
 		}
 	}

@@ -35,6 +35,23 @@ type testInt64Input struct {
 	Message   string      `json:"message,omitempty"`
 }
 
+type testAliasInput struct {
+	Query        string      `json:"query"`
+	MRIID        int64       `json:"merge_request_iid"`
+	ProjectID    StringOrInt `json:"project_id"`
+	LinkURL      string      `json:"link_url"`
+	Labels       string      `json:"labels"`
+	SourceBranch string      `json:"source_branch"`
+	TargetBranch string      `json:"target_branch"`
+	Environment  string      `json:"environment_scope"`
+	AutoMerge    bool        `json:"auto_merge"`
+	Variables    []string    `json:"variables,omitempty"`
+}
+
+type testRequiredInput struct {
+	Name string `json:"name" jsonschema:"Resource name,required"`
+}
+
 // testOutput represents the response from the test operation.
 type testOutput struct {
 	Result string `json:"result"`
@@ -114,6 +131,41 @@ func TestUnmarshalParams_CoercionInvalidString(t *testing.T) {
 	_, err := UnmarshalParams[testInt64Input](params)
 	if err == nil {
 		t.Fatal("expected error for non-numeric string in int64 field")
+	}
+}
+
+func TestUnmarshalParams_NormalizesCommonAliases(t *testing.T) {
+	params := map[string]any{
+		"search":                       "bug",
+		"mr_iid":                       "17",
+		"project_path":                 "group/project",
+		"link":                         "https://example.test",
+		"labels":                       []any{"bug", "urgent"},
+		"from":                         "feature",
+		"to":                           "main",
+		"environment":                  "production",
+		"merge_when_pipeline_succeeds": true,
+		"variables":                    "DEPLOY_ENV=prod",
+	}
+
+	got, err := UnmarshalParams[testAliasInput](params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Query != "bug" || got.MRIID != 17 || got.ProjectID.String() != "group/project" {
+		t.Fatalf("basic aliases = %+v, want query bug, MR 17, project group/project", got)
+	}
+	if got.LinkURL != "https://example.test" || got.Labels != "bug,urgent" {
+		t.Fatalf("link/labels aliases = %+v, want link_url and CSV labels", got)
+	}
+	if got.SourceBranch != "feature" || got.TargetBranch != "main" {
+		t.Fatalf("branch aliases = %+v, want feature -> main", got)
+	}
+	if got.Environment != "production" || !got.AutoMerge {
+		t.Fatalf("environment/auto_merge aliases = %+v", got)
+	}
+	if len(got.Variables) != 1 || got.Variables[0] != "DEPLOY_ENV=prod" {
+		t.Fatalf("variables = %#v, want single-item string slice", got.Variables)
 	}
 }
 
@@ -324,9 +376,15 @@ func TestMakeMetaHandler_EmptyAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
-	if err == nil {
-		t.Fatal("expected error for empty action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); got != "test_tool: 'action' is required. Valid actions: list" {
+		t.Fatalf("error text = %q", got)
 	}
 }
 
@@ -339,10 +397,93 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	_, _, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
-	if err == nil {
-		t.Fatal("expected error for unknown action, got nil")
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "bogus"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
 	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); got != `test_tool: unknown action "bogus". Valid actions: list` {
+		t.Fatalf("error text = %q", got)
+	}
+}
+
+func TestMakeMetaHandler_ActionAlias(t *testing.T) {
+	routes := ActionMap{
+		"project.milestone_list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return testOutput{Result: "ok"}, nil
+		}),
+	}
+	handler := MakeMetaHandler("gitlab_project", routes, nil)
+
+	_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "milestone.list"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, ok := raw.(testOutput)
+	if !ok || out.Result != "ok" {
+		t.Fatalf("raw = %#v, want test output", raw)
+	}
+}
+
+func TestMakeMetaHandler_ParamValidationErrorIsToolError(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testInput) (testOutput, error) {
+			return testOutput{}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{
+		Action: "create",
+		Params: map[string]any{"id": "not-an-int"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	if got := metaErrorText(t, result); !strings.Contains(got, `test_tool/create: invalid params for this action`) {
+		t.Fatalf("error text = %q, want validation tool error", got)
+	}
+}
+
+func TestMakeMetaHandler_MissingRequiredParamsIsToolError(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testRequiredInput, testOutput](nil, func(context.Context, *gitlabclient.Client, testRequiredInput) (testOutput, error) {
+			return testOutput{}, nil
+		}),
+	}
+	handler := MakeMetaHandler("test_tool", routes, nil)
+
+	result, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "create"})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if raw != nil {
+		t.Fatalf("raw result = %#v, want nil", raw)
+	}
+	got := metaErrorText(t, result)
+	if !strings.Contains(got, "params' is required") || !strings.Contains(got, "name") {
+		t.Fatalf("error text = %q, want required params", got)
+	}
+}
+
+func metaErrorText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %#v, want IsError result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("error result content is empty")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	return text.Text
 }
 
 // TestMakeMetaHandler_CustomFormatter verifies MakeMetaHandler uses a custom
