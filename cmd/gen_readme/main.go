@@ -181,7 +181,7 @@ func stripMetaToolDescriptionPrefix(description string) string {
 
 	firstLine := strings.TrimSpace(lines[0])
 	secondLine := strings.TrimSpace(lines[1])
-	if !strings.HasPrefix(firstLine, `Example: {"action":`) ||
+	if !strings.Contains(firstLine, `Example: {"action":`) ||
 		!strings.HasPrefix(secondLine, "For the params schema of any action") {
 		return description
 	}

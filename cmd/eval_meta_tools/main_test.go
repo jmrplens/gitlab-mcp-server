@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -174,12 +175,16 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 			"mr_review.draft_note_create": {},
 			"project.get":                 {},
 		},
+		"gitlab_model_registry": {
+			"download": {},
+		},
 	}
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
 		{ID: "deployment-unavailable", ExpectedTool: "gitlab", ExpectedAction: "environment.deployment_approve_or_reject"},
 		{ID: "missing", ExpectedTool: "gitlab", ExpectedAction: "dependency.list"},
 		{ID: "ce-unavailable", ExpectedTool: "gitlab", ExpectedAction: "model_registry.download"},
+		{ID: "split-ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
 		{ID: "docker-unavailable", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
 		{ID: "MT-105", ExpectedTool: "gitlab", ExpectedAction: "user.disable_two_factor"},
 		{ID: "MT-115", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
@@ -298,8 +303,10 @@ func TestApplyPresetDefaults_RejectsUnknownPreset(t *testing.T) {
 func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "health", ExpectedTool: "gitlab_server", ExpectedAction: "health_check"},
 		{ID: "write", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
 		{ID: "schema-title-write", Prompt: "Create an issue titled `Evaluate schema discovery`.", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
+		{ID: "archive", ExpectedTool: "gitlab_project", ExpectedAction: "archive"},
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
 		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
@@ -309,8 +316,8 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-read) error = %v", err)
 	}
-	if got := taskIDs(read); got != "read" {
-		t.Fatalf("docker-read IDs = %q, want read", got)
+	if got := taskIDs(read); got != "read,health" {
+		t.Fatalf("docker-read IDs = %q, want read,health", got)
 	}
 	mutating, err := filterTasksByPreset(tasks, presetDockerMutatingSafe)
 	if err != nil {
@@ -323,8 +330,8 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-destructive-safe) error = %v", err)
 	}
-	if got := taskIDs(destructive); got != "delete" {
-		t.Fatalf("docker-destructive-safe IDs = %q, want delete", got)
+	if got := taskIDs(destructive); got != "delete,archive" {
+		t.Fatalf("docker-destructive-safe IDs = %q, want delete,archive", got)
 	}
 	enterprise, err := filterTasksByPreset(tasks, presetSchemaEnterprise)
 	if err != nil {
@@ -1948,6 +1955,80 @@ func TestValidateExecutionOptions_ExternalCommandRequiresToolsFile(t *testing.T)
 	err := validateExecutionOptions(options{MCPCommand: "gitlab-mcp-server"})
 	if err == nil || !strings.Contains(err.Error(), "requires --tools-file") {
 		t.Fatalf("error = %v, want tools-file guard", err)
+	}
+}
+
+func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "fixture-test", Version: "0"}, nil)
+	called := false
+	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_branch", Description: "branch meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
+		called = true
+		if input["action"] != "create" {
+			t.Fatalf("action = %v, want create", input["action"])
+		}
+		params, _ := input["params"].(map[string]any)
+		if params["project_id"] != "my-org/tools/gitlab-mcp-server" {
+			t.Fatalf("params = %+v", params)
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "fixture-test-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	err = callFixtureSetupTool(t.Context(), session, "branch.create", map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"})
+	if err != nil {
+		t.Fatalf("callFixtureSetupTool() error = %v", err)
+	}
+	if !called {
+		t.Fatal("split meta-tool was not called")
+	}
+}
+
+func TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "sampling-probe", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "sampling_probe", Description: "sampling probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+		params := req.Session.InitializeParams()
+		if params == nil || params.Capabilities.Sampling == nil {
+			return nil, nil, errors.New("sampling capability not advertised")
+		}
+		result, err := req.Session.CreateMessage(ctx, &mcp.CreateMessageParams{
+			Messages:  []*mcp.SamplingMessage{{Role: "user", Content: &mcp.TextContent{Text: "probe"}}},
+			MaxTokens: 64,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: result.Model}}}, nil, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "sampling-probe-client", Version: "0"}, &mcp.ClientOptions{
+		CreateMessageHandler: evalCreateMessageHandler,
+	})
+	session, err := mcpClient.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sampling_probe", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if got := toolResultContent(result); !strings.Contains(got, "eval-meta-tools-sampling-mock") {
+		t.Fatalf("sampling result = %q, want evaluator sampling model", got)
 	}
 }
 

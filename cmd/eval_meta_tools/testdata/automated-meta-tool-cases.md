@@ -366,6 +366,7 @@ Choose the next MCP tool call needed to perform this task. You may look up schem
 | MT-176 | Get vulnerability GID `gid://gitlab/Vulnerability/42`. | `gitlab` / `vulnerability.get` | `id` | none | No | Vulnerability detail uses GraphQL GID. |
 | MT-177 | Dismiss vulnerability GID `gid://gitlab/Vulnerability/42` as false positive with a comment. | `gitlab` / `vulnerability.dismiss` | `id` | `dismissal_reason`, `comment` | No | Vulnerability dismissal uses GID and dismissal_reason. |
 | MT-178 | Get the pipeline security summary for pipeline IID `12345` in project path `my-org/tools/gitlab-mcp-server`. | `gitlab` / `vulnerability.pipeline_security_summary` | `project_path`, `pipeline_iid` | none | No | Security summary uses project_path and pipeline_iid, not numeric IDs. |
+| MT-179 | Inspect merge request `7` changes in project `my-org/tools/gitlab-mcp-server` without running an LLM analyzer. | `gitlab_mr_review` / `changes_get` | `project_id`, `merge_request_iid` | none | No | MR changes are returned or a truncation hint is included. |
 
 ## Multi-Step Scenario Fixture
 
@@ -432,11 +433,11 @@ These rows use an extra `Simulation by step` column. The harness validates the m
 
 | Area | Cases |
 | --- | ---: |
-| Single-operation meta-tool cases | 116 |
+| Single-operation meta-tool cases | 117 |
 | Multi-step workflow scenarios | 37 |
 | Failure simulation scenarios | 5 |
-| Total automated cases | 158 |
-| Expected tool operations across all cases | 299 |
+| Total automated cases | 159 |
+| Expected tool operations across all cases | 300 |
 | Catalog tools covered | 48 / 48 |
 
 ## Maintenance Rules

@@ -67,6 +67,7 @@ var commonActionAliases = map[string]string{
 	"milestone.list":          "project.milestone_list",
 	"milestone.update":        "project.milestone_update",
 	"group.custom_emoji_list": "custom_emoji.list",
+	"me":                      "current",
 }
 
 // NormalizeActionAlias returns the canonical action name for common shortened
@@ -387,6 +388,7 @@ var commonParamAliases = []struct {
 	{Alias: "from_ref", Canonical: "from"},
 	{Alias: "to_ref", Canonical: "to"},
 	{Alias: "target_branch", Canonical: "to"},
+	{Alias: "name", Canonical: "environment"},
 }
 
 // normalizeParamAliases accepts common LLM-generated parameter aliases only
@@ -1729,7 +1731,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	sort.Strings(actions)
 	first := actions[0]
 	return fmt.Sprintf(
-		"Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
+		"Input envelope: the only top-level keys are action and params; put project_id, query, IDs, refs, and all other action fields inside params. Example: {\"action\":%q,\"params\":{...}}\nFor the params schema of any action, read the MCP resource gitlab://schema/meta/%s/<action>.\n\n",
 		first, toolName,
 	)
 }

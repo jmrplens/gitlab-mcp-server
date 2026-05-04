@@ -823,7 +823,32 @@ func filterTasksByPreset(tasks []evalTask, preset string) ([]evalTask, error) {
 			filtered = append(filtered, task)
 		}
 	}
-	return filtered, nil
+	return orderTasksForPreset(filtered, preset), nil
+}
+
+func orderTasksForPreset(tasks []evalTask, preset string) []evalTask {
+	if preset != presetDockerDestructiveSafe {
+		return tasks
+	}
+	regular := make([]evalTask, 0, len(tasks))
+	projectArchive := make([]evalTask, 0, 1)
+	for _, task := range tasks {
+		if taskArchivesSharedProject(task) {
+			projectArchive = append(projectArchive, task)
+			continue
+		}
+		regular = append(regular, task)
+	}
+	return append(regular, projectArchive...)
+}
+
+func taskArchivesSharedProject(task evalTask) bool {
+	for _, step := range taskSteps(task) {
+		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "archive" {
+			return true
+		}
+	}
+	return false
 }
 
 func taskMatchesPreset(task evalTask, preset string) bool {
@@ -886,7 +911,7 @@ func taskHasSimulation(task evalTask) bool {
 func taskUsesCapabilityFallback(task evalTask) bool {
 	hasExpectedRoute := false
 	for _, step := range taskSteps(task) {
-		if step.ExpectedTool == "gitlab_server" || strings.Contains(step.ExpectedAction, "schema") {
+		if strings.Contains(step.ExpectedAction, "schema") {
 			return true
 		}
 		if step.ExpectedTool != "" || step.ExpectedAction != "" {
@@ -910,10 +935,11 @@ func catalogHasRoute(routes map[string]toolutil.ActionMap, tool, action string) 
 }
 
 func routeUnavailableOnCE(tool, action string) bool {
-	if tool != "gitlab" {
-		return false
+	route := action
+	if tool != "gitlab" && action != "" {
+		route = strings.TrimPrefix(tool, "gitlab_") + "." + action
 	}
-	switch action {
+	switch route {
 	case "environment.deployment_approve_or_reject", "model_registry.download", "mr_review.draft_note_create":
 		return true
 	default:
@@ -1513,7 +1539,9 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	}
 	cmd.Env = env
 	transport := &mcp.CommandTransport{Command: cmd, TerminateDuration: 5 * time.Second}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-external-client", Version: "0.0.1"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-external-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		CreateMessageHandler: evalCreateMessageHandler,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	session, err := mcpClient.Connect(ctx, transport, nil)
@@ -1528,8 +1556,28 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, nil
 	}
 	switch task.ID {
+	case "MT-013":
+		return ensureLiveIssueDeleteTarget(ctx, client, task)
+	case "MT-027":
+		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
 	case "MT-015":
 		return task, ensureLiveMergeRequestSource(ctx, session, task.Prompt)
+	case "MT-031":
+		return task, ensureLiveRepositoryFileDeleteTarget(ctx, client, task.Prompt)
+	case "MT-035":
+		return ensureLiveMilestoneDeleteTarget(ctx, client, task)
+	case "MT-037":
+		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
+	case "MT-044":
+		return ensureLivePackageDeleteTarget(ctx, client, task)
+	case "MT-047":
+		return ensureLiveRunnerRemoveTarget(ctx, client, task)
+	case "MT-051":
+		return ensureLiveSnippetDeleteTarget(ctx, client, task)
+	case "MT-057":
+		return ensureLiveHookDeleteTarget(ctx, client, task)
+	case "MT-059":
+		return ensureLiveBadgeDeleteTarget(ctx, client, task)
 	case "MT-099":
 		return task, ensureLiveBranchDeleteTarget(ctx, client, task.Prompt)
 	case "MT-100":
@@ -1561,6 +1609,352 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 	default:
 		return task, nil
 	}
+}
+
+func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-013 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
+		Title:       new(fmt.Sprintf("Evaluation issue safe to delete %d", time.Now().UnixNano())),
+		Description: new("Temporary issue for destructive evaluator coverage."),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "issue ", issue.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveProjectVariableUpdateTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	if client == nil {
+		return nil
+	}
+	projectID, ok := exampleProjectIDValue(prompt)
+	if !ok {
+		return fmt.Errorf("prepare MT-027 fixture: project path not found in prompt %q", prompt)
+	}
+	key, ok := backtickValueAfter(prompt, "CI variable ")
+	if !ok {
+		return fmt.Errorf("prepare MT-027 fixture: variable key not found in prompt %q", prompt)
+	}
+	environmentScope, ok := backtickValueAfter(prompt, "environment_scope ")
+	if !ok {
+		environmentScope = "*"
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	for _, scope := range []string{"*", environmentScope} {
+		_, err := client.GL().ProjectVariables.RemoveVariable(projectID, key, &gl.RemoveProjectVariableOptions{
+			Filter: &gl.VariableFilter{EnvironmentScope: scope},
+		}, gl.WithContext(setupCtx))
+		if err != nil && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return fmt.Errorf("prepare MT-027 fixture variable cleanup %s/%s: %w", key, scope, err)
+		}
+	}
+	_, _, err := client.GL().ProjectVariables.CreateVariable(projectID, &gl.CreateProjectVariableOptions{
+		Key:              &key,
+		Value:            new("masked-value-123"),
+		EnvironmentScope: &environmentScope,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return fmt.Errorf("prepare MT-027 fixture variable %s: %w", key, err)
+	}
+	return nil
+}
+
+func ensureLiveRepositoryFileDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	if client == nil {
+		return nil
+	}
+	projectID, ok := exampleProjectIDValue(prompt)
+	if !ok {
+		return fmt.Errorf("prepare MT-031 fixture: project path not found in prompt %q", prompt)
+	}
+	filePath, ok := backtickValueAfter(prompt, "file ")
+	if !ok {
+		return fmt.Errorf("prepare MT-031 fixture: file path not found in prompt %q", prompt)
+	}
+	branch, ok := backtickValueAfter(prompt, "branch ")
+	if !ok {
+		return fmt.Errorf("prepare MT-031 fixture: branch not found in prompt %q", prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	if err := ensureLiveBranchExists(setupCtx, client, projectID, branch, liveFixtureDefaultRef); err != nil {
+		return fmt.Errorf("prepare MT-031 fixture branch %s: %w", branch, err)
+	}
+	_, _, err := client.GL().RepositoryFiles.GetFile(projectID, filePath, &gl.GetFileOptions{Ref: &branch}, gl.WithContext(setupCtx))
+	if err == nil {
+		return nil
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("prepare MT-031 fixture file %s: %w", filePath, err)
+	}
+	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+		Branch:        &branch,
+		Content:       new("temporary evaluation file\n"),
+		CommitMessage: new("Seed file delete evaluation fixture"),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return fmt.Errorf("prepare MT-031 fixture file %s: %w", filePath, err)
+	}
+	return nil
+}
+
+func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-035 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	milestone, _, err := client.GL().Milestones.CreateMilestone(projectID, &gl.CreateMilestoneOptions{
+		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %d", time.Now().UnixNano())),
+		Description: new("Temporary milestone for destructive evaluator coverage."),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-035 fixture milestone: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "milestone IID ", milestone.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveReleaseDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	if client == nil {
+		return nil
+	}
+	projectID, ok := exampleProjectIDValue(prompt)
+	if !ok {
+		return fmt.Errorf("prepare MT-037 fixture: project path not found in prompt %q", prompt)
+	}
+	tagName, ok := backtickValueAfter(prompt, "release ")
+	if !ok {
+		return fmt.Errorf("prepare MT-037 fixture: release tag not found in prompt %q", prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	if err := ensureLiveTagExists(setupCtx, client, projectID, tagName, liveFixtureDefaultRef); err != nil {
+		return fmt.Errorf("prepare MT-037 fixture tag %s: %w", tagName, err)
+	}
+	_, _, err := client.GL().Releases.GetRelease(projectID, tagName, gl.WithContext(setupCtx))
+	if err == nil {
+		return nil
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("prepare MT-037 fixture release %s: %w", tagName, err)
+	}
+	_, _, err = client.GL().Releases.CreateRelease(projectID, &gl.CreateReleaseOptions{
+		Name:        new("Evaluation release safe to delete"),
+		TagName:     &tagName,
+		Description: new("Temporary release for destructive evaluator coverage."),
+	}, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusConflict) && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		return fmt.Errorf("prepare MT-037 fixture release %s: %w", tagName, err)
+	}
+	return nil
+}
+
+func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-044 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	_, _, err := client.GL().GenericPackages.PublishPackageFile(
+		projectID,
+		liveFixturePackageName,
+		fmt.Sprintf("%s-delete-%d", liveFixturePackageVer, time.Now().UnixNano()),
+		liveFixturePackageFile,
+		bytes.NewBufferString("evaluation package\n"),
+		nil,
+		gl.WithContext(setupCtx),
+	)
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-044 fixture package publish: %w", err)
+	}
+	packages, _, err := client.GL().Packages.ListProjectPackages(projectID, &gl.ListProjectPackagesOptions{
+		PackageType: new("generic"),
+		PackageName: new(liveFixturePackageName),
+		OrderBy:     new("created_at"),
+		Sort:        new("desc"),
+		ListOptions: gl.ListOptions{PerPage: 1},
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-044 fixture package list: %w", err)
+	}
+	if len(packages) == 0 {
+		return task, errors.New("prepare MT-044 fixture package was not listed after publish")
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "package ID ", packages[0].ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	project, _, err := client.GL().Projects.GetProject(liveFixtureProjectPath, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-047 fixture project lookup: %w", err)
+	}
+	runner, _, err := client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
+		RunnerType:  new("project_type"),
+		ProjectID:   new(project.ID),
+		Description: new(fmt.Sprintf("eval-remove-runner-%d", time.Now().UnixNano())),
+		Paused:      new(false),
+		Locked:      new(false),
+		RunUntagged: new(true),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-047 fixture runner: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "runner ID ", runner.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	visibility := gl.PrivateVisibility
+	snippet, _, err := client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
+		Title:      new(fmt.Sprintf("Evaluation snippet safe to delete %d", time.Now().UnixNano())),
+		FileName:   new("eval.txt"),
+		Content:    new("evaluation snippet content\n"),
+		Visibility: &visibility,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-051 fixture snippet: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "personal snippet ID ", snippet.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-057 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	hook, _, err := client.GL().Projects.AddProjectHook(projectID, &gl.AddProjectHookOptions{
+		Name:                  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		URL:                   new("https://example.com/gitlab-hook-delete"),
+		PushEvents:            new(true),
+		EnableSSLVerification: new(false),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-057 fixture hook: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "webhook ID ", hook.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return task, fmt.Errorf("prepare MT-059 fixture: project path not found in prompt %q", task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	badge, _, err := client.GL().ProjectBadges.AddProjectBadge(projectID, &gl.AddProjectBadgeOptions{
+		LinkURL:  new("https://example.com/coverage"),
+		ImageURL: new("https://example.com/badge.svg"),
+		Name:     new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-059 fixture badge: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "badge ID ", badge.ID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveBranchExists(ctx context.Context, client *gitlabclient.Client, projectID, branch, ref string) error {
+	_, _, err := client.GL().Branches.GetBranch(projectID, branch, gl.WithContext(ctx))
+	if err == nil {
+		return nil
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return err
+	}
+	_, _, err = client.GL().Branches.CreateBranch(projectID, &gl.CreateBranchOptions{
+		Branch: &branch,
+		Ref:    &ref,
+	}, gl.WithContext(ctx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return err
+	}
+	return nil
+}
+
+func ensureLiveTagExists(ctx context.Context, client *gitlabclient.Client, projectID, tagName, ref string) error {
+	_, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
+	if err == nil {
+		return nil
+	}
+	if !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return err
+	}
+	_, _, err = client.GL().Tags.CreateTag(projectID, &gl.CreateTagOptions{
+		TagName: &tagName,
+		Ref:     &ref,
+	}, gl.WithContext(ctx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+		return err
+	}
+	return nil
 }
 
 func ensureLiveBranchDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
@@ -2073,13 +2467,12 @@ func ensureLiveMergeRequestSource(ctx context.Context, session *mcp.ClientSessio
 }
 
 func callFixtureSetupTool(ctx context.Context, session *mcp.ClientSession, action string, params map[string]any, ignoredErrors ...string) error {
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab",
-		Arguments: map[string]any{
-			"action": action,
-			"params": params,
-		},
-	})
+	result, err := callFixtureSetupToolByName(ctx, session, "gitlab", action, params)
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "unknown tool \"gitlab\"") {
+		if toolName, splitAction, ok := splitFixtureSetupAction(action); ok {
+			result, err = callFixtureSetupToolByName(ctx, session, toolName, splitAction, params)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("prepare fixture %s: %w", action, err)
 	}
@@ -2094,6 +2487,24 @@ func callFixtureSetupTool(ctx context.Context, session *mcp.ClientSession, actio
 		}
 	}
 	return fmt.Errorf("prepare fixture %s: %s", action, text)
+}
+
+func callFixtureSetupToolByName(ctx context.Context, session *mcp.ClientSession, toolName, action string, params map[string]any) (*mcp.CallToolResult, error) {
+	return session.CallTool(ctx, &mcp.CallToolParams{
+		Name: toolName,
+		Arguments: map[string]any{
+			"action": action,
+			"params": params,
+		},
+	})
+}
+
+func splitFixtureSetupAction(action string) (toolName, splitAction string, ok bool) {
+	domain, route, ok := strings.Cut(action, ".")
+	if !ok || domain == "" || route == "" {
+		return "", "", false
+	}
+	return "gitlab_" + domain, strings.ReplaceAll(route, ".", "_"), true
 }
 
 func backtickValueAfter(text, marker string) (string, bool) {
@@ -2258,7 +2669,9 @@ func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSessio
 	if _, serverErr := server.Connect(ctx, st, nil); serverErr != nil {
 		return nil, nil, nil, nil, fmt.Errorf("server connect: %w", serverErr)
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-client", Version: "0.0.1"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-meta-tools-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		CreateMessageHandler: evalCreateMessageHandler,
+	})
 	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("client connect: %w", err)
@@ -2269,6 +2682,14 @@ func buildCatalogSession(client *gitlabclient.Client) (session *mcp.ClientSessio
 		return nil, nil, nil, nil, fmt.Errorf("list tools: %w", err)
 	}
 	return session, func() { session.Close() }, result.Tools, routes, nil
+}
+
+func evalCreateMessageHandler(_ context.Context, _ *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+	return &mcp.CreateMessageResult{
+		Content: &mcp.TextContent{Text: "## Mock Analysis\n\nThis analysis was generated by the eval_meta_tools sampling handler."},
+		Model:   "eval-meta-tools-sampling-mock",
+		Role:    "assistant",
+	}, nil
 }
 
 func convertTools(toolList []*mcp.Tool) []modelTool {

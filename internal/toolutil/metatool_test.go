@@ -734,6 +734,10 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	if !strings.Contains(got, wantExample) {
 		t.Errorf("prefix missing literal example, got: %q", got)
 	}
+	wantEnvelope := "only top-level keys are action and params"
+	if !strings.Contains(got, wantEnvelope) {
+		t.Errorf("prefix missing envelope guidance, got: %q", got)
+	}
 	wantPointer := "gitlab://schema/meta/gitlab_widget/<action>"
 	if !strings.Contains(got, wantPointer) {
 		t.Errorf("prefix missing resource pointer, got: %q", got)

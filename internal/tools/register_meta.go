@@ -450,7 +450,7 @@ Labels (label_*):
 - label_create: project_id*, name*, color* (hex), description, priority
 - label_update: project_id*, label_id*, new_name, color, description, priority
 
-Milestones (milestone_*):
+Project milestones (milestone_* — use gitlab_group group_milestone_* only when the prompt explicitly says group milestone or gives a group_id/group path):
 - milestone_list: project_id*, state (active/closed), title, search, include_ancestors
 - milestone_get / milestone_delete: project_id*, milestone_iid*
 - milestone_create: project_id*, title*, description, start_date, due_date
@@ -855,10 +855,10 @@ func registerMRReviewMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_mr_review", `Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
-When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review.
+	When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
 NOT for: MR lifecycle — create/update/merge/approve/rebase/delete (use gitlab_merge_request), reactions on MR notes (use gitlab_merge_request emoji_mr_note_*), CI pipelines on the MR (use gitlab_pipeline or gitlab_merge_request pipelines).
 
-IMPORTANT — batch review pattern: call draft_note_create once per comment (with `+"`position`"+` for inline comments, or `+"`in_reply_to_discussion_id`"+` for replies), then draft_note_publish_all ONCE to send a single notification. Use discussion_create only for standalone questions that need immediate visibility.
+	IMPORTANT — action choice: if the task says note or comment, use note_create. If it says discussion/thread, use discussion_create. If it says draft review note or batch review, use draft_note_create first and draft_note_publish_all once at the end. For raw patch text, use raw_diffs; for structured MR changes by file, use changes_get.
 
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
@@ -886,12 +886,12 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: returns file diffs; check truncated_files
-- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use when changes_get reports truncated_files)
+- changes_get: returns structured MR file diffs by merge_request_iid; use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- raw_diffs: project_id*, merge_request_iid* — returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
 - diff_versions_list: list MR diff revisions
 - diff_version_get: version_id*, unidiff (bool)
 
-Draft notes (batch review):
+Draft notes (batch review, not immediately published):
 - draft_note_list: order_by, sort
 - draft_note_get: note_id*
 - draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion (bool), position
@@ -952,7 +952,7 @@ func registerRepositoryMeta(server *mcp.Server, client *gitlabclient.Client) {
 	}
 
 	addMetaTool(server, "gitlab_repository", `Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
-When to use: file/commit operations, diffs, blame, compare, archives, submodules, markdown rendering. NOT for: branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
+	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
 
 Behavior:
 - Idempotent reads: tree, blob, raw_blob, archive, compare, merge_base, contributors, file_get/raw/metadata/raw_metadata/blame, list_submodules, read_submodule_file, file_history, commit_list/get/diff/refs/comments/merge_requests/statuses/signature, commit_discussion_list/get, markdown_render, changelog_generate.
@@ -983,7 +983,7 @@ Commits:
 - commit_list: project_id*, ref_name, since, until, path, author, with_stats
 - file_history: alias for commit_list filtered by path* — list commits modifying a specific file
 - commit_get: project_id*, sha*
-- commit_diff: project_id*, sha*
+- commit_diff: project_id*, sha* — commit SHA only; not for merge_request_iid or MR changes.
 - commit_refs: project_id*, sha*, type (branch/tag/all)
 - commit_comments / commit_merge_requests: project_id*, sha*
 - commit_comment_create: project_id*, sha*, note*, path, line, line_type (new/old)
@@ -994,7 +994,7 @@ Commits:
 - commit_signature: project_id*, sha*
 
 Files:
-- file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Blame also accepts range_start, range_end.
+- file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Use only when the exact repository file_path is known; use gitlab_search/code for text search across files. Blame also accepts range_start, range_end.
   - file_metadata: HEAD-style metadata for the file content endpoint (size, encoding, content_sha256, blob_id, last_commit_id, ref).
   - file_raw_metadata: HEAD-style metadata for the raw file endpoint (size, content_type, ref) — useful to size-check before downloading via file_raw.
 - file_create: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding (text/base64), author_email, author_name, execute_filemode
@@ -1234,7 +1234,7 @@ Labels (group_label_*):
 - group_label_create: group_id*, name*, color*, description
 - group_label_update: group_id*, label_id*, new_name, color, description
 
-Milestones (group_milestone_*):
+Group milestones (group_milestone_* — group scope only; use gitlab_project milestone_* for project milestones):
 - group_milestone_list: group_id*, state, title, search, include_ancestors, include_descendants
 - group_milestone_get / group_milestone_delete: group_id*, milestone_iid*
 - group_milestone_create: group_id*, title*, description, start_date, due_date
@@ -1680,10 +1680,10 @@ Jobs:
 - delete_project_artifacts: project_id*. Deletes ALL artifacts across project.
 
 Artifact downloads (base64, max 1MB):
-- artifacts: project_id*, job_id*
-- download_artifacts: project_id*, ref_name*, job
-- download_single_artifact: project_id*, job_id*, artifact_path*
-- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job
+- artifacts: project_id*, job_id* — download the whole artifact archive from a known numeric job ID.
+- download_artifacts: project_id*, ref_name*, job — download the whole artifact archive by ref_name and job NAME (string), not by job_id.
+- download_single_artifact: project_id*, job_id*, artifact_path* — use when the prompt gives a numeric job ID and one artifact file path.
+- download_single_artifact_by_ref: project_id*, ref_name*, artifact_path*, job — use when the prompt gives ref_name plus job NAME and one artifact file path.
 
 Job token scope:
 - token_scope_get / token_scope_patch: project_id*. Patch params: enabled.
@@ -1793,7 +1793,7 @@ When to use: any user-management workflow — user CRUD (create / modify / delet
 Param conventions: * = required. User IDs are integers. List actions accept page, per_page. Actions ending in _for_user take the same params as the base action plus user_id*. Plain ssh_keys / gpg_keys / emails (no suffix) operate on the current authenticated user with no params.
 
 Current user:
-- current / me: returns authenticated user info.
+- current: returns authenticated user info. The legacy alias me is accepted and normalized to current, but current is the canonical action to emit.
 - current_user_status: returns emoji, message, availability.
 - set_status: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
 
@@ -1971,8 +1971,9 @@ Environments:
 
 Protected environments:
 - protected_list: project_id*, page, per_page
-- protected_get / protected_unprotect: project_id*, name*
-- protected_protect / protected_update: project_id*, name*, deploy_access_levels, approval_rules
+- protected_get / protected_unprotect: project_id*, environment* (environment name; name is accepted as an alias)
+- protected_protect: project_id*, name*, deploy_access_levels, approval_rules
+- protected_update: project_id*, environment*, name, deploy_access_levels, approval_rules
 
 Freeze periods (cron expressions):
 - freeze_list: project_id*, page, per_page

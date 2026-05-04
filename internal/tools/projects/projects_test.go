@@ -957,6 +957,42 @@ func TestProjectStar_Success(t *testing.T) {
 	}
 }
 
+func TestProjectStar_EOFFallsBackToGet(t *testing.T) {
+	starCalled := false
+	getCalled := false
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/star":
+			starCalled = true
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("response writer does not support hijacking")
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Fatalf("hijack response: %v", err)
+			}
+			_ = conn.Close()
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42":
+			getCalled = true
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"myproject","path":"myproject","path_with_namespace":"user/myproject","visibility":"private","web_url":"https://gitlab.example.com/user/myproject","default_branch":"main","star_count":6}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := Star(context.Background(), client, StarInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("Star() unexpected error: %v", err)
+	}
+	if !starCalled || !getCalled {
+		t.Fatalf("starCalled=%t getCalled=%t, want both true", starCalled, getCalled)
+	}
+	if out.StarCount != 6 {
+		t.Errorf("StarCount = %d, want 6", out.StarCount)
+	}
+}
+
 // TestProjectStar_EmptyProjectID verifies the behavior of project star empty project i d.
 func TestProjectStar_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

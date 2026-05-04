@@ -333,7 +333,7 @@ Errors: 404 (hint: project_id, merge_request_iid, issue_iid, pipeline_id, milest
 All actions need project_id*. Additional params per action:
 - mr_changes: merge_request_iid*. Analyze MR code changes for quality, bugs, improvements.
 - issue_summary: issue_iid*. Summarize discussion with key decisions and action items.
-- release_notes: from_ref*, to_ref*. Generate categorized release notes between refs.
+- release_notes: from*, to*. Generate categorized release notes between refs. from_ref/to_ref aliases are accepted but from/to are canonical.
 - pipeline_failure: pipeline_id*. Root cause analysis with fix suggestions.
 - mr_review: merge_request_iid*. Summarize review feedback and unresolved threads.
 - milestone_report: milestone_iid*. Progress report with metrics.
