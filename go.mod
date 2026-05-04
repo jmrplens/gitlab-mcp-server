@@ -9,9 +9,9 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/google/jsonschema-go v0.4.3
 	github.com/joho/godotenv v1.5.1
-	github.com/modelcontextprotocol/go-sdk v1.5.0
-	github.com/shirou/gopsutil/v4 v4.26.3
-	gitlab.com/gitlab-org/api/client-go/v2 v2.21.0
+	github.com/modelcontextprotocol/go-sdk v1.6.0
+	github.com/shirou/gopsutil/v4 v4.26.4
+	gitlab.com/gitlab-org/api/client-go/v2 v2.24.0
 	golang.org/x/crypto v0.50.0
 	golang.org/x/time v0.15.0
 )
