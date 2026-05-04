@@ -9,6 +9,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -481,6 +482,68 @@ func normalizeParamAliases(params map[string]any, target reflect.Type) map[strin
 	return out
 }
 
+// NormalizeParamAliasesForSchema applies the same compatibility aliases used
+// by UnmarshalParams, driven by a JSON Schema properties map instead of a Go
+// struct type. It is used by evaluation code that validates simulated calls.
+func NormalizeParamAliasesForSchema(params, schema map[string]any) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := schemaPropertyNames(schema)
+	if len(fields) == 0 {
+		return params
+	}
+	normalized := normalizeParamAliasesWithFields(params, fields)
+	normalized = coerceSchemaParamTypes(normalized, schema)
+	normalized = coerceSingleStringArraysForSchema(normalized, schema)
+	return coerceStringListParamsForSchema(normalized, schema)
+}
+
+func normalizeParamAliasesWithFields(params map[string]any, fields map[string]struct{}) map[string]any {
+	out := params
+	cloned := false
+	clone := func() map[string]any {
+		if !cloned {
+			out = maps.Clone(params)
+			cloned = true
+		}
+		return out
+	}
+	accepts := func(name string) bool {
+		_, ok := fields[name]
+		return ok
+	}
+	for _, pair := range commonParamAliases {
+		value, hasAlias := out[pair.Alias]
+		_, hasCanonical := out[pair.Canonical]
+		if !hasAlias {
+			continue
+		}
+		if hasCanonical {
+			if accepts(pair.Canonical) && !accepts(pair.Alias) {
+				delete(clone(), pair.Alias)
+			}
+			continue
+		}
+		if !accepts(pair.Canonical) || accepts(pair.Alias) {
+			continue
+		}
+		updated := clone()
+		updated[pair.Canonical] = value
+		delete(updated, pair.Alias)
+	}
+	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
+		if _, hasPaused := out["paused"]; !hasPaused {
+			if active, ok := value.(bool); ok {
+				updated := clone()
+				updated["paused"] = !active
+				delete(updated, "active")
+			}
+		}
+	}
+	return out
+}
+
 func nonEmptyStringValue(value any) bool {
 	text, ok := value.(string)
 	return ok && strings.TrimSpace(text) != ""
@@ -510,6 +573,18 @@ func jsonFieldNames(target reflect.Type) map[string]struct{} {
 	}
 	fields := make(map[string]struct{})
 	collectJSONFieldNames(target, fields)
+	return fields
+}
+
+func schemaPropertyNames(schema map[string]any) map[string]struct{} {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) == 0 {
+		return nil
+	}
+	fields := make(map[string]struct{}, len(properties))
+	for name := range properties {
+		fields[name] = struct{}{}
+	}
 	return fields
 }
 
@@ -854,6 +929,99 @@ func isNumericKind(kind reflect.Kind) bool {
 	}
 }
 
+func coerceSchemaParamTypes(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		property := properties[name]
+		coerced, changed := coerceSchemaParamValue(name, value, property)
+		if !changed {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = coerced
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceSchemaParamValue(name string, value, property any) (any, bool) {
+	if schemaPropertyHasType(property, "integer") {
+		if text, ok := value.(string); ok {
+			if integer, err := integerFromString(text); err == nil {
+				return integer, true
+			}
+		}
+		return value, false
+	}
+	if schemaPropertyHasType(property, "number") {
+		if text, ok := value.(string); ok {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(text), 64); err == nil {
+				return f, true
+			}
+		}
+		return value, false
+	}
+	if schemaPropertyHasType(property, "string") && isStringIDParam(name) {
+		if text, ok := numericIDString(value); ok {
+			return text, true
+		}
+	}
+	if schemaPropertyHasType(property, "array") {
+		return coerceSchemaArrayValue(value, property)
+	}
+	return value, false
+}
+
+func coerceSchemaArrayValue(value, property any) (any, bool) {
+	prop, ok := property.(map[string]any)
+	if !ok {
+		return value, false
+	}
+	items, ok := prop["items"].(map[string]any)
+	if !ok {
+		return value, false
+	}
+	if !schemaPropertyHasType(items, "integer") && !schemaPropertyHasType(items, "number") {
+		return value, false
+	}
+	values, ok := sliceItems(value)
+	if !ok {
+		return value, false
+	}
+	changed := false
+	out := make([]any, len(values))
+	for i, item := range values {
+		coerced, itemChanged := coerceSchemaParamValue("", item, items)
+		out[i] = coerced
+		changed = changed || itemChanged
+	}
+	return out, changed
+}
+
+func schemaPropertyHasType(property any, expected string) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	switch kind := prop["type"].(type) {
+	case string:
+		return kind == expected
+	case []any:
+		return slices.Contains(kind, any(expected))
+	case []string:
+		return slices.Contains(kind, expected)
+	}
+	return false
+}
+
 func integerFromString(text string) (int64, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -895,6 +1063,77 @@ func stringListToCSV(value any) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func coerceSingleStringArraysForSchema(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		if !schemaPropertyIsStringArray(properties[name]) {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = []string{text}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceStringListParamsForSchema(params, schema map[string]any) map[string]any {
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if !hasProperties || len(properties) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		if !isCommaStringParam(name) || !schemaPropertyIsString(properties[name]) {
+			continue
+		}
+		if csv, ok := stringListToCSV(value); ok {
+			if out == nil {
+				out = maps.Clone(params)
+			}
+			out[name] = csv
+		}
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func schemaPropertyIsStringArray(property any) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	if prop["type"] != "array" {
+		return false
+	}
+	items, hasItems := prop["items"].(map[string]any)
+	if !hasItems {
+		return false
+	}
+	return items["type"] == "string"
+}
+
+func schemaPropertyIsString(property any) bool {
+	prop, isObject := property.(map[string]any)
+	if !isObject {
+		return false
+	}
+	return prop["type"] == "string"
 }
 
 func jsonFieldTypes(target reflect.Type) map[string]reflect.Type {
