@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -2120,6 +2121,47 @@ func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
 	}
 }
 
+func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{}}),
+		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newProjectGetSession(t)
+	task := evalTask{ID: "MT-002", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.RepairAttempted || !result.RepairSuccess || !result.FinalSuccess {
+		t.Fatalf("result = %+v, want successful repair after MCP error", result)
+	}
+	if !traceContainsToolResult(result.Trace, "MCP missing params.project_id") {
+		t.Fatalf("trace events = %+v, want real MCP error content", result.Trace.Events)
+	}
+}
+
+func TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("search", "gitlab_search", map[string]any{"action": "projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
+		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newProjectGetSession(t)
+	task := evalTask{ID: "MT-002", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": projectGetRoute()},
+		"gitlab_search":  {"projects": toolutil.ActionRoute{}},
+	}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.RepairAttempted || !result.RepairSuccess || !result.FinalSuccess {
+		t.Fatalf("result = %+v, want successful repair after read-only MCP prefetch", result)
+	}
+	if !traceContainsToolResult(result.Trace, "search ok") {
+		t.Fatalf("trace events = %+v, want real search result content", result.Trace.Events)
+	}
+}
+
 func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) {
 	runner := newScriptedRunner(t,
 		multiToolUseResponse(
@@ -2549,6 +2591,18 @@ func TestGoogleContentConversion_RoundTripsFunctionResponseNames(t *testing.T) {
 	}
 }
 
+func TestGoogleFunctionCallingMode_DefaultsToValidated(t *testing.T) {
+	t.Setenv("EVAL_GOOGLE_FUNCTION_MODE", "")
+	if got := googleFunctionCallingMode(); got != "VALIDATED" {
+		t.Fatalf("googleFunctionCallingMode() = %q, want VALIDATED", got)
+	}
+
+	t.Setenv("EVAL_GOOGLE_FUNCTION_MODE", "auto")
+	if got := googleFunctionCallingMode(); got != "AUTO" {
+		t.Fatalf("googleFunctionCallingMode() override = %q, want AUTO", got)
+	}
+}
+
 func TestSanitizeGoogleSchema_FlattensTypeUnion(t *testing.T) {
 	schema := map[string]any{
 		"type": []any{"string", "integer"},
@@ -2619,6 +2673,29 @@ func TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons(t *testing.T) {
 	}
 }
 
+func TestGoogleResponseDecode_PreservesNestedParams(t *testing.T) {
+	raw := []byte(`{"candidates":[{"content":{"parts":[{"functionCall":{"name":"gitlab_project","args":{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server"}},"id":"call-1"}}]}}]}`)
+	var decoded googleResponse
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode google response: %v", err)
+	}
+
+	blocks := googleToolUseBlocks(decoded.Candidates[0].Content)
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %+v, want one tool call", blocks)
+	}
+	params, ok := blocks[0].Input["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params = %#v, want object", blocks[0].Input["params"])
+	}
+	if params["project_id"] != "my-org/tools/gitlab-mcp-server" {
+		t.Fatalf("project_id = %#v", params["project_id"])
+	}
+	if string(blocks[0].ProviderRawInput) != `{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server"}}` {
+		t.Fatalf("raw input = %s", blocks[0].ProviderRawInput)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -2651,6 +2728,33 @@ func newScriptedRunner(t *testing.T, responses ...modelResponse) *modelRunner {
 	return &modelRunner{apiKey: "test-key", model: "test-model", maxTokens: 256, client: client}
 }
 
+func newProjectGetSession(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "eval-test", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_project", Description: "project meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
+		params, _ := input["params"].(map[string]any)
+		if params["project_id"] == nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "MCP missing params.project_id"}}}, nil, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "project ok"}}}, nil, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_search", Description: "search meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "search ok"}}}, nil, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "eval-test-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
 func toolUseResponse(id, name string, input map[string]any) modelResponse {
 	return modelResponse{Content: []modelContentBlock{{Type: "tool_use", ID: id, Name: name, Input: input}}}
 }
@@ -2662,6 +2766,15 @@ func multiToolUseResponse(blocks ...modelContentBlock) modelResponse {
 func traceHasKind(trace taskTrace, kind string) bool {
 	for _, event := range trace.Events {
 		if event.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func traceContainsToolResult(trace taskTrace, text string) bool {
+	for _, event := range trace.Events {
+		if event.Kind == "tool_result" && strings.Contains(event.Content, text) {
 			return true
 		}
 	}

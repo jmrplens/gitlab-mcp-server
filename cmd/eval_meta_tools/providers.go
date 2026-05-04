@@ -441,9 +441,37 @@ type googlePart struct {
 }
 
 type googleFunctionCall struct {
-	Name string         `json:"name"`
-	Args map[string]any `json:"args,omitempty"`
-	ID   string         `json:"id,omitempty"`
+	Name    string
+	Args    map[string]any
+	RawArgs json.RawMessage
+	ID      string
+}
+
+func (c *googleFunctionCall) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"args"`
+		ID   string          `json:"id,omitempty"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	c.Name = raw.Name
+	c.ID = raw.ID
+	c.RawArgs = append(c.RawArgs[:0], raw.Args...)
+	c.Args = map[string]any{}
+	if len(bytes.TrimSpace(raw.Args)) == 0 || bytes.Equal(bytes.TrimSpace(raw.Args), []byte("null")) {
+		return nil
+	}
+	return json.Unmarshal(raw.Args, &c.Args)
+}
+
+func (c googleFunctionCall) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name string         `json:"name"`
+		Args map[string]any `json:"args,omitempty"`
+		ID   string         `json:"id,omitempty"`
+	}{Name: c.Name, Args: c.Args, ID: c.ID})
 }
 
 type googleFunctionResponse struct {
@@ -495,7 +523,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 		Contents:          googleContents(request.Messages),
 		Tools:             []googleTool{{FunctionDeclarations: googleFunctionDeclarations(request.Tools)}},
 	}
-	payload.ToolConfig.FunctionCallingConfig.Mode = "ANY"
+	payload.ToolConfig.FunctionCallingConfig.Mode = googleFunctionCallingMode()
 	payload.GenerationConfig.Temperature = request.Temperature
 	payload.GenerationConfig.MaxOutputTokens = request.MaxTokens
 	body, err := json.Marshal(payload)
@@ -566,6 +594,16 @@ func googleFunctionDeclarations(tools []modelTool) []googleFunctionDeclaration {
 	return out
 }
 
+func googleFunctionCallingMode() string {
+	mode := strings.ToUpper(strings.TrimSpace(os.Getenv("EVAL_GOOGLE_FUNCTION_MODE")))
+	switch mode {
+	case "AUTO", "ANY", "VALIDATED", "NONE":
+		return mode
+	default:
+		return "VALIDATED"
+	}
+}
+
 func googleContents(messages []modelMessage) []googleContent {
 	out := make([]googleContent, 0, len(messages))
 	callNames := map[string]string{}
@@ -621,7 +659,7 @@ func googleToolUseBlocks(content googleContent) []modelContentBlock {
 		if id == "" {
 			id = fmt.Sprintf("google-call-%d", index+1)
 		}
-		blocks = append(blocks, modelContentBlock{Type: "tool_use", ID: id, Name: part.FunctionCall.Name, Input: part.FunctionCall.Args, ThoughtSignature: part.ThoughtSignature})
+		blocks = append(blocks, modelContentBlock{Type: "tool_use", ID: id, Name: part.FunctionCall.Name, Input: part.FunctionCall.Args, ProviderRawInput: part.FunctionCall.RawArgs, ThoughtSignature: part.ThoughtSignature})
 	}
 	return blocks
 }

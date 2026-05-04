@@ -173,15 +173,16 @@ type modelMessage struct {
 }
 
 type modelContentBlock struct {
-	Type             string         `json:"type"`
-	Text             string         `json:"text,omitempty"`
-	ID               string         `json:"id,omitempty"`
-	Name             string         `json:"name,omitempty"`
-	Input            map[string]any `json:"input,omitempty"`
-	ToolUseID        string         `json:"tool_use_id,omitempty"`
-	Content          string         `json:"content,omitempty"`
-	IsError          bool           `json:"is_error,omitempty"`
-	ThoughtSignature string         `json:"-"`
+	Type             string          `json:"type"`
+	Text             string          `json:"text,omitempty"`
+	ID               string          `json:"id,omitempty"`
+	Name             string          `json:"name,omitempty"`
+	Input            map[string]any  `json:"input,omitempty"`
+	ToolUseID        string          `json:"tool_use_id,omitempty"`
+	Content          string          `json:"content,omitempty"`
+	IsError          bool            `json:"is_error,omitempty"`
+	ProviderRawInput json.RawMessage `json:"-"`
+	ThoughtSignature string          `json:"-"`
 }
 
 type modelResponse struct {
@@ -264,6 +265,7 @@ type traceEvent struct {
 	Tool       string              `json:"tool,omitempty"`
 	Action     string              `json:"action,omitempty"`
 	Input      map[string]any      `json:"input,omitempty"`
+	RawInput   json.RawMessage     `json:"provider_raw_input,omitempty"`
 	Blocks     []modelContentBlock `json:"blocks,omitempty"`
 	Content    string              `json:"content,omitempty"`
 	IsError    bool                `json:"is_error,omitempty"`
@@ -2481,6 +2483,17 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			}
 			result.RepairAttempted = true
 			repairSent = true
+			if r.canExecuteInvalidToolCall(steps[stepIndex], validation, toolUse, routes) {
+				simulationAttempts[stepIndex]++
+				simulation := r.mcpToolResult(ctx, toolUse)
+				if simulation.Err != nil {
+					result.Notes = append(result.Notes, toolExecutionNote(stepIndex+1, steps[stepIndex], simulation.Err))
+				}
+				block := toolResultBlock(toolUse.ID, simulation.Content, simulation.Err)
+				followups = append(followups, block)
+				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+				continue
+			}
 			repairMessage := validationRepairMessage(steps[stepIndex], validation)
 			block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
 			followups = append(followups, block)
@@ -2494,6 +2507,17 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
+}
+
+func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation validationResult, toolUse modelContentBlock, routes map[string]toolutil.ActionMap) bool {
+	if r.mcpSession == nil || step.Simulation != "" {
+		return false
+	}
+	route, ok := routes[toolUse.Name][validation.Action]
+	if !ok || route.Destructive {
+		return false
+	}
+	return validation.DestructiveSafe
 }
 
 func taskToolCallLimit(stepCount int) int {
@@ -2638,6 +2662,7 @@ func traceToolUseEvent(turn int, toolUse modelContentBlock) traceEvent {
 		Tool:      toolUse.Name,
 		Action:    action,
 		Input:     toolUse.Input,
+		RawInput:  toolUse.ProviderRawInput,
 	}
 }
 
