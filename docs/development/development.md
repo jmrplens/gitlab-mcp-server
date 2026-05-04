@@ -247,7 +247,7 @@ make test-e2e-docker
 
 This single command handles the full lifecycle: start GitLab CE container, wait for readiness, create test user/token, register CI runner, run tests, and tear down.
 
-For manual step-by-step execution, see [E2E Docker Mode](testing.md#docker-mode) in the testing guide.
+For manual step-by-step execution, see [E2E Docker Mode](../testing/testing.md#docker-mode) in the testing guide.
 
 #### E2E Prerequisites
 

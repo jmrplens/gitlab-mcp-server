@@ -75,7 +75,7 @@ The following documents must be generated or updated:
 | Configuration Guide | Reference | `docs/configuration.md` | High |
 | Deployment Guide | How-to | `docs/deployment.md` | Medium |
 | Development Guide | How-to | `docs/development/development.md` | High |
-| Testing Guide | How-to | `docs/development/testing.md` | Medium |
+| Testing Guide | How-to | `docs/testing/testing.md` | Medium |
 | Contributing Guide | How-to | `docs/contributing.md` | Medium |
 
 ## Document Templates

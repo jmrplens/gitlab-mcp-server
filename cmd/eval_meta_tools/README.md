@@ -140,5 +140,6 @@ Docker live reports include a failure-triage section that separates MCP implemen
 
 ## Related Documentation
 
-- [MCP evaluation prompts](../../docs/evaluation/mcp-evaluation-prompts.md)
-- [Output quality evaluation](../../docs/evaluation/output-quality-evaluation.md)
+- [AI Model Evaluation](../../docs/testing/model-evaluation.md)
+- [AI Model Evaluation Developer Guide](../../docs/testing/model-evaluation-developer.md)
+- [AI Model Evaluation Results](../../docs/testing/model-results.md)
