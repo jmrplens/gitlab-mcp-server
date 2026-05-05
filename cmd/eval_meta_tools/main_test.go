@@ -1147,6 +1147,30 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 	}
 }
 
+func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-030",
+		Prompt:         "Create file `tmp/eval.txt` with content `evaluation file` and commit_message `Create evaluation file` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_repository",
+		ExpectedAction: "file_create",
+		RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"Exact required call: use the gitlab_repository tool once with input",
+		`"action":"file_create"`,
+		`"file_path":"tmp/eval.txt"`,
+		`"content":"evaluation file"`,
+		`"branch":"feature/eval"`,
+		`"commit_message":"Create evaluation file"`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want exact file_create guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-020",
@@ -1195,6 +1219,34 @@ func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("taskPrompt() = %q, want discover_project guidance containing %q", prompt, want)
+		}
+	}
+}
+
+func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-029",
+		Prompt: "Exercise feature flag and user-list lifecycle in project `my-org/tools/gitlab-mcp-server`: create feature flag user list `eval-feature-list` with user IDs `u1,u2`, fetch it, update the user IDs to `u2,u3`, create feature flag `eval-feature-flag-crud` using version `new_version_flag`, fetch the flag, update it inactive, delete the flag, then delete the user list.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "ff_user_list_create", RequiredParams: []string{"project_id", "name", "user_xids"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "ff_user_list_get", RequiredParams: []string{"project_id", "user_list_iid"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "ff_user_list_update", RequiredParams: []string{"project_id", "user_list_iid"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "feature_flag_create", RequiredParams: []string{"project_id", "name", "version"}, OptionalParams: []string{"strategies"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "feature_flag_get", RequiredParams: []string{"project_id", "name"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "feature_flag_update", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"strategies"}},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "feature_flag_delete", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			{ExpectedTool: "gitlab_feature_flags", ExpectedAction: "ff_user_list_delete", RequiredParams: []string{"project_id", "user_list_iid"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		`params.user_xids is a comma-separated string such as "u1,u2", not an array`,
+		"omit params.strategies unless the task gives an exact strategies JSON string",
+		`must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want feature flag lifecycle guidance containing %q", prompt, want)
 		}
 	}
 }

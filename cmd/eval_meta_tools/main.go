@@ -3472,6 +3472,9 @@ func taskPrompt(task evalTask) string {
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
 		retryGuidance += ` For merge request note CRUD, follow exactly this order: note_create, note_get, note_update, note_delete. After note_create, call note_get next using the returned note id even if next_steps mentions update or delete. After note_get, call note_update with params.body set to the updated note text and without params.confirm. Only note_delete is destructive; call note_delete last with params.confirm=true.`
 	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_feature_flags" && steps[0].ExpectedAction == "ff_user_list_create" {
+		retryGuidance += ` For feature flag user-list lifecycle, params.user_xids is a comma-separated string such as "u1,u2", not an array. For feature_flag_create and feature_flag_update, omit params.strategies unless the task gives an exact strategies JSON string; if you must send strategies, it must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object.`
+	}
 	for _, step := range steps {
 		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
 			retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
@@ -3536,6 +3539,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 		"gitlab_user/block",
 		"gitlab_merge_request/emoji_mr_delete",
 		"gitlab_repository/commit_discussion_delete_note",
+		"gitlab_repository/file_create",
 		"gitlab_project/archive":
 		return true
 	default:
@@ -3853,6 +3857,22 @@ func exampleParamValue(param, prompt string) any {
 			return value
 		}
 		if value, ok := backtickValueAfter(prompt, " ref "); ok {
+			return value
+		}
+	case "branch":
+		if value, ok := backtickValueAfter(prompt, "branch "); ok {
+			return value
+		}
+	case "file_path":
+		if value, ok := backtickValueAfter(prompt, "file "); ok {
+			return value
+		}
+	case "content":
+		if value, ok := backtickValueAfter(prompt, "content "); ok {
+			return value
+		}
+	case "commit_message":
+		if value, ok := backtickValueAfter(prompt, "commit_message "); ok {
 			return value
 		}
 	}
