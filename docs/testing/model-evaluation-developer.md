@@ -33,16 +33,20 @@ Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
 scripts. Never print or commit `.env`, `.env.docker`, provider keys, raw traces,
 or generated fixture state.
 
+The documented Qwen configuration uses `QWEN_API_KEY` directly. Keep provider
+fallbacks out of `.env.example` unless the evaluator command examples also need
+them.
+
 The commands below resolve `go` through an explicit `PATH` so they also work in
 non-interactive shells where `timeout` cannot find the Go binary.
 
 ## Model Set
 
-Use this model set for the standard compatibility matrix unless a focused run
-requires fewer models:
+Use this economy-oriented model set for the standard compatibility matrix unless
+a focused run requires different models:
 
 ```bash
-EVAL_MODELS="anthropic:claude-sonnet-4-6,anthropic:claude-haiku-4-5-20251001,google:gemini-3-flash-preview,openai:gpt-5.4-mini,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 ```
 
 ## Run Schema Evaluation
@@ -56,7 +60,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-sonnet-4-6,anthropic:claude-haiku-4-5-20251001,google:gemini-3-flash-preview,openai:gpt-5.4-mini,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 timeout 10800s "$GO_BIN" run ./cmd/eval_meta_tools \
   --preset schema-enterprise \
@@ -117,7 +121,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-sonnet-4-6,anthropic:claude-haiku-4-5-20251001,google:gemini-3-flash-preview,openai:gpt-5.4-mini,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 for preset in docker-read docker-mutating-safe docker-destructive-safe; do
   timeout 7200s "$GO_BIN" run ./cmd/eval_meta_tools \

@@ -133,6 +133,18 @@ func TestFilterTasksByDestructive_RejectsConflictingFlags(t *testing.T) {
 	}
 }
 
+func TestReplaceAllPromptBacktickValuesAfter_ReplacesRepeatedMarkers(t *testing.T) {
+	prompt := "List files for package ID `55`, then delete package ID `52`."
+	got, err := replaceAllPromptBacktickValuesAfter(prompt, "package ID ", 61)
+	if err != nil {
+		t.Fatalf("replaceAllPromptBacktickValuesAfter() error = %v", err)
+	}
+	want := "List files for package ID `61`, then delete package ID `61`."
+	if got != want {
+		t.Fatalf("prompt = %q, want %q", got, want)
+	}
+}
+
 func TestFilterTasksByMutation(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
@@ -952,6 +964,20 @@ func TestTaskPrompt_SearchCodeAvoidsProjectDiscovery(t *testing.T) {
 	prompt := taskPrompt(task)
 	if !strings.Contains(prompt, `"action":"search.code"`) || !strings.Contains(prompt, "never remote_url") {
 		t.Fatalf("taskPrompt() = %q, want search.code direct project_id guidance", prompt)
+	}
+}
+
+func TestTaskPrompt_ReleaseCreateMapsFromRef(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-036",
+		Prompt:         "Create release `v0.0.0-eval` for tag `v0.0.0-eval` from ref `main` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_release",
+		ExpectedAction: "create",
+	}
+	prompt := taskPrompt(task)
+
+	if !strings.Contains(prompt, `For release.create, "from ref X" maps to params.ref`) {
+		t.Fatalf("taskPrompt() = %q, want release ref guidance", prompt)
 	}
 }
 
@@ -2460,15 +2486,14 @@ func TestParseModelSpec_StripsGoogleModelsPrefix(t *testing.T) {
 	}
 }
 
-func TestAPIKeyForModelProvider_UsesDashScopeFallbackForQwen(t *testing.T) {
+func TestAPIKeyForModelProvider_RequiresQwenAPIKey(t *testing.T) {
 	t.Setenv("QWEN_API_KEY", "")
-	t.Setenv("DASHSCOPE_API_KEY", "dashscope-key")
-	key, err := apiKeyForModelProvider(providerQwen)
-	if err != nil {
-		t.Fatalf("apiKeyForModelProvider() error = %v", err)
+	_, err := apiKeyForModelProvider(providerQwen)
+	if err == nil {
+		t.Fatal("apiKeyForModelProvider() error = nil, want missing QWEN_API_KEY")
 	}
-	if key != "dashscope-key" {
-		t.Fatalf("key = %q, want fallback key", key)
+	if !strings.Contains(err.Error(), "QWEN_API_KEY") {
+		t.Fatalf("error = %v, want QWEN_API_KEY", err)
 	}
 }
 

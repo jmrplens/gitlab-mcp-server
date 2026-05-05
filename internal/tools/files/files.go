@@ -142,8 +142,10 @@ type CreateInput struct {
 // FileInfoOutput represents the result of a file create or update operation.
 type FileInfoOutput struct {
 	toolutil.HintableOutput
-	FilePath string `json:"file_path"`
-	Branch   string `json:"branch"`
+	FilePath     string `json:"file_path"`
+	Branch       string `json:"branch"`
+	CommitID     string `json:"commit_id,omitempty"`
+	LastCommitID string `json:"last_commit_id,omitempty"`
 }
 
 // Create creates a new file in a GitLab repository.
@@ -187,7 +189,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return FileInfoOutput{}, toolutil.WrapErrWithMessage("fileCreate", err)
 	}
-	return FileInfoOutput{FilePath: info.FilePath, Branch: info.Branch}, nil
+	return enrichFileInfoOutput(ctx, client, string(input.ProjectID), info.FilePath, info.Branch), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +259,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 			return FileInfoOutput{}, toolutil.WrapErrWithMessage("fileUpdate", err)
 		}
 	}
-	return FileInfoOutput{FilePath: info.FilePath, Branch: info.Branch}, nil
+	return enrichFileInfoOutput(ctx, client, string(input.ProjectID), info.FilePath, info.Branch), nil
+}
+
+func enrichFileInfoOutput(ctx context.Context, client *gitlabclient.Client, projectID, filePath, branch string) FileInfoOutput {
+	output := FileInfoOutput{FilePath: filePath, Branch: branch}
+	if client == nil || projectID == "" || filePath == "" || branch == "" {
+		return output
+	}
+	metadata, _, err := client.GL().RepositoryFiles.GetFileMetaData(projectID, filePath, &gl.GetFileMetaDataOptions{Ref: new(branch)}, gl.WithContext(ctx))
+	if err != nil {
+		return output
+	}
+	output.CommitID = metadata.CommitID
+	output.LastCommitID = metadata.LastCommitID
+	return output
 }
 
 // ---------------------------------------------------------------------------

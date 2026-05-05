@@ -122,7 +122,7 @@ func apiKeyForModelProvider(provider string) (string, error) {
 		providerAnthropic: {"ANTHROPIC_API_KEY"},
 		providerGoogle:    {"GOOGLE_API_KEY"},
 		providerOpenAI:    {"OPENAI_API_KEY"},
-		providerQwen:      {"QWEN_API_KEY", "DASHSCOPE_API_KEY"},
+		providerQwen:      {"QWEN_API_KEY"},
 	}[provider]
 	if len(keyNames) == 0 {
 		return "", fmt.Errorf("unsupported model provider %q", provider)

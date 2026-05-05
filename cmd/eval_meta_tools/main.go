@@ -501,6 +501,11 @@ func run() error {
 			mcpSession: mcpSession,
 		}
 		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
+			if opts.Execute && opts.UseFixtures {
+				if err := ensureLiveProjectActive(ctx, executionClient); err != nil {
+					return err
+				}
+			}
 			for _, task := range tasks {
 				taskForAttempt := task
 				if opts.Execute && opts.UseFixtures {
@@ -1560,6 +1565,8 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return ensureLiveIssueDeleteTarget(ctx, client, task)
 	case "MT-027":
 		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
+	case "MT-028":
+		return task, ensureLiveProjectVariableDeleteTarget(ctx, client, task.Prompt)
 	case "MT-015":
 		return task, ensureLiveMergeRequestSource(ctx, session, task.Prompt)
 	case "MT-031":
@@ -1570,6 +1577,12 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	case "MT-044":
 		return ensureLivePackageDeleteTarget(ctx, client, task)
+	case "MS-004":
+		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
+	case "MS-007":
+		return ensureLivePackageDeleteTarget(ctx, client, task)
+	case "MS-013":
+		return task, ensureLiveFeatureFlagDeleteTarget(ctx, client, task.Prompt)
 	case "MT-047":
 		return ensureLiveRunnerRemoveTarget(ctx, client, task)
 	case "MT-051":
@@ -1602,6 +1615,8 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 		return ensureLiveDeployTokenDeleteTarget(ctx, client, task)
 	case "MT-113":
 		return ensureLiveCommitDiscussionNoteDeleteTarget(ctx, client, task)
+	case "MS-034":
+		return task, ensureLiveProjectMemberAbsent(ctx, client, task.Prompt)
 	case "MT-068":
 		return task, cleanupLiveInstanceVariables(ctx, client, "INSTANCE_EVAL_TOKEN")
 	case "MT-064":
@@ -1609,6 +1624,25 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 	default:
 		return task, nil
 	}
+}
+
+func ensureLiveProjectActive(ctx context.Context, client *gitlabclient.Client) error {
+	if client == nil {
+		return nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	project, _, err := client.GL().Projects.GetProject(liveFixtureProjectPath, nil, gl.WithContext(setupCtx))
+	if err != nil {
+		return fmt.Errorf("get project %s: %w", liveFixtureProjectPath, err)
+	}
+	if !project.Archived {
+		return nil
+	}
+	if _, _, err := client.GL().Projects.UnarchiveProject(project.ID, gl.WithContext(setupCtx)); err != nil {
+		return fmt.Errorf("unarchive project %s: %w", liveFixtureProjectPath, err)
+	}
+	return nil
 }
 
 func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
@@ -1637,21 +1671,26 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 }
 
 func ensureLiveProjectVariableUpdateTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	return ensureLiveProjectVariableTarget(ctx, client, prompt, "MT-027", "masked-value-123")
+}
+
+func ensureLiveProjectVariableDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	return ensureLiveProjectVariableTarget(ctx, client, prompt, "MT-028", "masked-value-456")
+}
+
+func ensureLiveProjectVariableTarget(ctx context.Context, client *gitlabclient.Client, prompt, taskID, value string) error {
 	if client == nil {
 		return nil
 	}
 	projectID, ok := exampleProjectIDValue(prompt)
 	if !ok {
-		return fmt.Errorf("prepare MT-027 fixture: project path not found in prompt %q", prompt)
+		return fmt.Errorf("prepare %s fixture: project path not found in prompt %q", taskID, prompt)
 	}
 	key, ok := backtickValueAfter(prompt, "CI variable ")
 	if !ok {
-		return fmt.Errorf("prepare MT-027 fixture: variable key not found in prompt %q", prompt)
+		return fmt.Errorf("prepare %s fixture: variable key not found in prompt %q", taskID, prompt)
 	}
-	environmentScope, ok := backtickValueAfter(prompt, "environment_scope ")
-	if !ok {
-		environmentScope = "*"
-	}
+	environmentScope := projectVariableEnvironmentScope(prompt)
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	for _, scope := range []string{"*", environmentScope} {
@@ -1659,18 +1698,28 @@ func ensureLiveProjectVariableUpdateTarget(ctx context.Context, client *gitlabcl
 			Filter: &gl.VariableFilter{EnvironmentScope: scope},
 		}, gl.WithContext(setupCtx))
 		if err != nil && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return fmt.Errorf("prepare MT-027 fixture variable cleanup %s/%s: %w", key, scope, err)
+			return fmt.Errorf("prepare %s fixture variable cleanup %s/%s: %w", taskID, key, scope, err)
 		}
 	}
 	_, _, err := client.GL().ProjectVariables.CreateVariable(projectID, &gl.CreateProjectVariableOptions{
 		Key:              &key,
-		Value:            new("masked-value-123"),
+		Value:            &value,
 		EnvironmentScope: &environmentScope,
 	}, gl.WithContext(setupCtx))
 	if err != nil {
-		return fmt.Errorf("prepare MT-027 fixture variable %s: %w", key, err)
+		return fmt.Errorf("prepare %s fixture variable %s: %w", taskID, key, err)
 	}
 	return nil
+}
+
+func projectVariableEnvironmentScope(prompt string) string {
+	if environmentScope, ok := backtickValueAfter(prompt, "environment_scope "); ok {
+		return environmentScope
+	}
+	if strings.Contains(strings.ToLower(prompt), "production scope") {
+		return "production"
+	}
+	return "*"
 }
 
 func ensureLiveRepositoryFileDeleteTarget(ctx context.Context, client *gitlabclient.Client, prompt string) error {
@@ -1807,12 +1856,37 @@ func ensureLivePackageDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	if len(packages) == 0 {
 		return task, errors.New("prepare MT-044 fixture package was not listed after publish")
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "package ID ", packages[0].ID)
+	prompt, err := replaceAllPromptBacktickValuesAfter(task.Prompt, "package ID ", packages[0].ID)
 	if err != nil {
 		return task, err
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func ensureLiveProjectMemberAbsent(ctx context.Context, client *gitlabclient.Client, prompt string) error {
+	if client == nil {
+		return nil
+	}
+	projectID, ok := exampleProjectIDValue(prompt)
+	if !ok {
+		return fmt.Errorf("prepare MS-034 fixture: project path not found in prompt %q", prompt)
+	}
+	userIDValue, ok := backtickValueAfter(prompt, "user ID ")
+	if !ok {
+		return fmt.Errorf("prepare MS-034 fixture: user ID not found in prompt %q", prompt)
+	}
+	userID, err := strconv.ParseInt(userIDValue, 10, 64)
+	if err != nil {
+		return fmt.Errorf("prepare MS-034 fixture user ID %q: %w", userIDValue, err)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	_, err = client.GL().ProjectMembers.DeleteProjectMember(projectID, userID, gl.WithContext(setupCtx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("prepare MS-034 fixture member cleanup: %w", err)
+	}
+	return nil
 }
 
 func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
@@ -2432,6 +2506,28 @@ func replacePromptBacktickValueAfter(prompt, marker string, value any) (string, 
 	oldText := marker + "`" + oldValue + "`"
 	newText := fmt.Sprintf("%s`%v`", marker, value)
 	return strings.Replace(prompt, oldText, newText, 1), nil
+}
+
+func replaceAllPromptBacktickValuesAfter(prompt, marker string, value any) (string, error) {
+	if _, ok := backtickValueAfter(prompt, marker); !ok {
+		return prompt, fmt.Errorf("backtick value after %q not found in prompt %q", marker, prompt)
+	}
+	var out strings.Builder
+	for {
+		idx := strings.Index(prompt, marker+"`")
+		if idx < 0 {
+			out.WriteString(prompt)
+			return out.String(), nil
+		}
+		out.WriteString(prompt[:idx])
+		out.WriteString(fmt.Sprintf("%s`%v`", marker, value))
+		remaining := prompt[idx+len(marker)+1:]
+		end := strings.Index(remaining, "`")
+		if end < 0 {
+			return "", fmt.Errorf("unterminated backtick value after %q in prompt %q", marker, prompt)
+		}
+		prompt = remaining[end+1:]
+	}
 }
 
 func ensureLiveMergeRequestSource(ctx context.Context, session *mcp.ClientSession, prompt string) error {
@@ -3320,6 +3416,9 @@ func taskPrompt(task evalTask) string {
 	}
 	if strings.Contains(task.Prompt, "discussion_id") && strings.Contains(task.Prompt, "merge_request_iid") {
 		retryGuidance += ` For discussion_resolve, emit the gitlab tool call with quoted JSON strings: {"action":"mr_review.discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "release") && strings.Contains(strings.ToLower(task.Prompt), "from ref") {
+		retryGuidance += ` For release.create, "from ref X" maps to params.ref; include params.ref when creating a release from a ref.`
 	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && steps[0].ExpectedAction == "admin.settings_get" {

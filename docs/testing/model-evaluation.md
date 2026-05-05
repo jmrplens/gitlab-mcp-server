@@ -122,10 +122,10 @@ call IDs across repair turns, and accept MCP-shaped JSON Schema.
 | --- | --- | --- |
 | Anthropic | `anthropic:claude-sonnet-4-6` | Supported. |
 | Anthropic | `anthropic:claude-haiku-4-5-20251001` | Supported. |
-| Google | `google:gemini-3-flash-preview` | Supported with validated function-calling mode. |
+| Google | `google:gemini-3.1-flash-lite-preview` | Supported with validated function-calling mode. |
 | OpenAI | `openai:gpt-5.4-mini` | Supported. |
 | OpenAI | `openai:gpt-5.4-nano` | Supported. |
-| Qwen | `qwen:qwen3.6-flash` | Supported through the OpenAI-compatible adapter. |
+| Qwen | `qwen:qwen3.6-flash` | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`. |
 
 Published percentages belong in [AI Model Evaluation Results](model-results.md),
 not in this conceptual guide.

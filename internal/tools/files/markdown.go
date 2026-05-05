@@ -42,6 +42,12 @@ func FormatFileInfoMarkdown(out FileInfoOutput) string {
 	b.WriteString("## File Operation Result\n\n")
 	fmt.Fprintf(&b, "- **File**: %s\n", out.FilePath)
 	fmt.Fprintf(&b, "- **Branch**: %s\n", out.Branch)
+	if out.CommitID != "" {
+		fmt.Fprintf(&b, "- **Commit ID**: %s\n", out.CommitID)
+	}
+	if out.LastCommitID != "" {
+		fmt.Fprintf(&b, "- **Last commit ID**: %s\n", out.LastCommitID)
+	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_file_get` to verify the file content",
 		"Use `gitlab_commit_list` to see the commit history",

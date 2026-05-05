@@ -17214,7 +17214,7 @@
     },
     {
         "name": "gitlab_file_create",
-        "description": "Create a new file in a GitLab repository. Requires branch and commit message. Optionally specify encoding (text/base64), start_branch, and author info. Returns: file_path and branch. See also: gitlab_commit_create, gitlab_file_get.",
+        "description": "Create a new file in a GitLab repository. Requires branch and commit message. Optionally specify encoding (text/base64), start_branch, and author info. Returns: file_path, branch, and current commit metadata when available. See also: gitlab_commit_create, gitlab_file_get.",
         "inputSchema": {
             "additionalProperties": false,
             "properties": {
@@ -17274,7 +17274,13 @@
                 "branch": {
                     "type": "string"
                 },
+                "commit_id": {
+                    "type": "string"
+                },
                 "file_path": {
+                    "type": "string"
+                },
+                "last_commit_id": {
                     "type": "string"
                 },
                 "next_steps": {
@@ -17668,7 +17674,7 @@
     },
     {
         "name": "gitlab_file_update",
-        "description": "Update an existing file in a GitLab repository. Requires branch and commit message. Supports last_commit_id for optimistic locking. Returns: file_path and branch. See also: gitlab_file_get.",
+        "description": "Update an existing file in a GitLab repository. Requires branch and commit message. Supports last_commit_id for optimistic locking. Returns: file_path, branch, and current commit metadata when available. See also: gitlab_file_get.",
         "inputSchema": {
             "additionalProperties": false,
             "properties": {
@@ -17732,7 +17738,13 @@
                 "branch": {
                     "type": "string"
                 },
+                "commit_id": {
+                    "type": "string"
+                },
                 "file_path": {
+                    "type": "string"
+                },
+                "last_commit_id": {
                     "type": "string"
                 },
                 "next_steps": {
@@ -35546,7 +35558,7 @@
                     "type": "integer"
                 },
                 "milestone_id": {
-                    "description": "Milestone ID to associate,required",
+                    "description": "Milestone ID to associate",
                     "type": "integer"
                 },
                 "project_id": {
@@ -40630,7 +40642,7 @@
                     "type": "string"
                 },
                 "milestone_id": {
-                    "description": "New milestone ID (0 to unset),required",
+                    "description": "New milestone ID (0 to unset)",
                     "type": "integer"
                 },
                 "project_id": {

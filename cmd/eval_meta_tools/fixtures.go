@@ -1040,7 +1040,7 @@ func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int
 	if suffix == "" {
 		return task
 	}
-	if task.ID == "MT-030" {
+	if task.ID == "MT-030" || task.ID == "MS-017" {
 		task.Prompt = suffixEvaluationFileCreatePath(task.Prompt, suffix)
 		return task
 	}
@@ -1081,7 +1081,8 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
-	case "MT-007", "MT-015", "MT-026", "MT-030", "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068":
+	case "MT-007", "MT-015", "MT-026", "MT-030", "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
+		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", "MS-033", "MS-035", "MS-036":
 		return true
 	default:
 		return false

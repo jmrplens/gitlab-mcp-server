@@ -1409,6 +1409,36 @@ func TestIssueIDRequired_Validation(t *testing.T) {
 	}
 }
 
+func TestIssueInputSchemas_DoNotRequireOptionalMilestone(t *testing.T) {
+	for name, schema := range map[string]map[string]any{
+		"create": toolutil.SchemaForRoute[CreateInput](),
+		"update": toolutil.SchemaForRoute[UpdateInput](),
+	} {
+		for _, field := range schemaRequiredFields(schema) {
+			if field == "milestone_id" {
+				t.Fatalf("%s schema required fields = %v, want milestone_id optional", name, schema["required"])
+			}
+		}
+	}
+}
+
+func schemaRequiredFields(schema map[string]any) []string {
+	switch required := schema["required"].(type) {
+	case []any:
+		fields := make([]string, 0, len(required))
+		for _, field := range required {
+			if fieldName, ok := field.(string); ok {
+				fields = append(fields, fieldName)
+			}
+		}
+		return fields
+	case []string:
+		return required
+	default:
+		return nil
+	}
+}
+
 // TestToProjectIDRequired_Validation ensures Move rejects zero/negative to_project_id.
 func TestToProjectIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

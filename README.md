@@ -29,7 +29,8 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 ## Highlights
 
 - **1006 MCP tools** — broad GitLab REST API v4 + GraphQL coverage across 162 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, templates, admin settings, access tokens, deploy keys, and more
-- **32 meta-tools** (47 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **33 meta-tools** (48 with the Enterprise/Premium catalog) — domain-grouped dispatchers that reduce token overhead for LLMs (optional, enabled by default). 15 additional enterprise meta-tools available for Premium/Ultimate features
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. The latest curated Docker economy matrix covers 472 live task attempts with a 94.3% aggregate final-success proxy; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
@@ -371,6 +372,29 @@ Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Wind
 
 See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/) for detailed client support.
 
+## AI Model Tool-Use Evaluation
+
+The project includes an automated evaluator for model-facing MCP quality. It can
+run schema-only checks against the tool catalog or execute validated model tool
+calls through MCP against a Docker GitLab CE instance populated with fixtures.
+The evaluator measures whether each model chooses the correct meta-tool and
+action, sends valid parameters, recovers from actionable GitLab errors, and
+respects destructive-action safeguards.
+
+Current economy model set used by the evaluation harness:
+
+| Provider | Model | Tool-call compatibility | Curated Docker final success |
+| --- | --- | --- | ---: |
+| Anthropic | `anthropic:claude-haiku-4-5-20251001` | OK | 97.5% |
+| Google | `google:gemini-3.1-flash-lite-preview` | OK | 88.1% |
+| OpenAI | `openai:gpt-5.4-nano` | OK | 94.1% |
+| Qwen | `qwen:qwen3.6-flash` | OK | 97.5% |
+
+The published economy matrix covers 472 Docker-backed attempts across read,
+safe-mutating, and safe-destructive presets after traces were inspected and
+known harness noise was removed. See [AI Model Evaluation Results](docs/testing/model-results.md)
+for the detailed matrix and run history.
+
 ## Documentation
 
 Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**.
@@ -384,6 +408,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
 | [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
+| [Testing](docs/testing/README.md) | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
 | [Security](docs/security.md) | Security model, token scopes, input validation |
 | [Architecture](docs/architecture.md) | System architecture, component design, data flow |
 | [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing |

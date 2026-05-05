@@ -1,8 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
@@ -46,6 +52,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[5].Prompt, "runner ID `20`")
 	assertContains(t, got[5].Prompt, "job `18`")
 	assertContains(t, got[6].Prompt, "`tmp/eval-crud-16.txt`")
+	assertContains(t, got[6].Prompt, "branch `feature/eval`")
 	assertContains(t, got[7].Prompt, "`EVAL_CRUD_TOKEN_16`")
 	assertContains(t, got[8].Prompt, "discussion_id `thread-123`")
 	assertContains(t, got[8].Prompt, "merge request IID `14`")
@@ -68,6 +75,94 @@ func TestFixtureRemoteURL(t *testing.T) {
 	want := "http://localhost:8929/my-org/tools/gitlab-mcp-server.git"
 	if got != want {
 		t.Fatalf("fixtureRemoteURL() = %q, want %q", got, want)
+	}
+}
+
+func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) {
+	calls := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":                  101,
+				"path_with_namespace": liveFixtureProjectPath,
+				"archived":            true,
+			})
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/101/unarchive":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":                  101,
+				"path_with_namespace": liveFixtureProjectPath,
+				"archived":            false,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       server.URL,
+		GitLabToken:     "eval-token",
+		MetaTools:       true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if err := ensureLiveProjectActive(t.Context(), client); err != nil {
+		t.Fatalf("ensureLiveProjectActive() error = %v", err)
+	}
+
+	if got := strings.Join(calls, ","); got != "GET /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server,POST /api/v4/projects/101/unarchive" {
+		t.Fatalf("calls = %q", got)
+	}
+}
+
+func TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable(t *testing.T) {
+	calls := make([]string, 0, 3)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodDelete && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Variable Not Found"}`))
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables":
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if request["key"] != "EVAL_TOKEN" || request["environment_scope"] != "production" {
+				t.Fatalf("request = %+v, want EVAL_TOKEN production", request)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"key":               "EVAL_TOKEN",
+				"environment_scope": "production",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       server.URL,
+		GitLabToken:     "eval-token",
+		MetaTools:       true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	err = ensureLiveProjectVariableDeleteTarget(t.Context(), client, "Delete CI variable `EVAL_TOKEN` from production scope in project `my-org/tools/gitlab-mcp-server`.")
+	if err != nil {
+		t.Fatalf("ensureLiveProjectVariableDeleteTarget() error = %v", err)
+	}
+
+	if got := strings.Join(calls, ","); got != "DELETE /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN,DELETE /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN,POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables" {
+		t.Fatalf("calls = %q", got)
 	}
 }
 
@@ -106,6 +201,19 @@ func TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys(t *testin
 	got := addLiveAttemptResourceSuffix(task, "qwen:qwen3.6-flash", 3, "abc123")
 
 	assertContains(t, got.Prompt, "`EVAL_TOKEN_qwen36flash_r3_abc123`")
+}
+
+func TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-018",
+		Prompt: "Create release `v0.0.0-crud-248` named `Evaluation CRUD release 248`, add asset link `eval-crud-link-248`, then delete the release and tag.",
+	}
+
+	got := addLiveAttemptResourceSuffix(task, "google:gemini-3.1-flash-lite-preview", 2, "abc123")
+
+	assertContains(t, got.Prompt, "`v0.0.0-crud-248-gemini31flas-r2-abc123`")
+	assertContains(t, got.Prompt, "`Evaluation CRUD release 248 gemini31flas-r2-abc123`")
+	assertContains(t, got.Prompt, "`eval-crud-link-248-gemini31flas-r2-abc123`")
 }
 
 func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch(t *testing.T) {
