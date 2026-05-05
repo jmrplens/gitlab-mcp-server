@@ -23,6 +23,9 @@ const (
 	openAIChatAPI = "https://api.openai.com/v1/chat/completions"
 	qwenChatAPI   = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
 	geminiAPIBase = "https://generativelanguage.googleapis.com/v1beta/models/"
+
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
 )
 
 // modelSpec holds data for main operations.
@@ -191,7 +194,7 @@ func (anthropicProvider) callOnce(ctx context.Context, client *http.Client, apiK
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new anthropic request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", anthropicVersion)
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
@@ -305,7 +308,7 @@ func (p openAIProvider) callOnce(ctx context.Context, client *http.Client, apiKe
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new %s request: %w", p.name, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	respBody, retry, err := doModelRequest(client, req, p.name)
@@ -586,7 +589,7 @@ func (googleProvider) callOnce(ctx context.Context, client *http.Client, apiKey 
 	if err != nil {
 		return modelResponse{}, false, fmt.Errorf("new google request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, contentTypeJSON)
 
 	respBody, retry, err := doModelRequest(client, req, "google")
 	if err != nil {

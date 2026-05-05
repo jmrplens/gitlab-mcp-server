@@ -177,6 +177,124 @@ func TestUnmarshalParams_NormalizesCommonAliases(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamAliasesForSchema_NormalizesAndCoerces verifies schema-led
+// normalization covers common aliases, active/paused inversion, numeric
+// coercion, numeric string IDs, string arrays, and comma-separated label
+// fields without needing a Go struct type.
+func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"query":             map[string]any{"type": "string"},
+			"merge_request_iid": map[string]any{"type": "integer"},
+			"project_id":        map[string]any{"type": "string"},
+			"link_url":          map[string]any{"type": "string"},
+			"labels":            map[string]any{"type": "string"},
+			"source_branch":     map[string]any{"type": "string"},
+			"target_branch":     map[string]any{"type": "string"},
+			"environment_scope": map[string]any{"type": "string"},
+			"auto_merge":        map[string]any{"type": "boolean"},
+			"paused":            map[string]any{"type": "boolean"},
+			"assignee_ids":      map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
+			"variables":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"weight":            map[string]any{"type": "number"},
+		},
+	}
+	params := map[string]any{
+		"search":                       "bug",
+		"mr_iid":                       "17",
+		"project_path":                 float64(42),
+		"link":                         "https://example.test",
+		"labels":                       []any{"bug", "urgent"},
+		"from":                         "feature",
+		"to":                           "main",
+		"environment":                  "production",
+		"merge_when_pipeline_succeeds": true,
+		"active":                       false,
+		"assignee_ids":                 []any{"10", "11"},
+		"variables":                    "DEPLOY_ENV=prod",
+		"weight":                       "3.5",
+	}
+
+	got := NormalizeParamAliasesForSchema(params, schema)
+	if got["query"] != "bug" || got["merge_request_iid"] != int64(17) || got["project_id"] != "42" {
+		t.Fatalf("basic normalized values = %#v", got)
+	}
+	if got["link_url"] != "https://example.test" || got["labels"] != "bug,urgent" {
+		t.Fatalf("link/labels values = %#v", got)
+	}
+	if got["source_branch"] != "feature" || got["target_branch"] != "main" {
+		t.Fatalf("branch values = %#v", got)
+	}
+	if got["environment_scope"] != "production" || got["auto_merge"] != true || got["paused"] != true {
+		t.Fatalf("environment/auto_merge/paused values = %#v", got)
+	}
+	if !reflect.DeepEqual(got["assignee_ids"], []any{int64(10), int64(11)}) {
+		t.Fatalf("assignee_ids = %#v", got["assignee_ids"])
+	}
+	if !reflect.DeepEqual(got["variables"], []string{"DEPLOY_ENV=prod"}) {
+		t.Fatalf("variables = %#v", got["variables"])
+	}
+	if got["weight"] != 3.5 {
+		t.Fatalf("weight = %#v", got["weight"])
+	}
+	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active"} {
+		if _, exists := got[alias]; exists {
+			t.Fatalf("alias %q still present in %#v", alias, got)
+		}
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_CanonicalWins verifies aliases are
+// dropped when the canonical parameter is already present and the schema does
+// not accept the alias.
+func TestNormalizeParamAliasesForSchema_CanonicalWins(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{"query": map[string]any{"type": "string"}}}
+	params := map[string]any{"query": "canonical", "search": "alias"}
+
+	got := NormalizeParamAliasesForSchema(params, schema)
+	if got["query"] != "canonical" {
+		t.Fatalf("query = %#v, want canonical", got["query"])
+	}
+	if _, exists := got["search"]; exists {
+		t.Fatalf("search alias still present: %#v", got)
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties verifies
+// params are returned unchanged when no schema properties are available.
+func TestNormalizeParamAliasesForSchema_IgnoresSchemasWithoutProperties(t *testing.T) {
+	params := map[string]any{"search": "bug"}
+	got := NormalizeParamAliasesForSchema(params, map[string]any{"type": "object"})
+	if !reflect.DeepEqual(got, params) {
+		t.Fatalf("got %#v, want unchanged %#v", got, params)
+	}
+}
+
+// TestRequiredMissingAndUnknownParamNames verifies required parameter sorting,
+// missing required detection, and unknown parameter detection from JSON Schema
+// properties.
+func TestRequiredMissingAndUnknownParamNames(t *testing.T) {
+	schema := map[string]any{
+		"required": []any{"project_id", "name", ""},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"name":       map[string]any{"type": "string"},
+		},
+	}
+	if got := requiredParamNames(schema); !reflect.DeepEqual(got, []string{"name", "project_id"}) {
+		t.Fatalf("requiredParamNames() = %#v", got)
+	}
+	if got := missingRequiredParamNames(schema, map[string]any{"project_id": "group/project"}); !reflect.DeepEqual(got, []string{"name"}) {
+		t.Fatalf("missingRequiredParamNames() = %#v", got)
+	}
+	if !hasUnknownParamNames(schema, map[string]any{"unknown": true}) {
+		t.Fatal("hasUnknownParamNames() = false, want true")
+	}
+	if hasUnknownParamNames(schema, map[string]any{"name": "value"}) {
+		t.Fatal("known params reported as unknown")
+	}
+}
+
 // TestUnmarshalParams_RejectsUnknownField verifies that params containing a
 // key that is not declared on the target type produce an actionable error
 // (mirroring the JSON Schema additionalProperties:false lockdown applied to

@@ -60,6 +60,31 @@ const (
 	presetDockerRead            = "docker-read"
 	presetDockerMutatingSafe    = "docker-mutating-safe"
 	presetDockerDestructiveSafe = "docker-destructive-safe"
+
+	partitionBaseRead                 = "base-read"
+	partitionBaseMutating             = "base-mutating"
+	partitionBaseDestructive          = "base-destructive"
+	partitionEnterpriseRead           = "enterprise-read"
+	partitionEnterpriseMutating       = "enterprise-mutating"
+	partitionEnterpriseDestructive    = "enterprise-destructive"
+	partitionErrorRecovery            = "error-recovery"
+	partitionCapabilityFallback       = "capability-fallback"
+	flagSkipDestructive               = "skip-destructive"
+	flagSkipUnavailable               = "skip-unavailable"
+	promptMarkerIssue                 = "issue "
+	promptMarkerBranch                = "branch "
+	promptMarkerProject               = "project "
+	promptMarkerAwardEmojiID          = "award emoji ID "
+	promptMarkerFrom                  = " from "
+	promptPhraseFailedJobs            = "failed jobs"
+	metricToolSelection               = "Tool-selection accuracy"
+	metricActionSelection             = "Action-selection accuracy"
+	metricFirstCallValidationPassRate = "First-call validation pass rate"
+	metricRepairSuccessRate           = "Repair success rate"
+	metricDestructiveSafety           = "Destructive safety"
+	metricFinalTaskSuccess            = "Final task success proxy"
+	metricEstimatedTokens             = "Estimated tokens"
+	metricValueTableHeader            = "| Metric | Value |\n| --- | ---: |\n"
 )
 
 // options holds data for main operations.
@@ -624,11 +649,11 @@ func parseFlags() options {
 	flag.BoolVar(&opts.PrepareFixtures, "prepare-fixtures", false, "Create or refresh Docker GitLab resources referenced by the evaluation fixture")
 	flag.BoolVar(&opts.FixturesOnly, "fixtures-only", false, "Exit after --prepare-fixtures writes fixture state")
 	flag.BoolVar(&opts.UseFixtures, "use-fixtures", false, "Replace fixture placeholder IDs in task prompts with IDs from --fixtures")
-	flag.BoolVar(&opts.SkipDestructive, "skip-destructive", false, "Skip tasks with destructive calls or destructive workflow steps")
+	flag.BoolVar(&opts.SkipDestructive, flagSkipDestructive, false, "Skip tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.OnlyDestructive, "only-destructive", false, "Run only tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.SkipMutating, "skip-mutating", false, "Skip tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.OnlyMutating, "only-mutating", false, "Run only tasks whose expected calls mutate GitLab state")
-	flag.BoolVar(&opts.SkipUnavailable, "skip-unavailable", false, "Skip tasks whose expected routes are not registered in the current catalog")
+	flag.BoolVar(&opts.SkipUnavailable, flagSkipUnavailable, false, "Skip tasks whose expected routes are not registered in the current catalog")
 	flag.Parse()
 	opts.explicitFlags = map[string]bool{}
 	flag.Visit(func(f *flag.Flag) {
@@ -650,17 +675,17 @@ func applyPresetDefaults(opts options) (options, error) {
 	switch preset {
 	case presetSchemaEnterprise:
 		setBoolDefault(&opts.DryRun, opts, "dry-run")
-		setBoolDefault(&opts.SkipUnavailable, opts, "skip-unavailable")
+		setBoolDefault(&opts.SkipUnavailable, opts, flagSkipUnavailable)
 	case presetDockerRead:
-		applyDockerPresetDefaults(&opts, "base-read")
+		applyDockerPresetDefaults(&opts, partitionBaseRead)
 		setBoolDefault(&opts.SkipMutating, opts, "skip-mutating")
-		setBoolDefault(&opts.SkipDestructive, opts, "skip-destructive")
+		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerMutatingSafe:
-		applyDockerPresetDefaults(&opts, "base-mutating")
+		applyDockerPresetDefaults(&opts, partitionBaseMutating)
 		setBoolDefault(&opts.OnlyMutating, opts, "only-mutating")
-		setBoolDefault(&opts.SkipDestructive, opts, "skip-destructive")
+		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerDestructiveSafe:
-		applyDockerPresetDefaults(&opts, "base-destructive")
+		applyDockerPresetDefaults(&opts, partitionBaseDestructive)
 		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
 	}
 	return opts, nil
@@ -673,7 +698,7 @@ func applyDockerPresetDefaults(opts *options, partition string) {
 	setStringDefault(&opts.Partition, *opts, "partition", partition)
 	setBoolDefault(&opts.Execute, *opts, "execute-tools")
 	setBoolDefault(&opts.UseFixtures, *opts, "use-fixtures")
-	setBoolDefault(&opts.SkipUnavailable, *opts, "skip-unavailable")
+	setBoolDefault(&opts.SkipUnavailable, *opts, flagSkipUnavailable)
 }
 
 // validPreset is an internal helper for the main package.
@@ -845,7 +870,7 @@ func filterTasksByPartition(tasks []evalTask, partition string) ([]evalTask, err
 // validPartition is an internal helper for the main package.
 func validPartition(partition string) bool {
 	switch partition {
-	case "base-read", "base-mutating", "base-destructive", "enterprise-read", "enterprise-mutating", "enterprise-destructive", "error-recovery", "capability-fallback":
+	case partitionBaseRead, partitionBaseMutating, partitionBaseDestructive, partitionEnterpriseRead, partitionEnterpriseMutating, partitionEnterpriseDestructive, partitionErrorRecovery, partitionCapabilityFallback:
 		return true
 	default:
 		return false
@@ -860,21 +885,21 @@ func taskMatchesPartition(task evalTask, partition string) bool {
 	readOnly := !mutating && !destructive
 	special := strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || taskUsesCapabilityFallback(task)
 	switch partition {
-	case "base-read":
+	case partitionBaseRead:
 		return !enterprise && readOnly && !special
-	case "base-mutating":
+	case partitionBaseMutating:
 		return !enterprise && mutating && !destructive && !special
-	case "base-destructive":
+	case partitionBaseDestructive:
 		return !enterprise && destructive && !special
-	case "enterprise-read":
+	case partitionEnterpriseRead:
 		return enterprise && readOnly && !special
-	case "enterprise-mutating":
+	case partitionEnterpriseMutating:
 		return enterprise && mutating && !destructive && !special
-	case "enterprise-destructive":
+	case partitionEnterpriseDestructive:
 		return enterprise && destructive && !special
-	case "error-recovery":
+	case partitionErrorRecovery:
 		return strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task)
-	case "capability-fallback":
+	case partitionCapabilityFallback:
 		return taskUsesCapabilityFallback(task)
 	default:
 		return false
@@ -1554,7 +1579,9 @@ func newCatalogGitLabClient(opts options) (*gitlabclient.Client, func(), error) 
 			return nil, nil, fmt.Errorf("ping GitLab backend %s: %w", cfg.GitLabURL, pingErr)
 		}
 		client.DetectEnterprise(ctx, cfg.Enterprise)
-		return client, func() {}, nil
+		return client, func() {
+			// GitLab catalog clients do not own an httptest server or other local resource.
+		}, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown backend %q (valid: %s, %s)", opts.Backend, backendMock, backendGitLab)
 	}
@@ -1777,7 +1804,7 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "issue ", issue.IID)
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
 	if err != nil {
 		return task, err
 	}
@@ -1854,7 +1881,7 @@ func ensureLiveRepositoryFileDeleteTarget(ctx context.Context, client *gitlabcli
 	if !ok {
 		return fmt.Errorf("prepare MT-031 fixture: file path not found in prompt %q", prompt)
 	}
-	branch, ok := backtickValueAfter(prompt, "branch ")
+	branch, ok := backtickValueAfter(prompt, promptMarkerBranch)
 	if !ok {
 		return fmt.Errorf("prepare MT-031 fixture: branch not found in prompt %q", prompt)
 	}
@@ -2080,7 +2107,7 @@ func ensureLiveHookDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	hook, _, err := client.GL().Projects.AddProjectHook(projectID, &gl.AddProjectHookOptions{
-		Name:                  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Name:                  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 		URL:                   new("https://example.com/gitlab-hook-delete"),
 		PushEvents:            new(true),
 		EnableSSLVerification: new(false),
@@ -2110,7 +2137,7 @@ func ensureLiveBadgeDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	badge, _, err := client.GL().ProjectBadges.AddProjectBadge(projectID, &gl.AddProjectBadgeOptions{
 		LinkURL:  new("https://example.com/coverage"),
 		ImageURL: new("https://example.com/badge.svg"),
-		Name:     new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Name:     new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-059 fixture badge: %w", err)
@@ -2166,11 +2193,11 @@ func ensureLiveBranchDeleteTarget(ctx context.Context, client *gitlabclient.Clie
 	if client == nil {
 		return nil
 	}
-	projectID, ok := backtickValueAfter(prompt, "project ")
+	projectID, ok := backtickValueAfter(prompt, promptMarkerProject)
 	if !ok {
 		return fmt.Errorf("prepare MT-099 fixture: project path not found in prompt %q", prompt)
 	}
-	branchName, ok := backtickValueAfter(prompt, "branch ")
+	branchName, ok := backtickValueAfter(prompt, promptMarkerBranch)
 	if !ok {
 		return fmt.Errorf("prepare MT-099 fixture: branch name not found in prompt %q", prompt)
 	}
@@ -2199,7 +2226,7 @@ func ensureLiveTagDeleteTarget(ctx context.Context, client *gitlabclient.Client,
 	if client == nil {
 		return nil
 	}
-	projectID, ok := backtickValueAfter(prompt, "project ")
+	projectID, ok := backtickValueAfter(prompt, promptMarkerProject)
 	if !ok {
 		return fmt.Errorf("prepare MT-100 fixture: project path not found in prompt %q", prompt)
 	}
@@ -2232,7 +2259,7 @@ func ensureLivePipelineDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-101 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2256,14 +2283,14 @@ func ensureLivePipelineTriggerDeleteTarget(ctx context.Context, client *gitlabcl
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-102 fixture: project path not found in prompt %q", task.Prompt)
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	trigger, _, err := client.GL().PipelineTriggers.AddPipelineTrigger(projectID, &gl.AddPipelineTriggerOptions{
-		Description: new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Description: new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-102 fixture trigger: %w", err)
@@ -2281,7 +2308,7 @@ func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabc
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-103 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2289,7 +2316,7 @@ func ensureLivePipelineScheduleDeleteTarget(ctx context.Context, client *gitlabc
 	defer cancel()
 	ref := liveFixtureDefaultRef
 	schedule, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(projectID, &gl.CreatePipelineScheduleOptions{
-		Description:  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Description:  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 		Ref:          &ref,
 		Cron:         new("0 3 * * *"),
 		CronTimezone: new("UTC"),
@@ -2311,7 +2338,7 @@ func ensureLiveFeatureFlagDeleteTarget(ctx context.Context, client *gitlabclient
 	if client == nil {
 		return nil
 	}
-	projectID, ok := backtickValueAfter(prompt, "project ")
+	projectID, ok := backtickValueAfter(prompt, promptMarkerProject)
 	if !ok {
 		return fmt.Errorf("prepare MT-106 fixture: project path not found in prompt %q", prompt)
 	}
@@ -2338,7 +2365,7 @@ func ensureLiveWikiDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	if client == nil {
 		return nil
 	}
-	projectID, ok := backtickValueAfter(prompt, "project ")
+	projectID, ok := backtickValueAfter(prompt, promptMarkerProject)
 	if !ok {
 		return fmt.Errorf("prepare MT-108 fixture: project path not found in prompt %q", prompt)
 	}
@@ -2365,7 +2392,7 @@ func ensureLiveMRAwardDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-109 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2379,7 +2406,7 @@ func ensureLiveMRAwardDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-109 fixture award emoji: %w", err)
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "award emoji ID ", awardID)
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
 	if err != nil {
 		return task, err
 	}
@@ -2392,11 +2419,11 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-110 fixture: project path not found in prompt %q", task.Prompt)
 	}
-	issueIID, err := promptInt64After(task.Prompt, "issue ")
+	issueIID, err := promptInt64After(task.Prompt, promptMarkerIssue)
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-110 fixture: %w", err)
 	}
@@ -2406,7 +2433,7 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-110 fixture award emoji: %w", err)
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "award emoji ID ", awardID)
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
 	if err != nil {
 		return task, err
 	}
@@ -2479,7 +2506,7 @@ func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.C
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-111 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2595,7 +2622,7 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, "project ")
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
 	if !ok {
 		return task, fmt.Errorf("prepare MT-064 fixture: project path not found in prompt %q", task.Prompt)
 	}
@@ -2683,11 +2710,11 @@ func replaceAllPromptBacktickValuesAfter(prompt, marker string, value any) (stri
 
 // ensureLiveMergeRequestSource is an internal helper for the main package.
 func ensureLiveMergeRequestSource(ctx context.Context, session *mcp.ClientSession, prompt string) error {
-	projectID, ok := backtickValueAfter(prompt, "project ")
+	projectID, ok := backtickValueAfter(prompt, promptMarkerProject)
 	if !ok {
 		return fmt.Errorf("prepare MT-015 fixture: project path not found in prompt %q", prompt)
 	}
-	sourceBranch, ok := backtickValueAfter(prompt, " from ")
+	sourceBranch, ok := backtickValueAfter(prompt, promptMarkerFrom)
 	if !ok {
 		return fmt.Errorf("prepare MT-015 fixture: source branch not found in prompt %q", prompt)
 	}
@@ -3722,7 +3749,7 @@ func taskPrompt(task evalTask) string {
 	if needsProjectHookGuidance {
 		retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
 	}
-	if strings.Contains(strings.ToLower(task.Prompt), "failed jobs") && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
+	if strings.Contains(strings.ToLower(task.Prompt), promptPhraseFailedJobs) && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
 		hasFailedJobListStep := false
 		for _, step := range steps {
 			if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" {
@@ -3766,7 +3793,7 @@ func isAnalyzerStep(step evalStep) bool {
 // usesExactSingleToolPrompt is an internal helper for the main package.
 func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	lowerPrompt := strings.ToLower(task.Prompt)
-	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, "failed jobs") && strings.Contains(lowerPrompt, "pipeline") {
+	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, promptPhraseFailedJobs) && strings.Contains(lowerPrompt, "pipeline") {
 		return true
 	}
 	switch step.ExpectedTool + "/" + step.ExpectedAction {
@@ -3899,7 +3926,7 @@ var numericExampleParamMarkers = map[string][]string{
 	"epic_iid":                 {"epic IID "},
 	"child_iid":                {"issue IID "},
 	"token_id":                 {"personal access token ID ", "token ID "},
-	"issue_iid":                {"issue "},
+	"issue_iid":                {promptMarkerIssue},
 	"merge_request_iid":        {"merge_request_iid ", "merge request ", "MR "},
 	"note_id":                  {"note ", "discussion note "},
 	"pipeline_id":              {"pipeline ID ", "pipeline "},
@@ -3907,7 +3934,7 @@ var numericExampleParamMarkers = map[string][]string{
 	"schedule_id":              {"pipeline schedule ID "},
 	"trigger_id":               {"pipeline trigger token ID "},
 	"user_id":                  {"user ID "},
-	"award_id":                 {"award emoji ID "},
+	"award_id":                 {promptMarkerAwardEmojiID},
 	"deploy_key_id":            {"deploy key ID "},
 	"deploy_token_id":          {"deploy token ID ", "project deploy token ID "},
 }
@@ -3918,7 +3945,7 @@ var stringExampleParamMarkers = map[string][]string{
 	"group_id":           {" in group ", "group path ", "group "},
 	"full_path":          {"group full path ", "group path "},
 	"child_project_path": {"child project path "},
-	"start_date":         {" from "},
+	"start_date":         {promptMarkerFrom},
 	"end_date":           {" to "},
 	"sha":                {"SHA "},
 	"url":                {"URL "},
@@ -3929,11 +3956,11 @@ var stringExampleParamMarkers = map[string][]string{
 	"value":              {"value "},
 	"title":              {"titled "},
 	"slug":               {"wiki page "},
-	"from":               {" from "},
+	"from":               {promptMarkerFrom},
 	"to":                 {" to "},
-	"content_ref":        {"branch ", " ref "},
-	"ref":                {"branch ", " ref "},
-	"branch":             {"branch "},
+	"content_ref":        {promptMarkerBranch, " ref "},
+	"ref":                {promptMarkerBranch, " ref "},
+	"branch":             {promptMarkerBranch},
 	"file_path":          {"file "},
 	"content":            {"content "},
 	"commit_message":     {"commit_message "},
@@ -3955,7 +3982,7 @@ func exampleParamValue(param, prompt string) any {
 			return "passed"
 		}
 	case "scope":
-		if strings.Contains(lowerPrompt, "failed jobs") {
+		if strings.Contains(lowerPrompt, promptPhraseFailedJobs) {
 			return "failed"
 		}
 	case "project_id":
@@ -4008,7 +4035,7 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	case "created_before":
 		return end, hasMonth
 	case "start_date":
-		if value, ok := backtickValueAfter(prompt, " from "); ok {
+		if value, ok := backtickValueAfter(prompt, promptMarkerFrom); ok {
 			return value, true
 		}
 	case "end_date":
@@ -4076,7 +4103,7 @@ func exampleProjectIDValue(prompt string) (string, bool) {
 			return value, true
 		}
 	}
-	return backtickValueAfter(prompt, "project ")
+	return backtickValueAfter(prompt, promptMarkerProject)
 }
 
 // numericExampleValue is an internal helper for the main package.
@@ -4614,13 +4641,13 @@ func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 	for _, input := range evals {
 		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s | %s | %s |\n",
 			escapeTable(input.Label),
-			formatMetric(input.Metrics["Tool-selection accuracy"]),
-			formatMetric(input.Metrics["Action-selection accuracy"]),
-			formatMetric(input.Metrics["First-call validation pass rate"]),
+			formatMetric(input.Metrics[metricToolSelection]),
+			formatMetric(input.Metrics[metricActionSelection]),
+			formatMetric(input.Metrics[metricFirstCallValidationPassRate]),
 			formatMetric(input.Metrics["Schema lookup use rate"]),
-			formatMetric(input.Metrics["Repair success rate"]),
-			formatMetric(input.Metrics["Destructive safety"]),
-			formatMetric(input.Metrics["Final task success proxy"]),
+			formatMetric(input.Metrics[metricRepairSuccessRate]),
+			formatMetric(input.Metrics[metricDestructiveSafety]),
+			formatMetric(input.Metrics[metricFinalTaskSuccess]),
 		)
 	}
 	writeMetricDeltaTable(b, evals)
@@ -4638,12 +4665,12 @@ func writeMetricDeltaTable(b *strings.Builder, evals []comparisonInput) {
 	for _, input := range evals[1:] {
 		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
 			escapeTable(input.Label),
-			formatDelta(input.Metrics["Tool-selection accuracy"]-baseline.Metrics["Tool-selection accuracy"]),
-			formatDelta(input.Metrics["Action-selection accuracy"]-baseline.Metrics["Action-selection accuracy"]),
-			formatDelta(input.Metrics["First-call validation pass rate"]-baseline.Metrics["First-call validation pass rate"]),
-			formatDelta(input.Metrics["Repair success rate"]-baseline.Metrics["Repair success rate"]),
-			formatDelta(input.Metrics["Destructive safety"]-baseline.Metrics["Destructive safety"]),
-			formatDelta(input.Metrics["Final task success proxy"]-baseline.Metrics["Final task success proxy"]),
+			formatDelta(input.Metrics[metricToolSelection]-baseline.Metrics[metricToolSelection]),
+			formatDelta(input.Metrics[metricActionSelection]-baseline.Metrics[metricActionSelection]),
+			formatDelta(input.Metrics[metricFirstCallValidationPassRate]-baseline.Metrics[metricFirstCallValidationPassRate]),
+			formatDelta(input.Metrics[metricRepairSuccessRate]-baseline.Metrics[metricRepairSuccessRate]),
+			formatDelta(input.Metrics[metricDestructiveSafety]-baseline.Metrics[metricDestructiveSafety]),
+			formatDelta(input.Metrics[metricFinalTaskSuccess]-baseline.Metrics[metricFinalTaskSuccess]),
 		)
 	}
 }
@@ -4658,11 +4685,11 @@ func writeTokenComparison(b *strings.Builder, inputs []comparisonInput) {
 	fmt.Fprintf(b, "\n## Catalog Token Metrics\n\n")
 	fmt.Fprintf(b, "| Label | Tools | Estimated tokens | Serialized bytes | Token delta vs `%s` |\n", escapeTable(baseline.Label))
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: |\n")
-	baseTokens := baseline.TokenMetrics["Estimated tokens"]
+	baseTokens := baseline.TokenMetrics[metricEstimatedTokens]
 	for _, input := range tokens {
-		delta := input.TokenMetrics["Estimated tokens"] - baseTokens
+		delta := input.TokenMetrics[metricEstimatedTokens] - baseTokens
 		fmt.Fprintf(b, "| `%s` | %d | %d | %d | %+d |\n",
-			escapeTable(input.Label), input.TokenMetrics["Tools"], input.TokenMetrics["Estimated tokens"], input.TokenMetrics["Serialized bytes"], delta)
+			escapeTable(input.Label), input.TokenMetrics["Tools"], input.TokenMetrics[metricEstimatedTokens], input.TokenMetrics["Serialized bytes"], delta)
 	}
 }
 
@@ -4679,15 +4706,15 @@ func writeUsageComparison(b *strings.Builder, inputs []comparisonInput) {
 		return
 	}
 	fmt.Fprintf(b, "\n## API Usage\n\n")
-	fmt.Fprintf(b, "| Label | Model requests | Tool calls | Input tokens | Output tokens | Estimated cost |\n")
+	fmt.Fprintf(b, "| Label | %s | %s | %s | %s | %s |\n", usageModelRequests, usageToolCalls, usageInputTokens, usageOutputTokens, usageEstimatedCost)
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, input := range withUsage {
-		requests := input.Usage["Model requests"]
+		requests := input.Usage[usageModelRequests]
 		if requests == "" {
 			requests = input.Usage["Anthropic requests"]
 		}
 		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s |\n",
-			escapeTable(input.Label), valueOrZero(requests), valueOrZero(input.Usage["Tool calls emitted"]), valueOrZero(input.Usage["Input tokens"]), valueOrZero(input.Usage["Output tokens"]), emptyDash(input.Usage["Estimated cost"]))
+			escapeTable(input.Label), valueOrZero(requests), valueOrZero(input.Usage[usageToolCallsEmitted]), valueOrZero(input.Usage[usageInputTokens]), valueOrZero(input.Usage[usageOutputTokens]), emptyDash(input.Usage[usageEstimatedCost]))
 	}
 }
 
@@ -4986,7 +5013,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 		fmt.Fprintf(&b, "Trace artifacts: `%s`\n\n", opts.TraceDir)
 	}
 	fmt.Fprintf(&b, "## Metrics\n\n")
-	fmt.Fprintf(&b, "| Metric | Value |\n| --- | ---: |\n")
+	b.WriteString(metricValueTableHeader)
 	fmt.Fprintf(&b, "| Tool-selection accuracy | %.1f%% |\n", metrics.ToolSelection)
 	fmt.Fprintf(&b, "| Action-selection accuracy | %.1f%% |\n", metrics.ActionSelection)
 	fmt.Fprintf(&b, "| First-call validation pass rate | %.1f%% |\n", metrics.FirstPass)
@@ -5169,7 +5196,7 @@ func writeFixtureCoverage(b *strings.Builder, catalog []modelTool, results []tas
 	summary := fixtureToolCoverage(catalog, results)
 	actionSummary := fixtureActionCoverage(routes, results)
 	fmt.Fprintf(b, "\n## Fixture Tool Coverage\n\n")
-	fmt.Fprintf(b, "| Metric | Value |\n| --- | ---: |\n")
+	b.WriteString(metricValueTableHeader)
 	fmt.Fprintf(b, "| Catalog tools | %d |\n", summary.Total)
 	fmt.Fprintf(b, "| Tools covered by expected steps | %d |\n", summary.Covered)
 	fmt.Fprintf(b, "| Missing tools | %d |\n", len(summary.Missing))
@@ -5503,20 +5530,20 @@ func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, d
 	}
 	summary := aggregateUsage(results)
 	fmt.Fprintf(b, "\n## API Usage\n\n")
-	fmt.Fprintf(b, "| Metric | Value |\n| --- | ---: |\n")
-	fmt.Fprintf(b, "| Model requests | %d |\n", summary.ModelCalls)
-	fmt.Fprintf(b, "| Tool calls emitted | %d |\n", summary.ToolCalls)
-	fmt.Fprintf(b, "| Input tokens | %d |\n", summary.Usage.InputTokens)
-	fmt.Fprintf(b, "| Output tokens | %d |\n", summary.Usage.OutputTokens)
+	b.WriteString(metricValueTableHeader)
+	fmt.Fprintf(b, "| %s | %d |\n", usageModelRequests, summary.ModelCalls)
+	fmt.Fprintf(b, "| %s | %d |\n", usageToolCallsEmitted, summary.ToolCalls)
+	fmt.Fprintf(b, "| %s | %d |\n", usageInputTokens, summary.Usage.InputTokens)
+	fmt.Fprintf(b, "| %s | %d |\n", usageOutputTokens, summary.Usage.OutputTokens)
 	fmt.Fprintf(b, "| Cache creation input tokens | %d |\n", summary.Usage.CacheCreationInputTokens)
 	fmt.Fprintf(b, "| Cache read input tokens | %d |\n", summary.Usage.CacheReadInputTokens)
 	pricing := resolvePricing(opts)
 	if pricing.Source == "" {
-		fmt.Fprintf(b, "| Estimated cost | Not configured |\n")
+		fmt.Fprintf(b, "| %s | Not configured |\n", usageEstimatedCost)
 		writePerModelUsage(b, opts, results)
 		return
 	}
-	fmt.Fprintf(b, "| Estimated cost | $%.4f |\n", estimateCostUSD(summary.Usage, pricing.Pricing))
+	fmt.Fprintf(b, "| %s | $%.4f |\n", usageEstimatedCost, estimateCostUSD(summary.Usage, pricing.Pricing))
 	fmt.Fprintf(b, "| Pricing source | %s |\n", pricing.Source)
 	writePerModelUsage(b, opts, results)
 }
@@ -5529,7 +5556,7 @@ func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) 
 	}
 	models := sortedStringKeys(byModel)
 	fmt.Fprintf(b, "\n### API Usage By Model\n\n")
-	fmt.Fprintf(b, "| Model | Requests | Tool calls | Input tokens | Output tokens | Estimated cost |\n")
+	fmt.Fprintf(b, "| Model | Requests | %s | %s | %s | %s |\n", usageToolCalls, usageInputTokens, usageOutputTokens, usageEstimatedCost)
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		summary := aggregateUsage(byModel[model])

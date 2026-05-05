@@ -109,6 +109,69 @@ func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	}
 }
 
+// TestCurrentGitReportMetadata_ReadsGitMetadata verifies optional Git metadata
+// collection reads .git files directly and returns branch plus short commit
+// information without invoking an external git binary.
+func TestCurrentGitReportMetadata_ReadsGitMetadata(t *testing.T) {
+	root := t.TempDir()
+	gitDir := filepath.Join(root, ".git")
+	if err := os.MkdirAll(filepath.Join(gitDir, "refs", "heads", "feature"), 0o700); err != nil {
+		t.Fatalf("mkdir git refs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/feature/eval\n"), 0o600); err != nil {
+		t.Fatalf("write HEAD: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(gitDir, "refs", "heads", "feature", "eval"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o600); err != nil {
+		t.Fatalf("write ref: %v", err)
+	}
+	t.Chdir(root)
+
+	branch, commit := currentGitReportMetadata()
+	if branch != "feature/eval" || commit != "0123456789ab" {
+		t.Fatalf("currentGitReportMetadata() = branch %q commit %q", branch, commit)
+	}
+}
+
+// TestResolveGitDir_SupportsGitFileAndPackedRefs verifies worktree .git files
+// and packed refs are supported for Git worktree-compatible metadata.
+func TestResolveGitDir_SupportsGitFileAndPackedRefs(t *testing.T) {
+	root := t.TempDir()
+	metadataDir := filepath.Join(root, "metadata")
+	worktree := filepath.Join(root, "worktree")
+	if err := os.MkdirAll(worktree, 0o700); err != nil {
+		t.Fatalf("mkdir worktree: %v", err)
+	}
+	if err := os.MkdirAll(metadataDir, 0o700); err != nil {
+		t.Fatalf("mkdir metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: ../metadata\n"), 0o600); err != nil {
+		t.Fatalf("write .git file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(metadataDir, "packed-refs"), []byte("# pack-refs\nabcdef0123456789abcdef0123456789abcdef01 refs/heads/main\n"), 0o600); err != nil {
+		t.Fatalf("write packed refs: %v", err)
+	}
+	gitDir, err := resolveGitDir(worktree)
+	if err != nil {
+		t.Fatalf("resolveGitDir() error = %v", err)
+	}
+	if gitDir != metadataDir {
+		t.Fatalf("gitDir = %q, want %q", gitDir, metadataDir)
+	}
+	commit, err := readGitRef(gitDir, "refs/heads/main")
+	if err != nil {
+		t.Fatalf("readGitRef() error = %v", err)
+	}
+	if commit != "abcdef0123456789abcdef0123456789abcdef01" {
+		t.Fatalf("commit = %q", commit)
+	}
+	if got := gitBranchName("refs/heads/feature/eval"); got != "feature/eval" {
+		t.Fatalf("gitBranchName() = %q", got)
+	}
+	if got := shortGitCommit("abcdef0123456789"); got != "abcdef012345" {
+		t.Fatalf("shortGitCommit() = %q", got)
+	}
+}
+
 // TestApplyManagedBlock_ReplacesAndAppendsSnapshots verifies that ApplyManagedBlock handles the replaces and appends snapshots scenario correctly.
 func TestApplyManagedBlock_ReplacesAndAppendsSnapshots(t *testing.T) {
 	content := "before\n" + modelEvalResultsStart + "\n### Old\n\nold\n" + modelEvalResultsEnd + "\nafter\n"

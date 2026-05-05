@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -25,6 +23,14 @@ const (
 	modelEvalSummaryEnd   = "<!-- END MODEL EVAL SUMMARY -->"
 	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
 	modelEvalResultsEnd   = "<!-- END MODEL EVAL RESULTS -->"
+
+	usageModelRequests    = "Model requests"
+	usageToolCallsEmitted = "Tool calls emitted"
+	usageToolCalls        = "Tool calls"
+	usageInputTokens      = "Input tokens"
+	usageOutputTokens     = "Output tokens"
+	usageEstimatedCost    = "Estimated cost"
+	modelEvaluationSuffix = " Model Evaluation"
 )
 
 var fullDockerAttemptsByPreset = map[string]int{
@@ -238,12 +244,12 @@ func publishSingleTaskStats(statsByModel map[string]publishTaskStats, model stri
 func metricsFromComparison(input comparisonInput) publishModelMetrics {
 	return publishModelMetrics{
 		Attempts:          input.TaskAttempts,
-		ToolSelection:     input.Metrics["Tool-selection accuracy"],
-		ActionSelection:   input.Metrics["Action-selection accuracy"],
-		FirstPass:         input.Metrics["First-call validation pass rate"],
-		RepairSuccess:     input.Metrics["Repair success rate"],
-		DestructiveSafety: input.Metrics["Destructive safety"],
-		FinalSuccess:      input.Metrics["Final task success proxy"],
+		ToolSelection:     input.Metrics[metricToolSelection],
+		ActionSelection:   input.Metrics[metricActionSelection],
+		FirstPass:         input.Metrics[metricFirstCallValidationPassRate],
+		RepairSuccess:     input.Metrics[metricRepairSuccessRate],
+		DestructiveSafety: input.Metrics[metricDestructiveSafety],
+		FinalSuccess:      input.Metrics[metricFinalTaskSuccess],
 	}
 }
 
@@ -251,11 +257,11 @@ func metricsFromComparison(input comparisonInput) publishModelMetrics {
 func publishSingleUsage(usage map[string]string, stats publishTaskStats) map[string]string {
 	out := map[string]string{}
 	maps.Copy(out, usage)
-	if out["Model requests"] == "" && stats.ModelRequests > 0 {
-		out["Model requests"] = strconv.Itoa(stats.ModelRequests)
+	if out[usageModelRequests] == "" && stats.ModelRequests > 0 {
+		out[usageModelRequests] = strconv.Itoa(stats.ModelRequests)
 	}
-	if out["Tool calls emitted"] == "" && stats.ToolCalls > 0 {
-		out["Tool calls emitted"] = strconv.Itoa(stats.ToolCalls)
+	if out[usageToolCallsEmitted] == "" && stats.ToolCalls > 0 {
+		out[usageToolCallsEmitted] = strconv.Itoa(stats.ToolCalls)
 	}
 	return out
 }
@@ -270,8 +276,8 @@ func newPublishRow(report publishReport, model string, stats publishTaskStats, m
 		ToolExecution:     report.ToolExecution,
 		Attempts:          firstPositive(stats.Attempts, metrics.Attempts),
 		ExpectedOps:       stats.ExpectedOps,
-		ModelRequests:     firstPositive(parseReportInt(usage["Model requests"]), parseReportInt(usage["Requests"]), stats.ModelRequests),
-		ToolCalls:         firstPositive(parseReportInt(usage["Tool calls emitted"]), parseReportInt(usage["Tool calls"]), stats.ToolCalls),
+		ModelRequests:     firstPositive(parseReportInt(usage[usageModelRequests]), parseReportInt(usage["Requests"]), stats.ModelRequests),
+		ToolCalls:         firstPositive(parseReportInt(usage[usageToolCallsEmitted]), parseReportInt(usage[usageToolCalls]), stats.ToolCalls),
 		ToolSelection:     metrics.ToolSelection,
 		ActionSelection:   metrics.ActionSelection,
 		FirstPass:         metrics.FirstPass,
@@ -299,7 +305,7 @@ func publishTaskStatsByModel(content, defaultModel string) map[string]publishTas
 		stats.Attempts++
 		stats.ExpectedOps += parseExpectedOps(row["Steps"])
 		stats.ModelRequests += parseReportInt(row["Calls"])
-		stats.ToolCalls += parseReportInt(row["Tool calls"])
+		stats.ToolCalls += parseReportInt(row[usageToolCalls])
 		switch row["Repair"] {
 		case "Yes":
 			stats.RepairAttempts++
@@ -342,11 +348,11 @@ func publishUsageByModel(content string) map[string]map[string]string {
 			continue
 		}
 		out[model] = map[string]string{
-			"Model requests":     row["Requests"],
-			"Tool calls emitted": row["Tool calls"],
-			"Input tokens":       row["Input tokens"],
-			"Output tokens":      row["Output tokens"],
-			"Estimated cost":     row["Estimated cost"],
+			usageModelRequests:    row["Requests"],
+			usageToolCallsEmitted: row[usageToolCalls],
+			usageInputTokens:      row[usageInputTokens],
+			usageOutputTokens:     row[usageOutputTokens],
+			usageEstimatedCost:    row[usageEstimatedCost],
 		}
 	}
 	return out
@@ -437,9 +443,9 @@ func parseExpectedOps(value string) int {
 
 // publishCostTokens is an internal helper for the main package.
 func publishCostTokens(usage map[string]string) string {
-	inputTokens := parseReportInt(usage["Input tokens"])
-	outputTokens := parseReportInt(usage["Output tokens"])
-	cost := cleanReportValue(usage["Estimated cost"])
+	inputTokens := parseReportInt(usage[usageInputTokens])
+	outputTokens := parseReportInt(usage[usageOutputTokens])
+	cost := cleanReportValue(usage[usageEstimatedCost])
 	parts := make([]string, 0, 3)
 	if inputTokens > 0 || outputTokens > 0 {
 		parts = append(parts, fmt.Sprintf("in %d / out %d", inputTokens, outputTokens))
@@ -487,12 +493,12 @@ func publishSnapshotLabel(label string, reports []publishReport) string {
 	for _, report := range reports {
 		if report.Date != "" {
 			if parsed, err := time.Parse(time.RFC3339, report.Date); err == nil {
-				return parsed.UTC().Format("2006-01-02") + " Model Evaluation"
+				return parsed.UTC().Format("2006-01-02") + modelEvaluationSuffix
 			}
-			return report.Date + " Model Evaluation"
+			return report.Date + modelEvaluationSuffix
 		}
 	}
-	return time.Now().UTC().Format("2006-01-02") + " Model Evaluation"
+	return time.Now().UTC().Format("2006-01-02") + modelEvaluationSuffix
 }
 
 // buildModelResultsBlock constructs the request parameters from the input.
@@ -501,7 +507,7 @@ func buildModelResultsBlock(label string, reports []publishReport) string {
 	aggregate := aggregatePublishRows(rows)
 	var b strings.Builder
 	fmt.Fprintf(&b, "### %s\n\n", label)
-	fmt.Fprintf(&b, "| Model | Preset | Backend | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation | Repair success | Destructive safety | Final task success | Cost/tokens | Commit / branch / date |\n")
+	fmt.Fprintf(&b, "| Model | Preset | Backend | Attempts | Expected ops | %s | %s | Tool-selection | Action-selection | First-pass validation | Repair success | Destructive safety | Final task success | Cost/tokens | Commit / branch / date |\n", usageModelRequests, usageToolCallsEmitted)
 	fmt.Fprintf(&b, "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |\n")
 	for _, row := range rows {
 		fmt.Fprintf(&b, "| `%s` | `%s` | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
@@ -848,27 +854,113 @@ func firstPositive(values ...int) int {
 
 // currentGitReportMetadata is an internal helper for the main package.
 func currentGitReportMetadata() (branch, commit string) {
-	branch = runGitMetadata("branch")
-	commit = runGitMetadata("commit")
-	return branch, commit
+	gitDir, err := resolveGitDir(".")
+	if err != nil {
+		return "", ""
+	}
+	head, err := readTrimmedFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil || head == "" {
+		return "", ""
+	}
+	if ref, ok := strings.CutPrefix(head, "ref: "); ok {
+		commit, _ = readGitRef(gitDir, ref)
+		return gitBranchName(ref), shortGitCommit(commit)
+	}
+	return "HEAD", shortGitCommit(head)
 }
 
-// runGitMetadata is an internal helper for the main package.
-func runGitMetadata(kind string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	var cmd *exec.Cmd
-	switch kind {
-	case "branch":
-		cmd = exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
-	case "commit":
-		cmd = exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")
-	default:
-		return ""
-	}
-	out, err := cmd.Output()
+// resolveGitDir returns the actual git metadata directory for a worktree.
+func resolveGitDir(worktree string) (string, error) {
+	dotGit := filepath.Join(worktree, ".git")
+	info, err := os.Stat(dotGit)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return strings.TrimSpace(string(out))
+	if info.IsDir() {
+		return dotGit, nil
+	}
+	content, err := readTrimmedFile(dotGit)
+	if err != nil {
+		return "", err
+	}
+	gitDir, ok := strings.CutPrefix(content, "gitdir: ")
+	if !ok || strings.TrimSpace(gitDir) == "" {
+		return "", errors.New("invalid .git file")
+	}
+	gitDir = strings.TrimSpace(gitDir)
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(worktree, gitDir)
+	}
+	return filepath.Clean(gitDir), nil
+}
+
+func readGitRef(gitDir, ref string) (string, error) {
+	if commit, err := readTrimmedFile(filepath.Join(gitDir, filepath.FromSlash(ref))); err == nil {
+		return commit, nil
+	}
+	if commit, ok := readPackedGitRef(gitDir, ref); ok {
+		return commit, nil
+	}
+	commonDir := gitCommonDir(gitDir)
+	if commonDir == gitDir {
+		return "", errors.New("git ref not found")
+	}
+	if commit, readErr := readTrimmedFile(filepath.Join(commonDir, filepath.FromSlash(ref))); readErr == nil {
+		return commit, nil
+	}
+	if commit, ok := readPackedGitRef(commonDir, ref); ok {
+		return commit, nil
+	}
+	return "", fmt.Errorf("git ref %s not found", ref)
+}
+
+func gitCommonDir(gitDir string) string {
+	commonDir, err := readTrimmedFile(filepath.Join(gitDir, "commondir"))
+	if err != nil || commonDir == "" {
+		return gitDir
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(gitDir, commonDir)
+	}
+	return filepath.Clean(commonDir)
+}
+
+func readPackedGitRef(gitDir, ref string) (string, bool) {
+	// #nosec G304 -- gitDir is resolved from the local repository metadata to read optional report labels.
+	content, err := os.ReadFile(filepath.Join(gitDir, "packed-refs"))
+	if err != nil {
+		return "", false
+	}
+	for line := range strings.SplitSeq(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "^") {
+			continue
+		}
+		commit, name, ok := strings.Cut(line, " ")
+		if ok && name == ref {
+			return commit, true
+		}
+	}
+	return "", false
+}
+
+func gitBranchName(ref string) string {
+	return strings.TrimPrefix(ref, "refs/heads/")
+}
+
+func shortGitCommit(commit string) string {
+	commit = strings.TrimSpace(commit)
+	if len(commit) > 12 {
+		return commit[:12]
+	}
+	return commit
+}
+
+func readTrimmedFile(path string) (string, error) {
+	// #nosec G304 -- callers pass paths derived from the local .git directory for optional report metadata.
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(content)), nil
 }

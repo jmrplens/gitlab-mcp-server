@@ -39,6 +39,9 @@ const (
 	liveFixtureWikiSlug     = "obsolete-eval"
 	liveFixtureReviewBranch = "feature/eval-review-fixture"
 	liveFixtureMergeBranch  = "feature/eval-merge-fixture"
+	liveDeleteFixtureFormat = "delete-fixture-%d"
+	taskFileCreateID        = "MT-030"
+	taskPipelineScheduleID  = "MT-103"
 )
 
 // liveFixtureState holds data for main operations.
@@ -462,7 +465,7 @@ func (p *liveFixturePreparer) ensureHooks(ctx context.Context) error {
 		return err
 	}
 	hook, _, err := p.client.GL().Projects.AddProjectHook(p.state.ProjectID, &gl.AddProjectHookOptions{
-		Name:                  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Name:                  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 		URL:                   new("https://example.com/gitlab-hook-delete"),
 		PushEvents:            new(true),
 		EnableSSLVerification: new(false),
@@ -534,7 +537,7 @@ func (p *liveFixturePreparer) ensureBadge(ctx context.Context) error {
 	badge, _, err := p.client.GL().ProjectBadges.AddProjectBadge(p.state.ProjectID, &gl.AddProjectBadgeOptions{
 		LinkURL:  new("https://example.com/coverage"),
 		ImageURL: new("https://example.com/badge.svg"),
-		Name:     new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Name:     new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return err
@@ -700,7 +703,7 @@ func (p *liveFixturePreparer) ensureDeployToken(ctx context.Context) error {
 // ensurePipelineTriggers performs the ensure pipeline triggers operation on *liveFixturePreparer.
 func (p *liveFixturePreparer) ensurePipelineTriggers(ctx context.Context) error {
 	deleteTrigger, _, err := p.client.GL().PipelineTriggers.AddPipelineTrigger(p.state.ProjectID, &gl.AddPipelineTriggerOptions{
-		Description: new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Description: new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return err
@@ -722,7 +725,7 @@ func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error
 		return err
 	}
 	deleteSchedule, _, err := p.client.GL().PipelineSchedules.CreatePipelineSchedule(p.state.ProjectID, &gl.CreatePipelineScheduleOptions{
-		Description:  new(fmt.Sprintf("delete-fixture-%d", time.Now().UnixNano())),
+		Description:  new(fmt.Sprintf(liveDeleteFixtureFormat, time.Now().UnixNano())),
 		Ref:          new(liveFixtureDefaultRef),
 		Cron:         new("0 3 * * *"),
 		CronTimezone: new("UTC"),
@@ -1147,7 +1150,7 @@ func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int
 	if suffix == "" {
 		return task
 	}
-	if task.ID == "MT-030" || task.ID == "MS-017" {
+	if task.ID == taskFileCreateID || task.ID == "MS-017" {
 		task.Prompt = suffixEvaluationFileCreatePath(task.Prompt, suffix)
 		return task
 	}
@@ -1190,7 +1193,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 // taskNeedsAttemptResourceSuffix is an internal helper for the main package.
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
-	case "MT-007", "MT-015", "MT-026", "MT-030", "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
+	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
 		"MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", "MS-033", "MS-035", "MS-036":
 		return true
 	default:
@@ -1441,7 +1444,7 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 		prompt = replaceID(prompt, "badge ID", 8, state.BadgeDeleteID)
 	case "MT-102":
 		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerID)
-	case "MT-103":
+	case taskPipelineScheduleID:
 		prompt = replaceID(prompt, "pipeline schedule ID", 12, state.PipelineScheduleID)
 	case "MT-104", "MT-105", "MS-034":
 		prompt = replaceID(prompt, "user ID", 55, state.UserID)
@@ -1474,7 +1477,7 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 	}
 	if suffix := fixtureUniqueSuffix(state); suffix != "" {
 		switch taskID {
-		case "MT-030":
+		case taskFileCreateID:
 			prompt = strings.ReplaceAll(prompt, "`tmp/eval.txt`", fmt.Sprintf("`tmp/eval-%s.txt`", suffix))
 		case "MT-034":
 			prompt = strings.ReplaceAll(prompt, "`Evaluation Sprint`", fmt.Sprintf("`Evaluation Sprint %s`", suffix))
@@ -1482,10 +1485,10 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval`", fmt.Sprintf("`v0.0.0-eval-%s`", suffix))
 		}
 	}
-	if taskID == "MT-103" && state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
+	if taskID == taskPipelineScheduleID && state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
 		prompt = replaceID(prompt, "pipeline schedule ID", 12, state.PipelineSchedulePlayID)
 	}
-	if taskID == "MT-103" && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
+	if taskID == taskPipelineScheduleID && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
 		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerRunID)
 	}
 	return prompt

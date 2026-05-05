@@ -26,8 +26,9 @@ import (
 const maxInt = int(math.MaxInt)
 
 const (
-	minInt64AsFloat = -float64(1 << 63)
-	maxInt64AsFloat = float64(1<<63 - 1)
+	minInt64AsFloat          = -float64(1 << 63)
+	maxInt64AsFloat          = float64(1<<63 - 1)
+	invalidActionParamsError = "invalid params for this action: %w"
 )
 
 // MetaToolInput is the common input for all meta-tools.
@@ -543,6 +544,32 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 			}
 		}
 	}
+	if accepts("source_branch") && accepts("target_branch") {
+		if _, hasSource := out["source_branch"]; !hasSource {
+			for _, key := range []string{"ref", "branch", "from"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["source_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+		if _, hasTarget := out["target_branch"]; !hasTarget {
+			for _, key := range []string{"to", "base"} {
+				value, ok := out[key]
+				if !ok || !nonEmptyStringValue(value) || accepts(key) {
+					continue
+				}
+				updated := clone()
+				updated["target_branch"] = value
+				delete(updated, key)
+				break
+			}
+		}
+	}
 	return out
 }
 
@@ -634,7 +661,7 @@ func UnmarshalParams[T any](params map[string]any) (T, error) {
 	cleaned := coerceStringIDNumbers(coerceStringListParams(coerceSingleStringSlices(normalizeParamAliases(stripReservedKeys(params), target), target), target), target)
 	cleaned, coerceErr := coerceNumericParams(cleaned, target)
 	if coerceErr != nil {
-		return input, newParamValidationError("invalid params for this action: %w", coerceErr)
+		return input, newParamValidationError(invalidActionParamsError, coerceErr)
 	}
 	data, err := json.Marshal(cleaned)
 	if err != nil {
@@ -647,11 +674,11 @@ func UnmarshalParams[T any](params map[string]any) (T, error) {
 		coerced := coerceNumericStrings(cleaned)
 		data2, marshalErr := json.Marshal(coerced)
 		if marshalErr != nil {
-			return input, newParamValidationError("invalid params for this action: %w", err)
+			return input, newParamValidationError(invalidActionParamsError, err)
 		}
 		if strictUnmarshal(data2, &input) != nil {
 			// Return the original error for a clearer message.
-			return input, newParamValidationError("invalid params for this action: %w", err)
+			return input, newParamValidationError(invalidActionParamsError, err)
 		}
 		return input, nil
 	}

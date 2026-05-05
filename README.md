@@ -426,19 +426,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category | Files | Lines |
 | --- | ---: | ---: |
-| Source (`.go`, non-test) | 647 | 132,813 |
-| Unit tests (`_test.go`) | 410 | 215,866 |
+| Source (`.go`, non-test) | 647 | 132,963 |
+| Unit tests (`_test.go`) | 410 | 216,197 |
 | End-to-end tests | 109 | 23,526 |
-| **Total** | **1,166** | **372,205** |
+| **Total** | **1,166** | **372,686** |
 
 ### Functions
 
 | Category | Count |
 | --- | ---: |
-| Source functions | 3,933 |
+| Source functions | 3,939 |
 | — exported (public) | 2,206 |
-| — unexported (private) | 1,727 |
-| Unit test functions (`TestXxx`) | 9,032 |
+| — unexported (private) | 1,733 |
+| Unit test functions (`TestXxx`) | 9,045 |
 | Subtests (`t.Run(...)`) | 1,933 |
 | End-to-end test functions | 243 |
 
@@ -448,16 +448,16 @@ Numbers nobody asked for, but here they are anyway.
 | --- | ---: |
 | Test lines vs source lines | 1.63× more tests than code |
 | Average source file length | ~205 lines |
-| Average test file length | ~526 lines |
-| Comment lines in source | 10,376 (~7.8% of source) |
+| Average test file length | ~527 lines |
+| Comment lines in source | 10,377 (~7.8% of source) |
 | Test functions per source function | 2.3× |
 
 ### Code patterns
 
 | Pattern | Count |
 | --- | ---: |
-| `if err != nil` checks | 5,675 |
-| `defer` statements | 717 |
+| `if err != nil` checks | 5,684 |
+| `defer` statements | 716 |
 | `struct` types defined | 2,006 |
 | `//nolint` suppressions | 57 |
 | `TODO` / `FIXME` / `HACK` comments | 0 |
@@ -469,22 +469,22 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages | 196 |
 | Direct dependencies (`go.mod`) | 11 |
 | Indirect dependencies | 46 |
-| Git commits | 122 |
+| Git commits | 123 |
 | Unique contributors | 2 |
 
 ### Hall of fame
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 5,715 lines |
+| Longest source file | `cmd/eval_meta_tools/main.go` — 5,742 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,422 lines |
 
 ### Because why not
 
 | Fact | Value |
 | --- | --- |
-| Source code printed at 55 lines/page | ~2,414 pages of A4 |
-| Source lines mentioning `"gitlab"` | 10,842 (impossible to avoid) |
+| Source code printed at 55 lines/page | ~2,417 pages of A4 |
+| Source lines mentioning `"gitlab"` | 10,843 (impossible to avoid) |
 | Longest function name in source | `ensureLiveCommitDiscussionNoteDeleteTarget` (42 chars) |
 | Longest test function name | `TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement` (84 chars) |
 
