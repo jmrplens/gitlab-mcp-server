@@ -1108,6 +1108,37 @@ func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	}
 }
 
+func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-021",
+		Prompt:         "List failed jobs in pipeline `1323` for project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_job",
+		ExpectedAction: "list",
+		RequiredParams: []string{"project_id", "pipeline_id"},
+		OptionalParams: []string{"scope"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"Exact required call",
+		"use the gitlab_job tool once",
+		`"action":"list"`,
+		`"pipeline_id":1323`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		`"scope":"failed"`,
+		"Return exactly one tool call and no text answer",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want single failed-job guidance containing %q", prompt, want)
+		}
+	}
+
+	system := systemPromptForTask(task)
+	if !strings.Contains(system, "Return tool calls only") || strings.Contains(system, "runner.list_project") {
+		t.Fatalf("systemPromptForTask() = %q, want compact exact-call system prompt", system)
+	}
+}
+
 func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-093",

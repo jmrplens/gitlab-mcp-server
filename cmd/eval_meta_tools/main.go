@@ -3414,7 +3414,7 @@ func systemPrompt() string {
 
 func systemPromptForTask(task evalTask) string {
 	steps := taskSteps(task)
-	if len(steps) == 1 && usesCompactExactPrompt(steps[0]) {
+	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
 		return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Function-call arguments must be one valid JSON object. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. Use domain.action values with the unified gitlab dispatcher. If a task provides a project ID or namespace path, pass it inside params as project_id. Schema lookup counts as an extra tool call; skip it when the prompt provides the exact action and params. For destructive tasks, include confirm:true in params. Return tool calls only; do not answer with explanatory text.`
 	}
 	return systemPrompt()
@@ -3469,8 +3469,11 @@ func taskPrompt(task evalTask) string {
 	if len(steps) == 1 && usesCompactExactPrompt(steps[0]) {
 		return compactExactTaskPrompt(task, destructive, steps[0])
 	}
+	if len(steps) == 1 && usesExactSingleToolPrompt(task, steps[0]) {
+		return exactToolTaskPrompt(task, destructive, steps[0])
+	}
 	if len(steps) == 1 && isAnalyzerStep(steps[0]) {
-		return analyzerTaskPrompt(task, destructive, steps[0])
+		return exactToolTaskPrompt(task, destructive, steps[0])
 	}
 	if len(steps) == 1 && steps[0].ExpectedAction == "search.code" {
 		retryGuidance += ` For search.code, call gitlab with {"action":"search.code","params":{"query":"<query>","project_id":"<project_id>"}}; a namespace path like group/project is already project_id, never remote_url.`
@@ -3485,7 +3488,12 @@ func isAnalyzerStep(step evalStep) bool {
 	return step.ExpectedTool == "gitlab_analyze" || strings.HasPrefix(step.ExpectedAction, "analyze.")
 }
 
-func analyzerTaskPrompt(task evalTask, destructive string, step evalStep) string {
+func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	return step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, "failed jobs") && strings.Contains(lowerPrompt, "pipeline")
+}
+
+func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) string {
 	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
 	for _, param := range step.RequiredParams {
 		params[param] = exampleParamValue(param, task.Prompt)
@@ -3670,6 +3678,10 @@ func exampleParamValue(param, prompt string) any {
 	case "status":
 		if strings.Contains(strings.ToLower(prompt), "passed") {
 			return "passed"
+		}
+	case "scope":
+		if strings.Contains(strings.ToLower(prompt), "failed jobs") {
+			return "failed"
 		}
 	case "url":
 		if value, ok := backtickValueAfter(prompt, "URL "); ok {
