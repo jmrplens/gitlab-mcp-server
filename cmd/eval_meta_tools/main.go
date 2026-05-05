@@ -3517,6 +3517,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	switch step.ExpectedTool + "/" + step.ExpectedAction {
 	case "gitlab_job/download_single_artifact",
 		"gitlab_job/delete_artifacts",
+		"gitlab_mr_review/discussion_resolve",
 		"gitlab_user/block",
 		"gitlab_merge_request/emoji_mr_delete",
 		"gitlab_repository/commit_discussion_delete_note",
@@ -3738,6 +3739,9 @@ func exampleParamValue(param, prompt string) any {
 			return numericExampleValue(value)
 		}
 	case "merge_request_iid":
+		if value, ok := backtickValueAfter(prompt, "merge_request_iid "); ok {
+			return numericExampleValue(value)
+		}
 		if value, ok := backtickValueAfter(prompt, "merge request "); ok {
 			return numericExampleValue(value)
 		}
@@ -3797,6 +3801,9 @@ func exampleParamValue(param, prompt string) any {
 			return value
 		}
 	case "discussion_id":
+		if value, ok := backtickValueAfter(prompt, "discussion_id "); ok {
+			return value
+		}
 		if value, ok := backtickValueAfter(prompt, "from discussion "); ok {
 			return value
 		}

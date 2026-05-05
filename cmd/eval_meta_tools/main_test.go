@@ -1126,6 +1126,32 @@ func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T
 	}
 }
 
+func TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-061",
+		Prompt:         "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_mr_review",
+		ExpectedAction: "discussion_resolve",
+		RequiredParams: []string{"project_id", "merge_request_iid", "discussion_id"},
+		OptionalParams: []string{"resolved"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"Exact required call",
+		"use the gitlab_mr_review tool once",
+		`"action":"discussion_resolve"`,
+		`"discussion_id":"abc123"`,
+		`"merge_request_iid":7`,
+		`"resolved":true`,
+		"Return exactly one tool call and no text answer",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want split discussion_resolve guidance containing %q", prompt, want)
+		}
+	}
+}
+
 func TestTaskPrompt_SearchCodeAvoidsProjectDiscovery(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-032",
